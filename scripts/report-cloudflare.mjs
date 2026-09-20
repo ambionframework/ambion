@@ -4,7 +4,7 @@
  * captured. The example that once produced it, `examples/site`, no longer
  * exists.
  *
- *   node scripts/report-cloudflare.mjs demo-cloudflare-run.json demos/<file>.html
+ *   node scripts/report-cloudflare.mjs demo-cloudflare-run.json planning/evidence/reports/<file>.html
  *
  * This report answers one question: what happens to a seat that is at work
  * when the room it commits to goes away. Every figure is read off the run's

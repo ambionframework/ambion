@@ -12,30 +12,30 @@ not. The kernel keeps the record and the rules. A restart loses nothing.
 pnpm workspace, ESM only, TypeScript. Every package needs Node 26.4 or
 newer, the OpenTUI floor.
 
-| Path                  | What                                                                                                                        |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `packages/ambion`     | The runtime. One file per concern, in layers Biome holds; `room.ts` composes them                                           |
-| `packages/assistant`  | The default assistant definition: membership guidance and closing summaries over the core                                   |
-| `packages/cli`        | Project creation and local rooms through Wrangler and OpenTUI; ships with the Cloudflare adapter                            |
-| `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Publishable; tested in workerd                                |
-| `packages/journal`    | An append-only journal: one queue, fenced by run, with conditional commits                                                  |
-| `packages/pi-journal` | Full Pi transcript sessions over the generic journal storage contract                                                       |
-| `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem                                               |
-| `docs/agent.md`       | Design contract for the core — read before changing the runtime                                                             |
-| `docs/assistant.md`   | Design contract for the default assistant package and the `assistant` room option — read with `agent.md`                    |
-| `docs/exchange.md`    | Design contract for the exchange, the room's unit of work — read with `agent.md`                                            |
-| `docs/presence.md`    | Design contract for presence and visits — read with `agent.md`                                                              |
-| `docs/summary.md`     | Design contract for optional summaries of closed exchanges                                                                  |
-| `docs/workspace.md`   | Design contract for the workspace an agent's tools reach into — read with `agent.md`                                        |
-| `docs/example.md`     | The one runnable example, an agentic lab workspace, and what it must show                                                   |
-| `docs/roster.md`      | Design contract for a roster that changes while the room runs — read with `agent.md`                                        |
-| `docs/durability.md`  | What the record promises under failure, and how the tiers prove it — read with `agent.md`                                   |
-| `docs/deployment.md`  | Host placement, storage, reconnect, and the recovery evidence — read with `durability.md`                                   |
-| `docs/formal.md`      | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                 |
-| `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                              |
-| `examples/workbench`  | Runnable example: rooms and an OpenTUI terminal in one process                                                              |
-| `demos/`              | One dated report per merged change — regenerate on the branch, then leave it                                                |
-| `planning/`           | `next.md`: the must-have scope and plan for 0.1.0; `backlog.md`: everything after; `formal.md`: the verified rules to write |
+| Path                  | What                                                                                                                                   |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/ambion`     | The runtime. One file per concern, in layers Biome holds; `room.ts` composes them                                                      |
+| `packages/assistant`  | The default assistant definition: membership guidance and closing summaries over the core                                              |
+| `packages/cli`        | Project creation and local rooms through Wrangler and OpenTUI; ships with the Cloudflare adapter                                       |
+| `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Publishable; tested in workerd                                           |
+| `packages/journal`    | An append-only journal: one queue, fenced by run, with conditional commits                                                             |
+| `packages/pi-journal` | Full Pi transcript sessions over the generic journal storage contract                                                                  |
+| `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem                                                          |
+| `docs/agent.md`       | Design contract for the core — read before changing the runtime                                                                        |
+| `docs/assistant.md`   | Design contract for the default assistant package and the `assistant` room option — read with `agent.md`                               |
+| `docs/exchange.md`    | Design contract for the exchange, the room's unit of work — read with `agent.md`                                                       |
+| `docs/presence.md`    | Design contract for presence and visits — read with `agent.md`                                                                         |
+| `docs/summary.md`     | Design contract for optional summaries of closed exchanges                                                                             |
+| `docs/workspace.md`   | Design contract for the workspace an agent's tools reach into — read with `agent.md`                                                   |
+| `docs/example.md`     | The one runnable example, an agentic lab workspace, and what it must show                                                              |
+| `docs/roster.md`      | Design contract for a roster that changes while the room runs — read with `agent.md`                                                   |
+| `docs/durability.md`  | What the record promises under failure, and how the tiers prove it — read with `agent.md`                                              |
+| `docs/deployment.md`  | Host placement, storage, reconnect, and the recovery evidence — read with `durability.md`                                              |
+| `docs/formal.md`      | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                            |
+| `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                                         |
+| `examples/workbench`  | Runnable example: rooms and an OpenTUI terminal in one process                                                                         |
+| `planning/evidence/`  | Dated evidence: generated reports of the retired site example under `reports/`, dated reviews, and the release results phase 8 records |
+| `planning/`           | `next.md`: the must-have scope and plan for 0.1.0; `backlog.md`: everything after; `formal.md`: the verified rules to write            |
 
 ## Positioning
 

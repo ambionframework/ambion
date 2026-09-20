@@ -19,6 +19,7 @@ packages/
 examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
 scripts/        package discovery, versioning, publishing, reports
 docs/           design and operational contracts
+planning/       the plan, the backlog, the rules to write, and dated evidence
 .github/        CI, live, and release workflows
 ```
 
