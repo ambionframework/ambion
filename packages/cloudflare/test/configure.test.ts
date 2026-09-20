@@ -1,4 +1,5 @@
 import { defineAgent, pi } from '@ambionframework/ambion';
+import { hostingOf } from '@ambionframework/ambion/transport';
 import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { configure, definitionOf, executionFor, runtimeFor } from '../src/configure.ts';
@@ -35,7 +36,7 @@ describe('configure', () => {
 		const services = executionFor({ storage });
 		const id = 'configured-execution';
 		const transcript = await services.transcripts.open(id, 'room');
-		const runtimeTranscript = await runtimeFor({ storage }).transcripts.open(id);
+		const runtimeTranscript = await hostingOf(runtimeFor({ storage })).transcripts.open(id);
 
 		expect(services.stream).toBe(stream);
 		expect(await transcript.getMetadata()).toMatchObject({ id, parentSessionId: 'room' });

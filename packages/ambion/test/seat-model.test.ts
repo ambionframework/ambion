@@ -6,6 +6,7 @@ import {
 	AgentRunner,
 	type CommitResult,
 	createPiExecutor,
+	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
 	type SeatRoom,
@@ -72,14 +73,14 @@ function actorFor(
 	const executor = createPiExecutor({
 		definition: product,
 		model: modelResolver,
-		stream: runtime.stream,
-		transcripts: runtime.transcripts,
+		stream: hostingOf(runtime).stream,
+		transcripts: hostingOf(runtime).transcripts,
 		room: 'model-test',
 		now: () => clock.now(),
 	});
 	return new AgentRunner(room, {
 		clock,
-		call: runtime.call,
+		call: hostingOf(runtime).call,
 		definition: product,
 		room: 'model-test',
 		seat: product.name,

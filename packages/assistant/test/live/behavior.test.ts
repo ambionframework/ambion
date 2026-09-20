@@ -9,6 +9,7 @@ import {
 	pi,
 	startRoom,
 } from '@ambionframework/ambion';
+import { hostingOf } from '@ambionframework/ambion/transport';
 import {
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,
@@ -29,10 +30,11 @@ async function evaluate(options: {
 	attention?: Attention;
 	instructions?: string;
 }) {
-	const resolved = await defaultRuntime.model(model, 'assistant');
+	const hosting = hostingOf(defaultRuntime());
+	const resolved = await hosting.model(model, 'assistant');
 	let answered = false;
 	const stream: NonNullable<CreateRuntimeOptions['stream']> = (requested, context, settings) => {
-		if (requested.id === model) return defaultRuntime.stream(resolved, context, settings);
+		if (requested.id === model) return hosting.stream(resolved, context, settings);
 		const result = createAssistantMessageEventStream();
 		const message = answered
 			? fauxAssistantMessage('', { stopReason: 'stop' })

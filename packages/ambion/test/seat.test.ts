@@ -14,6 +14,7 @@ import {
 	AgentRunner,
 	type CommitResult,
 	createPiExecutor,
+	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
 	type SeatRoom,
@@ -113,15 +114,15 @@ function play(stream: StreamFn = scripted(() => quiet()), transcripts?: SessionO
 	const room = new PlayedRoom(clock);
 	const executor = createPiExecutor({
 		definition: product,
-		model: runtime.model,
-		stream: runtime.stream,
-		transcripts: transcripts ?? runtime.transcripts,
+		model: hostingOf(runtime).model,
+		stream: hostingOf(runtime).stream,
+		transcripts: transcripts ?? hostingOf(runtime).transcripts,
 		room: 'played',
 		now: () => clock.now(),
 	});
 	const actor = new AgentRunner(room, {
 		clock,
-		call: runtime.call,
+		call: hostingOf(runtime).call,
 		definition: product,
 		room: 'played',
 		seat: 'product',
@@ -240,7 +241,7 @@ describe('a seat actor', () => {
 			},
 		};
 		const fixture = play(undefined, transcripts);
-		base = fixture.runtime.transcripts;
+		base = hostingOf(fixture.runtime).transcripts;
 		fixture.room.letGo.resolve();
 		await fixture.actor.run('message:1:product:1');
 

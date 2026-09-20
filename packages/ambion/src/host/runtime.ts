@@ -1,9 +1,13 @@
 /**
  * The runtime: what a host owns and every room in it shares.
  *
- * A room needs a clock, storage, a model call,
- * and a register of running rooms. A `Runtime` holds them as one value.
- * `startRoom` and `readRoom` take one.
+ * An application holds a `Runtime` as an opaque token: a clock, and a place
+ * to store the record. `startRoom` and `readRoom` take one and pass it on;
+ * neither reads anything else off it. Everything else a host or the
+ * kernel's own internals need — the journal namespace, transcript storage,
+ * the model call, wake and retry policy, and the room lifecycle registry —
+ * lives behind `hostingOf`. Only `createRuntime` can produce the brand
+ * `hostingOf` looks up, so a hand-built value can never stand in for one.
  *
  * The clock is an interface so a test can move time by hand, and so a host
  * on a platform with its own alarms maps `alarm` to them. A journal opener
@@ -18,7 +22,52 @@ import { createExecutionServices } from '../execution/services.ts';
 import type { SeatPort, SeatRoom } from '../protocol.ts';
 import type { AgentDefinition, Clock, ModelResolver, RoomNotification } from '../types.ts';
 
-interface RuntimeState {
+/** A key nobody outside this file can write: `createRuntime` is the one place that casts through it. */
+declare const RUNTIME: unique symbol;
+
+/** What an application holds and passes on. Nothing else reaches through it. */
+export interface Runtime {
+	readonly [RUNTIME]: true;
+	readonly clock: Clock;
+	/** The host's native storage. The runtime derives its room and Pi views from it. */
+	readonly storage: JournalOpener;
+}
+
+/**
+ * What a host, or the kernel's own internals, need beyond the application
+ * view: the journal namespace, transcript storage, the model call, wake and
+ * retry policy, and the room lifecycle registry. `hostingOf` is the one way
+ * to reach it from a `Runtime` value.
+ */
+export interface Hosting {
+	readonly journals: JournalOpener;
+	readonly transcripts: SessionOpener;
+	/** How the room reaches a seat. Absent, every seat is an actor in this process. */
+	readonly transport?: Transport;
+	/** The model call every seat in this runtime makes, unless a room overrides it. */
+	readonly stream: StreamFn;
+	readonly model: ModelResolver;
+	/**
+	 * How long a wake stays unanswered before the room sends it again, how
+	 * long a lease lasts between renewals, and how long an activation may run
+	 * from its claim: the room renews no lease past the deadline, so an
+	 * activation that runs on expires and counts as an attempt.
+	 */
+	readonly wake: { readonly resend: number; readonly expiry: number; readonly deadline: number };
+	/** How many times the room retries a failed summary, and how long it waits before each retry. */
+	readonly retry: { readonly attempts: number; readonly backoff: (attempt: number) => number };
+	/**
+	 * `timeout` bounds each executor call to the room, in milliseconds.
+	 * `attempts` bounds claim and release retries. Defaults: 10,000 ms and two attempts.
+	 * The journal remains authoritative when a timed out call may have reached the room.
+	 * These limits are separate from execution retries, which can repeat model work.
+	 */
+	readonly call: { readonly attempts: number; readonly timeout: number };
+	/** Drop a running room from memory and write nothing. The record keeps everything. */
+	evict(name: string): void;
+}
+
+interface RuntimeState extends Hosting {
 	running: Map<string, RunningRoom>;
 }
 
@@ -28,6 +77,11 @@ function state(runtime: Runtime): RuntimeState {
 	const found = stateFor.get(runtime);
 	if (found === undefined) throw new Error('Runtime must come from createRuntime.');
 	return found;
+}
+
+/** Everything beyond the application view: a host's, or the kernel's own, escape hatch. */
+export function hostingOf(runtime: Runtime): Hosting {
+	return state(runtime);
 }
 
 export const runningRoom = (runtime: Runtime, name: string): SeatRoom | undefined =>
@@ -89,52 +143,22 @@ export interface ExecutionConnector {
 	): SeatPort;
 }
 
-export interface Runtime {
-	readonly clock: Clock;
-	/** The host's native storage. The runtime derives its room and Pi views from it. */
-	readonly storage: JournalOpener;
-	readonly journals: JournalOpener;
-	readonly transcripts: SessionOpener;
-	/** How the room reaches a seat. Absent, every seat is an actor in this process. */
-	readonly transport?: Transport;
-	/** The model call every seat in this runtime makes, unless a room overrides it. */
-	readonly stream: StreamFn;
-	readonly model: ModelResolver;
-	/**
-	 * How long a wake stays unanswered before the room sends it again, how
-	 * long a lease lasts between renewals, and how long an activation may run
-	 * from its claim: the room renews no lease past the deadline, so an
-	 * activation that runs on expires and counts as an attempt.
-	 */
-	readonly wake: { readonly resend: number; readonly expiry: number; readonly deadline: number };
-	/** How many times the room retries a failed summary, and how long it waits before each retry. */
-	readonly retry: { readonly attempts: number; readonly backoff: (attempt: number) => number };
-	/**
-	 * `timeout` bounds each executor call to the room, in milliseconds.
-	 * `attempts` bounds claim and release retries. Defaults: 10,000 ms and two attempts.
-	 * The journal remains authoritative when a timed out call may have reached the room.
-	 * These limits are separate from execution retries, which can repeat model work.
-	 */
-	readonly call: { readonly attempts: number; readonly timeout: number };
-	/** Drop a running room from memory and write nothing. The record keeps everything. */
-	evict(name: string): void;
-}
-
 /** Collaboration services that a room host may use. */
 export interface RoomRuntime {
 	readonly clock: Clock;
 	readonly journals: JournalOpener;
-	readonly wake: Runtime['wake'];
-	readonly retry: Runtime['retry'];
+	readonly wake: Hosting['wake'];
+	readonly retry: Hosting['retry'];
 	release(room: RunningRoom): void;
 }
 
 export function roomRuntime(runtime: Runtime, name: string): RoomRuntime {
+	const hosting = state(runtime);
 	return {
 		clock: runtime.clock,
-		journals: runtime.journals,
-		wake: runtime.wake,
-		retry: runtime.retry,
+		journals: hosting.journals,
+		wake: hosting.wake,
+		retry: hosting.retry,
 		release: (room) => releaseRoom(runtime, name, room),
 	};
 }
@@ -149,9 +173,9 @@ export interface CreateRuntimeOptions {
 	 * model then resolves to a stub, because a custom stream never reads it.
 	 */
 	stream?: StreamFn;
-	wake?: Partial<Runtime['wake']>;
-	retry?: Partial<Runtime['retry']>;
-	call?: Partial<Runtime['call']>;
+	wake?: Partial<Hosting['wake']>;
+	retry?: Partial<Hosting['retry']>;
+	call?: Partial<Hosting['call']>;
 }
 
 export { systemClock } from './clock.ts';
@@ -183,9 +207,10 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 			throw new Error(`Runtime wake.${name} must be at least one millisecond.`);
 		}
 	}
-	const runtime: Runtime = {
-		clock: services.clock,
-		storage,
+	// The application view: an opaque token nobody outside this file can produce.
+	const runtime = { clock: services.clock, storage } as unknown as Runtime;
+	stateFor.set(runtime, {
+		running,
 		journals,
 		transcripts: services.transcripts,
 		...(options.transport === undefined ? {} : { transport: options.transport }),
@@ -199,10 +224,14 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 			running.delete(name);
 			room?.evict();
 		},
-	};
-	stateFor.set(runtime, { running });
+	});
 	return runtime;
 }
 
-/** What a host gets when it passes no runtime: one process-wide value. */
-export const defaultRuntime: Runtime = createRuntime();
+let singleton: Runtime | undefined;
+
+/** What a host gets when it passes no runtime: one process-wide value, created on first use. */
+export function defaultRuntime(): Runtime {
+	if (singleton === undefined) singleton = createRuntime();
+	return singleton;
+}

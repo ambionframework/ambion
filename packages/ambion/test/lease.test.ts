@@ -21,7 +21,7 @@ import {
 	type Visit,
 } from '../src/index.ts';
 import type { LeaseChange } from '../src/journal/events.ts';
-import { inProcessTransport, type SeatRoom } from '../src/transport.ts';
+import { hostingOf, inProcessTransport, type SeatRoom } from '../src/transport.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import {
 	assistant,
@@ -199,7 +199,7 @@ describe('a lease', () => {
 			true,
 		);
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
-		const stored = await storedOf(runtime.journals, session.name);
+		const stored = await storedOf(hostingOf(runtime).journals, session.name);
 		const renewals = stored.flatMap((entry) => {
 			const lease = entry.body as LeaseChange;
 			const mine = entry.kind === 'lease' && decodeActivationId(lease.id)?.seat === 'solo';
@@ -236,7 +236,7 @@ describe('a lease', () => {
 		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
 			{ type: 'abandoned', agent: 'solo', activation: 'message:4:solo:4', cause: 'transient' },
 		]);
-		const stored = await storedOf(runtime.journals, session.name);
+		const stored = await storedOf(hostingOf(runtime).journals, session.name);
 		const gaveUp = stored.filter((entry) => {
 			const lease = entry.body as LeaseChange;
 			return entry.kind === 'lease' && lease.phase === 'ended' && lease.reason === 'abandoned';
@@ -291,7 +291,7 @@ describe('a lease', () => {
 			seat: 'assistant',
 			attempt: 4,
 		});
-		const stored = await storedOf(runtime.journals, session.name);
+		const stored = await storedOf(hostingOf(runtime).journals, session.name);
 		expect(
 			stored
 				.filter((entry) => (entry.body as LeaseChange).id === givenUp)

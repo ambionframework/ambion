@@ -16,6 +16,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import {
+	hostingOf,
 	runningRoom,
 	type SeatPort,
 	type SeatRoom,
@@ -185,7 +186,7 @@ describe.each(storages)('inherited leases on $name', (storage) => {
 		const state = await interrupted(storage);
 		let resumed: Room | undefined;
 		try {
-			state.first.evict(state.name);
+			hostingOf(state.first).evict(state.name);
 			await assertOldHostStale(state);
 			const recording = recordingTransport();
 			const second = createRuntime({
@@ -234,7 +235,7 @@ describe.each(storages)('inherited leases on $name', (storage) => {
 		const state = await interrupted(storage);
 		let resumed: Room | undefined;
 		try {
-			state.first.evict(state.name);
+			hostingOf(state.first).evict(state.name);
 			await assertOldHostStale(state);
 			const recording = recordingTransport();
 			const second = createRuntime({

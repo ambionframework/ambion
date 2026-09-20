@@ -12,7 +12,7 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
-import { inProcessTransport, seatSessionId } from '../src/transport.ts';
+import { hostingOf, inProcessTransport, seatSessionId } from '../src/transport.ts';
 import {
 	andrei,
 	assistant,
@@ -513,7 +513,7 @@ describe('startRoom', () => {
 		const seat = (await participantsOf(session)).find((s) => s.name === 'solo');
 		if (seat?.kind !== 'agent') throw new Error('The solo seat is absent.');
 		const id = seatSessionId(name, seat.name);
-		const piSeat = await runtime.transcripts.open(id);
+		const piSeat = await hostingOf(runtime).transcripts.open(id);
 		expect(await piSeat.getMetadata()).toMatchObject({
 			id,
 			parentSessionId: name,

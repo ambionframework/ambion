@@ -21,7 +21,7 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import { inProcessTransport } from '../src/transport.ts';
+import { hostingOf, inProcessTransport } from '../src/transport.ts';
 import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
@@ -256,7 +256,7 @@ class Walk {
 	private async crash(): Promise<void> {
 		if (this.crashes >= 3) return;
 		this.crashes += 1;
-		this.runtime.evict(this.name);
+		hostingOf(this.runtime).evict(this.name);
 		this.visits.clear();
 		const activations = await liveLeases(this.journals, this.name, this.clock.now());
 		// A resume writes the fence first, and a host tries again when the storage fails it.

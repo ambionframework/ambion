@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const node = process.env.AMBION_NODE ?? process.execPath;
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 const entry = pathToFileURL(`${packageRoot}/dist/index.mjs`).href;
+const transportEntry = pathToFileURL(`${packageRoot}/dist/transport.mjs`).href;
 const loader = fileURLToPath(new URL('./support/import-trace-loader.mjs', import.meta.url));
 
 function runFreshProcess(code: string): Promise<{ code: number | null; stderr: string }> {
@@ -85,7 +86,8 @@ describe('provider loading', () => {
 	it('loads the catalog when the default model resolver is first used', async () => {
 		const result = await runFreshProcess(
 			`const { createRuntime } = await import(${JSON.stringify(entry)});
-			const model = await createRuntime().model('anthropic/claude-sonnet-4-5', 'test');
+			const { hostingOf } = await import(${JSON.stringify(transportEntry)});
+			const model = await hostingOf(createRuntime()).model('anthropic/claude-sonnet-4-5', 'test');
 			if (model.id !== 'claude-sonnet-4-5' || model.provider !== 'anthropic') {
 				throw new Error('unexpected model');
 			}`,

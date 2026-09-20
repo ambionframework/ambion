@@ -31,8 +31,8 @@ export {
 	type ExecutionServicesOptions,
 	seatSessionId,
 } from './execution/services.ts';
-export type { SeatContext, Transport } from './host/runtime.ts';
-export { runningRoom } from './host/runtime.ts';
+export type { Hosting, SeatContext, Transport } from './host/runtime.ts';
+export { hostingOf, runningRoom } from './host/runtime.ts';
 export type {
 	ActivationPurpose,
 	ActivationSpec,

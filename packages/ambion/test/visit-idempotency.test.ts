@@ -9,6 +9,7 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
+import { hostingOf } from '../src/transport.ts';
 import { messagesOf, roomName } from './support/room.ts';
 import { gatedJournals, storages, tappedJournals } from './support/storage.ts';
 
@@ -198,7 +199,7 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 		let room: Awaited<ReturnType<typeof startRoom>> | undefined;
 		try {
 			await first.visit(person);
-			firstRuntime.evict(name);
+			hostingOf(firstRuntime).evict(name);
 			room = await resumeRoom(name, {
 				agents: [],
 				runtime: createRuntime({ storage: opened.storage }),

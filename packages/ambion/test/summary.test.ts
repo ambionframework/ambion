@@ -17,7 +17,7 @@ import {
 	type SummaryMessage,
 	startRoom,
 } from '../src/index.ts';
-import { seatSessionId } from '../src/transport.ts';
+import { hostingOf, seatSessionId } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import {
 	assistantEnded,
@@ -659,7 +659,9 @@ describe('closing summaries', () => {
 		const seatSession = (await participantsOf(session)).find((value) => value.name === 'assistant');
 		if (seatSession?.kind !== 'agent') throw new Error('The assistant seat is absent.');
 		const entries = await (
-			await transcriptRuntime.transcripts.open(seatSessionId(session.name, seatSession.name))
+			await hostingOf(transcriptRuntime).transcripts.open(
+				seatSessionId(session.name, seatSession.name),
+			)
 		).findEntries();
 		expect(entries.some((e) => e.type === 'custom' && e.customType === 'ambion/activation')).toBe(
 			true,

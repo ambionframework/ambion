@@ -7,6 +7,7 @@ import {
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
+import { hostingOf } from '../src/transport.ts';
 import { collect, roomName, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
@@ -76,7 +77,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			const visit = await room.visit(person);
 			await visit.send({ to: worker.name, text: 'answer me' });
 			await waitForRoom(room);
-			expect(calls).toBe(runtime.retry.attempts);
+			expect(calls).toBe(hostingOf(runtime).retry.attempts);
 			expect(abandonments(events)).toEqual([
 				expect.objectContaining({ agent: worker.name, cause: 'transient' }),
 			]);
@@ -107,7 +108,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			await waitForRoom(room);
 			// A transient failure may pass, so the room retries to the cap before it
 			// gives up.
-			expect(calls).toBe(runtime.retry.attempts);
+			expect(calls).toBe(hostingOf(runtime).retry.attempts);
 			expect(abandonments(events)).toEqual([
 				expect.objectContaining({ agent: worker.name, cause: 'transient' }),
 			]);
