@@ -63,6 +63,7 @@ export type {
 	ToolContext,
 	TracePolicy,
 	TraceStep,
+	Usage,
 } from './types.ts';
 export { isPresence, isSpoken, isSummary } from './types.ts';
 

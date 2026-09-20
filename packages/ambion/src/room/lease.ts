@@ -30,7 +30,7 @@
 import type { JournalEntry } from '@ambionframework/journal';
 import { type ActivationSource, decodeActivationId, encodeActivationId } from '../activation-id.ts';
 import type { LeaseChange } from '../journal/events.ts';
-import type { Message, Seq } from '../types.ts';
+import type { Message, Seq, Usage } from '../types.ts';
 import type { MessageDelivery } from './delivery.ts';
 import {
 	applyChange,
@@ -45,7 +45,10 @@ import {
 } from './rules.verified.ts';
 
 /** What the lease entries for one activation fold to: the rules' `Hold`. */
-export type LeaseHold = Hold;
+export type LeaseHold = Hold & {
+	/** What the activation spent, from the ended entry its driver wrote. */
+	readonly usage?: Usage;
+};
 
 /**
  * Every lease the changes fold to. The complete journal remains available,
@@ -65,7 +68,11 @@ export function applyLease(
 	leases: Map<string, LeaseHold>,
 	{ body: change, seq }: JournalEntry<LeaseChange>,
 ): void {
-	leases.set(change.id, applyChange(leases.get(change.id), change, seq));
+	const known = leases.get(change.id);
+	const next: LeaseHold = applyChange(known, change, seq);
+	// An ended lease is final: only the entry that ends it carries usage.
+	const usage = change.phase === 'ended' && next !== known ? change.usage : undefined;
+	leases.set(change.id, usage === undefined ? next : { ...next, usage });
 }
 
 export const isExpired = (lease: LeaseHold, now: number): boolean =>

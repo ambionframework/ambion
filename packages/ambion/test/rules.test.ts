@@ -22,6 +22,8 @@ import {
 } from '../src/room/rules.verified.ts';
 import type { EndReason, Message, FailureCause as PublicFailureCause } from '../src/types.ts';
 
+type DistributiveOmit<T, K extends string> = T extends unknown ? Omit<T, K> : never;
+
 const at = '2026-01-01T09:00:00.000Z';
 const lease = (seq: number, body: LeaseChange): Entry<LeaseChange> => ({
 	kind: 'lease',
@@ -37,13 +39,14 @@ describe('verified rules', () => {
 		expectTypeOf<LeaseEndReason>().toEqualTypeOf<EndReason>();
 		expectTypeOf<FailureCause>().toEqualTypeOf<PublicFailureCause>();
 		expectTypeOf<LeasePhase>().toEqualTypeOf<'running' | 'ended'>();
-		expectTypeOf<Change>().toEqualTypeOf<LeaseChange>();
+		// Usage is a fact of the record the rules never read, so the rules omit it.
+		expectTypeOf<Change>().toEqualTypeOf<DistributiveOmit<LeaseChange, 'usage'>>();
 		expectTypeOf<Source>().toEqualTypeOf<ActivationSource>();
 		expectTypeOf<ActivationFields>().toEqualTypeOf<ActivationId>();
 		expectTypeOf<GrantPurpose>().toEqualTypeOf<ActivationPurpose>();
 		expectTypeOf<Close>().toMatchTypeOf<CloseFact>();
 		// The room's hold is the rule's hold plus the derived `cancelled` marker.
-		expectTypeOf<Hold>().toEqualTypeOf<LeaseHold>();
+		expectTypeOf<Hold>().toEqualTypeOf<DistributiveOmit<LeaseHold, 'usage'>>();
 	});
 
 	it('folds one lease entry: ended is final, since is fixed, readThrough never moves back', () => {

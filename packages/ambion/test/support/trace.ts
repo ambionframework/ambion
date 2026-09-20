@@ -6,6 +6,7 @@ import type { Runtime, TraceStep } from '../../src/index.ts';
 export const noTrace: TraceSink = {
 	startPass: () => {},
 	record: () => {},
+	usage: () => undefined,
 	close: async () => {},
 };
 

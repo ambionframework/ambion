@@ -182,6 +182,92 @@ describe('the room pages the record', () => {
 	});
 });
 
+describe('the room caps the record', () => {
+	const entries: Entry[] = [
+		composition,
+		message(2, said(2, 'one')),
+		message(3, said(3, 'two')),
+		message(4, said(4, 'three')),
+		message(5, said(5, 'four')),
+	];
+	const capped = (state: RoomState, messages: number): RoomFacts => ({
+		...facts(state),
+		limits: { messages },
+	});
+	const seqs = (view: ReturnType<typeof viewOf>): Seq[] => view.context.messages.map((m) => m.seq);
+
+	it('serves the newest messages and counts what it drops', () => {
+		const state = foldRoom(entries, options);
+		const view = viewOf(respondSpec(), capped(state, 2));
+		expect(seqs(view)).toEqual([4, 5]);
+		expect(view.context.earliest).toBe(4);
+		expect(view.context.omitted).toBe(2);
+		expect(view.through).toBe(state.lastSeq);
+	});
+
+	it('serves the open exchange whole below the cap', () => {
+		const state = foldRoom(entries, options);
+		const pinned: RoomState = { ...state, exchange: { owner: 'priya', from: 3, at } };
+		const view = viewOf(respondSpec(), capped(pinned, 1));
+		expect(seqs(view)).toEqual([3, 4, 5]);
+		expect(view.context.omitted).toBe(1);
+	});
+
+	it('moves the floor past a summarised range and keeps the summary', () => {
+		const summary: Message = {
+			kind: 'summary',
+			seq: 8,
+			at,
+			from: 'worker',
+			to: 'priya',
+			text: 'Done.',
+			covers: { from: 4, through: 6 },
+		};
+		const longer: Entry[] = [
+			composition,
+			...[2, 3, 4, 5, 6, 7].map((seq) => message(seq, said(seq, `m${seq}`))),
+			message(8, summary),
+			message(9, said(9, 'seven')),
+			message(10, said(10, 'eight')),
+		];
+		const view = viewOf(respondSpec(), capped(foldRoom(longer, options), 6));
+		expect(seqs(view)).toEqual([7, 8, 9, 10]);
+		expect(view.context.omitted).toBe(5);
+	});
+
+	it('stops a page at the capped floor', () => {
+		const state = foldRoom(entries, options);
+		const view = viewOf(respondSpec(), capped(state, 3), { before: 5, limit: 2 });
+		expect(seqs(view)).toEqual([3, 4]);
+		expect(view.context.earliest).toBe(3);
+		expect(view.context.omitted).toBe(1);
+		const below = viewOf(respondSpec(), capped(state, 3), { before: 3, limit: 2 });
+		expect(seqs(below)).toEqual([]);
+		expect(below.context.omitted).toBe(1);
+	});
+
+	it('reports nothing for an infinite cap without a range', () => {
+		const state = foldRoom(entries, options);
+		const view = viewOf(respondSpec(), capped(state, Number.POSITIVE_INFINITY));
+		expect(seqs(view)).toEqual([2, 3, 4, 5]);
+		expect(view.context.earliest).toBeUndefined();
+		expect(view.context.omitted).toBeUndefined();
+	});
+
+	it('serves the closing exchange whole to a summary purpose', () => {
+		const state = foldRoom(entries, options);
+		const spec: ActivationSpec = {
+			id: 'summary:2:writer:0',
+			seat: 'worker',
+			attempt: 0,
+			purpose: { kind: 'summarize', person: 'priya', exchange: 3, through: 5 },
+		};
+		const view = viewOf(spec, capped(state, 1));
+		expect(seqs(view)).toEqual([3, 4, 5]);
+		expect(view.context.omitted).toBe(1);
+	});
+});
+
 describe('activationTokenLimit validation', () => {
 	const base = {
 		instructions: 'Read.',
