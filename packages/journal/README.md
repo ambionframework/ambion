@@ -77,8 +77,9 @@ awaiting storage; later caller mutations do not change that append.
 **A storage author proves the contract with a published suite.**
 `@ambionframework/journal/conformance` exports `storageConformance(backend)`.
 It returns cases with a stable `name` and a `run` that throws on failure. The
-suite needs no test framework. `backend.open()` returns the `JournalOpener`
-under test. Run the cases in vitest like this:
+suite needs no test framework. `backend.open()` returns `{ opener, dispose? }`:
+the `JournalOpener` under test and an optional release that the suite calls
+after the case. Run the cases in vitest like this:
 
 ```ts
 import { storageConformance } from '@ambionframework/journal/conformance';

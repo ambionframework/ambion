@@ -5,8 +5,8 @@
  * runs the `product` definition on the scripted model from `worker.ts`.
  *
  * `runInDurableObject` and the test share one isolate, so the recording
- * room's closures work. A pool that isolates objects needs a real seam in
- * `RoomObject` for this harness.
+ * room's closures work. A pool that isolates objects needs `RoomObject`
+ * to take the recording room through an option.
  */
 import { env, runInDurableObject } from 'cloudflare:test';
 import { systemClock } from '@ambionframework/ambion';
