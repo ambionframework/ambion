@@ -1,7 +1,7 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import type { SeatContext } from '../src/host/runtime.ts';
+import type { AgentExecutionContext } from '../src/host/runtime.ts';
 import {
 	AgentRunner,
 	type CommitRequest,
@@ -10,7 +10,7 @@ import {
 	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
-	type SeatRoom,
+	type RoomProtocol,
 	type ViewResponse,
 	type Wake,
 } from '../src/hosting.ts';
@@ -37,7 +37,7 @@ interface RoomOptions {
 	commit?: (request: CommitRequest) => Promise<CommitResult>;
 }
 
-class LivenessRoom implements SeatRoom {
+class LivenessRoom implements RoomProtocol {
 	readonly calls: LeaseRequest[] = [];
 
 	constructor(
@@ -95,7 +95,7 @@ function fixture(
 		commit?: (request: CommitRequest) => Promise<CommitResult>;
 		stream?: StreamFn;
 		call?: { attempts?: number; timeout?: number };
-		emit?: (event: Parameters<NonNullable<SeatContext['emit']>>[0]) => void;
+		emit?: (event: Parameters<NonNullable<AgentExecutionContext['emit']>>[0]) => void;
 	} = {},
 ) {
 	const clock = fakeClock(0);

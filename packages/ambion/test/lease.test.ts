@@ -8,7 +8,7 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { afterEach, describe, expect, it } from 'vitest';
 import { decodeActivationId } from '../src/activation-id.ts';
-import { hostingOf, inProcessTransport, type SeatRoom } from '../src/hosting.ts';
+import { hostingOf, inProcessTransport, type RoomProtocol } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -81,7 +81,7 @@ async function open(
 		seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 		agents: [solo, assistant],
 		runtime,
-		streamFn: scripted(script),
+		stream: scripted(script),
 	});
 	started.push(session);
 	return { session, clock, runtime };
@@ -161,7 +161,7 @@ describe('a lease', () => {
 		]);
 		expect(await currentExchange(session)).toBeUndefined();
 
-		const room = session as unknown as SeatRoom;
+		const room = session as unknown as RoomProtocol;
 		await expect(
 			room.lease({
 				activation: 'message:2:solo:1',
@@ -425,7 +425,7 @@ describe('a lease judged where its change is written', () => {
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
 			runtime: createRuntime({ clock, storage: journals }),
-			streamFn: scripted(async (_c, _a, call) => {
+			stream: scripted(async (_c, _a, call) => {
 				if (call === 1) {
 					await held.promise;
 					return speak('late but alive');
@@ -501,7 +501,7 @@ describe('a lease judged where its change is written', () => {
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
 			runtime,
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					solo: async (context, name, call) => {
 						if (!contextText(context).includes('Second?')) {

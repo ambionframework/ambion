@@ -94,7 +94,7 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 	const session = await startRoom({
 		name: name('workspace'),
 		agents,
-		streamFn: scripted(byAgent(seats)),
+		stream: scripted(byAgent(seats)),
 	});
 	const visit = await enter(session);
 	const exchange = await visit.send({ text: 'go' });

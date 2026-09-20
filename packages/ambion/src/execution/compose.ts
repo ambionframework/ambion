@@ -2,7 +2,7 @@
 
 import type { ExecutionConnector, Hosting, Runtime, Transport } from '../host/runtime.ts';
 import { hostingOf } from '../host/runtime.ts';
-import type { SeatRoom } from '../protocol.ts';
+import type { RoomProtocol } from '../protocol.ts';
 import { createPiExecutor } from './activation.ts';
 import { inProcessTransport } from './runner.ts';
 import { stubModel } from './services.ts';
@@ -10,14 +10,14 @@ import { stubModel } from './services.ts';
 /** Build one connector that captures this room's model stream and transport. */
 export function composeExecution(
 	runtime: Runtime,
-	streamFn?: Hosting['stream'],
+	override?: Hosting['stream'],
 ): ExecutionConnector {
 	const hosting = hostingOf(runtime);
 	const transport: Transport = hosting.transport ?? inProcessTransport();
-	const stream = streamFn ?? hosting.stream;
-	const model = streamFn === undefined ? hosting.model : stubModel;
+	const stream = override ?? hosting.stream;
+	const model = override === undefined ? hosting.model : stubModel;
 	return {
-		connect(room: SeatRoom, request) {
+		connect(room: RoomProtocol, request) {
 			const executor = createPiExecutor({
 				definition: request.definition,
 				model,

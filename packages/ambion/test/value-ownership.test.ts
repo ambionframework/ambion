@@ -68,7 +68,7 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 			runtime,
 			agents: [writer],
 			seats: {},
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		try {
 			const exchange = await (await room.visit(andrei)).send({ text: 'Original question.' });
@@ -110,7 +110,7 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 			agents: [writer],
 			seats: { writer: 'none' },
 			summary: writer.name,
-			streamFn: scripted((context) => (isClosing(context) ? speak('Original result.') : quiet())),
+			stream: scripted((context) => (isClosing(context) ? speak('Original result.') : quiet())),
 		});
 		try {
 			const exchange = await (await room.visit(andrei)).send({ text: 'Question?' });

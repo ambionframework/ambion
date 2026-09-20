@@ -11,7 +11,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Clock, ExecutionEvent } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
-import type { ExecutionServices, SeatRoom, Steer, Wake } from '@ambionframework/ambion/hosting';
+import type { ExecutionServices, RoomProtocol, Steer, Wake } from '@ambionframework/ambion/hosting';
 import { AgentRunner, createPiExecutor } from '@ambionframework/ambion/hosting';
 import type { SeatEvent } from './configure.ts';
 import { definitionOf, executionFor, seatEvent } from './configure.ts';
@@ -122,7 +122,7 @@ export class SeatObject extends DurableObject<Env> {
 		const state = await this.metadata.read();
 		const { activation, room, seat } = state;
 		if (activation === undefined || room === undefined || seat === undefined) return;
-		const seatRoom = this.roomFor(room);
+		const protocol = this.roomFor(room);
 		const execution = executionFor({
 			storage: this.storage,
 			clock: systemClock(),
@@ -131,7 +131,7 @@ export class SeatObject extends DurableObject<Env> {
 			// A run that never came back: the object was evicted mid-activation.
 			try {
 				await this.releaseRecovered(
-					seatRoom,
+					protocol,
 					execution.call,
 					execution.clock,
 					room,
@@ -153,7 +153,7 @@ export class SeatObject extends DurableObject<Env> {
 			room,
 			now: () => execution.clock.now(),
 		});
-		this.runner = new AgentRunner(seatRoom, {
+		this.runner = new AgentRunner(protocol, {
 			clock: execution.clock,
 			call: execution.call,
 			definition,
@@ -172,7 +172,7 @@ export class SeatObject extends DurableObject<Env> {
 
 	/** Release a recovered activation within the configured call budget. */
 	private async releaseRecovered(
-		seatRoom: SeatRoom,
+		protocol: RoomProtocol,
 		call: ExecutionServices['call'],
 		clock: Clock,
 		room: string,
@@ -183,7 +183,7 @@ export class SeatObject extends DurableObject<Env> {
 		for (let attempt = 0; attempt < call.attempts; attempt += 1) {
 			const result = await this.recoveryCall(
 				() =>
-					seatRoom.lease({ activation, operation: 'release', reason: 'failed', readThrough: 0 }),
+					protocol.lease({ activation, operation: 'release', reason: 'failed', readThrough: 0 }),
 				clock,
 				call.timeout,
 			);
@@ -232,7 +232,7 @@ export class SeatObject extends DurableObject<Env> {
 	}
 
 	/** The three calls this seat makes on its room, each over a stub of its own. */
-	private roomFor(room: string): SeatRoom {
+	private roomFor(room: string): RoomProtocol {
 		return {
 			view: (id, range) => this.roomStub(room).view(id, range),
 			commit: (commit) => this.roomStub(room).commit(commit),

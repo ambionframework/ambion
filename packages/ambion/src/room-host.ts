@@ -40,12 +40,12 @@ import {
 	spaced,
 } from './journal/journal.ts';
 import type {
+	AgentPort,
 	CommitRequest,
 	CommitResult,
 	LeaseRequest,
 	LeaseResponse,
-	SeatPort,
-	SeatRoom,
+	RoomProtocol,
 	Steer,
 	ViewRange,
 	ViewResponse,
@@ -76,7 +76,7 @@ import type {
 	Message,
 	PresenceMessage,
 	RoomNotification,
-	RoomSnapshot,
+	RoomRead,
 	SeatOptions,
 	Seq,
 	SummaryMessage,
@@ -84,7 +84,7 @@ import type {
 } from './types.ts';
 import { copyMessage } from './types.ts';
 
-export type { RoomSnapshot } from './types.ts';
+export type { RoomRead } from './types.ts';
 
 /**
  * Where the room is in its life. One field answers every question the room
@@ -182,8 +182,8 @@ export interface ExchangeHandle extends ExchangeRef {
 
 export interface Room {
 	readonly name: string;
-	/** Observe one detached room snapshot without waiting for agent work. */
-	read(options?: { messages?: MessageSelection }): Promise<RoomSnapshot>;
+	/** Observe one detached room read without waiting for agent work. */
+	read(options?: { messages?: MessageSelection }): Promise<RoomRead>;
 	subscribe(listener: (event: RoomNotification) => void): () => void;
 	/** Reacquire an exchange by the source sequence of its opening question. */
 	exchange(from: Seq): ExchangeHandle | undefined;
@@ -207,7 +207,7 @@ export interface Room {
 export interface Visit {
 	readonly human: HumanDefinition;
 	/** The seq of this person's last `left`, or undefined the first time. A live read. */
-	readonly since: Seq | undefined;
+	readonly lastDeparture: Seq | undefined;
 	/**
 	 * Send a message to the room. `key` is the delivery's idempotency token:
 	 * a repeated token lands once, so a host that never learned whether a
@@ -269,9 +269,9 @@ export class RoomHost implements Room, RunningRoom {
 		string,
 		{ identity: string; promise: Promise<VisitRuntime> }
 	>();
-	private readonly ports = new Map<string, SeatPort>();
+	private readonly ports = new Map<string, AgentPort>();
 	/** The three room calls exposed to an in-process seat. */
-	readonly calls: SeatRoom = {
+	readonly calls: RoomProtocol = {
 		view: (id, range) => this.view(id, range),
 		commit: (commit) => this.commit(commit),
 		lease: (lease) => this.lease(lease),
@@ -395,19 +395,19 @@ export class RoomHost implements Room, RunningRoom {
 				const priorComposition = current.composition;
 				if (priorComposition === undefined) return { event: undefined };
 				const roster = new Set(current.roster.map((seat) => seat.name));
-				const catalog = new Map(
+				const definitions = new Map(
 					[...priorComposition.agents, ...priorComposition.available, ...current.roster].map(
 						(seat) => [seat.name, seat],
 					),
 				);
 				for (const agent of this.defs.values())
-					if (!catalog.has(agent.name))
-						catalog.set(agent.name, {
+					if (!definitions.has(agent.name))
+						definitions.set(agent.name, {
 							name: agent.name,
 							identity: agent.identity,
 							attention: 'broadcast',
 						});
-				const available = [...catalog.values()].filter((seat) => !roster.has(seat.name));
+				const available = [...definitions.values()].filter((seat) => !roster.has(seat.name));
 				const { seq: _seq, at: _at, ...prior } = priorComposition;
 				const body = { ...prior, agents: current.roster, available, at: this.iso() };
 				return decide(current, { type: 'compose', composition: body }, this.now());
@@ -535,7 +535,7 @@ export class RoomHost implements Room, RunningRoom {
 	}
 
 	/** Read the detached room projection after pending journal work settles. */
-	async read(options: { messages?: MessageSelection } = {}): Promise<RoomSnapshot> {
+	async read(options: { messages?: MessageSelection } = {}): Promise<RoomRead> {
 		const messages = captureMessageSelection(options.messages);
 		await this.ready;
 		await this.journal.settled();
@@ -734,8 +734,8 @@ export class RoomHost implements Room, RunningRoom {
 		const room = this;
 		return {
 			human: visit.human,
-			get since() {
-				return room.state().people.get(visit.human.name)?.since;
+			get lastDeparture() {
+				return room.state().people.get(visit.human.name)?.lastDeparture;
 			},
 			async send(input) {
 				if (visit.gone)
@@ -1105,7 +1105,7 @@ export class RoomHost implements Room, RunningRoom {
 		seat: string,
 		operation: DeliveryOperation,
 		activation: string,
-		send: (port: SeatPort) => Promise<void>,
+		send: (port: AgentPort) => Promise<void>,
 	): void {
 		if (this.phase === 'evicted') return;
 		this.pruneDeliveryErrors();
@@ -1191,7 +1191,7 @@ export class RoomHost implements Room, RunningRoom {
 		});
 	}
 
-	private port(seat: string): SeatPort {
+	private port(seat: string): AgentPort {
 		let port = this.ports.get(seat);
 		if (port === undefined) {
 			const definition = this.defs.get(seat);

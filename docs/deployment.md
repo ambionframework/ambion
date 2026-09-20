@@ -127,7 +127,7 @@ client's delivery and display progress.
 | `exchange.from`, saved after acknowledgement         | Reacquire that exchange after reconnect            |
 | Last consumed message `seq`                          | Read messages that the client has not acknowledged |
 
-`Visit.since` is the sequence of the person's last recorded departure.
+`Visit.lastDeparture` is the sequence of the person's last recorded departure.
 It is shared presence history, not an acknowledged cursor for each device.
 Keep a separate cursor per client. Sequence numbers are journal positions;
 messages can have gaps between their sequence numbers.

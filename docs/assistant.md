@@ -98,7 +98,7 @@ The normalization rules are:
 - Register the supplied definition under its own name.
 - Seat that agent at `broadcast` attention and select it as the summary writer.
 - Preserve explicit seating choices for all other agents.
-- Preserve existing defaults when `seats` is omitted: all catalog agents start
+- Preserve existing defaults when `seats` is omitted: all defined agents start
   at `broadcast` attention.
 - Treat `seats: {}` with an assistant as seating only the assistant.
 - Reject duplicate assistant names and conflicting summary or assistant
@@ -130,7 +130,7 @@ that choice for the application.
 **The journal records the expanded ordinary composition.** The shorthand adds
 no durable assistant role or new history format. Resume still requires all
 recorded agent definitions, including the assistant. A host retains the
-complete catalog for resume and preserves recorded membership.
+complete definitions for resume and preserves recorded membership.
 
 ## Speak only when the message adds value
 
@@ -236,8 +236,8 @@ repair it through further investigation.
 
 ## Membership and completion
 
-**Membership changes serve the work.** Select specialists from their catalog
-identities and the current request. Avoid recruiting every remotely related
+**Membership changes serve the work.** Select specialists from the identities in
+their definitions and the current request. Avoid recruiting every remotely related
 specialist by default. Retain specialists across exchanges by default.
 Unseat when the user requests removal or a clear scope change makes continued
 participation unnecessary. Being idle alone is not a reason to remove an agent.
@@ -316,8 +316,8 @@ See [Summaries](summary.md) for the existing authority and completion rules.
 **The workbench example is the first consumer and the acceptance target.** Its
 rooms use the package factory with the lab's domain context and workspace
 tools. The example exposes the assistant, the specialist definitions, and the
-complete catalog. Startup uses the shorthand; resume supplies the complete
-catalog. [The example page](example.md) describes each room. Exercise every
+complete definitions. Startup uses the shorthand; resume supplies the complete
+definitions. [The example page](example.md) describes each room. Exercise every
 room when evaluating changes to the shared behavior.
 
 **Deterministic checks and behavioral evaluations establish different facts.**

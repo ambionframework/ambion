@@ -8,14 +8,14 @@
  * optional because a later executor family may only take context between
  * passes, never during one.
  */
-import type { ActivationView, SeatRoom } from '../protocol.ts';
+import type { ActivationView, RoomProtocol } from '../protocol.ts';
 import type { ExecutionEvent, FailureCause, Seq } from '../types.ts';
 
 /** What one activation gives its executor to open a session. */
 export interface ExecutorActivation {
 	readonly id: string;
 	/** The bounded room facade: the driver's own retries and cancellation. */
-	readonly room: SeatRoom;
+	readonly room: RoomProtocol;
 	readonly emit: (event: ExecutionEvent) => void;
 }
 

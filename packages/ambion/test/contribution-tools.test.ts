@@ -8,7 +8,7 @@ import type {
 	CommitResult,
 	LeaseRequest,
 	LeaseResponse,
-	SeatRoom,
+	RoomProtocol,
 	ViewResponse,
 } from '../src/hosting.ts';
 import { type AgentDefinition, defineAgent, pi } from '../src/index.ts';
@@ -19,7 +19,7 @@ const worker = defineAgent({
 	executor: pi({ instructions: 'Use the room tools.', model: 'scripted/worker' }),
 });
 
-const unusedRoom: SeatRoom = {
+const unusedRoom: RoomProtocol = {
 	view: async (): Promise<ViewResponse> => ({ stale: 'unused' }),
 	commit: async (): Promise<CommitResult> => ({ stale: 'unused' }),
 	lease: async (): Promise<LeaseResponse> => ({ stale: 'unused' }),
@@ -62,7 +62,7 @@ function view(purpose: ActivationView['spec']['purpose']): ActivationView {
 	};
 }
 
-function roomThatCommits(commits: CommitRequest[], responses: CommitResult[]): SeatRoom {
+function roomThatCommits(commits: CommitRequest[], responses: CommitResult[]): RoomProtocol {
 	return {
 		view: async () => ({ stale: 'unused' }),
 		commit: async (request) => {

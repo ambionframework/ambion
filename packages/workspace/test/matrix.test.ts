@@ -54,7 +54,7 @@ const twoWorkspaces: Scenario = {
 			name,
 			runtime,
 			agents: [alpha, beta, gamma],
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					alpha: async (context, _name, call) => {
 						alphaResults.push(...toolResultTexts(context).slice(alphaResults.length));

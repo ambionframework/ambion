@@ -3,7 +3,7 @@ import {
 	hostingOf,
 	inProcessTransport,
 	type LeaseRequest,
-	type SeatRoom,
+	type RoomProtocol,
 	type Transport,
 } from '../src/hosting.ts';
 import {
@@ -47,7 +47,7 @@ function delayedClaimTransport(
 	let held = true;
 	return {
 		connect(room, context) {
-			const delayed: SeatRoom = {
+			const delayed: RoomProtocol = {
 				view: (id, range) => room.view(id, range),
 				commit: (commit) => room.commit(commit),
 				lease: async (request: LeaseRequest) => {
@@ -98,7 +98,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 					},
 				},
 			}),
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		const throwing = room.subscribe((event) => {
 			if (event.type === 'delivery_error') throw new Error('observer failed');
@@ -158,7 +158,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		const off = room.subscribe((event) => events.push(event));
 		try {
@@ -225,7 +225,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 					},
 				},
 			}),
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		try {
 			const visit = await room.visit(human);
@@ -258,7 +258,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime: firstRuntime,
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -272,7 +272,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			resumed = await resumeRoom(name, {
 				agents: [worker],
 				runtime: createRuntime({ storage: opened.storage, clock, transport: inProcessTransport() }),
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 			const snapshot = await resumed.read({ messages: false });
 			expect(snapshot.exchange).toBeUndefined();
@@ -291,7 +291,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 		const clock = fakeClock();
 		const sent: string[] = [];
 		const lost = {
-			connect(room: SeatRoom, context: Parameters<Transport['connect']>[1]) {
+			connect(room: RoomProtocol, context: Parameters<Transport['connect']>[1]) {
 				const port = inProcessTransport().connect(room, context);
 				return {
 					cut: (activation: string) => port.cut(activation),
@@ -311,7 +311,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime: firstRuntime,
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -342,7 +342,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			resumed = await resumeRoom(name, {
 				agents: [worker],
 				runtime: createRuntime({ storage: opened.storage, clock, transport }),
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 			await resumed.reconcile();
 			await flush();
@@ -372,7 +372,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		const events: RoomNotification[] = [];
 		const off = room.subscribe((event) => events.push(event));

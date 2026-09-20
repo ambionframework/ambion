@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { hostingOf, seatSessionId } from '../src/hosting.ts';
+import { type ActivationSpec, hostingOf, seatSessionId } from '../src/hosting.ts';
 import {
 	type AgentParticipantInfo,
 	createRuntime,
@@ -10,6 +10,9 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
+import type { Entry } from '../src/journal/journal.ts';
+import { foldRoom } from '../src/room/fold.ts';
+import { viewOf } from '../src/room/view.ts';
 import { participantsOf, roomName, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted, speak } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
@@ -29,7 +32,7 @@ describe('participant views', () => {
 			name: roomName('participants'),
 			agents: [writer()],
 			runtime,
-			streamFn: scripted((context) => {
+			stream: scripted((context) => {
 				contexts.push(`${context.systemPrompt ?? ''}\n${contextText(context)}`);
 				const text = contextText(context);
 				return text.includes('Question?') && !text.includes('Answer.') ? speak('Answer.') : quiet();
@@ -57,7 +60,10 @@ describe('participant views', () => {
 			}
 			expectTypeOf<Extract<'sessionId', keyof AgentParticipantInfo>>().toEqualTypeOf<never>();
 			expectTypeOf<
-				Extract<'changedAt' | 'since' | 'unseen' | 'preferences', keyof HumanParticipantInfo>
+				Extract<
+					'changedAt' | 'lastDeparture' | 'messagesSinceDeparture' | 'preferences',
+					keyof HumanParticipantInfo
+				>
 			>().toEqualTypeOf<never>();
 			const snapshot = await readRoom(room.name, {
 				runtime: createRuntime({ storage: runtime.storage }),
@@ -85,6 +91,55 @@ describe('participant views', () => {
 		}
 	});
 
+	it('carries the departure and the unread count in the context view of a person', () => {
+		const at = '2026-01-01T00:00:00.000Z';
+		const said = (seq: number, from: string): Entry => ({
+			kind: 'message',
+			seq,
+			body: { kind: 'said', at, from, text: `Message ${seq}.` },
+		});
+		const entries: Entry[] = [
+			{
+				kind: 'composition',
+				seq: 1,
+				body: {
+					version: 2,
+					summary: 'worker',
+					agents: [{ name: 'worker', identity: 'W.', attention: 'broadcast' }],
+					available: [],
+					at,
+				},
+			},
+			{ kind: 'message', seq: 2, body: { kind: 'arrived', at, subject: 'priya', identity: 'P.' } },
+			{ kind: 'message', seq: 3, body: { kind: 'arrived', at, subject: 'sam', identity: 'S.' } },
+			said(4, 'priya'),
+			{ kind: 'message', seq: 5, body: { kind: 'left', at, subject: 'priya' } },
+			said(6, 'sam'),
+			said(7, 'sam'),
+		];
+		const state = foldRoom(entries, { backoff: () => 0 });
+		const spec: ActivationSpec = {
+			id: 'message:7:worker:1',
+			seat: 'worker',
+			attempt: 1,
+			purpose: { kind: 'respond', message: 7 },
+		};
+		const view = viewOf(spec, {
+			name: 'room',
+			now: Date.parse(at),
+			state,
+			live: new Map<string, string[]>(),
+			messagesSince: (seq) =>
+				entries.filter((entry) => entry.kind === 'message' && entry.seq > seq).length,
+		});
+		const people = view.context.participants.filter((participant) => participant.kind === 'human');
+		const priya = people.find((person) => person.name === 'priya');
+		const sam = people.find((person) => person.name === 'sam');
+		expect(priya).toMatchObject({ lastDeparture: 5, messagesSinceDeparture: 2 });
+		expect(sam).toMatchObject({ messagesSinceDeparture: 0 });
+		expect(sam).not.toHaveProperty('lastDeparture');
+	});
+
 	it.each(storages)('keeps stopped participant reads consistent on %s storage', async (storage) => {
 		const opened = await storage.open();
 		const runtime = createRuntime({ storage: opened.storage });
@@ -93,7 +148,7 @@ describe('participant views', () => {
 			agents: [writer()],
 			seats: { writer: 'none' },
 			runtime,
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		try {
 			await room.visit(defineHuman({ name: 'reader', identity: 'Reads the room.' }));
@@ -124,7 +179,7 @@ describe('participant views', () => {
 			name: roomName('participant-audit'),
 			agents: [writer()],
 			runtime,
-			streamFn: scripted((context) => {
+			stream: scripted((context) => {
 				const text = contextText(context);
 				return text.includes('Question?') && !text.includes('Answer.') ? speak('Answer.') : quiet();
 			}),

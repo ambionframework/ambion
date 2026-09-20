@@ -599,7 +599,7 @@ compositionSeq)`** applies every membership change after the
   `find` calls today. `docs/exchange.md` §6 promises the handle.
 - **G8. `messagesSince(messages, since)`** is the exclusive cursor read:
   exactly the messages past the cursor, in record order. `read.ts`
-  `selectMessages` and the unseen count in `answers.ts` run it.
+  `selectMessages` and the `messagesSinceDeparture` count in `answers.ts` run it.
 
 **Two facts stay outside the rules and the plan states them.** The record
 is ordered by seq, which the journal package proves, so `lastOf` reads

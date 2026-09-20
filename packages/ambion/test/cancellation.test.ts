@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+	type AgentExecutionContext,
+	type AgentPort,
 	hostingOf,
 	inProcessTransport,
+	type RoomProtocol,
 	runningRoom,
-	type SeatContext,
-	type SeatPort,
-	type SeatRoom,
 	type Wake,
 } from '../src/hosting.ts';
 import {
@@ -66,7 +66,7 @@ describe('durable cancellation', () => {
 		const newWake = deferred();
 		const wakes: Wake[] = [];
 		const transport = {
-			connect(_room: SeatRoom, _context: SeatContext): SeatPort {
+			connect(_room: RoomProtocol, _context: AgentExecutionContext): AgentPort {
 				return {
 					wake: async (wake) => {
 						wakes.push(wake);
@@ -83,7 +83,7 @@ describe('durable cancellation', () => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		try {
 			const visit = await room.visit(person);
@@ -140,11 +140,11 @@ describe('durable cancellation', () => {
 			const started = deferred();
 			const cutStarted = deferred();
 			const transport = {
-				connect(room: SeatRoom, context: SeatContext) {
+				connect(room: RoomProtocol, context: AgentExecutionContext) {
 					const port = inProcessTransport().connect(room, context);
 					return {
 						wake: (wake: Wake) => port.wake(wake),
-						steer: (steer: Parameters<SeatPort['steer']>[0]) => port.steer(steer),
+						steer: (steer: Parameters<AgentPort['steer']>[0]) => port.steer(steer),
 						cut: async () => {
 							cuts += 1;
 							cutStarted.resolve();
@@ -160,7 +160,7 @@ describe('durable cancellation', () => {
 				agents: [worker],
 				seats: { [worker.name]: 'broadcast' },
 				runtime,
-				streamFn: scripted(() => {
+				stream: scripted(() => {
 					started.resolve();
 					return new Promise<never>(() => {});
 				}),
@@ -197,13 +197,13 @@ describe('durable cancellation', () => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
-			streamFn: deaf,
+			stream: deaf,
 		});
 		const oldAbort = old.abort();
 		await cancelStarted.promise;
 		hostingOf(runtime).evict(name);
 		const nextRuntime = createRuntime({ storage: opened.storage });
-		const next = await resumeRoom(name, { agents: [worker], runtime: nextRuntime, streamFn: deaf });
+		const next = await resumeRoom(name, { agents: [worker], runtime: nextRuntime, stream: deaf });
 		try {
 			const visit = await next.visit(person);
 			const exchange = await visit.send({ text: 'new run work' });
@@ -223,7 +223,7 @@ describe('durable cancellation', () => {
 			name: roomName('cancel-cut'),
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
-			streamFn: deaf,
+			stream: deaf,
 		});
 		try {
 			const visit = await room.visit(person);
@@ -275,7 +275,7 @@ describe('durable cancellation', () => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
-			streamFn: deaf,
+			stream: deaf,
 		});
 		try {
 			const visit = await room.visit(person);
@@ -303,7 +303,7 @@ describe('durable cancellation', () => {
 			summary: assistant.name,
 			agents: [worker, assistant],
 			seats: { [worker.name]: 'broadcast', [assistant.name]: 'none' },
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					worker: (_context, _agent, call) => (call === 1 ? speak('answer') : quiet()),
 					assistant: (context) => {
@@ -342,7 +342,7 @@ describe.each(storages)('cancellation storage recovery (%s)', (storage: Storage)
 				agents: [worker],
 				seats: { [worker.name]: 'broadcast' },
 				runtime,
-				streamFn: deaf,
+				stream: deaf,
 			});
 			try {
 				const visit = await room.visit(person);
@@ -372,7 +372,7 @@ describe.each(storages)('cancellation storage recovery (%s)', (storage: Storage)
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
-			streamFn: deaf,
+			stream: deaf,
 		});
 		try {
 			const visit = await room.visit(person);
@@ -422,7 +422,7 @@ it('does not retry cancelled work after a restart', async () => {
 		agents: [worker],
 		seats: { [worker.name]: 'broadcast' },
 		runtime,
-		streamFn: stream,
+		stream: stream,
 	});
 	const visit = await room.visit(person);
 	const exchange = await visit.send({ text: 'do not retry' });
@@ -436,7 +436,7 @@ it('does not retry cancelled work after a restart', async () => {
 	);
 	expect(ended).toBeDefined();
 	hostingOf(runtime).evict(name);
-	const resumed = await resumeRoom(name, { runtime, agents: [worker], streamFn: stream });
+	const resumed = await resumeRoom(name, { runtime, agents: [worker], stream: stream });
 	try {
 		await waitForRoom(resumed);
 		expect(calls).toBe(1);

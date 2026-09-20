@@ -52,7 +52,7 @@ const open = (overrides: Partial<Parameters<typeof startRoom>[0]> = {}) =>
 		name: roomName(),
 		seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 		agents: [watcher, assistant],
-		streamFn: recording,
+		stream: recording,
 		...overrides,
 	});
 
@@ -137,7 +137,7 @@ describe('presence', () => {
 			await held.promise;
 			return quiet();
 		});
-		const session = track(await open({ streamFn: holding }));
+		const session = track(await open({ stream: holding }));
 		const visit = await session.visit(andrei);
 		await visit.send({ text: 'start something long' }); // watcher is now mid-activation
 		await providerStarted.promise;
@@ -203,7 +203,7 @@ describe('presence', () => {
 			name,
 			seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [watcher, assistant],
-			streamFn: recording,
+			stream: recording,
 			runtime,
 		});
 		const visit = await first.visit(andrei);
@@ -221,7 +221,7 @@ describe('presence', () => {
 				name,
 				seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [watcher, assistant],
-				streamFn: recording,
+				stream: recording,
 				runtime,
 			}),
 		);
@@ -241,10 +241,10 @@ describe('presence', () => {
 		await expect(visit.send({ text: 'hello?' })).rejects.toEqual(refusal('visit_ended'));
 	});
 
-	it('anchors since at where a person stopped reading, and holds it while they read', async () => {
+	it('anchors lastDeparture at where a person stopped reading, and holds it while they read', async () => {
 		const session = track(await open());
 		const first = await session.visit(andrei);
-		expect(first.since).toBeUndefined(); // never been here
+		expect(first.lastDeparture).toBeUndefined(); // never been here
 
 		await first.send({ text: 'before' });
 		await first.leave();
@@ -252,15 +252,15 @@ describe('presence', () => {
 		const left = (await messagesOf(session)).find((m) => m.kind === 'left');
 
 		const again = await session.visit(andrei);
-		expect(again.since).toBe(left?.seq);
+		expect(again.lastDeparture).toBe(left?.seq);
 		await again.send({ text: 'after' });
-		expect(again.since).toBe(left?.seq); // it does not move while they read
+		expect(again.lastDeparture).toBe(left?.seq); // it does not move while they read
 
 		await again.leave();
 		await waitForRoom(session);
 		const second = (await messagesOf(session)).filter((m) => m.kind === 'left').at(-1);
 		const back = await session.visit(andrei);
-		expect(back.since).toBe(second?.seq); // it moves when they leave again
+		expect(back.lastDeparture).toBe(second?.seq); // it moves when they leave again
 	});
 
 	it('reads only what followed a cursor, both kinds in order', async () => {
@@ -273,7 +273,7 @@ describe('presence', () => {
 		await again.send({ text: 'two' });
 		await waitForRoom(session);
 
-		const missed = await messagesOf(session, { since: again.since });
+		const missed = await messagesOf(session, { since: again.lastDeparture });
 		expect(missed.map((m) => m.kind)).toEqual(['arrived', 'said']);
 		expect(missed.every((m) => m.seq > (left?.seq ?? 0))).toBe(true);
 		expect(await messagesOf(session)).toHaveLength(5);
@@ -302,7 +302,7 @@ describe('presence', () => {
 			name,
 			seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [watcher, assistant],
-			streamFn: recording,
+			stream: recording,
 			runtime,
 		});
 		const visit = await session.visit(andrei);
@@ -336,7 +336,7 @@ describe('presence', () => {
 		const back = await session.visit(andrei);
 		await back.send({ text: 'what moved?' }); // quiet arrivals wake nobody
 		await waitForRoom(session);
-		expect(back.since).toBeDefined();
+		expect(back.lastDeparture).toBeDefined();
 
 		const view = contexts.at(-1) ?? '';
 		expect(view).toContain('The time is');
@@ -379,7 +379,7 @@ async function brittle(): Promise<{ session: Room; fail: FaultyJournals['fail'] 
 		name: roomName(),
 		seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 		agents: [watcher, assistant],
-		streamFn: recording,
+		stream: recording,
 		runtime,
 	});
 	return { session, fail: faulty.fail };
@@ -450,7 +450,7 @@ describe('a storage that fails', () => {
 				name: session.name,
 				seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [watcher, assistant],
-				streamFn: recording,
+				stream: recording,
 				runtime: createRuntime(),
 			}),
 		);
@@ -472,7 +472,7 @@ describe('a storage that fails', () => {
 				name: roomName(),
 				seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [watcher, assistant],
-				streamFn: recording,
+				stream: recording,
 				runtime: createRuntime({ storage: unreachable }),
 			}),
 		).rejects.toThrow(/unreachable/);

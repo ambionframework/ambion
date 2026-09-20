@@ -57,7 +57,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 				name: roomName('audit-outcome'),
 				agents: [product],
 				runtime: runtime(),
-				streamFn: scripted(() => {
+				stream: scripted(() => {
 					calls += 1;
 					return outcome === 'spoken' && calls === 1 ? speak('Accepted answer.') : quiet();
 				}),
@@ -83,7 +83,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 				resumed = await resumeRoom(room.name, {
 					runtime: runtime(),
 					agents: [product],
-					streamFn: scripted(() => {
+					stream: scripted(() => {
 						calls += 1;
 						return quiet();
 					}),
@@ -109,7 +109,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 			summary: assistant.name,
 			seats: { [product.name]: 'broadcast', [assistant.name]: 'none' },
 			runtime: createRuntime({ clock, storage: auditOutage(opened.storage) }),
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					product: says(['First fact.', 'Second fact.']),
 					assistant: () => {
@@ -156,7 +156,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 					await releaseAudit.promise;
 				}),
 			}),
-			streamFn: scripted((context) => {
+			stream: scripted((context) => {
 				contexts.push(contextText(context));
 				return quiet();
 			}),
@@ -198,7 +198,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 				storage: auditOutage(opened.storage),
 				limits: { activation: { attempts: 2, backoff: () => 100 } },
 			}),
-			streamFn: scripted(() => {
+			stream: scripted(() => {
 				calls += 1;
 				if (calls === 1) throw new Error('Provider unavailable.');
 				return calls === 2 ? speak('Recovered answer.') : quiet();

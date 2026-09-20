@@ -3,7 +3,7 @@
  * beyond the application view that a host needs from a `Runtime`.
  *
  * A seat makes three calls — `view`, `commit` and `lease` — and the room
- * answers them. `SeatRoom` names the three, `SeatPort` names the side the
+ * answers them. `RoomProtocol` names the three, `AgentPort` names the side the
  * room calls back, and `Transport` is what connects one to the other.
  * `inProcessTransport` is the default: it receives a room-call facade and
  * a separate executor context. Nothing crosses a process. A host that puts the seats
@@ -36,12 +36,13 @@ export {
 	type ExecutionServicesOptions,
 	seatSessionId,
 } from './execution/services.ts';
-export type { Hosting, Limits, SeatContext, Transport } from './host/runtime.ts';
+export type { AgentExecutionContext, Hosting, Limits, Transport } from './host/runtime.ts';
 export { hostingOf, runningRoom } from './host/runtime.ts';
 export type {
 	ActivationPurpose,
 	ActivationSpec,
 	ActivationView,
+	AgentPort,
 	CollaborationContext,
 	CommitRequest,
 	CommitResult,
@@ -49,8 +50,7 @@ export type {
 	Intent,
 	LeaseRequest,
 	LeaseResponse,
-	SeatPort,
-	SeatRoom,
+	RoomProtocol,
 	Stale,
 	Steer,
 	ViewRange,

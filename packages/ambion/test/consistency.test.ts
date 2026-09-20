@@ -159,7 +159,7 @@ class Cluster {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			streamFn: scripted(this.cast.script),
+			stream: scripted(this.cast.script),
 		});
 		this.watch();
 		await messagesOf(this.session);
@@ -244,7 +244,7 @@ class Cluster {
 				this.session = await resumeRoom(this.name, {
 					runtime: this.runtime,
 					agents,
-					streamFn: scripted(this.cast.script),
+					stream: scripted(this.cast.script),
 				});
 				break;
 			} catch (error) {

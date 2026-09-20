@@ -2,7 +2,7 @@
 
 **An agent owns its instructions, model, tools, and domain behavior.** The
 room owns the journal, membership, presence, execution authority, and exchange
-rules. The agent catalog supplies every executable definition for one room run.
+rules. `agents` supplies every executable definition for one room run.
 
 The [documentation index](README.md) links the other contracts. The
 [plan](../planning/next.md) defines the scope and records the work that
@@ -49,7 +49,7 @@ The shorthand introduces no separate role or tool set. See
 Definitions are values, captured for one run. On resume, the host supplies
 executable definitions for every recorded agent name. The new run may use
 updated definitions and add definitions to the reserve; live runs keep their
-captured catalog.
+captured definitions.
 
 ## Tools
 
@@ -82,9 +82,9 @@ the closed set in `errors.ts`; its message is for a person.
 ## Rooms and membership
 
 `startRoom` writes a version 2 composition and starts the room. `seats` names
-initial members and their attention. If `seats` is omitted, every catalog
+initial members and their attention. If `seats` is omitted, every defined
 agent starts as a member with `broadcast` attention. An empty map starts all
-catalog agents in the reserve.
+defined agents in the reserve.
 
 ```ts
 const room = await startRoom({
@@ -96,7 +96,7 @@ const room = await startRoom({
 });
 ```
 
-`room.seat(name)` adds a catalog agent to membership. `room.unseat(name)`
+`room.seat(name)` adds a defined agent to membership. `room.unseat(name)`
 removes a member and returns the definition to the reserve. A live activation
 may call the same operations for another agent or itself, unless the target
 seat is fixed: the summary writer's seat is fixed by default, and only the
@@ -143,7 +143,7 @@ remain distinct outcomes.
 
 ## Value ownership
 
-**Room reads return detached values.** Messages, participant lists, snapshots,
+**Room reads return detached values.** Messages, participant lists, reads,
 exchange discussions, and summary responses belong to their caller. Changing
 these values cannot change the room's journal, projection, or later reads.
 Nested routing lists and summary ranges follow the same rule.
@@ -183,23 +183,23 @@ the model call, model resolver, transcript storage, clock, and call retry policy
 The room supplies the captured agent definition and receives an execution port.
 It does not construct a model runner or choose execution services.
 
-`startRoom` and `resumeRoom` supply this composition by default. Their `streamFn`
+`startRoom` and `resumeRoom` supply this composition by default. Their `stream`
 override applies to one room run. Other rooms retain their own definitions and
 model calls, including when they use the same agent names.
 
 **A transport receives room calls and executor dependencies separately.**
-`Transport.connect(room, context)` receives a plain `SeatRoom` facade with
+`Transport.connect(room, context)` receives a plain `RoomProtocol` facade with
 `view`, `commit`, and `lease`. It cannot reach room lifecycle methods through
-that facade. The returned `SeatPort` handles `wake`, `steer`, and `cut`.
+that facade. The returned `AgentPort` handles `wake`, `steer`, and `cut`.
 
-`SeatContext` supplies one captured agent definition, the room and seat names,
+`AgentExecutionContext` supplies one captured agent definition, the room and seat names,
 clock, call retry policy, an executor, and notifications. The in-process
 `AgentRunner` uses these values directly. Remote hosts resolve their
 execution dependencies where the agent runs. Only protocol data crosses RPC.
 
 **`AgentRunner` is the driver.** It owns the lease, its renewal, the wake
 queue, and the record window. It knows no model and no provider. For each
-activation it opens one `ExecutorSession` from `SeatContext.executor` and
+activation it opens one `ExecutorSession` from `AgentExecutionContext.executor` and
 passes the windowed record to it. A session renders a prompt, runs its own
 model loop for one pass, and reports where it left off. Pi is the only
 executor Ambion ships today: `createPiExecutor` builds it from the model

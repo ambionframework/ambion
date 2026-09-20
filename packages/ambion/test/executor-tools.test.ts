@@ -12,7 +12,7 @@ import type {
 	Intent,
 	LeaseRequest,
 	LeaseResponse,
-	SeatRoom,
+	RoomProtocol,
 	ViewResponse,
 } from '../src/hosting.ts';
 import { type AgentDefinition, defineAgent, defineTool, pi } from '../src/index.ts';
@@ -52,7 +52,7 @@ const oldAuthority: ActivationSpec = {
 };
 void oldAuthority;
 
-const unusedRoom: SeatRoom = {
+const unusedRoom: RoomProtocol = {
 	view: async (): Promise<ViewResponse> => ({ stale: 'unused' }),
 	commit: async (): Promise<CommitResult> => ({ stale: 'unused' }),
 	lease: async (): Promise<LeaseResponse> => ({ stale: 'unused' }),
@@ -95,7 +95,7 @@ function view(purpose: ActivationView['spec']['purpose']): ActivationView {
 	};
 }
 
-function roomThatCommits(commits: CommitRequest[]): SeatRoom {
+function roomThatCommits(commits: CommitRequest[]): RoomProtocol {
 	return {
 		view: async () => ({ stale: 'unused' }),
 		commit: async (request): Promise<CommitResult> => {
@@ -172,7 +172,7 @@ describe('executor tool authority', () => {
 	it('does not mark context consumed for membership or an unchanged membership result', async () => {
 		const activation = activationFor('message:4:worker:1', worker);
 		const commits: CommitRequest[] = [];
-		const room: SeatRoom = {
+		const room: RoomProtocol = {
 			view: async () => ({ stale: 'unused' }),
 			commit: async (request) => {
 				commits.push(request);
@@ -250,7 +250,7 @@ describe('executor tool authority', () => {
 			now: Date.parse(at),
 			state,
 			live: new Map<string, string[]>(),
-			unseen: () => 0,
+			messagesSince: () => 0,
 		};
 		const summary = activationSpec('closed:3:worker:1', state);
 		const response = activationSpec('message:5:product:1', state);

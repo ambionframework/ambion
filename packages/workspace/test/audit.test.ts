@@ -222,7 +222,7 @@ describe('the workspace audit log', () => {
 		const session = await startRoom({
 			name: roomId,
 			agents: [worker],
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					worker: (_context, _who, call) => {
 						if (call === 1) return callTool('write', { path: 'notes.txt', content: 'done\n' });

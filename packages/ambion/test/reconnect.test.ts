@@ -59,7 +59,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			agents: [watcher],
 			seats: { [watcher.name]: 'none' },
 			runtime,
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		try {
 			await first.visit(priya);
@@ -77,7 +77,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			const resumed = await resumeRoom(name, {
 				agents: [watcher],
 				runtime: createRuntime({ clock, storage: opened.storage }),
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 			try {
 				expect(
@@ -93,7 +93,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 
 				const reconnected = await resumed.visit(priya);
 				const secondHandle = await resumed.visit(priya);
-				expect(reconnected.since).toBeUndefined();
+				expect(reconnected.lastDeparture).toBeUndefined();
 				expect(secondHandle.human).toEqual(priya);
 				expect(
 					(await messagesOf(resumed)).filter((message) => message.kind === 'arrived'),
@@ -127,7 +127,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			name,
 			agents: [],
 			runtime,
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		try {
 			const visit = await first.visit(priya);
@@ -136,18 +136,18 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			await visit.leave();
 			const left = (await messagesOf(first)).find((message) => message.kind === 'left');
 			expect(left).toBeDefined();
-			expect(visit.since).toBe(left?.seq);
+			expect(visit.lastDeparture).toBe(left?.seq);
 
 			hostingOf(runtime).evict(name);
 			const resumed = await resumeRoom(name, {
 				agents: [],
 				runtime: createRuntime({ clock, storage: opened.storage }),
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 			try {
 				const reconnected = await resumed.visit(priya);
-				expect(reconnected.since).toBe(left?.seq);
-				const missed = await messagesOf(resumed, { since: reconnected.since });
+				expect(reconnected.lastDeparture).toBe(left?.seq);
+				const missed = await messagesOf(resumed, { since: reconnected.lastDeparture });
 				expect(missed.map((message) => message.kind)).toEqual(['arrived']);
 
 				const retry = await reconnected.send({
@@ -159,7 +159,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 				expect(
 					(await messagesOf(resumed)).filter((message) => message.key === 'promise-1'),
 				).toHaveLength(1);
-				expect(reconnected.since).toBe(left?.seq);
+				expect(reconnected.lastDeparture).toBe(left?.seq);
 			} finally {
 				await resumed.stop();
 			}
@@ -236,7 +236,7 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 				agents: [watcher],
 				seats: { [watcher.name]: 'broadcast' },
 				runtime: firstRuntime,
-				streamFn: scripted(async (_context, _agent, call) => {
+				stream: scripted(async (_context, _agent, call) => {
 					if (call === 1) await held.promise;
 					return quiet();
 				}),
@@ -263,7 +263,7 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 					resumed = await resumeRoom(name, {
 						agents: [watcher],
 						runtime: secondRuntime,
-						streamFn: scripted(() => quiet()),
+						stream: scripted(() => quiet()),
 					});
 					await expect(visit.leave()).rejects.toThrow(/superseded|stopped/i);
 				}
@@ -280,7 +280,7 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 							storage: opened.storage,
 							limits: { lease: { ttl: 60_000 }, delivery: { resend: 5_000 } },
 						}),
-						streamFn: scripted(() => quiet()),
+						stream: scripted(() => quiet()),
 					});
 				}
 				const recovered = resumed.exchange(exchange.from);

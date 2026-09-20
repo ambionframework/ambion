@@ -1,6 +1,6 @@
 {
 	"name": "ambion-cloudflare",
-	// The workerd tier's worker: it configures the catalog and exports the two objects.
+	// The workerd tier's worker: it configures the definitions and exports the two objects.
 	"main": "test/worker.ts",
 	// The date the test pool's workerd supports. Newer than the binary refuses to start.
 	"compatibility_date": "2026-08-15",

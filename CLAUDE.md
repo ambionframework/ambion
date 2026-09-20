@@ -117,7 +117,7 @@ vitest.live.config.ts test/live/<file>.test.ts`) over the whole suite. Run the
   write.
 - Cognitive complexity: max 10 in source, 15 in tests.
 - Prettier formats (tabs, single quotes, width 100, semicolons); Biome lints.
-- Tests are vitest. A scripted `streamFn` makes a room deterministic.
+- Tests are vitest. A scripted `stream` makes a room deterministic.
 
 ## Writing documentation
 

@@ -75,7 +75,7 @@ export const person = defineHuman({
 	identity: 'Founder. Asks the questions.',
 });
 
-type RoomOptions = Omit<StartRoomOptions, 'name' | 'streamFn' | 'runtime'>;
+type RoomOptions = Omit<StartRoomOptions, 'name' | 'stream' | 'runtime'>;
 
 /** A live room with explicit participants and fresh storage for its record and transcripts. */
 export async function open(prefix: string, options: RoomOptions) {

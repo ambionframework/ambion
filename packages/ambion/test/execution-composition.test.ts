@@ -1,10 +1,10 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import {
+	type AgentExecutionContext,
 	hostingOf,
 	inProcessTransport,
-	type SeatContext,
-	type SeatRoom,
+	type RoomProtocol,
 	seatSessionId,
 	type Transport,
 } from '../src/hosting.ts';
@@ -55,7 +55,7 @@ function spokenTexts(room: { read(): Promise<{ messages: readonly Message[] }> }
 }
 
 function forwardingTransport(
-	connections: Array<{ room: SeatRoom; context: SeatContext }>,
+	connections: Array<{ room: RoomProtocol; context: AgentExecutionContext }>,
 ): Transport {
 	const local = inProcessTransport();
 	return {
@@ -85,13 +85,13 @@ describe('execution composition', () => {
 			name: roomName('execution-first'),
 			runtime,
 			agents: [firstDefinition],
-			streamFn: firstStream,
+			stream: firstStream,
 		});
 		const second = await startRoom({
 			name: roomName('execution-second'),
 			runtime,
 			agents: [secondDefinition],
-			streamFn: secondStream,
+			stream: secondStream,
 		});
 		try {
 			await Promise.all([
@@ -153,7 +153,7 @@ describe('execution composition', () => {
 			name: roomName('execution-resume-first'),
 			runtime,
 			agents: [definition('Original writer.', 'Use the original instructions.')],
-			streamFn: answer('Original question?', 'Original answer.', firstCalls),
+			stream: answer('Original question?', 'Original answer.', firstCalls),
 		});
 		const second = await startRoom({
 			name: roomName('execution-resume-second'),
@@ -169,7 +169,7 @@ describe('execution composition', () => {
 			resumed = await resumeRoom(first.name, {
 				runtime,
 				agents: [definition('Replacement writer.', 'Use the replacement instructions.')],
-				streamFn: answer('Replacement question?', 'Replacement answer.', firstCalls),
+				stream: answer('Replacement question?', 'Replacement answer.', firstCalls),
 			});
 			const replacement = await (
 				await resumed.visit(defineHuman({ name: 'replacement-person', identity: 'A new visitor.' }))
@@ -195,7 +195,7 @@ describe('execution composition', () => {
 	});
 
 	it('forwards the default local runner with each room context and transcript namespace', async () => {
-		const connections: Array<{ room: SeatRoom; context: SeatContext }> = [];
+		const connections: Array<{ room: RoomProtocol; context: AgentExecutionContext }> = [];
 		const wrappedCalls: Call[] = [];
 		const wrappedStream = answer('Wrapped question?', 'Wrapped answer.', wrappedCalls);
 		const runtime = createRuntime({

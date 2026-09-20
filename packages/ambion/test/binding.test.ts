@@ -374,7 +374,7 @@ describe('the room runs the verified rules', () => {
 					executor: pi({ instructions: 'Answer.', model: 'scripted/product' }),
 				}),
 			],
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		try {
 			const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Person.' }));

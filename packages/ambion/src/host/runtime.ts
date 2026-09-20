@@ -27,7 +27,7 @@ import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Executor } from '../execution/executor.ts';
 import { createExecutionServices } from '../execution/services.ts';
-import type { SeatPort, SeatRoom } from '../protocol.ts';
+import type { AgentPort, RoomProtocol } from '../protocol.ts';
 import type { AgentDefinition, Clock, ExecutionEvent, ModelResolver } from '../types.ts';
 
 /** A key nobody outside this file can name. `createRuntime` is the one place that casts past it. */
@@ -114,7 +114,7 @@ export function hostingOf(runtime: Runtime): Hosting {
 	};
 }
 
-export const runningRoom = (runtime: Runtime, name: string): SeatRoom | undefined =>
+export const runningRoom = (runtime: Runtime, name: string): RoomProtocol | undefined =>
 	state(runtime).running.get(name)?.calls;
 
 /** The host's lifecycle record, for the room facade's own live fast paths. */
@@ -131,7 +131,7 @@ export function releaseRoom(runtime: Runtime, name: string, room: RunningRoom): 
 }
 
 /** The dependencies that one in-process seat needs for one captured definition. */
-export interface SeatContext {
+export interface AgentExecutionContext {
 	readonly clock: Clock;
 	readonly call: Limits['call'];
 	readonly definition: AgentDefinition;
@@ -145,7 +145,7 @@ export interface SeatContext {
 /** A room the runtime keeps in its lifecycle registry. */
 export interface RunningRoom {
 	readonly name: string;
-	readonly calls: SeatRoom;
+	readonly calls: RoomProtocol;
 	/** Drop the room from memory. The record keeps everything. */
 	evict(): void;
 }
@@ -157,20 +157,20 @@ export interface RunningRoom {
  * back through the same boundary.
  */
 export interface Transport {
-	connect(room: SeatRoom, context: SeatContext): SeatPort;
+	connect(room: RoomProtocol, context: AgentExecutionContext): AgentPort;
 }
 
 /** The collaboration host's narrow request for one configured seat port. */
 export interface ExecutionConnector {
 	connect(
-		room: SeatRoom,
+		room: RoomProtocol,
 		request: {
 			readonly room: string;
 			readonly seat: string;
 			readonly definition: AgentDefinition;
 			readonly emit: (event: ExecutionEvent) => void;
 		},
-	): SeatPort;
+	): AgentPort;
 }
 
 /** Collaboration services that a room host may use. */

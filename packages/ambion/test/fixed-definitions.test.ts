@@ -53,7 +53,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 					seats: { alpha: 'broadcast' },
 					summary: 'beta',
 					runtime: createRuntime({ storage: opened.storage }),
-					streamFn: silent(),
+					stream: silent(),
 				}),
 			).rejects.toThrow(/not seated/);
 		} finally {
@@ -70,7 +70,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			seats: { alpha: 'broadcast', beta: 'none' },
 			summary: 'beta',
 			runtime,
-			streamFn: silent(),
+			stream: silent(),
 		});
 		try {
 			await room.unseat('beta');
@@ -95,7 +95,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			agents: [alpha, beta],
 			seats: {},
 			runtime: createRuntime({ storage: opened.storage }),
-			streamFn: silent(),
+			stream: silent(),
 		});
 		try {
 			expect(await participantsOf(room)).toEqual([]);
@@ -124,7 +124,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			name: roomName('catalog-unknown'),
 			agents: [alpha],
 			runtime: createRuntime({ storage: opened.storage }),
-			streamFn: silent(),
+			stream: silent(),
 		});
 		try {
 			const before = await storedOf(opened.journals, room.name);
@@ -179,7 +179,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			agents,
 			seats,
 			runtime: createRuntime({ storage: opened.storage }),
-			streamFn: scripted((context, _agent, call) => {
+			stream: scripted((context, _agent, call) => {
 				prompts.push(context.systemPrompt ?? '');
 				return call === 1 ? callTool('inspect', {}) : quiet();
 			}),
@@ -226,7 +226,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			agents: [alpha, beta],
 			seats: { alpha: 'named' },
 			runtime,
-			streamFn: silent(),
+			stream: silent(),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -239,7 +239,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			resumed = await resumeRoom(room.name, {
 				agents: [alpha, beta, gamma],
 				runtime: createRuntime({ storage: opened.storage }),
-				streamFn: silent(),
+				stream: silent(),
 			});
 			expect(await participantsOf(resumed)).toMatchObject([{ name: 'beta', attention: 'none' }]);
 			expect(
@@ -257,7 +257,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 				resumeRoom(room.name, {
 					agents: [beta, gamma],
 					runtime: createRuntime({ storage: opened.storage }),
-					streamFn: silent(),
+					stream: silent(),
 				}),
 			).rejects.toThrow();
 			// Failed validation must not fence the current host.
@@ -278,7 +278,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			name: roomName('catalog-person-collision'),
 			agents: [alpha],
 			runtime: createRuntime({ storage: opened.storage }),
-			streamFn: silent(),
+			stream: silent(),
 		});
 		try {
 			const visit = await room.visit(priya);
@@ -287,7 +287,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 				resumeRoom(room.name, {
 					agents: [alpha, { ...beta, name: priya.name }],
 					runtime: createRuntime({ storage: opened.storage }),
-					streamFn: silent(),
+					stream: silent(),
 				}),
 			).rejects.toThrow(/person/);
 			expect(await storedOf(opened.journals, room.name)).toEqual(before);
@@ -306,7 +306,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			name: roomName('catalog-competing-resume'),
 			agents: [alpha],
 			runtime: createRuntime({ storage: opened.storage }),
-			streamFn: silent(),
+			stream: silent(),
 		});
 		const entered = deferred();
 		const release = deferred();
@@ -330,13 +330,13 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 		});
 		let newer: Room | undefined;
 		try {
-			const old = resumeRoom(room.name, { agents: [alpha], runtime: delayed, streamFn: silent() });
+			const old = resumeRoom(room.name, { agents: [alpha], runtime: delayed, stream: silent() });
 			const rejected = expect(old).rejects.toThrow(/beta/);
 			await entered.promise;
 			newer = await resumeRoom(room.name, {
 				agents: [alpha, beta],
 				runtime: createRuntime({ storage: opened.storage }),
-				streamFn: silent(),
+				stream: silent(),
 			});
 			const before = await storedOf(opened.journals, room.name);
 			release.resolve();
@@ -368,7 +368,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 						name,
 						...options,
 						runtime: createRuntime({ storage: opened.storage }),
-						streamFn: silent(),
+						stream: silent(),
 					}),
 				).rejects.toThrow();
 				expect(await storedOf(opened.journals, name)).toEqual([]);

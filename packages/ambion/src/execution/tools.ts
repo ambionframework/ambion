@@ -7,7 +7,7 @@
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
 import { SAY, SEAT, UNSEAT } from '../define.ts';
-import type { ActivationView, CommitResult, Intent, SeatRoom } from '../protocol.ts';
+import type { ActivationView, CommitResult, Intent, RoomProtocol } from '../protocol.ts';
 import type { AgentDefinition, AmbionTool, Message } from '../types.ts';
 import type { Activation } from './activation.ts';
 import { refusal } from './render.ts';
@@ -49,11 +49,11 @@ function delivered(): AgentToolResult<Record<string, never>> {
 /** What every room tool reaches: the activation and the room. */
 export interface Binding {
 	readonly activation: Activation;
-	readonly room: SeatRoom;
+	readonly room: RoomProtocol;
 	landed(response: CommitResult): AgentToolResult<Record<string, never>>;
 }
 
-export function binding(activation: Activation, room: SeatRoom): Binding {
+export function binding(activation: Activation, room: RoomProtocol): Binding {
 	return {
 		activation,
 		room,

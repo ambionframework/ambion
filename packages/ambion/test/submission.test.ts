@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hostingOf, inProcessTransport, type SeatPort, type Transport } from '../src/hosting.ts';
+import { type AgentPort, hostingOf, inProcessTransport, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -73,7 +73,7 @@ function recordingTransport(isEvicted: () => boolean): {
 		transport: {
 			connect(_room, context) {
 				record(`connect:${context.seat}`);
-				const port: SeatPort = {
+				const port: AgentPort = {
 					wake: async () => record('wake'),
 					steer: async () => {
 						steers.push(isEvicted() ? 'after' : 'before');
@@ -116,7 +116,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			agents: [agent],
 			seats: { [agent.name]: 'broadcast' },
 			runtime: firstRuntime,
-			streamFn: stream,
+			stream: stream,
 		});
 		let resumed: Room | undefined;
 		try {
@@ -136,7 +136,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			resumed = await resumeRoom(name, {
 				agents: [agent],
 				runtime: throwingRuntime,
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 			const reentered = await resumed.visit(person);
 			const confirmed = observed(reentered.send({ text: 'second', key: 'submission-second' }));
@@ -154,7 +154,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			resumed = await resumeRoom(name, {
 				agents: [agent],
 				runtime: healthyRuntime,
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 			const retryVisit = await resumed.visit(person);
 			const retry = await retryVisit.send({ text: 'second', key: 'submission-second' });
@@ -222,7 +222,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			agents: [agent],
 			seats: { [agent.name]: 'broadcast' },
 			runtime: firstRuntime,
-			streamFn: scripted(async () => {
+			stream: scripted(async () => {
 				started.resolve();
 				await held.promise;
 				return quiet();
@@ -247,7 +247,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			resumed = await resumeRoom(name, {
 				agents: [agent],
 				runtime: failingRuntime,
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 			expect(runningLeases(resumed)).toBeGreaterThan(0);
 			const resumedVisit = await resumed.visit(person);
@@ -287,7 +287,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			recovered = await resumeRoom(name, {
 				agents: [agent],
 				runtime: healthyRuntime,
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 			expect(
 				(await messagesOf(recovered)).filter(
@@ -430,7 +430,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			agents: [agent],
 			seats: { [agent.name]: 'broadcast' },
 			runtime: firstRuntime,
-			streamFn: stream,
+			stream: stream,
 		});
 		let resumed: Room | undefined;
 		try {
@@ -449,7 +449,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			resumed = await resumeRoom(name, {
 				agents: [agent],
 				runtime: failingRuntime,
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 
 			const stopped = observed(resumed.stop());

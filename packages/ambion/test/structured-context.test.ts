@@ -66,7 +66,13 @@ const entries: Entry[] = [
 
 const facts = () => {
 	const state = foldRoom(entries, { backoff: () => 0 });
-	return { name: 'payments', now, state, live: new Map<string, string[]>(), unseen: () => 0 };
+	return {
+		name: 'payments',
+		now,
+		state,
+		live: new Map<string, string[]>(),
+		messagesSince: () => 0,
+	};
 };
 
 const spec = {
@@ -244,7 +250,7 @@ describe('structured activation context', () => {
 			now,
 			state,
 			live: new Map(),
-			unseen: () => 0,
+			messagesSince: () => 0,
 		});
 
 		// Sam's already-summarised exchange is background priya's writer now

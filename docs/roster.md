@@ -18,9 +18,9 @@ const room = await startRoom({
 });
 ```
 
-If `seats` is omitted, every catalog agent starts as a member at `broadcast`.
-An empty map starts every catalog agent in the reserve. `summary` names one
-catalog agent that may receive closing work. It does not create a separate
+If `seats` is omitted, every defined agent starts as a member at `broadcast`.
+An empty map starts every defined agent in the reserve. `summary` names one
+defined agent that may receive closing work. It does not create a separate
 membership type. `summary` must name an agent in `seats`. A room start
 rejects a `summary` name that is not seated.
 
@@ -33,12 +33,12 @@ seats: { editor: { attention: 'broadcast', fixed: true } }
 
 The optional `assistant` property registers an ordinary agent, seats it at
 `broadcast`, and selects it as the summary writer. With this property,
-`seats: {}` seats only the assistant. Omitted `seats` still seats every catalog
+`seats: {}` seats only the assistant. Omitted `seats` still seats every defined
 agent at `broadcast`. Explicit seats configure the other agents. See
 [Default assistant](assistant.md) for conflicts and the complete shorthand.
 
 On resume, supply definitions for every recorded agent name. Additional
-definitions enter the reserve in the new run. Names outside that run's catalog
+definitions enter the reserve in the new run. Names outside that run's definitions
 cannot be seated.
 
 ## Attention
@@ -63,7 +63,7 @@ checks the activation, lease, recipient, and consumed context for every write.
 An agent activation can use `seat({ name })` and `unseat({ name })`. The room
 also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
 
-- `seat` accepts a name from the catalog and reserve.
+- `seat` accepts a name from the definitions or the reserve.
 - `unseat` accepts a currently seated agent, including the calling agent.
 - An unknown name or a human name is refused.
 - Agent tool commits return `unchanged` when the requested membership already holds.
@@ -93,7 +93,7 @@ current agents and human visitors. Reserve agents
 do not appear. Views contain identity, membership status, and attention. They
 do not contain executable definitions or authority.
 
-`resumeRoom` receives the complete catalog again. It preserves recorded
+`resumeRoom` receives the complete definitions again. It preserves recorded
 membership and attention. Startup seating options do not reset a resumed room.
 Version 2 composition entries reject legacy assistant histories. Start a new
 journal or perform migration outside Ambion.

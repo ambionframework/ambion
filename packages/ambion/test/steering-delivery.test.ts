@@ -83,7 +83,7 @@ describe.each(storages)('messages across activation completion on $name', (stora
 				agents: [alpha, assistant],
 				seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
 				runtime: createRuntime({ storage: opened.storage, clock, transport: observed.transport }),
-				streamFn: scripted(
+				stream: scripted(
 					byAgent({
 						alpha: async (context, _agent, call) => {
 							contexts.push(contextText(context));
@@ -147,7 +147,7 @@ describe.each(storages)('messages across activation completion on $name', (stora
 			agents: [alpha, assistant],
 			seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
 			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					alpha: async (context, _agent, call) => {
 						contexts.push(contextText(context));

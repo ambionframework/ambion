@@ -72,7 +72,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			agents: [alpha, beta, assistant],
 			seats: { [assistant.name]: 'none', ...quietSeats },
 			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					alpha: async (context, _agent, call) => {
 						contexts.push(contextText(context));
@@ -133,7 +133,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			agents: [alpha, beta, assistant],
 			seats: { [assistant.name]: 'none', ...quietSeats },
 			runtime: firstRuntime,
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					alpha: async () => {
 						started.resolve();
@@ -158,7 +158,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			resumed = await resumeRoom(room.name, {
 				runtime: runtime(),
 				agents: [alpha, beta, assistant],
-				streamFn: scripted(
+				stream: scripted(
 					byAgent({
 						alpha: (context) => {
 							contexts.push(contextText(context));
@@ -196,7 +196,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			agents: [alpha, beta, assistant],
 			seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast', [beta.name]: 'named' },
 			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					alpha: says(['First fact.', 'Second fact.']),
 					beta: async (_context, _agent, call) => {

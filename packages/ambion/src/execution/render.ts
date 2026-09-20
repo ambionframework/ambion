@@ -155,7 +155,7 @@ export function renderRecord(
 	exchangeFrom?: Seq,
 ): string {
 	if (record.length === 0) return '(the record is empty)';
-	const dividers = unseenDividers(people);
+	const dividers = departureDividers(people);
 	const lines: string[] = [];
 	for (const block of blocks(record)) {
 		if ('line' in block && block.line.seq === exchangeFrom)
@@ -181,13 +181,18 @@ function divide(block: Block, dividers: Map<Seq, string[]>): string[] {
 }
 
 /** Seq to the people whose divider sits right after it. */
-function unseenDividers(people: readonly HumanContextParticipant[]): Map<Seq, string[]> {
+function departureDividers(people: readonly HumanContextParticipant[]): Map<Seq, string[]> {
 	const dividers = new Map<Seq, string[]>();
 	for (const person of people) {
-		if (person.presence === 'absent' || person.since === undefined || person.unseen === 0) continue;
-		const at = dividers.get(person.since) ?? [];
+		if (
+			person.presence === 'absent' ||
+			person.lastDeparture === undefined ||
+			person.messagesSinceDeparture === 0
+		)
+			continue;
+		const at = dividers.get(person.lastDeparture) ?? [];
 		at.push(person.name);
-		dividers.set(person.since, at);
+		dividers.set(person.lastDeparture, at);
 	}
 	return dividers;
 }
@@ -226,7 +231,8 @@ function renderPeople(people: readonly HumanContextParticipant[], now: number): 
 function notes(person: HumanContextParticipant, now: number): string {
 	const parts: string[] = [person.presence];
 	if (person.changedAt) parts.push(`since ${ago(person.changedAt, now)}`);
-	if (person.unseen > 0) parts.push(`has not seen the last ${count(person.unseen, 'message')}`);
+	if (person.messagesSinceDeparture > 0)
+		parts.push(`has not seen the last ${count(person.messagesSinceDeparture, 'message')}`);
 	return parts.join(', ');
 }
 

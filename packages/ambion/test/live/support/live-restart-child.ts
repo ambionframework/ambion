@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { sqliteJournals } from '@ambionframework/journal';
-import { inProcessTransport, type SeatRoom, type Transport } from '../../../src/hosting.ts';
+import { inProcessTransport, type RoomProtocol, type Transport } from '../../../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -61,7 +61,7 @@ function startTransport(): Transport {
 	return {
 		connect(room, context) {
 			if (phase !== 'start' || context.seat !== slow.name) return local.connect(room, context);
-			const gated: SeatRoom = {
+			const gated: RoomProtocol = {
 				view: (activation, range) => room.view(activation, range),
 				commit: (commit) => room.commit(commit),
 				lease: async (lease) => {

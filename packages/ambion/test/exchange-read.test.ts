@@ -111,7 +111,7 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 			name: roomName(`exchange-read-open-${storage.name}`),
 			runtime,
 			agents: [agent],
-			streamFn: scripted(async (context) => {
+			stream: scripted(async (context) => {
 				if (!contextText(context).includes('What is open?')) return quiet();
 				started.resolve();
 				await release.promise;

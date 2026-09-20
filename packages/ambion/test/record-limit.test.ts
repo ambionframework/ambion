@@ -4,7 +4,7 @@
  * exchange whole. An older closed exchange with no summary falls out of context.
  */
 import { describe, expect, it } from 'vitest';
-import { inProcessTransport, type SeatRoom, type Transport } from '../src/hosting.ts';
+import { inProcessTransport, type RoomProtocol, type Transport } from '../src/hosting.ts';
 import { createRuntime, defineAgent, pi, startRoom } from '../src/index.ts';
 import { priya, sam } from './support/cast.ts';
 import { andrei, messagesOf, roomName, waitForRoom } from './support/room.ts';
@@ -29,7 +29,7 @@ function spyTransport(pages: Page[]): Transport {
 	const local = inProcessTransport();
 	return {
 		connect(room, context) {
-			const watched: SeatRoom = {
+			const watched: RoomProtocol = {
 				...room,
 				view: async (id, range) => {
 					const response = await room.view(id, range);

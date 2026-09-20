@@ -1,5 +1,5 @@
 /**
- * The driver: runs activations over the SeatRoom protocol.
+ * The driver: runs activations over `RoomProtocol`.
  *
  * AgentRunner owns the lease, its renewal, the cut, the wake queue, the
  * record a seat reads, and the decision to run another pass. It knows
@@ -8,11 +8,11 @@
  * off. Wake, steer, and cut reach this driver through the transport.
  */
 
-import type { SeatContext, Transport } from '../host/runtime.ts';
+import type { AgentExecutionContext, Transport } from '../host/runtime.ts';
 import type {
 	ActivationView,
-	SeatPort,
-	SeatRoom,
+	AgentPort,
+	RoomProtocol,
 	Steer,
 	ViewRange,
 	ViewResponse,
@@ -44,14 +44,14 @@ interface Current {
  * The seat's side of the wire. One actor per seat, for as long as the room
  * runs; one activation at a time, named by the wake that started it.
  */
-export class AgentRunner implements SeatPort {
-	private readonly room: SeatRoom;
-	private readonly context: SeatContext;
+export class AgentRunner implements AgentPort {
+	private readonly room: RoomProtocol;
+	private readonly context: AgentExecutionContext;
 	private current: Current | undefined;
 	/** The wakes that arrived while an activation ran, in order. They run next, once each. */
 	private readonly queued: string[] = [];
 
-	constructor(room: SeatRoom, context: SeatContext) {
+	constructor(room: RoomProtocol, context: AgentExecutionContext) {
 		this.room = room;
 		this.context = context;
 	}
@@ -492,7 +492,7 @@ export class AgentRunner implements SeatPort {
 		}
 	}
 
-	private boundedRoom(cancelled: Promise<void>): SeatRoom {
+	private boundedRoom(cancelled: Promise<void>): RoomProtocol {
 		return {
 			view: (id) => this.room.view(id),
 			commit: async (request) => {

@@ -77,7 +77,7 @@ function facts(room: Answering, state: RoomState): RoomFacts {
 		now: room.now(),
 		state,
 		live: room.live(state),
-		unseen: (since) => state.messages.filter((message) => message.seq > since).length,
+		messagesSince: (seq) => state.messages.filter((message) => message.seq > seq).length,
 	};
 }
 

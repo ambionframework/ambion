@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { Activation, type PiExecutorOptions, persistTurns } from '../src/execution/activation.ts';
 import { stubModel } from '../src/execution/services.ts';
 import { defineAgent, pi } from '../src/index.ts';
-import type { ActivationView, SeatRoom } from '../src/protocol.ts';
+import type { ActivationView, RoomProtocol } from '../src/protocol.ts';
 import type { RoomNotification } from '../src/types.ts';
 import { quiet, scripted } from './support/scripted.ts';
 
@@ -20,7 +20,7 @@ const product = defineAgent({
 	executor: pi({ instructions: 'answer', model: 'scripted/product' }),
 });
 
-const unusedRoom: SeatRoom = {
+const unusedRoom: RoomProtocol = {
 	view: async () => ({ stale: 'unused' }),
 	commit: async () => ({ stale: 'unused' }),
 	lease: async () => ({ stale: 'unused' }),

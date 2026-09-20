@@ -113,7 +113,7 @@ export const oneExchange: Scenario = {
 			summary: assistant.name,
 			seats: { [product.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [product, assistant],
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({ product: twoAnswersEach, assistant: composes([], 'The one message.') }),
 			),
 		});
@@ -142,7 +142,7 @@ export const twoPeopleTwoExchanges: Scenario = {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					product: answersLastQuestion(['priya', 'sam']),
 					colleague: answersLastQuestion(['priya', 'sam']),
@@ -185,7 +185,7 @@ export const seatFromReserve: Scenario = {
 			summary: assistant.name,
 			agents: [product, surveyor, assistant],
 			seats: { [assistant.name]: 'broadcast', ...{ [product.name]: 'broadcast' } },
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
 					product: (_context, _name, call) =>

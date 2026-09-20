@@ -6,10 +6,10 @@
  */
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { expect, it } from 'vitest';
+import { expect, expectTypeOf, it } from 'vitest';
 import * as hosting from '../src/hosting.ts';
 import * as main from '../src/index.ts';
-import { PACKAGE_NAME } from '../src/index.ts';
+import { PACKAGE_NAME, type Seq } from '../src/index.ts';
 
 const read = async (name: string) =>
 	readFile(fileURLToPath(new URL(`../${name}`, import.meta.url)), 'utf8');
@@ -76,4 +76,19 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 	for (const name of Object.keys(main)) {
 		expect(hosting).not.toHaveProperty(name);
 	}
+});
+
+it('names the ports, the reads, and the visit by their final names', () => {
+	expectTypeOf<hosting.AgentPort>().toHaveProperty('wake');
+	expectTypeOf<hosting.RoomProtocol>().toHaveProperty('view');
+	expectTypeOf<hosting.AgentExecutionContext>().toHaveProperty('executor');
+	expectTypeOf<main.Visit['lastDeparture']>().toEqualTypeOf<Seq | undefined>();
+	expectTypeOf<
+		Extract<hosting.ContextParticipant, { kind: 'human' }>['messagesSinceDeparture']
+	>().toEqualTypeOf<number>();
+	expectTypeOf<Awaited<ReturnType<typeof main.readExchange>>>().toEqualTypeOf<
+		main.ExchangeRead | undefined
+	>();
+	expectTypeOf<Awaited<ReturnType<typeof main.readRoom>>>().toEqualTypeOf<main.RoomRead>();
+	expectTypeOf<main.StartRoomOptions>().toHaveProperty('stream');
 });

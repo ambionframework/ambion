@@ -37,7 +37,7 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 			[assistant.name]: 'none',
 		},
 		agents: [...agents, assistant],
-		streamFn: scripted(byAgent(seats)),
+		stream: scripted(byAgent(seats)),
 	});
 	const visit = await enter(session);
 	await visit.send({ text: 'go' });

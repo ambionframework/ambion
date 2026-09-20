@@ -4,7 +4,7 @@ import { configure, RoomObject, SeatObject } from '@ambionframework/cloudflare';
 import { AGENTS, COMPOSITION, human, ROOM_NAME } from './room.ts';
 
 configure({
-	// The catalog is fixed at module load. Room metadata stores these names
+	// The definitions are fixed at module load. Room metadata stores these names
 	// so a Durable Object can resolve them after it resumes.
 	agents: AGENTS,
 	limits: { delivery: { resend: 2_000 } },

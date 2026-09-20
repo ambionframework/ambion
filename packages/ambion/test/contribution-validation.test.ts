@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runningRoom, type SeatRoom, type Transport } from '../src/hosting.ts';
+import { type RoomProtocol, runningRoom, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -67,7 +67,7 @@ async function openWorld(
 	return { opened, runtime, room };
 }
 
-async function protocol(runtime: Runtime, name: string): Promise<SeatRoom> {
+async function protocol(runtime: Runtime, name: string): Promise<RoomProtocol> {
 	const peer = runningRoom(runtime, name);
 	if (peer === undefined) throw new Error('The room is absent.');
 	return peer;

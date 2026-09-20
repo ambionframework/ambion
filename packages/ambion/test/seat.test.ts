@@ -15,7 +15,7 @@ import {
 	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
-	type SeatRoom,
+	type RoomProtocol,
 	type Steer,
 	type ViewResponse,
 	type Wake,
@@ -37,7 +37,7 @@ const product = defineAgent({
  * release until the test lets go, so a wake can land while a finished
  * activation is still releasing its lease.
  */
-class PlayedRoom implements SeatRoom {
+class PlayedRoom implements RoomProtocol {
 	readonly claims: string[] = [];
 	readonly releases: string[] = [];
 	/** The leases held now, and the most that were ever held at once. */

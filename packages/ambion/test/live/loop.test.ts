@@ -1,5 +1,5 @@
 /**
- * The model, the key and the loop. `docs/agent.md` §1: without a `streamFn`,
+ * The model, the key and the loop. `docs/agent.md` §1: without a `stream`,
  * a model resolves as `provider/model-id` from Pi's catalog and the key comes
  * from the environment. Nothing scripted touches that path.
  */

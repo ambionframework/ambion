@@ -60,7 +60,7 @@ describe('room bindings', () => {
 			name: roomName('binding-one'),
 			runtime,
 			agents: [first],
-			streamFn: scripted((context, _agent, call) => {
+			stream: scripted((context, _agent, call) => {
 				prompts.push(context.systemPrompt ?? '');
 				return call === 1 && toolNames(context).includes('first') ? callTool('first', {}) : quiet();
 			}),
@@ -69,7 +69,7 @@ describe('room bindings', () => {
 			name: roomName('binding-two'),
 			runtime,
 			agents: [second],
-			streamFn: scripted((context, _agent, call) => {
+			stream: scripted((context, _agent, call) => {
 				prompts.push(context.systemPrompt ?? '');
 				return call === 1 && toolNames(context).includes('second')
 					? callTool('second', {})
@@ -98,7 +98,7 @@ describe('room bindings', () => {
 			name,
 			runtime: createRuntime({ storage: opened.storage }),
 			agents: [analyst],
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		await waitForRoom(first);
 		await expect(
@@ -130,7 +130,7 @@ describe('room bindings', () => {
 			agents: [original],
 			seats: {},
 			runtime: createRuntime({ storage: faulty.journals }),
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		try {
 			faulty.fail(true, 'message');

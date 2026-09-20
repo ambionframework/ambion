@@ -36,7 +36,7 @@ import type {
 	StreamFn,
 } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
-import type { ActivationView, SeatRoom } from '../protocol.ts';
+import type { ActivationView, RoomProtocol } from '../protocol.ts';
 import type {
 	AgentDefinition,
 	ExecutionEvent,
@@ -88,7 +88,7 @@ export function createPiExecutor(options: PiExecutorOptions): Executor {
 /** One activation, from the moment the room wakes a seat until it stops. */
 export class Activation implements ExecutorSession {
 	readonly id: string;
-	private readonly room: SeatRoom;
+	private readonly room: RoomProtocol;
 	private readonly roomName: string;
 	private readonly emit: (event: ExecutionEvent) => void;
 	private readonly definition: AgentDefinition;

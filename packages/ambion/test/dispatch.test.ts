@@ -64,7 +64,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 			agents: [alpha, beta, assistant],
 			seats: { [assistant.name]: 'broadcast', ...{ [alpha.name]: 'broadcast' } },
 			runtime: createRuntime({ storage: opened.storage, clock, transport: transport.transport }),
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					alpha: () => {
 						alphaStarted.resolve();
@@ -108,7 +108,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 			agents: [alpha, beta, assistant],
 			seats: { [assistant.name]: 'broadcast', ...{ [alpha.name]: 'broadcast' } },
 			runtime: firstRuntime,
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -125,7 +125,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 			resumed = await resumeRoom(room.name, {
 				runtime: createRuntime({ storage: opened.storage, clock, transport: recovered.transport }),
 				agents: [alpha, beta, assistant],
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 			await waitForRoom(resumed);
 			expect(clock.now()).toBe(before);
