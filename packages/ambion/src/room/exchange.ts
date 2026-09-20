@@ -28,6 +28,7 @@
 import { decodeActivationId } from '../activation-id.ts';
 import type { Close } from '../journal/events.ts';
 import {
+	addUsage,
 	type ClosedExchange,
 	copyMessage,
 	type ExchangeRef,
@@ -38,6 +39,7 @@ import {
 	type Seq,
 	type SummaryMessage,
 	type SummaryOutcome,
+	type Usage,
 } from '../types.ts';
 import { type LeaseHold, removedAfter } from './lease.ts';
 import {
@@ -113,11 +115,44 @@ function closedExchangeView(
 	leases: ReadonlyMap<string, LeaseHold>,
 	cancelledAt?: number,
 ): Extract<ExchangeView, { status: 'closed' }> {
+	const usage = exchangeUsage(close.from, close.through, leases);
 	return {
 		...closedExchange(close, messages),
 		status: 'closed',
 		summary: summaryOutcome(close, messages, leases, cancelledAt),
+		...(usage === undefined ? {} : { usage }),
 	};
+}
+
+/**
+ * The leases of the activations in an exchange range. An activation is in
+ * the range when the position its id names lies in `[from, through]`. That
+ * holds the respond activations the range woke and the summary activation,
+ * which names `through`. Every attempt counts.
+ */
+export function activationsInRange(
+	leases: ReadonlyMap<string, LeaseHold>,
+	from: Seq,
+	through: Seq,
+): LeaseHold[] {
+	return [...leases.values()].filter((lease) => {
+		const position = decodeActivationId(lease.id)?.position;
+		return position !== undefined && position >= from && position <= through;
+	});
+}
+
+/** The sum of what the activations in the range spent, or nothing when none recorded usage. */
+export function exchangeUsage(
+	from: Seq,
+	through: Seq,
+	leases: ReadonlyMap<string, LeaseHold>,
+): Usage | undefined {
+	let total: Usage | undefined;
+	for (const { usage } of activationsInRange(leases, from, through)) {
+		if (usage === undefined) continue;
+		total = addUsage(total, usage);
+	}
+	return total;
 }
 
 /** Select the detached closed handle shared by waits and read views. */

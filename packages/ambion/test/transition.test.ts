@@ -447,6 +447,27 @@ describe('room transition', () => {
 		expect(ended).toMatchObject({ event: { body: { phase: 'ended', reason: 'released' } } });
 	});
 
+	it('carries the usage of a release into the ended body, and omits it without usage', () => {
+		const state = foldRoom(
+			[composition(), person(), question(), lease('message:3:product:1', 4)],
+			options,
+		);
+		const usage = { input: 3, output: 2, cacheRead: 1, cacheWrite: 0, cost: 0.25 };
+		const spent = decide(
+			state,
+			{ type: 'end', id: 'message:3:product:1', reason: 'released', readThrough: 0, usage },
+			now,
+		);
+		expect(spent).toMatchObject({ event: { body: { phase: 'ended', usage } } });
+		const plain = decide(
+			state,
+			{ type: 'end', id: 'message:3:product:1', reason: 'released', readThrough: 0 },
+			now,
+		);
+		expect(plain).toMatchObject({ event: { body: { phase: 'ended' } } });
+		expect(JSON.stringify(plain)).not.toContain('usage');
+	});
+
 	it('allows one active execution per seat across ordinary and closing work', () => {
 		const state = foldRoom(
 			[

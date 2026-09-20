@@ -20,6 +20,7 @@ import type {
 	Intent,
 	Message,
 	Seq,
+	Usage,
 	Without,
 } from './types.ts';
 
@@ -159,6 +160,7 @@ export type LeaseRequest =
 			reason: EndReason;
 			readThrough: Seq;
 			cause?: FailureCause;
+			usage?: Usage;
 	  };
 
 /**
