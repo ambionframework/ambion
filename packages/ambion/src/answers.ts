@@ -107,13 +107,18 @@ export async function answerCommit(room: Answering, commit: CommitRequest): Prom
 	const seat = liveSeatOf(room, captured.activation, room.state());
 	if (seat === undefined) return stale('the lease ended');
 	const result = await room.write(captured);
-	return 'refusal' in result ? refused(room, seat, result.refusal) : result;
+	return 'refusal' in result ? refused(room, seat, captured.activation, result.refusal) : result;
 }
 
-function refused(room: Answering, seat: string, refusal: Refusal): CommitResult {
+function refused(
+	room: Answering,
+	seat: string,
+	activation: string,
+	refusal: Refusal,
+): CommitResult {
 	if (refusal.category === 'missed') {
 		const missed = refusal.missed.map(copyMessage);
-		room.emit({ type: 'conflict', author: seat, missed });
+		room.emit({ type: 'conflict', author: seat, activation, missed });
 		return { missed };
 	}
 	return refusal.category === 'stale' ? stale(refusal.reason) : { refused: refusal.reason };

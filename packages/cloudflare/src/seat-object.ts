@@ -9,7 +9,7 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
-import type { Clock, RoomNotification } from '@ambionframework/ambion';
+import type { Clock, ExecutionEvent } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
 import type { ExecutionServices, SeatRoom, Steer, Wake } from '@ambionframework/ambion/hosting';
 import { AgentRunner, createPiExecutor } from '@ambionframework/ambion/hosting';
@@ -30,17 +30,12 @@ type RecoveryCall<T> = { kind: 'value'; value: T } | { kind: 'lost'; error: Erro
  *
  * The core writes nothing to stdout, and the decision is a host's to make.
  */
-function seatLine(
-	room: string,
-	seat: string,
-	activation: string,
-	event: RoomNotification,
-): SeatEvent {
+function seatLine(room: string, seat: string, event: ExecutionEvent): SeatEvent {
 	return {
 		ambion: 'seat',
 		room,
 		seat,
-		activation: 'activation' in event ? event.activation : activation,
+		activation: event.activation,
 		event: event.type,
 		...(event.type === 'delivery_error' ? { operation: event.operation } : {}),
 		...('toolName' in event ? { tool: event.toolName } : {}),
@@ -165,7 +160,7 @@ export class SeatObject extends DurableObject<Env> {
 			room,
 			seat,
 			executor,
-			emit: (event) => seatEvent(seatLine(room, seat, activation, event)),
+			emit: (event) => seatEvent(seatLine(room, seat, event)),
 		});
 		try {
 			await this.runner.run(activation);
@@ -198,7 +193,7 @@ export class SeatObject extends DurableObject<Env> {
 		if (failure === undefined) return;
 		try {
 			seatEvent(
-				seatLine(room, seat, activation, {
+				seatLine(room, seat, {
 					type: 'delivery_error',
 					agent: seat,
 					activation,

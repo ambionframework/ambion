@@ -1004,6 +1004,7 @@ export class RoomHost implements Room, RunningRoom {
 					this.emit({
 						type: 'activation_end',
 						agent: seat,
+						activation: lease.id,
 						spoke: state.messages.some((message) => message.activationId === lease.id),
 					});
 			}
@@ -1020,7 +1021,7 @@ export class RoomHost implements Room, RunningRoom {
 		const seat = seatOf(lease.id) ?? '';
 		if (lease.phase === 'running') {
 			this.publish(() => {
-				if (first) this.emit({ type: 'activation_start', agent: seat });
+				if (first) this.emit({ type: 'activation_start', agent: seat, activation: lease.id });
 				// A claim that lost its confirmation never armed the expiry: this pass does.
 				void this.reconcile();
 				this.notifyExchangeWaiters();
@@ -1048,12 +1049,13 @@ export class RoomHost implements Room, RunningRoom {
 		const spoke = this.state().messages.some((m) => m.activationId === lease.id);
 		this.publish(() => {
 			if (revoked) this.cutPort(seat, lease.id);
-			this.emit({ type: 'activation_end', agent: seat, spoke });
+			this.emit({ type: 'activation_end', agent: seat, activation: lease.id, spoke });
 			this.notifyExchangeWaiters();
 			if (lease.reason === 'expired')
 				this.emit({
 					type: 'error',
 					agent: seat,
+					activation: lease.id,
 					error: new Error('The activation ran past its lease.'),
 				});
 		});

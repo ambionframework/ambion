@@ -39,9 +39,9 @@ import { Agent } from '@earendil-works/pi-agent-core';
 import type { ActivationView, SeatRoom } from '../protocol.ts';
 import type {
 	AgentDefinition,
+	ExecutionEvent,
 	FailureCause,
 	ModelResolver,
-	RoomNotification,
 	Seq,
 } from '../types.ts';
 import type { Executor, ExecutorActivation, ExecutorSession, PassResult } from './executor.ts';
@@ -90,7 +90,7 @@ export class Activation implements ExecutorSession {
 	readonly id: string;
 	private readonly room: SeatRoom;
 	private readonly roomName: string;
-	private readonly emit: (event: RoomNotification) => void;
+	private readonly emit: (event: ExecutionEvent) => void;
 	private readonly definition: AgentDefinition;
 	private readonly model: ModelResolver;
 	private readonly stream: StreamFn;
@@ -203,7 +203,12 @@ export class Activation implements ExecutorSession {
 		if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
 			// `say` is the room's own event, not a tool's.
 			if (event.toolName !== 'say') {
-				this.emit({ type: event.type, agent: this.definition.name, toolName: event.toolName });
+				this.emit({
+					type: event.type,
+					agent: this.definition.name,
+					activation: this.id,
+					toolName: event.toolName,
+				});
 			}
 			return;
 		}
@@ -216,6 +221,7 @@ export class Activation implements ExecutorSession {
 		this.emit({
 			type: 'error',
 			agent: this.definition.name,
+			activation: this.id,
 			error: failure.error,
 			cause: failure.cause,
 		});
@@ -246,7 +252,13 @@ export class Activation implements ExecutorSession {
 	 * transient and the room tries the activation again.
 	 */
 	private broke(error: Error): PassResult {
-		this.emit({ type: 'error', agent: this.definition.name, error, cause: 'transient' });
+		this.emit({
+			type: 'error',
+			agent: this.definition.name,
+			activation: this.id,
+			error,
+			cause: 'transient',
+		});
 		return { failed: true, cause: 'transient' };
 	}
 

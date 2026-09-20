@@ -429,14 +429,18 @@ describe('runner liveness', () => {
 	});
 
 	it('fails the activation and reports it when the view the pass loop needs is lost', async () => {
-		const events: Array<{ type: string; cause?: string }> = [];
+		const events: Array<{ type: string; activation: string; cause?: string }> = [];
 		const { actor, room } = fixture({
 			view: async () => {
 				throw new Error('view unavailable');
 			},
 			emit: (event) => {
 				if (event.type === 'error' || event.type === 'delivery_error') {
-					events.push({ type: event.type, cause: 'cause' in event ? event.cause : undefined });
+					events.push({
+						type: event.type,
+						activation: event.activation,
+						cause: 'cause' in event ? event.cause : undefined,
+					});
 				}
 			},
 		});
@@ -444,8 +448,8 @@ describe('runner liveness', () => {
 		expect(room.calls).toContainEqual(
 			expect.objectContaining({ operation: 'release', reason: 'failed' }),
 		);
-		expect(events).toContainEqual({ type: 'delivery_error', cause: undefined });
-		expect(events).toContainEqual({ type: 'error', cause: 'transient' });
+		expect(events).toContainEqual({ type: 'delivery_error', activation: first, cause: undefined });
+		expect(events).toContainEqual({ type: 'error', activation: first, cause: 'transient' });
 	});
 
 	it('keeps an applied commit when its reply is lost', async () => {

@@ -247,8 +247,8 @@ export interface HumanParticipantInfo {
 
 export type ParticipantInfo = AgentParticipantInfo | HumanParticipantInfo;
 
-/** The room's event stream: one notification per room-level fact. */
-export type RoomNotification =
+/** A room-level fact: what landed on the record, or what happened to this run. */
+export type RoomEvent =
 	/**
 	 * A message landed on the record. Exactly one of these per message,
 	 * whoever wrote it: what a person delivered, what an agent said, what the
@@ -256,39 +256,6 @@ export type RoomNotification =
 	 * way.
 	 */
 	| { type: 'message'; message: Message }
-	/**
-	 * The room woke a seat. One per activation, however many requests to a
-	 * provider it takes: an activation is the room's span, and Pi's own `turn`
-	 * — one request and the tools it calls — never surfaces here.
-	 */
-	| { type: 'activation_start'; agent: string }
-	/**
-	 * The lock refused ordinary speech because the record moved after its
-	 * author read it. The event includes the messages the author missed.
-	 */
-	| { type: 'conflict'; author: string; missed: Message[] }
-	| { type: 'tool_execution_start'; agent: string; toolName: string }
-	| { type: 'tool_execution_end'; agent: string; toolName: string }
-	/** The seat stopped, and `spoke` says whether it left a mark on the record. */
-	| { type: 'activation_end'; agent: string; spoke: boolean }
-	| { type: 'error'; agent: string; error: Error; cause?: FailureCause }
-	/** A room delivery or seat call failed, or its result became unknown. */
-	| {
-			type: 'delivery_error';
-			agent: string;
-			activation: string;
-			operation: 'wake' | 'steer' | 'cut' | 'view' | 'commit' | 'claim' | 'renew' | 'release';
-			error: Error;
-	  }
-	/** Transcript persistence failed independently of the execution outcome. */
-	| { type: 'audit_error'; agent: string; activation: string; error: Error }
-	/**
-	 * The room gave up: a permanent failure, or every attempt at a wake or a
-	 * draft came to nothing and the cap is reached. `activation` names the
-	 * attempt the room did not make, `cause` says why, and the journal holds
-	 * the entry that says so.
-	 */
-	| { type: 'abandoned'; agent: string; activation: string; cause: FailureCause }
 	/**
 	 * Another run took the name: its fence is on the journal past this run's.
 	 * This run is superseded, and drops itself from memory the way
@@ -310,6 +277,45 @@ export type RoomNotification =
 	 * one.
 	 */
 	| { type: 'exchange_closed'; exchange: ClosedExchange };
+
+/** What one activation did, or what happened to it. Every member names the activation. */
+export type ExecutionEvent =
+	/**
+	 * The room woke a seat. One per activation, however many requests to a
+	 * provider it takes: an activation is the room's span, and Pi's own `turn`
+	 * — one request and the tools it calls — never surfaces here.
+	 */
+	| { type: 'activation_start'; agent: string; activation: string }
+	/**
+	 * The lock refused ordinary speech because the record moved after its
+	 * author read it. The event includes the messages the author missed.
+	 */
+	| { type: 'conflict'; author: string; activation: string; missed: Message[] }
+	| { type: 'tool_execution_start'; agent: string; activation: string; toolName: string }
+	| { type: 'tool_execution_end'; agent: string; activation: string; toolName: string }
+	/** The seat stopped, and `spoke` says whether it left a mark on the record. */
+	| { type: 'activation_end'; agent: string; activation: string; spoke: boolean }
+	| { type: 'error'; agent: string; activation: string; error: Error; cause?: FailureCause }
+	/** A room delivery or seat call failed, or its result became unknown. */
+	| {
+			type: 'delivery_error';
+			agent: string;
+			activation: string;
+			operation: 'wake' | 'steer' | 'cut' | 'view' | 'commit' | 'claim' | 'renew' | 'release';
+			error: Error;
+	  }
+	/** Transcript persistence failed independently of the execution outcome. */
+	| { type: 'audit_error'; agent: string; activation: string; error: Error }
+	/**
+	 * The room gave up: a permanent failure, or every attempt at a wake or a
+	 * draft came to nothing and the cap is reached. `activation` names the
+	 * attempt the room did not make, `cause` says why, and the journal holds
+	 * the entry that says so.
+	 */
+	| { type: 'abandoned'; agent: string; activation: string; cause: FailureCause };
+
+/** The room's event stream: room facts and execution events, under one `subscribe`. */
+export type RoomNotification = RoomEvent | ExecutionEvent;
 
 /**
  * What a tool's `execute` is handed beside its parameters: the calling agent

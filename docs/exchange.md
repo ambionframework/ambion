@@ -99,8 +99,9 @@ conflicting reuse rejects. Concurrent sends into one open exchange share its
 identity. See [delivery guarantees](durability.md#2-what-a-delivery-promises).
 
 Live notifications include `message`, `exchange_opened`, and
-`exchange_closed` events, plus execution diagnostics. Notifications and pending
-waits belong to the current run and must be recreated after interruption.
+`exchange_closed` events, plus execution events. An execution event names its
+activation. Notifications and pending waits belong to the current run and
+must be recreated after interruption.
 
 **`room.read()` returns detached state from one journal position.** It starts
 no agents and performs no reconciliation. `RoomSnapshot` reports initialization,

@@ -137,8 +137,10 @@ the one before it and no file is reshaped twice.
        types.
 5. [x] `AmbionError` with codes at every throw site (B7). Needs 4, so the
        files are in their final place.
-6. [ ] An activation id on every execution event; `RoomEvent` and
+6. [x] An activation id on every execution event; `RoomEvent` and
        `ExecutionEvent` under one `subscribe` (B8). Needs 4.
+       `RoomNotification` stays as the exported union of the two; C5 owns
+       whether it keeps that name.
 7. [ ] One limits vocabulary (B3), with the `context`, `message`, and
        `trace` groups present and at their current defaults.
 8. [ ] A `fixed` seat with the summary writer fixed by default (D4), and
@@ -466,6 +468,10 @@ departure position with a cursor's name.
 | `ContextParticipant.unseen` | `messagesSinceDeparture`     |
 | `ExchangeSnapshot`          | `ExchangeRead`               |
 | "catalog" (docs)            | "definitions"                |
+
+`RoomNotification` is the exported union of `RoomEvent` and `ExecutionEvent`
+(B8). Whether it keeps that name, once every type has its final home, is
+this item's to decide.
 
 **C6. Small sharp edges.** `startRoom` validates participant names and
 never the room name; a `summary` name no seat holds gives no summary and

@@ -9,14 +9,14 @@
  * passes, never during one.
  */
 import type { ActivationView, SeatRoom } from '../protocol.ts';
-import type { FailureCause, RoomNotification, Seq } from '../types.ts';
+import type { ExecutionEvent, FailureCause, Seq } from '../types.ts';
 
 /** What one activation gives its executor to open a session. */
 export interface ExecutorActivation {
 	readonly id: string;
 	/** The bounded room facade: the driver's own retries and cancellation. */
 	readonly room: SeatRoom;
-	readonly emit: (event: RoomNotification) => void;
+	readonly emit: (event: ExecutionEvent) => void;
 }
 
 /** What one pass reports back to the driver. */
