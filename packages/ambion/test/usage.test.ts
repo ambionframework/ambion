@@ -5,8 +5,8 @@
 import { describe, expect, it } from 'vitest';
 import type { RoomNotification, Usage } from '../src/index.ts';
 import { createRuntime, defineAgent, pi, readExchange, startRoom } from '../src/index.ts';
-import { andrei, collect, roomName, storedOf, waitForRoom } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
+import { quiet, scripted, settled } from '../src/testing.ts';
+import { andrei, collect, roomName, storedOf } from './support/room.ts';
 import { storages } from './support/storage.ts';
 import { traceOf } from './support/trace.ts';
 
@@ -57,7 +57,7 @@ describe.each(storages)('usage on $name storage', (storage) => {
 			const events = collect(room);
 			const visit = await room.visit(andrei);
 			const handle = await visit.send({ text: 'Ready?' });
-			await waitForRoom(room, 'quiet', 2_000);
+			await settled(room, { timeout: 2_000 });
 
 			const ends = events.filter(isEnd);
 			const worked = ends.find((event) => event.agent === 'product');

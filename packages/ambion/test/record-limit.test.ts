@@ -97,9 +97,9 @@ describe('a limit windows the record', () => {
 		const room = await startRoom({ name: roomName('room-cap'), runtime, agents: [worker] });
 
 		await (await room.visit(andrei)).send({ text: 'alpha marker' });
-		await waitForRoom(room);
+		await settled(room);
 		await (await room.visit(andrei)).send({ text: 'omega marker' });
-		await waitForRoom(room);
+		await settled(room);
 
 		const answering = contexts.filter((text) => text.includes('omega marker'));
 		expect(answering.length).toBeGreaterThan(0);
@@ -130,7 +130,7 @@ describe('a limit windows the record', () => {
 		const room = await startRoom({ name: roomName('room-cap-wire'), runtime, agents: [worker] });
 		for (const text of ['one', 'two', 'three']) {
 			await (await room.visit(andrei)).send({ text });
-			await waitForRoom(room);
+			await settled(room);
 		}
 		expect(pages.length).toBeGreaterThan(0);
 		expect(pages.every((page) => page.omitted !== undefined)).toBe(true);
