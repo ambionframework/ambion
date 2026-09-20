@@ -34,7 +34,7 @@ export interface AuditEntry {
 	readonly arguments: unknown;
 	/** The tool's full result. Absent when the call ended in `error`. */
 	readonly result?: unknown;
-	/** Present when the call threw instead of returning. */
+	/** Present when the call threw. */
 	readonly error?: { readonly name: string; readonly message: string };
 }
 
@@ -89,8 +89,8 @@ function rotatedName(path: string): string {
 /**
  * Append one line, creating the parent directory first, and rotate past
  * `maxBytes`. A full entry that the filesystem refuses (an oversized
- * `write` call's content, past what's left of a bounded backend) falls back
- * to a short notice, so the call still leaves a trace instead of vanishing.
+ * `write` call's content, past the room left on a bounded backend) falls
+ * back to a short notice, so the call still leaves a trace.
  */
 async function append(
 	env: ExecutionEnv,

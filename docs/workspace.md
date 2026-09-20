@@ -125,23 +125,22 @@ the same `ExecutionEnv` as the call it records. The entry and the call never
 separate under concurrent work from other agents.
 
 **A cut or aborted call is still recorded.** The record runs after the call
-ends, whatever ended it, over its own unconditional context rather than the
-caller's abort signal. A room that cuts an activation mid-call still leaves
-a trace of what that call was doing.
+ends, whatever ended it, over its own unconditional context. It does not
+depend on the caller's abort signal. A room that cuts an activation mid-call
+still leaves a trace of what that call was doing.
 
 **An entry too large for the backend to hold falls back to a short notice.**
 A `write` call whose content the filesystem has no room for still leaves one
-line naming the call and the failure, in place of the full entry, instead of
-leaving no trace at all.
+line naming the call and the failure, in place of the full entry.
 
-**A write or rotation failure goes to `onError`, not to the tool call.** The
-call that triggered the failure still returns its own result. The log is
-best-effort: a full disk delays the record, not the agent. A throwing
-`onError` callback is caught, and never replaces the tool call's own outcome.
+**A write or rotation failure calls `onError`.** The tool call itself keeps
+its own result. The log is best-effort: a full disk delays the record. It
+does not delay the agent. A throwing `onError` callback is caught inside the
+log, so it never reaches the tool call's own outcome.
 
 **Only a call through `workspace.tools()` is recorded.** A direct
-`workspace.use` call reaches the backend with no entry. It is host code, not
-a tool a model called.
+`workspace.use` call reaches the backend with no entry. It is host code, and
+the guidance the log describes speaks to the model alone.
 
 **The log shares the workspace's boundary.** just-bash gives no wall between
 one agent's home and another's (see [Backends and limits](#backends-and-limits)),
