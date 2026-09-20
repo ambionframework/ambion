@@ -20,7 +20,15 @@ import type {
 	ViewResponse,
 	Wake,
 } from '../protocol.ts';
-import type { EndReason, ExecutionEvent, FailureCause, Message, Seq, Step } from '../types.ts';
+import type {
+	EndReason,
+	ExecutionEvent,
+	FailureCause,
+	Message,
+	Seq,
+	Step,
+	Usage,
+} from '../types.ts';
 import type { ExecutorSession, PassResult } from './executor.ts';
 import { renderLine, windowToLimit } from './render.ts';
 import type { TraceSink } from './trace.ts';
@@ -180,6 +188,7 @@ export class AgentRunner implements AgentPort {
 				failed ? 'failed' : 'released',
 				current.session.readThrough,
 				last?.cause,
+				current.trace.usage(),
 			);
 		}
 	}
@@ -315,6 +324,7 @@ export class AgentRunner implements AgentPort {
 		reason: EndReason,
 		readThrough: Seq,
 		cause: FailureCause | undefined,
+		usage: Usage | undefined,
 	): Promise<void> {
 		const released = await this.calls(
 			() =>
@@ -324,6 +334,7 @@ export class AgentRunner implements AgentPort {
 					reason,
 					readThrough,
 					...(cause === undefined ? {} : { cause }),
+					...(usage === undefined ? {} : { usage }),
 				}),
 			this.current?.cutOff,
 		);

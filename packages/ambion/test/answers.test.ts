@@ -36,6 +36,7 @@ function fakeRoom(
 	state: ReturnType<typeof foldRoom>,
 	ended: string[],
 	messages = Number.POSITIVE_INFINITY,
+	usages: unknown[] = [],
 ): Answering {
 	return {
 		name: 'release-test',
@@ -52,8 +53,9 @@ function fakeRoom(
 		claim: async () => ({ stale: 'unused' }),
 		renew: async () => ({ stale: 'unused' }),
 		reconcile: async () => {},
-		end: async (id: string) => {
+		end: async (id: string, _reason, _readThrough, _cause, usage) => {
 			ended.push(id);
+			usages.push(usage);
 			return true;
 		},
 	};
@@ -140,5 +142,37 @@ describe('seat lease answers', () => {
 			}),
 		).toMatchObject({ ok: {} });
 		expect(ended).toEqual(['closed:2:assistant:1']);
+	});
+
+	it('threads the usage of a release into the end', async () => {
+		const state = foldRoom(
+			[
+				composition,
+				question,
+				close,
+				{
+					kind: 'lease',
+					seq: 4,
+					body: {
+						id: 'closed:2:assistant:1',
+						phase: 'running',
+						expiresAt: now + 100,
+						at,
+						readThrough: 0,
+					},
+				},
+			],
+			options,
+		);
+		const usage = { input: 4, output: 2, cacheRead: 0, cacheWrite: 1 };
+		const usages: unknown[] = [];
+		await answerLease(fakeRoom(state, [], undefined, usages), {
+			activation: 'closed:2:assistant:1',
+			operation: 'release',
+			reason: 'released',
+			readThrough: 0,
+			usage,
+		});
+		expect(usages).toEqual([usage]);
 	});
 });

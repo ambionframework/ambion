@@ -88,6 +88,16 @@ const leaseRunning = Type.Object(
 	},
 	extra,
 );
+const usage = Type.Object(
+	{
+		input: Type.Number(),
+		output: Type.Number(),
+		cacheRead: Type.Number(),
+		cacheWrite: Type.Number(),
+		cost: Type.Optional(Type.Number()),
+	},
+	extra,
+);
 const leaseEnded = Type.Object(
 	{
 		id: Type.String(),
@@ -101,6 +111,7 @@ const leaseEnded = Type.Object(
 		]),
 		at: Type.String(),
 		readThrough: seq,
+		usage: Type.Optional(usage),
 	},
 	extra,
 );

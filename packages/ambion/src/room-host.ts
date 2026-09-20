@@ -82,7 +82,7 @@ import type {
 	SummaryMessage,
 	Without,
 } from './types.ts';
-import { copyMessage } from './types.ts';
+import { copyMessage, type Usage } from './types.ts';
 
 export type { RoomRead } from './types.ts';
 
@@ -1098,7 +1098,13 @@ export class RoomHost implements Room, RunningRoom {
 		const spoke = this.state().messages.some((m) => m.activationId === lease.id);
 		this.publish(() => {
 			if (revoked) this.cutPort(seat, lease.id);
-			this.emit({ type: 'activation_end', agent: seat, activation: lease.id, spoke });
+			this.emit({
+				type: 'activation_end',
+				agent: seat,
+				activation: lease.id,
+				spoke,
+				...(lease.usage === undefined ? {} : { usage: lease.usage }),
+			});
 			this.notifyExchangeWaiters();
 			if (lease.reason === 'expired')
 				this.emit({
@@ -1338,11 +1344,19 @@ export class RoomHost implements Room, RunningRoom {
 		reason: EndReason,
 		readThrough: Seq,
 		cause?: FailureCause,
+		usage?: Usage,
 	): Promise<boolean | { refusal: Refusal }> {
 		const appended = await this.submit('lease', () =>
 			decide(
 				this.state(),
-				{ type: 'end', id, reason, readThrough, ...(cause === undefined ? {} : { cause }) },
+				{
+					type: 'end',
+					id,
+					reason,
+					readThrough,
+					...(cause === undefined ? {} : { cause }),
+					...(usage === undefined ? {} : { usage }),
+				},
 				this.now(),
 			),
 		);
@@ -1433,6 +1447,7 @@ export class RoomHost implements Room, RunningRoom {
 				event.body.reason,
 				event.body.readThrough,
 				event.body.cause,
+				event.body.usage,
 			).then((result) => {
 				return this.requireEnd(result);
 			});
