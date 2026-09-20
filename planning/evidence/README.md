@@ -9,4 +9,4 @@ review. A dated file is named `YYYY-MM-DD-<slug>.<ext>`.
 | `2026-09-16-assistant-acceptance.md` | The review of the default assistant on 2026-09-16.                                      |
 
 Phase 8 records the release results here. `0.1.0.md` signs off F1 to F9.
-See [the plan](../next.md#phase-8).
+See [the plan](../next.md#phase-8-release-evidence-and-sign-off-p0).
