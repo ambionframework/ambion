@@ -22,6 +22,7 @@
  * design contract for the wire.
  */
 
+export { DEFAULT_TRACE } from './define.ts';
 export { createPiExecutor, type PiExecutorOptions } from './execution/activation.ts';
 export type {
 	Executor,
@@ -35,7 +36,14 @@ export {
 	type ExecutionServices,
 	type ExecutionServicesOptions,
 	seatSessionId,
+	type TraceLimits,
 } from './execution/services.ts';
+export {
+	type TraceOpener,
+	type TraceOptions,
+	type TraceSink,
+	traceOpener,
+} from './execution/trace.ts';
 export type { AgentExecutionContext, Hosting, Limits, Transport } from './host/runtime.ts';
 export { hostingOf, runningRoom } from './host/runtime.ts';
 export type {

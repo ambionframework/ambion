@@ -68,6 +68,7 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 it('exports exactly the wire and the hosting escape hatch, and nothing an application already has', () => {
 	expect(Object.keys(hosting).sort()).toEqual([
 		'AgentRunner',
+		'DEFAULT_TRACE',
 		'assertWire',
 		'createExecutionServices',
 		'createPiExecutor',
@@ -76,6 +77,7 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'roundTrip',
 		'runningRoom',
 		'seatSessionId',
+		'traceOpener',
 	]);
 	for (const name of Object.keys(main)) {
 		expect(hosting).not.toHaveProperty(name);
