@@ -13,8 +13,8 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
+import { byAgent, callTool, isClosing, quiet, scripted } from '../src/testing.ts';
 import { collect, roomName } from './support/room.ts';
-import { byAgent, callTool, isClosing, quiet, scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
