@@ -99,7 +99,7 @@ story; **P2** is in scope and can land last.
 | A    | Phase 2: 14; 16; 17                                        | P0       |
 | B    | Phase 4: 1 then 2; 3 then 4; 5 then 6 and 7                | P1       |
 | C    | Phase 3: 1 then 2; 3 then 4                                | P1       |
-| D    | Phase 5: 1, then 2, 3, and 5 together; 4                   | P1       |
+| D    | Phase 5: 2, 3, and 5 together; 4                           | P1       |
 | E    | Phase 8: 1 now; 2 and 3 as each package lands; 4 to 8 last | P0       |
 | F    | Phases 6 and 7: each item after the code it describes      | P1       |
 
@@ -161,16 +161,13 @@ package's prompt shrinks to what the kernel does not enforce.
 **Goal:** artifacts are references on the record with provenance behind
 them, and the workspace is one binding of one resource contract.
 
-1. [ ] The neutral resource contract at `@ambionframework/workspace/resource`;
-       just-bash and its Pi tools as the Pi binding (E4).
 2. [ ] A change log in the workspace binding keyed by activation, with
-       `changes({ exchange })` (E6). Needs 1.
+       `changes({ exchange })` (E6).
 3. [ ] A read-only SQL resource over `node:sqlite` with `query` and
-       `record` tools, for the example (E4). Needs 1.
+       `record` tools, for the example (E4).
 4. [ ] The instrument resource for the example, with approval on a limit.
        Needs 3.
 5. [ ] Workspace `/dev/null` and the backend matrix on both backends.
-       Needs 1.
 
 **Evidence:** two resources on one contract; "what changed during this
 exchange" answered from the change log; a summary that cites a ref.
@@ -439,11 +436,8 @@ the repository mentions MCP or a headless run. Expose the three room tools
 in the hosting entry, serve them over MCP bound to one activation, and add
 the Codex example (F6, F10).
 
-**E4. The workspace as one binding among many.** All five workspace source
-files import Pi; the resource owner (`openResource`, `use`, `dispose`,
-`destroy`) is neutral and already has its own entry. Keep that entry as the
-resource contract, make just-bash and its Pi tools the Pi binding, and add
-a read-only SQL resource over `node:sqlite` in the example.
+**E4. A SQL resource in the example.** Add a read-only SQL resource over
+`node:sqlite` with `query` and `record` tools, on the resource contract.
 
 **E6. A change log for resources.** Let the workspace binding keep a change
 log keyed by activation with `changes({ exchange })`. The log answers what
