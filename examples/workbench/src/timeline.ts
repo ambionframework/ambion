@@ -14,7 +14,7 @@ export interface MessageBlock {
 /** The thread between a question and its summary. It opens and closes. */
 export interface DiscussionBlock {
 	type: 'discussion';
-	/** The seq of the exchange's question. It names the discussion across polls. */
+	/** The seq of the exchange's question. It names the discussion across reads. */
 	key: string;
 	count: number;
 	voices: string[];

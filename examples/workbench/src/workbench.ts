@@ -22,6 +22,13 @@ export interface Workbench {
 	rooms(): Promise<RoomView[]>;
 	/** Read one room. Messages come back only after `since`, an exclusive position. */
 	read(room: string, since: number): Promise<RoomView>;
+	/**
+	 * Watch one room for live changes. A running room calls `changed` after each
+	 * entry it records and each activation step, so a reader can read again at
+	 * once. A stopped room records nothing, so it calls nothing; a slow read keeps
+	 * that room current. The return value ends the watch.
+	 */
+	watch(room: string, changed: () => void): () => void;
 	/** Enter a room as a person. Entering twice records one arrival. */
 	join(room: string, person: string): Promise<void>;
 	/** Leave a room. A person who is not present has nothing to leave. */
@@ -100,6 +107,7 @@ function hosted(rooms: Rooms, database: DatabaseSync): Workbench {
 		people,
 		rooms: () => rooms.list(),
 		read: (room, since) => rooms.read(room, since),
+		watch: (room, changed) => rooms.watch(room, changed),
 		async join(room, person) {
 			const who = personNamed(person);
 			await inRoom(room, async (live) => void (await live.visit(who)));

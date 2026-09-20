@@ -8,7 +8,7 @@ import {
 	fauxAssistantMessage,
 	fauxToolCall,
 } from '@earendil-works/pi-ai';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openWorkbench, type Workbench } from '../src/workbench.ts';
 
 const opened: { workbench: Workbench; directory: string }[] = [];
@@ -285,4 +285,60 @@ describe('Workbench host', () => {
 			expect.objectContaining({ status: 'closed', summary: { status: 'silent' } }),
 		);
 	});
+});
+
+describe('Workbench host watch', () => {
+	it('tells a watcher when the room records something, and stops after the watch ends', async () => {
+		const workbench = await open(joinPath(await freshDirectory(), 'run'));
+		let changes = 0;
+		let control = 0;
+		const stop = workbench.watch('bringup', () => {
+			changes += 1;
+		});
+		workbench.watch('bringup', () => {
+			control += 1;
+		});
+		await workbench.join('bringup', 'mira');
+		await vi.waitFor(() => expect(changes).toBeGreaterThan(0));
+		stop();
+		const seen = changes;
+		const controlSeen = control;
+		await workbench.send('bringup', 'mira', 'watch-1', 'Which resistor?');
+		await vi.waitFor(() => expect(control).toBeGreaterThan(controlSeen));
+		expect(changes).toBe(seen);
+	});
+
+	it('watches one room and not another', async () => {
+		const workbench = await open(joinPath(await freshDirectory(), 'run'));
+		let bringup = 0;
+		let sensing = 0;
+		workbench.watch('bringup', () => {
+			bringup += 1;
+		});
+		workbench.watch('sensing', () => {
+			sensing += 1;
+		});
+		await workbench.join('sensing', 'theo');
+		await vi.waitFor(() => expect(sensing).toBeGreaterThan(0));
+		expect(bringup).toBe(0);
+	});
+
+	it('refuses to watch a room that does not exist', async () => {
+		const workbench = await open(joinPath(await freshDirectory(), 'run'));
+		expect(() => workbench.watch('nowhere', () => {})).toThrow(/Unknown room/);
+	});
+
+	it('keeps a watch across a stop and a resume', async () => {
+		const workbench = await open(joinPath(await freshDirectory(), 'run'));
+		let changes = 0;
+		workbench.watch('bringup', () => {
+			changes += 1;
+		});
+		await workbench.control('bringup', 'stop');
+		await workbench.control('bringup', 'resume');
+		await new Promise<void>((resolve) => setTimeout(resolve, 50));
+		const settled = changes;
+		await workbench.join('bringup', 'mira');
+		await vi.waitFor(() => expect(changes).toBeGreaterThan(settled));
+	}, 20_000);
 });

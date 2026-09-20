@@ -89,6 +89,11 @@ export class Session {
 	private readonly changed: () => void;
 	private sending = false;
 	private wantBottom = false;
+	/** True while a read runs. A change during the read sets `pending` for one more read. */
+	private refreshing = false;
+	private pending = false;
+	/** Ends the watch on the open room. The session watches one room at a time. */
+	private unwatch: (() => void) | undefined;
 
 	constructor(host: Workbench, identity: Person | undefined, changed: () => void) {
 		this.host = host;
@@ -142,7 +147,28 @@ export class Session {
 		this.changed();
 	}
 
+	/**
+	 * Read the open room. A watch calls this on each change. A change that lands
+	 * during a read sets `pending`, so one more read runs after the current one
+	 * and no change is lost.
+	 */
 	async refresh(): Promise<void> {
+		if (this.refreshing) {
+			this.pending = true;
+			return;
+		}
+		this.refreshing = true;
+		try {
+			do {
+				this.pending = false;
+				await this.readOnce();
+			} while (this.pending);
+		} finally {
+			this.refreshing = false;
+		}
+	}
+
+	private async readOnce(): Promise<void> {
 		try {
 			const view = await this.feed.refresh();
 			if (!view) return;
@@ -153,6 +179,16 @@ export class Session {
 			this.offline = errorText(error);
 			this.changed();
 		}
+	}
+
+	/**
+	 * The slow fallback. It reads the room list and the workspace files, which no
+	 * room watch reports. It reads the open room only when the room does not run,
+	 * because a stopped room records nothing for a watch to report.
+	 */
+	async poll(): Promise<void> {
+		await this.refreshRooms();
+		if (this.view?.status !== 'running') await this.refresh();
 	}
 
 	rebuild(): void {
@@ -278,9 +314,16 @@ export class Session {
 		this.entered = false;
 		this.wantBottom = true;
 		this.feed.select(name);
+		this.watchRoom();
 		if (previous) await this.host.leave(previous, this.whoami).catch(() => {});
 		await this.join();
 		await this.refresh();
+	}
+
+	/** Watch the open room, so a change reads it at once. It replaces an earlier watch. */
+	private watchRoom(): void {
+		this.unwatch?.();
+		this.unwatch = this.host.watch(this.room, () => void this.refresh());
 	}
 
 	private async join(): Promise<void> {
@@ -442,6 +485,8 @@ export class Session {
 
 	/** End the person's visit, so the room shows them as gone after the terminal exits. */
 	async leave(): Promise<void> {
+		this.unwatch?.();
+		this.unwatch = undefined;
 		if (this.room && this.entered && this.identity)
 			await this.host.leave(this.room, this.identity.name).catch(() => {});
 	}
