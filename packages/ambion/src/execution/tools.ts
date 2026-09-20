@@ -14,7 +14,11 @@ import { refusal } from './render.ts';
 import { summaryToolDescription } from './summary.ts';
 
 /** A Pi tool from a normalized tool. */
-function toPiTool(tool: AmbionTool, agent: AgentDefinition): AgentTool<TSchema, unknown> {
+function toPiTool(
+	tool: AmbionTool,
+	agent: AgentDefinition,
+	room: string,
+): AgentTool<TSchema, unknown> {
 	return {
 		name: tool.name,
 		label: tool.label,
@@ -28,6 +32,7 @@ function toPiTool(tool: AmbionTool, agent: AgentDefinition): AgentTool<TSchema, 
 				signal,
 				callId: toolCallId,
 				onUpdate,
+				room,
 			});
 			return typeof result === 'string'
 				? { content: [{ type: 'text', text: result }], details: {} }
@@ -176,7 +181,12 @@ function membershipTool(
 }
 
 /** What an activation holds from its purpose. */
-export function toolsFor(view: ActivationView, def: AgentDefinition, held: Binding): AgentTool[] {
+export function toolsFor(
+	view: ActivationView,
+	def: AgentDefinition,
+	held: Binding,
+	room: string,
+): AgentTool[] {
 	if (view.spec.purpose.kind === 'summarize') {
 		return [sayTool(held, view.spec.purpose.person)];
 	}
@@ -184,7 +194,7 @@ export function toolsFor(view: ActivationView, def: AgentDefinition, held: Bindi
 		sayTool(held),
 		seatTool(held),
 		unseatTool(held),
-		...def.tools.map((tool) => toPiTool(tool, def)),
+		...def.tools.map((tool) => toPiTool(tool, def, room)),
 	];
 }
 

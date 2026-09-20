@@ -82,8 +82,45 @@ const readPlan = defineTool({
 });
 ```
 
-`ToolContext` contains `agent`, `signal`, `callId`, and `onUpdate`. It holds
-no workspace or resource field.
+`ToolContext` contains `agent`, `signal`, `callId`, `onUpdate`, and `room`.
+`room` names the room the call ran in; it is absent for a call made outside
+a room. `ToolContext` holds no workspace or resource field.
+
+## Record every tool call
+
+**`openWorkspace` can record every bound tool call to a rotating JSONL file.**
+Set `audit` with a `path`, and every call through `workspace.tools()` appends
+one line: the room, the agent, the tool, the full arguments, and the full
+result or error.
+
+```ts
+const drive = openWorkspace({
+  name: 'team-site',
+  backend: memoryBackend(),
+  audit: { path: '/var/log/ambion/team-site-audit.jsonl' },
+});
+```
+
+**The log lives outside the backend's filesystem.** An agent's own tools
+reach the backend, never the log file. A `bash` or `write` call cannot read,
+edit, or remove its own record.
+
+**A file rotates once it reaches `maxBytes`.** The default is 5 MiB
+(5 &times; 1024 &times; 1024 bytes). A rotated file keeps its old lines under
+a timestamped name beside the active file. The active file starts empty at
+the same path.
+
+**Writes serialize through one queue.** Two tool calls that finish out of
+order still land as two separate, complete lines. Neither call waits on the
+other beyond that queue.
+
+**A write or rotation failure goes to `onError`, not to the tool call.** The
+call that triggered the failure still returns its own result. The log is
+best-effort: a full disk delays the record, not the agent.
+
+**Only a call through `workspace.tools()` is recorded.** A direct
+`workspace.use` call reaches the backend with no entry. It is host code, not
+a tool a model called.
 
 ## Query the shared database
 

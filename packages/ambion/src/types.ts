@@ -321,6 +321,8 @@ export interface ToolContext {
 	readonly signal?: AbortSignal;
 	readonly callId: string;
 	readonly onUpdate?: AgentToolUpdateCallback<unknown>;
+	/** Name of the room this call ran in. Absent for a call made outside a room. */
+	readonly room?: string;
 }
 
 /** A composable set of tools and the guidance that explains their use. */

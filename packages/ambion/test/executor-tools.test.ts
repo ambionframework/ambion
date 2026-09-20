@@ -98,7 +98,7 @@ describe('executor tool authority', () => {
 		const room = roomThatCommits([]);
 		const held = binding(activation, room);
 
-		expect(names(toolsFor(view({ kind: 'respond', message: 4 }), worker, held))).toEqual([
+		expect(names(toolsFor(view({ kind: 'respond', message: 4 }), worker, held, 'room'))).toEqual([
 			'say',
 			'seat',
 			'unseat',
@@ -110,6 +110,7 @@ describe('executor tool authority', () => {
 					view({ kind: 'summarize', exchange: 4, person: 'priya', through: 7 }),
 					worker,
 					held,
+					'room',
 				),
 			),
 		).toEqual(['say']);
@@ -122,6 +123,7 @@ describe('executor tool authority', () => {
 			view({ kind: 'summarize', exchange: 4, person: 'priya', through: 7 }),
 			worker,
 			binding(activation, roomThatCommits(commits)),
+			'room',
 		);
 		const summary = tools[0];
 		if (summary === undefined) throw new Error('The summarize purpose has no tool.');
@@ -156,6 +158,7 @@ describe('executor tool authority', () => {
 			view({ kind: 'respond', message: 4 }),
 			worker,
 			binding(activation, room),
+			'room',
 		)[1];
 		if (seat === undefined) throw new Error('The response tools have no seat tool.');
 

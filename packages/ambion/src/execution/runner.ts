@@ -488,7 +488,12 @@ export class AgentRunner implements SeatPort {
 				systemPrompt: rendered.systemPrompt,
 				model: await this.context.model(def.model, def.name),
 				thinkingLevel: 'off',
-				tools: toolsFor(view, def, binding(activation, this.boundedRoom(cancelled))),
+				tools: toolsFor(
+					view,
+					def,
+					binding(activation, this.boundedRoom(cancelled)),
+					this.context.room,
+				),
 				messages: [],
 			},
 		});

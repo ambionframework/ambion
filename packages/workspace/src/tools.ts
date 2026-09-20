@@ -10,6 +10,7 @@ import type {
 	ExecutionToolContext,
 } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
+import type { AuditEntry, AuditLog } from './audit.ts';
 import type { WorkspaceResource } from './resource.ts';
 
 type HarnessTool = AgentHarnessTool<ExecutionToolContext>;
@@ -29,8 +30,33 @@ function invocationOf(callId: string): AgentHarnessToolInvocation {
 	};
 }
 
+/** An error, as the audit log records it. */
+function auditError(error: unknown): { name: string; message: string } {
+	return error instanceof Error
+		? { name: error.name, message: error.message }
+		: { name: 'Error', message: String(error) };
+}
+
+/** One audit entry for a finished call, successful or not. */
+function auditEntry(
+	tool: string,
+	params: unknown,
+	ctx: ToolContext,
+	outcome: { result: unknown } | { error: unknown },
+): AuditEntry {
+	return {
+		time: new Date().toISOString(),
+		room: ctx.room ?? '',
+		agent: ctx.agent.name,
+		tool,
+		callId: ctx.callId,
+		arguments: params,
+		...('result' in outcome ? { result: outcome.result } : { error: auditError(outcome.error) }),
+	};
+}
+
 /** Bind a Pi harness tool through the owner's whole-operation queue. */
-function bindTool(tool: HarnessTool, use: WorkspaceResource['use']): AmbionTool {
+function bindTool(tool: HarnessTool, use: WorkspaceResource['use'], audit?: AuditLog): AmbionTool {
 	return defineTool({
 		name: tool.name,
 		description: tool.description,
@@ -43,19 +69,26 @@ function bindTool(tool: HarnessTool, use: WorkspaceResource['use']): AmbionTool 
 				ctx.signal === undefined
 					? BACKGROUND_CONTEXT
 					: withAbortSignal(ctx.signal, BACKGROUND_CONTEXT);
-			return use(
-				ctx.agent,
-				(env) =>
-					tool.execute(
-						ctx.callId,
-						params,
-						ctx.onUpdate ?? (() => undefined),
-						{ env },
-						invocationOf(ctx.callId),
-						context,
-					),
-				ctx.signal,
-			);
+			try {
+				const result = await use(
+					ctx.agent,
+					(env) =>
+						tool.execute(
+							ctx.callId,
+							params,
+							ctx.onUpdate ?? (() => undefined),
+							{ env },
+							invocationOf(ctx.callId),
+							context,
+						),
+					ctx.signal,
+				);
+				await audit?.record(auditEntry(tool.name, params, ctx, { result }));
+				return result;
+			} catch (error) {
+				await audit?.record(auditEntry(tool.name, params, ctx, { error }));
+				throw error;
+			}
 		},
 	});
 }
@@ -65,9 +98,10 @@ export function bindTools(
 	tools: readonly HarnessTool[],
 	use: WorkspaceResource['use'],
 	guidance?: string,
+	audit?: AuditLog,
 ): ToolBundle {
 	return Object.freeze({
-		tools: Object.freeze(tools.map((tool) => bindTool(tool, use))),
+		tools: Object.freeze(tools.map((tool) => bindTool(tool, use, audit))),
 		...(guidance === undefined ? {} : { guidance }),
 	});
 }
