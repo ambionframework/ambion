@@ -118,48 +118,27 @@ step. Phase 3 step 3 splits `room-host.ts`, so it waits for step 12.
 **Goal:** every journal field and every read the release needs land, then
 the freeze.
 
-15. [x] The naming list (C5): `AgentExecutionContext`, `AgentPort`,
-        `RoomProtocol`, `lastDeparture`, `messagesSinceDeparture`,
-        `ExchangeRead`. Needs nothing. Land it first, as one mechanical
-        pull request, so every later step writes against the final names.
-        `RoomRead` replaces `RoomSnapshot`, and the room option `streamFn`
-        is now `stream`. Cursors keep the name `since`. Pi's `streamFn`,
-        `RoomNotification`, and the workbench room catalog keep their
-        names. The lease `since` in `room/rules.verified.ts` stays until a
-        proof edit renames it.
-16. [x] A `fixed` seat with the summary writer fixed by default (D4), and
-        the sharp edges: room name validation, the unheld summary name,
-        `opened` on the handle, idempotent host `seat`, prefixed key kinds
-        (C6). Landed ahead of 15: the sharp edges needed only the typed
-        refusals, not the renaming list.
-        `isFixed` derives the fixed state at read time from the seating
-        and the composition; nothing bakes it into the draft. The host's
-        `presence()` and the agent tool's `seating()`/`unseating()` stay
-        two decisions: only the tool path checks `fixed`, so the host can
-        always remove a fixed seat. `startRoom` rejects a `summary` name
-        outside `seats`; a resumed room still tolerates a writer the host
-        removed earlier, since `compose()` never re-checks that name.
-        `spaced` and `placed` tag and strip a caller's key at one choke
-        point, so a delivery key and a commit key never collide though
-        `Message.key` reads back unprefixed either way.
-17. [ ] `limits.context.messages` and `limits.message.bytes` (D5). Needs 15.
-18. [ ] `refs` on spoken messages and summaries; room URIs; `refs` on the
-        `say` parameters (E5). Needs 15.
-19. [ ] `activation`, `exchange`, and `room` on `ToolContext`, supplied by
-        the driver (E6). Needs 15.
-20. [ ] The `Step` vocabulary; the trace journal per activation;
-        `limits.trace`; the trace policy per definition; live `step`
-        events (F4, F7). Needs 10.
-21. [ ] Usage on `activation_end` and on the release entry; a closed
-        exchange sums its activations (D2). Needs 12.
-22. [ ] `activations` on the exchange read; `readActivation` (F8). Needs
-        12 and 13.
-23. [ ] `format: 1` on the run entry; golden journals per chaos scenario
-        with expected folds, replayed in CI; the compatibility promise in
-        `durability.md` (D3). Needs 8, 9, 10, 13, 14, and phase 3 step 2,
-        because the goldens must hold every field and every outcome.
-24. [ ] The freeze: a note at the top of this file; additive changes only
-        from here to the tag. Needs 16.
+Each label is a stable name that other steps cite. Steps 8 and 15
+landed (#185, #187), so the labels skip them.
+
+- [ ] **9.** `limits.context.messages` and `limits.message.bytes` (D5). Needs 15.
+- [ ] **10.** `refs` on spoken messages and summaries; room URIs; `refs` on the
+      `say` parameters (E5). Needs 15.
+- [ ] **11.** `activation`, `exchange`, and `room` on `ToolContext`, supplied by
+      the driver (E6). Needs 15.
+- [ ] **12.** The `Step` vocabulary; the trace journal per activation;
+      `limits.trace`; the trace policy per definition; live `step`
+      events (F4, F7). Needs 10.
+- [ ] **13.** Usage on `activation_end` and on the release entry; a closed
+      exchange sums its activations (D2). Needs 12.
+- [ ] **14.** `activations` on the exchange read; `readActivation` (F8). Needs
+      12 and 13.
+- [ ] **16.** `format: 1` on the run entry; golden journals per chaos scenario
+      with expected folds, replayed in CI; the compatibility promise in
+      `durability.md` (D3). Needs 8, 9, 10, 13, 14, and phase 3 step 2,
+      because the goldens must hold every field and every outcome.
+- [ ] **17.** The freeze: a note at the top of this file; additive changes only
+      from here to the tag. Needs 16.
 
 **Evidence:** the export snapshot passes with the final names; a fixed
 seat refuses an agent's unseat; `readActivation` returns steps; golden
