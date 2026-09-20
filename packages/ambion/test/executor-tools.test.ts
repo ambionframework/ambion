@@ -15,7 +15,13 @@ import type {
 	RoomProtocol,
 	ViewResponse,
 } from '../src/hosting.ts';
-import { type AgentDefinition, defineAgent, defineTool, pi } from '../src/index.ts';
+import {
+	type AgentDefinition,
+	defineAgent,
+	defineTool,
+	pi,
+	type ToolContext,
+} from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { activationSpec } from '../src/room/activation.ts';
 import { foldRoom } from '../src/room/fold.ts';
@@ -124,7 +130,7 @@ describe('executor tool authority', () => {
 		const room = roomThatCommits([]);
 		const held = binding(activation, room);
 
-		expect(names(toolsFor(view({ kind: 'respond', message: 4 }), worker, held, 'room'))).toEqual([
+		expect(names(toolsFor(view({ kind: 'respond', message: 4 }), worker, held))).toEqual([
 			'say',
 			'seat',
 			'unseat',
@@ -136,7 +142,6 @@ describe('executor tool authority', () => {
 					view({ kind: 'summarize', exchange: 4, person: 'priya', through: 7 }),
 					worker,
 					held,
-					'room',
 				),
 			),
 		).toEqual(['say']);
@@ -149,7 +154,6 @@ describe('executor tool authority', () => {
 			view({ kind: 'summarize', exchange: 4, person: 'priya', through: 7 }),
 			worker,
 			binding(activation, roomThatCommits(commits)),
-			'room',
 		);
 		const summary = tools[0];
 		if (summary === undefined) throw new Error('The summarize purpose has no tool.');
@@ -184,7 +188,6 @@ describe('executor tool authority', () => {
 			view({ kind: 'respond', message: 4 }),
 			worker,
 			binding(activation, room),
-			'room',
 		)[1];
 		if (seat === undefined) throw new Error('The response tools have no seat tool.');
 
@@ -267,5 +270,52 @@ describe('executor tool authority', () => {
 		expect(responseView.context.messages).toContainEqual(
 			expect.objectContaining({ text: 'Latest.' }),
 		);
+	});
+
+	it('hands a domain tool the room, the activation, and the exchange from the view', async () => {
+		const seen: ToolContext[] = [];
+		const capturing = defineAgent({
+			name: 'worker',
+			identity: 'Works on room decisions.',
+			executor: pi({
+				instructions: 'Use the tool that the room gives you.',
+				model: 'scripted/assistant',
+				tools: [
+					defineTool({
+						name: 'record_decision',
+						description: 'Record a private decision.',
+						parameters: Type.Object({}),
+						execute: (_params, ctx) => {
+							seen.push(ctx);
+							return 'recorded';
+						},
+					}),
+				],
+			}),
+		});
+		const base = view({ kind: 'respond', message: 4 });
+		const open: ActivationView = {
+			...base,
+			spec: { ...base.spec, id: 'message:4:worker:1' },
+			context: { ...base.context, exchange: { owner: 'priya', from: 4 } },
+		};
+		const held = binding(activationFor('message:4:worker:1', capturing), unusedRoom);
+		await toolsFor(open, capturing, held)[3]?.execute('call-1', {});
+		await toolsFor({ ...open, context: { ...base.context } }, capturing, held)[3]?.execute(
+			'call-2',
+			{},
+		);
+
+		const [first, second] = seen;
+		expect(first).toMatchObject({
+			callId: 'call-1',
+			room: 'room',
+			activation: 'message:4:worker:1',
+			exchange: { owner: 'priya', from: 4 },
+		});
+		expect(Object.isFrozen(first)).toBe(true);
+		expect(Object.isFrozen(first?.exchange)).toBe(true);
+		expect(second).toMatchObject({ room: 'room', activation: 'message:4:worker:1' });
+		expect(second).not.toHaveProperty('exchange');
 	});
 });

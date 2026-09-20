@@ -345,6 +345,16 @@ export interface ToolContext {
 	readonly onUpdate?: AgentToolUpdateCallback<unknown>;
 	/** Name of the room this call ran in. Absent for a call made outside a room. */
 	readonly room?: string;
+	/**
+	 * The activation this call ran in: the id every execution event and every
+	 * recorded message carries. Absent for a call made outside a room.
+	 */
+	readonly activation?: string;
+	/**
+	 * The exchange that was open when the activation read the record. Absent
+	 * outside a room, and absent when no exchange was open.
+	 */
+	readonly exchange?: Pick<ExchangeRef, 'owner' | 'from'>;
 }
 
 /** A composable set of tools and the guidance that explains their use. */

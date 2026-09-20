@@ -34,6 +34,10 @@ export interface AuditEntry {
 	/** Name of the tool called. */
 	readonly tool: string;
 	readonly callId: string;
+	/** The activation the call ran in. Absent for a call made outside a room. */
+	readonly activation?: string;
+	/** The exchange open when the activation read the record. Absent when none was open. */
+	readonly exchange?: { readonly owner: string; readonly from: number };
 	/** The tool's full parameters. */
 	readonly arguments: unknown;
 	/** The tool's full result. Absent when the call ended in `error`. */
@@ -66,6 +70,7 @@ function notice(entry: AuditEntry, name: string, message: string): string {
 		agent: entry.agent,
 		tool: entry.tool,
 		callId: entry.callId,
+		...(entry.activation === undefined ? {} : { activation: entry.activation }),
 		error: { name, message },
 	})}\n`;
 }
@@ -141,8 +146,8 @@ function humanBytes(bytes: number): string {
 export function auditGuidance(log: AuditLog): string {
 	return [
 		`Every tool call on this workspace is recorded at ${log.path}, one JSON line per`,
-		`call: the room, the agent, the tool, its full arguments, and its full result or`,
-		`error. Read it to see what happened here, including calls other agents made. Past`,
+		`call: the room, the agent, the tool, the activation and the exchange it ran in,`,
+		`its full arguments, and its full result or error. Read it to see what happened here, including calls other agents made. Past`,
 		`${humanBytes(log.maxBytes)} the file rotates: it moves beside itself under a`,
 		`timestamped name, and a new file starts at ${log.path}.`,
 	].join('\n');

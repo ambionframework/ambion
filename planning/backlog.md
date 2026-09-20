@@ -33,8 +33,8 @@ clock or an external event is future work. A timer also expires an
 replay as the reference. A checkpoint entry that lets a resume skip
 settled history is a later format change.
 
-**Tool execution provenance beyond the activation.** `ToolContext` gains
-activation, exchange, and room in 0.1.0. A purpose field, a retry-safe
+**Tool execution provenance beyond the activation.** `ToolContext` carries
+activation, exchange, and room since phase 2 step 11. A purpose field, a retry-safe
 operation key derived by the kernel, and a demonstrated domain operation
 reused across rooms wait for a consumer.
 

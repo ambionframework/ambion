@@ -84,9 +84,15 @@ const readPlan = defineTool({
 });
 ```
 
-`ToolContext` contains `agent`, `signal`, `callId`, `onUpdate`, and `room`.
-`room` names the room the call ran in; it is absent for a call made outside
-a room. `ToolContext` holds no workspace or resource field.
+`ToolContext` contains `agent`, `signal`, `callId`, `onUpdate`, `room`,
+`activation`, and `exchange`. `room` names the room the call ran in and
+`activation` names the activation. Both are absent for a call made outside
+a room.
+
+`exchange` holds the `owner` and `from` of the exchange that was open when
+the activation read the record. It is absent when no exchange was open. The
+room builds the context once per call and freezes it. `ToolContext` holds no
+workspace or resource field.
 
 ## Write an append-only log
 
@@ -143,7 +149,8 @@ holding `env` directly serializes its own calls.
 **`openWorkspace` can record every bound tool call to a rotating JSONL file
 on the workspace's own filesystem, built on `openLog`.** Set `audit`, and
 every call through `workspace.tools()` appends one line: the room, the
-agent, the tool, the full arguments, and the full result or error.
+agent, the tool, the activation and the exchange it ran in, the full
+arguments, and the full result or error.
 
 ```ts
 const drive = openWorkspace({

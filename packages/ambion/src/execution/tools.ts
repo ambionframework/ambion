@@ -17,7 +17,7 @@ import { summaryToolDescription } from './summary.ts';
 function toPiTool(
 	tool: AmbionTool,
 	agent: AgentDefinition,
-	room: string,
+	view: ActivationView,
 ): AgentTool<TSchema, unknown> {
 	return {
 		name: tool.name,
@@ -27,13 +27,21 @@ function toPiTool(
 		...(tool.prepareArguments === undefined ? {} : { prepareArguments: tool.prepareArguments }),
 		...(tool.executionMode === undefined ? {} : { executionMode: tool.executionMode }),
 		execute: async (toolCallId, params, signal, onUpdate) => {
-			const result = await tool.invoke(params, {
-				agent: { name: agent.name, identity: agent.identity },
-				signal,
-				callId: toolCallId,
-				onUpdate,
-				room,
-			});
+			const exchange = view.context.exchange;
+			const result = await tool.invoke(
+				params,
+				Object.freeze({
+					agent: { name: agent.name, identity: agent.identity },
+					signal,
+					callId: toolCallId,
+					onUpdate,
+					room: view.context.name,
+					activation: view.spec.id,
+					...(exchange === undefined
+						? {}
+						: { exchange: Object.freeze({ owner: exchange.owner, from: exchange.from }) }),
+				}),
+			);
 			return typeof result === 'string'
 				? { content: [{ type: 'text', text: result }], details: {} }
 				: result;
@@ -181,12 +189,7 @@ function membershipTool(
 }
 
 /** What an activation holds from its purpose. */
-export function toolsFor(
-	view: ActivationView,
-	def: AgentDefinition,
-	held: Binding,
-	room: string,
-): AgentTool[] {
+export function toolsFor(view: ActivationView, def: AgentDefinition, held: Binding): AgentTool[] {
 	if (view.spec.purpose.kind === 'summarize') {
 		return [sayTool(held, view.spec.purpose.person)];
 	}
@@ -194,7 +197,7 @@ export function toolsFor(
 		sayTool(held),
 		seatTool(held),
 		unseatTool(held),
-		...def.executor.tools.map((tool) => toPiTool(tool, def, room)),
+		...def.executor.tools.map((tool) => toPiTool(tool, def, view)),
 	];
 }
 

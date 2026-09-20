@@ -16,8 +16,15 @@ import {
 	type ToolBundle,
 	type ToolContext,
 } from '../src/index.ts';
-import { assistant, enter, roomName as name, waitForRoom } from './support/room.ts';
-import { byAgent, callTool, quiet, type Script, scripted } from './support/scripted.ts';
+import {
+	assistant,
+	collect,
+	enter,
+	messagesOf,
+	roomName as name,
+	waitForRoom,
+} from './support/room.ts';
+import { byAgent, callTool, quiet, type Script, scripted, speak } from './support/scripted.ts';
 
 function agent(agentName: string, options: Partial<PiOptions> = {}) {
 	return defineAgent({
@@ -102,6 +109,74 @@ describe('ordinary tool bundles', () => {
 			worker: (_context, _who, call) => (call <= 2 ? callTool('probe', {}) : quiet()),
 		});
 		expect(seen).toEqual(['worker:Identity of worker.:true', 'worker:Identity of worker.:true']);
+		await session.stop();
+	});
+
+	it('passes the room, the activation, and the open exchange to ordinary tools', async () => {
+		const seen: ToolContext[] = [];
+		const frozen: boolean[] = [];
+		const probe = tool('probe', (ctx) => {
+			seen.push(ctx);
+			frozen.push(Object.isFrozen(ctx));
+			return 'probed';
+		});
+		const session = await startRoom({
+			name: name('ordinary-provenance'),
+			summary: assistant.name,
+			seats: { worker: 'broadcast', [assistant.name]: 'none' },
+			agents: [agent('worker', { tools: [probe] }), assistant],
+			stream: scripted(
+				byAgent({
+					worker: (_context, _who, call) =>
+						call === 1 ? callTool('probe', {}) : call === 2 ? speak('done') : quiet(),
+				}),
+			),
+		});
+		const events = collect(session);
+		const visit = await enter(session);
+		await visit.send({ text: 'go' });
+		await waitForRoom(session);
+		const messages = await messagesOf(session);
+		const question = messages.find((message) => message.kind === 'said' && message.text === 'go');
+		const said = messages.find((message) => message.kind === 'said' && message.from === 'worker');
+		expect(seen).toHaveLength(1);
+		expect(seen[0]?.room).toBe(session.name);
+		expect(seen[0]?.activation).toBeDefined();
+		expect(seen[0]?.activation).toBe(said?.kind === 'said' ? said.activationId : undefined);
+		expect(seen[0]?.exchange).toEqual({ owner: 'andrei', from: question?.seq });
+		const starts = events.filter(
+			(event) => event.type === 'activation_start' && event.agent === 'worker',
+		);
+		expect(starts.map((event) => 'activation' in event && event.activation)).toEqual([
+			seen[0]?.activation,
+		]);
+		expect(frozen).toEqual([true]);
+		await session.stop();
+	});
+
+	it('passes no exchange to a tool called in an activation that no question opened', async () => {
+		const seen: ToolContext[] = [];
+		const probe = tool('probe', (ctx) => {
+			seen.push(ctx);
+			return 'probed';
+		});
+		const session = await startRoom({
+			name: name('ordinary-no-exchange'),
+			summary: assistant.name,
+			seats: { greeter: 'presence', [assistant.name]: 'none' },
+			agents: [agent('greeter', { tools: [probe] }), assistant],
+			stream: scripted(
+				byAgent({
+					greeter: (_context, _who, call) => (call === 1 ? callTool('probe', {}) : quiet()),
+				}),
+			),
+		});
+		await enter(session);
+		await waitForRoom(session);
+		expect(seen).toHaveLength(1);
+		expect(seen[0]?.room).toBe(session.name);
+		expect(typeof seen[0]?.activation).toBe('string');
+		expect(seen[0] !== undefined && 'exchange' in seen[0]).toBe(false);
 		await session.stop();
 	});
 
