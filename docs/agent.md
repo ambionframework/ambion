@@ -87,7 +87,7 @@ text exactly; `say` trims its input. An agent can finish silently without `say`.
 **A message has a size limit.** `limits.message.bytes` sets the most UTF-8
 bytes one human message, agent message, or summary text carries. The default
 is unbounded. The room refuses a longer text with the code `message_too_large`
-before it writes. A refusal does not reserve the request key. An agent reads
+before it writes. An agent reads
 the refusal as a tool error and can say a shorter text. The limit counts
 `text` only.
 
@@ -253,8 +253,8 @@ record. The record keeps every message for human review either way.
 for every executor. The room serves the newest `messages` entries of the
 record an activation may read. The floor moves past a summarised range it
 would split. The open exchange stays whole, so a cap smaller than the open
-exchange serves the exchange in full. The bound on the view is `messages`
-plus the open exchange, not a byte bound. The default is unbounded. A seat
+exchange serves the exchange in full. The view holds up to `messages` entries
+plus the open exchange. The cap counts messages; it does not count bytes. The default is unbounded. A seat
 with `activationTokenLimit` windows further, inside what the room serves.
 
 When a view holds less than the whole record, `context.omitted` counts the
