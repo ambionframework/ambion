@@ -300,6 +300,8 @@ function duties(view: ActivationView, def: AgentDefinition): string[] {
 		`it, and speak again only if your reply still adds something.`,
 		``,
 		...AUDIENCE_PARAGRAPH,
+		``,
+		...HANDOFF_PARAGRAPH,
 	];
 	if (def.executor.guidance) lines.push(``, def.executor.guidance);
 	// A fold renders once the record holds a summary, so only such a record
@@ -400,6 +402,18 @@ const AUDIENCE_PARAGRAPH = [
 	`drop what only mattered to somebody who has gone. If it changes nothing about your`,
 	`turn, ignore it. When nobody is in the room, work for the record: state what you`,
 	`decided and why, and do not wait for an answer that nobody is there to give.`,
+];
+
+/** How a seat hands an artifact to a colleague, and where its own work stops. */
+const HANDOFF_PARAGRAPH = [
+	`The record holds conversation. An artifact goes to the workspace: write a document or a`,
+	`generated result to a file once, and put structured data in the shared database as a named`,
+	`table or view. A colleague reads the file by its path and queries the table by its name, and`,
+	`sqlite_master shows how a view was built. A hand-off is still a message: say what you wrote`,
+	`and where, in a directed say to the agent that needs it. Do not leave a file and assume the`,
+	`reader finds it. Your identity on the roster names your work. When a task falls under a`,
+	`colleague's identity, hand it to them with a directed say. Seat them first if they are in`,
+	`the reserve. Do not do their work, and do not copy what they already hold into the record.`,
 ];
 
 /**
