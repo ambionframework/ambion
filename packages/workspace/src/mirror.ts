@@ -2,7 +2,7 @@
  * A room's message record, mirrored to the workspace as one JSONL file per
  * room.
  *
- * The record lives at `/rooms/<room name>/messages.jsonl`, one line per
+ * The mirror lives at `/rooms/<room name>/messages.jsonl`, one line per
  * message, in the room's own order. It is an ordinary file: an agent reads
  * it with `read` or `bash cat`, the same as any file a peer wrote.
  *
@@ -12,6 +12,10 @@
  * `docs/durability.md` gives any external reader: subscribe first, then
  * backfill from the highest `seq` already on disk, so a restart neither
  * misses a message nor writes one twice.
+ *
+ * `Workspace.mirror()`, in `workspace.ts`, is the public entry point: it
+ * supplies the workspace's own resource and a write identity it owns, so a
+ * caller names only the room.
  */
 
 import { posix } from 'node:path';
@@ -27,12 +31,14 @@ const ROOMS_ROOT = '/rooms';
 /** One line of a room's message record. */
 export type RoomMessageEntry = Message & { readonly room: string };
 
-export interface RoomRecordOptions {
+export interface RoomMirrorOptions {
+	/** Bytes the file may hold before the next message rotates it. */
+	readonly rotateBytes?: number;
 	/** Told about a write or rotation failure. The room keeps running either way. */
 	readonly onError?: (error: Error) => void;
 }
 
-export interface RoomRecord {
+export interface RoomMirror {
 	readonly room: string;
 	readonly path: string;
 	/** Unsubscribe from the room and let the current append settle. Idempotent. */
@@ -40,38 +46,28 @@ export interface RoomRecord {
 }
 
 /**
+ * Generic guidance: this names the convention, not any one room, so a
+ * workspace includes it unconditionally rather than gating it behind an
+ * option a host would otherwise have to remember to set.
+ */
+export const ROOM_MIRROR_GUIDANCE = [
+	`This workspace may hold /rooms/<room name>/messages.jsonl: one JSON`,
+	`line per message, for a room that mirrors its record here. Read your`,
+	`own room's file with read or bash cat to see what happened in it.`,
+].join('\n');
+
+/**
  * The path one room's message record lives at, or a thrown error naming the
  * room. A room's name is not validated at the kernel today, and this is the
  * first place one turns into a filesystem path: a name holding `..` or an
  * extra `/` must not resolve outside `/rooms`.
  */
-export function roomRecordPath(roomName: string): string {
+export function roomMirrorPath(roomName: string): string {
 	const path = `${ROOMS_ROOT}/${roomName}/messages.jsonl`;
 	if (posix.normalize(path) !== path) {
 		throw new Error(`Room name is not safe to use as a path: '${roomName}'.`);
 	}
 	return path;
-}
-
-/** Guidance telling an agent the record exists, where it lives, and what it holds. */
-export function roomRecordGuidance(): string {
-	return [
-		`Every room using this workspace keeps its message record at`,
-		`${ROOMS_ROOT}/<room name>/messages.jsonl, one JSON line per message, in`,
-		`the order the room recorded it. Read your own room's file with read or`,
-		`bash cat.`,
-		``,
-		`Every line carries room, kind, and seq. kind is said, arrived, left,`,
-		`seated, unseated, or summary.`,
-		`- said: from, to (absent for a broadcast), text.`,
-		`- arrived, left, seated, unseated: subject, and identity on arrived`,
-		`  and seated.`,
-		`- summary: from, to, text, and covers: { from, through }, the seq`,
-		`  range it stands for.`,
-		``,
-		`Past 8 MiB the file rotates: it moves beside itself under a`,
-		`timestamped name, and a new file starts at the same path.`,
-	].join('\n');
 }
 
 /** The `seq` field of the last non-empty line in `path`, or undefined. */
@@ -140,21 +136,25 @@ function reportError(onError: ((error: Error) => void) | undefined, error: unkno
 }
 
 /**
- * Start mirroring `room`'s messages to `roomRecordPath(room.name)` over
- * `drive`. Subscribes before it reads, so nothing lands during recovery is
- * missed, then backfills from the highest `seq` already on disk. A message
- * already accounted for, from either source, is not written twice.
+ * Start mirroring `room`'s messages to `roomMirrorPath(room.name)` over
+ * `drive`, writing as `agent`. Subscribes before it reads, so nothing that
+ * lands during recovery is missed, then backfills from the highest `seq`
+ * already on disk. A message already accounted for, from either source, is
+ * not written twice.
+ *
+ * Not exported from the package root: a caller reaches this through
+ * `Workspace.mirror()`, which supplies `drive` and `agent` itself.
  */
-export async function recordRoomMessages(
+export async function mirrorRoom(
 	room: Room,
 	drive: WorkspaceResource,
 	agent: WorkspaceAgent,
-	options: RoomRecordOptions = {},
-): Promise<RoomRecord> {
-	const path = roomRecordPath(room.name);
+	options: RoomMirrorOptions = {},
+): Promise<RoomMirror> {
+	const path = roomMirrorPath(room.name);
 	const dir = posix.dirname(path);
 	const fileName = posix.basename(path);
-	const log = openLog({ path });
+	const log = openLog({ path, rotateBytes: options.rotateBytes });
 
 	let appendedSeq: Seq | undefined = await drive.use(agent, (env) =>
 		lastRecordedSeq(env, dir, fileName, BACKGROUND_CONTEXT),

@@ -14,10 +14,14 @@ import { describe, expect, it } from 'vitest';
 import { enter, roomName as name } from '../../ambion/test/support/room.ts';
 import { byAgent, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import type { WorkspaceAgent } from '../src/index.ts';
-import { memoryBackend, openWorkspace } from '../src/index.ts';
-import { recordRoomMessages, roomRecordGuidance, roomRecordPath } from '../src/room-record.ts';
+import {
+	memoryBackend,
+	openWorkspace,
+	ROOM_MIRROR_GUIDANCE,
+	roomMirrorPath,
+} from '../src/index.ts';
 
-const host: WorkspaceAgent = { name: 'host', identity: 'Mirrors the room record.' };
+const reader: WorkspaceAgent = { name: 'reader', identity: 'Reads the mirrored file back.' };
 
 function said(seq: Seq, text: string, from = 'priya'): Message {
 	return { kind: 'said', seq, at: new Date(seq).toISOString(), from, text };
@@ -78,20 +82,25 @@ async function readLines(env: ExecutionEnv, path: string): Promise<Record<string
 		.map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
-describe('recordRoomMessages', () => {
+describe('Workspace.mirror', () => {
 	it('names the path under /rooms/<room name>/messages.jsonl', () => {
-		expect(roomRecordPath('lobby')).toBe('/rooms/lobby/messages.jsonl');
+		expect(roomMirrorPath('lobby')).toBe('/rooms/lobby/messages.jsonl');
+	});
+
+	it('always includes the /rooms guidance in tools(), with no option to set', () => {
+		const site = openWorkspace({ name: name('guidance'), backend: memoryBackend() });
+		expect(site.tools().guidance).toContain(ROOM_MIRROR_GUIDANCE);
 	});
 
 	it('backfills the full backlog, in order, on a fresh log', async () => {
 		const site = openWorkspace({ name: name('fresh'), backend: memoryBackend() });
 		const room = fakeRoom('lobby', [said(1, 'one'), said(2, 'two'), said(3, 'three')]);
 
-		const record = await recordRoomMessages(room, site, host);
-		expect(record.path).toBe('/rooms/lobby/messages.jsonl');
-		await record.stop();
+		const mirror = await site.mirror(room);
+		expect(mirror.path).toBe('/rooms/lobby/messages.jsonl');
+		await mirror.stop();
 
-		const lines = await site.use(host, (env) => readLines(env, record.path));
+		const lines = await site.use(reader, (env) => readLines(env, mirror.path));
 		expect(lines.map((line) => line.text)).toEqual(['one', 'two', 'three']);
 		expect(lines.every((line) => line.room === 'lobby')).toBe(true);
 		await site.destroy();
@@ -100,16 +109,15 @@ describe('recordRoomMessages', () => {
 	it('resumes from the highest seq already on disk, writing nothing twice', async () => {
 		const site = openWorkspace({ name: name('resume'), backend: memoryBackend() });
 		const backlog = [said(1, 'one'), said(2, 'two'), said(3, 'three')];
-		const room = fakeRoom('lobby', backlog);
 
-		const first = await recordRoomMessages(room, site, host);
+		const first = await site.mirror(fakeRoom('lobby', backlog));
 		await first.stop();
 
 		// A fresh call, as a restarted host would make: no in-memory state survives.
-		const second = await recordRoomMessages(fakeRoom('lobby', backlog), site, host);
+		const second = await site.mirror(fakeRoom('lobby', backlog));
 		await second.stop();
 
-		const lines = await site.use(host, (env) => readLines(env, second.path));
+		const lines = await site.use(reader, (env) => readLines(env, second.path));
 		expect(lines.map((line) => line.seq)).toEqual([1, 2, 3]);
 		await site.destroy();
 	});
@@ -118,11 +126,11 @@ describe('recordRoomMessages', () => {
 		const site = openWorkspace({ name: name('live'), backend: memoryBackend() });
 		const room = fakeRoom('lobby', [said(1, 'one')]);
 
-		const record = await recordRoomMessages(room, site, host);
+		const mirror = await site.mirror(room);
 		room.emit({ type: 'message', message: said(2, 'two') });
-		await record.stop();
+		await mirror.stop();
 
-		const lines = await site.use(host, (env) => readLines(env, record.path));
+		const lines = await site.use(reader, (env) => readLines(env, mirror.path));
 		expect(lines.map((line) => line.text)).toEqual(['one', 'two']);
 		await site.destroy();
 	});
@@ -131,12 +139,12 @@ describe('recordRoomMessages', () => {
 		const site = openWorkspace({ name: name('dedup'), backend: memoryBackend() });
 		const room = fakeRoom('lobby', [said(1, 'one'), said(2, 'two')]);
 
-		const record = await recordRoomMessages(room, site, host);
+		const mirror = await site.mirror(room);
 		// A duplicate delivery of a message the backfill already wrote.
 		room.emit({ type: 'message', message: said(2, 'two') });
-		await record.stop();
+		await mirror.stop();
 
-		const lines = await site.use(host, (env) => readLines(env, record.path));
+		const lines = await site.use(reader, (env) => readLines(env, mirror.path));
 		expect(lines).toHaveLength(2);
 		await site.destroy();
 	});
@@ -145,12 +153,12 @@ describe('recordRoomMessages', () => {
 		const site = openWorkspace({ name: name('stopped'), backend: memoryBackend() });
 		const room = fakeRoom('lobby', [said(1, 'one')]);
 
-		const record = await recordRoomMessages(room, site, host);
-		await record.stop();
+		const mirror = await site.mirror(room);
+		await mirror.stop();
 		room.emit({ type: 'message', message: said(2, 'two') });
-		await record.stop();
+		await mirror.stop();
 
-		const lines = await site.use(host, (env) => readLines(env, record.path));
+		const lines = await site.use(reader, (env) => readLines(env, mirror.path));
 		expect(lines).toHaveLength(1);
 		await site.destroy();
 	});
@@ -160,15 +168,13 @@ describe('recordRoomMessages', () => {
 		const room = fakeRoom('lobby', [said(1, 'one')]);
 		const errors: Error[] = [];
 
-		const record = await recordRoomMessages(room, site, host, {
-			onError: (error) => errors.push(error),
-		});
+		const mirror = await site.mirror(room, { onError: (error) => errors.push(error) });
 		// Settle the backfill's own write before destroying: reads and writes
 		// share one queue, so this proves message one already landed.
-		await site.use(host, (env) => readLines(env, record.path));
+		await site.use(reader, (env) => readLines(env, mirror.path));
 		await site.destroy();
 		room.emit({ type: 'message', message: said(2, 'two') });
-		await record.stop();
+		await mirror.stop();
 
 		expect(errors).toHaveLength(1);
 		expect(errors[0]?.message).toMatch(/no longer available/i);
@@ -178,7 +184,7 @@ describe('recordRoomMessages', () => {
 		const site = openWorkspace({ name: name('escape'), backend: memoryBackend() });
 		const room = fakeRoom('../escape', []);
 
-		await expect(recordRoomMessages(room, site, host)).rejects.toThrow(/room name/i);
+		await expect(site.mirror(room)).rejects.toThrow(/room name/i);
 		await site.destroy();
 	});
 
@@ -207,33 +213,23 @@ describe('recordRoomMessages', () => {
 				}),
 			),
 		});
-		const record = await recordRoomMessages(session, site, host);
+		const mirror = await site.mirror(session);
 		const visit = await enter(session);
 		const exchange = await visit.send({ text: 'go' });
 		await exchange.waitForClose();
-		// Stop the room, and its recorded "left", before stopping the record
-		// itself: a record that stopped first must not see what came after.
+		// Stop the room, and its shutdown-triggered "left", before stopping
+		// the mirror itself: a mirror that stopped first must not see what
+		// came after.
 		await session.stop();
-		await record.stop();
+		await mirror.stop();
 
-		const lines = await site.use(host, (env) => readLines(env, record.path));
-		const said = lines.filter((line) => line.kind === 'said' && line.from === 'worker');
-		expect(said.map((line) => line.text)).toEqual(['first', 'second']);
+		const lines = await site.use(reader, (env) => readLines(env, mirror.path));
+		const spoken = lines.filter((line) => line.kind === 'said' && line.from === 'worker');
+		expect(spoken.map((line) => line.text)).toEqual(['first', 'second']);
 		expect(lines.every((line) => line.room === roomId)).toBe(true);
 
 		const read = await session.read();
 		expect(lines).toHaveLength(read.messages.length);
 		await site.destroy();
-	});
-});
-
-describe('roomRecordGuidance', () => {
-	it('names the path convention and every message kind', () => {
-		const guidance = roomRecordGuidance();
-		expect(guidance).toContain('/rooms/<room name>/messages.jsonl');
-		expect(guidance).toContain('room, kind, and seq');
-		for (const kind of ['said', 'arrived', 'left', 'seated', 'unseated', 'summary']) {
-			expect(guidance).toContain(kind);
-		}
 	});
 });

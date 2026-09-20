@@ -193,61 +193,63 @@ one agent's home and another's (see [Backends and limits](#backends-and-limits))
 and the log is no exception: any agent's `bash` or `write` call can alter or
 remove it, the same as any other file on the workspace.
 
-## Record a room's messages
+## Mirror a room's messages
 
-**`recordRoomMessages` mirrors one room's message record to
-`/rooms/<room name>/messages.jsonl`, built on `openLog`.** Call it once a
-room has started, with a workspace resource to write to.
+**`workspace.mirror(room)` mirrors one room's message record to
+`/rooms/<room name>/messages.jsonl`, built on `openLog`.** Call it once the
+room has started; it needs no other setup.
 
 ```ts
-import { memoryBackend, openWorkspace, recordRoomMessages } from '@ambionframework/workspace';
+import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
 import { startRoom } from '@ambionframework/ambion';
 
 const site = openWorkspace({ name: 'town', backend: memoryBackend() });
-const host = { name: 'host', identity: 'Mirrors the room record.' };
 const session = await startRoom({ name: 'lobby', agents: [/* ... */] });
 
-const record = await recordRoomMessages(session, site, host);
+const mirror = await site.mirror(session);
 // later, on shutdown:
-await record.stop();
 await session.stop();
+await mirror.stop();
 ```
+
+`mirror()` writes as an identity the workspace owns; a caller names only the
+room. Stop the room before the mirror, not after: the room's own shutdown
+commits a `left` message for every present visitor, and a mirror stopped
+first never sees it.
 
 **One line per message, in the room's own order.** Every line is the
 room's own `Message` type — `said`, `arrived`, `left`, `seated`, `unseated`,
-or `summary` — plus `room`, the room's name. An agent reads its own room's
-file with `read` or `bash cat`, the same as any file a peer wrote.
+or `summary` — plus `room`, the room's name:
+
+| `kind`                                  | Fields beyond `room`, `kind`, `seq`                 |
+| --------------------------------------- | --------------------------------------------------- |
+| `said`                                  | `from`, `to` (absent for a broadcast), `text`       |
+| `arrived`, `left`, `seated`, `unseated` | `subject`, and `identity` on `arrived` and `seated` |
+| `summary`                               | `from`, `to`, `text`, `covers: { from, through }`   |
+
+An agent reads its own room's file with `read` or `bash cat`, the same as
+any file a peer wrote.
 
 **This is a secondary, best-effort copy.** `packages/journal` remains the
 source of truth for the room. A write failure calls `onError` and the room
 keeps running; a gap is possible, and not retried.
 
-**Recovery needs no cursor of its own.** `recordRoomMessages` subscribes to
-the room before it reads, then backfills from the highest `seq` already on
-disk — the same recipe [durability](durability.md) gives any external
-reader. A restart neither misses a message nor writes one twice; a message
-seen from both the live subscription and the backfill is written once.
+**Recovery needs no cursor of its own.** `mirror()` subscribes to the room
+before it reads, then backfills from the highest `seq` already on disk —
+the same recipe [durability](durability.md) gives any external reader. A
+restart neither misses a message nor writes one twice; a message seen from
+both the live subscription and the backfill is written once.
 
 **A room's name is not validated at the kernel today.** This is the first
-place a room name turns into a filesystem path, so `recordRoomMessages`
-refuses a name that would resolve outside `/rooms` (a name holding `..` or
-an extra `/`) rather than write there.
+place a room name turns into a filesystem path, so `mirror()` refuses a
+name that would resolve outside `/rooms` (a name holding `..` or an extra
+`/`) rather than write there.
 
-**Presenting the schema to an agent is a separate step.** `roomRecordGuidance()`
-returns the same field guide as this section, as a plain string. Add it as
-its own bundle, alongside the workspace's own, so every activation's
-guidance names the convention without needing a live room to compute it:
-
-```ts
-const worker = defineAgent({
-  name: 'worker',
-  identity: '...',
-  executor: pi({
-    bundles: [site.tools(), { tools: [], guidance: roomRecordGuidance() }],
-    // ...
-  }),
-});
-```
+**Every workspace's guidance names the `/rooms` convention, whether or not
+anything mirrors there.** The note is generic — it names no room — so it
+costs nothing to state unconditionally, the same way an agent already
+learns its `/home/<name>` convention. An agent finds the field guide above
+by reading a room's own file; the guidance only points at the path.
 
 **Directory-per-room organizes the data; it does not wall it off.** Every
 room sharing one workspace still shares its filesystem boundary (see
