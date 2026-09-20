@@ -91,7 +91,7 @@ a room.
 
 `exchange` holds the `owner` and `from` of the exchange that was open when
 the activation read the record. It is absent when no exchange was open. The
-room builds the context once per call and freezes it. `ToolContext` holds no
+executor builds the context once per call and freezes it. `ToolContext` holds no
 workspace or resource field.
 
 ## Write an append-only log
