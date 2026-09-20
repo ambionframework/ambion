@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { WorkspaceEnv } from '../src/backend.ts';
 import type { WorkspaceAgent, WorkspaceBackend } from '../src/index.ts';
 import {
 	BACKGROUND_CONTEXT,
@@ -115,7 +116,7 @@ describe('workspace lifecycle', () => {
 	});
 	it('keeps lifecycle ownership separate from Ambion tools', async () => {
 		const inner = memoryBackend();
-		const backend: ResourceBackend = {
+		const backend: ResourceBackend<WorkspaceEnv> = {
 			connect: (agent, signal) => inner.connect(agent, signal),
 			destroy: async () => {},
 		};

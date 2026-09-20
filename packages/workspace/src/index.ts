@@ -23,7 +23,7 @@
 export { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 export type { AuditEntry, AuditLog, AuditLogOptions } from './audit.ts';
 export { DEFAULT_AUDIT_LOG, openAuditLog } from './audit.ts';
-export type { WorkspaceBackend } from './backend.ts';
+export type { WorkspaceBackend, WorkspaceEnv } from './backend.ts';
 export type {
 	MemoryBackendFile,
 	MemoryBackendOptions,
@@ -35,7 +35,13 @@ export type { WorkspaceLog, WorkspaceLogOptions } from './log.ts';
 export { DEFAULT_ROTATE_BYTES, openLog } from './log.ts';
 export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.ts';
 export { ROOM_MIRROR_GUIDANCE, roomMirrorPath } from './mirror.ts';
-export type { WorkspaceAgent } from './resource.ts';
+export type {
+	ResourceBackend,
+	ResourceEnv,
+	WorkspaceAgent,
+	WorkspaceResource,
+} from './resource.ts';
+export { openResource } from './resource.ts';
 export { SHARED_DATABASE } from './sql.ts';
 export type { Workspace } from './workspace.ts';
 export { openWorkspace } from './workspace.ts';

@@ -332,23 +332,40 @@ just-bash is the default implementation, and it has these specific behaviors:
 
 ## Use a resource without the room runtime
 
-`@ambionframework/workspace/resource` exports `openResource` and the same
-memory and directory backends. This entry loads no Ambion runtime.
+`@ambionframework/workspace/resource` is the neutral resource contract. It
+exports `openResource` and the types `ResourceBackend`, `ResourceEnv`,
+`WorkspaceAgent`, and `WorkspaceResource`. This entry loads no Ambion runtime
+and no model library.
 
 ```ts
-import { memoryBackend, openResource } from '@ambionframework/workspace/resource';
+import { openResource, type ResourceBackend } from '@ambionframework/workspace/resource';
 
-const drive = openResource({ name: 'team-site', backend: memoryBackend() });
-await drive.use({ name: 'surveyor', identity: 'Quantity surveyor.' }, async (env) => {
-  const result = await env.writeFile('notes.txt', 'Checked the plan.');
-  if (!result.ok) throw result.error;
+interface NoteEnv {
+  readonly notes: string[];
+  cleanup(): Promise<void>;
+}
+
+const backend: ResourceBackend<NoteEnv> = {
+  connect: async () => ({ notes: [], cleanup: async () => {} }),
+  destroy: async () => {},
+};
+
+const resource = openResource({ name: 'team-notes', backend });
+await resource.use({ name: 'surveyor', identity: 'Quantity surveyor.' }, (env) => {
+  env.notes.push('Checked the plan.');
 });
-await drive.dispose();
+await resource.dispose();
 ```
 
-`WorkspaceResource` exposes `name`, `use`, `dispose`, and `destroy`.
-Its `ResourceBackend` needs `connect` and `destroy`; `dispose` is optional.
-A custom resource backend does not need tools or model guidance.
+`WorkspaceResource<Env>` exposes `name`, `use`, `dispose`, and `destroy`.
+`ResourceBackend<Env>` needs `connect` and `destroy`; `dispose` is optional.
+`ResourceEnv` is the smallest environment: one `cleanup()` method with no
+argument. The owner calls it after every operation. A binding picks its own
+`Env` that extends `ResourceEnv`.
+
+The memory and directory backends are the Pi binding. They export from the
+root entry, with `WorkspaceEnv`, the Pi `ExecutionEnv` that has a zero-argument
+`cleanup()`. `WorkspaceBackend` extends `ResourceBackend<WorkspaceEnv>`.
 
 The root `openWorkspace` function creates this same owner and binds the
 backend tools to its `use` method. `WorkspaceBackend` adds Pi harness tools
