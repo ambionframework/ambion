@@ -2,7 +2,7 @@
 
 **An agent owns its instructions, model, tools, and domain behavior.** The
 room owns the journal, membership, presence, execution authority, and exchange
-rules. The agent definitions supply every executable definition for one room run.
+rules. `agents` supplies every executable definition for one room run.
 
 The [documentation index](README.md) links the other contracts. The
 [plan](../planning/next.md) defines the scope and records the work that

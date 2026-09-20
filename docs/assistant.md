@@ -236,8 +236,8 @@ repair it through further investigation.
 
 ## Membership and completion
 
-**Membership changes serve the work.** Select specialists from their definitions
-identities and the current request. Avoid recruiting every remotely related
+**Membership changes serve the work.** Select specialists from the identities in
+their definitions and the current request. Avoid recruiting every remotely related
 specialist by default. Retain specialists across exchanges by default.
 Unseat when the user requests removal or a clear scope change makes continued
 participation unnecessary. Being idle alone is not a reason to remove an agent.

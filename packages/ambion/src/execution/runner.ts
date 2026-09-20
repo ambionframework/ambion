@@ -1,5 +1,5 @@
 /**
- * The driver: runs activations over the RoomProtocol protocol.
+ * The driver: runs activations over `RoomProtocol`.
  *
  * AgentRunner owns the lease, its renewal, the cut, the wake queue, the
  * record a seat reads, and the decision to run another pass. It knows

@@ -82,6 +82,23 @@ const view: ActivationView = {
 	through: 4,
 	context: { name: 'site', now: Date.parse(at), participants: [], messages: [], reserve: [] },
 };
+const departed: ActivationView = {
+	...view,
+	context: {
+		...view.context,
+		participants: [
+			{
+				kind: 'human',
+				name: 'priya',
+				identity: 'Reads the room.',
+				presence: 'absent',
+				changedAt: at,
+				lastDeparture: 3,
+				messagesSinceDeparture: 2,
+			},
+		],
+	},
+};
 const requests: Record<string, CommitRequest | LeaseRequest | string> = {
 	say: {
 		activation: 'message:2:product:1',
@@ -139,7 +156,7 @@ const responses: Record<string, ViewResponse | CommitResult | LeaseResponse> = {
 };
 
 describe('the wire', () => {
-	it.each(Object.entries({ ...stored, wake, steer, ...requests, ...responses }))(
+	it.each(Object.entries({ ...stored, departed, wake, steer, ...requests, ...responses }))(
 		'carries %s unchanged',
 		(_name, value) => {
 			expect(() => assertWire(value)).not.toThrow();

@@ -14,9 +14,9 @@ presence.
 
 ## 1. Two lifetimes
 
-Agent membership and human visits are independent. `agents` is the executable
-definitions; `seats` chooses its initial members and attention. A person is admitted
-through a visit. Hosts decide what “present” means for their medium and must
+Agent membership and human visits are independent. `agents` holds the executable
+definitions; `seats` chooses its initial members and attention. A person is
+admitted through a visit. Hosts decide what “present” means for their medium and must
 reconcile multiple tabs or connections before calling Ambion. The runtime has
 no idle timer and a crash writes no departure.
 
