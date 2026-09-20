@@ -82,8 +82,70 @@ const readPlan = defineTool({
 });
 ```
 
-`ToolContext` contains `agent`, `signal`, `callId`, and `onUpdate`. It holds
-no workspace or resource field.
+`ToolContext` contains `agent`, `signal`, `callId`, `onUpdate`, and `room`.
+`room` names the room the call ran in; it is absent for a call made outside
+a room. `ToolContext` holds no workspace or resource field.
+
+## Record every tool call
+
+**`openWorkspace` can record every bound tool call to a rotating JSONL file
+on the workspace's own filesystem.** Set `audit`, and every call through
+`workspace.tools()` appends one line: the room, the agent, the tool, the
+full arguments, and the full result or error.
+
+```ts
+const drive = openWorkspace({
+  name: 'team-site',
+  backend: memoryBackend(),
+  audit: {},
+});
+```
+
+**The log is an ordinary file an agent reads.** The default path is
+`/workspace/audit.jsonl`; set `path` to change it. `path` must be absolute:
+a relative path would resolve against whichever agent's home connects
+first, splitting the log one way for that agent and another way for every
+other. An agent reads the log with `read` or `bash cat`, the same as any
+file a peer wrote, and sees every call any agent made, including its own
+past calls.
+
+**Tool guidance tells every agent the log exists.** `openWorkspace` appends
+a note naming the path and what each line holds to the bundle's guidance, so
+an agent that reads its own tool guidance already knows to look for it.
+
+**A file rotates once it reaches `maxBytes`.** The default is 5 MiB
+(5 &times; 1024 &times; 1024 bytes). A rotated file keeps its old lines under
+a timestamped name beside the active file. The active file starts empty at
+the same path.
+
+**Recording one entry runs inside the tool call's own queued operation.**
+The workspace resource lets one operation touch the filesystem at a time
+(see [Open one resource](#open-one-resource)), and the audit write shares
+the same `ExecutionEnv` as the call it records. The entry and the call never
+separate under concurrent work from other agents.
+
+**A cut or aborted call is still recorded.** The record runs after the call
+ends, whatever ended it, over its own unconditional context. It does not
+depend on the caller's abort signal. A room that cuts an activation mid-call
+still leaves a trace of what that call was doing.
+
+**An entry too large for the backend to hold falls back to a short notice.**
+A `write` call whose content the filesystem has no room for still leaves one
+line naming the call and the failure, in place of the full entry.
+
+**A write or rotation failure calls `onError`.** The tool call itself keeps
+its own result. The log is best-effort: a full disk delays the record. It
+does not delay the agent. A throwing `onError` callback is caught inside the
+log, so it never reaches the tool call's own outcome.
+
+**Only a call through `workspace.tools()` is recorded.** A direct
+`workspace.use` call reaches the backend with no entry. It is host code, and
+the guidance the log describes speaks to the model alone.
+
+**The log shares the workspace's boundary.** just-bash gives no wall between
+one agent's home and another's (see [Backends and limits](#backends-and-limits)),
+and the log is no exception: any agent's `bash` or `write` call can alter or
+remove it, the same as any other file on the workspace.
 
 ## Query the shared database
 

@@ -21,6 +21,8 @@
  * a context. Use this context when the call has no other one.
  */
 export { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
+export type { AuditEntry, AuditLog, AuditLogOptions } from './audit.ts';
+export { DEFAULT_AUDIT_LOG, openAuditLog } from './audit.ts';
 export type { WorkspaceBackend } from './backend.ts';
 export type {
 	MemoryBackendFile,

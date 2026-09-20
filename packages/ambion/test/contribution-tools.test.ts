@@ -76,6 +76,7 @@ describe('contribution tools', () => {
 					},
 				]),
 			),
+			'room',
 		)[0];
 		if (tool === undefined) throw new Error('The response tools have no say tool.');
 
@@ -123,6 +124,7 @@ describe('contribution tools', () => {
 					},
 				]),
 			),
+			'room',
 		)[0];
 		if (tool === undefined) throw new Error('The summary tools have no say tool.');
 
