@@ -22,6 +22,7 @@ import { posix } from 'node:path';
 import type { Message, Room, RoomRead, Seq } from '@ambionframework/ambion';
 import type { Context, ExecutionEnv, JsonValue } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
+import type { WorkspaceEnv } from './backend.ts';
 import { openLog } from './log.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 
@@ -155,7 +156,7 @@ function reportError(onError: ((error: Error) => void) | undefined, error: unkno
  */
 export async function mirrorRoom(
 	room: Room,
-	drive: WorkspaceResource,
+	drive: WorkspaceResource<WorkspaceEnv>,
 	agent: WorkspaceAgent,
 	options: RoomMirrorOptions = {},
 ): Promise<RoomMirror> {

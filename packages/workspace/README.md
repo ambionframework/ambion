@@ -40,11 +40,12 @@ const surveyor = defineAgent({
 
 ## Use the resource directly
 
-The `/resource` entry provides file access and lifecycle operations without
-loading the Ambion runtime:
+The root entry exports `openResource` beside the just-bash backends. The
+`/resource` entry holds only the neutral contract: `openResource` and its
+types. It loads neither the Ambion runtime nor a model library.
 
 ```ts
-import { memoryBackend, openResource } from '@ambionframework/workspace/resource';
+import { memoryBackend, openResource } from '@ambionframework/workspace';
 
 const drive = openResource({ name: 'team-site', backend: memoryBackend() });
 await drive.use({ name: 'surveyor', identity: 'Quantity surveyor.' }, async (env) => {
