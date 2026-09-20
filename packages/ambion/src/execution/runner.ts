@@ -199,9 +199,16 @@ export class AgentRunner implements SeatPort {
 				if (last.failed || session.cancelled || view.spec.purpose.kind !== 'respond') return last;
 				if (!(await this.needsRefresh(id, session, cancelled))) return last;
 			}
-		} catch {
-			return { failed: true, cause: 'transient' };
+		} catch (error) {
+			return this.broke(error);
 		}
+	}
+
+	/** Record and report a room call this loop cannot recover from, as a transient failure. */
+	private broke(error: unknown): PassResult {
+		const broken = error instanceof Error ? error : new Error(String(error));
+		this.emit({ type: 'error', agent: this.context.seat, error: broken, cause: 'transient' });
+		return { failed: true, cause: 'transient' };
 	}
 
 	/**
