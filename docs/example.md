@@ -53,6 +53,10 @@ workspace resource.
 - `/library`: datasheet summaries for the kit, copied from
   `examples/workbench/library`.
 - `/shared`: `kit.md` and `notes.md`, the team's artifacts.
+- `/workspace/audit.jsonl`: one line per tool call, from the workspace audit
+  log.
+- `/rooms/<room name>/messages.jsonl`: one line per message, mirrored from
+  each room's own journal.
 
 The datasheets are simplified summaries for a runnable example. They are not
 the manufacturer datasheets.
