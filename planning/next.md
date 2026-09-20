@@ -3,10 +3,7 @@
 This file is the whole plan for 0.1.0: the scope, the order of the work,
 the evidence each step needs, and the reason behind each item.
 [backlog.md](backlog.md) holds everything after 0.1.0.
-[docs/example.md](../docs/example.md) holds the one example. Rewritten on
-2026-09-17 against main `deaaf94` from a review that read the runtime, the
-journal, the adapters, the examples, the docs, the four harness SDKs, and
-the open pull requests.
+[docs/example.md](../docs/example.md) holds the one example.
 
 **An item lands with its evidence or stays open.** Every checkbox names an
 item in [the items](#the-items). A phase closes when its evidence line
@@ -17,7 +14,7 @@ holds on main.
 **Ambion is a collaboration kernel for agents and humans.** The
 [README](../README.md) holds the statement, the key technical facts, and
 what is new, written for the 0.1.0 surface. Of the nine novelties it lists,
-the first five exist on main. The last four land in phases 2, 4, and 5: any
+the first five exist on main. The last four land in phases 2, 3, 4, and 5: any
 framework through one executor contract, the trace beside the record,
 artifacts by reference, and waiting on a person as a derived outcome.
 
@@ -61,7 +58,7 @@ ingress are future work.
 - **One example.** The site example and Relay are replaced by the agentic
   lab workspace in [docs/example.md](../docs/example.md).
 - **Two entries.** `@ambionframework/ambion` for applications and
-  `@ambionframework/ambion/hosting` for hosts and adapters (B5).
+  `@ambionframework/ambion/hosting` for hosts and adapters.
 - **The kernel imports no model library.** Pi becomes an executor package
   and the Claude Agent SDK a second one (E2, F10).
 - **Speech enters the record through `say` only**, on every executor (F4).
@@ -91,91 +88,66 @@ means two things or two names mean one.
 
 ## The order of work
 
-**The critical path is phase 2, 4, 6, then 8.** Phases 3, 5, and 7 run
-beside it after the freeze. Inside a phase, the steps are numbered in
-execution order, and a step names the step it needs. Three priorities sort
-the work: **P0** blocks other work or the tag; **P1** carries the release
-story; **P2** is in scope and can land last.
+**Six lanes run at once.** A lane is a chain of steps that share files.
+Steps in different lanes share no files and run in parallel. A step names
+the steps it needs; a step with no "Needs" line starts now, after the
+rename in step 15. Three priorities sort the work: **P0** blocks the tag;
+**P1** carries the release story; **P2** is in scope and can land last.
 
-| Phase | Name                              | Priority | Starts after | Blocks     |
-| ----- | --------------------------------- | -------- | ------------ | ---------- |
-| 2     | The public shape, then the freeze | P0       |              | 3, 4, 5, 7 |
-| 4     | Executors and adapters            | P1       | 2            | 6          |
-| 5     | Resources and artifacts           | P1       | 2            | 6          |
-| 3     | Kernel internals                  | P1       | 2            | 6          |
-| 6     | The workbench example and the UI  | P1       | 3, 4, 5      | 8          |
-| 7     | Documentation                     | P1       | 2            | 8          |
-| 8     | Release evidence and sign-off     | P0       | 6, 7         | the tag    |
+| Lane | Chain                                                             | Priority |
+| ---- | ----------------------------------------------------------------- | -------- |
+| A    | Phase 2: 15, then 8, 9, 10, 11 together; 12; 13 and 14; 16; 17    | P0       |
+| B    | Phase 4: 1 then 2; 3 then 4; 5 then 6 and 7; 8 beside all of them | P1       |
+| C    | Phase 3: 1 then 2; 3 then 4                                       | P1       |
+| D    | Phase 5: 1, then 2, 3, and 5 together; 4                          | P1       |
+| E    | Phase 8: 1 now; 2 and 3 as each package lands; 4 to 8 last        | P0       |
+| F    | Phases 6 and 7: each item after the code it describes             | P1       |
 
-When phases 3, 4, and 5 compete for the same hands, take them in the order
-4, 5, 3: the adapters carry the story, the resources feed the example, and
-the fold has the least user-visible surface.
+**The critical path is 10, 12, 13, 14, then 6.2, then 8.** Step 12 also
+gates the Claude adapter (4.5) and the instrument resource (5.4). Start
+lane A first; when hands run short, take lane B before D and D before C:
+the adapters carry the story, the resources feed the example, and the fold
+has the least user-visible surface.
+
+**Expect merge conflicts in three files.** Steps 8, 10, 11, and 12 edit
+`room-host.ts` and the driver. Land them in small pull requests, one per
+step. Phase 3 step 3 splits `room-host.ts`, so it waits for step 12.
 
 ### Phase 2. The public shape, then the freeze (P0)
 
-**Goal:** every public rename, every journal field, and every read the
-release needs land in one window, in an order where each step builds on
-the one before it and no file is reshaped twice.
+**Goal:** every journal field and every read the release needs land, then
+the freeze.
 
-1. [x] `AgentDefinition` becomes `{ name, identity, executor }`; Pi's
-       fields move into `pi({})` (E1).
-2. [x] The executor contract: `open(activation)` returns a session with
-       `pass`, optional `steer`, and `abort`; the driver (leases, renewals,
-       cuts, the wake queue, freshness) moves out of the runner and the
-       activation into one driver, `AgentRunner` (E2, F2). Delta passes wait
-       on a later step; item 3 removes `stream`, `model`, and `transcripts`
-       from `Runtime`. Needs 1.
-3. [x] Brand `Runtime`; create the default on first use; narrow the
-       application view to `clock` and `storage` (B4). `hostingOf(runtime)`
-       reaches the rest — the journal namespace, the model call, wake and
-       retry policy, and the room registry. Needs 1.
-4. [x] Two entries, `.` and `/hosting`; `/transport` removed; the export
-       list of each entry asserted (B5). `Room.reconcile()` stays on the
-       main entry's `Room` type for now: splitting an application-facing
-       `Room` from a host-facing one is its own design, not a rename.
-       Needs 2 and 3, because hosting holds the driver and the executor
-       types.
-5. [x] `AmbionError` with codes at every throw site (B7). Needs 4, so the
-       files are in their final place.
-6. [x] An activation id on every execution event; `RoomEvent` and
-       `ExecutionEvent` under one `subscribe` (B8). Needs 4.
-       `RoomNotification` stays as the exported union of the two; C5 owns
-       whether it keeps that name.
-7. [x] One limits vocabulary (B3), with the `context`, `message`, and
-       `trace` groups present and at their current defaults.
-       `AUDIT_ATTEMPTS` and `PASSES_PER_RECONCILE` stay module-private;
-       nothing tunes them.
-8. [ ] A `fixed` seat with the summary writer fixed by default (D4), and
-       the sharp edges: room name validation, the unheld summary name,
-       `opened` on the handle, idempotent host `seat`, prefixed key kinds
-       (C6). Needs 5 for the typed refusals.
-9. [ ] `limits.context.messages` and `limits.message.bytes` (D5). Needs 7.
-10. [ ] `refs` on spoken messages and summaries; room URIs; `refs` on the
-        `say` parameters (E5).
-11. [ ] `activation`, `exchange`, and `room` on `ToolContext`, supplied by
-        the driver (E6). Needs 2.
-12. [ ] The `Step` vocabulary; the trace journal per activation;
-        `limits.trace`; the trace policy per definition; live `step`
-        events (F4, F7). Needs 6, 7, and 10.
-13. [ ] Usage on `activation_end` and on the release entry; a closed
-        exchange sums its activations (D2). Needs 2 and 12.
-14. [ ] `activations` on the exchange read; `readActivation` (F8). Needs
-        12 and 13.
 15. [ ] The naming list (C5): `AgentExecutionContext`, `AgentPort`,
         `RoomProtocol`, `lastDeparture`, `messagesSinceDeparture`,
-        `ExchangeRead`. Last of the renames, once every type has its final
-        home.
-16. [ ] `format: 1` on the run entry; golden journals per chaos scenario
+        `ExchangeRead`. Needs nothing. Land it first, as one mechanical
+        pull request, so every later step writes against the final names.
+16. [ ] A `fixed` seat with the summary writer fixed by default (D4), and
+        the sharp edges: room name validation, the unheld summary name,
+        `opened` on the handle, idempotent host `seat`, prefixed key kinds
+        (C6). Needs 15.
+17. [ ] `limits.context.messages` and `limits.message.bytes` (D5). Needs 15.
+18. [ ] `refs` on spoken messages and summaries; room URIs; `refs` on the
+        `say` parameters (E5). Needs 15.
+19. [ ] `activation`, `exchange`, and `room` on `ToolContext`, supplied by
+        the driver (E6). Needs 15.
+20. [ ] The `Step` vocabulary; the trace journal per activation;
+        `limits.trace`; the trace policy per definition; live `step`
+        events (F4, F7). Needs 10.
+21. [ ] Usage on `activation_end` and on the release entry; a closed
+        exchange sums its activations (D2). Needs 12.
+22. [ ] `activations` on the exchange read; `readActivation` (F8). Needs
+        12 and 13.
+23. [ ] `format: 1` on the run entry; golden journals per chaos scenario
         with expected folds, replayed in CI; the compatibility promise in
-        `durability.md` (D3). Last, because the goldens must hold every
-        field above.
-17. [ ] The freeze: a note at the top of this file; additive changes only
-        from here to the tag.
+        `durability.md` (D3). Needs 8, 9, 10, 13, 14, and phase 3 step 2,
+        because the goldens must hold every field and every outcome.
+24. [ ] The freeze: a note at the top of this file; additive changes only
+        from here to the tag. Needs 16.
 
-**Evidence:** generated declarations list two entries and the export
-snapshot passes; a scripted executor passes the driver suite; a fixed seat
-refuses an agent's unseat; `readActivation` returns steps; golden journals
-replay; `activation_end` carries usage.
+**Evidence:** the export snapshot passes with the final names; a fixed
+seat refuses an agent's unseat; `readActivation` returns steps; golden
+journals replay; `activation_end` carries usage.
 
 ### Phase 4. Executors and adapters (P1)
 
@@ -183,13 +155,14 @@ replay; `activation_end` carries usage.
 
 1. [ ] `@ambionframework/ambion/testing`: `scripted`, `speak`, `quiet`,
        `callTool`, `byAgent`, `fakeClock`, `settled`; the `stubModel` cast
-       removed; the repository's tests moved onto it (C2). First, because
-       every later step tests on it.
+       removed; the repository's tests moved onto it (C2). Needs 15.
 2. [ ] The executor conformance suite on the scripted executor (D6, F10).
        Needs 1.
-3. [ ] `@ambionframework/pi`: the Pi executor moved out of the kernel; the
-       `Agent` kept across passes; `prompt()` with the delta; the Pi
-       journal as its private audit (F2, F5). Needs 2.
+3. [ ] `@ambionframework/pi`: the Pi executor moved out of the kernel, so
+       the kernel imports no model library; the `Agent` kept across passes;
+       `prompt()` with the delta; the Pi journal as its private audit (E2,
+       F2, F5). Needs 11 and 15. The move starts at once and adopts the
+       trace sink when step 12 of phase 2 lands.
 4. [ ] Three prompt parts and `renderDelta`; the default speaking policy as
        one replaceable constant; prompt snapshots for an ordinary and a
        closing activation (B6, F3). Needs 3.
@@ -197,7 +170,8 @@ replay; `activation_end` carries usage.
        per activation; streaming input for steer with the user echo
        advancing `readThrough`; hooks and tool messages as steps; a
        permission request as an `approval` step; policy options passed
-       through; a fake executable in CI (F5, F6). Needs 2 and 4.
+       through; a fake executable in CI (F5, F6). Needs 2, 4, 11, and
+       phase 2 step 12.
 6. [ ] `memory: 'activation' | 'seat'` on both adapters (F9). Needs 3
        and 5.
 7. [ ] `examples/codex`: a thread per activation; the stdio room tools
@@ -205,7 +179,7 @@ replay; `activation_end` carries usage.
        `refs`; a fake `codex` on `PATH` in CI (F6, F10). Needs 5.
 8. [ ] The storage and transport conformance suites, published and run on
        memory, SQLite, the in-process transport, and the Cloudflare RPC
-       transport (D6).
+       transport (D6). Needs 15. Runs beside every other step.
 
 **Evidence:** both adapters pass the executor suite on fakes; a room with
 one Pi seat and one Claude seat in CI; prompt snapshots; the assistant
@@ -217,14 +191,15 @@ package's prompt shrinks to what the kernel does not enforce.
 them, and the workspace is one binding of one resource contract.
 
 1. [ ] The neutral resource contract at `@ambionframework/workspace/resource`;
-       just-bash and its Pi tools as the Pi binding (E4).
+       just-bash and its Pi tools as the Pi binding (E4). Needs 15.
 2. [ ] A change log in the workspace binding keyed by activation, with
        `changes({ exchange })` (E6). Needs 1 and phase 2 step 11.
 3. [ ] A read-only SQL resource over `node:sqlite` with `query` and
        `record` tools, for the example (E4). Needs 1.
 4. [ ] The instrument resource for the example, with approval on a limit.
-       Needs 3 and phase 4 step 5 for the `approval` step.
+       Needs 3 and phase 2 step 12 for the `approval` step.
 5. [ ] Workspace `/dev/null` and the backend matrix on both backends.
+       Needs 1.
 
 **Evidence:** two resources on one contract; "what changed during this
 exchange" answered from the change log; a summary that cites a ref.
@@ -236,12 +211,14 @@ mechanism reads in one place.
 
 1. [ ] The incremental projection with the equivalence property test under
        cancellation, reseating, late summaries, takeover, and restart (B1).
-       First, because it is the largest risk and the outcomes build on it.
+       Needs 15. The equivalence test guards it against the changes that
+       phase 2 makes to the fold inputs.
 2. [ ] Exchange outcomes: complete, cancelled, exhausted, `awaiting`;
        `pendingFor(person)`; a summary for each person who spoke (E7).
        Needs 1.
 3. [ ] `room-host.ts` split by mechanism with a file budget in the gate
-       (B2). Needs 1, so the split moves the incremental code once.
+       (B2). Needs 1 and phase 2 step 12, so the split moves each edited
+       file once.
 4. [ ] The Cloudflare object on the core read model; alarms through
        `reconcileRoom` in hosting (B9). Needs 3.
 
@@ -256,11 +233,12 @@ guide describes. The example is one terminal process with an assistant and
 three specialists ([docs/example.md](../docs/example.md)).
 
 1. [ ] Move the old example reports and `docs/assistant-acceptance.md` under
-       `planning/evidence/` (C7).
+       `planning/evidence/` (C7). Needs nothing.
 2. [ ] The terminal shows steps per activation, the cost per exchange, and
-       `awaiting` and `approval` to the person (F8). Needs phase 3 step 2.
+       `awaiting` and `approval` to the person (F8). Needs phase 3 step 2
+       and phase 2 steps 13 and 14, plus phase 5 step 4 for `approval`.
 3. [ ] `ambion new --template node` derived from the example; the
-       Cloudflare template on `read()` (C3). Needs phase 3 step 4.
+       Cloudflare template on `read()` (C3). Needs 2 and phase 3 step 4.
 
 A second provider for the two live scenarios is optional: Pi's transport
 keeps behavior provider-neutral, so add one only if a provider-specific
@@ -272,32 +250,33 @@ one provider; a restart preserves the question.
 ### Phase 7. Documentation (P1)
 
 **Goal:** a reader meets one voice, one glossary, and one page per
-mechanism, with no history of names they never used. Each page follows the
-code it describes, so the order follows the phases above.
+mechanism, with no history of names they never used. Each page starts when
+the code it describes lands, so pages run beside the code.
 
 1. [ ] `docs/room.md`: the overview and the glossary; the index leads with
        it; `agent.md` becomes the definitions and tools page (C4, C5).
-       After phase 2.
+       Needs phase 2 step 15.
 2. [ ] `durability.md`: the format promise, stop semantics, permanent
-       failure, commit retry (A1, A2, D1, D3). After phase 2.
-3. [ ] `docs/envelope.md`: the limits table and the measured envelope (B3,
-       B1, D5). After phase 3 step 1.
+       failure, commit retry (A1, A2, D1, D3). Needs phase 2 step 16.
+3. [ ] `docs/envelope.md`: the limits table and the measured envelope (B1,
+       D5). Needs phase 3 step 1 and phase 2 step 9.
 4. [ ] `docs/executors.md`: the contract, the steps, the harness matrix,
-       how to write an adapter (F). After phase 4 step 5.
+       how to write an adapter (F). Needs phase 4 step 5.
 5. [ ] `docs/resources.md`: the contract, references, provenance;
-       `workspace.md` becomes the Pi binding page (E4 to E6). After
+       `workspace.md` becomes the Pi binding page (E4 to E6). Needs
        phase 5.
-6. [ ] `docs/patterns.md`: the human patterns table (E7). After phase 3
+6. [ ] `docs/patterns.md`: the human patterns table (E7). Needs phase 3
        step 2.
 7. [ ] `docs/trust.md`: guarantees between owners, membership authority,
-       harness memory (D8, D4, F9). After phase 4 step 6.
+       harness memory (D8, D4, F9). Needs phase 4 step 6 and phase 2
+       step 8.
 8. [ ] Retire the residue: rule citations, migration notes, package
-       descriptions, comment voice, `demos/README.md` (C4). After 1.
+       descriptions, comment voice, `demos/README.md` (C4). Needs 1.
 9. [ ] The `README.md` example typechecked against the packed entries;
        package READMEs; the CLI README; `CONTRIBUTING.md` with the Node
-       floors. After phase 6 step 4.
+       floors. Needs phase 6 step 3.
 10. [ ] A generated API reference per entry with a CI staleness check
-        (D10). P2; after 9.
+        (D10). P2. Needs 9.
 11. [ ] The 0.1.0 changelog entry. Last.
 
 **Evidence:** every page in the index has one owner section; no numbered
@@ -311,22 +290,25 @@ the scope has evidence on the tagged commit.
 
 1. [ ] Publish to npmjs under a prerelease tag; remove the token
        instructions; the release workflow verifies a consumer from npmjs
-       (D7). First, because every consumer check below installs from it.
+       (D7). Needs nothing. Start now, because every consumer check below
+       installs from it.
 2. [ ] Packed consumers outside the monorepo: journal alone; pi-journal
        with journal; kernel with pi; kernel with claude; the workbench; the
        generated Node and Cloudflare projects; the resource-only import.
-       Needs 1.
+       Needs 1. Each consumer starts when its packages exist.
 3. [ ] One TypeBox version; ESM exports and declarations; package
        contents; lockstep versions. Needs 2.
 4. [ ] Node 26 tests and CLI; workerd tests; the historical
-       Cloudflare wake and cut races reproduced on current code.
+       Cloudflare wake and cut races reproduced on current code. Needs
+       phase 3 step 4.
 5. [ ] The chaos sweep at 200 seeds; Dafny proofs for every changed rule;
        golden journals; the live tier on one provider; results recorded
-       under `planning/evidence/`.
+       under `planning/evidence/`. Needs phase 2 step 16 and phase 6.
 6. [ ] Recovery evidence: duplicate wake, takeover, delayed cut, audit
-       retry, clock skew, process pause, uncooperative tool.
+       retry, clock skew, process pause, uncooperative tool. Needs phase 3
+       and phase 4 steps 3 and 5.
 7. [ ] Summary evidence: silence, corrections, conflicting constraints,
-       multiple humans, late summaries.
+       multiple humans, late summaries. Needs phase 3 step 2.
 8. [ ] Sign off F1 to F9 above in `planning/evidence/0.1.0.md`; tag
        `v0.1.0`. Needs every step above.
 
@@ -336,8 +318,7 @@ commit and a run for each claim.
 
 ## The items
 
-Each item states the problem, the solution, and the impact. The review of
-2026-09-17 established the facts; file links point at main `deaaf94`.
+Each item states the problem, the solution, and the impact.
 
 ### B. Architecture
 
@@ -372,37 +353,6 @@ delivery state, send, steer, cut), `host/waits.ts` (exchange handles), and
 `host/control.ts` (reconcile, alarm, stop, abort, evict), each over a
 narrow view of the room, and add a file line budget to the gate.
 
-**B3. One vocabulary for limits.** The runtime exposes `wake.resend`,
-`wake.expiry`, `wake.deadline`, `retry.attempts`, `retry.backoff`,
-`call.attempts`, and `call.timeout`, beside the constants `AUDIT_ATTEMPTS`
-and `PASSES`; the names do not say what they bound. Rename by scope and keep
-the defaults.
-
-```ts
-limits: {
-  delivery: { resend: 5_000 },
-  lease: { ttl: 60_000, deadline: 600_000 },
-  activation: { attempts: 3, backoff: (n) => n * 30_000 },
-  call: { attempts: 2, timeout: 10_000 },
-  context: { messages: Infinity },
-  message: { bytes: Infinity },
-  trace: { toolOutputBytes: 65_536, stepsPerPass: 1_000 },
-}
-```
-
-**B4. Give the runtime a nominal identity.** `Runtime` is structural, its
-identity lives in a private `WeakMap`, and a spread copy fails at the first
-call. `defaultRuntime` is created at import. Brand the type, narrow the
-application view to `clock` and `storage`, move the rest to hosting, and
-create the default on first use.
-
-**B5. Two entries: application and hosting.** `/hosting` (renamed from
-`/transport`) exports the runner, the execution services, the audit id, the
-live-room lookup, `hostingOf`, and the wire types; the main entry still
-exports `Room.reconcile()`, which only a host calls — narrowing `Room`
-itself is a separate design, left open. `package.test.ts` asserts the
-sorted export list of each entry.
-
 **B6. Separate mechanism text from speaking policy in prompts.**
 [`render.ts`](../packages/ambion/src/execution/render.ts) holds about 11,600
 characters of prompt text and the assistant package 7,700 more; part
@@ -410,23 +360,6 @@ describes the mechanism and part is speaking policy that every agent gets
 and no definition can replace. Keep the mechanism text in the kernel, export
 the policy as one `DEFAULT_GUIDANCE` a definition can replace, and snapshot
 the rendered prompts.
-
-**B7. Typed refusals.** The core throws 75 plain `Error` values; Relay and
-the template map them by reading the message. Add `AmbionError` with a
-closed set of codes (`room_stopped`, `room_running`, `no_composition`,
-`missing_definition`, `visit_ended`, `not_present`, `unknown_participant`,
-`duplicate_name`, `invalid_name`, `invalid_tool`, `refused`, `stale`) and
-keep the messages. `superseded` throws from `@ambionframework/journal`, a
-package the core does not import; a room passes the fact on as the
-`superseded` event, not a code here. Typed refusals in the journal package
-itself (`superseded`, `closed`, `fenced`, a key conflict, a moved fence) are
-backlog work.
-
-**B8. Activation identity on every execution event.** `activation_start`,
-`activation_end`, `conflict`, `tool_execution_*`, and `error` carry no
-activation id; the Cloudflare seat object substitutes the seat's current
-one. Add `activation` to every event an activation raises and split the
-union into `RoomEvent` and `ExecutionEvent` under one `subscribe`.
 
 **B9. Keep the Cloudflare object on the core read model.** The room object
 still exposes `messages()`, `participants()`, and a `status()` with an
@@ -471,8 +404,8 @@ departure position with a cursor's name.
 | `ExchangeSnapshot`          | `ExchangeRead`               |
 | "catalog" (docs)            | "definitions"                |
 
-`RoomNotification` is the exported union of `RoomEvent` and `ExecutionEvent`
-(B8). Whether it keeps that name, once every type has its final home, is
+`RoomNotification` is the exported union of `RoomEvent` and `ExecutionEvent`.
+Whether it keeps that name, once every type has its final home, is
 this item's to decide.
 
 **C6. Small sharp edges.** `startRoom` validates participant names and
@@ -526,7 +459,7 @@ fits the limit, plus the open exchange whole. A summary stands for an older
 exchange it covers, and the page never splits a summarised range. An agent with
 no limit reads the whole record, so the default is unchanged. This is a
 per-agent axis, because an agent owns its model; it is not the room-level
-`limits.context` that B3 names.
+`limits.context` group.
 
 What remains: an omission line where the window drops uncompacted history, so a
 seat reads that a gap exists; `limits.message.bytes` with a typed refusal for
@@ -565,14 +498,10 @@ holds a model is an executor. Everything that holds data is a resource.
 seat reaches the room through `view`, `commit`, and `lease`, and the room
 reaches a seat through `wake`, `steer`, and `cut`, in plain JSON.
 
-**E2. One executor contract and one activation driver.** The runner and
-the activation hold a neutral half (claims, renewals, cuts, the wake queue,
-the pass loop, freshness) and a Pi half (building an `Agent`, steering it,
-reading its stop reason, persisting its transcript). Keep the driver in the
-hosting entry and reduce a framework to the contract in F2. `Runtime` still
-carries a Pi stream, resolver, and transcript opener; remove those three
-fields once the driver gives them a home outside it. Ship Pi as
-`@ambionframework/pi`.
+**E2. Pi leaves the kernel.** `Runtime` and the hosting state still carry
+a Pi stream, a model resolver, and a transcript opener, and the runner still
+builds a Pi `Agent`. Move each into `@ambionframework/pi` so the kernel
+imports no model library, and reduce every framework to the contract in F2.
 
 **E3. Neutral room tools and a headless adapter as the proof.** Nothing in
 the repository mentions MCP or a headless run. Expose the three room tools
@@ -650,24 +579,19 @@ identity to rebuild a step list. Every surface reports usage. Two take a
 message during a run and two do not, so steering is a capability an
 adapter declares, and correctness rests on freshness alone.
 
-**F2. A session with passes as the executor contract.** A harness keeps
-its session between turns and resumes by id; the Pi executor builds a new
-`Agent` per pass and rereads the whole record. Make the unit a session and
-the pass a turn on it.
+**F2. Passes carry a delta, tools, and a trace.** A harness keeps its
+session between turns and resumes by id; the Pi executor builds a new
+`Agent` per pass and rereads the whole record. The executor contract in
+`execution/executor.ts` has `open`, `pass(view)`, optional `steer`, and
+`abort`. It needs the tools and a trace sink at `open`, a delta input, and a
+richer result.
 
 ```ts
-interface Executor {
-  open(activation: {
-    spec: ActivationSpec;
-    tools: readonly RoomTool[];
-    trace: TraceSink;
-    signal: AbortSignal;
-  }): Promise<ExecutorSession>;
-}
-interface ExecutorSession {
-  pass(input: PassInput): Promise<PassResult>;
-  steer?(steer: Steer): Promise<void>;
-  close(): Promise<void>;
+interface ExecutorActivation {
+  spec: ActivationSpec;
+  tools: readonly RoomTool[];
+  trace: TraceSink;
+  signal: AbortSignal;
 }
 type PassInput =
   { kind: 'view'; view: ActivationView } | { kind: 'delta'; since: Seq; view: ActivationView };
@@ -679,9 +603,8 @@ interface PassResult {
 }
 ```
 
-The driver keeps the lease, the renewal, the cut, the wake queue, the
-freshness check, and the decision to run another pass; it renders a delta
-for every pass after the first and records `session` on the release.
+The driver renders a delta for every pass after the first and records
+`session` on the release.
 
 **F3. Three prompt parts and a delta.** The renderer returns `mechanism`
 (per kernel version), `agent` (per definition), and `context` (per pass);
