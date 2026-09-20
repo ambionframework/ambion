@@ -64,7 +64,7 @@ They wait on the journal and are available after the person returns.
 ## 4. The visit
 
 The public handle is deliberately small: a `human` definition, a live `lastDeparture`
-cursor, `send(input)`, and `leave()`. See the [`Visit` declaration](../packages/ambion/src/room-host.ts)
+position, `send(input)`, and `leave()`. See the [`Visit` declaration](../packages/ambion/src/room-host.ts)
 for the exact TypeScript signature.
 
 `lastDeparture` is a live read of the person's latest durable `left` message. It is

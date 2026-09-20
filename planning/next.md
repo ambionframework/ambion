@@ -118,10 +118,15 @@ step. Phase 3 step 3 splits `room-host.ts`, so it waits for step 12.
 **Goal:** every journal field and every read the release needs land, then
 the freeze.
 
-15. [ ] The naming list (C5): `AgentExecutionContext`, `AgentPort`,
+15. [x] The naming list (C5): `AgentExecutionContext`, `AgentPort`,
         `RoomProtocol`, `lastDeparture`, `messagesSinceDeparture`,
         `ExchangeRead`. Needs nothing. Land it first, as one mechanical
         pull request, so every later step writes against the final names.
+        `RoomRead` replaces `RoomSnapshot`, and the room option `streamFn`
+        is now `stream`. Cursors keep the name `since`. Pi's `streamFn`,
+        `RoomNotification`, and the workbench room catalog keep their
+        names. The lease `since` in `room/rules.verified.ts` stays until a
+        proof edit renames it.
 16. [x] A `fixed` seat with the summary writer fixed by default (D4), and
         the sharp edges: room name validation, the unheld summary name,
         `opened` on the handle, idempotent host `seat`, prefixed key kinds

@@ -140,7 +140,7 @@ examples/workbench/
     brand.ts           the product name and the terminal palette
     definitions.ts     the assistant, three specialists, and the people
     scenarios.ts       the rooms, and the workspace seed
-    rooms.ts           the host lifecycle and the room registry
+    rooms.ts           the host lifecycle and the room catalog
     workbench.ts       the host: open, read, watch, send, control, create, files
     names.ts           the room name and goal rules
     files.ts           the workspace list and one file preview

@@ -70,6 +70,8 @@ handles.
   turnkey deployment commands, CLI remote authentication, multiple
   terminal clients, live activity transport in the CLI.
 - A `SeatObject` class rename in the Cloudflare adapter.
+- The lease `since` in `room/rules.verified.ts` keeps its name until a
+  proof edit renames it.
 - A provider-neutral plugin ecosystem beyond the executor contract.
 - A second live-tier provider job; Pi's transport is expected to keep
   behavior provider-neutral. Add one only if a provider-specific defect
