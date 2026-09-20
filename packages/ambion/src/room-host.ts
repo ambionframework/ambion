@@ -52,14 +52,20 @@ import type {
 } from './protocol.ts';
 import { activationSpec } from './room/activation.ts';
 import { closedExchange, discussionMessages, summaryCompletion } from './room/exchange.ts';
-import { foldRoom, type RoomState } from './room/fold.ts';
+import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
+import {
+	advance,
+	emptyProjection,
+	projectState,
+	type RoomProjection,
+	replay,
+} from './room/projection.ts';
 import { captureMessageSelection, type MessageSelection, readView } from './room/read.ts';
 import { type LiveWork, liveWork } from './room/reconcile.ts';
 import {
 	decide,
-	evolve,
 	type ReconcileDecision,
 	type Refusal,
 	type RoomCommand,
@@ -320,7 +326,7 @@ export class RoomHost implements Room, RunningRoom {
 	/** A cancellation append in flight, with its key retained across uncertainty. */
 	private abortInFlight: Promise<void> | undefined;
 	private abortKey: string | undefined;
-	private fold: { length: number; state: RoomState } | undefined;
+	private fold: { length: number; projection: RoomProjection; state: RoomState } | undefined;
 	private phase: Phase = 'starting';
 	/** This run's id: the fence it writes first, and the stamp on every entry it writes. */
 	private readonly run = crypto.randomUUID();
@@ -487,18 +493,19 @@ export class RoomHost implements Room, RunningRoom {
 	/** Every fact about the room, folded over the journal as it stands. */
 	state(): RoomState {
 		const current = this.fold;
+		const options = this.runtime.limits.activation;
 		const entries = this.journal.entriesFrom(current?.length ?? 0);
-		if (current === undefined) {
-			this.fold = {
-				length: entries.length,
-				state: foldRoom(entries, this.runtime.limits.activation),
-			};
-			return this.fold.state;
-		}
-		for (const entry of entries)
-			current.state = evolve(current.state, entry, this.runtime.limits.activation);
-		current.length += entries.length;
-		return current.state;
+		if (current !== undefined && entries.length === 0) return current.state;
+		let projection = current?.projection ?? emptyProjection();
+		// A cold room replays in place. A warm room advances one value per entry.
+		if (current === undefined) projection = replay(entries, options);
+		else for (const entry of entries) projection = advance(projection, entry, options);
+		this.fold = {
+			length: (current?.length ?? 0) + entries.length,
+			projection,
+			state: projectState(projection),
+		};
+		return this.fold.state;
 	}
 
 	/** Take a phase. Eviction is terminal, so nothing follows it. */

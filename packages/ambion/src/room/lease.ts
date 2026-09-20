@@ -191,7 +191,7 @@ function reached(delivery: MessageDelivery, roster: ReadonlySet<string>): Set<st
 }
 
 /** A lease as the wake rules read it: its phase, reason, acknowledgment, and the position its id names. */
-function takenOf(lease: LeaseHold): Taken {
+export function takenOf(lease: LeaseHold): Taken {
 	const position = decodeActivationId(lease.id)?.position ?? 0;
 	return lease.phase === 'running'
 		? { phase: 'running', readThrough: lease.readThrough, position }
@@ -199,7 +199,7 @@ function takenOf(lease: LeaseHold): Taken {
 }
 
 /** A lease covers a message while it works, or through the end of its attempted work. */
-const coversAttempt = (lease: LeaseHold, seq: Seq): boolean =>
+export const coversAttempt = (lease: LeaseHold, seq: Seq): boolean =>
 	lease.phase === 'ended' ? coverageRule(true, lease.until, seq) : coverageRule(false, 0, seq);
 
 /**
@@ -207,8 +207,8 @@ const coversAttempt = (lease: LeaseHold, seq: Seq): boolean =>
  * cap is still pending, and carries the attempts that reached it: the room
  * decides what it does about a wake it gave up on.
  */
-function statusOf(
-	message: Message,
+export function statusOf(
+	message: Pick<Message, 'seq' | 'at'>,
 	seat: string,
 	taken: readonly LeaseHold[],
 	options: PendingActivationOptions,

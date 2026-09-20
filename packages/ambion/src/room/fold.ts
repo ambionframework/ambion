@@ -28,7 +28,7 @@ import { foldPeople, type PersonState } from './presence.ts';
 import { cancelHold, lastOf, survivesCancellation } from './rules.verified.ts';
 
 /** A summary one person is owed, and how the room has tried to write it. */
-interface Owed extends PendingActivation {
+export interface Owed extends PendingActivation {
 	person: string;
 	/** The seat the close named to write it. */
 	writer: string;
@@ -66,7 +66,7 @@ export interface FoldOptions {
 }
 
 /** The facts beside the derived projection. It contains no journal history. */
-interface BaseFacts {
+export interface BaseFacts {
 	messages: Message[];
 	closes: Close[];
 	cancelledAt: Seq | undefined;
@@ -86,7 +86,7 @@ export const baseOf = (state: RoomState): BaseFacts => ({
 });
 
 /** The empty room facts before the first committed event. */
-const older = (): BaseFacts => ({
+export const older = (): BaseFacts => ({
 	messages: [],
 	closes: [],
 	cancelledAt: undefined,
@@ -170,7 +170,10 @@ function cancelLeases(leases: Map<string, LeaseHold>, cancelledAt: Seq, at: stri
 	}
 }
 
-function reserveOf(composition: Composition | undefined, roster: readonly Seating[]): Seating[] {
+export function reserveOf(
+	composition: Composition | undefined,
+	roster: readonly Seating[],
+): Seating[] {
 	if (composition === undefined) return [];
 	const seated = new Set(roster.map((seat) => seat.name));
 	const definitions = new Map(
@@ -200,7 +203,7 @@ function foldRoster(composition: Composition | undefined, messages: readonly Mes
  * One seating or unseating applied to the roster. Any other message changes
  * nothing.
  */
-function reseat(roster: Seating[], message: Message): void {
+export function reseat(roster: Seating[], message: Message): void {
 	if (message.kind !== 'seated' && message.kind !== 'unseated') return;
 	const at = roster.findIndex((seat) => seat.name === message.subject);
 	if (at >= 0) roster.splice(at, 1);
@@ -255,7 +258,7 @@ function foldOwed(
  * What a person is owed, as an activation: how many drafts over these
  * closes came to nothing, when the next may start, and the id it claims.
  */
-function withAttempts(
+export function withAttempts(
 	owed: Omit<Owed, keyof PendingActivation>,
 	leases: ReadonlyMap<string, LeaseHold>,
 	context: FoldOptions,

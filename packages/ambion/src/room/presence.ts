@@ -32,31 +32,49 @@ export interface PersonState {
 	preferences: string | undefined;
 }
 
+/** One arrival or departure applied to the people. Any other message changes nothing. */
+function meet(people: Map<string, PersonState>, message: Message): void {
+	if (message.kind === 'arrived') {
+		const known = people.get(message.subject);
+		people.set(message.subject, {
+			name: message.subject,
+			identity: message.identity ?? known?.identity ?? '',
+			presence: 'present',
+			lastDeparture: known?.lastDeparture,
+			changedAt: message.at,
+			preferences: message.preferences ?? known?.preferences,
+		});
+	} else if (message.kind === 'left') {
+		const known = people.get(message.subject);
+		if (known) {
+			people.set(message.subject, {
+				...known,
+				presence: 'absent',
+				lastDeparture: message.seq,
+				changedAt: message.at,
+			});
+		}
+	}
+}
+
 /** Every person the record knows, in the order the record met them. */
 export function foldPeople(messages: readonly Message[]): Map<string, PersonState> {
 	const people = new Map<string, PersonState>();
-	for (const message of messages) {
-		if (message.kind === 'arrived') {
-			const known = people.get(message.subject);
-			people.set(message.subject, {
-				name: message.subject,
-				identity: message.identity ?? known?.identity ?? '',
-				presence: 'present',
-				lastDeparture: known?.lastDeparture,
-				changedAt: message.at,
-				preferences: message.preferences ?? known?.preferences,
-			});
-		} else if (message.kind === 'left') {
-			const known = people.get(message.subject);
-			if (known) {
-				people.set(message.subject, {
-					...known,
-					presence: 'absent',
-					lastDeparture: message.seq,
-					changedAt: message.at,
-				});
-			}
-		}
-	}
+	for (const message of messages) meet(people, message);
 	return people;
+}
+
+/**
+ * The people after one more message. It returns the same map when the message
+ * changes nobody, and a new map otherwise, unless the caller owns the map.
+ */
+export function advancePeople(
+	people: Map<string, PersonState>,
+	message: Message,
+	own: boolean,
+): Map<string, PersonState> {
+	if (message.kind !== 'arrived' && message.kind !== 'left') return people;
+	const next = own ? people : new Map(people);
+	meet(next, message);
+	return next;
 }

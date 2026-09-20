@@ -10,6 +10,7 @@ import type { EndReason, FailureCause, Message, PresenceMessage } from '../types
 import { activationSpec } from './activation.ts';
 import { applyEvent, baseOf, type FoldOptions, isFixed, project, type RoomState } from './fold.ts';
 import { isExpired, isLive } from './lease.ts';
+import { evolveState } from './projection.ts';
 import {
 	liveWork,
 	planReconciliation,
@@ -83,6 +84,8 @@ export type ReconcileDecision = {
 
 /** Live application and replay use the same event rules. */
 export function evolve(state: RoomState, event: Entry, options: FoldOptions): RoomState {
+	const evolved = evolveState(state, event, options);
+	if (evolved !== undefined) return evolved;
 	const base = baseOf(state);
 	applyEvent(base, event);
 	return project(base, options);
