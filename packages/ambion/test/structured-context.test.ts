@@ -193,4 +193,68 @@ describe('structured activation context', () => {
 			'── Current exchange begins here; earlier exchanges are background ──',
 		);
 	});
+
+	it('tells a closing seat how to read a fold its background now holds', () => {
+		const twoExchanges: Entry[] = [
+			{
+				kind: 'composition',
+				seq: 1,
+				body: {
+					version: 2,
+					summary: 'worker',
+					agents: [{ name: 'worker', identity: 'Writes decisions.', attention: 'broadcast' }],
+					available: [],
+					at,
+				},
+			},
+			{ kind: 'message', seq: 2, body: { kind: 'arrived', at, from: 'sam', subject: 'sam' } },
+			{ kind: 'message', seq: 3, body: { kind: 'said', at, from: 'sam', text: "Sam's question." } },
+			{ kind: 'close', seq: 4, body: { owner: 'sam', from: 3, through: 3, at, summary: 'worker' } },
+			{
+				kind: 'message',
+				seq: 5,
+				body: {
+					kind: 'summary',
+					at,
+					from: 'worker',
+					to: 'sam',
+					text: 'Answered.',
+					covers: { from: 3, through: 3 },
+				},
+			},
+			{ kind: 'message', seq: 6, body: { kind: 'arrived', at, from: 'priya', subject: 'priya' } },
+			{
+				kind: 'message',
+				seq: 7,
+				body: { kind: 'said', at, from: 'priya', text: "Priya's question." },
+			},
+			{
+				kind: 'close',
+				seq: 8,
+				body: { owner: 'priya', from: 7, through: 7, at, summary: 'worker' },
+			},
+		];
+		const state = foldRoom(twoExchanges, { backoff: () => 0 });
+		const priyaClose: ActivationSpec = {
+			id: 'closed:7:worker:1',
+			seat: 'worker',
+			attempt: 1,
+			purpose: { kind: 'summarize', exchange: 7, person: 'priya', through: 7 },
+		};
+		const view = viewOf(priyaClose, {
+			name: 'payments',
+			now,
+			state,
+			live: new Map(),
+			unseen: () => 0,
+		});
+
+		// Sam's already-summarised exchange is background priya's writer now
+		// reads, folded the same way it would be for an ordinary activation —
+		// so the writer needs the same instruction for reading one.
+		expect(view.context.messages.some((message) => message.kind === 'summary')).toBe(true);
+		const rendered = renderActivation(view, worker);
+		expect(rendered.context).toContain('summarised for sam below');
+		expect(rendered.systemPrompt).toContain('summarised for <name> below');
+	});
 });

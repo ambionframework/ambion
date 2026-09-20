@@ -366,12 +366,12 @@ export class AgentRunner implements SeatPort {
 	 * The record windowed to the agent's token limit. The seat pages the record
 	 * from the tail, keeps the newest blocks that fit, and stops when the window
 	 * starts above the record it holds or the record reaches its floor. The open
-	 * exchange stays whole even past the limit.
+	 * exchange stays whole even past the limit; a summary activation pins its own
+	 * exchange whole the same way and windows the background before it.
 	 *
 	 * The first page fixes the frame — its purpose, exchange, participants, and
 	 * `through`. Later pages add only older messages, so the acknowledged
-	 * position stays what the tail page held. A summary activation reads its
-	 * whole fixed exchange, so it never windows.
+	 * position stays what the tail page held.
 	 */
 	private async windowedView(
 		id: string,
@@ -386,7 +386,6 @@ export class AgentRunner implements SeatPort {
 			const page = await this.pageView(id, before, cancelled);
 			if ('stop' in page) return page.stop;
 			if (frame === undefined) frame = page.view;
-			if (frame.spec.purpose.kind !== 'respond') return { view: frame };
 			const older = page.view.context.messages;
 			held = [...older, ...held];
 			const window = windowToLimit(held, estimate, limit, pinOf(frame));
@@ -506,9 +505,14 @@ function defaultEstimate(text: string): number {
 	return Math.ceil(text.length / 4);
 }
 
-/** The open exchange is pinned whole for an ordinary response. */
+/**
+ * The open exchange is pinned whole for an ordinary response; a summary
+ * activation pins its own closed exchange the same way, so the window never
+ * trims the range it is writing about.
+ */
 function pinOf(view: ActivationView): Seq | undefined {
-	return view.spec.purpose.kind === 'respond' ? view.context.exchange?.from : undefined;
+	const { purpose } = view.spec;
+	return purpose.kind === 'respond' ? view.context.exchange?.from : purpose.exchange;
 }
 
 /**

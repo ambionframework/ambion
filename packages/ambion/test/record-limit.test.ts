@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRuntime, defineAgent, startRoom } from '../src/index.ts';
 import { inProcessTransport, type SeatRoom, type Transport } from '../src/transport.ts';
+import { priya, sam } from './support/cast.ts';
 import { andrei, messagesOf, roomName, waitForRoom } from './support/room.ts';
 import {
 	answersEveryQuestion,
@@ -153,6 +154,60 @@ describe('a limit windows the record', () => {
 		// not the substring the echo also carries.
 		expect(closings.length).toBeGreaterThan(0);
 		expect(closings.every((text) => text.includes('[andrei] opening question'))).toBe(true);
+		await room.stop();
+	});
+
+	it('windows the background before a closing activation, keeping its own exchange whole', async () => {
+		const closings: string[] = [];
+		const scribeScript: Script = (context) => {
+			if (!isClosing(context)) return quiet();
+			// Write only for priya's exchange, so the earlier one closes without a summary.
+			if (!context.systemPrompt?.includes('You are writing for priya.')) return quiet();
+			closings.push(contextText(context));
+			return summarise('done');
+		};
+		const worker = defineAgent({
+			name: 'worker',
+			identity: 'Answers.',
+			instructions: 'Answer.',
+			model: 'scripted/worker',
+		});
+		// A limit wide enough for priya's own exchange, too tight to also hold sam's.
+		const scribe = defineAgent({
+			name: 'scribe',
+			identity: 'Writes the closing message.',
+			instructions: 'Summarize the exchange.',
+			model: 'scripted/scribe',
+			activationTokenLimit: 60,
+			estimateTokens: (text) => text.length,
+		});
+		const runtime = createRuntime({
+			stream: scripted((context, name, call) =>
+				name === 'scribe'
+					? scribeScript(context, name, call)
+					: answersEveryQuestion(['sam', 'priya'])(context, name, call),
+			),
+		});
+		const room = await startRoom({
+			name: roomName('limit-summary-background'),
+			runtime,
+			agents: [worker, scribe],
+			summary: 'scribe',
+			seats: { worker: 'broadcast', scribe: 'broadcast' },
+		});
+
+		const samExchange = await (await room.visit(sam)).send({ text: 'sam question' });
+		await samExchange.waitForClose();
+		await waitForRoom(room);
+		const priyaExchange = await (await room.visit(priya)).send({ text: 'priya question' });
+		await priyaExchange.waitForClose();
+		await waitForRoom(room);
+
+		// The pinned exchange stays whole; the earlier, unpinned one is windowed
+		// out rather than read in full alongside it.
+		expect(closings.length).toBeGreaterThan(0);
+		expect(closings.every((text) => text.includes('priya question'))).toBe(true);
+		expect(closings.every((text) => !text.includes('sam question'))).toBe(true);
 		await room.stop();
 	});
 
