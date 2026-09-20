@@ -33,7 +33,9 @@ export type {
 export { directoryBackend, memoryBackend } from './just-bash.ts';
 export type { WorkspaceLog, WorkspaceLogOptions } from './log.ts';
 export { DEFAULT_ROTATE_BYTES, openLog } from './log.ts';
-export type { WorkspaceAgent } from './resource.ts';
+export type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
+export type { RoomMessageEntry, RoomRecord, RoomRecordOptions } from './room-record.ts';
+export { recordRoomMessages, roomRecordGuidance, roomRecordPath } from './room-record.ts';
 export { SHARED_DATABASE } from './sql.ts';
 export type { Workspace } from './workspace.ts';
 export { openWorkspace } from './workspace.ts';

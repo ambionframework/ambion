@@ -193,6 +193,67 @@ one agent's home and another's (see [Backends and limits](#backends-and-limits))
 and the log is no exception: any agent's `bash` or `write` call can alter or
 remove it, the same as any other file on the workspace.
 
+## Record a room's messages
+
+**`recordRoomMessages` mirrors one room's message record to
+`/rooms/<room name>/messages.jsonl`, built on `openLog`.** Call it once a
+room has started, with a workspace resource to write to.
+
+```ts
+import { memoryBackend, openWorkspace, recordRoomMessages } from '@ambionframework/workspace';
+import { startRoom } from '@ambionframework/ambion';
+
+const site = openWorkspace({ name: 'town', backend: memoryBackend() });
+const host = { name: 'host', identity: 'Mirrors the room record.' };
+const session = await startRoom({ name: 'lobby', agents: [/* ... */] });
+
+const record = await recordRoomMessages(session, site, host);
+// later, on shutdown:
+await record.stop();
+await session.stop();
+```
+
+**One line per message, in the room's own order.** Every line is the
+room's own `Message` type — `said`, `arrived`, `left`, `seated`, `unseated`,
+or `summary` — plus `room`, the room's name. An agent reads its own room's
+file with `read` or `bash cat`, the same as any file a peer wrote.
+
+**This is a secondary, best-effort copy.** `packages/journal` remains the
+source of truth for the room. A write failure calls `onError` and the room
+keeps running; a gap is possible, and not retried.
+
+**Recovery needs no cursor of its own.** `recordRoomMessages` subscribes to
+the room before it reads, then backfills from the highest `seq` already on
+disk — the same recipe [durability](durability.md) gives any external
+reader. A restart neither misses a message nor writes one twice; a message
+seen from both the live subscription and the backfill is written once.
+
+**A room's name is not validated at the kernel today.** This is the first
+place a room name turns into a filesystem path, so `recordRoomMessages`
+refuses a name that would resolve outside `/rooms` (a name holding `..` or
+an extra `/`) rather than write there.
+
+**Presenting the schema to an agent is a separate step.** `roomRecordGuidance()`
+returns the same field guide as this section, as a plain string. Add it as
+its own bundle, alongside the workspace's own, so every activation's
+guidance names the convention without needing a live room to compute it:
+
+```ts
+const worker = defineAgent({
+  name: 'worker',
+  identity: '...',
+  executor: pi({
+    bundles: [site.tools(), { tools: [], guidance: roomRecordGuidance() }],
+    // ...
+  }),
+});
+```
+
+**Directory-per-room organizes the data; it does not wall it off.** Every
+room sharing one workspace still shares its filesystem boundary (see
+[Backends and limits](#backends-and-limits)): an agent seated in one room
+can read another room's file the same way it can read another agent's home.
+
 ## Query the shared database
 
 **The `sql` tool runs SQLite statements on one shared database.** The default
