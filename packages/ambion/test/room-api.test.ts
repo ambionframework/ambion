@@ -14,6 +14,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
+import { refusal } from './support/errors.ts';
 import {
 	closedExchange,
 	crash,
@@ -338,7 +339,9 @@ describe('the room API', () => {
 		held.resolve();
 		await opened.dispose();
 		await expect(exchange.waitForClose()).rejects.toThrow(/stopped|ended/i);
+		await expect(exchange.waitForClose()).rejects.toEqual(refusal('room_stopped'));
 		await expect(exchange.waitForSummary()).rejects.toThrow(/stopped|ended/i);
+		await expect(exchange.waitForSummary()).rejects.toEqual(refusal('room_stopped'));
 	});
 
 	it.each(storages)('restores exchange handles from $name storage', async (storage) => {

@@ -13,6 +13,7 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
+import { refusal } from './support/errors.ts';
 import {
 	andrei,
 	assistant,
@@ -278,6 +279,13 @@ describe('startRoom', () => {
 				agents: [scribe, assistant],
 			}),
 		).rejects.toThrow(/already running/);
+		await expect(
+			startRoom({
+				name,
+				seats: { [scribe.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [scribe, assistant],
+			}),
+		).rejects.toEqual(refusal('room_running'));
 
 		await first.stop();
 		const again = await startRoom({
@@ -584,6 +592,15 @@ describe('startRoom', () => {
 				streamFn: scripted(() => quiet()),
 			}),
 		).rejects.toThrow(/one name names one participant/);
+		await expect(
+			startRoom({
+				name,
+				seats: { [impostor.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [impostor, assistant],
+				runtime,
+				streamFn: scripted(() => quiet()),
+			}),
+		).rejects.toEqual(refusal('duplicate_name'));
 	});
 
 	it('frees the name a refused start took, without a stop', async () => {

@@ -135,7 +135,7 @@ the one before it and no file is reshaped twice.
        `Room` from a host-facing one is its own design, not a rename.
        Needs 2 and 3, because hosting holds the driver and the executor
        types.
-5. [ ] `AmbionError` with codes at every throw site (B7). Needs 4, so the
+5. [x] `AmbionError` with codes at every throw site (B7). Needs 4, so the
        files are in their final place.
 6. [ ] An activation id on every execution event; `RoomEvent` and
        `ExecutionEvent` under one `subscribe` (B8). Needs 4.
@@ -411,8 +411,12 @@ the rendered prompts.
 the template map them by reading the message. Add `AmbionError` with a
 closed set of codes (`room_stopped`, `room_running`, `no_composition`,
 `missing_definition`, `visit_ended`, `not_present`, `unknown_participant`,
-`duplicate_name`, `invalid_name`, `invalid_tool`, `refused`, `stale`,
-`superseded`) and keep the messages.
+`duplicate_name`, `invalid_name`, `invalid_tool`, `refused`, `stale`) and
+keep the messages. `superseded` throws from `@ambionframework/journal`, a
+package the core does not import; a room passes the fact on as the
+`superseded` event, not a code here. Typed refusals in the journal package
+itself (`superseded`, `closed`, `fenced`, a key conflict, a moved fence) are
+backlog work.
 
 **B8. Activation identity on every execution event.** `activation_start`,
 `activation_end`, `conflict`, `tool_execution_*`, and `error` carry no

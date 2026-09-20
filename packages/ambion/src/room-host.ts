@@ -28,6 +28,7 @@
 import { decodeActivationId } from './activation-id.ts';
 import { answerCommit, answerLease, answerView } from './answers.ts';
 import { captureHuman } from './define.ts';
+import { AmbionError } from './errors.ts';
 import type { ExecutionConnector, RoomRuntime, RunningRoom } from './host/runtime.ts';
 import type { Close, Composition, LeaseChange } from './journal/events.ts';
 import { type Entry, type Kind, placed, type RoomJournal, roomJournal } from './journal/journal.ts';
@@ -205,10 +206,6 @@ export interface Visit {
 	leave(): Promise<void>;
 }
 
-/** Sets up the context where the agents work and waits for its opening replay. */
-/** The name comes free, unless another room took it since. */
-const _stale = (why: string) => ({ stale: why });
-
 /** Copy mutable notification values for one listener. */
 function notificationFor(event: RoomNotification): RoomNotification {
 	switch (event.type) {
@@ -234,8 +231,11 @@ const PASSES = 8;
 
 type SubmissionResult<K extends Kind> = Exclude<RoomDecision<K>, { event: unknown }> | undefined;
 
-const refusalMessage = (refusal: Refusal): string =>
-	'reason' in refusal ? refusal.reason : 'The record moved.';
+/** The refusal a decision made, as the error the host catches. */
+const refusalError = (refusal: Refusal): AmbionError =>
+	'reason' in refusal
+		? new AmbionError(refusal.category, refusal.reason)
+		: new AmbionError('stale', 'The record moved.');
 
 // -- the room ----------------------------------------------------------------
 
@@ -405,7 +405,10 @@ export class RoomHost implements Room, RunningRoom {
 
 	private validateDefinitions(state: RoomState): void {
 		if (state.composition === undefined)
-			throw new Error(`Room '${this.name}' has no composition on its record: start it instead.`);
+			throw new AmbionError(
+				'no_composition',
+				`Room '${this.name}' has no composition on its record: start it instead.`,
+			);
 		const names = new Set([
 			...state.composition.agents.map((seat) => seat.name),
 			...state.composition.available.map((seat) => seat.name),
@@ -413,10 +416,16 @@ export class RoomHost implements Room, RunningRoom {
 		]);
 		for (const name of names)
 			if (!this.defs.has(name))
-				throw new Error(`Room '${this.name}' cannot resume: agent '${name}' has no binding.`);
+				throw new AmbionError(
+					'missing_definition',
+					`Room '${this.name}' cannot resume: agent '${name}' has no binding.`,
+				);
 		for (const name of this.defs.keys())
 			if (state.people.has(name))
-				throw new Error(`Room '${this.name}' cannot resume: '${name}' is a person in this room.`);
+				throw new AmbionError(
+					'duplicate_name',
+					`Room '${this.name}' cannot resume: '${name}' is a person in this room.`,
+				);
 	}
 
 	/**
@@ -479,7 +488,7 @@ export class RoomHost implements Room, RunningRoom {
 		result: { entry: unknown } | { result: SubmissionResult<K> },
 	): void {
 		if ('result' in result && result.result !== undefined && 'refusal' in result.result)
-			throw new Error(refusalMessage(result.result.refusal));
+			throw refusalError(result.result.refusal);
 	}
 
 	/** The room answers nothing more: the host stopped it, or it was dropped. */
@@ -488,7 +497,7 @@ export class RoomHost implements Room, RunningRoom {
 	}
 
 	private assertRunning(): void {
-		if (this.gone()) throw new Error(`Room '${this.name}' is stopped.`);
+		if (this.gone()) throw new AmbionError('room_stopped', `Room '${this.name}' is stopped.`);
 	}
 
 	// -- what the host reads -----------------------------------------------------
@@ -557,7 +566,8 @@ export class RoomHost implements Room, RunningRoom {
 		await this.ready;
 		const closed = this.closedFor(from);
 		if (closed !== undefined) return closed;
-		if (this.gone()) throw new Error(`Exchange '${from}' was stopped or interrupted.`);
+		if (this.gone())
+			throw new AmbionError('room_stopped', `Exchange '${from}' was stopped or interrupted.`);
 		return new Promise((resolve, reject) => {
 			const waiters = this.closeWaiters.get(from) ?? [];
 			waiters.push({ resolve, reject });
@@ -578,7 +588,10 @@ export class RoomHost implements Room, RunningRoom {
 			if (result !== 'pending' && result !== 'failed') return copyMessage(result);
 			if (result === 'failed') throw new Error(`Exchange '${from}' summary work was interrupted.`);
 			if (this.gone())
-				throw new Error(`Exchange '${from}' summary work was stopped or interrupted.`);
+				throw new AmbionError(
+					'room_stopped',
+					`Exchange '${from}' summary work was stopped or interrupted.`,
+				);
 			await new Promise<void>((resolve) => {
 				this.responseWaiters.add(resolve);
 			});
@@ -639,7 +652,8 @@ export class RoomHost implements Room, RunningRoom {
 		const pending = this.arrivals.get(captured.name);
 		if (pending !== undefined) {
 			if (pending.identity !== captured.identity)
-				throw new Error(
+				throw new AmbionError(
+					'duplicate_name',
 					`'${captured.name}' is already entering this room under a different identity: one name is one person.`,
 				);
 			const admitted = await pending.promise;
@@ -692,7 +706,10 @@ export class RoomHost implements Room, RunningRoom {
 
 	private assertVisitable(human: HumanDefinition): void {
 		if (this.defs.has(human.name))
-			throw new Error(`'${human.name}' is an agent in this room: one name names one participant.`);
+			throw new AmbionError(
+				'duplicate_name',
+				`'${human.name}' is an agent in this room: one name names one participant.`,
+			);
 	}
 
 	private handle(visit: VisitRuntime): Visit {
@@ -703,7 +720,8 @@ export class RoomHost implements Room, RunningRoom {
 				return room.state().people.get(visit.human.name)?.since;
 			},
 			async send(input) {
-				if (visit.gone) throw new Error(`${visit.human.name}'s visit has ended.`);
+				if (visit.gone)
+					throw new AmbionError('visit_ended', `${visit.human.name}'s visit has ended.`);
 				room.assertRunning();
 				return room.deliverFrom(visit.human.name, input);
 			},
@@ -794,7 +812,8 @@ export class RoomHost implements Room, RunningRoom {
 		this.assertRunning();
 		await this.ready;
 		const definition = this.defs.get(name);
-		if (definition === undefined) throw new Error(`Unknown agent '${name}'.`);
+		if (definition === undefined)
+			throw new AmbionError('missing_definition', `Unknown agent '${name}'.`);
 		const change: PresenceDraft = {
 			kind: 'seated',
 			subject: name,
@@ -809,7 +828,8 @@ export class RoomHost implements Room, RunningRoom {
 	async unseat(name: string): Promise<void> {
 		this.assertRunning();
 		await this.ready;
-		if (!this.defs.has(name)) throw new Error(`Unknown agent '${name}'.`);
+		if (!this.defs.has(name))
+			throw new AmbionError('missing_definition', `Unknown agent '${name}'.`);
 		this.validatePresence({ kind: 'unseated', subject: name });
 		await this.commitPresence({ kind: 'unseated', subject: name });
 		await this.reconcile();
@@ -836,7 +856,8 @@ export class RoomHost implements Room, RunningRoom {
 		this.requireSubmission(appended);
 		if (!('entry' in appended)) throw new Error('The room command did not append a message.');
 		const message = placed(appended.entry);
-		if (!deliveryMatches(command, message)) throw new Error(messageKeyConflict(key, message));
+		if (!deliveryMatches(command, message))
+			throw new AmbionError('refused', messageKeyConflict(key, message));
 		return message;
 	}
 
@@ -1205,7 +1226,7 @@ export class RoomHost implements Room, RunningRoom {
 	}
 
 	private acceptedEvent<K extends Kind>(decision: RoomDecision<K>) {
-		if ('refusal' in decision) throw new Error(refusalMessage(decision.refusal));
+		if ('refusal' in decision) throw refusalError(decision.refusal);
 		return 'event' in decision ? decision.event : undefined;
 	}
 
@@ -1427,7 +1448,8 @@ export class RoomHost implements Room, RunningRoom {
 			key,
 		);
 		this.requireSubmission(appended);
-		if (!('entry' in appended)) throw new Error(`Room '${this.name}' stopped before cancellation.`);
+		if (!('entry' in appended))
+			throw new AmbionError('room_stopped', `Room '${this.name}' stopped before cancellation.`);
 	}
 
 	/** Revoke every running lease until a durable read finds none. Unclaimed work stays for the next run. */
@@ -1443,7 +1465,7 @@ export class RoomHost implements Room, RunningRoom {
 
 	private requireEnd(result: boolean | { refusal: Refusal }): boolean {
 		if (typeof result === 'boolean') return result;
-		throw new Error(refusalMessage(result.refusal));
+		throw refusalError(result.refusal);
 	}
 
 	/** Closes the run: what is live is revoked, what is present is marked gone, and the name comes free. */
@@ -1480,7 +1502,9 @@ export class RoomHost implements Room, RunningRoom {
 			// The name comes free whatever the storage did. A failed write must
 			// not leave a room that can never be started again.
 			this.runtime.release(this);
-			this.rejectExchangeWaiters(new Error(`Room '${this.name}' was stopped.`));
+			this.rejectExchangeWaiters(
+				new AmbionError('room_stopped', `Room '${this.name}' was stopped.`),
+			);
 		}
 	}
 
@@ -1515,7 +1539,7 @@ export class RoomHost implements Room, RunningRoom {
 		this.cancelAlarm();
 		this.listeners.clear();
 		for (const visit of this.visits.values()) visit.gone = true;
-		this.rejectExchangeWaiters(new Error(`Room '${this.name}' was evicted.`));
+		this.rejectExchangeWaiters(new AmbionError('room_stopped', `Room '${this.name}' was evicted.`));
 	}
 }
 

@@ -20,6 +20,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
+import { refusal } from './support/errors.ts';
 import {
 	assistantEnded,
 	collect,
@@ -619,12 +620,21 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			await expect(resumeRoom(name, { runtime: bare, agents: [] })).rejects.toThrow(
 				/cannot resume: agent 'alpha' has no binding/,
 			);
+			await expect(resumeRoom(name, { runtime: bare, agents: [] })).rejects.toEqual(
+				refusal('missing_definition'),
+			);
 			await expect(resumeRoom(name, { runtime: bare, agents: [alpha, alpha] })).rejects.toThrow(
 				/Duplicate agent name 'alpha'/,
+			);
+			await expect(resumeRoom(name, { runtime: bare, agents: [alpha, alpha] })).rejects.toEqual(
+				refusal('duplicate_name'),
 			);
 			await expect(
 				resumeRoom(roomName('never-started'), { runtime: runtime(), agents: [] }),
 			).rejects.toThrow(/no composition/);
+			await expect(
+				resumeRoom(roomName('never-started'), { runtime: runtime(), agents: [] }),
+			).rejects.toEqual(refusal('no_composition'));
 		} finally {
 			await opened.dispose();
 		}

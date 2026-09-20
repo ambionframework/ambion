@@ -76,6 +76,9 @@ whitespace-only human messages, agent messages, and summaries before writing.
 A refusal does not reserve the request key. Direct calls preserve accepted
 text exactly; `say` trims its input. An agent can finish silently without `say`.
 
+**A refusal is typed.** The room throws `AmbionError`. Its `code` is one of
+the closed set in `errors.ts`; its message is for a person.
+
 ## Rooms and membership
 
 `startRoom` writes a version 2 composition and starts the room. `seats` names

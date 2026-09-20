@@ -10,6 +10,7 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
+import { refusal } from './support/errors.ts';
 import {
 	andrei,
 	assistant,
@@ -237,6 +238,7 @@ describe('presence', () => {
 		await visit.leave();
 		await expect(visit.leave()).resolves.toBeUndefined();
 		await expect(visit.send({ text: 'hello?' })).rejects.toThrow(/has ended/);
+		await expect(visit.send({ text: 'hello?' })).rejects.toEqual(refusal('visit_ended'));
 	});
 
 	it('anchors since at where a person stopped reading, and holds it while they read', async () => {

@@ -78,9 +78,9 @@ describe('room transition', () => {
 			options,
 		);
 		const decision = decide(absent, { type: 'deliver', from: 'priya', text: 'Orphan.' }, now);
-		expect(decision).toMatchObject({ refusal: { category: 'refused' } });
+		expect(decision).toMatchObject({ refusal: { category: 'not_present' } });
 		const unknown = decide(absent, { type: 'deliver', from: 'ghost', text: 'Unknown.' }, now);
-		expect(unknown).toMatchObject({ refusal: { category: 'refused' } });
+		expect(unknown).toMatchObject({ refusal: { category: 'not_present' } });
 	});
 
 	it('turns recovered presence retries into no-ops', () => {
@@ -227,7 +227,7 @@ describe('room transition', () => {
 			);
 		expect(commit(undefined)).toMatchObject({ refusal: { category: 'refused' } });
 		expect(commit(0)).toMatchObject({ refusal: { category: 'missed' } });
-		expect(commit(3, 'nobody')).toMatchObject({ refusal: { category: 'refused' } });
+		expect(commit(3, 'nobody')).toMatchObject({ refusal: { category: 'unknown_participant' } });
 		expect(commit(3)).toMatchObject({ event: { body: { kind: 'said', from: 'product' } } });
 	});
 

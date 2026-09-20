@@ -1,6 +1,7 @@
 /** Pure commands and committed events for a room. */
 
 import { decodeActivationId } from '../activation-id.ts';
+import type { AmbionErrorCode } from '../errors.ts';
 import type { Close, Composition } from '../journal/events.ts';
 import type { Bodies, Body, Entry, Kind } from '../journal/journal.ts';
 import type { ActivationSpec, CommitRequest } from '../protocol.ts';
@@ -58,8 +59,19 @@ export type RoomCommand =
 	| CancelCommand
 	| ReconcileCommand;
 
+/** The codes a decision refuses with. Every one is a code the host switches on. */
+type RefusalCode = Extract<
+	AmbionErrorCode,
+	| 'stale'
+	| 'refused'
+	| 'not_present'
+	| 'unknown_participant'
+	| 'duplicate_name'
+	| 'missing_definition'
+>;
+
 export type Refusal =
-	{ category: 'stale' | 'refused'; reason: string } | { category: 'missed'; missed: Message[] };
+	{ category: RefusalCode; reason: string } | { category: 'missed'; missed: Message[] };
 
 export type RoomDecision<K extends Kind> =
 	| { event: ProposedEvent<K> | undefined }
@@ -168,8 +180,8 @@ export function stopWork(state: RoomState, now: number): RoomDecision<'lease'> {
 }
 
 const iso = (now: number): string => new Date(now).toISOString();
-const refused = (reason: string): { refusal: Refusal } => ({
-	refusal: { category: 'refused', reason },
+const refused = (reason: string, category: RefusalCode = 'refused'): { refusal: Refusal } => ({
+	refusal: { category, reason },
 });
 const stale = (reason: string): { refusal: Refusal } => ({
 	refusal: { category: 'stale', reason },
@@ -198,10 +210,11 @@ function deliver(
 ): RoomDecision<'message'> {
 	const { from, to, text } = command;
 	const author = state.people.get(from);
-	if (author?.presence !== 'present') return refused(`'${from}' is not present in this room.`);
+	if (author?.presence !== 'present')
+		return refused(`'${from}' is not present in this room.`, 'not_present');
 	const target = state.roster.find((seat) => seat.name === to);
 	if (to !== undefined && !state.people.has(to) && target === undefined) {
-		return refused(`Cannot direct a delivery to '${to}': not in this room.`);
+		return refused(`Cannot direct a delivery to '${to}': not in this room.`, 'unknown_participant');
 	}
 	if (target?.attention === 'none') {
 		return refused(`Cannot direct a delivery to '${to}': it wakes for nothing said.`);
@@ -218,8 +231,8 @@ function presence(
 	command: Extract<MessageCommand, { type: 'presence' }>,
 	now: number,
 ): RoomDecision<'message'> {
-	const reason = presenceRefusal(state, command.change);
-	if (reason !== undefined) return refused(reason);
+	const refusal = presenceRefusal(state, command.change);
+	if (refusal !== undefined) return refusal;
 	const known = state.people.get(command.change.subject);
 	if (
 		(command.change.kind === 'arrived' && known?.presence === 'present') ||
@@ -229,10 +242,16 @@ function presence(
 	return message(state, { ...command.change, at: iso(now) }, now, command.route);
 }
 
-function presenceRefusal(state: RoomState, change: PresenceChange): string | undefined {
+function presenceRefusal(
+	state: RoomState,
+	change: PresenceChange,
+): { refusal: Refusal } | undefined {
 	const seat = state.roster.find((candidate) => candidate.name === change.subject);
 	if (change.kind === 'seated' && (seat !== undefined || state.people.has(change.subject))) {
-		return `Duplicate agent name '${change.subject}': one name names one participant.`;
+		return refused(
+			`Duplicate agent name '${change.subject}': one name names one participant.`,
+			'duplicate_name',
+		);
 	}
 	if (change.kind === 'unseated') return unseatRefusal(seat, change.subject);
 	if (change.kind === 'arrived') return arrivalRefusal(state, change);
@@ -242,19 +261,28 @@ function presenceRefusal(state: RoomState, change: PresenceChange): string | und
 function unseatRefusal(
 	seat: RoomState['roster'][number] | undefined,
 	name: string,
-): string | undefined {
-	if (seat === undefined) return `'${name}' is not seated in this room.`;
+): { refusal: Refusal } | undefined {
+	if (seat === undefined) return refused(`'${name}' is not seated in this room.`);
 	return undefined;
 }
 
-function arrivalRefusal(state: RoomState, change: PresenceChange): string | undefined {
+function arrivalRefusal(
+	state: RoomState,
+	change: PresenceChange,
+): { refusal: Refusal } | undefined {
 	const name = change.subject;
 	if ([...state.roster, ...state.reserve].some((seat) => seat.name === name)) {
-		return `'${name}' is an agent in this room: one name names one participant.`;
+		return refused(
+			`'${name}' is an agent in this room: one name names one participant.`,
+			'duplicate_name',
+		);
 	}
 	const known = state.people.get(name);
 	if (known?.presence === 'present' && known.identity !== change.identity) {
-		return `'${name}' is already in this room under a different identity: one name is one person.`;
+		return refused(
+			`'${name}' is already in this room under a different identity: one name is one person.`,
+			'duplicate_name',
+		);
 	}
 	return undefined;
 }
@@ -310,8 +338,8 @@ function ordinaryCommit(
 	const stamp = { at: iso(now), activationId: request.activation, from: live.seat };
 	if (intent.kind === 'seated') return seating(state, intent.name, stamp, now);
 	if (intent.kind === 'unseated') return unseating(state, intent.name, stamp, now);
-	const reason = addressRefusal(state, live.seat, intent.to);
-	return reason === undefined ? message(state, { ...intent, ...stamp }, now) : refused(reason);
+	const refusal = addressRefusal(state, live.seat, intent.to);
+	return refusal ?? message(state, { ...intent, ...stamp }, now);
 }
 
 function isCoveringSummary(
@@ -399,6 +427,7 @@ function seating(
 		return refused(
 			`'${name}' is not in the reserve. ` +
 				(names.length ? `Seat one of: ${names.join(', ')}.` : 'The reserve is empty.'),
+			'unknown_participant',
 		);
 	}
 	return message(
@@ -423,7 +452,7 @@ function unseating(
 	if (!state.roster.some((seat) => seat.name === name)) {
 		return state.reserve.some((seat) => seat.name === name)
 			? { unchanged: { kind: 'unseated', name } }
-			: refused(`'${name}' is not an agent in this room.`);
+			: refused(`'${name}' is not an agent in this room.`, 'unknown_participant');
 	}
 	return message(state, { kind: 'unseated', subject: name, ...stamp }, now);
 }
@@ -432,14 +461,17 @@ function addressRefusal(
 	state: RoomState,
 	seat: string,
 	target: string | undefined,
-): string | undefined {
+): { refusal: Refusal } | undefined {
 	if (target === undefined) return undefined;
 	const found = state.roster.find((candidate) => candidate.name === target);
 	if (!state.people.has(target) && found === undefined)
-		return `Unknown participant '${target}'. Address someone from the roster.`;
-	if (target === seat) return 'You cannot address yourself.';
+		return refused(
+			`Unknown participant '${target}'. Address someone from the roster.`,
+			'unknown_participant',
+		);
+	if (target === seat) return refused('You cannot address yourself.');
 	return found?.attention === 'none'
-		? `'${target}' wakes for nothing said. Say it to the room, or to somebody else.`
+		? refused(`'${target}' wakes for nothing said. Say it to the room, or to somebody else.`)
 		: undefined;
 }
 
@@ -552,11 +584,17 @@ function compose(state: RoomState, composition: Body<Composition>): RoomDecision
 			(seat) => seat.name === composition.summary,
 		)
 	)
-		return refused(`Summary writer '${composition.summary}' is not defined in this room.`);
+		return refused(
+			`Summary writer '${composition.summary}' is not defined in this room.`,
+			'missing_definition',
+		);
 	const names = new Set<string>();
 	for (const seat of [...composition.agents, ...composition.available]) {
 		if (names.has(seat.name) || state.people.has(seat.name))
-			return refused(`Duplicate agent name '${seat.name}': one name names one participant.`);
+			return refused(
+				`Duplicate agent name '${seat.name}': one name names one participant.`,
+				'duplicate_name',
+			);
 		names.add(seat.name);
 	}
 	return { event: { kind: 'composition', body: composition } };
