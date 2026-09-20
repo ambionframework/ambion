@@ -1,6 +1,6 @@
 /** Model, stream and transcript services that an execution host composes. */
 
-import type { JournalOpener } from '@ambionframework/journal';
+import { type JournalOpener, namespaced } from '@ambionframework/journal';
 import { piSessions, type SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models } from '@earendil-works/pi-ai';
@@ -17,10 +17,19 @@ export function seatSessionId(room: string, seat: string): string {
 	return JSON.stringify(['ambion/seat-session', room, seat]);
 }
 
+/** What the trace keeps of a step, and how many steps one pass keeps. */
+export interface TraceLimits {
+	readonly toolOutputBytes: number;
+	readonly stepsPerPass: number;
+}
+
 export interface ExecutionServices {
 	readonly clock: Clock;
 	readonly call: ExecutionCall;
 	readonly transcripts: SessionOpener;
+	/** Opens the trace journal of an activation over the same storage. */
+	readonly traces: JournalOpener;
+	readonly trace: TraceLimits;
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
 }
@@ -29,6 +38,7 @@ export interface ExecutionServicesOptions {
 	readonly storage: JournalOpener;
 	readonly clock?: Clock;
 	readonly call?: Partial<ExecutionCall>;
+	readonly trace?: Partial<TraceLimits>;
 	readonly stream?: StreamFn;
 }
 
@@ -71,6 +81,8 @@ export function createExecutionServices(options: ExecutionServicesOptions): Exec
 		clock: options.clock ?? systemClock(),
 		call: { attempts, timeout },
 		transcripts: piSessions(options.storage),
+		traces: namespaced(options.storage, 'ambion/trace'),
+		trace: { toolOutputBytes: 65_536, stepsPerPass: 1_000, ...options.trace },
 		stream: options.stream ?? registryStream,
 		model: custom ? stubModel : registryModel,
 	};
