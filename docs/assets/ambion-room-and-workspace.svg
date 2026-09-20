@@ -134,10 +134,10 @@
   <text x="1148" y="490" class="sans dim small">each row names its activation</text>
 
   <rect x="1132" y="540" width="232" height="124" rx="12" fill="#eef5f4" stroke="#bcd9d5" stroke-width="1"/>
-  <text x="1148" y="568" class="sans ink body" font-weight="700">Change log</text>
-  <text x="1148" y="592" class="sans dim small">one entry per change</text>
-  <text x="1148" y="610" class="sans dim small">keyed by activation</text>
-  <text x="1148" y="628" class="sans dim small">what changed in an exchange</text>
+  <text x="1148" y="568" class="sans ink body" font-weight="700">Audit log</text>
+  <text x="1148" y="592" class="sans dim small">one line per tool call</text>
+  <text x="1148" y="610" class="sans dim small">room, agent, tool, result</text>
+  <text x="1148" y="628" class="sans dim small">an agent reads it as a file</text>
 
   <text x="1132" y="710" class="sans dim small">The kernel reads none of this.</text>
   <text x="1132" y="730" class="sans dim small">Resources own it; the room names it.</text>
