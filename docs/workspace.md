@@ -251,6 +251,51 @@ A `use` callback must not await another `use`, `dispose`, or `destroy` call
 on the same owner. The owner serializes those operations, so such nesting
 would wait for the callback that is already running.
 
+## Write an append-only log
+
+**`openLog` writes JSON Lines to one file, and rotates it by size.** A log
+holds one active file and every file it has rotated, all under one root
+directory a caller names at open. `append` writes one JSON-compatible record
+as one line, and rotates the active file first when it has reached the byte
+threshold. A record is never split across a rotation.
+
+```ts
+import {
+  BACKGROUND_CONTEXT,
+  directoryBackend,
+  openLog,
+  openWorkspace,
+} from '@ambionframework/workspace';
+
+const drive = openWorkspace({ name: 'town', backend: directoryBackend('./data') });
+const host = { name: 'host', identity: 'Writes the room record.' };
+
+await drive.use(host, async (env) => {
+  const journal = openLog(env, { root: '/var/log/room', fileName: 'journal.jsonl' });
+  await journal.append({ kind: 'said', text: 'hi' }, BACKGROUND_CONTEXT);
+});
+```
+
+**A log stays inside its root.** `fileName` names one plain file, with no
+path separator, so a caller cannot point a log's writes outside `root`
+through the name. Two logs at two roots on one workspace never collide, so a
+host opens one log per concern: a room's full record, an audit trail, a
+metrics feed, each at its own path.
+
+**Rotation reads the directory, not memory.** `rotateBytes` sets the byte
+threshold, and the default is 8 MiB. Once the active file reaches it,
+`append` renames the active file to `<name>.<index><extension>` before it
+writes the new record, then starts a fresh active file at the original name.
+The index counts up from the highest one already on disk, so a log opened
+again after a restart keeps counting where the last run left off, with no
+in-memory count to lose. A log does not delete a rotated file; a host that
+wants retention lists the root and prunes its own way.
+
+**A log is one core over the workspace filesystem.** It runs on every
+backend, in memory or on a directory, the same way `read`, `write`, and `sql`
+do. `append` must run one call at a time over one log; a caller inside
+`use()` gets this for free from the owner's queue.
+
 ## Backends and limits
 
 `memoryBackend()` keeps files in process. Its optional seed writes files
