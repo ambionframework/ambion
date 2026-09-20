@@ -130,7 +130,7 @@ function closedExchangeView(
  * holds the respond activations the range woke and the summary activation,
  * which names `through`. Every attempt counts.
  */
-export function activationsInRange(
+function activationsInRange(
 	leases: ReadonlyMap<string, LeaseHold>,
 	from: Seq,
 	through: Seq,
@@ -142,7 +142,7 @@ export function activationsInRange(
 }
 
 /** The sum of what the activations in the range spent, or nothing when none recorded usage. */
-export function exchangeUsage(
+function exchangeUsage(
 	from: Seq,
 	through: Seq,
 	leases: ReadonlyMap<string, LeaseHold>,
