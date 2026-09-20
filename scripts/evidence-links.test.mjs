@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 
@@ -31,6 +31,23 @@ test('every relative Markdown link with a fragment resolves to a heading', () =>
 				anchorsOf(readFileSync(file, 'utf8')).has(fragment),
 				`${page}: ${target}#${fragment} matches no heading`,
 			);
+		}
+	}
+});
+
+test('a quoted section of a docs page names a heading that the page holds', () => {
+	for (const dir of ['docs', 'planning']) {
+		for (const name of readdirSync(join(root, dir)).filter((n) => n.endsWith('.md'))) {
+			const text = readFileSync(join(root, dir, name), 'utf8').replace(/\s+/g, ' ');
+			for (const [, page, heading] of text.matchAll(/`docs\/([\w-]+\.md)` "([^"]+)"/g)) {
+				const file = join(root, 'docs', page);
+				assert.ok(existsSync(file), `${dir}/${name}: docs/${page} does not exist`);
+				const headings = readFileSync(file, 'utf8')
+					.split('\n')
+					.filter((line) => /^#{1,6} /.test(line))
+					.map((line) => line.replace(/^#+ /, '').trim());
+				assert.ok(headings.includes(heading), `${dir}/${name}: docs/${page} has no "${heading}"`);
+			}
 		}
 	}
 });
