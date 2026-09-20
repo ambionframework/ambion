@@ -18,7 +18,7 @@ import type {
 	ViewResponse,
 	Wake,
 } from '../protocol.ts';
-import type { EndReason, FailureCause, Message, RoomNotification, Seq } from '../types.ts';
+import type { EndReason, ExecutionEvent, FailureCause, Message, Seq } from '../types.ts';
 import type { ExecutorSession, PassResult } from './executor.ts';
 import { renderLine, windowToLimit } from './render.ts';
 
@@ -200,14 +200,20 @@ export class AgentRunner implements SeatPort {
 				if (!(await this.needsRefresh(id, session, cancelled))) return last;
 			}
 		} catch (error) {
-			return this.broke(error);
+			return this.broke(id, error);
 		}
 	}
 
 	/** Record and report a room call this loop cannot recover from, as a transient failure. */
-	private broke(error: unknown): PassResult {
+	private broke(id: string, error: unknown): PassResult {
 		const broken = error instanceof Error ? error : new Error(String(error));
-		this.emit({ type: 'error', agent: this.context.seat, error: broken, cause: 'transient' });
+		this.emit({
+			type: 'error',
+			agent: this.context.seat,
+			activation: id,
+			error: broken,
+			cause: 'transient',
+		});
 		return { failed: true, cause: 'transient' };
 	}
 
@@ -478,7 +484,7 @@ export class AgentRunner implements SeatPort {
 		this.emit({ type: 'delivery_error', agent: this.context.seat, activation, operation, error });
 	}
 
-	private emit(event: RoomNotification): void {
+	private emit(event: ExecutionEvent): void {
 		try {
 			this.context.emit?.(event);
 		} catch {

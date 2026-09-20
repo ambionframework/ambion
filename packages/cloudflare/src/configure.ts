@@ -6,7 +6,7 @@
 import type {
 	AgentDefinition,
 	CreateRuntimeOptions,
-	RoomNotification,
+	ExecutionEvent,
 	Runtime,
 } from '@ambionframework/ambion';
 import { createRuntime } from '@ambionframework/ambion';
@@ -22,8 +22,8 @@ export interface SeatEvent {
 	room: string;
 	seat: string;
 	activation: string;
-	event: RoomNotification['type'];
-	operation?: Extract<RoomNotification, { type: 'delivery_error' }>['operation'];
+	event: ExecutionEvent['type'];
+	operation?: Extract<ExecutionEvent, { type: 'delivery_error' }>['operation'];
 	tool?: string;
 	error?: string;
 	at: string;

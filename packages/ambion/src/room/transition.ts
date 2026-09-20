@@ -28,9 +28,6 @@ import {
 	stampedSummary,
 } from './rules.verified.ts';
 
-/** A committed event includes the position assigned by the journal. */
-export type RoomEvent = Entry;
-
 type ProposedEvent<K extends Kind = Kind> = {
 	[P in K]: { kind: P; body: Bodies[P] };
 }[K];
@@ -84,7 +81,7 @@ export type ReconcileDecision = {
 };
 
 /** Live application and replay use the same event rules. */
-export function evolve(state: RoomState, event: RoomEvent, options: FoldOptions): RoomState {
+export function evolve(state: RoomState, event: Entry, options: FoldOptions): RoomState {
 	const base = baseOf(state);
 	applyEvent(base, event);
 	return project(base, options);

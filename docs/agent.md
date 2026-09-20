@@ -150,6 +150,7 @@ Nested routing lists and summary ranges follow the same rule.
 inside that notification are detached from the room and other listeners.
 Error notifications retain the original `Error` object, including its cause
 and provider-specific fields. Errors describe execution; they are not room facts.
+An execution event names its activation.
 
 **In-process transports have the same ownership boundary as remote calls.**
 The room captures commit and lease requests before awaiting work. Results and

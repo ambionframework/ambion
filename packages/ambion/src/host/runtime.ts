@@ -28,7 +28,7 @@ import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Executor } from '../execution/executor.ts';
 import { createExecutionServices } from '../execution/services.ts';
 import type { SeatPort, SeatRoom } from '../protocol.ts';
-import type { AgentDefinition, Clock, ModelResolver, RoomNotification } from '../types.ts';
+import type { AgentDefinition, Clock, ExecutionEvent, ModelResolver } from '../types.ts';
 
 /** A key nobody outside this file can name. `createRuntime` is the one place that casts past it. */
 declare const RUNTIME: unique symbol;
@@ -128,7 +128,7 @@ export interface SeatContext {
 	readonly seat: string;
 	/** Opens one session per activation. Pi today; a later model family gets its own. */
 	readonly executor: Executor;
-	readonly emit?: (event: RoomNotification) => void;
+	readonly emit?: (event: ExecutionEvent) => void;
 }
 
 /** A room the runtime keeps in its lifecycle registry. */
@@ -157,7 +157,7 @@ export interface ExecutionConnector {
 			readonly room: string;
 			readonly seat: string;
 			readonly definition: AgentDefinition;
-			readonly emit: (event: RoomNotification) => void;
+			readonly emit: (event: ExecutionEvent) => void;
 		},
 	): SeatPort;
 }

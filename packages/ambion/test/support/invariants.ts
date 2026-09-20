@@ -65,6 +65,7 @@ export async function invariants(
 	expect(new Set(keys).size).toBe(keys.length);
 	await summariesMatchCloses(messages, events, options.journals, session.name);
 	expect(errorsIn(events).length).toBeLessThanOrEqual(options.allowErrors ?? 0);
+	activationsMatchEvents(events);
 	expect(count(events, 'activation_start') + (options.inherited ?? 0)).toBe(
 		count(events, 'activation_end'),
 	);
@@ -72,6 +73,16 @@ export async function invariants(
 		count(events, 'exchange_closed'),
 	);
 	if (options.journals) await leased(session, options.journals);
+}
+
+/** Every execution event names the activation whose seat raised it. */
+function activationsMatchEvents(events: RoomNotification[]): void {
+	for (const event of events) {
+		if (!('activation' in event)) continue;
+		expect(event.activation.length).toBeGreaterThan(0);
+		const seat = 'agent' in event ? event.agent : event.author;
+		expect(decodeActivationId(event.activation)?.seat).toBe(seat);
+	}
 }
 
 async function summariesMatchCloses(
