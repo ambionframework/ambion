@@ -32,12 +32,7 @@ it('builds every entry the manifest names', async () => {
 	const { exports } = await manifest();
 	const config = await read('tsdown.config.ts');
 	const built = [...config.matchAll(/'(src\/[^']+)'/g)].map((m) => m[1]);
-	expect(built).toEqual([
-		'src/index.ts',
-		'src/hosting.ts',
-		'src/conformance.ts',
-		'src/testing.ts',
-	]);
+	expect(built).toEqual(['src/index.ts', 'src/hosting.ts', 'src/conformance.ts', 'src/testing.ts']);
 	// The manifest names every entry the build writes, so a merge that drops one fails here.
 	expect(Object.keys(exports).sort()).toEqual([
 		'.',

@@ -49,7 +49,6 @@ The core has four published entries:
 - `@ambionframework/ambion/testing` for the deterministic stream, clock, and
   wait that a test needs.
 
-
 The core imports no platform modules. Workspace filesystem code owns Node
 dependencies; Cloudflare code owns Durable Object integration.
 
