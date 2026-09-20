@@ -7,11 +7,15 @@
  * queued operation as the tool call it records, over the same `ExecutionEnv`,
  * so the entry and the call it describes never separate under concurrent
  * work, and a rotation never races another agent's write.
+ *
+ * The append and the rotation are `log.ts`'s shared mechanism. This module
+ * adds what is specific to a tool-call entry: the JSONL shape, a short
+ * fallback notice when the full entry will not serialize or will not fit,
+ * and reporting a write failure to `onError` instead of the tool call.
  */
 
-import { randomBytes } from 'node:crypto';
-import { posix } from 'node:path';
 import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
+import { appendLine, checkedLogPath, rotateIfDue } from './log.ts';
 
 /** Where the log lives when the caller names no path. */
 export const DEFAULT_AUDIT_LOG = '/workspace/audit.jsonl';
@@ -77,45 +81,25 @@ function line(entry: AuditEntry): string {
 }
 
 /**
- * The name a rotated file takes. The random suffix keeps two rotations in
- * the same millisecond from naming the same file, which would otherwise
- * drop the earlier one.
+ * Append one line, falling back to a short notice when the filesystem
+ * refuses the full entry (an oversized `write` call's content, past the
+ * room left on a bounded backend), so the call still leaves a trace. Rotates
+ * past `maxBytes` once whichever line landed.
  */
-function rotatedName(path: string): string {
-	const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-	return `${path}.${stamp}-${randomBytes(3).toString('hex')}`;
-}
-
-/**
- * Append one line, creating the parent directory first, and rotate past
- * `maxBytes`. A full entry that the filesystem refuses (an oversized
- * `write` call's content, past the room left on a bounded backend) falls
- * back to a short notice, so the call still leaves a trace.
- */
-async function append(
+async function recordEntry(
 	env: ExecutionEnv,
 	path: string,
 	maxBytes: number,
 	entry: AuditEntry,
 	context: Context,
 ): Promise<void> {
-	const made = await env.createDir(posix.dirname(path), { recursive: true }, context);
-	if (!made.ok) throw made.error;
-	const appended = await env.appendFile(path, line(entry), context);
-	if (!appended.ok) {
-		const fallback = await env.appendFile(
-			path,
-			notice(entry, 'RecordTooLarge', appended.error.message),
-			context,
-		);
-		if (!fallback.ok) throw fallback.error;
+	try {
+		await appendLine(env, path, line(entry), context);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		await appendLine(env, path, notice(entry, 'RecordTooLarge', message), context);
 	}
-	const info = await env.fileInfo(path, context);
-	if (!info.ok) throw info.error;
-	if (info.value.size >= maxBytes) {
-		const renamed = await env.renameFile(path, rotatedName(path), context);
-		if (!renamed.ok) throw renamed.error;
-	}
+	await rotateIfDue(env, path, maxBytes, context);
 }
 
 /**
@@ -124,16 +108,11 @@ async function append(
  * already lets one operation touch the filesystem at a time.
  */
 export function openAuditLog(options: AuditLogOptions = {}): AuditLog {
-	const path = options.path ?? DEFAULT_AUDIT_LOG;
-	if (!posix.isAbsolute(path)) {
-		// A relative path resolves against the calling agent's own home, so
-		// two agents would each write, and read, a different file.
-		throw new Error(`An audit log path must be absolute: '${path}'.`);
-	}
+	const path = checkedLogPath(options.path ?? DEFAULT_AUDIT_LOG, 'An audit log path');
 	const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
 	const record = async (env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void> => {
 		try {
-			await append(env, path, maxBytes, entry, context);
+			await recordEntry(env, path, maxBytes, entry, context);
 		} catch (error) {
 			reportError(options.onError, error);
 		}
