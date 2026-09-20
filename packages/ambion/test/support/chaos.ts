@@ -32,7 +32,7 @@ import {
 } from '../../src/index.ts';
 import type { LeaseChange } from '../../src/journal/events.ts';
 import { foldLeases, isLive } from '../../src/room/lease.ts';
-import { inProcessTransport } from '../../src/transport.ts';
+import { hostingOf, inProcessTransport } from '../../src/transport.ts';
 import {
 	agents,
 	assistant,
@@ -176,7 +176,7 @@ export class World {
 		this.crashes += 1;
 		this.dead = true;
 		this.off();
-		this.runtime.evict(this.name);
+		hostingOf(this.runtime).evict(this.name);
 	}
 
 	private host(): Runtime {

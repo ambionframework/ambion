@@ -18,7 +18,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { inProcessTransport } from '../src/transport.ts';
+import { hostingOf, inProcessTransport } from '../src/transport.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import {
 	assistantEnded,
@@ -653,7 +653,7 @@ describe('a room dropped from memory', () => {
 			runtime,
 			streamFn: scripted(byAgent({})),
 		});
-		runtime.evict(name);
+		hostingOf(runtime).evict(name);
 		expect((await participantsOf(session)).map((s) => s.name)).toEqual([
 			'alpha',
 			'beta',
@@ -689,7 +689,7 @@ describe('a room dropped from memory', () => {
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'go' });
 		await tick();
-		runtime.evict(session.name);
+		hostingOf(runtime).evict(session.name);
 		return { session, visit, exchange, opened, held };
 	}
 
@@ -738,7 +738,7 @@ describe('a room dropped from memory', () => {
 		});
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'go' });
-		runtime.evict(session.name);
+		hostingOf(runtime).evict(session.name);
 		await expect(exchange.waitForClose()).rejects.toThrow(/stopped|interrupted|evicted/i);
 		held.resolve();
 	});

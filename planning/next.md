@@ -126,8 +126,11 @@ the one before it and no file is reshaped twice.
        activation into one driver, `AgentRunner` (E2, F2). Delta passes wait
        on a later step; item 3 removes `stream`, `model`, and `transcripts`
        from `Runtime`. Needs 1.
-3. [ ] Brand `Runtime`; create the default on first use; narrow the
-       application view to `clock` and `storage` (B4). Needs 1.
+3. [x] Brand `Runtime`; create the default on first use; narrow the
+       application view to `clock` and `storage` (B4). `hostingOf(runtime)`
+       reaches the rest — the journal namespace, the model call, wake and
+       retry policy, and the room registry — and ships from `/transport`
+       until item 4 gives it its own entry. Needs 1.
 4. [ ] Two entries, `.` and `/hosting`; `/transport` removed; the export
        list of each entry asserted (B5). Needs 2 and 3, because hosting
        holds the driver and the executor types.

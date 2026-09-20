@@ -18,7 +18,7 @@ import {
 	type Runtime,
 	startRoom,
 } from '../../src/index.ts';
-import { inProcessTransport } from '../../src/transport.ts';
+import { hostingOf, inProcessTransport } from '../../src/transport.ts';
 import { fakeClock } from './clock.ts';
 import { invariants } from './invariants.ts';
 import { collect, messagesOf, participantsOf, roomName, waitForRoom } from './room.ts';
@@ -100,7 +100,7 @@ export async function finish(
 	events: ReturnType<typeof collect>,
 	runtime: Runtime,
 ): Promise<void> {
-	await invariants(session, events, { journals: runtime.journals });
+	await invariants(session, events, { journals: hostingOf(runtime).journals });
 	await session.stop();
 }
 

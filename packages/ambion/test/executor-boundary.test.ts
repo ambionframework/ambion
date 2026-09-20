@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createRuntime, defineAgent, pi, readRoom, resumeRoom, startRoom } from '../src/index.ts';
 import {
+	hostingOf,
 	inProcessTransport,
 	runningRoom,
 	type SeatContext,
@@ -154,7 +155,7 @@ describe.each(storages)('executor lifecycle on $name', (storage) => {
 			assertRoomCalls(old);
 			const firstExchange = await (await first.visit(andrei)).send({ text: 'First?' });
 			await firstExchange.waitForClose();
-			runtime.evict(name);
+			hostingOf(runtime).evict(name);
 			expect(runningRoom(runtime, name)).toBeUndefined();
 			resumed = await resumeRoom(name, { agents: [writer], runtime, streamFn: reply('New run.') });
 			const current = runningRoom(runtime, name);

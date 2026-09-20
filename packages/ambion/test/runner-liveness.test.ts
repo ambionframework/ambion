@@ -8,6 +8,7 @@ import {
 	type CommitRequest,
 	type CommitResult,
 	createPiExecutor,
+	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
 	type SeatRoom,
@@ -110,15 +111,15 @@ function fixture(
 	});
 	const executor = createPiExecutor({
 		definition: worker,
-		model: runtime.model,
-		stream: runtime.stream,
-		transcripts: runtime.transcripts,
+		model: hostingOf(runtime).model,
+		stream: hostingOf(runtime).stream,
+		transcripts: hostingOf(runtime).transcripts,
 		room: 'liveness',
 		now: () => clock.now(),
 	});
 	const actor = new AgentRunner(room, {
 		clock,
-		call: runtime.call,
+		call: hostingOf(runtime).call,
 		definition: worker,
 		room: 'liveness',
 		seat: worker.name,
@@ -138,7 +139,7 @@ const deaf: StreamFn = () => createAssistantMessageEventStream();
 describe('runner liveness', () => {
 	it('uses a ten second default timeout for room calls', () => {
 		const runtime = createRuntime({ clock: fakeClock(0) });
-		expect(runtime.call.timeout).toBe(10_000);
+		expect(hostingOf(runtime).call.timeout).toBe(10_000);
 	});
 
 	it('does not start an activation from an already-expired claim', async () => {

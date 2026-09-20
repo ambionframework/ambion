@@ -11,6 +11,7 @@ import {
 } from '../../src/index.ts';
 import type { RoomState } from '../../src/room/fold.ts';
 import { liveWork } from '../../src/room/reconcile.ts';
+import { hostingOf } from '../../src/transport.ts';
 
 /** A trivial assistant: every room seats one, and nothing that uses it tests what it writes. */
 export const assistant = defineAgent({
@@ -111,7 +112,7 @@ export const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
  * over it is the test of the design.
  */
 export function crash(runtime: Runtime, session: Room): void {
-	runtime.evict(session.name);
+	hostingOf(runtime).evict(session.name);
 }
 
 /** Every native entry the room wrote, in its storage order. */

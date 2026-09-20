@@ -9,6 +9,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import {
+	hostingOf,
 	inProcessTransport,
 	runningRoom,
 	type SeatContext,
@@ -200,7 +201,7 @@ describe('durable cancellation', () => {
 		});
 		const oldAbort = old.abort();
 		await cancelStarted.promise;
-		runtime.evict(name);
+		hostingOf(runtime).evict(name);
 		const nextRuntime = createRuntime({ storage: opened.storage });
 		const next = await resumeRoom(name, { agents: [worker], runtime: nextRuntime, streamFn: deaf });
 		try {
@@ -427,14 +428,14 @@ it('does not retry cancelled work after a restart', async () => {
 	const exchange = await visit.send({ text: 'do not retry' });
 	await visit.send({ text: 'pre-cut steering' });
 	await started.promise;
-	now += runtime.wake.expiry + 1;
+	now += hostingOf(runtime).wake.expiry + 1;
 	await room.abort();
 	await closesWithoutSummary(room, exchange.from);
 	const ended = [...stateOf(room).leases.values()].find(
 		(lease) => lease.phase === 'ended' && lease.reason === 'revoked',
 	);
 	expect(ended).toBeDefined();
-	runtime.evict(name);
+	hostingOf(runtime).evict(name);
 	const resumed = await resumeRoom(name, { runtime, agents: [worker], streamFn: stream });
 	try {
 		await waitForRoom(resumed);

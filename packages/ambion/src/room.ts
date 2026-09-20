@@ -5,6 +5,7 @@ import { captureAgent } from './define.ts';
 import { composeExecution } from './execution/compose.ts';
 import {
 	defaultRuntime,
+	hostingOf,
 	type Runtime,
 	registeredRoom,
 	registerRoom,
@@ -64,7 +65,7 @@ export interface ResumeRoomOptions {
 }
 
 export async function startRoom(options: StartRoomOptions): Promise<Room> {
-	const runtime = options.runtime ?? defaultRuntime;
+	const runtime = options.runtime ?? defaultRuntime();
 	assertFree(runtime, options.name);
 	const room = RoomHost.start(
 		options.name,
@@ -83,7 +84,7 @@ export async function startRoom(options: StartRoomOptions): Promise<Room> {
 }
 
 export async function resumeRoom(name: string, options: ResumeRoomOptions): Promise<Room> {
-	const runtime = options.runtime ?? defaultRuntime;
+	const runtime = options.runtime ?? defaultRuntime();
 	assertFree(runtime, name);
 	const room = RoomHost.resume(
 		name,
@@ -103,16 +104,17 @@ export async function resumeRoom(name: string, options: ResumeRoomOptions): Prom
 
 /** Observe a room's recorded state without requiring a running handle. */
 export async function readRoom(name: string, options: ReadRoomOptions = {}): Promise<RoomSnapshot> {
-	const runtime = options.runtime ?? defaultRuntime;
+	const runtime = options.runtime ?? defaultRuntime();
 	const messages = captureMessageSelection(options.messages);
 	const live = registeredRoom(runtime, name);
 	if (live instanceof RoomHost) return live.read({ messages });
-	const journal = roomJournal(runtime.journals.open(name));
+	const hosting = hostingOf(runtime);
+	const journal = roomJournal(hosting.journals.open(name));
 	await journal.ready;
 	await journal.settled();
 	return readView(
 		name,
-		foldRoom(journal.entries, runtime.retry),
+		foldRoom(journal.entries, hosting.retry),
 		runtime.clock.now(),
 		journal.lastSeq,
 		messages,

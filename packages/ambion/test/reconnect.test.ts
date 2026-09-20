@@ -15,6 +15,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
+import { hostingOf } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import { deferred, messagesOf, participantsOf, roomName, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
@@ -72,7 +73,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 				preferences: priya.preferences,
 			});
 
-			runtime.evict(name);
+			hostingOf(runtime).evict(name);
 			const resumed = await resumeRoom(name, {
 				agents: [watcher],
 				runtime: createRuntime({ clock, storage: opened.storage }),
@@ -137,7 +138,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			expect(left).toBeDefined();
 			expect(visit.since).toBe(left?.seq);
 
-			runtime.evict(name);
+			hostingOf(runtime).evict(name);
 			const resumed = await resumeRoom(name, {
 				agents: [],
 				runtime: createRuntime({ clock, storage: opened.storage }),
@@ -252,7 +253,7 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 				if (lifecycle === 'stop') {
 					await first.stop();
 				} else if (lifecycle === 'eviction') {
-					firstRuntime.evict(name);
+					hostingOf(firstRuntime).evict(name);
 				} else {
 					const secondRuntime = createRuntime({
 						clock,
@@ -307,7 +308,7 @@ describe.each(storages)('planned room shutdown on $name storage', (storage) => {
 			const crashName = roomName(`reconnect-stop-crash-${storage.name}`);
 			const crashed = await startRoom({ name: crashName, agents: [], runtime: crashRuntime });
 			await crashed.visit(priya);
-			crashRuntime.evict(crashName);
+			hostingOf(crashRuntime).evict(crashName);
 			expect(
 				(await readRoom(crashName, { runtime: createRuntime({ clock, storage: opened.storage }) }))
 					.participants,

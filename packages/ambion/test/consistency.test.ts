@@ -20,7 +20,7 @@ import {
 } from '../src/index.ts';
 import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
-import { inProcessTransport } from '../src/transport.ts';
+import { hostingOf, inProcessTransport } from '../src/transport.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
 import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
@@ -207,7 +207,7 @@ class Cluster {
 	/** The run dies and a fresh host resumes the name over the same journal. */
 	async crash(): Promise<void> {
 		this.bounded();
-		this.runtime.evict(this.name);
+		hostingOf(this.runtime).evict(this.name);
 		await this.takeover();
 	}
 
@@ -277,7 +277,7 @@ class Cluster {
 
 	/** Time jumps, the way a paused process sees it: a lease live across a jump past its expiry ends. */
 	async advance(ms: number): Promise<void> {
-		if (ms >= this.runtime.wake.expiry) {
+		if (ms >= hostingOf(this.runtime).wake.expiry) {
 			this.jumped += await liveLeases(this.opened.journals, this.name, this.clock.now());
 		}
 		await this.clock.advance(ms);

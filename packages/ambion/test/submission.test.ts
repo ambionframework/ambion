@@ -9,7 +9,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { inProcessTransport, type SeatPort, type Transport } from '../src/transport.ts';
+import { hostingOf, inProcessTransport, type SeatPort, type Transport } from '../src/transport.ts';
 import {
 	messagesOf,
 	participantsOf,
@@ -126,7 +126,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			await firstStarted;
 			await started.promise;
 
-			firstRuntime.evict(name);
+			hostingOf(firstRuntime).evict(name);
 			held.resolve();
 
 			const throwingRuntime = createRuntime({
@@ -145,7 +145,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 				2,
 			);
 
-			throwingRuntime.evict(name);
+			hostingOf(throwingRuntime).evict(name);
 			resumed = undefined;
 			const healthyRuntime = createRuntime({
 				storage: opened.storage,
@@ -236,7 +236,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			await visit.send({ to: agent.name, text: 'prime lease', key: 'submission-eviction-prime' });
 			await activation;
 			await started.promise;
-			firstRuntime.evict(name);
+			hostingOf(firstRuntime).evict(name);
 
 			let evicted = false;
 			const recording = recordingTransport(() => evicted);
@@ -262,7 +262,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			const off = resumed.subscribe((event) => {
 				if (event.type !== 'message' || event.message.key !== 'submission-eviction-trigger') return;
 				triggerSeq = event.message.seq;
-				failingRuntime.evict(name);
+				hostingOf(failingRuntime).evict(name);
 				evicted = true;
 			});
 
@@ -440,7 +440,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			await firstStarted;
 			await started.promise;
 
-			firstRuntime.evict(name);
+			hostingOf(firstRuntime).evict(name);
 			held.resolve();
 			const failingRuntime = createRuntime({
 				storage: opened.storage,

@@ -9,7 +9,7 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
-import { seatSessionId } from '../src/transport.ts';
+import { hostingOf, seatSessionId } from '../src/transport.ts';
 import { participantsOf, roomName, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted, speak } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
@@ -138,7 +138,7 @@ describe('participant views', () => {
 
 			const expectedId = JSON.stringify(['ambion/seat-session', room.name, 'writer']);
 			expect(seatSessionId(room.name, 'writer')).toBe(expectedId);
-			const transcript = await runtime.transcripts.open(expectedId);
+			const transcript = await hostingOf(runtime).transcripts.open(expectedId);
 			expect(await transcript.getMetadata()).toMatchObject({
 				id: expectedId,
 				parentSessionId: room.name,

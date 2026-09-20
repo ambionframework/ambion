@@ -8,7 +8,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { runningRoom, type SeatPort, type Wake } from '../src/transport.ts';
+import { hostingOf, runningRoom, type SeatPort, type Wake } from '../src/transport.ts';
 import {
 	deferred,
 	messagesOf,
@@ -183,7 +183,7 @@ it('does not retry an expired activation after an acknowledged stop and resume',
 		const visit = await room.visit(person);
 		await visit.send({ to: worker.name, text: 'hold this work' });
 		await started.promise;
-		time.advance(runtime.wake.expiry + 1);
+		time.advance(hostingOf(runtime).wake.expiry + 1);
 		await room.stop();
 
 		const resumed = await resumeRoom(name, { runtime, agents: [worker], streamFn: stream });
@@ -389,7 +389,7 @@ describe.each(storages)('stopped summary recovery on $name storage', (storage) =
 			const visit = await room.visit(person);
 			const exchange = await visit.send({ to: worker.name, text: 'summarise this' });
 			await drafted.promise;
-			time.advance(runtime.wake.expiry + 1);
+			time.advance(hostingOf(runtime).wake.expiry + 1);
 			await room.stop();
 
 			const resumed = await resumeRoom(name, {
@@ -612,7 +612,7 @@ it('fences a delayed old stop from revoking work in a newer run', async () => {
 		holdRevocation = true;
 		const stopping = old.stop();
 		await revocationStarted.promise;
-		runtime.evict(name);
+		hostingOf(runtime).evict(name);
 
 		const newer = await resumeRoom(name, {
 			runtime,

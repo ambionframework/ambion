@@ -11,6 +11,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import {
+	hostingOf,
 	inProcessTransport,
 	type SeatContext,
 	type SeatRoom,
@@ -101,8 +102,12 @@ describe('execution composition', () => {
 
 			expect(await spokenTexts(first)).toEqual(['First question?', 'First answer.']);
 			expect(await spokenTexts(second)).toEqual(['Second question?', 'Second answer.']);
-			const firstTranscript = await runtime.transcripts.open(seatSessionId(first.name, 'writer'));
-			const secondTranscript = await runtime.transcripts.open(seatSessionId(second.name, 'writer'));
+			const firstTranscript = await hostingOf(runtime).transcripts.open(
+				seatSessionId(first.name, 'writer'),
+			);
+			const secondTranscript = await hostingOf(runtime).transcripts.open(
+				seatSessionId(second.name, 'writer'),
+			);
 			expect(await firstTranscript.getMetadata()).toMatchObject({ parentSessionId: first.name });
 			expect(await secondTranscript.getMetadata()).toMatchObject({ parentSessionId: second.name });
 			expect(seatSessionId(first.name, 'writer')).not.toBe(seatSessionId(second.name, 'writer'));
@@ -218,7 +223,9 @@ describe('execution composition', () => {
 			expect(
 				wrappedCalls.some((call) => call.systemPrompt.includes(wrapped.executor.instructions)),
 			).toBe(true);
-			const transcript = await runtime.transcripts.open(seatSessionId(room.name, wrapped.name));
+			const transcript = await hostingOf(runtime).transcripts.open(
+				seatSessionId(room.name, wrapped.name),
+			);
 			expect(await transcript.getMetadata()).toMatchObject({
 				id: seatSessionId(room.name, wrapped.name),
 				parentSessionId: room.name,

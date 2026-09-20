@@ -10,6 +10,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import {
+	hostingOf,
 	inProcessTransport,
 	type LeaseRequest,
 	type SeatRoom,
@@ -168,18 +169,18 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			expect(first.from).toBeGreaterThan(0);
 			expect(deliveryErrors(events)).toHaveLength(1);
 
-			await clock.advance(runtime.wake.resend);
+			await clock.advance(hostingOf(runtime).wake.resend);
 			expect(deliveryErrors(events)).toHaveLength(1);
 
 			available = true;
-			await clock.advance(runtime.wake.resend);
+			await clock.advance(hostingOf(runtime).wake.resend);
 			await flush();
 			expect(deliveryErrors(events)).toHaveLength(1);
 
 			available = false;
 			await visit.send({ text: 'Try the recovered connection.' });
 			await flush();
-			await clock.advance(runtime.wake.resend);
+			await clock.advance(hostingOf(runtime).wake.resend);
 			await flush();
 			const errors = deliveryErrors(events);
 			expect(errors).toHaveLength(2);
@@ -322,7 +323,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			const activation = pending?.id;
 			if (activation === undefined) throw new Error('The test did not create pending work.');
 			crash(firstRuntime, first);
-			await clock.advance(firstRuntime.wake.deadline + 1);
+			await clock.advance(hostingOf(firstRuntime).wake.deadline + 1);
 
 			const recovered = inProcessTransport();
 			const transport: Transport = {
