@@ -80,7 +80,7 @@ function actorFor(
 	});
 	return new AgentRunner(room, {
 		clock,
-		call: hostingOf(runtime).call,
+		call: hostingOf(runtime).limits.call,
 		definition: product,
 		room: 'model-test',
 		seat: product.name,

@@ -81,7 +81,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 			createRuntime({
 				clock,
 				storage: opened.storage,
-				retry: { attempts: 1, backoff: () => 0 },
+				limits: { activation: { attempts: 1, backoff: () => 0 } },
 			});
 		const room = await startRoom({
 			name: roomName('exchange-terminal-replay'),
@@ -130,7 +130,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 			createRuntime({
 				clock,
 				storage: opened.storage,
-				retry: { attempts: 2, backoff: () => 1_000 },
+				limits: { activation: { attempts: 2, backoff: () => 1_000 } },
 			});
 		const firstRuntime = runtime();
 		const room = await startRoom({
@@ -312,7 +312,7 @@ describe('exchange completion handles', () => {
 				clock,
 				storage: opened.storage,
 				transport: inProcessTransport(),
-				retry: { attempts: 1, backoff: () => 0 },
+				limits: { activation: { attempts: 1, backoff: () => 0 } },
 			}),
 			agents: [alpha, beta, assistant],
 			summary: assistant.name,

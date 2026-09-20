@@ -14,7 +14,11 @@ it('reports audit failure while a remote seat completes its contribution', async
 		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', name, 'product'])),
 	);
 	const events: SeatEvent[] = [];
-	const defaults = { agents: [assistant, product, slow], stream: scripted, wake: { resend: 50 } };
+	const defaults = {
+		agents: [assistant, product, slow],
+		stream: scripted,
+		limits: { delivery: { resend: 50 } },
+	};
 	configure({ ...defaults, onSeatEvent: (event) => events.push(event) });
 	try {
 		await seat.hold(true);

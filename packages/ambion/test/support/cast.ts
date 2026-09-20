@@ -158,4 +158,6 @@ export const questions: readonly Question[] = [
 ];
 
 /** The lease and the backoff a room killed from outside runs with, and is resumed with. */
-export const TIMING = { wake: { expiry: 1_500 }, retry: { backoff: (n: number) => n * 300 } };
+export const TIMING = {
+	limits: { lease: { ttl: 1_500 }, activation: { backoff: (n: number) => n * 300 } },
+};

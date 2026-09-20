@@ -28,7 +28,10 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 	it('abandons a permanent failure in one attempt', async () => {
 		const opened = await storage.open();
 		let calls = 0;
-		const runtime = createRuntime({ storage: opened.storage, retry: { backoff: () => 0 } });
+		const runtime = createRuntime({
+			storage: opened.storage,
+			limits: { activation: { backoff: () => 0 } },
+		});
 		const room = await startRoom({
 			name: roomName(`perm-${storage.name}`),
 			agents: [worker],
@@ -60,7 +63,10 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 	it('does not read a rate-limit token count as a permanent status', async () => {
 		const opened = await storage.open();
 		let calls = 0;
-		const runtime = createRuntime({ storage: opened.storage, retry: { backoff: () => 0 } });
+		const runtime = createRuntime({
+			storage: opened.storage,
+			limits: { activation: { backoff: () => 0 } },
+		});
 		const room = await startRoom({
 			name: roomName(`ratelimit-${storage.name}`),
 			agents: [worker],
@@ -77,7 +83,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			const visit = await room.visit(person);
 			await visit.send({ to: worker.name, text: 'answer me' });
 			await waitForRoom(room);
-			expect(calls).toBe(hostingOf(runtime).retry.attempts);
+			expect(calls).toBe(hostingOf(runtime).limits.activation.attempts);
 			expect(abandonments(events)).toEqual([
 				expect.objectContaining({ agent: worker.name, cause: 'transient' }),
 			]);
@@ -90,7 +96,10 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 	it('retries a transient failure to the cap', async () => {
 		const opened = await storage.open();
 		let calls = 0;
-		const runtime = createRuntime({ storage: opened.storage, retry: { backoff: () => 0 } });
+		const runtime = createRuntime({
+			storage: opened.storage,
+			limits: { activation: { backoff: () => 0 } },
+		});
 		const room = await startRoom({
 			name: roomName(`transient-${storage.name}`),
 			agents: [worker],
@@ -108,7 +117,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			await waitForRoom(room);
 			// A transient failure may pass, so the room retries to the cap before it
 			// gives up.
-			expect(calls).toBe(hostingOf(runtime).retry.attempts);
+			expect(calls).toBe(hostingOf(runtime).limits.activation.attempts);
 			expect(abandonments(events)).toEqual([
 				expect.objectContaining({ agent: worker.name, cause: 'transient' }),
 			]);

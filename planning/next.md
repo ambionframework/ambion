@@ -141,8 +141,10 @@ the one before it and no file is reshaped twice.
        `ExecutionEvent` under one `subscribe` (B8). Needs 4.
        `RoomNotification` stays as the exported union of the two; C5 owns
        whether it keeps that name.
-7. [ ] One limits vocabulary (B3), with the `context`, `message`, and
+7. [x] One limits vocabulary (B3), with the `context`, `message`, and
        `trace` groups present and at their current defaults.
+       `AUDIT_ATTEMPTS` and `PASSES_PER_RECONCILE` stay module-private;
+       nothing tunes them.
 8. [ ] A `fixed` seat with the summary writer fixed by default (D4), and
        the sharp edges: room name validation, the unheld summary name,
        `opened` on the handle, idempotent host `seat`, prefixed key kinds

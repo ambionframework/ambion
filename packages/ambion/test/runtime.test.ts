@@ -14,16 +14,44 @@ import { childStorage, memory, sqlite } from './support/storage.ts';
 
 describe('createRuntime', () => {
 	it('refuses a retry cap below one attempt, which the verified cap rule requires', () => {
-		expect(() => createRuntime({ retry: { attempts: 0 } })).toThrow(/at least one attempt/);
-		expect(() => createRuntime({ retry: { attempts: 1.5 } })).toThrow(/positive integer/);
-		expect(hostingOf(createRuntime({ retry: { attempts: 1 } })).retry.attempts).toBe(1);
+		expect(() => createRuntime({ limits: { activation: { attempts: 0 } } })).toThrow(
+			/at least one attempt/,
+		);
+		expect(() => createRuntime({ limits: { activation: { attempts: 1.5 } } })).toThrow(
+			/positive integer/,
+		);
+		expect(
+			hostingOf(createRuntime({ limits: { activation: { attempts: 1 } } })).limits.activation
+				.attempts,
+		).toBe(1);
 	});
 
 	it('refuses a wake interval below one millisecond, so a resend and a claim always wait', () => {
-		expect(() => createRuntime({ wake: { resend: 0 } })).toThrow(/wake.resend/);
-		expect(() => createRuntime({ wake: { expiry: -1 } })).toThrow(/wake.expiry/);
-		expect(() => createRuntime({ wake: { deadline: Number.NaN } })).toThrow(/wake.deadline/);
-		expect(hostingOf(createRuntime({ wake: { resend: 1 } })).wake.resend).toBe(1);
+		expect(() => createRuntime({ limits: { delivery: { resend: 0 } } })).toThrow(
+			/limits.delivery.resend/,
+		);
+		expect(() => createRuntime({ limits: { lease: { ttl: -1 } } })).toThrow(/limits.lease.ttl/);
+		expect(() => createRuntime({ limits: { lease: { deadline: Number.NaN } } })).toThrow(
+			/limits.lease.deadline/,
+		);
+		expect(
+			hostingOf(createRuntime({ limits: { delivery: { resend: 1 } } })).limits.delivery.resend,
+		).toBe(1);
+	});
+
+	it('exposes every limit at its default, and an override keeps the rest of its group', () => {
+		const limits = hostingOf(createRuntime()).limits;
+		expect(limits.delivery).toEqual({ resend: 5_000 });
+		expect(limits.lease).toEqual({ ttl: 60_000, deadline: 600_000 });
+		expect(limits.activation.attempts).toBe(3);
+		expect([1, 2, 3].map(limits.activation.backoff)).toEqual([30_000, 60_000, 90_000]);
+		expect(limits.call).toEqual({ attempts: 2, timeout: 10_000 });
+		expect(limits.context).toEqual({ messages: Number.POSITIVE_INFINITY });
+		expect(limits.message).toEqual({ bytes: Number.POSITIVE_INFINITY });
+		expect(limits.trace).toEqual({ toolOutputBytes: 65_536, stepsPerPass: 1_000 });
+
+		const overridden = hostingOf(createRuntime({ limits: { lease: { ttl: 1 } } })).limits;
+		expect(overridden.lease).toEqual({ ttl: 1, deadline: 600_000 });
 	});
 
 	it('keeps two runtimes apart: one name runs in both, and neither reads the other', async () => {

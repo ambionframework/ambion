@@ -190,10 +190,14 @@ it('bounds recovery release and clears local state after an unknown result', asy
 		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', name, 'product'])),
 	);
 	const events: SeatEvent[] = [];
-	const defaults = { agents: [assistant, product, slow], stream: scripted, wake: { resend: 50 } };
+	const defaults = {
+		agents: [assistant, product, slow],
+		stream: scripted,
+		limits: { delivery: { resend: 50 } },
+	};
 	configure({
 		...defaults,
-		call: { attempts: 1, timeout: 10 },
+		limits: { ...defaults.limits, call: { attempts: 1, timeout: 10 } },
 		onSeatEvent: (event) => events.push(event),
 	});
 	try {
@@ -251,10 +255,14 @@ it('keeps newer metadata when a timed out recovery release replies late', async 
 		resolveLate = resolve;
 	});
 	const events: SeatEvent[] = [];
-	const defaults = { agents: [assistant, product, slow], stream: scripted, wake: { resend: 50 } };
+	const defaults = {
+		agents: [assistant, product, slow],
+		stream: scripted,
+		limits: { delivery: { resend: 50 } },
+	};
 	configure({
 		...defaults,
-		call: { attempts: 1, timeout: 10 },
+		limits: { ...defaults.limits, call: { attempts: 1, timeout: 10 } },
 		onSeatEvent: (event) => events.push(event),
 	});
 	try {

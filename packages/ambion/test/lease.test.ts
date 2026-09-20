@@ -66,14 +66,14 @@ afterEach(async () => {
 async function open(
 	faults: Fault[],
 	script: Script,
-	wake?: { expiry: number; deadline: number },
+	lease?: { ttl: number; deadline: number },
 	summary = false,
 ): Promise<{ session: Room; clock: FakeClock; runtime: Runtime }> {
 	const clock = fakeClock();
 	const runtime = createRuntime({
 		clock,
 		transport: faultyTransport(inProcessTransport(), faults, clock),
-		...(wake === undefined ? {} : { wake }),
+		...(lease === undefined ? {} : { limits: { lease } }),
 	});
 	const session = await startRoom({
 		name: roomName('lease'),
@@ -183,7 +183,7 @@ describe('a lease', () => {
 				await held.promise;
 				return quiet();
 			},
-			{ expiry: 60_000, deadline: 120_000 },
+			{ ttl: 60_000, deadline: 120_000 },
 		);
 		const events = collect(session);
 		const visit = await enter(session);
@@ -477,7 +477,7 @@ describe('a lease judged where its change is written', () => {
 		const runtime = createRuntime({
 			clock,
 			storage: opened.storage,
-			call: { timeout: 20_000 },
+			limits: { call: { timeout: 20_000 } },
 			transport: faultyTransport(
 				inProcessTransport(),
 				[

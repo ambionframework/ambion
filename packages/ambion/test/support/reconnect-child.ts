@@ -37,8 +37,7 @@ const clock = fakeClock(phase === 'start' ? 1_000 : 2_000);
 const runtime = createRuntime({
 	storage: sqliteJournals(nodeSql(database)),
 	clock,
-	wake: { expiry: 100, deadline: 1_000 },
-	retry: { backoff: () => 0 },
+	limits: { lease: { ttl: 100, deadline: 1_000 }, activation: { backoff: () => 0 } },
 	stream: scripted(async (_context, _agent, call) => {
 		if (phase === 'resume') return call === 1 ? speak('Recovered answer.') : quiet();
 		started.resolve();

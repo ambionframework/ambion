@@ -98,8 +98,7 @@ async function start(): Promise<void> {
 	const runtime = createRuntime({
 		storage,
 		transport: startTransport(),
-		wake: { expiry: 5_000, deadline: 120_000 },
-		retry: { backoff: () => 0 },
+		limits: { lease: { ttl: 5_000, deadline: 120_000 }, activation: { backoff: () => 0 } },
 	});
 	const room = await startRoom({ name, agents: [fast, slow], runtime });
 	diagnostics(room);
@@ -150,8 +149,7 @@ async function resume(): Promise<void> {
 	const runtime = createRuntime({
 		storage,
 		transport: inProcessTransport(),
-		wake: { expiry: 5_000, deadline: 120_000 },
-		retry: { backoff: () => 0 },
+		limits: { lease: { ttl: 5_000, deadline: 120_000 }, activation: { backoff: () => 0 } },
 	});
 	const room = await resumeRoom(name, { runtime, agents: [fast, slow] });
 	diagnostics(room);

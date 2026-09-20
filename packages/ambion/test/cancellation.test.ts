@@ -428,7 +428,7 @@ it('does not retry cancelled work after a restart', async () => {
 	const exchange = await visit.send({ text: 'do not retry' });
 	await visit.send({ text: 'pre-cut steering' });
 	await started.promise;
-	now += hostingOf(runtime).wake.expiry + 1;
+	now += hostingOf(runtime).limits.lease.ttl + 1;
 	await room.abort();
 	await closesWithoutSummary(room, exchange.from);
 	const ended = [...stateOf(room).leases.values()].find(

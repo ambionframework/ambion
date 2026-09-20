@@ -89,8 +89,7 @@ async function interrupted(storage: Storage): Promise<InterruptedRoom> {
 		storage: opened.storage,
 		clock,
 		transport: recording.transport,
-		wake: { expiry: 1_000, deadline: 10_000 },
-		retry: { backoff: () => 0 },
+		limits: { lease: { ttl: 1_000, deadline: 10_000 }, activation: { backoff: () => 0 } },
 	});
 	const name = roomName(`inherited-${storage.name}`);
 	const session = await startRoom({
@@ -193,8 +192,7 @@ describe.each(storages)('inherited leases on $name', (storage) => {
 				storage: state.opened.storage,
 				clock: state.clock,
 				transport: recording.transport,
-				wake: { expiry: 1_000, deadline: 10_000 },
-				retry: { backoff: () => 0 },
+				limits: { lease: { ttl: 1_000, deadline: 10_000 }, activation: { backoff: () => 0 } },
 			});
 			resumed = await resumeRoom(state.name, {
 				runtime: second,
@@ -242,8 +240,7 @@ describe.each(storages)('inherited leases on $name', (storage) => {
 				storage: state.opened.storage,
 				clock: state.clock,
 				transport: recording.transport,
-				wake: { expiry: 1_000, deadline: 10_000 },
-				retry: { backoff: () => 0 },
+				limits: { lease: { ttl: 1_000, deadline: 10_000 }, activation: { backoff: () => 0 } },
 			});
 			resumed = await resumeRoom(state.name, {
 				runtime: second,

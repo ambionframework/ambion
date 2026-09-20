@@ -244,8 +244,9 @@ pnpm --filter @ambionframework/ambion test:live test/live/restart.test.ts
 ```
 
 The fixture holds a lease claim response to make the interruption point
-observable. It uses a five-second expiry and zero retry backoff. It does not
-preserve a provider connection across the kill or claim exactly-once model execution.
+observable. It sets `limits.lease.ttl` to five seconds and
+`limits.activation.backoff` to zero. It does not preserve a provider
+connection across the kill or claim exactly-once model execution.
 
 ## Separate execution and the Cloudflare reference
 
@@ -283,9 +284,10 @@ Subscriptions belong to one host; 0.1.0 includes no durable subscription service
 across processes.
 
 **Transport deadlines and execution limits have different scopes.**
-`call.timeout` bounds each executor call to the room. `call.attempts` bounds
-claim and release retries. A lost answer can follow a successful remote write;
-the journal still decides which contributions were accepted.
+`limits.call.timeout` bounds each executor call to the room.
+`limits.call.attempts` bounds claim and release retries. A lost answer can
+follow a successful remote write; the journal still decides which
+contributions were accepted.
 
 Monitor `delivery_error` for failed or uncertain delivery. Unclaimed work stays
 pending and retries while eligible, including after a long shutdown. Execution
