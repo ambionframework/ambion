@@ -75,8 +75,9 @@ at the commit boundary.
 `ctx.activation` holds the id that every event and message of the activation
 carries. `ctx.exchange` holds the `owner` and `from` of the exchange that was
 open when the activation read the record. The value is provenance and grants
-no authority. A tool that needs the current word of the room calls the room.
-All three are absent for a call made outside a room.
+no authority. A tool that needs the current state of the room reads it through the
+`Room` handle it closes over. The room checks freshness at the commit
+boundary. All three are absent for a call made outside a room.
 
 **Spoken contributions require nonblank text.** The room refuses empty or
 whitespace-only human messages, agent messages, and summaries before writing.
