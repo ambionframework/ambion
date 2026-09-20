@@ -18,33 +18,30 @@ import {
 	type SummaryMessage,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import {
+	byAgent,
+	fakeClock,
+	isClosing,
+	quiet,
+	type Script,
+	scripted,
+	settled,
+	speak,
+} from '../src/testing.ts';
 import {
 	assistantEnded,
 	closedExchange,
 	collect,
 	currentExchange,
 	deferred,
+	exchangeClosed,
 	messageBefore,
 	messagesOf,
 	roomName as name,
 	participantsOf,
 	tick,
-	waitForRoom,
 } from './support/room.ts';
-import {
-	byAgent,
-	contextText,
-	insists,
-	isClosing,
-	quiet,
-	type Script,
-	scripted,
-	seat,
-	speak,
-	summarise,
-	toolNames,
-} from './support/scripted.ts';
+import { contextText, insists, seat, summarise, toolNames } from './support/scripted.ts';
 import { gatedJournals, memory } from './support/storage.ts';
 
 /** The ordinary assistant: it writes once, then ends its activation. */
@@ -154,8 +151,8 @@ function nextSummary(session: Room): Promise<SummaryMessage> {
 }
 
 /** Quiet: no seat is taking an activation, and the assistant owes nobody a message. */
-function quiescent(session: Room): Promise<void> {
-	return waitForRoom(session);
+async function quiescent(session: Room): Promise<void> {
+	await settled(session);
 }
 
 const summaries = (record: Message[]) => record.filter((m) => m.kind === 'summary');
@@ -365,13 +362,13 @@ describe('closing summaries', () => {
 
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'Can I tell the client Thursday?' });
-		await waitForRoom(session, 'settled');
+		await exchangeClosed(session);
 		// the assistant has read its range and is drafting against it
 		await tick();
 
 		const written = nextSummary(session);
 		await visit.send({ text: 'And the pump?' });
-		await waitForRoom(session, 'settled');
+		await exchangeClosed(session);
 		held.resolve();
 		const summary = await written;
 		await quiescent(session);
@@ -414,7 +411,7 @@ describe('closing summaries', () => {
 
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'Can I tell the client Thursday?' });
-		await waitForRoom(session, 'settled');
+		await exchangeClosed(session);
 		await tick();
 
 		// two arrivals move the record under the assistant, and wake nobody
@@ -491,7 +488,7 @@ describe('closing summaries', () => {
 		// a failed activation leaves the summary owed; an arrival is not the backoff passing
 		const written = nextSummary(session);
 		await session.visit(sam);
-		await waitForRoom(session, 'settled');
+		await exchangeClosed(session);
 		expect(summaries(await messagesOf(session))).toHaveLength(0);
 		// the room's own alarm writes it, once the backoff has passed
 		await clock.advance(30_000);
@@ -616,11 +613,11 @@ describe('closing summaries', () => {
 		const hers = await session.visit(priya);
 		const his = await session.visit(sam);
 		await hers.send({ text: 'Can I tell the client Thursday?' });
-		await waitForRoom(session, 'settled');
+		await exchangeClosed(session);
 		await tick();
 		// the assistant is drafting for priya; sam's exchange opens, runs and closes under it
 		await his.send({ text: 'What do my crews do at seven?' });
-		await waitForRoom(session, 'settled');
+		await exchangeClosed(session);
 		held.resolve();
 		await quiescent(session);
 
@@ -686,7 +683,7 @@ describe('closing summaries', () => {
 	it('is seated when the room starts, and an agent-only room never activates it', async () => {
 		const session = await open({ script: byAgent({ product: () => speak('working alone') }) });
 		const events = collect(session);
-		await waitForRoom(session);
+		await settled(session);
 		await quiescent(session);
 
 		const seat = (await participantsOf(session)).find((s) => s.name === 'assistant');
@@ -783,7 +780,7 @@ describe('closing summaries', () => {
 		// exchange remains durable, but its response rejects as failed.
 		await clock.advance(30_000);
 		await clock.advance(60_000);
-		await waitForRoom(session);
+		await settled(session);
 		expect(events.filter((e) => e.type === 'abandoned')).toHaveLength(1);
 		expect(summaries(await messagesOf(session))).toHaveLength(0);
 		await expect(exchange.waitForSummary()).rejects.toThrow(/interrupted/i);
@@ -804,7 +801,7 @@ describe('closing summaries', () => {
 		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
 		await drafting.promise;
 		await session.abort();
-		await waitForRoom(session);
+		await settled(session);
 		expect(summaries(await messagesOf(session))).toHaveLength(0);
 		expect(await currentExchange(session)).toBeUndefined();
 		await expect(exchange.waitForSummary()).rejects.toThrow(/interrupted/i);
@@ -835,7 +832,7 @@ describe('closing summaries', () => {
 	it('keeps the designated assistant apart from people', async () => {
 		const session = await open({ script: byAgent({}) });
 		await session.visit(priya);
-		await waitForRoom(session);
+		await settled(session);
 
 		const seats = await participantsOf(session);
 		expect(seats.find((s) => s.name === 'assistant')).toMatchObject({

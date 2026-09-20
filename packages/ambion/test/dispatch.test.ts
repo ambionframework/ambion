@@ -9,9 +9,8 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
-import { assistant, crash, deferred, roomName, stateOf, waitForRoom } from './support/room.ts';
-import { byAgent, quiet, scripted } from './support/scripted.ts';
+import { byAgent, fakeClock, quiet, scripted, settled } from '../src/testing.ts';
+import { assistant, crash, deferred, roomName, stateOf } from './support/room.ts';
 import { storages } from './support/storage.ts';
 
 const alpha = defineAgent({
@@ -81,7 +80,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 			const exchange = await (await room.visit(priya)).send({ text: 'Who can answer?' });
 			// No caller-driven reconciliation or clock advance starts these activations.
 			await Promise.all([alphaStarted.promise, assistantStarted.promise]);
-			await waitForRoom(room);
+			await settled(room);
 			expect(clock.now()).toBe(before);
 			expect(activations(transport.sent)).toEqual([
 				`message:${exchange.from}:alpha:1`,
@@ -127,7 +126,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 				agents: [alpha, beta, assistant],
 				stream: scripted(() => quiet()),
 			});
-			await waitForRoom(resumed);
+			await settled(resumed);
 			expect(clock.now()).toBe(before);
 			expect(activations(lost.sent)).toEqual(expected);
 			expect(activations(recovered.sent)).toEqual(expected);

@@ -13,9 +13,8 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../../src/index.ts';
-import { fakeClock } from './clock.ts';
+import { fakeClock, quiet, scripted, speak } from '../../src/testing.ts';
 import { messagesOf } from './room.ts';
-import { quiet, scripted, speak } from './scripted.ts';
 import { nodeSql } from './storage.ts';
 
 const [phase, directory] = process.argv.slice(2);

@@ -2,8 +2,9 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { expect, it, vi } from 'vitest';
 import { defineAgent, defineTool, fromPiTool, pi, startRoom } from '../src/index.ts';
-import { enter, roomName, waitForRoom } from './support/room.ts';
-import { callTool, quiet, scripted, toolResultTexts } from './support/scripted.ts';
+import { callTool, quiet, scripted, settled } from '../src/testing.ts';
+import { enter, roomName } from './support/room.ts';
+import { toolResultTexts } from './support/scripted.ts';
 
 const parameters = Type.Object({ count: Type.Number() });
 
@@ -108,7 +109,7 @@ it('prepares native arguments once per call and validates before execution', asy
 	try {
 		const visit = await enter(room);
 		await visit.send({ text: 'Count.' });
-		await waitForRoom(room);
+		await settled(room);
 		expect(prepareArguments).toHaveBeenCalledTimes(2);
 		expect(execute).toHaveBeenCalledTimes(1);
 		expect(execute.mock.calls[0]?.[1]).toEqual({ count: 7 });

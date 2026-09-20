@@ -2,8 +2,9 @@ import type { JournalOpener } from '@ambionframework/journal';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { createRuntime, defineAgent, defineTool, pi, startRoom } from '../src/index.ts';
-import { deferred, messagesOf, participantsOf, roomName, waitForRoom } from './support/room.ts';
-import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
+import { callTool, quiet, scripted, settled } from '../src/testing.ts';
+import { deferred, messagesOf, participantsOf, roomName } from './support/room.ts';
+import { toolNames } from './support/scripted.ts';
 import { faultyJournals, gatedJournals, memory, tappedJournals } from './support/storage.ts';
 
 const agent = (name: string, tool: string, calls: string[]) =>
@@ -102,7 +103,7 @@ describe('membership writes with fixed definitions', () => {
 			hold = false;
 			gate.resolve();
 			await seating;
-			await waitForRoom(session);
+			await settled(session);
 			expect(calls).toEqual(['chosen']);
 		} finally {
 			hold = false;
@@ -128,7 +129,7 @@ describe('membership writes with fixed definitions', () => {
 			faulty.fail('after', 'message');
 			await expect(session.seat(chosen.name)).rejects.toThrow(/disk is full/);
 			faulty.fail(false);
-			await waitForRoom(session);
+			await settled(session);
 			expect((await participantsOf(session)).map((participant) => participant.name)).toContain(
 				chosen.name,
 			);
@@ -168,7 +169,7 @@ describe('membership writes with fixed definitions', () => {
 				await expect(session.seat(chosen.name)).rejects.toThrow(/disk is full/);
 				unreadable.fail(false);
 				await session.seat(chosen.name);
-				await waitForRoom(session);
+				await settled(session);
 				expect(calls).toEqual(['chosen']);
 				expect(
 					(await messagesOf(session)).filter((message) => message.kind === 'seated'),

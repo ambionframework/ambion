@@ -12,6 +12,14 @@ import {
 	startRoom,
 	type ToolContext,
 } from '@ambionframework/ambion';
+import {
+	byAgent,
+	callTool,
+	quiet,
+	type Script,
+	scripted,
+	speak,
+} from '@ambionframework/ambion/testing';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import type { Context } from '@earendil-works/pi-ai';
@@ -20,14 +28,6 @@ import { Bash, InMemoryFs } from 'just-bash';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { enter, roomName as name } from '../../ambion/test/support/room.ts';
-import {
-	byAgent,
-	callTool,
-	quiet,
-	type Script,
-	scripted,
-	speak,
-} from '../../ambion/test/support/scripted.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
 import type { WorkspaceBackend } from '../src/index.ts';
 import {

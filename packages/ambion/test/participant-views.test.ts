@@ -13,8 +13,9 @@ import {
 import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { viewOf } from '../src/room/view.ts';
-import { participantsOf, roomName, waitForRoom } from './support/room.ts';
-import { contextText, quiet, scripted, speak } from './support/scripted.ts';
+import { quiet, scripted, settled, speak } from '../src/testing.ts';
+import { participantsOf, roomName } from './support/room.ts';
+import { contextText } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const writer = (instructions = 'Answer the room.') =>
@@ -48,7 +49,7 @@ describe('participant views', () => {
 			);
 			const exchange = await visit.send({ text: 'Question?' });
 			await exchange.waitForClose();
-			await waitForRoom(room);
+			await settled(room);
 
 			const participants = await participantsOf(room);
 			for (const participant of participants) {

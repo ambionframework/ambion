@@ -10,6 +10,7 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
+import { quiet, scripted, settled } from '../src/testing.ts';
 import { refusal } from './support/errors.ts';
 import {
 	andrei,
@@ -20,9 +21,8 @@ import {
 	messagesOf,
 	roomName as name,
 	participantsOf,
-	waitForRoom,
 } from './support/room.ts';
-import { contextText, quiet, scripted } from './support/scripted.ts';
+import { contextText } from './support/scripted.ts';
 import { type FaultyJournals, faultyJournals, memory } from './support/storage.ts';
 
 // -- a room that never speaks ------------------------------------------------
@@ -83,7 +83,7 @@ const lastSystemPrompt = () => prompts.at(-1) ?? '';
 describe('presence', () => {
 	it('runs a room of agents with nobody present, and settles', async () => {
 		const session = track(await open());
-		await waitForRoom(session);
+		await settled(session);
 		expect(await messagesOf(session)).toHaveLength(0);
 		expect((await participantsOf(session)).filter((s) => s.kind === 'human')).toHaveLength(0);
 	});
@@ -92,7 +92,7 @@ describe('presence', () => {
 		const session = track(await open());
 		const seen = collect(session);
 		await session.visit(andrei);
-		await waitForRoom(session);
+		await settled(session);
 
 		expect(await kinds(session)).toEqual(['arrived']);
 		expect(seen.some((e) => e.type === 'activation_start')).toBe(false);
@@ -118,7 +118,7 @@ describe('presence', () => {
 		);
 		const seen = collect(session);
 		await session.visit(andrei);
-		await waitForRoom(session);
+		await settled(session);
 
 		const woke = seen.filter((e) => e.type === 'activation_start').map((e) => e.agent);
 		expect(woke).toEqual(['greeter']); // not watcher, not the passive seat
@@ -143,7 +143,7 @@ describe('presence', () => {
 		await providerStarted.promise;
 		await session.visit(mara); // arrives while it works
 		held.resolve();
-		await waitForRoom(session);
+		await settled(session);
 
 		// the arrival never woke a second activation; it landed inside the running one
 		expect(await kinds(session)).toEqual(['arrived', 'said', 'arrived']);
@@ -153,7 +153,7 @@ describe('presence', () => {
 	it('carries no text on a presence message, and stamps from the visit', async () => {
 		const session = track(await open());
 		await session.visit(andrei);
-		await waitForRoom(session);
+		await settled(session);
 
 		const arrival = (await messagesOf(session))[0];
 		expect(arrival).toMatchObject({ kind: 'arrived', from: 'andrei', subject: 'andrei' });
@@ -167,7 +167,7 @@ describe('presence', () => {
 		const two = await session.visit(mara);
 		await one.send({ text: 'from andrei' });
 		await two.send({ text: 'from mara' });
-		await waitForRoom(session);
+		await settled(session);
 
 		const said = (await messagesOf(session)).filter(isSpoken);
 		expect(said.map((m) => [m.from, m.text])).toEqual([
@@ -181,13 +181,13 @@ describe('presence', () => {
 		const seen = collect(session);
 		const terminal = await session.visit(andrei);
 		const browser = await session.visit(andrei);
-		await waitForRoom(session);
+		await settled(session);
 		expect(browser.human).toBe(terminal.human); // one person is in the room once, or not at all
 		expect(await kinds(session)).toEqual(['arrived']); // the second visit committed nothing
 		expect(await presenceOf(session, 'andrei')).toBe('present');
 
 		await terminal.leave();
-		await waitForRoom(session);
+		await settled(session);
 		expect(await presenceOf(session, 'andrei')).toBe('absent');
 		expect(await kinds(session)).toEqual(['arrived', 'left']);
 		// leaving is a message like any other, and the stream carries it
@@ -208,9 +208,9 @@ describe('presence', () => {
 		});
 		const visit = await first.visit(andrei);
 		await visit.send({ text: 'noting that I was here' });
-		await waitForRoom(first);
+		await settled(first);
 		await visit.leave();
-		await waitForRoom(first);
+		await settled(first);
 		expect(await presenceOf(first, 'andrei')).toBe('absent');
 		// absent, and still on the roster the agents read
 		expect(contexts.at(-1)).toContain('andrei');
@@ -225,7 +225,7 @@ describe('presence', () => {
 				runtime,
 			}),
 		);
-		await waitForRoom(again); // startRoom is synchronous; the replay is awaited here
+		await settled(again); // startRoom is synchronous; the replay is awaited here
 		expect(await presenceOf(again, 'andrei')).toBe('absent');
 		expect((await participantsOf(again)).find((s) => s.name === 'andrei')?.identity).toBe(
 			andrei.identity,
@@ -248,7 +248,7 @@ describe('presence', () => {
 
 		await first.send({ text: 'before' });
 		await first.leave();
-		await waitForRoom(session);
+		await settled(session);
 		const left = (await messagesOf(session)).find((m) => m.kind === 'left');
 
 		const again = await session.visit(andrei);
@@ -257,7 +257,7 @@ describe('presence', () => {
 		expect(again.lastDeparture).toBe(left?.seq); // it does not move while they read
 
 		await again.leave();
-		await waitForRoom(session);
+		await settled(session);
 		const second = (await messagesOf(session)).filter((m) => m.kind === 'left').at(-1);
 		const back = await session.visit(andrei);
 		expect(back.lastDeparture).toBe(second?.seq); // it moves when they leave again
@@ -271,7 +271,7 @@ describe('presence', () => {
 		const left = (await messagesOf(session)).find((m) => m.kind === 'left');
 		const again = await session.visit(andrei);
 		await again.send({ text: 'two' });
-		await waitForRoom(session);
+		await settled(session);
 
 		const missed = await messagesOf(session, { since: again.lastDeparture });
 		expect(missed.map((m) => m.kind)).toEqual(['arrived', 'said']);
@@ -282,7 +282,7 @@ describe('presence', () => {
 	it('closes its visits when the run stops, without waking anybody', async () => {
 		const session = await open();
 		const visit = await session.visit(andrei);
-		await waitForRoom(session);
+		await settled(session);
 		const seen = collect(session);
 
 		await session.stop();
@@ -307,7 +307,7 @@ describe('presence', () => {
 		});
 		const visit = await session.visit(andrei);
 		await visit.send({ text: 'for later' });
-		await waitForRoom(session);
+		await settled(session);
 		await session.stop();
 
 		const view = await readRoom(name, { runtime });
@@ -327,15 +327,15 @@ describe('presence', () => {
 		const visit = await session.visit(andrei);
 		await visit.send({ text: 'kicking this off' });
 		await visit.leave();
-		await waitForRoom(session);
+		await settled(session);
 
 		const later = await session.visit(mara);
 		await later.send({ text: 'while andrei is away' });
-		await waitForRoom(session);
+		await settled(session);
 
 		const back = await session.visit(andrei);
 		await back.send({ text: 'what moved?' }); // quiet arrivals wake nobody
-		await waitForRoom(session);
+		await settled(session);
 		expect(back.lastDeparture).toBeDefined();
 
 		const view = contexts.at(-1) ?? '';
@@ -351,7 +351,7 @@ describe('presence', () => {
 		const withGoal = track(await open({ goal: 'Ship payments v2.' }));
 		const gv = await withGoal.visit(andrei);
 		await gv.send({ text: 'anything' }); // arrivals wake nobody, so ask
-		await waitForRoom(withGoal);
+		await settled(withGoal);
 		const prompted = lastSystemPrompt();
 		expect(prompted).toContain('This room exists to: Ship payments v2.');
 		expect(prompted).toContain('Who is reading can change while you work');
@@ -360,7 +360,7 @@ describe('presence', () => {
 		const without = track(await open());
 		const wv = await without.visit(andrei);
 		await wv.send({ text: 'anything' });
-		await waitForRoom(without);
+		await settled(without);
 		const bare = lastSystemPrompt();
 		expect(bare).not.toContain('This room exists to:');
 		// the audience paragraph is about routing, not purpose, so it needs no goal
@@ -414,7 +414,7 @@ describe('a storage that fails', () => {
 		const { session, fail } = await brittle();
 		const events = collect(session);
 		const visit = await session.visit(andrei);
-		await waitForRoom(session);
+		await settled(session);
 		// the close is the one write that fails
 		fail(true, 'close');
 		await visit.send({ text: 'first?' });
@@ -427,7 +427,7 @@ describe('a storage that fails', () => {
 		// the storage mends, the seats work and stop again, and the close is written then
 		fail(false);
 		await visit.send({ text: 'still there?' });
-		await waitForRoom(session);
+		await settled(session);
 		expect(await currentExchange(session)).toBeUndefined();
 		const closed = events.filter((e) => e.type === 'exchange_closed');
 		expect(closed).toHaveLength(1);

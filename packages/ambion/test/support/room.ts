@@ -11,7 +11,7 @@ import {
 	type Runtime,
 } from '../../src/index.ts';
 import type { RoomState } from '../../src/room/fold.ts';
-import { liveWork } from '../../src/room/reconcile.ts';
+import { settled } from '../../src/testing.ts';
 
 /** A trivial assistant: every room seats one, and nothing that uses it tests what it writes. */
 export const assistant = defineAgent({
@@ -34,8 +34,21 @@ export const roomName = (prefix: string) => `${prefix}-${++unique}`;
  */
 export async function enter(session: Room, who = andrei) {
 	const visit = await session.visit(who);
-	await waitForRoom(session, 'settled');
+	await settled(session);
 	return visit;
+}
+
+/**
+ * The room has closed its open exchange. The summary of that exchange may
+ * still be owed. A test that asserts on the state between the close and the
+ * summary waits here; every other test waits on `settled`.
+ */
+export async function exchangeClosed(room: Pick<Room, 'name' | 'read'>, timeout = 10_000) {
+	const deadline = Date.now() + timeout;
+	while ((await room.read({ messages: false })).exchange !== undefined) {
+		if (Date.now() > deadline) throw new Error(`Room '${room.name}' kept its exchange open.`);
+		await tick();
+	}
 }
 
 export const collect = (session: Pick<Room, 'subscribe'>) => {
@@ -62,27 +75,6 @@ export function closedExchange(room: Room, from: number) {
 /** Running leases are activations inherited before this run could emit a start. */
 export function runningLeases(room: Room): number {
 	return [...stateOf(room).leases.values()].filter((lease) => lease.phase === 'running').length;
-}
-
-/** Wait for the folded room to reach the completion boundary under test. */
-export async function waitForRoom(
-	room: Room,
-	scope: 'settled' | 'quiet' = 'quiet',
-	timeoutMs = 150_000,
-): Promise<void> {
-	const internal = room as Room & {
-		state(): RoomState;
-		runtime: Runtime;
-	};
-	const deadline = Date.now() + timeoutMs;
-	while (Date.now() < deadline) {
-		await room.reconcile();
-		await tick();
-		await room.read({ messages: false });
-		const work = liveWork(internal.state(), internal.runtime.clock.now());
-		if (scope === 'settled' ? !work.exchange : work.rest) return;
-	}
-	throw new Error(`The room did not reach ${scope}.`);
 }
 
 export async function messagesOf(

@@ -172,8 +172,10 @@ async function assistantFixture(destination) {
 		join(destination, 'src', 'assistant.ts'),
 		`import assert from 'node:assert/strict';
 import { createRuntime, defineAgent, resumeRoom, startRoom, type AgentDefinition } from '@ambionframework/ambion';
+import { quiet } from '@ambionframework/ambion/testing';
 import { defineAssistant } from '@ambionframework/assistant';
 
+assert.equal(quiet().stopReason, 'stop');
 const assistant: AgentDefinition = defineAssistant({
   name: 'coordinator',
   model: 'test/model',

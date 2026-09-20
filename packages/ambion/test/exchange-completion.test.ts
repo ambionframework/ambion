@@ -11,7 +11,16 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import {
+	byAgent,
+	fakeClock,
+	isClosing,
+	quiet,
+	type Script,
+	scripted,
+	settled,
+	speak,
+} from '../src/testing.ts';
 import {
 	assistantEnded,
 	closedExchange,
@@ -21,19 +30,8 @@ import {
 	roomName,
 	stateOf,
 	storedOf,
-	waitForRoom,
 } from './support/room.ts';
-import {
-	byAgent,
-	contextText,
-	isClosing,
-	quiet,
-	type Script,
-	says,
-	scripted,
-	speak,
-	summarise,
-} from './support/scripted.ts';
+import { contextText, says, summarise } from './support/scripted.ts';
 import { faultyJournals, memory, storages } from './support/storage.ts';
 
 const assistant = defineAgent({
@@ -96,7 +94,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 		let resumed: Room | undefined;
 		try {
 			const exchange = await (await room.visit(priya)).send({ text: 'Result?' });
-			await waitForRoom(room);
+			await settled(room);
 			expect(closedExchange(room, exchange.from)?.summary).toEqual(assistant.name);
 			await expectOutcome(exchange, outcome);
 			await room.stop();
@@ -113,7 +111,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 			if (recovered === undefined) throw new Error('Expected the recorded exchange.');
 			await expectOutcome(recovered, outcome);
 			await clock.advance(120_000);
-			await waitForRoom(resumed);
+			await settled(resumed);
 			expect(stateOf(resumed).owed).toEqual([]);
 			expect(calls).toBe(0);
 		} finally {
@@ -156,20 +154,20 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 			});
 			const recovered = resumed.exchange(exchange.from);
 			if (recovered === undefined) throw new Error('Expected the recorded exchange.');
-			let settled = false;
+			let resolved = false;
 			const response = recovered.waitForSummary().then((message) => {
-				settled = true;
+				resolved = true;
 				return message;
 			});
 			await clock.advance(999);
-			expect(settled).toBe(false);
+			expect(resolved).toBe(false);
 			expect(stateOf(resumed).owed).toHaveLength(1);
 			await clock.advance(1);
 			await expect(response).resolves.toMatchObject({
 				text: 'Recorded result.',
 				covers: { from: exchange.from, through: closedExchange(resumed, exchange.from)?.through },
 			});
-			await waitForRoom(resumed);
+			await settled(resumed);
 			expect(stateOf(resumed).owed).toEqual([]);
 		} finally {
 			await resumed?.stop();

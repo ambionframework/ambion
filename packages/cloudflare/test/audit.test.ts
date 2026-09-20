@@ -3,7 +3,7 @@ import type { Message } from '@ambionframework/ambion';
 import type { JournalOpener } from '@ambionframework/journal';
 import { expect, it } from 'vitest';
 import { configure, type SeatEvent } from '../src/configure.ts';
-import { scripted } from './scripted.ts';
+import { stream } from './answers.ts';
 import { until } from './until.ts';
 import { assistant, product, slow } from './worker.ts';
 
@@ -16,7 +16,7 @@ it('reports audit failure while a remote seat completes its contribution', async
 	const events: SeatEvent[] = [];
 	const defaults = {
 		agents: [assistant, product, slow],
-		stream: scripted,
+		stream,
 		limits: { delivery: { resend: 50 } },
 	};
 	configure({ ...defaults, onSeatEvent: (event) => events.push(event) });

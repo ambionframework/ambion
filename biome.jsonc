@@ -92,6 +92,7 @@
 		//   answers.ts                    what the room answers a seat's three calls with
 		//   tools/                        the workspace port, and the four tools over it
 		//   execution/                   the execution side of the wire and its services
+		//   testing/                     the deterministic test tools, over the vocabulary and the public room types
 		//   room.ts                     the room facade, which composes them all
 		//
 		// `docs/toolchain.md` §1 names the layers; each override below refuses
@@ -336,6 +337,35 @@
 											"@ambionframework/pi-journal"
 										],
 										"message": "A conformance suite drives the wire from outside: no log, no fold, no seat, no model."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// The test tools read the vocabulary and the public room types.
+			"includes": ["packages/ambion/src/testing/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"../journal/*",
+											"../room/*",
+											"../host/*",
+											"../execution/*",
+											"../room.ts",
+											"../index.ts",
+											"../hosting.ts"
+										],
+										"message": "The test tools read the vocabulary and the public room types, and nothing that runs a room."
 									}
 								]
 							}

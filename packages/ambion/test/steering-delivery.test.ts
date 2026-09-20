@@ -7,9 +7,9 @@ import {
 	type Wake,
 } from '../src/hosting.ts';
 import { createRuntime, defineAgent, defineHuman, pi, startRoom } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
-import { assistant, deferred, messagesOf, roomName, stateOf, waitForRoom } from './support/room.ts';
-import { byAgent, contextText, quiet, scripted } from './support/scripted.ts';
+import { byAgent, fakeClock, quiet, scripted, settled } from '../src/testing.ts';
+import { assistant, deferred, messagesOf, roomName, stateOf } from './support/room.ts';
+import { contextText } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const alpha = defineAgent({
@@ -117,9 +117,9 @@ describe.each(storages)('messages across activation completion on $name', (stora
 				// A delayed transport operation must not enter the later activation.
 				if (delivery === 'late') await observed.deliver[0]?.();
 				nextRelease.resolve();
-				await waitForRoom(room);
+				await settled(room);
 				if (delivery === 'late') await observed.deliver[0]?.();
-				await waitForRoom(room);
+				await settled(room);
 				expect(contexts).toHaveLength(2);
 				expect(contexts[0]).not.toContain('Keep this final correction.');
 				expect(contexts[1]?.split('Keep this final correction.')).toHaveLength(2);
@@ -171,7 +171,7 @@ describe.each(storages)('messages across activation completion on $name', (stora
 			await observed.deliver[1]?.();
 			await observed.deliver[0]?.();
 			release.resolve();
-			await waitForRoom(room);
+			await settled(room);
 			expect(contexts.at(-1)).toContain('First correction.');
 			expect(contexts.at(-1)).toContain('Second correction.');
 			expect(observed.wakes).toHaveLength(1);

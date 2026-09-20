@@ -16,9 +16,8 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock, quiet, scripted } from '../src/testing.ts';
 import { crash, deferred, roomName, stateOf } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const worker = defineAgent({

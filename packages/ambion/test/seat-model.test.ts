@@ -13,9 +13,8 @@ import {
 	type ViewResponse,
 } from '../src/hosting.ts';
 import { type Clock, createRuntime, defineAgent, pi } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock, quiet, scripted } from '../src/testing.ts';
 import { tick } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
 
 const product = defineAgent({
 	name: 'product',

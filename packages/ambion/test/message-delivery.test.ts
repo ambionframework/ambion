@@ -9,7 +9,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { byAgent, fakeClock, quiet, scripted, settled } from '../src/testing.ts';
 import {
 	assistant,
 	assistantEnded,
@@ -19,9 +19,8 @@ import {
 	messagesOf,
 	roomName,
 	stateOf,
-	waitForRoom,
 } from './support/room.ts';
-import { byAgent, contextText, quiet, says, scripted, summarise } from './support/scripted.ts';
+import { contextText, says, summarise } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const alpha = defineAgent({
@@ -100,7 +99,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 				[...stateOf(room).leases.values()].find((lease) => lease.phase === 'running')?.id,
 			);
 			release.resolve();
-			await waitForRoom(room);
+			await settled(room);
 			expect(contexts.slice(1).some((text) => text.includes('The requirement has changed.'))).toBe(
 				true,
 			);
@@ -171,7 +170,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 				expect.arrayContaining([expect.objectContaining({ seat: alpha.name, seq: update?.seq })]),
 			);
 			await clock.advance(1_000);
-			await waitForRoom(resumed);
+			await settled(resumed);
 			expect(contexts.some((text) => text.includes('Recover this unconsumed context.'))).toBe(true);
 			expect(stateOf(resumed).pending).toEqual([]);
 		} finally {
@@ -237,7 +236,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 					.map((steer) => steer.seat),
 			).toEqual(['beta']);
 			betaRelease.resolve();
-			await waitForRoom(room);
+			await settled(room);
 		} finally {
 			summaryRelease.resolve();
 			betaRelease.resolve();

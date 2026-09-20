@@ -11,6 +11,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
+import { callTool, quiet, scripted, settled } from '../src/testing.ts';
 import {
 	crash,
 	deferred,
@@ -19,9 +20,7 @@ import {
 	roomName,
 	stateOf,
 	storedOf,
-	waitForRoom,
 } from './support/room.ts';
-import { callTool, quiet, scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const alpha = defineAgent({
@@ -101,7 +100,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			expect(await participantsOf(room)).toEqual([]);
 			expect(stateOf(room).reserve.map((agent) => agent.name)).toEqual(['alpha', 'beta']);
 			await room.seat(beta.name, { attention: 'named' });
-			await waitForRoom(room);
+			await settled(room);
 			expect(await participantsOf(room)).toMatchObject([{ name: beta.name, attention: 'named' }]);
 			await room.seat(beta.name, { attention: 'named' });
 			expect(await participantsOf(room)).toMatchObject([{ name: beta.name, attention: 'named' }]);
@@ -135,7 +134,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			expect(await storedOf(opened.journals, room.name)).toEqual(before);
 			const visit = await room.visit(priya);
 			await visit.send({ to: alpha.name, text: 'By name.' });
-			await waitForRoom(room);
+			await settled(room);
 			expect((await messagesOf(room)).find((message) => message.kind === 'said')).toMatchObject({
 				from: priya.name,
 				to: alpha.name,
@@ -199,7 +198,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			person.name = 'someone-else';
 			const visit = await visiting;
 			await visit.send({ to: 'alpha', text: 'Use captured values.' });
-			await waitForRoom(room);
+			await settled(room);
 			expect(await participantsOf(room)).toEqual(
 				expect.arrayContaining([
 					expect.objectContaining({ name: 'alpha', identity: 'Original.', attention: 'named' }),
@@ -231,9 +230,9 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 		let resumed: Room | undefined;
 		try {
 			await room.seat(beta.name, { attention: 'none' });
-			await waitForRoom(room);
+			await settled(room);
 			await room.unseat(alpha.name);
-			await waitForRoom(room);
+			await settled(room);
 			expect(stateOf(room).reserve.map((agent) => agent.name)).toEqual(['alpha']);
 			crash(runtime, room);
 			resumed = await resumeRoom(room.name, {
@@ -248,7 +247,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 					.sort(),
 			).toEqual(['alpha', 'gamma']);
 			await resumed.seat('gamma', { attention: 'named' });
-			await waitForRoom(resumed);
+			await settled(resumed);
 			const read = await readRoom(room.name, {
 				runtime: createRuntime({ storage: opened.storage }),
 			});
@@ -292,7 +291,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			).rejects.toThrow(/person/);
 			expect(await storedOf(opened.journals, room.name)).toEqual(before);
 			await visit.send({ to: alpha.name, text: 'The original run still works.' });
-			await waitForRoom(room);
+			await settled(room);
 			expect((await messagesOf(room)).some((message) => message.kind === 'said')).toBe(true);
 		} finally {
 			await room.stop();

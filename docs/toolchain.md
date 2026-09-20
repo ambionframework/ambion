@@ -41,11 +41,14 @@ See [`scripts/cli-team-smoke.mjs`](../scripts/cli-team-smoke.mjs) and
 [`scripts/journal-smoke.mjs`](../scripts/journal-smoke.mjs) for detailed
 consumer checks.
 
-The core has three published entries:
+The core has four published entries:
 
 - `@ambionframework/ambion` for hosts.
 - `@ambionframework/ambion/hosting` for a room and seat separated by a wire.
 - `@ambionframework/ambion/conformance` for the transport suite.
+- `@ambionframework/ambion/testing` for the deterministic stream, clock, and
+  wait that a test needs.
+
 
 The core imports no platform modules. Workspace filesystem code owns Node
 dependencies; Cloudflare code owns Durable Object integration.
@@ -53,6 +56,7 @@ dependencies; Cloudflare code owns Durable Object integration.
 The core separates collaboration from execution. `room-host.ts` coordinates
 the journal and pure decisions under `room/`. `execution/` owns Pi services
 and agent runners. `room.ts` composes both behind the public facade.
+`testing/` reads the vocabulary and the public room types only.
 `biome.jsonc` enforces these import boundaries.
 
 ## 2. Toolchain choices

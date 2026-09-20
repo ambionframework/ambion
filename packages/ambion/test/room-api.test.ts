@@ -13,17 +13,10 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock, isClosing, quiet, scripted, settled, speak } from '../src/testing.ts';
 import { refusal } from './support/errors.ts';
-import {
-	closedExchange,
-	crash,
-	deferred,
-	messagesOf,
-	roomName,
-	waitForRoom,
-} from './support/room.ts';
-import { contextText, isClosing, quiet, scripted, speak, summarise } from './support/scripted.ts';
+import { closedExchange, crash, deferred, messagesOf, roomName } from './support/room.ts';
+import { contextText, summarise } from './support/scripted.ts';
 import { memory, type OpenedStorage, storages } from './support/storage.ts';
 
 const assistant = defineAgent({
@@ -207,7 +200,7 @@ describe('the room API', () => {
 		});
 		try {
 			const visit = await room.visit(priya);
-			await waitForRoom(room);
+			await settled(room);
 			const exchange = await visit.send({ text: 'Can we ship?', key: 'ship-1' });
 
 			expect(exchange.owner).toBe(priya.name);

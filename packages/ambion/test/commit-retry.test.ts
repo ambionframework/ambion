@@ -9,8 +9,9 @@ import {
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
-import { messagesOf, roomName, waitForRoom } from './support/room.ts';
-import { quiet, type Script, scripted, speak, toolResultTexts } from './support/scripted.ts';
+import { quiet, type Script, scripted, settled, speak } from '../src/testing.ts';
+import { messagesOf, roomName } from './support/room.ts';
+import { toolResultTexts } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const worker = defineAgent({
@@ -77,7 +78,7 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 		try {
 			const visit = await room.visit(person);
 			await visit.send({ to: worker.name, text: 'please answer' });
-			await waitForRoom(room, 'quiet');
+			await settled(room);
 			const answers = (await messagesOf(room)).filter(
 				(message): message is Extract<Message, { kind: 'said' }> =>
 					message.kind === 'said' && message.from === worker.name,
@@ -108,7 +109,7 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 		try {
 			const visit = await room.visit(person);
 			await visit.send({ to: worker.name, text: 'please answer' });
-			await waitForRoom(room, 'quiet');
+			await settled(room);
 			const answers = (await messagesOf(room)).filter(
 				(message) => message.kind === 'said' && message.from === worker.name,
 			);

@@ -210,6 +210,12 @@ It does not construct a model runner or choose execution services.
 override applies to one room run. Other rooms retain their own definitions and
 model calls, including when they use the same agent names.
 
+**The `/testing` entry supplies the deterministic stream.**
+`@ambionframework/ambion/testing` exports `scripted`, `byAgent`, `callTool`,
+`speak`, `quiet`, `isClosing`, `fakeClock`, and `settled`. A `Script` receives
+the context, the seat name, and the call count for that seat. `settled(room)`
+resolves when no exchange is open and every agent is idle.
+
 **A transport receives room calls and executor dependencies separately.**
 `Transport.connect(room, context)` receives a plain `RoomProtocol` facade with
 `view`, `commit`, and `lease`. It cannot reach room lifecycle methods through

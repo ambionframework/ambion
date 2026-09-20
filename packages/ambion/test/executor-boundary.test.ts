@@ -8,8 +8,9 @@ import {
 	type Transport,
 } from '../src/hosting.ts';
 import { createRuntime, defineAgent, pi, readRoom, resumeRoom, startRoom } from '../src/index.ts';
-import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
-import { isClosing, quiet, scripted, seat, speak } from './support/scripted.ts';
+import { isClosing, quiet, scripted, settled, speak } from '../src/testing.ts';
+import { andrei, collect, deferred, roomName, tick } from './support/room.ts';
+import { seat } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
@@ -64,7 +65,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 			await expect(exchange.waitForSummary()).resolves.toMatchObject({
 				text: 'Summary: Room override.',
 			});
-			await waitForRoom(room, 'quiet', 2_000);
+			await settled(room, { timeout: 2_000 });
 			expect(defaultCalls).toBe(0);
 			expect(connections).toHaveLength(1);
 			const connection = connections[0];

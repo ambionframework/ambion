@@ -10,15 +10,8 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import {
-	messagesOf,
-	participantsOf,
-	roomName,
-	runningLeases,
-	stateOf,
-	waitForRoom,
-} from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
+import { quiet, scripted, settled } from '../src/testing.ts';
+import { messagesOf, participantsOf, roomName, runningLeases, stateOf } from './support/room.ts';
 import { faultyJournals, storages } from './support/storage.ts';
 
 const person = defineHuman({ name: 'andrei', identity: 'Founder.' });
@@ -314,9 +307,9 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			const events: RoomNotification[] = [];
 			const off = room.subscribe((event) => events.push(event));
 			await visit.send({ text: 'question', key: 'submission-order' });
-			await waitForRoom(room);
+			await settled(room);
 			await visit.send({ text: 'follow-up', key: 'submission-order-2' });
-			await waitForRoom(room);
+			await settled(room);
 			const before = types(events);
 			expect(before).toEqual([
 				'message',
@@ -381,7 +374,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 
 			faulty.fail(false);
 			await messagesOf(room);
-			await waitForRoom(room);
+			await settled(room);
 			expect(
 				events.filter(
 					(event) => event.type === 'message' && event.message.key === 'submission-recovered',
@@ -391,7 +384,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 
 			const later = await visit.send({ text: 'later', key: 'submission-later' });
 			expect(later.owner).toBe(person.name);
-			await waitForRoom(room);
+			await settled(room);
 			expect(
 				events.filter(
 					(event) => event.type === 'message' && event.message.key === 'submission-later',

@@ -19,20 +19,23 @@ import {
 	type Runtime,
 	startRoom,
 } from '../../src/index.ts';
-import { fakeClock } from './clock.ts';
-import { invariants } from './invariants.ts';
-import { collect, messagesOf, participantsOf, roomName, waitForRoom } from './room.ts';
 import {
-	answersLastQuestion,
 	byAgent,
-	contextText,
-	insists,
+	fakeClock,
 	isClosing,
 	quiet,
 	type Script,
 	scripted,
-	seat,
+	settled,
 	speak,
+} from '../../src/testing.ts';
+import { invariants } from './invariants.ts';
+import { collect, messagesOf, participantsOf, roomName } from './room.ts';
+import {
+	answersLastQuestion,
+	contextText,
+	insists,
+	seat,
 	summarise,
 	toolNames,
 	toolResultTexts,
@@ -120,7 +123,7 @@ export const oneExchange: Scenario = {
 		const events = collect(session);
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'Can I tell the client Thursday?' });
-		await waitForRoom(session);
+		await settled(session);
 		const record = await messagesOf(session);
 		expect(record.filter(isSpoken).map((m) => m.from)).toEqual(['priya', 'product', 'product']);
 		const summary = record.find(isSummary);
@@ -160,9 +163,9 @@ export const twoPeopleTwoExchanges: Scenario = {
 		const hers = await session.visit(priya);
 		const his = await session.visit(sam);
 		await hers.send({ text: 'First?' });
-		await waitForRoom(session);
+		await settled(session);
 		await his.send({ text: 'Second?' });
-		await waitForRoom(session);
+		await settled(session);
 		await hers.leave();
 		const summaries = (await messagesOf(session)).filter(isSummary);
 		expect(summaries.map((m) => [m.to, m.text])).toEqual([
@@ -197,7 +200,7 @@ export const seatFromReserve: Scenario = {
 		const events = collect(session);
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'Is there enough steel for the pour?' });
-		await waitForRoom(session);
+		await settled(session);
 		const record = await messagesOf(session);
 		expect(record.find((m) => m.kind === 'seated')).toMatchObject({
 			from: 'assistant',

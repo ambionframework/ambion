@@ -8,8 +8,9 @@ import {
 	readExchange,
 	startRoom,
 } from '../src/index.ts';
-import { deferred, roomName, tick, waitForRoom } from './support/room.ts';
-import { contextText, quiet, scripted } from './support/scripted.ts';
+import { quiet, scripted } from '../src/testing.ts';
+import { deferred, exchangeClosed, roomName, tick } from './support/room.ts';
+import { contextText } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const at = '2026-01-01T00:00:00.000Z';
@@ -121,7 +122,7 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 		try {
 			const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
 			const visit = await room.visit(person);
-			await waitForRoom(room, 'settled');
+			await exchangeClosed(room);
 			const handle = await visit.send({ text: 'What is open?' });
 			await started.promise;
 

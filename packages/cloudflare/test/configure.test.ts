@@ -3,7 +3,7 @@ import { hostingOf } from '@ambionframework/ambion/hosting';
 import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { configure, definitionOf, executionFor, runtimeFor } from '../src/configure.ts';
-import { scripted } from './scripted.ts';
+import { stream } from './answers.ts';
 
 const agent = (name: string) =>
 	defineAgent({
@@ -30,7 +30,6 @@ describe('configure', () => {
 	});
 
 	it('composes the configured stream and transcripts over supplied storage', async () => {
-		const stream = scripted;
 		configure({ agents: [agent('execution')], stream });
 		const storage = memoryJournals();
 		const services = executionFor({ storage });

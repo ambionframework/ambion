@@ -13,7 +13,7 @@ import { piSessions } from '@ambionframework/pi-journal';
 import { expect, it } from 'vitest';
 import { configure, type SeatEvent } from '../src/configure.ts';
 import { seatMetadata, sqlStorage } from '../src/storage.ts';
-import { scripted } from './scripted.ts';
+import { stream } from './answers.ts';
 import { until } from './until.ts';
 import { assistant, product, slow } from './worker.ts';
 
@@ -192,7 +192,7 @@ it('bounds recovery release and clears local state after an unknown result', asy
 	const events: SeatEvent[] = [];
 	const defaults = {
 		agents: [assistant, product, slow],
-		stream: scripted,
+		stream,
 		limits: { delivery: { resend: 50 } },
 	};
 	configure({
@@ -257,7 +257,7 @@ it('keeps newer metadata when a timed out recovery release replies late', async 
 	const events: SeatEvent[] = [];
 	const defaults = {
 		agents: [assistant, product, slow],
-		stream: scripted,
+		stream,
 		limits: { delivery: { resend: 50 } },
 	};
 	configure({

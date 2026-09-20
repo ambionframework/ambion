@@ -33,6 +33,7 @@ import {
 } from '../../src/index.ts';
 import type { LeaseChange } from '../../src/journal/events.ts';
 import { foldLeases, isLive } from '../../src/room/lease.ts';
+import { type FakeClock, fakeClock, scripted } from '../../src/testing.ts';
 import {
 	agents,
 	assistant,
@@ -45,10 +46,8 @@ import {
 	sam,
 	steady,
 } from './cast.ts';
-import { type FakeClock, fakeClock } from './clock.ts';
 import { invariants } from './invariants.ts';
 import { currentExchange, runningLeases, stateOf, storedOf } from './room.ts';
-import { scripted } from './scripted.ts';
 import { type FailMode, type OpenedStorage, tappedJournals } from './storage.ts';
 import { serializing } from './transport.ts';
 

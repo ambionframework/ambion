@@ -22,9 +22,9 @@ import {
 } from '../src/hosting.ts';
 import type { Message } from '../src/index.ts';
 import { type Clock, createRuntime, defineAgent, pi } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock, quiet, scripted } from '../src/testing.ts';
 import { deferred, tick } from './support/room.ts';
-import { contextText, quiet, scripted } from './support/scripted.ts';
+import { contextText } from './support/scripted.ts';
 
 const product = defineAgent({
 	name: 'product',

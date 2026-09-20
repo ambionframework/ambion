@@ -8,8 +8,8 @@ import { Activation, type PiExecutorOptions, persistTurns } from '../src/executi
 import { stubModel } from '../src/execution/services.ts';
 import { defineAgent, pi } from '../src/index.ts';
 import type { ActivationView, RoomProtocol } from '../src/protocol.ts';
+import { quiet, scripted } from '../src/testing.ts';
 import type { RoomNotification } from '../src/types.ts';
-import { quiet, scripted } from './support/scripted.ts';
 
 const message: AgentMessage = { role: 'user', content: 'hello', timestamp: 1 };
 const agent = { state: { messages: [message] } } as unknown as Agent;

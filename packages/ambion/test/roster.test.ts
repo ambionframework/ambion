@@ -12,26 +12,18 @@ import {
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
-import {
-	collect,
-	deferred,
-	messagesOf,
-	participantsOf,
-	roomName,
-	waitForRoom,
-} from './support/room.ts';
 import {
 	byAgent,
 	callTool,
-	contextText,
+	fakeClock,
 	quiet,
 	type Script,
 	scripted,
-	seat,
+	settled,
 	speak,
-	toolNames,
-} from './support/scripted.ts';
+} from '../src/testing.ts';
+import { collect, deferred, messagesOf, participantsOf, roomName } from './support/room.ts';
+import { contextText, seat, toolNames } from './support/scripted.ts';
 
 const product = defineAgent({
 	name: 'product',
@@ -128,7 +120,7 @@ describe('ordinary participation', () => {
 		const events = collect(session);
 
 		await (await session.visit(priya)).send({ text: 'How much steel is on site?' });
-		await waitForRoom(session);
+		await settled(session);
 
 		expect(tools[0]).toEqual(['say', 'seat', 'unseat']);
 		expect(contexts[0]).toContain('The reserve: agents not in the room.');
@@ -157,7 +149,7 @@ describe('ordinary participation', () => {
 		});
 
 		await (await session.visit(priya)).send({ text: 'Bring everyone needed.' });
-		await waitForRoom(session);
+		await settled(session);
 
 		expect(await seatNames(session)).toEqual(['product', 'surveyor', 'architect', 'greeter']);
 		expect(kinds(await messagesOf(session))).toEqual([
@@ -183,7 +175,7 @@ describe('ordinary participation', () => {
 		});
 
 		await (await session.visit(priya)).send({ text: 'Is the team ready?' });
-		await waitForRoom(session);
+		await settled(session);
 
 		const record = await messagesOf(session);
 		expect(record.filter((message) => message.kind === 'seated')).toHaveLength(0);
@@ -204,7 +196,7 @@ describe('ordinary participation', () => {
 		const events = collect(session);
 
 		await (await session.visit(priya)).send({ text: 'Who should join?' });
-		await waitForRoom(session);
+		await settled(session);
 
 		expect(activated(events)).toContain('greeter');
 		expect(activated(events)).toContain('surveyor');
@@ -240,7 +232,7 @@ describe('ordinary participation', () => {
 			});
 		});
 		held.resolve();
-		await waitForRoom(session);
+		await settled(session);
 
 		expect(contexts.at(-1)).toContain('[surveyor → product] The drawings will settle this.');
 		expect(await seatNames(session)).toContain(architect.name);
@@ -261,7 +253,7 @@ describe('ordinary unseating and host membership', () => {
 		const events = collect(session);
 
 		await (await session.visit(priya)).send({ text: 'Can anyone decide?' });
-		await waitForRoom(session);
+		await settled(session);
 
 		const record = await messagesOf(session);
 		expect(
@@ -282,7 +274,7 @@ describe('ordinary unseating and host membership', () => {
 		});
 
 		await (await session.visit(priya)).send({ text: 'Remove the writer.' });
-		await waitForRoom(session);
+		await settled(session);
 
 		const record = await messagesOf(session);
 		expect(record.some((message) => message.kind === 'unseated')).toBe(false);
@@ -297,7 +289,7 @@ describe('ordinary unseating and host membership', () => {
 		});
 
 		await session.seat(surveyor.name);
-		await waitForRoom(session);
+		await settled(session);
 		expect(await seatNames(session)).toEqual([product.name, surveyor.name]);
 		await session.unseat(surveyor.name);
 		expect(await seatNames(session)).toEqual([product.name]);

@@ -4,7 +4,7 @@
  */
 import { defineAgent, pi } from '@ambionframework/ambion';
 import { configure, RoomObject, SeatObject } from '../src/index.ts';
-import { scripted } from './scripted.ts';
+import { stream } from './answers.ts';
 
 export const assistant = defineAgent({
 	name: 'assistant',
@@ -26,7 +26,7 @@ export const slow = defineAgent({
 
 configure({
 	agents: [assistant, product, slow],
-	stream: scripted,
+	stream,
 	// Alarms fire on their own in workerd: a wake nobody takes is sent again this often.
 	limits: { delivery: { resend: 50 } },
 });

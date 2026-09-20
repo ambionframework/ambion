@@ -17,7 +17,7 @@ import {
 } from '../src/hosting.ts';
 import { createRuntime } from '../src/index.ts';
 import type { Close, Composition, LeaseChange } from '../src/journal/events.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock } from '../src/testing.ts';
 import { roomName, storedOf } from './support/room.ts';
 import { oneExchange } from './support/scenarios.ts';
 import { sqlite } from './support/storage.ts';

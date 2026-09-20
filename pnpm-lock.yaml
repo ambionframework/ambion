@@ -48,9 +48,6 @@ importers:
         specifier: 0.5.11
         version: 0.5.11(typescript@7.0.2)(web-tree-sitter@0.25.10)
     devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: ^0.85.1
-        version: 0.85.1(ws@8.21.3)(zod@4.4.3)
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -142,12 +139,6 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^5.20260801.0
         version: 5.20260910.1
-      '@earendil-works/pi-agent-core':
-        specifier: ^0.85.1
-        version: 0.85.1(ws@8.21.3)(zod@4.4.3)
-      '@earendil-works/pi-ai':
-        specifier: ^0.85.1
-        version: 0.85.1(ws@8.21.3)(zod@4.4.3)
       tsdown:
         specifier: ^0.22.14
         version: 0.22.14(oxc-resolver@11.24.2)(typescript@7.0.2)

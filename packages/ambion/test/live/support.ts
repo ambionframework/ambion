@@ -27,7 +27,8 @@ import {
 	type StartRoomOptions,
 	startRoom,
 } from '../../src/index.ts';
-import { collect, participantsOf, roomName, waitForRoom } from '../support/room.ts';
+import { settled } from '../../src/testing.ts';
+import { collect, participantsOf, roomName } from '../support/room.ts';
 
 /** The model every live seat runs on. The example reads the same variable. */
 export const MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
@@ -105,7 +106,7 @@ export function within<T>(promise: Promise<T>, ms: number, what: string): Promis
 export async function untilQuiet(session: Room): Promise<void> {
 	try {
 		await within(
-			waitForRoom(session, 'quiet', QUIET_MS),
+			settled(session, { timeout: QUIET_MS }),
 			QUIET_MS,
 			`'${session.name}' going quiet`,
 		);

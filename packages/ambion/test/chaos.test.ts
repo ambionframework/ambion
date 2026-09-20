@@ -20,12 +20,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { createRuntime, isPresence, type Room, resumeRoom } from '../src/index.ts';
+import { type FakeClock, fakeClock, scripted } from '../src/testing.ts';
 import { agents, priya, type Question, questions, sam, script, TIMING } from './support/cast.ts';
 import { idle, liveLeases, outcome, World, within } from './support/chaos.ts';
-import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
 import { collect, currentExchange, messagesOf, participantsOf, roomName } from './support/room.ts';
-import { scripted } from './support/scripted.ts';
 import { childJournals, childStorage, memory, type Storage, storages } from './support/storage.ts';
 
 const full = process.env.AMBION_CHAOS === 'all';

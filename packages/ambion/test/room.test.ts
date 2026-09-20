@@ -13,6 +13,7 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
+import { byAgent, quiet, scripted, settled, speak } from '../src/testing.ts';
 import { refusal } from './support/errors.ts';
 import {
 	andrei,
@@ -23,9 +24,8 @@ import {
 	messagesOf,
 	participantsOf,
 	roomName,
-	waitForRoom,
 } from './support/room.ts';
-import { byAgent, contextText, quiet, scripted, speak } from './support/scripted.ts';
+import { contextText } from './support/scripted.ts';
 import { memory } from './support/storage.ts';
 
 /** The record's spoken half, which is what most of these tests are about. */
@@ -93,7 +93,7 @@ describe('startRoom', () => {
 
 		const visit = await enter(session);
 		await visit.send({ text: 'What is the answer?' });
-		await waitForRoom(session);
+		await settled(session);
 
 		const texts = spoken(await messagesOf(session)).map((m) => `${m.from}: ${m.text}`);
 		expect(texts).toContain('alpha: the answer is 42');
@@ -129,9 +129,9 @@ describe('startRoom', () => {
 		});
 		const visit = await enter(session);
 		await visit.send({ text: 'one' });
-		await waitForRoom(session);
+		await settled(session);
 		await visit.send({ text: 'two' });
-		await waitForRoom(session);
+		await settled(session);
 
 		// The second activation starts from a single fresh transcript message —
 		// no assistant turns carried over from the first activation.
@@ -158,7 +158,7 @@ describe('startRoom', () => {
 		});
 		const events = collect(session);
 		await (await enter(session)).send({ text: 'anyone?' });
-		await waitForRoom(session);
+		await settled(session);
 
 		expect(spoken(await messagesOf(session))).toHaveLength(1);
 		expect(events.some((e) => e.type === 'message' && e.message.from === 'shy')).toBe(false);
@@ -201,16 +201,16 @@ describe('startRoom', () => {
 		expect(starts('front')).toBe(0); // arrivals are quiet: nobody woke
 
 		await visit.send({ text: 'hello room' });
-		await waitForRoom(session);
+		await settled(session);
 		expect(starts('archivist')).toBe(0); // broadcast never wakes a passive seat
 
 		await visit.send({ to: archivist.name, text: 'what was Q2, archivist?' });
-		await waitForRoom(session);
+		await settled(session);
 		expect(starts('archivist')).toBe(1); // directed delivery does
 		expect(starts('front')).toBe(1); // and it woke only its target
 
 		await visit.send({ text: 'front, can you find out?' });
-		await waitForRoom(session);
+		await settled(session);
 		expect(starts('archivist')).toBe(2); // a colleague's directed say does too
 	});
 
@@ -237,7 +237,7 @@ describe('startRoom', () => {
 			}),
 		});
 		await (await enter(session)).send({ text: 'who said what?' });
-		await waitForRoom(session);
+		await settled(session);
 
 		const said = (await messagesOf(session)).at(-1);
 		expect(said?.from).toBe('liar'); // stamped, regardless of what the content claimed
@@ -269,7 +269,7 @@ describe('startRoom', () => {
 		const visit = await enter(first);
 		await visit.send({ text: 'for the record' });
 		await visit.send({ text: 'and in this order' });
-		await waitForRoom(first);
+		await settled(first);
 
 		// one run per name: a second live room over one record would diverge
 		await expect(
@@ -336,7 +336,7 @@ describe('startRoom', () => {
 		const orderedVisit = await enter(ordered);
 		const events = collect(ordered);
 		await orderedVisit.send({ text: 'say hi' });
-		await waitForRoom(ordered);
+		await settled(ordered);
 		// one event per message on the record, whoever wrote it, and the exchange
 		// that message opened around it. One answer needs no summary, so the room
 		// goes quiet in the same tick the exchange closes: nothing is owed.
@@ -376,7 +376,7 @@ describe('startRoom', () => {
 		// the failed activation is one attempt: the wake is pending again after the
 		// backoff, so the room is still working, and only an abort settles it now
 		await faulty.abort();
-		await waitForRoom(faulty);
+		await settled(faulty);
 
 		// abort quiets an active room, keeping what was already said
 		const hung = await startRoom({
@@ -389,7 +389,7 @@ describe('startRoom', () => {
 		const hungEvents = collect(hung);
 		await hungVisit.send({ text: 'hang' });
 		await hung.abort();
-		await waitForRoom(hung);
+		await settled(hung);
 		expect(hungEvents.some((e) => e.type === 'error')).toBe(false);
 		expect(spoken(await messagesOf(hung))).toHaveLength(1);
 
@@ -411,7 +411,7 @@ describe('startRoom', () => {
 		await racingStarted.promise;
 		await racingVisit.send({ text: 'mid-turn note' }); // queues a steer into the hung run
 		await racing.abort();
-		await waitForRoom(racing);
+		await settled(racing);
 		expect(racingCalls).toBe(1);
 		expect(spoken(await messagesOf(racing))).toHaveLength(2);
 	});
@@ -456,7 +456,7 @@ describe('startRoom', () => {
 			if (event.type === 'message' && event.message.from === 'first') firstSaid.resolve();
 		});
 		await visit.send({ text: 'thoughts?' });
-		await waitForRoom(session);
+		await settled(session);
 
 		const texts = spoken(await messagesOf(session)).map((m) => m.text);
 		expect(texts).toEqual(['thoughts?', 'the point', 'a genuinely different angle']);
@@ -495,7 +495,7 @@ describe('startRoom', () => {
 			if (event.type === 'message' && event.message.from === 'first') yieldSaid.resolve();
 		});
 		await yieldVisit.send({ text: 'thoughts?' });
-		await waitForRoom(yielding);
+		await settled(yielding);
 
 		expect(spoken(await messagesOf(yielding))).toHaveLength(2);
 		const end = yieldEvents.find((e) => e.type === 'activation_end' && e.agent === 'second');
@@ -519,7 +519,7 @@ describe('startRoom', () => {
 			stream: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
 		});
 		await (await enter(session)).send({ text: 'say hi' });
-		await waitForRoom(session);
+		await settled(session);
 
 		const seat = (await participantsOf(session)).find((s) => s.name === 'solo');
 		if (seat?.kind !== 'agent') throw new Error('The solo seat is absent.');
@@ -555,7 +555,7 @@ describe('startRoom', () => {
 		const visit = await enter(session);
 		await visit.send({ text: 'once', key: 'delivery-1' });
 		await visit.send({ text: 'once', key: 'delivery-1' });
-		await waitForRoom(session);
+		await settled(session);
 
 		const said = spoken(await messagesOf(session));
 		expect(said.map((m) => [m.seq, m.text, m.key])).toEqual([[4, 'once', 'delivery-1']]);
@@ -707,7 +707,7 @@ describe('startRoom', () => {
 		await visit.send({ text: 'wait for me' });
 		await hangs.promise;
 		await session.abort();
-		await waitForRoom(session);
+		await settled(session);
 		// the room ended the lease and told the seat, and the seat stopped: the room is idle
 		expect(cuts).toEqual(['message:4:solo:1']);
 		expect((await participantsOf(session)).find((s) => s.name === 'solo')).toMatchObject({
@@ -911,7 +911,7 @@ describe('what the room waits on', () => {
 		expect([...sentBy(session).keys()]).toEqual(['message:4:solo:1']);
 
 		held.resolve();
-		await waitForRoom(session);
+		await settled(session);
 		// the activation released, so the fold owes nothing and the room holds nothing
 		expect([...sentBy(session).keys()]).toEqual([]);
 		await session.stop();

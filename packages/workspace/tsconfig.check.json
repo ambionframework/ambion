@@ -12,7 +12,8 @@
 		// through its published surface.
 		"paths": {
 			"@ambionframework/ambion": ["../ambion/src/index.ts"],
-			"@ambionframework/ambion/hosting": ["../ambion/src/hosting.ts"]
+			"@ambionframework/ambion/hosting": ["../ambion/src/hosting.ts"],
+			"@ambionframework/ambion/testing": ["../ambion/src/testing.ts"]
 		}
 	},
 	"include": ["src", "test"]

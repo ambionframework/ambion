@@ -8,7 +8,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { PiContext } from '../src/execution/pi.ts';
 import { stubModel } from '../src/execution/services.ts';
-import { quiet, scripted } from './support/scripted.ts';
+import { quiet, scripted } from '../src/testing.ts';
 
 const at = Date.parse('2026-01-01T09:00:00.000Z');
 

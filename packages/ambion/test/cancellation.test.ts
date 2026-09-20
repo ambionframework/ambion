@@ -17,8 +17,8 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { deferred, messagesOf, roomName, stateOf, storedOf, waitForRoom } from './support/room.ts';
-import { byAgent, isClosing, quiet, scripted, speak } from './support/scripted.ts';
+import { byAgent, isClosing, quiet, scripted, settled, speak } from '../src/testing.ts';
+import { deferred, messagesOf, roomName, stateOf, storedOf } from './support/room.ts';
 import {
 	faultyJournals,
 	gatedJournals,
@@ -438,7 +438,7 @@ it('does not retry cancelled work after a restart', async () => {
 	hostingOf(runtime).evict(name);
 	const resumed = await resumeRoom(name, { runtime, agents: [worker], stream: stream });
 	try {
-		await waitForRoom(resumed);
+		await settled(resumed);
 		expect(calls).toBe(1);
 	} finally {
 		await resumed.stop();

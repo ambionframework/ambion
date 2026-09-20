@@ -16,18 +16,9 @@ import {
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
-import { collect, messagesOf, roomName, storedOf, waitForRoom } from './support/room.ts';
-import {
-	answersLastQuestion,
-	byAgent,
-	isClosing,
-	quiet,
-	says,
-	scripted,
-	summarise,
-	toolResultTexts,
-} from './support/scripted.ts';
+import { byAgent, fakeClock, isClosing, quiet, scripted, settled } from '../src/testing.ts';
+import { collect, exchangeClosed, messagesOf, roomName, storedOf } from './support/room.ts';
+import { answersLastQuestion, says, summarise, toolResultTexts } from './support/scripted.ts';
 import { faultyJournals, memory, tappedJournals } from './support/storage.ts';
 
 const assistant = defineAgent({
@@ -131,11 +122,11 @@ describe('a room in doubt', () => {
 	it('hears a delivery that landed and lost its confirmation, and the seats wake for it', async () => {
 		const { faulty, session, events } = await room('doubt-delivery');
 		const visit = await session.visit(priya);
-		await waitForRoom(session);
+		await settled(session);
 		faulty.fail('after', 'message');
 		await expect(visit.send({ text: 'First?', key: 'q1' })).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
-		await waitForRoom(session);
+		await settled(session);
 		const record = await messagesOf(session);
 		expect(record.filter((m) => m.key === 'q1')).toHaveLength(1);
 		expect(record.filter(isSpoken).filter((m) => m.from === alpha.name)).toHaveLength(1);
@@ -166,7 +157,7 @@ describe('a room in doubt', () => {
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);
-		await waitForRoom(session);
+		await settled(session);
 		// The second question is delivered the moment alpha's activation ends, so its
 		// commit is queued ahead of the close the reconcile decides, and that close
 		// lands and loses its confirmation.
@@ -182,10 +173,10 @@ describe('a room in doubt', () => {
 			}
 		});
 		await visit.send({ text: 'First?', key: 'q1' });
-		await waitForRoom(session);
+		await exchangeClosed(session);
 		await delivered;
 		for (let i = 0; i < 4; i += 1) await clock.advance(61_000);
-		await waitForRoom(session);
+		await settled(session);
 		const stored = await storedOf(opened.journals, session.name);
 		const closes = stored.filter((r) => r.kind === 'close');
 		expect(closes).toHaveLength(1);
@@ -197,7 +188,7 @@ describe('a room in doubt', () => {
 	it('answers messages() with what the read found, whenever the read was asked for', async () => {
 		const { faulty, session } = await room('doubt-read');
 		const visit = await session.visit(priya);
-		await waitForRoom(session);
+		await settled(session);
 		faulty.fail('after', 'message');
 		const delivery = visit.send({ text: 'First?', key: 'q1' });
 		const read = messagesOf(session);
@@ -208,14 +199,14 @@ describe('a room in doubt', () => {
 
 	it('writes one arrival for a visit retried after its arrival lost its confirmation', async () => {
 		const { faulty, session } = await room('doubt-visit');
-		await waitForRoom(session);
+		await settled(session);
 		faulty.fail('after', 'message');
 		const first = session.visit(priya);
 		const second = first.catch(() => session.visit(priya));
 		await expect(first).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
 		await second;
-		await waitForRoom(session);
+		await settled(session);
 		const arrivals = (await messagesOf(session))
 			.filter(isPresence)
 			.filter((m) => m.kind === 'arrived');

@@ -55,9 +55,19 @@ const registryModel: ModelResolver = async (id, agent) => {
 	throw new Error(`Unknown model '${id}' for agent '${agent}': expected 'provider/model-id'.`);
 };
 
-/** A custom stream does not read a model, so Pi receives a stable stub. */
-export const stubModel: ModelResolver = (id) =>
-	({ id, name: id, api: 'scripted', provider: 'scripted' }) as unknown as Model<Api>;
+/** A custom stream never reads a model, so Pi receives a stub. It names the seat, and a scripted stream routes on that name. */
+export const stubModel: ModelResolver = (id, agent): Model<Api> => ({
+	id,
+	name: agent,
+	api: 'scripted',
+	provider: 'scripted',
+	baseUrl: '',
+	reasoning: false,
+	input: ['text'],
+	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+	contextWindow: 1_000_000,
+	maxTokens: 64_000,
+});
 
 export function createExecutionServices(options: ExecutionServicesOptions): ExecutionServices {
 	const custom = options.stream !== undefined;

@@ -4,10 +4,13 @@ import { join as joinPath } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { CreateRuntimeOptions } from '@ambionframework/ambion';
 import {
-	createAssistantMessageEventStream,
-	fauxAssistantMessage,
-	fauxToolCall,
-} from '@earendil-works/pi-ai';
+	callTool,
+	isClosing,
+	quiet,
+	type Script,
+	scripted,
+	speak,
+} from '@ambionframework/ambion/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openWorkbench, type Workbench } from '../src/workbench.ts';
 
@@ -15,66 +18,21 @@ const opened: { workbench: Workbench; directory: string }[] = [];
 
 const PLAN = 'LED plan: 330 ohm series resistor at 10 mA.\n';
 
-function scriptedResponse(agent: string, call: number, closing: boolean) {
-	if (closing)
-		return fauxAssistantMessage([fauxToolCall('say', { text: 'Summary: the bench answered.' })], {
-			stopReason: 'toolUse',
-		});
-	if (agent === 'assistant' && call === 1)
-		return fauxAssistantMessage(
-			[fauxToolCall('say', { to: 'design', text: 'Please choose the resistor.' })],
-			{ stopReason: 'toolUse' },
-		);
-	if (agent === 'assistant' && call === 2)
-		return fauxAssistantMessage([fauxToolCall('read', { path: '/library/led-5mm.md' })], {
-			stopReason: 'toolUse',
-		});
-	if (agent === 'assistant' && call === 3)
-		return fauxAssistantMessage(
-			[fauxToolCall('say', { to: 'design', text: 'Thanks, that is clear.' })],
-			{ stopReason: 'toolUse' },
-		);
+const script: Script = (context, agent, call) => {
+	if (isClosing(context)) return speak('Summary: the bench answered.');
+	if (agent === 'assistant' && call === 1) return speak('Please choose the resistor.', 'design');
+	if (agent === 'assistant' && call === 2) return callTool('read', { path: '/library/led-5mm.md' });
+	if (agent === 'assistant' && call === 3) return speak('Thanks, that is clear.', 'design');
 	if (agent === 'design' && call === 1)
-		return fauxAssistantMessage(
-			[fauxToolCall('write', { path: 'shared/plan.md', content: PLAN })],
-			{ stopReason: 'toolUse' },
-		);
-	if (agent === 'design' && call === 2)
-		return fauxAssistantMessage(
-			[fauxToolCall('say', { to: 'assistant', text: 'Resistor chosen.' })],
-			{ stopReason: 'toolUse' },
-		);
-	return fauxAssistantMessage('quiet', { stopReason: 'stop' });
-}
-
-const makeStream = (): CreateRuntimeOptions['stream'] => {
-	const calls = new Map<string, number>();
-	return (_model, context, options) => {
-		const output = createAssistantMessageEventStream();
-		const closing = context.systemPrompt?.includes('The exchange is over.') ?? false;
-		const agent = context.systemPrompt?.match(/You are '([^']+)'/)?.[1] ?? 'assistant';
-		const call = (calls.get(agent) ?? 0) + 1;
-		calls.set(agent, call);
-		const response = scriptedResponse(agent, call, closing);
-		queueMicrotask(() => {
-			if (options?.signal?.aborted) {
-				output.push({
-					type: 'error',
-					reason: 'aborted',
-					error: fauxAssistantMessage('', { stopReason: 'aborted', errorMessage: 'aborted' }),
-				});
-				return;
-			}
-			output.push({ type: 'start', partial: response });
-			output.push({
-				type: 'done',
-				reason: response.stopReason as 'stop' | 'toolUse',
-				message: response,
-			});
-		});
-		return output;
-	};
+		return callTool('write', { path: 'shared/plan.md', content: PLAN });
+	if (agent === 'design' && call === 2) return speak('Resistor chosen.', 'assistant');
+	return quiet();
 };
+
+/** A model that never answers; the room aborts it. */
+const hangs = scripted(() => new Promise(() => {}));
+
+const makeStream = (): CreateRuntimeOptions['stream'] => scripted(script);
 
 async function open(directory: string, stream = makeStream()) {
 	const workbench = await openWorkbench({ directory, stream });
@@ -272,9 +230,7 @@ describe('Workbench host', () => {
 	});
 
 	it('aborts an open exchange and keeps the room available', async () => {
-		const workbench = await open(joinPath(await freshDirectory(), 'run'), () =>
-			createAssistantMessageEventStream(),
-		);
+		const workbench = await open(joinPath(await freshDirectory(), 'run'), hangs);
 		await workbench.join('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'pending-1', 'Wait for work.');
 		expect((await workbench.read('bringup', 0)).exchange).toBeDefined();

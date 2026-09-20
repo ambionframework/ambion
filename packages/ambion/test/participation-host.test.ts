@@ -9,7 +9,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import type { Intent } from '../src/protocol.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock } from '../src/testing.ts';
 import { crash, messagesOf, roomName, stateOf } from './support/room.ts';
 import { storages } from './support/storage.ts';
 

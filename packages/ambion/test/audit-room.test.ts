@@ -1,25 +1,9 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { createRuntime, defineAgent, pi, type Room, resumeRoom, startRoom } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
-import {
-	andrei,
-	assistant,
-	collect,
-	deferred,
-	roomName,
-	stateOf,
-	waitForRoom,
-} from './support/room.ts';
-import {
-	byAgent,
-	contextText,
-	quiet,
-	says,
-	scripted,
-	speak,
-	summarise,
-} from './support/scripted.ts';
+import { byAgent, fakeClock, quiet, scripted, settled, speak } from '../src/testing.ts';
+import { andrei, assistant, collect, deferred, roomName, stateOf } from './support/room.ts';
+import { contextText, says, summarise } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const product = defineAgent({
@@ -66,7 +50,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 			let resumed: Room | undefined;
 			try {
 				const exchange = await (await room.visit(andrei)).send({ text: 'Ready?' });
-				await waitForRoom(room, 'quiet', 2_000);
+				await settled(room, { timeout: 2_000 });
 				const discussion = await exchange.waitForClose();
 				expect(discussion.filter((message) => message.from === product.name)).toHaveLength(
 					outcome === 'spoken' ? 1 : 0,
@@ -88,7 +72,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 						return quiet();
 					}),
 				});
-				await waitForRoom(resumed, 'quiet', 2_000);
+				await settled(resumed, { timeout: 2_000 });
 				expect(calls).toBe(finishedCalls);
 				await expect(resumed.exchange(exchange.from)?.waitForClose()).resolves.toEqual(discussion);
 			} finally {
@@ -124,7 +108,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 		const events = collect(room);
 		try {
 			const exchange = await (await room.visit(andrei)).send({ text: 'Result?' });
-			await waitForRoom(room, 'quiet', 2_000);
+			await settled(room, { timeout: 2_000 });
 			const response = await exchange.waitForSummary();
 			expect(response?.text).toBe(outcome === 'published' ? 'Consolidated answer.' : undefined);
 			expect(summaryCalls).toBeGreaterThan(0);
@@ -168,7 +152,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 			await auditing.promise;
 			await visit.send({ text: 'Later correction.' });
 			releaseAudit.resolve();
-			await waitForRoom(room, 'quiet', 2_000);
+			await settled(room, { timeout: 2_000 });
 			expect(contexts).toHaveLength(2);
 			expect(contexts[0]).not.toContain('Later correction.');
 			expect(contexts[1]).toContain('Later correction.');
@@ -218,7 +202,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 				}),
 			]);
 			await clock.advance(100);
-			await waitForRoom(room, 'quiet', 2_000);
+			await settled(room, { timeout: 2_000 });
 			expect(
 				(await exchange.waitForClose()).filter((message) => message.from === product.name),
 			).toEqual([expect.objectContaining({ text: 'Recovered answer.' })]);

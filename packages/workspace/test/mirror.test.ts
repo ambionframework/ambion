@@ -9,10 +9,10 @@ import type {
 	Visit,
 } from '@ambionframework/ambion';
 import { defineAgent, pi, startRoom } from '@ambionframework/ambion';
+import { byAgent, quiet, scripted, speak } from '@ambionframework/ambion/testing';
 import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { enter, roomName as name } from '../../ambion/test/support/room.ts';
-import { byAgent, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import type { WorkspaceAgent } from '../src/index.ts';
 import {
 	memoryBackend,

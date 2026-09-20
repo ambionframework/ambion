@@ -6,17 +6,10 @@
 import { describe, expect, it } from 'vitest';
 import { inProcessTransport, type RoomProtocol, type Transport } from '../src/hosting.ts';
 import { createRuntime, defineAgent, pi, startRoom } from '../src/index.ts';
+import { isClosing, quiet, type Script, scripted, settled } from '../src/testing.ts';
 import { priya, sam } from './support/cast.ts';
-import { andrei, messagesOf, roomName, waitForRoom } from './support/room.ts';
-import {
-	answersEveryQuestion,
-	contextText,
-	isClosing,
-	quiet,
-	type Script,
-	scripted,
-	summarise,
-} from './support/scripted.ts';
+import { andrei, messagesOf, roomName } from './support/room.ts';
+import { answersEveryQuestion, contextText, summarise } from './support/scripted.ts';
 
 /** A page seen by the seat: the record floor it reported, and how many messages it carried. */
 interface Page {
@@ -68,9 +61,9 @@ describe('a limit windows the record', () => {
 		const room = await startRoom({ name: roomName('limit'), runtime, agents: [worker] });
 
 		await (await room.visit(andrei)).send({ text: 'alpha marker' });
-		await waitForRoom(room);
+		await settled(room);
 		await (await room.visit(andrei)).send({ text: 'omega marker' });
-		await waitForRoom(room);
+		await settled(room);
 
 		const answering = contexts.filter((text) => text.includes('omega marker'));
 		expect(answering.length).toBeGreaterThan(0);
@@ -101,7 +94,7 @@ describe('a limit windows the record', () => {
 		const room = await startRoom({ name: roomName('limit-wire'), runtime, agents: [worker] });
 
 		await (await room.visit(andrei)).send({ text: 'a question' });
-		await waitForRoom(room);
+		await settled(room);
 
 		// The room served a bounded page, not the whole record: a paged response
 		// carries the record floor. Without the range reaching the room, none would.
@@ -150,7 +143,7 @@ describe('a limit windows the record', () => {
 
 		const exchange = await (await room.visit(andrei)).send({ text: 'opening question' });
 		await exchange.waitForClose();
-		await waitForRoom(room);
+		await settled(room);
 
 		// The closing activation reads its fixed exchange whole, so the opener line
 		// is present even though it sits past the writer's token limit. The worker
@@ -203,10 +196,10 @@ describe('a limit windows the record', () => {
 
 		const samExchange = await (await room.visit(sam)).send({ text: 'sam question' });
 		await samExchange.waitForClose();
-		await waitForRoom(room);
+		await settled(room);
 		const priyaExchange = await (await room.visit(priya)).send({ text: 'priya question' });
 		await priyaExchange.waitForClose();
-		await waitForRoom(room);
+		await settled(room);
 
 		// The pinned exchange stays whole; the earlier, unpinned one is windowed
 		// out rather than read in full alongside it.
@@ -244,13 +237,13 @@ describe('a limit windows the record', () => {
 		// More messages than one page holds (RECORD_PAGE is 64).
 		const visit = await room.visit(andrei);
 		for (let index = 0; index < 80; index += 1) await visit.send({ text: `message ${index}` });
-		await waitForRoom(room);
+		await settled(room);
 		expect(pages).toHaveLength(0);
 
 		// Seat the reader and wake it once: it reads the whole record over pages.
 		await room.seat('reader');
 		await visit.send({ text: 'wake the reader' });
-		await waitForRoom(room);
+		await settled(room);
 
 		const all = await messagesOf(room);
 		expect(all.length).toBeGreaterThan(64);

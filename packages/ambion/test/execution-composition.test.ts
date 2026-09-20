@@ -18,8 +18,9 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { andrei, roomName, waitForRoom } from './support/room.ts';
-import { contextText, quiet, scripted, speak } from './support/scripted.ts';
+import { quiet, scripted, settled, speak } from '../src/testing.ts';
+import { andrei, roomName } from './support/room.ts';
+import { contextText } from './support/scripted.ts';
 import { memory } from './support/storage.ts';
 
 interface Call {
@@ -98,7 +99,7 @@ describe('execution composition', () => {
 				(await first.visit(andrei)).send({ text: 'First question?' }),
 				(await second.visit(andrei)).send({ text: 'Second question?' }),
 			]);
-			await Promise.all([waitForRoom(first), waitForRoom(second)]);
+			await Promise.all([settled(first), settled(second)]);
 
 			expect(await spokenTexts(first)).toEqual(['First question?', 'First answer.']);
 			expect(await spokenTexts(second)).toEqual(['Second question?', 'Second answer.']);

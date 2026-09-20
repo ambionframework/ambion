@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { runningRoom } from '../src/host/runtime.ts';
 import { inProcessTransport } from '../src/hosting.ts';
 import { createRuntime, resumeRoom, startRoom } from '../src/index.ts';
+import { fakeClock, scripted, settled } from '../src/testing.ts';
 import {
 	agents,
 	assistant,
@@ -22,9 +23,7 @@ import {
 	troubled,
 } from './support/cast.ts';
 import { World, within } from './support/chaos.ts';
-import { fakeClock } from './support/clock.ts';
-import { collect, messagesOf, roomName, waitForRoom } from './support/room.ts';
-import { scripted } from './support/scripted.ts';
+import { collect, messagesOf, roomName } from './support/room.ts';
 import { memory } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
@@ -104,7 +103,7 @@ describe('a split: two live hosts over one journal', () => {
 		const events = collect(room);
 		const hers = await room.visit(priya);
 		await hers.send({ text: 'First?', key: 'q1' });
-		await waitForRoom(room);
+		await settled(room);
 		// the second host takes the name while the first is alive and keeps taking questions
 		const second = host();
 		const taken = await resumeRoom(name, {
@@ -114,10 +113,10 @@ describe('a split: two live hosts over one journal', () => {
 		});
 		const his = await taken.visit(sam);
 		await his.send({ text: 'Second?', key: 'q2' });
-		await waitForRoom(taken);
+		await settled(taken);
 		// the first host's next write finds the fence: it is superseded, and writes nothing
 		await expect(hers.send({ text: 'Third?', key: 'q3' })).rejects.toThrow(/superseded/);
-		await waitForRoom(room);
+		await settled(room);
 		try {
 			expect(events.some((e) => e.type === 'superseded')).toBe(true);
 			expect(runningRoom(first, name)).toBeUndefined();

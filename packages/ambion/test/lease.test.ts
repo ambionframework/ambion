@@ -22,7 +22,17 @@ import {
 	type Visit,
 } from '../src/index.ts';
 import type { LeaseChange } from '../src/journal/events.ts';
-import { type FakeClock, fakeClock } from './support/clock.ts';
+import {
+	byAgent,
+	type FakeClock,
+	fakeClock,
+	isClosing,
+	quiet,
+	type Script,
+	scripted,
+	settled,
+	speak,
+} from '../src/testing.ts';
 import {
 	assistant,
 	assistantEnded,
@@ -35,20 +45,8 @@ import {
 	roomName,
 	storedOf,
 	tick,
-	waitForRoom,
 } from './support/room.ts';
-import {
-	answersEveryQuestion,
-	byAgent,
-	contextText,
-	isClosing,
-	quiet,
-	type Script,
-	says,
-	scripted,
-	speak,
-	summarise,
-} from './support/scripted.ts';
+import { answersEveryQuestion, contextText, says, summarise } from './support/scripted.ts';
 import { gatedJournals, memory } from './support/storage.ts';
 import { type Fault, faultyTransport } from './support/transport.ts';
 
@@ -104,7 +102,7 @@ describe('a lease', () => {
 		await clock.advance(4_999);
 		expect(starts(events)).toBe(0);
 		await clock.advance(1);
-		await waitForRoom(session);
+		await settled(session);
 		expect(starts(events)).toBe(1);
 		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toEqual([
 			'andrei',
@@ -119,7 +117,7 @@ describe('a lease', () => {
 		const events = collect(session);
 		const visit = await enter(session);
 		await visit.send({ text: 'say hi' });
-		await waitForRoom(session);
+		await settled(session);
 		expect(starts(events)).toBe(1);
 		expect((await messagesOf(session)).filter(isSpoken)).toHaveLength(2);
 	});
@@ -153,7 +151,7 @@ describe('a lease', () => {
 		// after the backoff, reads its own words on the record, and stands down
 		expect(await currentExchange(session)).toBeDefined();
 		await clock.advance(30_000);
-		await waitForRoom(session);
+		await settled(session);
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(2);
 		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toEqual([
 			'andrei',
@@ -212,7 +210,7 @@ describe('a lease', () => {
 		// the activation came to nothing, so the seat is woken again after the backoff
 		expect(await currentExchange(session)).toBeDefined();
 		await clock.advance(30_000);
-		await waitForRoom(session);
+		await settled(session);
 		expect(starts(events)).toBe(2);
 		expect(await currentExchange(session)).toBeUndefined();
 		held.resolve();
@@ -229,7 +227,7 @@ describe('a lease', () => {
 		// the first attempt failed; the second and the third fail after their backoffs
 		await clock.advance(30_000);
 		await clock.advance(60_000);
-		await waitForRoom(session);
+		await settled(session);
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(3);
 
 		// the room gives up: the attempt it does not make is on the record, once
@@ -251,7 +249,7 @@ describe('a lease', () => {
 		});
 		// and the room stays that way: no fourth attempt starts, whatever the clock does
 		await clock.advance(600_000);
-		await waitForRoom(session);
+		await settled(session);
 		expect(starts(events)).toBe(3);
 	});
 
@@ -278,7 +276,7 @@ describe('a lease', () => {
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
 		await clock.advance(30_000);
 		await clock.advance(60_000);
-		await waitForRoom(session);
+		await settled(session);
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(3);
 
 		// the room gives up on the summary, and says so once
@@ -300,7 +298,7 @@ describe('a lease', () => {
 		// nothing is owed, no summary was written, and the record stands whole
 		expect((await messagesOf(session)).filter(isSummary)).toHaveLength(0);
 		await clock.advance(600_000);
-		await waitForRoom(session);
+		await settled(session);
 		expect(events.filter((e) => e.type === 'abandoned')).toHaveLength(1);
 	});
 
@@ -336,7 +334,7 @@ describe('a lease', () => {
 		expect(await currentExchange(session)).toMatchObject({ owner: 'andrei' });
 		expect(starts(events)).toBe(1);
 		await clock.advance(30_000);
-		await waitForRoom(session);
+		await settled(session);
 		expect(starts(events)).toBe(2);
 		expect(await currentExchange(session)).toBeUndefined();
 	});
@@ -361,7 +359,7 @@ describe('a lease', () => {
 		const { session } = await open(faults, byAgent({ solo: answersEveryQuestion(['andrei']) }));
 		visit = await enter(session);
 		await visit.send({ text: 'First?' });
-		await waitForRoom(session);
+		await settled(session);
 		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.text)).toEqual([
 			'First?',
 			'solo on First?',
@@ -389,7 +387,7 @@ describe('a lease', () => {
 		await tick();
 		await visit.send({ text: 'second' });
 		held.resolve();
-		await waitForRoom(session);
+		await settled(session);
 
 		expect(starts(events)).toBe(1);
 		expect(contexts).toHaveLength(2);
@@ -453,7 +451,7 @@ describe('a lease judged where its change is written', () => {
 		// The accepted renewal holds the remote lease to 90s; its expiry then
 		// schedules the retry after the 30s backoff, at 120s.
 		await clock.advance(60_000);
-		await waitForRoom(session);
+		await settled(session);
 		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toEqual([
 			'andrei',
 			'solo',
@@ -543,9 +541,9 @@ describe('a lease judged where its change is written', () => {
 		await tick();
 		expect(events.filter((e) => e.type === 'exchange_closed')).toHaveLength(2);
 		await clock.advance(10_000);
-		await waitForRoom(session);
+		await settled(session);
 		await clock.advance(200_000);
-		await waitForRoom(session);
+		await settled(session);
 
 		const record = await messagesOf(session);
 		const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');

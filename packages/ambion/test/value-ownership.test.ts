@@ -9,8 +9,8 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
+import { isClosing, quiet, scripted, speak } from '../src/testing.ts';
 import { andrei, messagesOf, participantsOf, roomName } from './support/room.ts';
-import { isClosing, quiet, scripted, speak } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const writer = defineAgent({

@@ -17,14 +17,15 @@ import {
 	type ToolContext,
 } from '../src/index.ts';
 import {
-	assistant,
-	collect,
-	enter,
-	messagesOf,
-	roomName as name,
-	waitForRoom,
-} from './support/room.ts';
-import { byAgent, callTool, quiet, type Script, scripted, speak } from './support/scripted.ts';
+	byAgent,
+	callTool,
+	quiet,
+	type Script,
+	scripted,
+	settled,
+	speak,
+} from '../src/testing.ts';
+import { assistant, collect, enter, messagesOf, roomName as name } from './support/room.ts';
 
 function agent(agentName: string, options: Partial<PiOptions> = {}) {
 	return defineAgent({
@@ -48,7 +49,7 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 	});
 	const visit = await enter(session);
 	await visit.send({ text: 'go' });
-	await waitForRoom(session);
+	await settled(session);
 	return session;
 }
 
@@ -135,7 +136,7 @@ describe('ordinary tool bundles', () => {
 		const events = collect(session);
 		const visit = await enter(session);
 		await visit.send({ text: 'go' });
-		await waitForRoom(session);
+		await settled(session);
 		const messages = await messagesOf(session);
 		const question = messages.find((message) => message.kind === 'said' && message.text === 'go');
 		const said = messages.find((message) => message.kind === 'said' && message.from === 'worker');
@@ -172,7 +173,7 @@ describe('ordinary tool bundles', () => {
 			),
 		});
 		await enter(session);
-		await waitForRoom(session);
+		await settled(session);
 		expect(seen).toHaveLength(1);
 		expect(seen[0]?.room).toBe(session.name);
 		expect(typeof seen[0]?.activation).toBe('string');

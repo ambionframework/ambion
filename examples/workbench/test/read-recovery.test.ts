@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { CreateRuntimeOptions } from '@ambionframework/ambion';
-import { createAssistantMessageEventStream, fauxAssistantMessage } from '@earendil-works/pi-ai';
+import { quiet, scripted } from '@ambionframework/ambion/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { people } from '../src/definitions.ts';
 import { liveRoom, openRooms } from '../src/rooms.ts';
@@ -13,16 +13,10 @@ const mira = people.at(0);
 if (!mira) throw new Error('The test team has no human.');
 
 function quietStream(counter: { calls: number }): CreateRuntimeOptions['stream'] {
-	return (_model, _context, _options) => {
+	return scripted(() => {
 		counter.calls += 1;
-		const output = createAssistantMessageEventStream();
-		const response = fauxAssistantMessage('quiet', { stopReason: 'stop' });
-		queueMicrotask(() => {
-			output.push({ type: 'start', partial: response });
-			output.push({ type: 'done', reason: 'stop', message: response });
-		});
-		return output;
-	};
+		return quiet();
+	});
 }
 
 describe('Workbench room reads and recovery', () => {

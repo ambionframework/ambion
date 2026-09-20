@@ -9,6 +9,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
+import { isClosing, quiet, scripted, settled, speak } from '../src/testing.ts';
 import {
 	deferred,
 	messagesOf,
@@ -16,9 +17,7 @@ import {
 	roomName,
 	stateOf,
 	storedOf,
-	waitForRoom,
 } from './support/room.ts';
-import { isClosing, quiet, scripted, speak } from './support/scripted.ts';
 import {
 	faultyJournals,
 	gatedJournals,
@@ -549,7 +548,7 @@ describe.each(storages)('graceful stop keeps unclaimed work on $name storage', (
 				),
 			});
 			try {
-				await waitForRoom(resumed, 'quiet');
+				await settled(resumed);
 				const messages = await messagesOf(resumed);
 				expect(
 					messages.some(

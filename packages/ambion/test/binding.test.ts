@@ -13,10 +13,9 @@ import type { CommitRequest } from '../src/protocol.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
+import { fakeClock, quiet, scripted, settled } from '../src/testing.ts';
 import { bindings } from './support/binding.ts';
-import { fakeClock } from './support/clock.ts';
-import { closedExchange, roomName, waitForRoom } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
+import { closedExchange, roomName } from './support/room.ts';
 import { memory } from './support/storage.ts';
 
 vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
@@ -395,7 +394,7 @@ describe('the room runs the verified rules', () => {
 			bind.once(rules.admitsClose, false);
 			await peer.lease({ activation, operation: 'release', reason: 'released', readThrough: 4 });
 			await visit.send({ text: 'Again.' });
-			await waitForRoom(room);
+			await settled(room);
 			expect(closedExchange(room, first.from)).toBeDefined();
 			expect(vi.mocked(rules.admitsClose).mock.calls.length).toBeGreaterThan(1);
 		} finally {

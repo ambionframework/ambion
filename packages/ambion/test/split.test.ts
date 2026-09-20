@@ -20,6 +20,7 @@ import { inProcessTransport } from '../src/hosting.ts';
 import { createRuntime, type Room, resumeRoom, startRoom } from '../src/index.ts';
 import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
+import { type FakeClock, fakeClock, scripted, settled } from '../src/testing.ts';
 import {
 	agents,
 	assistant,
@@ -32,10 +33,8 @@ import {
 	TIMING,
 } from './support/cast.ts';
 import { idle } from './support/chaos.ts';
-import { type FakeClock, fakeClock } from './support/clock.ts';
 import { History, standing, violations } from './support/history.ts';
-import { collect, messagesOf, roomName, storedOf, waitForRoom } from './support/room.ts';
-import { scripted } from './support/scripted.ts';
+import { collect, messagesOf, roomName, storedOf } from './support/room.ts';
 import { childJournals, childStorage, gatedJournals, memory, sqlite } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
@@ -97,7 +96,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 		const events = collect(room);
 		const hers = await room.visit(priya);
 		await history.run('priya', 'deliver', 'q1', () => hers.send({ text: 'First?', key: 'q1' }));
-		await waitForRoom(room);
+		await settled(room);
 		// paused: a delivery on the first host is in flight and held
 		gate = new Promise((resolve) => {
 			release = resolve;
@@ -113,13 +112,13 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 		});
 		const his = await taken.visit(sam);
 		await history.run('sam', 'deliver', 'q3', () => his.send({ text: 'Third?', key: 'q3' }));
-		await waitForRoom(taken);
+		await settled(taken);
 		// The first host comes back. Its held write sees the newer storage position,
 		// so it is refused before the host acknowledges it.
 		release();
 		await held;
 		await history.run('priya', 'deliver', 'q4', () => hers.send({ text: 'Fourth?', key: 'q4' }));
-		await waitForRoom(room);
+		await settled(room);
 		await history.run(
 			'sam',
 			'read',

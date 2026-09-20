@@ -22,8 +22,16 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
+import {
+	byAgent,
+	type FakeClock,
+	fakeClock,
+	isClosing,
+	quiet,
+	scripted,
+	settled,
+} from '../src/testing.ts';
 import { liveLeases } from './support/chaos.ts';
-import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
 import {
 	currentExchange,
@@ -32,17 +40,8 @@ import {
 	participantsOf,
 	roomName,
 	storedOf,
-	waitForRoom,
 } from './support/room.ts';
-import {
-	answersLastQuestion,
-	byAgent,
-	isClosing,
-	quiet,
-	scripted,
-	summarise,
-	toolResultTexts,
-} from './support/scripted.ts';
+import { answersLastQuestion, summarise, toolResultTexts } from './support/scripted.ts';
 import { type FailMode, memory, tappedJournals } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
 
@@ -283,7 +282,7 @@ class Walk {
 		this.faults.length = 0;
 		this.disk = false;
 		for (let i = 0; i < 6; i += 1) await this.clock.advance(61_000);
-		await within(waitForRoom(this.session), 10_000, 'quiet after the drain');
+		await within(settled(this.session), 10_000, 'quiet after the drain');
 	}
 }
 

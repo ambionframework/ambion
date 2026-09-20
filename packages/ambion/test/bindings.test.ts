@@ -9,8 +9,9 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { messagesOf, participantsOf, roomName, waitForRoom } from './support/room.ts';
-import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
+import { callTool, quiet, scripted, settled } from '../src/testing.ts';
+import { exchangeClosed, messagesOf, participantsOf, roomName } from './support/room.ts';
+import { toolNames } from './support/scripted.ts';
 import { faultyJournals, memory } from './support/storage.ts';
 
 describe('room bindings', () => {
@@ -79,7 +80,7 @@ describe('room bindings', () => {
 		const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
 		await (await one.visit(person)).send({ text: 'First?' });
 		await (await two.visit(person)).send({ text: 'Second?' });
-		await Promise.all([waitForRoom(one, 'settled'), waitForRoom(two, 'settled')]);
+		await Promise.all([exchangeClosed(one), exchangeClosed(two)]);
 		expect(calls.sort()).toEqual(['first', 'second']);
 		expect(prompts.some((prompt) => prompt.includes('Use first.'))).toBe(true);
 		expect(prompts.some((prompt) => prompt.includes('Use second.'))).toBe(true);
@@ -100,14 +101,14 @@ describe('room bindings', () => {
 			agents: [analyst],
 			stream: scripted(() => quiet()),
 		});
-		await waitForRoom(first);
+		await settled(first);
 		await expect(
 			resumeRoom(name, { runtime: createRuntime({ storage: opened.storage }), agents: [] }),
 		).rejects.toThrow(/has no binding/);
 		await (
 			await first.visit(defineHuman({ name: 'priya', identity: 'Project manager.' }))
 		).send({ text: 'Still mine?' });
-		await waitForRoom(first);
+		await settled(first);
 		expect(
 			(await messagesOf(first)).some(
 				(message) => message.kind === 'said' && message.text === 'Still mine?',

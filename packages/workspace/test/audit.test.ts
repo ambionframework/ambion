@@ -1,11 +1,11 @@
 import { defineAgent, pi, startRoom } from '@ambionframework/ambion';
+import { byAgent, callTool, quiet, scripted, speak } from '@ambionframework/ambion/testing';
 import type { ExecutionEnv, FileInfo } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, err, FileError, ok } from '@earendil-works/pi-agent-core';
 import { Bash, InMemoryFs } from 'just-bash';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { enter, roomName as name } from '../../ambion/test/support/room.ts';
-import { byAgent, callTool, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import { DEFAULT_AUDIT_LOG, openAuditLog } from '../src/audit.ts';
 import { BashEnv } from '../src/bash-env.ts';
 import { memoryBackend, openWorkspace } from '../src/index.ts';

@@ -15,9 +15,8 @@ import {
 	type Wake,
 } from '../src/hosting.ts';
 import { type Clock, createRuntime, defineAgent, pi } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock, quiet, scripted, speak } from '../src/testing.ts';
 import { tick } from './support/room.ts';
-import { quiet, scripted, speak } from './support/scripted.ts';
 
 const worker = defineAgent({
 	name: 'worker',

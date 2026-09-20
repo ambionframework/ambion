@@ -9,6 +9,7 @@
  */
 
 import { isSpoken, startRoom } from '@ambionframework/ambion';
+import { byAgent, callTool, quiet, scripted, speak } from '@ambionframework/ambion/testing';
 import { describe, expect, it } from 'vitest';
 import { collect, deferred } from '../../ambion/test/support/room.ts';
 import {
@@ -18,15 +19,7 @@ import {
 	runScenario,
 	type Scenario,
 } from '../../ambion/test/support/scenarios.ts';
-import {
-	byAgent,
-	callTool,
-	quiet,
-	scripted,
-	speak,
-	toolNames,
-	toolResultTexts,
-} from '../../ambion/test/support/scripted.ts';
+import { toolNames, toolResultTexts } from '../../ambion/test/support/scripted.ts';
 import { storages } from '../../ambion/test/support/storage.ts';
 import { openWorkspace } from '../src/index.ts';
 import { backends } from './support/backends.ts';

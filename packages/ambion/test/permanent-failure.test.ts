@@ -8,8 +8,8 @@ import {
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
-import { collect, roomName, waitForRoom } from './support/room.ts';
-import { scripted } from './support/scripted.ts';
+import { scripted, settled } from '../src/testing.ts';
+import { collect, roomName } from './support/room.ts';
 import { storages } from './support/storage.ts';
 
 const worker = defineAgent({
@@ -46,7 +46,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 		try {
 			const visit = await room.visit(person);
 			await visit.send({ to: worker.name, text: 'answer me' });
-			await waitForRoom(room);
+			await settled(room);
 			// A permanent failure does not pass on a retry, so the room runs the
 			// seat once and abandons the rest.
 			expect(calls).toBe(1);
@@ -82,7 +82,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 		try {
 			const visit = await room.visit(person);
 			await visit.send({ to: worker.name, text: 'answer me' });
-			await waitForRoom(room);
+			await settled(room);
 			expect(calls).toBe(hostingOf(runtime).limits.activation.attempts);
 			expect(abandonments(events)).toEqual([
 				expect.objectContaining({ agent: worker.name, cause: 'transient' }),
@@ -114,7 +114,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 		try {
 			const visit = await room.visit(person);
 			await visit.send({ to: worker.name, text: 'answer me' });
-			await waitForRoom(room);
+			await settled(room);
 			// A transient failure may pass, so the room retries to the cap before it
 			// gives up.
 			expect(calls).toBe(hostingOf(runtime).limits.activation.attempts);

@@ -23,9 +23,8 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { type FakeClock, fakeClock } from './support/clock.ts';
+import { type FakeClock, fakeClock, quiet, scripted } from '../src/testing.ts';
 import { roomName, storedOf } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
 import { type OpenedStorage, type Storage, storages } from './support/storage.ts';
 
 const runner = defineAgent({

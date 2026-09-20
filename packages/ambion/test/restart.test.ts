@@ -19,7 +19,16 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { type FakeClock, fakeClock } from './support/clock.ts';
+import {
+	byAgent,
+	type FakeClock,
+	fakeClock,
+	isClosing,
+	quiet,
+	type Script,
+	scripted,
+	settled,
+} from '../src/testing.ts';
 import { refusal } from './support/errors.ts';
 import {
 	assistantEnded,
@@ -27,22 +36,14 @@ import {
 	crash,
 	currentExchange,
 	deferred,
+	exchangeClosed,
 	messagesOf,
 	participantsOf,
 	roomName,
 	storedOf,
 	tick,
-	waitForRoom,
 } from './support/room.ts';
-import {
-	byAgent,
-	isClosing,
-	quiet,
-	type Script,
-	says,
-	scripted,
-	summarise,
-} from './support/scripted.ts';
+import { says, summarise } from './support/scripted.ts';
 import { memory, type OpenedStorage, storages } from './support/storage.ts';
 import { faultyTransport } from './support/transport.ts';
 
@@ -177,7 +178,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			expect(events.some((e) => e.type === 'error' && e.agent === 'alpha')).toBe(true);
 			expect(await currentExchange(resumed)).toMatchObject({ owner: 'priya' });
 			await clock.advance(30_000);
-			await waitForRoom(resumed);
+			await settled(resumed);
 			expect(
 				events.filter((e) => e.type === 'activation_start' && e.agent === 'alpha'),
 			).toHaveLength(1);
@@ -230,7 +231,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			expect(await currentExchange(resumed)).toMatchObject({ owner: 'priya' });
 			expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(0);
 			await clock.advance(30_000);
-			await waitForRoom(resumed);
+			await settled(resumed);
 			expect(
 				events.filter((e) => e.type === 'activation_start' && e.agent === 'alpha'),
 			).toHaveLength(1);
@@ -258,7 +259,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				runtime: runtime(),
 				stream: scripted(byAgent({})),
 			});
-			await waitForRoom(one);
+			await settled(one);
 			expect((await participantsOf(one)).map((s) => s.name)).toEqual(['alpha', 'assistant']);
 			await one.stop();
 
@@ -270,7 +271,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				runtime: runtime(),
 				stream: scripted(byAgent({})),
 			});
-			await waitForRoom(two);
+			await settled(two);
 			expect((await participantsOf(two)).map((s) => s.name)).toEqual(['beta', 'assistant']);
 			await two.stop();
 
@@ -299,9 +300,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				['alpha', 'Alpha.'],
 				['assistant', assistant.identity],
 			]);
-			await waitForRoom(session, 'settled');
+			await exchangeClosed(session);
 			await session.seat(beta.name);
-			await waitForRoom(session);
+			await settled(session);
 			await session.stop();
 
 			// a fresh runtime knows no definition: the composition and the seating carry them
@@ -359,7 +360,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				runtime: runtime(),
 				stream: scripted(byAgent({})),
 			});
-			await waitForRoom(two);
+			await settled(two);
 			// Startup may durably close before subscribers attach; the journal assertion below is authoritative.
 			expect(await currentExchange(two)).toBeUndefined();
 			const question = (await messagesOf(two)).find((m) => m.kind === 'said');
@@ -454,7 +455,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			// the first draft failed: priya is owed, and the room waits for the backoff
 			expect(await summaries(session)).toHaveLength(0);
 			await visit.send({ text: 'Second?' });
-			await waitForRoom(session, 'settled');
+			await exchangeClosed(session);
 			expect(await summaries(session)).toHaveLength(0);
 			const record = await messagesOf(session);
 			const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');
@@ -469,10 +470,10 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			});
 			// the resumed room takes on the draft the first run left owed, so it is
 			// not quiet either: it settled, and the backoff has not passed
-			await waitForRoom(resumed, 'settled');
+			await exchangeClosed(resumed);
 			expect(await summaries(resumed)).toHaveLength(0);
 			await clock.advance(30_000);
-			await waitForRoom(resumed);
+			await settled(resumed);
 			const written = await summaries(resumed);
 			expect(written).toHaveLength(1);
 			expect(written[0]?.covers.from).toBe(questions[0]?.seq);
@@ -517,9 +518,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				stream: scripted(byAgent({ assistant: writes('Never written.') })),
 			});
 			const events = collect(resumed);
-			await waitForRoom(resumed);
+			await settled(resumed);
 			await clock.advance(120_000);
-			await waitForRoom(resumed);
+			await settled(resumed);
 			expect(await summaries(resumed)).toHaveLength(0);
 			expect(events.filter((e) => e.type === 'activation_start')).toEqual([]);
 			expect(await currentExchange(resumed)).toBeUndefined();
@@ -589,7 +590,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				status: 'active',
 			});
 			await resumed.abort();
-			await waitForRoom(resumed);
+			await settled(resumed);
 			await tick();
 			// the seat side hears the cut over the wire, and the room opened it to say so
 			expect(cuts).toEqual(['message:4:alpha:1']);
@@ -611,7 +612,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				runtime: runtime(),
 				stream: scripted(byAgent({})),
 			});
-			await waitForRoom(session);
+			await settled(session);
 			await session.stop();
 			const bare = createRuntime({
 				storage: opened.storage,
