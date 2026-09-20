@@ -46,7 +46,12 @@ live('control', () => {
 
 		expect(saidBy(await messagesOf(session), 'essayist')).toEqual([]);
 		expect(errorsIn(events)).toEqual([]);
-		expect(events).toContainEqual({ type: 'activation_end', agent: 'essayist', spoke: false });
+		expect(events).toContainEqual({
+			type: 'activation_end',
+			agent: 'essayist',
+			activation: expect.any(String),
+			spoke: false,
+		});
 
 		// The room is still running: the next question is answered. The aborted
 		// request left no mark, so the record still asks for the essay, and the

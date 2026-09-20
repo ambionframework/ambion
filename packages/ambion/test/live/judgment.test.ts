@@ -100,6 +100,7 @@ live('judgment', () => {
 		expect(events).toContainEqual({
 			type: 'tool_execution_start',
 			agent: 'stock',
+			activation: expect.any(String),
 			toolName: 'stock_level',
 		});
 		const answer = saidBy(messages, 'stock');

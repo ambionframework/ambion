@@ -49,7 +49,7 @@ describe.each(backends)('a workspace log on $name', (backend) => {
 				{ kind: 'said', text: 'hi' },
 			]);
 		} finally {
-			await env.cleanup(BACKGROUND_CONTEXT);
+			await env.cleanup();
 			await opened.dispose();
 		}
 	});
@@ -76,7 +76,7 @@ describe.each(backends)('a workspace log on $name', (backend) => {
 			const records = await allRecords(env, log.path);
 			expect(records.map((r) => r.i).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
 		} finally {
-			await env.cleanup(BACKGROUND_CONTEXT);
+			await env.cleanup();
 			await opened.dispose();
 		}
 	});
@@ -97,7 +97,7 @@ describe.each(backends)('a workspace log on $name', (backend) => {
 			const records = await allRecords(env, options.path);
 			expect(records.map((r) => r.i).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
 		} finally {
-			await env.cleanup(BACKGROUND_CONTEXT);
+			await env.cleanup();
 			await opened.dispose();
 		}
 	});
@@ -120,7 +120,7 @@ describe.each(backends)('a workspace log on $name', (backend) => {
 			const auditDir = await env.listDir('/var/log/audit', BACKGROUND_CONTEXT);
 			expect(auditDir.ok && auditDir.value.map((entry) => entry.name)).toEqual(['audit.jsonl']);
 		} finally {
-			await env.cleanup(BACKGROUND_CONTEXT);
+			await env.cleanup();
 			await opened.dispose();
 		}
 	});

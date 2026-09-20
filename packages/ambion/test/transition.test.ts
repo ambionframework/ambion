@@ -260,6 +260,75 @@ describe('room transition', () => {
 		expect(commit(3)).toMatchObject({ event: { body: { kind: 'said', from: 'product' } } });
 	});
 
+	it('refuses a message over the byte cap and counts bytes, not characters', () => {
+		const state = foldRoom([composition(), person()], options);
+		const deliver = (text: string, bytes?: number) =>
+			decide(
+				state,
+				{ type: 'deliver', from: 'priya', text, ...(bytes === undefined ? {} : { bytes }) },
+				now,
+			);
+		expect(deliver('123456789', 8)).toMatchObject({ refusal: { category: 'message_too_large' } });
+		expect(deliver('12345678', 8)).toMatchObject({ event: { body: { kind: 'said' } } });
+		expect(deliver('h\u00e9llo', 5)).toMatchObject({ refusal: { category: 'message_too_large' } });
+		expect(deliver('h\u00e9llo', 6)).toMatchObject({ event: { body: { kind: 'said' } } });
+		expect(deliver('x'.repeat(10_000))).toMatchObject({ event: { body: { kind: 'said' } } });
+	});
+
+	it('refuses an ordinary say and a closing summary over the byte cap', () => {
+		const say = foldRoom(
+			[composition(), person(), question(), lease('message:3:product:1', 4)],
+			options,
+		);
+		const ordinary = decide(
+			say,
+			{
+				type: 'commit',
+				bytes: 4,
+				commit: {
+					activation: 'message:3:product:1',
+					key: 'say',
+					readThrough: 3,
+					intent: { kind: 'said', text: 'Answer.' },
+				},
+			},
+			now,
+		);
+		expect(ordinary).toMatchObject({ refusal: { category: 'message_too_large' } });
+
+		const closing = foldRoom(
+			[
+				composition('writer'),
+				person(),
+				question(),
+				{
+					kind: 'close',
+					seq: 4,
+					body: { owner: 'priya', from: 3, through: 3, at, summary: 'writer' },
+				},
+				lease('closed:3:writer:1', 5),
+			],
+			options,
+		);
+		const summary = (bytes?: number) =>
+			decide(
+				closing,
+				{
+					type: 'commit',
+					...(bytes === undefined ? {} : { bytes }),
+					commit: {
+						activation: 'closed:3:writer:1',
+						key: 'summary',
+						intent: { kind: 'said', text: 'Done.' },
+					},
+				},
+				now,
+			);
+		expect(summary(4)).toMatchObject({ refusal: { category: 'message_too_large' } });
+		expect(summary(5)).toMatchObject({ event: { body: { kind: 'summary' } } });
+		expect(summary()).toMatchObject({ event: { body: { kind: 'summary' } } });
+	});
+
 	it('returns durable membership no-ops without writing another event', () => {
 		const seated = foldRoom(
 			[composition(), person(), question(), lease('message:3:product:1', 4)],
@@ -445,6 +514,27 @@ describe('room transition', () => {
 			now,
 		);
 		expect(ended).toMatchObject({ event: { body: { phase: 'ended', reason: 'released' } } });
+	});
+
+	it('carries the usage of a release into the ended body, and omits it without usage', () => {
+		const state = foldRoom(
+			[composition(), person(), question(), lease('message:3:product:1', 4)],
+			options,
+		);
+		const usage = { input: 3, output: 2, cacheRead: 1, cacheWrite: 0, cost: 0.25 };
+		const spent = decide(
+			state,
+			{ type: 'end', id: 'message:3:product:1', reason: 'released', readThrough: 0, usage },
+			now,
+		);
+		expect(spent).toMatchObject({ event: { body: { phase: 'ended', usage } } });
+		const plain = decide(
+			state,
+			{ type: 'end', id: 'message:3:product:1', reason: 'released', readThrough: 0 },
+			now,
+		);
+		expect(plain).toMatchObject({ event: { body: { phase: 'ended' } } });
+		expect(JSON.stringify(plain)).not.toContain('usage');
 	});
 
 	it('allows one active execution per seat across ordinary and closing work', () => {

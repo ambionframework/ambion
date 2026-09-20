@@ -36,9 +36,10 @@ configuration. `pi` is the only executor today. Its `instructions` are private
 model guidance. `model` names a Pi provider model. `tools` and `bundles`
 supply the agent's domain tools. `activationTokenLimit` bounds the record one
 activation reads, and `estimateTokens` counts tokens against it. Without a
-limit, an activation reads the whole record. The seat runs `estimateTokens`,
-so it never crosses the wire. `trace` sets what the trace keeps of the agent's
-work; see [Steps and the trace](#steps-and-the-trace).
+limit, an activation reads the whole record the room serves. See
+`limits.context.messages` under History and limits. The seat runs
+`estimateTokens`, so it never crosses the wire. `trace` sets what the trace
+keeps of the agent's work; see [Steps and the trace](#steps-and-the-trace).
 
 `summary` is an optional name from `agents`. It assigns closing work to that
 ordinary agent. `assistant` accepts an ordinary agent definition and supplies
@@ -84,6 +85,12 @@ room.
 whitespace-only human messages, agent messages, and summaries before writing.
 A refusal does not reserve the request key. Direct calls preserve accepted
 text exactly; `say` trims its input. An agent can finish silently without `say`.
+
+**A message has a size limit.** `limits.message.bytes` sets the most UTF-8
+bytes one human message, agent message, or summary text carries. The default
+is unbounded. The room refuses a longer text with the code `message_too_large`
+before it writes. An agent reads the refusal as a tool error and can say a
+shorter text. The limit counts `text` only.
 
 **A ref is one absolute URI that a message cites.** A ref has a scheme, at
 most 2048 characters, and no whitespace. A message carries at most 16 refs

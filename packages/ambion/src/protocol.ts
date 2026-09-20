@@ -20,6 +20,7 @@ import type {
 	Intent,
 	Message,
 	Seq,
+	Usage,
 	Without,
 } from './types.ts';
 
@@ -97,6 +98,12 @@ export interface CollaborationContext {
 	 * ends and stops paging.
 	 */
 	readonly earliest?: Seq;
+	/**
+	 * How many messages of the record this activation may read lie below the
+	 * first one in `messages`. The room reports it beside `earliest`. A seat
+	 * that windows further adds what it dropped.
+	 */
+	readonly omitted?: number;
 }
 
 /**
@@ -159,6 +166,7 @@ export type LeaseRequest =
 			reason: EndReason;
 			readThrough: Seq;
 			cause?: FailureCause;
+			usage?: Usage;
 	  };
 
 /**

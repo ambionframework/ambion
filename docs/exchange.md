@@ -154,7 +154,11 @@ settles existing pending summary work as failed. See the
 - The summary writer receives one dedicated closing activation and may write a
   summary through `say`.
 - A client groups the fixed range under the question it answered.
-- A host can measure cost and completion per exchange.
+- A host can measure cost and completion per exchange. A closed exchange
+  read carries `usage`: the sum of every activation in its range, the
+  summary activation and every retried attempt included. The
+  `exchange_closed` event carries no usage, because the summary activation
+  runs after the close.
 
 The exchange covers only its own `[from, through]` range. What a person missed
 between visits is presence catch-up, not a synthetic exchange.
