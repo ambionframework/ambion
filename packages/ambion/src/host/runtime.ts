@@ -6,8 +6,16 @@
  * neither reads anything else off it. Everything else a host or the
  * kernel's own internals need — the journal namespace, transcript storage,
  * the model call, wake and retry policy, and the room lifecycle registry —
- * lives behind `hostingOf`. Only `createRuntime` can produce the brand
- * `hostingOf` looks up, so a hand-built value can never stand in for one.
+ * lives behind `hostingOf`.
+ *
+ * `Runtime`'s brand blocks a hand-written literal at compile time: nothing
+ * outside this file can name the key it carries, so a value assembled from
+ * scratch never type-checks as one. It does not follow a value through a
+ * spread, because the key names no runtime property to copy; what actually
+ * refuses a value that did not come from `createRuntime` is the same check
+ * `hostingOf` always made, the `stateFor` lookup below, so a spread copy
+ * still fails, at the first call that reaches it, exactly as it did before
+ * the brand existed.
  *
  * The clock is an interface so a test can move time by hand, and so a host
  * on a platform with its own alarms maps `alarm` to them. A journal opener
@@ -22,7 +30,7 @@ import { createExecutionServices } from '../execution/services.ts';
 import type { SeatPort, SeatRoom } from '../protocol.ts';
 import type { AgentDefinition, Clock, ModelResolver, RoomNotification } from '../types.ts';
 
-/** A key nobody outside this file can write: `createRuntime` is the one place that casts through it. */
+/** A key nobody outside this file can name. `createRuntime` is the one place that casts past it. */
 declare const RUNTIME: unique symbol;
 
 /** What an application holds and passes on. Nothing else reaches through it. */
@@ -81,7 +89,18 @@ function state(runtime: Runtime): RuntimeState {
 
 /** Everything beyond the application view: a host's, or the kernel's own, escape hatch. */
 export function hostingOf(runtime: Runtime): Hosting {
-	return state(runtime);
+	const found = state(runtime);
+	return {
+		journals: found.journals,
+		transcripts: found.transcripts,
+		...(found.transport === undefined ? {} : { transport: found.transport }),
+		stream: found.stream,
+		model: found.model,
+		wake: found.wake,
+		retry: found.retry,
+		call: found.call,
+		evict: found.evict,
+	};
 }
 
 export const runningRoom = (runtime: Runtime, name: string): SeatRoom | undefined =>

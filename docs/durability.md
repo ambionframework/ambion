@@ -91,8 +91,9 @@ and harmless.
 Lease ids derive from cause, journal position, seat, and attempt. No caller
 mints them. The room derives pending wakes and summary assignments from the
 record, retries according to `hostingOf(runtime).retry`, and records
-`abandoned` at the configured cap. Claim and renewal expiry follows the
-runtime wake deadline.
+`abandoned` at the configured cap. `hostingOf` comes from
+`@ambionframework/ambion/transport`, a host's own entry. Claim and renewal
+expiry follows the runtime wake deadline.
 
 Steering carries explicit consumed ranges, so reordered or duplicated context
 cannot acknowledge a gap. A fresh activation reconstructs missed context from

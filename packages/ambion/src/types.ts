@@ -292,8 +292,8 @@ export type RoomNotification =
 	/**
 	 * Another run took the name: its fence is on the journal past this run's.
 	 * This run is superseded, and drops itself from memory the way
-	 * `runtime.evict` does. Nothing it wrote after the other run's fence is on
-	 * the record, and nothing it does from here on writes.
+	 * `hostingOf(runtime).evict` does. Nothing it wrote after the other run's
+	 * fence is on the record, and nothing it does from here on writes.
 	 */
 	| { type: 'superseded' }
 	/**

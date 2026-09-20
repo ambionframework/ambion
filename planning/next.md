@@ -392,9 +392,9 @@ application view to `clock` and `storage`, move the rest to hosting, and
 create the default on first use.
 
 **B5. Two entries: application and hosting.** `/transport` exports the
-runner, the execution services, the audit id, the live-room lookup, and the
-wire types; the main entry exports `Room.reconcile()` and `runtime.evict()`,
-which only hosts call. Ship `.` and `/hosting`, remove `/transport`, and
+runner, the execution services, the audit id, the live-room lookup,
+`hostingOf`, and the wire types; the main entry exports `Room.reconcile()`,
+which only a host calls. Ship `.` and `/hosting`, remove `/transport`, and
 assert the sorted export list of each entry in `package.test.ts`.
 
 **B6. Separate mechanism text from speaking policy in prompts.**

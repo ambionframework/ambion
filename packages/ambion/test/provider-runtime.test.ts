@@ -1,7 +1,6 @@
 import type { Api, Context, Model } from '@earendil-works/pi-ai';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
-import { hostingOf } from '../src/transport.ts';
 
 const catalog = vi.hoisted(() => ({
 	builtinModels: vi.fn(),
@@ -22,6 +21,15 @@ const model = {
 
 describe('default provider runtime boundary', () => {
 	it('initializes one catalog for concurrent first model uses and streams through it', async () => {
+		// Each test's catalog is module-scoped and cached for the module's life
+		// (`builtinRegistry` in services.ts): a fresh module keeps this test's
+		// mocks from a neighbour's, whichever test runs first. The mock call
+		// counts are their own hoisted values, shared by both tests, so they
+		// are cleared here too.
+		vi.resetModules();
+		catalog.builtinModels.mockClear();
+		catalog.getModel.mockClear();
+		catalog.streamSimple.mockClear();
 		catalog.builtinModels.mockReturnValue({
 			getModel: catalog.getModel,
 			streamSimple: catalog.streamSimple,
@@ -34,7 +42,7 @@ describe('default provider runtime boundary', () => {
 		];
 		let streamIndex = 0;
 		catalog.streamSimple.mockImplementation(() => expectedStreams[streamIndex++]);
-		const { createRuntime } = await import('../src/host/runtime.ts');
+		const { createRuntime, hostingOf } = await import('../src/host/runtime.ts');
 		const runtimes = [createRuntime(), createRuntime(), createRuntime()];
 
 		const context: Context = { systemPrompt: '', messages: [] };
@@ -60,11 +68,11 @@ describe('default provider runtime boundary', () => {
 		catalog.builtinModels.mockImplementationOnce(() => {
 			throw new Error('catalog failed');
 		});
-		const { createRuntime, hostingOf: freshHostingOf } = await import('../src/host/runtime.ts');
+		const { createRuntime, hostingOf } = await import('../src/host/runtime.ts');
 		const runtimes = [createRuntime(), createRuntime(), createRuntime()];
 
 		const results = await Promise.allSettled(
-			runtimes.map((runtime) => freshHostingOf(runtime).model('fake/fast', 'worker')),
+			runtimes.map((runtime) => hostingOf(runtime).model('fake/fast', 'worker')),
 		);
 		expect(results).toEqual([
 			{ status: 'rejected', reason: expect.any(Error) },
