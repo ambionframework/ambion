@@ -16,15 +16,7 @@ import {
 	type ToolBundle,
 	type ToolContext,
 } from '../src/index.ts';
-import {
-	byAgent,
-	callTool,
-	quiet,
-	type Script,
-	scripted,
-	settled,
-	speak,
-} from '../src/testing.ts';
+import { byAgent, callTool, quiet, type Script, scripted, settled, speak } from '../src/testing.ts';
 import { assistant, collect, enter, messagesOf, roomName as name } from './support/room.ts';
 
 function agent(agentName: string, options: Partial<PiOptions> = {}) {
