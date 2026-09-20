@@ -149,6 +149,32 @@ describe('Workspace.mirror', () => {
 		await site.destroy();
 	});
 
+	it('does not drop a message published while the backfill read is still in flight', async () => {
+		// A room settles its read only once every queued append has landed, so
+		// it can publish a message to a brand-new subscriber before that same
+		// read resolves with the message already included. Appending it right
+		// away would mark it accounted for before the backfill loop runs, and
+		// the loop would then skip it as already written: gone for good.
+		const site = openWorkspace({ name: name('race'), backend: memoryBackend() });
+		const backlog = [said(1, 'one'), said(2, 'two')];
+		const base = fakeRoom('lobby', backlog);
+		const room: typeof base = {
+			...base,
+			async read(options) {
+				base.emit({ type: 'message', message: said(3, 'three') });
+				backlog.push(said(3, 'three'));
+				return base.read(options);
+			},
+		};
+
+		const mirror = await site.mirror(room);
+		await mirror.stop();
+
+		const lines = await site.use(reader, (env) => readLines(env, mirror.path));
+		expect(lines.map((line) => line.text)).toEqual(['one', 'two', 'three']);
+		await site.destroy();
+	});
+
 	it('ignores a live event once stopped', async () => {
 		const site = openWorkspace({ name: name('stopped'), backend: memoryBackend() });
 		const room = fakeRoom('lobby', [said(1, 'one')]);
@@ -185,6 +211,28 @@ describe('Workspace.mirror', () => {
 		const room = fakeRoom('../escape', []);
 
 		await expect(site.mirror(room)).rejects.toThrow(/room name/i);
+		await site.destroy();
+	});
+
+	it('unsubscribes before rejecting when the backfill read itself fails', async () => {
+		const site = openWorkspace({ name: name('read-fails'), backend: memoryBackend() });
+		const base = fakeRoom('lobby', []);
+		let subscribed = 0;
+		const room: typeof base = {
+			...base,
+			subscribe(listener) {
+				subscribed += 1;
+				const off = base.subscribe(listener);
+				return () => {
+					subscribed -= 1;
+					off();
+				};
+			},
+			read: () => Promise.reject(new Error('storage unavailable')),
+		};
+
+		await expect(site.mirror(room)).rejects.toThrow(/storage unavailable/);
+		expect(subscribed).toBe(0);
 		await site.destroy();
 	});
 

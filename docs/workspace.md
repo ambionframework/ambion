@@ -213,15 +213,22 @@ await mirror.stop();
 ```
 
 `mirror()` writes as an identity the workspace owns; a caller names only the
-room. Stop the room before the mirror, not after: the room's own shutdown
-commits a `left` message for every present visitor, and a mirror stopped
-first never sees it.
+room. Stop the room before the mirror. The room's own shutdown commits a
+`left` message for every present visitor; a mirror already stopped never
+sees it.
+
+**`await site.mirror(room)` returns once recovery is caught up, not once
+every message is durably on disk.** Its promise resolves after the
+backfill has queued every past message for the workspace to write. The
+writes themselves still run on the workspace's own queue; `mirror.stop()`
+is what waits for the last of them to land.
 
 **One line per message, in the room's own order.** Every line is the
 room's own `Message` type — `said`, `arrived`, `left`, `seated`, `unseated`,
-or `summary` — plus `room`, the room's name:
+or `summary` — plus `room`, the room's name. Every kind also carries `at`,
+an ISO timestamp the runtime stamps when the message lands:
 
-| `kind`                                  | Fields beyond `room`, `kind`, `seq`                 |
+| `kind`                                  | Fields beyond `room`, `kind`, `seq`, `at`           |
 | --------------------------------------- | --------------------------------------------------- |
 | `said`                                  | `from`, `to` (absent for a broadcast), `text`       |
 | `arrived`, `left`, `seated`, `unseated` | `subject`, and `identity` on `arrived` and `seated` |
@@ -237,13 +244,16 @@ keeps running; a gap is possible, and not retried.
 **Recovery needs no cursor of its own.** `mirror()` subscribes to the room
 before it reads, then backfills from the highest `seq` already on disk —
 the same recipe [durability](durability.md) gives any external reader. A
-restart neither misses a message nor writes one twice; a message seen from
-both the live subscription and the backfill is written once.
+message the subscription sees while that backfill is still in flight is
+held, not written early: writing it first would mark it accounted for, and
+the backfill would then skip it as already written. A restart neither
+misses a message nor writes one twice; a message seen from both the live
+subscription and the backfill is written once.
 
 **A room's name is not validated at the kernel today.** This is the first
-place a room name turns into a filesystem path, so `mirror()` refuses a
-name that would resolve outside `/rooms` (a name holding `..` or an extra
-`/`) rather than write there.
+place a room name turns into a filesystem path. A name holding `..` or an
+extra `/` would resolve outside `/rooms`; `mirror()` refuses that name and
+writes nothing.
 
 **Every workspace's guidance names the `/rooms` convention, whether or not
 anything mirrors there.** The note is generic — it names no room — so it

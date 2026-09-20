@@ -149,7 +149,7 @@ describe('the workspace audit log', () => {
 		expect(guidance).toContain('the room, the agent, the tool');
 	});
 
-	it('keeps the backend guidance, and adds nothing, when no audit log is set', () => {
+	it('keeps the backend guidance, and adds nothing about audit, when no audit log is set', () => {
 		const site = openWorkspace({ name: name('no-audit'), backend: memoryBackend() });
 		const guidance = site.tools().guidance ?? '';
 		expect(guidance).not.toContain('audit');

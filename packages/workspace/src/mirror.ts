@@ -19,7 +19,7 @@
  */
 
 import { posix } from 'node:path';
-import type { Message, Room, Seq } from '@ambionframework/ambion';
+import type { Message, Room, RoomSnapshot, Seq } from '@ambionframework/ambion';
 import type { Context, ExecutionEnv, JsonValue } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { openLog } from './log.ts';
@@ -46,9 +46,8 @@ export interface RoomMirror {
 }
 
 /**
- * Generic guidance: this names the convention, not any one room, so a
- * workspace includes it unconditionally rather than gating it behind an
- * option a host would otherwise have to remember to set.
+ * Guidance for the `/rooms` convention. It names no room, so a workspace
+ * states it unconditionally, with no option to set.
  */
 export const ROOM_MIRROR_GUIDANCE = [
 	`This workspace may hold /rooms/<room name>/messages.jsonl: one JSON`,
@@ -142,6 +141,15 @@ function reportError(onError: ((error: Error) => void) | undefined, error: unkno
  * already on disk. A message already accounted for, from either source, is
  * not written twice.
  *
+ * A live message can land while the backfill `read` is still in flight, and
+ * a room only settles that read once every queued append (this one among
+ * them) has landed — so the room can publish it to the new subscriber
+ * before `read` resolves with it already included. Appending it early would
+ * set the high-water mark past it, and the backfill loop would then skip it
+ * as already accounted for: written nowhere. Every event the subscription
+ * sees before the backfill loop has run is held, not appended, and drained
+ * through the same loop once recovery is over.
+ *
  * Not exported from the package root: a caller reaches this through
  * `Workspace.mirror()`, which supplies `drive` and `agent` itself.
  */
@@ -175,12 +183,24 @@ export async function mirrorRoom(
 			.catch((error: unknown) => reportError(options.onError, error));
 	};
 
+	let held: Message[] | undefined = [];
 	const unsubscribe = room.subscribe((event) => {
-		if (event.type === 'message') append(event.message);
+		if (event.type !== 'message') return;
+		if (held !== undefined) held.push(event.message);
+		else append(event.message);
 	});
 
-	const snapshot = await room.read({ messages: { since: appendedSeq } });
+	let snapshot: RoomSnapshot;
+	try {
+		snapshot = await room.read({ messages: { since: appendedSeq } });
+	} catch (error) {
+		unsubscribe();
+		throw error;
+	}
 	for (const message of snapshot.messages) append(message);
+	const buffered = held;
+	held = undefined;
+	for (const message of buffered) append(message);
 
 	return {
 		room: room.name,
