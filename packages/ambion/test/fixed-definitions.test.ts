@@ -43,18 +43,37 @@ const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
 const silent = () => scripted(() => quiet());
 
 describe.each(storages)('fixed definitions on $name', (storage) => {
-	it('keeps a configured summary writer in reserve until it is seated', async () => {
+	it('rejects a summary writer that is not seated at start', async () => {
+		const opened = await storage.open();
+		try {
+			await expect(
+				startRoom({
+					name: roomName('reserve-writer-rejected'),
+					agents: [alpha, beta],
+					seats: { alpha: 'broadcast' },
+					summary: 'beta',
+					runtime: createRuntime({ storage: opened.storage }),
+					streamFn: silent(),
+				}),
+			).rejects.toThrow(/not seated/);
+		} finally {
+			await opened.dispose();
+		}
+	});
+
+	it('leaves a closed exchange without a summary while the host holds the writer out of the room', async () => {
 		const opened = await storage.open();
 		const runtime = createRuntime({ storage: opened.storage });
 		const room = await startRoom({
 			name: roomName('reserve-writer'),
 			agents: [alpha, beta],
-			seats: { alpha: 'broadcast' },
+			seats: { alpha: 'broadcast', beta: 'none' },
 			summary: 'beta',
 			runtime,
 			streamFn: silent(),
 		});
 		try {
+			await room.unseat('beta');
 			const visit = await room.visit(priya);
 			const first = await visit.send({ text: 'No writer seated yet.' });
 			await expect(first.waitForSummary()).resolves.toBeUndefined();
@@ -84,6 +103,10 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			await room.seat(beta.name, { attention: 'named' });
 			await waitForRoom(room);
 			expect(await participantsOf(room)).toMatchObject([{ name: beta.name, attention: 'named' }]);
+			await room.seat(beta.name, { attention: 'named' });
+			expect(await participantsOf(room)).toMatchObject([{ name: beta.name, attention: 'named' }]);
+			await expect(room.seat(beta.name, { attention: 'broadcast' })).rejects.toThrow();
+			await room.unseat(beta.name);
 			await room.unseat(beta.name);
 			await room.seat(beta.name);
 			expect(await participantsOf(room)).toMatchObject([

@@ -38,6 +38,25 @@ describe('room journal body validation', () => {
 					subject: 'andrei',
 				}),
 			).toBe(true);
+		expect(
+			validateRoomBody('message', {
+				kind: 'seated',
+				at: '2026-01-01T00:00:00.000Z',
+				subject: 'andrei',
+				fixed: true,
+			}),
+		).toBe(true);
+	});
+
+	it('rejects a non-boolean fixed field on a seating', () => {
+		expect(() =>
+			validateRoomBody('message', {
+				kind: 'seated',
+				at: '2026-01-01T00:00:00.000Z',
+				subject: 'andrei',
+				fixed: 'yes',
+			}),
+		).toThrow();
 	});
 
 	it('accepts both lease phases, close wakes, and a complete composition', () => {

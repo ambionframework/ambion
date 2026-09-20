@@ -161,6 +161,12 @@ export interface PresenceMessage {
 	identity?: string;
 	/** What wakes the seat, on `seated`. Absent means `broadcast`. */
 	attention?: Attention;
+	/**
+	 * Whether an agent cannot unseat this seat, on `seated`. Absent leaves the
+	 * default to the seat's own name: the summary writer's seat is fixed
+	 * unless this says `false`.
+	 */
+	fixed?: boolean;
 	/** How the person reads, on `arrived`, when they said so. */
 	preferences?: string;
 }
@@ -226,6 +232,16 @@ export type SeatStatus = 'active' | 'idle';
  * use this attention when it should receive no ordinary messages.
  */
 export type Attention = 'none' | 'named' | 'broadcast' | 'presence';
+
+/** How a seat wakes, and whether an agent can unseat it. */
+export interface SeatOptions {
+	attention?: Attention;
+	/**
+	 * An agent cannot unseat this seat; the host always can. Absent, the
+	 * summary writer's seat is fixed and every other seat is not.
+	 */
+	fixed?: boolean;
+}
 
 /** A person is in the room or they are not. */
 export type PresenceStatus = 'present' | 'absent';

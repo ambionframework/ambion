@@ -159,7 +159,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		}
 	});
 
-	it('rejects an agent commit that reuses a human delivery key', async () => {
+	it('accepts an agent commit that reuses a human delivery key, in a separate key space', async () => {
 		const { opened, room, runtime } = await openWorld(storage, {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
@@ -173,15 +173,16 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 			expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
 			const view = await peer.view(activation);
 			if (!('view' in view)) throw new Error('The ordinary activation is absent.');
-			const conflict = await peer.commit({
+			const committed = await peer.commit({
 				activation,
 				key: 'cross-operation',
 				readThrough: view.view.through,
-				intent: { kind: 'said', text: 'Question?' },
+				intent: { kind: 'said', text: 'An answer.' },
 			});
-			expect(conflict).toMatchObject({
-				refused: expect.stringMatching(/different room operation/),
-			});
+			expect(committed).toHaveProperty('committed');
+			expect(
+				(await messagesOf(room)).filter((message) => message.key === 'cross-operation'),
+			).toHaveLength(2);
 		} finally {
 			await room.stop();
 			await opened.dispose();

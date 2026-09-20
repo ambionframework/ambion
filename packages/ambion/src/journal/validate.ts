@@ -14,7 +14,10 @@ const attention = Type.Union([
 const wakes = Type.Optional(Type.Array(Type.String()));
 const activationId = Type.Optional(Type.String());
 const commonMessage = { activationId, wakes, at: Type.String() };
-const seating = Type.Object({ name: Type.String(), identity: Type.String(), attention }, extra);
+const seating = Type.Object(
+	{ name: Type.String(), identity: Type.String(), attention, fixed: Type.Optional(Type.Boolean()) },
+	extra,
+);
 const covers = Type.Object({ from: seq, through: seq }, extra);
 const cancelClose = Type.Object(
 	{
@@ -64,6 +67,7 @@ function presenceSchema(kind: string): TSchema {
 			subject: Type.String(),
 			identity: Type.Optional(Type.String()),
 			attention: Type.Optional(attention),
+			fixed: Type.Optional(Type.Boolean()),
 			preferences: Type.Optional(Type.String()),
 		},
 		extra,

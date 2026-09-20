@@ -271,6 +271,24 @@ describe('ordinary unseating and host membership', () => {
 		expect(activated(events)).toContain(product.name);
 	});
 
+	it('refuses an ordinary seat trying to unseat the fixed summary writer', async () => {
+		const session = await open({
+			agents: [product],
+			summary: true,
+			script: byAgent({
+				product: (_context, _name, call) =>
+					call === 1 ? callTool('unseat', { name: writer.name }) : quiet(),
+			}),
+		});
+
+		await (await session.visit(priya)).send({ text: 'Remove the writer.' });
+		await waitForRoom(session);
+
+		const record = await messagesOf(session);
+		expect(record.some((message) => message.kind === 'unseated')).toBe(false);
+		expect(await seatNames(session)).toContain(writer.name);
+	});
+
 	it('preserves host seat and unseat records across a stopped and resumed room', async () => {
 		const session = await open({
 			agents: [product],

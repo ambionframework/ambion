@@ -398,12 +398,25 @@ function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
 	return typeof value === 'object' && value !== null;
 }
 
+const NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
+
 function assertName(name: unknown): asserts name is string {
-	const match = typeof name === 'string' ? /^[a-z][a-z0-9-]*$/.exec(name) : undefined;
+	const match = typeof name === 'string' ? NAME_PATTERN.exec(name) : undefined;
 	if (typeof name !== 'string' || match?.[0] !== name) {
 		throw new AmbionError(
 			'invalid_name',
 			`Invalid participant name '${name}': names are lowercase, alphanumeric plus dashes.`,
+		);
+	}
+}
+
+/** A room name follows the same rule as a participant name: lowercase, alphanumeric plus dashes. */
+export function assertRoomName(name: unknown): asserts name is string {
+	const match = typeof name === 'string' ? NAME_PATTERN.exec(name) : undefined;
+	if (typeof name !== 'string' || match?.[0] !== name) {
+		throw new AmbionError(
+			'invalid_name',
+			`Invalid room name '${name}': names are lowercase, alphanumeric plus dashes.`,
 		);
 	}
 }

@@ -88,7 +88,7 @@ describe.each(storages)('ordinary membership on $name', (storage) => {
 		}
 	});
 
-	it('settles an unclaimed closing assignment when another agent removes its writer, across replay', async () => {
+	it('settles an unclaimed closing assignment when the host removes its writer, across replay', async () => {
 		const opened = await storage.open();
 		const clock = fakeClock();
 		const runtime = createRuntime({ storage: opened.storage, clock, transport: transport([]) });
@@ -119,13 +119,7 @@ describe.each(storages)('ordinary membership on $name', (storage) => {
 			const second = await visit.send({ text: 'Remove the writer.' });
 			const betaSecond = `message:${second.from}:beta:1`;
 			await peer.lease({ operation: 'claim', activation: betaSecond });
-			expect(
-				await peer.commit({
-					activation: betaSecond,
-					key: 'remove-alpha',
-					intent: { kind: 'unseated', name: 'alpha' },
-				}),
-			).toHaveProperty('committed');
+			await room.unseat('alpha');
 			await expect(first.waitForSummary()).rejects.toThrow(/interrupted/);
 			await room.seat('alpha', { attention: 'none' });
 			if (closing === undefined) throw new Error('Expected closing assignment.');

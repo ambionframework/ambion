@@ -56,15 +56,20 @@ contract.
   subsequent handles and writes are stale.
 
 Keys are scoped to the room, not to a person or visit. Reusing a key for another
-author, recipient, text, or operation rejects without changing the original
-entry. An explicitly supplied empty string is a key; omitting it generates one.
-Applications should generate unique keys and save the key with the request
-before sending. Leaving and reentering does not reset a key.
+author, recipient, or text within the same operation rejects without changing
+the original entry. An explicitly supplied empty string is a key; omitting it
+generates one. Applications should generate unique keys and save the key with
+the request before sending. Leaving and reentering does not reset a key.
 
 Agent contributions likewise bind a key to their activation and contribution.
 A retry may carry a newer read position, but cannot replace the accepted content.
 Presence and administrative writes retain the generic journal's kind-level
 deduplication. The record retains every token for replay and inspection.
+
+A delivery's key and an agent commit's key live in separate spaces. The same
+literal key can name a delivery and, independently, a commit, without
+colliding: each reads back through `Message.key` exactly as its own caller
+supplied it.
 
 ## 3. What a read promises
 

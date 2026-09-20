@@ -244,8 +244,9 @@ participation unnecessary. Being idle alone is not a reason to remove an agent.
 
 Unseating can interrupt active work and settle pending assignments. Do not
 use it as routine cleanup after each contribution. Avoid repeated seating
-and unseating, and keep the assistant seated while it supplies summaries.
-The shorthand establishes initial membership; it does not pin that membership.
+and unseating. The assistant's seat is fixed as the summary writer: no
+agent, including the assistant itself, can unseat it through the room's
+`unseat` tool. Only the host can remove it through `room.unseat`.
 
 **The room determines closure from remaining work.** The assistant has no
 special completion command. It stops contributing when further intervention

@@ -178,7 +178,12 @@ function reserveOf(composition: Composition | undefined, roster: readonly Seatin
 	);
 	return [...catalog.values()]
 		.filter((seat) => !seated.has(seat.name))
-		.map((seat) => ({ name: seat.name, identity: seat.identity, attention: 'broadcast' }));
+		.map((seat) => ({
+			name: seat.name,
+			identity: seat.identity,
+			attention: 'broadcast',
+			...(seat.fixed === undefined ? {} : { fixed: seat.fixed }),
+		}));
 }
 
 /** The latest composition, then every seating and unseating after it, in order. */
@@ -204,9 +209,14 @@ function reseat(roster: Seating[], message: Message): void {
 			name: message.subject,
 			identity: message.identity ?? '',
 			attention: message.attention ?? 'broadcast',
+			...(message.fixed === undefined ? {} : { fixed: message.fixed }),
 		});
 	}
 }
+
+/** A seat an agent cannot unseat. The summary writer's is fixed unless its seating said `fixed: false`. */
+export const isFixed = (seat: Seating, composition: Composition | undefined): boolean =>
+	seat.fixed ?? seat.name === composition?.summary;
 
 /**
  * The summaries still owed, one per close. A close owes one when it names a

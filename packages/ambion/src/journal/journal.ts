@@ -55,12 +55,24 @@ const WORDS: Vocabulary<Kind> = {
 /** One entry on the room's journal: its kind, and the body that kind carries. */
 export type Entry = Entries<Kind, Bodies>;
 
+/**
+ * The space a caller's token lives in. The journal's own idempotency index is
+ * one space for the whole room, so a delivery token and a commit token could
+ * otherwise collide on the same literal string and be read as one operation
+ * repeating as the other. `spaced` tags a token before it reaches that index;
+ * `placed` strips the tag back off, so `Message.key` still reads the token
+ * exactly as the caller supplied it.
+ */
+export type KeySpace = 'delivery' | 'commit';
+export const spaced = (space: KeySpace, key: string): string => `${space}:${key}`;
+const unspaced = (key: string): string => key.replace(/^(?:delivery|commit):/, '');
+
 /** One record entry as the room reads it: the body, joined to its envelope. */
 export const placed = (entry: Envelope<Bodies['message']>): Message =>
 	({
 		...entry.body,
 		seq: entry.seq,
-		...(entry.key === undefined ? {} : { key: entry.key }),
+		...(entry.key === undefined ? {} : { key: unspaced(entry.key) }),
 	}) as Message;
 
 /**

@@ -2,12 +2,12 @@
 
 import { decodeActivationId } from '../activation-id.ts';
 import type { AmbionErrorCode } from '../errors.ts';
-import type { Close, Composition } from '../journal/events.ts';
+import type { Close, Composition, Seating } from '../journal/events.ts';
 import type { Bodies, Body, Entry, Kind } from '../journal/journal.ts';
 import type { ActivationSpec, CommitRequest } from '../protocol.ts';
 import type { EndReason, FailureCause, Message, PresenceMessage } from '../types.ts';
 import { activationSpec } from './activation.ts';
-import { applyEvent, baseOf, type FoldOptions, project, type RoomState } from './fold.ts';
+import { applyEvent, baseOf, type FoldOptions, isFixed, project, type RoomState } from './fold.ts';
 import { isExpired, isLive } from './lease.ts';
 import {
 	liveWork,
@@ -231,9 +231,12 @@ function presence(
 	const refusal = presenceRefusal(state, command.change);
 	if (refusal !== undefined) return refusal;
 	const known = state.people.get(command.change.subject);
+	const seat = state.roster.find((candidate) => candidate.name === command.change.subject);
 	if (
 		(command.change.kind === 'arrived' && known?.presence === 'present') ||
-		(command.change.kind === 'left' && known?.presence !== 'present')
+		(command.change.kind === 'left' && known?.presence !== 'present') ||
+		(command.change.kind === 'seated' && seat !== undefined) ||
+		(command.change.kind === 'unseated' && seat === undefined)
 	)
 		return { event: undefined };
 	return message(state, { ...command.change, at: iso(now) }, now, command.route);
@@ -244,22 +247,44 @@ function presenceRefusal(
 	change: PresenceChange,
 ): { refusal: Refusal } | undefined {
 	const seat = state.roster.find((candidate) => candidate.name === change.subject);
-	if (change.kind === 'seated' && (seat !== undefined || state.people.has(change.subject))) {
-		return refused(
-			`Duplicate agent name '${change.subject}': one name names one participant.`,
-			'duplicate_name',
-		);
+	if (change.kind === 'seated') {
+		if (state.people.has(change.subject))
+			return refused(
+				`Duplicate agent name '${change.subject}': one name names one participant.`,
+				'duplicate_name',
+			);
+		if (seat !== undefined && !sameSeating(seat, change, state.composition))
+			return refused(
+				`'${change.subject}' is already seated with a different attention or fixing. Unseat it first.`,
+			);
 	}
-	if (change.kind === 'unseated') return unseatRefusal(seat, change.subject);
+	if (change.kind === 'unseated') return unseatRefusal(state, seat, change.subject);
 	if (change.kind === 'arrived') return arrivalRefusal(state, change);
 	return undefined;
 }
 
+/** Whether a repeated seating asks for exactly what the roster already holds. */
+function sameSeating(
+	seat: Seating,
+	change: PresenceChange,
+	composition: Composition | undefined,
+): boolean {
+	if ((change.identity ?? '') !== seat.identity) return false;
+	if ((change.attention ?? 'broadcast') !== seat.attention) return false;
+	const fixed = change.fixed ?? change.subject === composition?.summary;
+	return isFixed(seat, composition) === fixed;
+}
+
 function unseatRefusal(
+	state: RoomState,
 	seat: RoomState['roster'][number] | undefined,
 	name: string,
 ): { refusal: Refusal } | undefined {
-	if (seat === undefined) return refused(`'${name}' is not seated in this room.`);
+	if (seat === undefined) {
+		return state.reserve.some((candidate) => candidate.name === name)
+			? undefined
+			: refused(`'${name}' is not seated in this room.`);
+	}
 	return undefined;
 }
 
@@ -435,6 +460,7 @@ function seating(
 			subject: held.name,
 			identity: held.identity,
 			attention: held.attention,
+			...(held.fixed === undefined ? {} : { fixed: held.fixed }),
 		},
 		now,
 	);
@@ -446,11 +472,14 @@ function unseating(
 	stamp: { at: string; activationId: string; from: string },
 	now: number,
 ): RoomDecision<'message'> {
-	if (!state.roster.some((seat) => seat.name === name)) {
-		return state.reserve.some((seat) => seat.name === name)
+	const seat = state.roster.find((candidate) => candidate.name === name);
+	if (seat === undefined) {
+		return state.reserve.some((candidate) => candidate.name === name)
 			? { unchanged: { kind: 'unseated', name } }
 			: refused(`'${name}' is not an agent in this room.`, 'unknown_participant');
 	}
+	if (isFixed(seat, state.composition))
+		return refused(`'${name}' holds a fixed seat. Only the host can unseat it.`);
 	return message(state, { kind: 'unseated', subject: name, ...stamp }, now);
 }
 

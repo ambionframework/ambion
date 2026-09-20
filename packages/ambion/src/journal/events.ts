@@ -44,6 +44,8 @@ export interface Seating {
 	name: string;
 	identity: string;
 	attention: Attention;
+	/** An agent cannot unseat this seat, when stated. See `room/fold.ts`'s `isFixed`. */
+	fixed?: boolean;
 }
 
 /** What a run started with. The roster folds from the latest one. */

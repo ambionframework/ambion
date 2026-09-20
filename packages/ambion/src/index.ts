@@ -50,6 +50,7 @@ export type {
 	PresenceStatus,
 	RoomEvent,
 	RoomNotification,
+	SeatOptions,
 	SeatStatus,
 	Seq,
 	SpokenMessage,
