@@ -1,5 +1,6 @@
 /**
- * The wire between a room and a seat, for a host that runs the two apart.
+ * The host's own entry: the wire between a room and a seat, and everything
+ * beyond the application view that a host needs from a `Runtime`.
  *
  * A seat makes three calls — `view`, `commit` and `lease` — and the room
  * answers them. `SeatRoom` names the three, `SeatPort` names the side the
@@ -12,9 +13,13 @@
  * Every shape a call carries is here, because a transport serialises them.
  * `assertWire` and `roundTrip` hold a value to what the wire can carry.
  *
- * The main entry is what a host needs to build a room, and it names no part
- * of this. The execution boundary section of `docs/agent.md` is the design
- * contract for the wire.
+ * `hostingOf(runtime)` is the other half: the journal namespace, transcript
+ * storage, the model call, wake and retry policy, and the room lifecycle
+ * registry, none of which the main entry exposes.
+ *
+ * The main entry is what an application needs to build a room, and it names
+ * no part of this. The execution boundary section of `docs/agent.md` is the
+ * design contract for the wire.
  */
 
 export { createPiExecutor, type PiExecutorOptions } from './execution/activation.ts';

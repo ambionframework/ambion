@@ -8,6 +8,7 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { afterEach, describe, expect, it } from 'vitest';
 import { decodeActivationId } from '../src/activation-id.ts';
+import { hostingOf, inProcessTransport, type SeatRoom } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -21,7 +22,6 @@ import {
 	type Visit,
 } from '../src/index.ts';
 import type { LeaseChange } from '../src/journal/events.ts';
-import { hostingOf, inProcessTransport, type SeatRoom } from '../src/transport.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import {
 	assistant,

@@ -31,8 +31,8 @@ import type {
 	Transport,
 	ViewRange,
 	ViewResponse,
-} from '@ambionframework/ambion/transport';
-import { runningRoom } from '@ambionframework/ambion/transport';
+} from '@ambionframework/ambion/hosting';
+import { runningRoom } from '@ambionframework/ambion/hosting';
 import type { JournalOpener } from '@ambionframework/journal';
 import { definitionOf, runtimeFor } from './configure.ts';
 import type { SeatObject } from './seat-object.ts';

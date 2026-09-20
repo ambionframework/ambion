@@ -4,7 +4,7 @@
  */
 
 import { env, runInDurableObject } from 'cloudflare:test';
-import { assertWire, roundTrip } from '@ambionframework/ambion/transport';
+import { assertWire, roundTrip } from '@ambionframework/ambion/hosting';
 import { namespaced } from '@ambionframework/journal';
 import { piSessions } from '@ambionframework/pi-journal';
 import { expect, it } from 'vitest';

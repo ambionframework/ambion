@@ -17,6 +17,7 @@ import { messagesOf, participantsOf } from './room.ts';
 
 import type { JournalOpener } from '@ambionframework/journal';
 import { expect } from 'vitest';
+import { hostingOf, inProcessTransport } from '../../src/hosting.ts';
 import {
 	createRuntime,
 	type HumanDefinition,
@@ -32,7 +33,6 @@ import {
 } from '../../src/index.ts';
 import type { LeaseChange } from '../../src/journal/events.ts';
 import { foldLeases, isLive } from '../../src/room/lease.ts';
-import { hostingOf, inProcessTransport } from '../../src/transport.ts';
 import {
 	agents,
 	assistant,

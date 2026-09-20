@@ -5,6 +5,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+	hostingOf,
+	runningRoom,
+	type SeatPort,
+	type SeatRoom,
+	type Transport,
+	type Wake,
+} from '../src/hosting.ts';
+import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
@@ -15,14 +23,6 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import {
-	hostingOf,
-	runningRoom,
-	type SeatPort,
-	type SeatRoom,
-	type Transport,
-	type Wake,
-} from '../src/transport.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { roomName, storedOf } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';

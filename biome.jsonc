@@ -120,7 +120,7 @@
 											"./room.ts",
 											"./room-host.ts",
 											"./index.ts",
-											"./transport.ts"
+											"./hosting.ts"
 										],
 										"message": "The vocabulary imports nothing that does anything."
 									}
@@ -150,7 +150,7 @@
 											"../room.ts",
 											"../room-host.ts",
 											"../index.ts",
-											"../transport.ts"
+											"../hosting.ts"
 										],
 										"message": "A host owns values; it reads no log, folds nothing, and runs no seat."
 									}
@@ -180,7 +180,7 @@
 											"../room.ts",
 											"../room-host.ts",
 											"../index.ts",
-											"../transport.ts"
+											"../hosting.ts"
 										],
 										"message": "The journal names the room's kinds, and nothing that reads them."
 									}
@@ -208,7 +208,7 @@
 											"../room.ts",
 											"../room-host.ts",
 											"../index.ts",
-											"../transport.ts",
+											"../hosting.ts",
 											"@earendil-works/pi-*",
 											"@ambionframework/pi-journal"
 										],
@@ -238,7 +238,7 @@
 											"./room.ts",
 											"./room-host.ts",
 											"./index.ts",
-											"./transport.ts",
+											"./hosting.ts",
 											"@earendil-works/pi-*",
 											"@ambionframework/pi-journal"
 										],
@@ -268,7 +268,7 @@
 											"../room.ts",
 											"../room-host.ts",
 											"../index.ts",
-											"../transport.ts"
+											"../hosting.ts"
 										],
 										"message": "A workspace is what a tool reaches into; it knows no room and no seat."
 									}
@@ -295,7 +295,7 @@
 											"../room.ts",
 											"../room-host.ts",
 											"../index.ts",
-											"../transport.ts"
+											"../hosting.ts"
 										],
 										"message": "The seat side reaches its room through the wire alone: no log, no fold, no session."
 									}
@@ -322,7 +322,7 @@
 											"./execution/*",
 											"./room.ts",
 											"./index.ts",
-											"./transport.ts",
+											"./hosting.ts",
 											"@earendil-works/pi-*",
 											"@ambionframework/pi-journal"
 										],
@@ -352,10 +352,10 @@
 							"options": {
 								"patterns": [
 									{
-										// `@ambionframework/ambion/transport` is a published entry, and
+										// `@ambionframework/ambion/hosting` is a published entry, and
 										// the manifest names it. Every other path reaches inside the core.
-										"group": ["@ambionframework/ambion/!(transport)", "**/packages/ambion/src/*"],
-										"message": "Reach the core through `@ambionframework/ambion` or its `/transport` entry, never a file inside it."
+										"group": ["@ambionframework/ambion/!(hosting)", "**/packages/ambion/src/*"],
+										"message": "Reach the core through `@ambionframework/ambion` or its `/hosting` entry, never a file inside it."
 									}
 								]
 							}

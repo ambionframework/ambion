@@ -4,11 +4,6 @@ import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { Activation, type PiExecutorOptions } from '../src/execution/activation.ts';
 import { binding, toolsFor } from '../src/execution/tools.ts';
-import { type AgentDefinition, defineAgent, defineTool, pi } from '../src/index.ts';
-import type { Entry } from '../src/journal/journal.ts';
-import { activationSpec } from '../src/room/activation.ts';
-import { foldRoom } from '../src/room/fold.ts';
-import { viewOf } from '../src/room/view.ts';
 import type {
 	ActivationSpec,
 	ActivationView,
@@ -19,7 +14,12 @@ import type {
 	LeaseResponse,
 	SeatRoom,
 	ViewResponse,
-} from '../src/transport.ts';
+} from '../src/hosting.ts';
+import { type AgentDefinition, defineAgent, defineTool, pi } from '../src/index.ts';
+import type { Entry } from '../src/journal/journal.ts';
+import { activationSpec } from '../src/room/activation.ts';
+import { foldRoom } from '../src/room/fold.ts';
+import { viewOf } from '../src/room/view.ts';
 
 const worker = defineAgent({
 	name: 'worker',

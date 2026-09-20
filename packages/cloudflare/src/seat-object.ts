@@ -11,8 +11,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Clock, RoomNotification } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
-import type { ExecutionServices, SeatRoom, Steer, Wake } from '@ambionframework/ambion/transport';
-import { AgentRunner, createPiExecutor } from '@ambionframework/ambion/transport';
+import type { ExecutionServices, SeatRoom, Steer, Wake } from '@ambionframework/ambion/hosting';
+import { AgentRunner, createPiExecutor } from '@ambionframework/ambion/hosting';
 import type { SeatEvent } from './configure.ts';
 import { definitionOf, executionFor, seatEvent } from './configure.ts';
 import type { Env } from './room-object.ts';

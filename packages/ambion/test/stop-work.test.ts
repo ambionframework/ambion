@@ -1,5 +1,6 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
+import { hostingOf, runningRoom, type SeatPort, type Wake } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -8,7 +9,6 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { hostingOf, runningRoom, type SeatPort, type Wake } from '../src/transport.ts';
 import {
 	deferred,
 	messagesOf,

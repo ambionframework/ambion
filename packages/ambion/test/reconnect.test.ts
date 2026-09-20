@@ -3,6 +3,7 @@
  * exchange by its opening message and retry a delivery by its durable key.
  */
 import { describe, expect, it } from 'vitest';
+import { hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -15,7 +16,6 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { hostingOf } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import { deferred, messagesOf, participantsOf, roomName, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';

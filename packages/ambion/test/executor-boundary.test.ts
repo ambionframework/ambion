@@ -1,5 +1,4 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { createRuntime, defineAgent, pi, readRoom, resumeRoom, startRoom } from '../src/index.ts';
 import {
 	hostingOf,
 	inProcessTransport,
@@ -7,7 +6,8 @@ import {
 	type SeatContext,
 	type SeatRoom,
 	type Transport,
-} from '../src/transport.ts';
+} from '../src/hosting.ts';
+import { createRuntime, defineAgent, pi, readRoom, resumeRoom, startRoom } from '../src/index.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
 import { isClosing, quiet, scripted, seat, speak } from './support/scripted.ts';
 import { storages } from './support/storage.ts';

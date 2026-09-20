@@ -7,7 +7,7 @@
 
 import { env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import type { Message } from '@ambionframework/ambion';
-import type { LeaseResponse, SeatRoom, Steer } from '@ambionframework/ambion/transport';
+import type { LeaseResponse, SeatRoom, Steer } from '@ambionframework/ambion/hosting';
 import { namespaced } from '@ambionframework/journal';
 import { piSessions } from '@ambionframework/pi-journal';
 import { expect, it } from 'vitest';

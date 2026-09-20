@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { inProcessTransport, type Steer, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -8,7 +9,6 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { inProcessTransport, type Steer, type Transport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import {
 	assistant,

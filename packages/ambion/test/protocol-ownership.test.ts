@@ -1,4 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import type {
+	CommitRequest,
+	LeaseRequest,
+	SeatContext,
+	SeatRoom,
+	Steer,
+	Transport,
+} from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -9,14 +17,6 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
-import type {
-	CommitRequest,
-	LeaseRequest,
-	SeatContext,
-	SeatRoom,
-	Steer,
-	Transport,
-} from '../src/transport.ts';
 import { andrei, participantsOf, roomName } from './support/room.ts';
 import { type Storage, storages } from './support/storage.ts';
 

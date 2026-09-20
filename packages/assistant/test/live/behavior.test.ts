@@ -9,7 +9,7 @@ import {
 	pi,
 	startRoom,
 } from '@ambionframework/ambion';
-import { hostingOf } from '@ambionframework/ambion/transport';
+import { hostingOf } from '@ambionframework/ambion/hosting';
 import {
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,

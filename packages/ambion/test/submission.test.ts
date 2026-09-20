@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { hostingOf, inProcessTransport, type SeatPort, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -9,7 +10,6 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { hostingOf, inProcessTransport, type SeatPort, type Transport } from '../src/transport.ts';
 import {
 	messagesOf,
 	participantsOf,

@@ -1,4 +1,5 @@
 import type { JournalEntry, JournalOpener } from '@ambionframework/journal';
+import { hostingOf } from '../../src/hosting.ts';
 import {
 	defineAgent,
 	defineHuman,
@@ -11,7 +12,6 @@ import {
 } from '../../src/index.ts';
 import type { RoomState } from '../../src/room/fold.ts';
 import { liveWork } from '../../src/room/reconcile.ts';
-import { hostingOf } from '../../src/transport.ts';
 
 /** A trivial assistant: every room seats one, and nothing that uses it tests what it writes. */
 export const assistant = defineAgent({

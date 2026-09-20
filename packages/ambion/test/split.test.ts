@@ -16,10 +16,10 @@ import { fileURLToPath } from 'node:url';
 import type { JournalEntry } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { runningRoom } from '../src/host/runtime.ts';
+import { inProcessTransport } from '../src/hosting.ts';
 import { createRuntime, type Room, resumeRoom, startRoom } from '../src/index.ts';
 import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
-import { inProcessTransport } from '../src/transport.ts';
 import {
 	agents,
 	assistant,

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+	hostingOf,
+	inProcessTransport,
+	runningRoom,
+	type SeatContext,
+	type SeatPort,
+	type SeatRoom,
+	type Wake,
+} from '../src/hosting.ts';
+import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
@@ -8,15 +17,6 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import {
-	hostingOf,
-	inProcessTransport,
-	runningRoom,
-	type SeatContext,
-	type SeatPort,
-	type SeatRoom,
-	type Wake,
-} from '../src/transport.ts';
 import { deferred, messagesOf, roomName, stateOf, storedOf, waitForRoom } from './support/room.ts';
 import { byAgent, isClosing, quiet, scripted, speak } from './support/scripted.ts';
 import {

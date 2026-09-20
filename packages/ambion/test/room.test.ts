@@ -1,6 +1,7 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { runningRoom } from '../src/host/runtime.ts';
+import { hostingOf, inProcessTransport, seatSessionId } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -12,7 +13,6 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
-import { hostingOf, inProcessTransport, seatSessionId } from '../src/transport.ts';
 import {
 	andrei,
 	assistant,

@@ -42,7 +42,7 @@ See [`scripts/cli-team-smoke.mjs`](../scripts/cli-team-smoke.mjs) and
 consumer checks.
 
 The core has two published entries: `@ambionframework/ambion` for hosts and
-`@ambionframework/ambion/transport` for a room and seat separated by a wire.
+`@ambionframework/ambion/hosting` for a room and seat separated by a wire.
 The core imports no platform modules. Workspace filesystem code owns Node
 dependencies; Cloudflare code owns Durable Object integration.
 

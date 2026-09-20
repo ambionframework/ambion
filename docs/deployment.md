@@ -104,7 +104,7 @@ revoked remains failed.
 
 `hostingOf(runtime).evict(name)` drops local handles and observers without
 writing departures or releasing leases. `hostingOf` comes from
-`@ambionframework/ambion/transport`, a host's own entry. Neither operation
+`@ambionframework/ambion/hosting`, a host's own entry. Neither operation
 closes one client's connection while keeping the room active.
 
 Concurrent `stop()` calls wait for the same shutdown operation. If a durable
