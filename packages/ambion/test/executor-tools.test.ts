@@ -184,7 +184,7 @@ describe('executor tool authority', () => {
 				? { kind: 'summarize', exchange: 4, person: 'priya', through: 7 }
 				: { kind: 'respond', message: 4 };
 			const held = binding(activation, roomThatCommits(commits));
-			const say = toolsFor(view(purpose), worker, held, 'room')[0];
+			const say = toolsFor(view(purpose), worker, held)[0];
 			if (say === undefined) throw new Error('The purpose has no say tool.');
 			await say.execute('c1', { text: 'x', refs: [' https://x/a ', '', 'https://x/b'] });
 			await say.execute('c2', { text: 'x', refs: [] });
