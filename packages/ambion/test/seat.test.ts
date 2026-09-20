@@ -1,3 +1,4 @@
+import { noTraces } from './support/trace.ts';
 /**
  * The seat's side of the wire, driven by hand over a room the test plays:
  * one activation at a time, a steer into the one that runs, and whatever
@@ -127,6 +128,7 @@ function play(stream: StreamFn = scripted(() => quiet()), transcripts?: SessionO
 		room: 'played',
 		seat: 'product',
 		executor,
+		trace: noTraces,
 	});
 	return { room, actor, clock, runtime };
 }

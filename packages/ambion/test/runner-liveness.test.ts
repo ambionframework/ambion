@@ -17,6 +17,7 @@ import {
 import { type Clock, createRuntime, defineAgent, pi } from '../src/index.ts';
 import { fakeClock, quiet, scripted, speak } from '../src/testing.ts';
 import { tick } from './support/room.ts';
+import { noTraces } from './support/trace.ts';
 
 const worker = defineAgent({
 	name: 'worker',
@@ -124,6 +125,7 @@ function fixture(
 		seat: worker.name,
 		executor,
 		emit: options.emit,
+		trace: noTraces,
 	});
 	return { actor, clock, room };
 }

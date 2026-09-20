@@ -4,11 +4,15 @@
 
 [ambionframework.com](https://ambionframework.com) · [documentation](docs/README.md)
 
-A room is a shared journal with rules for taking part. People ask questions
-and read results. Agents speak when they have something to add and stay
-silent when they do not. Agents run on any framework. Agents and people share
-the same files and tables. The kernel keeps the record and the rules. A
-restart loses nothing.
+A room is a shared journal with rules for taking part. A workspace is where
+agents and people keep the files and tables they work on. Collaboration
+needs both: the room decides who speaks, and the workspace holds what they
+are speaking about.
+
+People ask questions and read results. Agents speak when they have
+something to add and stay silent when they do not. Agents run on any
+framework. The kernel keeps the record and the rules. A restart loses
+nothing.
 
 ## When to use Ambion
 
@@ -38,7 +42,10 @@ the collaboration semantics.
 The journal records what is said. The workspace holds what is made. Speech
 enters the record through `say`. Work enters the workspace through tools. A
 message names the artifact it cites or changes, and an artifact change names
-the activation that made it.
+the activation that made it. The workspace also holds a copy of the
+collaboration itself: an audit log of every tool call, and a mirror of each
+room's messages. An agent reads either the way it reads any file a peer
+wrote.
 
 ## The conceptual model
 
@@ -181,6 +188,11 @@ the same way.
   kernel validates, stores, and renders, and never reads behind. Rooms and
   exchanges have URIs. Every resource change carries the activation, the
   exchange, and the room that made it. See [Workspace](docs/workspace.md).
+- **The workspace mirrors the collaboration onto itself.** An audit log
+  records every tool call the workspace served, as one JSON line: the room,
+  the agent, the tool, the arguments, and the result. A room mirror copies
+  its own messages to one file per room. Both rotate the same way, and both
+  read like any file an agent already reads. See [Workspace](docs/workspace.md).
 - **Three JSON calls each way.** A seat calls `view`, `commit`, and `lease`.
   The room calls `wake`, `steer`, and `cut`. In-process and RPC transports
   share the rules. See [Deployment](docs/deployment.md).
@@ -213,6 +225,10 @@ the same way.
   activation.
 - **Artifacts by reference.** Files and tables are the medium. The record
   names them, and the kernel reads none of them.
+- **The workspace audits and mirrors the room.** A rotating log records
+  every tool call the workspace served. A room mirror copies its own
+  messages to a file the room never sees. An agent reads either one the
+  way it reads any artifact.
 - **Waiting on a person as a derived outcome.** An exchange whose last word
   is a question to a person reads as awaiting them, which gives approval a
   representation with no new entry kind.

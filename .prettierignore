@@ -4,6 +4,6 @@ node_modules/
 pnpm-lock.yaml
 CHANGELOG.md
 # generated demo snapshots — whitespace is content
-demos/
+planning/evidence/reports/*.html
 # Local Workbench workspace artifacts are runtime data.
 examples/workbench/.data/

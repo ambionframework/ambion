@@ -10,6 +10,7 @@ import { defineAgent, pi } from '../src/index.ts';
 import type { ActivationView, RoomProtocol } from '../src/protocol.ts';
 import { quiet, scripted } from '../src/testing.ts';
 import type { RoomNotification } from '../src/types.ts';
+import { noTrace } from './support/trace.ts';
 
 const message: AgentMessage = { role: 'user', content: 'hello', timestamp: 1 };
 const agent = { state: { messages: [message] } } as unknown as Agent;
@@ -60,7 +61,11 @@ function activationFor(
 		room: 'room',
 		now: () => 0,
 	};
-	return new Activation({ id: 'activation', room: unusedRoom, emit }, options, openAudit);
+	return new Activation(
+		{ id: 'activation', room: unusedRoom, emit, trace: noTrace },
+		options,
+		openAudit,
+	);
 }
 
 function intercepted(
@@ -150,7 +155,7 @@ describe('audit persistence', () => {
 		activation.abort();
 		releasePersist();
 
-		expect(await running).toEqual({ failed: true, cause: 'transient' });
+		expect(await running).toMatchObject({ failed: true, cause: 'transient' });
 		expect(events).toEqual(['provider']);
 	});
 

@@ -34,7 +34,7 @@ newer, the OpenTUI floor.
 | `docs/formal.md`      | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                 |
 | `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                              |
 | `examples/workbench`  | Runnable example: rooms and an OpenTUI terminal in one process                                                              |
-| `demos/`              | One dated report per merged change — regenerate on the branch, then leave it                                                |
+| `planning/evidence/`  | Dated evidence: reports of the retired site example under `reports/`, dated reviews, and the results that phase 8 records   |
 | `planning/`           | `next.md`: the must-have scope and plan for 0.1.0; `backlog.md`: everything after; `formal.md`: the verified rules to write |
 
 ## Positioning

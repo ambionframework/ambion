@@ -238,8 +238,8 @@ template on `read()`.
 guide describes. The example is one terminal process with an assistant and
 three specialists ([docs/example.md](../docs/example.md)).
 
-1. [ ] Move the old example reports and `docs/assistant-acceptance.md` under
-       `planning/evidence/` (C7). Needs nothing.
+1. [x] Move the old example reports and `docs/assistant-acceptance.md` under
+       `planning/evidence/` (C7). The reports sit in `planning/evidence/reports/`.
 2. [ ] The terminal shows steps per activation, the cost per exchange, and
        `awaiting` and `approval` to the person (F8). Needs phase 3 step 2
        and phase 2 steps 13 and 14, plus phase 5 step 4 for `approval`.
@@ -277,7 +277,8 @@ the code it describes lands, so pages run beside the code.
        harness memory (D8, D4, F9). Needs phase 4 step 6 and phase 2
        step 8.
 8. [ ] Retire the residue: rule citations, migration notes, package
-       descriptions, comment voice, `demos/README.md` (C4). Needs 1.
+       descriptions, comment voice, and
+       `planning/evidence/reports/README.md` (C4). Needs 1.
 9. [ ] The `README.md` example typechecked against the packed entries;
        package READMEs; the CLI README; `CONTRIBUTING.md` with the Node
        floors. Needs phase 6 step 3.
@@ -390,10 +391,11 @@ definitions, and make it the default.
 **C4. Retire pre-release residue.** Eight source comments cite numbered
 rules that `docs/agent.md` no longer has; four migration notes describe
 renames before any release; the core manifest describes "a minimalist
-framework for ambient-aware, always-on agents"; `demos/README.md` names a
-removed API. Fix each before the tag, and state two limits the docs omit:
-passes share no model context without an adapter session, and a second
-person's question inside an open exchange belongs to that exchange.
+framework for ambient-aware, always-on agents";
+`planning/evidence/reports/README.md` names a removed API. Fix each before
+the tag, and state two limits the docs omit: passes share no model context
+without an adapter session, and a second person's question inside an open
+exchange belongs to that exchange.
 
 **C5. One word, one meaning.** "Seat" names membership, the `seats` map,
 the `seat()` operation, the executor dependencies, and the wire. "Exchange"
@@ -633,7 +635,7 @@ type Step =
       type: 'room';
       call: string;
       intent: Intent;
-      result: 'committed' | 'unchanged' | 'missed' | 'refused' | 'stale';
+      result: 'committed' | 'unchanged' | 'missed' | 'refused' | 'stale' | 'unknown';
       seq?: Seq;
     }
   | { type: 'steer'; seq: Seq; consumed: boolean }
@@ -646,8 +648,16 @@ type Step =
       cacheWrite: number;
       cost?: number;
     }
-  | { type: 'end'; stop: PassResult['stop']; failure?: PassResult['failure'] };
+  | {
+      type: 'end';
+      stop: PassResult['stop'];
+      failure?: { cause: 'permanent' | 'transient'; message: string };
+    };
 ```
+
+The `unknown` result is a commit whose outcome the room cannot read. The
+`end` failure carries a `message`, not an `Error`, so a live step and a
+journal step have one wire form.
 
 Every step carries `activation`, `pass`, `at`, and an index. Pi deltas and
 tool events, Anthropic content blocks, Claude Agent SDK messages and hooks,

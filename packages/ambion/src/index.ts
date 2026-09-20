@@ -56,10 +56,13 @@ export type {
 	SeatStatus,
 	Seq,
 	SpokenMessage,
+	Step,
 	SummaryMessage,
 	SummaryOutcome,
 	ToolBundle,
 	ToolContext,
+	TracePolicy,
+	TraceStep,
 } from './types.ts';
 export { isPresence, isSpoken, isSummary } from './types.ts';
 

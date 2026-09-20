@@ -15,6 +15,7 @@ import {
 import { type Clock, createRuntime, defineAgent, pi } from '../src/index.ts';
 import { fakeClock, quiet, scripted } from '../src/testing.ts';
 import { tick } from './support/room.ts';
+import { noTraces } from './support/trace.ts';
 
 const product = defineAgent({
 	name: 'product',
@@ -84,6 +85,7 @@ function actorFor(
 		room: 'model-test',
 		seat: product.name,
 		executor,
+		trace: noTraces,
 	});
 }
 

@@ -26,6 +26,7 @@ import type { Entry } from '../src/journal/journal.ts';
 import { activationSpec } from '../src/room/activation.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { viewOf } from '../src/room/view.ts';
+import { noTrace } from './support/trace.ts';
 
 const worker = defineAgent({
 	name: 'worker',
@@ -85,7 +86,7 @@ function executorOptions(definition: AgentDefinition): PiExecutorOptions {
 
 function activationFor(id: string, definition: AgentDefinition): Activation {
 	return new Activation(
-		{ id, room: unusedRoom, emit: () => {} },
+		{ id, room: unusedRoom, emit: () => {}, trace: noTrace },
 		executorOptions(definition),
 		() => {
 			throw new Error('unused');

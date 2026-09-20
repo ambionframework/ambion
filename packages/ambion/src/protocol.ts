@@ -17,6 +17,7 @@ import type {
 	EndReason,
 	FailureCause,
 	HumanParticipantInfo,
+	Intent,
 	Message,
 	Seq,
 	Without,
@@ -125,11 +126,7 @@ export interface Stale {
 
 export type ViewResponse = { view: ActivationView } | Stale;
 
-/** What a seat asks the room to put on the record. The room stamps everything else. */
-export type Intent =
-	| { kind: 'said'; to?: string; text: string; refs?: string[] }
-	| { kind: 'seated'; name: string }
-	| { kind: 'unseated'; name: string };
+export type { Intent };
 
 export interface CommitRequest {
 	activation: string;

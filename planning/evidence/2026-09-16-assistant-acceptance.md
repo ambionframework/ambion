@@ -89,4 +89,4 @@ blanket speech or tool prohibition that prevents application overrides,
 necessary dependent assignments, or evidence-backed corrections. Do not mask
 failures with retries or weaken assertions to accept missing specialist work.
 
-See [the assistant contract](assistant.md) for the intended behavior and scope.
+See [the assistant contract](../../docs/assistant.md) for the intended behavior and scope.
