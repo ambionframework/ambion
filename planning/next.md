@@ -116,8 +116,10 @@ step. Phase 3 step 3 splits `room-host.ts`, so it waits for step 12.
 ### Phase 2. The public shape, then the freeze (P0)
 
 **Goal:** every journal field and every read the release needs land, then
-the freeze. The step labels are fixed names that other steps cite; the
-list does not run in numeric order.
+the freeze.
+
+Each label is a stable name that other steps cite. Steps 8 and 15
+landed (#185, #187), so the labels skip them.
 
 - [ ] **9.** `limits.context.messages` and `limits.message.bytes` (D5). Needs 15.
 - [ ] **10.** `refs` on spoken messages and summaries; room URIs; `refs` on the
