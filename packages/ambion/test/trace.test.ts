@@ -29,9 +29,8 @@ import {
 	type TracePolicy,
 } from '../src/index.ts';
 import { assertWire, roundTrip } from '../src/protocol.ts';
-import { fakeClock } from './support/clock.ts';
-import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
-import { quiet, scripted, speak } from './support/scripted.ts';
+import { fakeClock, quiet, scripted, settled, speak } from '../src/testing.ts';
+import { andrei, collect, deferred, roomName, tick } from './support/room.ts';
 import { traceOf } from './support/trace.ts';
 
 const product = defineAgent({
@@ -52,7 +51,7 @@ async function ranOnce(runtime: Runtime, room: string, events: readonly RoomNoti
 async function ask(room: Room, text: string): Promise<void> {
 	const visit = await room.visit(andrei);
 	await visit.send({ text });
-	await waitForRoom(room, 'quiet', 2_000);
+	await settled(room, { timeout: 2_000 });
 }
 
 describe('the trace of a room activation', () => {
