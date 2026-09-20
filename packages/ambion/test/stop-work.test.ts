@@ -169,7 +169,7 @@ it('does not retry an expired activation after an acknowledged stop and resume',
 	const runtime = createRuntime({
 		storage: opened.storage,
 		clock: time.clock,
-		retry: { backoff: () => 0 },
+		limits: { activation: { backoff: () => 0 } },
 	});
 	const name = roomName('stop-expired');
 	const room = await startRoom({
@@ -183,7 +183,7 @@ it('does not retry an expired activation after an acknowledged stop and resume',
 		const visit = await room.visit(person);
 		await visit.send({ to: worker.name, text: 'hold this work' });
 		await started.promise;
-		time.advance(hostingOf(runtime).wake.expiry + 1);
+		time.advance(hostingOf(runtime).limits.lease.ttl + 1);
 		await room.stop();
 
 		const resumed = await resumeRoom(name, { runtime, agents: [worker], streamFn: stream });
@@ -229,7 +229,7 @@ describe.each(storages)('stop revocation recovery on $name storage', (storage) =
 			const runtime = createRuntime({
 				storage: faulty.journals,
 				clock: time.clock,
-				retry: { backoff: () => 0 },
+				limits: { activation: { backoff: () => 0 } },
 			});
 			const name = roomName(`stop-revocation-${phase}-${storage.name}`);
 			const room = await startRoom({
@@ -286,7 +286,7 @@ it('takes up unread steering work after a stop and resume', async () => {
 	});
 	const runtime = createRuntime({
 		storage: journal,
-		retry: { backoff: () => 0 },
+		limits: { activation: { backoff: () => 0 } },
 	});
 	const name = roomName('stop-unread-steer');
 	const room = await startRoom({
@@ -374,7 +374,7 @@ describe.each(storages)('stopped summary recovery on $name storage', (storage) =
 		const runtime = createRuntime({
 			storage: opened.storage,
 			clock: time.clock,
-			retry: { backoff: () => 0 },
+			limits: { activation: { backoff: () => 0 } },
 		});
 		const name = roomName(`stop-summary-${storage.name}`);
 		const room = await startRoom({
@@ -389,7 +389,7 @@ describe.each(storages)('stopped summary recovery on $name storage', (storage) =
 			const visit = await room.visit(person);
 			const exchange = await visit.send({ to: worker.name, text: 'summarise this' });
 			await drafted.promise;
-			time.advance(hostingOf(runtime).wake.expiry + 1);
+			time.advance(hostingOf(runtime).limits.lease.ttl + 1);
 			await room.stop();
 
 			const resumed = await resumeRoom(name, {

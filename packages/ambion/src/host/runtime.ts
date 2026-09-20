@@ -5,8 +5,8 @@
  * to store the record. `startRoom` and `readRoom` take one and pass it on;
  * neither reads anything else off it. Everything else a host or the
  * kernel's own internals need — the journal namespace, transcript storage,
- * the model call, wake and retry policy, and the room lifecycle registry —
- * lives behind `hostingOf`.
+ * the model call, the limits, and the room lifecycle registry — lives
+ * behind `hostingOf`.
  *
  * `Runtime`'s brand blocks a hand-written literal at compile time: nothing
  * outside this file can name the key it carries, so a value assembled from
@@ -41,11 +41,39 @@ export interface Runtime {
 	readonly storage: JournalOpener;
 }
 
+/** Every bound the runtime sets, by what it bounds. One value for every room in the runtime. */
+export interface Limits {
+	/** How long a wake stays unanswered before the room sends it again. */
+	readonly delivery: { readonly resend: number };
+	/**
+	 * How long a lease lasts from each claim or renewal (`ttl`), and how long
+	 * an activation may run from its first claim (`deadline`): the room renews
+	 * no lease past the deadline, so an activation that runs on expires and
+	 * counts as an attempt.
+	 */
+	readonly lease: { readonly ttl: number; readonly deadline: number };
+	/** How many attempts the room makes at one wake or one draft, and how long it waits before each retry. */
+	readonly activation: { readonly attempts: number; readonly backoff: (attempt: number) => number };
+	/**
+	 * `timeout` bounds each executor call to the room, in milliseconds.
+	 * `attempts` bounds claim and release retries. The journal remains
+	 * authoritative when a timed out call may have reached the room. These
+	 * bounds are separate from activation attempts, which can repeat model work.
+	 */
+	readonly call: { readonly attempts: number; readonly timeout: number };
+	/** How many messages one activation reads. Nothing reads it yet; D5 does. */
+	readonly context: { readonly messages: number };
+	/** How many bytes one message carries. Nothing reads it yet; D5 does. */
+	readonly message: { readonly bytes: number };
+	/** How much of a step the trace keeps, and how many steps per pass. Nothing reads it yet; F7 does. */
+	readonly trace: { readonly toolOutputBytes: number; readonly stepsPerPass: number };
+}
+
 /**
  * What a host, or the kernel's own internals, need beyond the application
- * view: the journal namespace, transcript storage, the model call, wake and
- * retry policy, and the room lifecycle registry. `hostingOf` is the one way
- * to reach it from a `Runtime` value.
+ * view: the journal namespace, transcript storage, the model call, the
+ * limits, and the room lifecycle registry. `hostingOf` is the one way to
+ * reach it from a `Runtime` value.
  */
 export interface Hosting {
 	readonly journals: JournalOpener;
@@ -55,22 +83,7 @@ export interface Hosting {
 	/** The model call every seat in this runtime makes, unless a room overrides it. */
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
-	/**
-	 * How long a wake stays unanswered before the room sends it again, how
-	 * long a lease lasts between renewals, and how long an activation may run
-	 * from its claim: the room renews no lease past the deadline, so an
-	 * activation that runs on expires and counts as an attempt.
-	 */
-	readonly wake: { readonly resend: number; readonly expiry: number; readonly deadline: number };
-	/** How many times the room retries a failed summary, and how long it waits before each retry. */
-	readonly retry: { readonly attempts: number; readonly backoff: (attempt: number) => number };
-	/**
-	 * `timeout` bounds each executor call to the room, in milliseconds.
-	 * `attempts` bounds claim and release retries. Defaults: 10,000 ms and two attempts.
-	 * The journal remains authoritative when a timed out call may have reached the room.
-	 * These limits are separate from execution retries, which can repeat model work.
-	 */
-	readonly call: { readonly attempts: number; readonly timeout: number };
+	readonly limits: Limits;
 	/** Drop a running room from memory and write nothing. The record keeps everything. */
 	evict(name: string): void;
 }
@@ -96,9 +109,7 @@ export function hostingOf(runtime: Runtime): Hosting {
 		...(found.transport === undefined ? {} : { transport: found.transport }),
 		stream: found.stream,
 		model: found.model,
-		wake: found.wake,
-		retry: found.retry,
-		call: found.call,
+		limits: found.limits,
 		evict: found.evict,
 	};
 }
@@ -122,7 +133,7 @@ export function releaseRoom(runtime: Runtime, name: string, room: RunningRoom): 
 /** The dependencies that one in-process seat needs for one captured definition. */
 export interface SeatContext {
 	readonly clock: Clock;
-	readonly call: { readonly attempts: number; readonly timeout: number };
+	readonly call: Limits['call'];
 	readonly definition: AgentDefinition;
 	readonly room: string;
 	readonly seat: string;
@@ -166,8 +177,7 @@ export interface ExecutionConnector {
 export interface RoomRuntime {
 	readonly clock: Clock;
 	readonly journals: JournalOpener;
-	readonly wake: Hosting['wake'];
-	readonly retry: Hosting['retry'];
+	readonly limits: Limits;
 	release(room: RunningRoom): void;
 }
 
@@ -176,8 +186,7 @@ export function roomRuntime(runtime: Runtime, name: string): RoomRuntime {
 	return {
 		clock: runtime.clock,
 		journals: hosting.journals,
-		wake: hosting.wake,
-		retry: hosting.retry,
+		limits: hosting.limits,
 		release: (room) => releaseRoom(runtime, name, room),
 	};
 }
@@ -192,9 +201,8 @@ export interface CreateRuntimeOptions {
 	 * model then resolves to a stub, because a custom stream never reads it.
 	 */
 	stream?: StreamFn;
-	wake?: Partial<Hosting['wake']>;
-	retry?: Partial<Hosting['retry']>;
-	call?: Partial<Hosting['call']>;
+	/** Any field of any group. An omitted field keeps its default. */
+	limits?: { readonly [Group in keyof Limits]?: Partial<Limits[Group]> };
 }
 
 export { systemClock } from './clock.ts';
@@ -206,24 +214,41 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	const services = createExecutionServices({
 		storage,
 		clock: options.clock,
-		call: options.call,
+		call: options.limits?.call,
 		stream: options.stream,
 	});
-	const retry = { attempts: 3, backoff: (attempt: number) => attempt * 30_000, ...options.retry };
-	const wake = { resend: 5_000, expiry: 60_000, deadline: 600_000, ...options.wake };
+	const given = options.limits ?? {};
+	const limits: Limits = {
+		delivery: { resend: 5_000, ...given.delivery },
+		lease: { ttl: 60_000, deadline: 600_000, ...given.lease },
+		activation: {
+			attempts: 3,
+			backoff: (attempt: number) => attempt * 30_000,
+			...given.activation,
+		},
+		call: services.call,
+		context: { messages: Number.POSITIVE_INFINITY, ...given.context },
+		message: { bytes: Number.POSITIVE_INFINITY, ...given.message },
+		trace: { toolOutputBytes: 65_536, stepsPerPass: 1_000, ...given.trace },
+	};
 	// The runtime establishes these bounds here, once, for every room it runs.
 	// The pass writes an activation off at the cap, so a cap below one would
 	// write every activation off before its first attempt. The verified
 	// `leaseExpiry` requires each wake interval to be at least one
 	// millisecond, so a resend and a claim always wait.
-	if (!Number.isInteger(retry.attempts) || retry.attempts < 1) {
+	if (!Number.isInteger(limits.activation.attempts) || limits.activation.attempts < 1) {
 		throw new Error(
-			'Runtime retry.attempts must be a positive integer: the room makes at least one attempt.',
+			'Runtime limits.activation.attempts must be a positive integer: the room makes at least one attempt.',
 		);
 	}
-	for (const [name, value] of Object.entries(wake)) {
+	const intervals = {
+		'delivery.resend': limits.delivery.resend,
+		'lease.ttl': limits.lease.ttl,
+		'lease.deadline': limits.lease.deadline,
+	};
+	for (const [name, value] of Object.entries(intervals)) {
 		if (!Number.isFinite(value) || value < 1) {
-			throw new Error(`Runtime wake.${name} must be at least one millisecond.`);
+			throw new Error(`Runtime limits.${name} must be at least one millisecond.`);
 		}
 	}
 	// The application view: an opaque token nobody outside this file can produce.
@@ -235,9 +260,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		...(options.transport === undefined ? {} : { transport: options.transport }),
 		stream: services.stream,
 		model: services.model,
-		wake,
-		retry,
-		call: services.call,
+		limits,
 		evict(name) {
 			const room = running.get(name);
 			running.delete(name);

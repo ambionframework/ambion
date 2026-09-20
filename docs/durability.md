@@ -90,10 +90,11 @@ and harmless.
 
 Lease ids derive from cause, journal position, seat, and attempt. No caller
 mints them. The room derives pending wakes and summary assignments from the
-record, retries according to `hostingOf(runtime).retry`, and records
-`abandoned` at the configured cap. `hostingOf` comes from
-`@ambionframework/ambion/hosting`, a host's own entry. Claim and renewal
-expiry follows the runtime wake deadline.
+record. It retries under `hostingOf(runtime).limits.activation` and records
+`abandoned` at `attempts`. `hostingOf` comes from
+`@ambionframework/ambion/hosting`, a host's own entry. Each claim or renewal
+holds the lease for `limits.lease.ttl`. No renewal reaches past
+`limits.lease.deadline` from the first claim.
 
 Steering carries explicit consumed ranges, so reordered or duplicated context
 cannot acknowledge a gap. A fresh activation reconstructs missed context from
@@ -104,9 +105,10 @@ work, and no durable audit backlog is promised.
 ### Transport calls and unclaimed work
 
 **A local timeout leaves the remote result unknown.** Executor calls to the room
-use `hostingOf(runtime).call.timeout`, in milliseconds, with a default of
-10,000. Claims and releases retry up to `hostingOf(runtime).call.attempts`,
-which defaults to two. Retries keep the activation identity. A timeout
+use `hostingOf(runtime).limits.call.timeout`, in milliseconds, with a default
+of 10,000. Claims and releases retry up to
+`hostingOf(runtime).limits.call.attempts`, which defaults to two. Retries
+keep the activation identity. A timeout
 neither revokes a lease nor reverses a contribution that the journal already
 accepted.
 
@@ -121,9 +123,9 @@ activation. An unknown result frees local seat metadata; the journal still owns
 the lease. A late reply cannot clear another activation's metadata.
 
 **Unclaimed work remains pending while eligible.** The room resends delivery
-under `hostingOf(runtime).wake.resend`. Delivery failure does not consume an
-execution attempt. Activation deadlines start at a claim, not at the source
-message.
+under `hostingOf(runtime).limits.delivery.resend`. Delivery failure does not
+consume an execution attempt. Activation deadlines start at a claim, not at
+the source message.
 An unresolved delivery does not prevent a later resend.
 Work can remain pending through a shutdown or a deliberate executor hold.
 Abort and unseating record the boundaries that make delayed claims stale.

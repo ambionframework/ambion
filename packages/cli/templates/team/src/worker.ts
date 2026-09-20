@@ -7,7 +7,7 @@ configure({
 	// The catalog is fixed at module load. Room metadata stores these names
 	// so a Durable Object can resolve them after it resumes.
 	agents: AGENTS,
-	wake: { resend: 2_000 },
+	limits: { delivery: { resend: 2_000 } },
 	// Keep seat failures as one machine-readable line so `ambion dev` can
 	// surface provider/authentication errors in its log pane.
 	onSeatEvent: (event) => console.log(JSON.stringify(event)),

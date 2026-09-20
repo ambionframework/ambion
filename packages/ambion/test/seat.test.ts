@@ -122,7 +122,7 @@ function play(stream: StreamFn = scripted(() => quiet()), transcripts?: SessionO
 	});
 	const actor = new AgentRunner(room, {
 		clock,
-		call: hostingOf(runtime).call,
+		call: hostingOf(runtime).limits.call,
 		definition: product,
 		room: 'played',
 		seat: 'product',

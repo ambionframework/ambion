@@ -124,7 +124,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			createRuntime({
 				storage: opened.storage,
 				clock,
-				retry: { attempts: 3, backoff: () => 1_000 },
+				limits: { activation: { attempts: 3, backoff: () => 1_000 } },
 			});
 		const firstRuntime = runtime();
 		const room = await startRoom({

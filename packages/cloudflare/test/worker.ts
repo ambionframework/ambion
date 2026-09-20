@@ -28,7 +28,7 @@ configure({
 	agents: [assistant, product, slow],
 	stream: scripted,
 	// Alarms fire on their own in workerd: a wake nobody takes is sent again this often.
-	wake: { resend: 50 },
+	limits: { delivery: { resend: 50 } },
 });
 
 export { RoomObject, SeatObject };

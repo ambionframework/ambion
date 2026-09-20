@@ -115,7 +115,7 @@ export async function readRoom(name: string, options: ReadRoomOptions = {}): Pro
 	await journal.settled();
 	return readView(
 		name,
-		foldRoom(journal.entries, hosting.retry),
+		foldRoom(journal.entries, hosting.limits.activation),
 		runtime.clock.now(),
 		journal.lastSeq,
 		messages,

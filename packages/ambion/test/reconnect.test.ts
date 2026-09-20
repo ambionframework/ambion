@@ -228,7 +228,7 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 			const firstRuntime = createRuntime({
 				clock,
 				storage: opened.storage,
-				wake: { expiry: 60_000, resend: 5_000 },
+				limits: { lease: { ttl: 60_000 }, delivery: { resend: 5_000 } },
 			});
 			const name = roomName(`reconnect-wait-${storage.name}-${lifecycle}`);
 			const first = await startRoom({
@@ -258,7 +258,7 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 					const secondRuntime = createRuntime({
 						clock,
 						storage: opened.storage,
-						wake: { expiry: 60_000, resend: 5_000 },
+						limits: { lease: { ttl: 60_000 }, delivery: { resend: 5_000 } },
 					});
 					resumed = await resumeRoom(name, {
 						agents: [watcher],
@@ -278,7 +278,7 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 						runtime: createRuntime({
 							clock,
 							storage: opened.storage,
-							wake: { expiry: 60_000, resend: 5_000 },
+							limits: { lease: { ttl: 60_000 }, delivery: { resend: 5_000 } },
 						}),
 						streamFn: scripted(() => quiet()),
 					});

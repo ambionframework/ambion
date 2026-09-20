@@ -28,7 +28,7 @@ export function composeExecution(
 			});
 			return transport.connect(room, {
 				clock: runtime.clock,
-				call: hosting.call,
+				call: hosting.limits.call,
 				definition: request.definition,
 				room: request.room,
 				seat: request.seat,

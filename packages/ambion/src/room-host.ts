@@ -227,7 +227,7 @@ function notificationFor(event: RoomNotification): RoomNotification {
 }
 
 /** How many times one pass folds, decides and writes before it yields. */
-const PASSES = 8;
+const PASSES_PER_RECONCILE = 8;
 
 type SubmissionResult<K extends Kind> = Exclude<RoomDecision<K>, { event: unknown }> | undefined;
 
@@ -457,10 +457,14 @@ export class RoomHost implements Room, RunningRoom {
 		const current = this.fold;
 		const entries = this.journal.entriesFrom(current?.length ?? 0);
 		if (current === undefined) {
-			this.fold = { length: entries.length, state: foldRoom(entries, this.runtime.retry) };
+			this.fold = {
+				length: entries.length,
+				state: foldRoom(entries, this.runtime.limits.activation),
+			};
 			return this.fold.state;
 		}
-		for (const entry of entries) current.state = evolve(current.state, entry, this.runtime.retry);
+		for (const entry of entries)
+			current.state = evolve(current.state, entry, this.runtime.limits.activation);
 		current.length += entries.length;
 		return current.state;
 	}
@@ -1247,14 +1251,14 @@ export class RoomHost implements Room, RunningRoom {
 	): Promise<LeaseResponse> {
 		const written = await this.submit('lease', () => {
 			if (this.gone()) return { event: undefined };
-			const wake = this.runtime.wake;
+			const lease = this.runtime.limits.lease;
 			const decision = decide(
 				this.state(),
 				{
 					type,
 					id,
-					expiry: wake.expiry,
-					deadline: wake.deadline,
+					expiry: lease.ttl,
+					deadline: lease.deadline,
 					...(readThrough === undefined ? {} : { readThrough }),
 				},
 				this.now(),
@@ -1315,11 +1319,11 @@ export class RoomHost implements Room, RunningRoom {
 	 */
 	private async reconcileOnce(): Promise<void> {
 		await this.journal.ready;
-		for (let pass = 0; pass < PASSES && !this.gone(); pass += 1) {
+		for (let pass = 0; pass < PASSES_PER_RECONCILE && !this.gone(); pass += 1) {
 			if (await this.onePass()) return;
 		}
 		// A pass that kept writing yields, and the room looks again after the resend window.
-		if (!this.gone()) this.arm(this.now() + this.runtime.wake.resend);
+		if (!this.gone()) this.arm(this.now() + this.runtime.limits.delivery.resend);
 	}
 
 	/**
@@ -1332,8 +1336,8 @@ export class RoomHost implements Room, RunningRoom {
 			{
 				type: 'reconcile',
 				options: {
-					resend: this.runtime.wake.resend,
-					attempts: this.runtime.retry.attempts,
+					resend: this.runtime.limits.delivery.resend,
+					attempts: this.runtime.limits.activation.attempts,
 					sent: this.sentAt,
 					stopped: this.gone(),
 				},
@@ -1346,7 +1350,7 @@ export class RoomHost implements Room, RunningRoom {
 		} catch {
 			this.settle();
 			// A write that failed because the room is gone arms nothing.
-			if (!this.gone()) this.arm(this.now() + this.runtime.wake.resend);
+			if (!this.gone()) this.arm(this.now() + this.runtime.limits.delivery.resend);
 			return true;
 		}
 		if (changed) return false;

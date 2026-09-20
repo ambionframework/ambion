@@ -277,7 +277,7 @@ class Cluster {
 
 	/** Time jumps, the way a paused process sees it: a lease live across a jump past its expiry ends. */
 	async advance(ms: number): Promise<void> {
-		if (ms >= hostingOf(this.runtime).wake.expiry) {
+		if (ms >= hostingOf(this.runtime).limits.lease.ttl) {
 			this.jumped += await liveLeases(this.opened.journals, this.name, this.clock.now());
 		}
 		await this.clock.advance(ms);

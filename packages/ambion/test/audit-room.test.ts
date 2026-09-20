@@ -196,7 +196,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 			runtime: createRuntime({
 				clock,
 				storage: auditOutage(opened.storage),
-				retry: { attempts: 2, backoff: () => 100 },
+				limits: { activation: { attempts: 2, backoff: () => 100 } },
 			}),
 			streamFn: scripted(() => {
 				calls += 1;

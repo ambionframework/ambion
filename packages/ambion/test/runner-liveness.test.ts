@@ -102,7 +102,7 @@ function fixture(
 	const runtime = createRuntime({
 		clock,
 		stream: options.stream ?? scripted(() => quiet()),
-		call: options.call,
+		limits: { call: options.call },
 	});
 	const room = new LivenessRoom(clock, {
 		lease: options.lease,
@@ -119,7 +119,7 @@ function fixture(
 	});
 	const actor = new AgentRunner(room, {
 		clock,
-		call: hostingOf(runtime).call,
+		call: hostingOf(runtime).limits.call,
 		definition: worker,
 		room: 'liveness',
 		seat: worker.name,
@@ -139,7 +139,7 @@ const deaf: StreamFn = () => createAssistantMessageEventStream();
 describe('runner liveness', () => {
 	it('uses a ten second default timeout for room calls', () => {
 		const runtime = createRuntime({ clock: fakeClock(0) });
-		expect(hostingOf(runtime).call.timeout).toBe(10_000);
+		expect(hostingOf(runtime).limits.call.timeout).toBe(10_000);
 	});
 
 	it('does not start an activation from an already-expired claim', async () => {
