@@ -26,6 +26,10 @@
 			"types": "./dist/hosting.d.mts",
 			"import": "./dist/hosting.mjs"
 		},
+		"./conformance": {
+			"types": "./dist/conformance.d.mts",
+			"import": "./dist/conformance.mjs"
+		},
 		"./package.json": "./package.json"
 	},
 	"main": "./dist/index.mjs",

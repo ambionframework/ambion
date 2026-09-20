@@ -74,6 +74,20 @@ awaiting storage; later caller mutations do not change that append.
 `sqliteJournals(sql)` provides SQLite storage with native compare-and-append.
 `memoryJournals()` provides independent in-memory journals for one process.
 
+**A storage author proves the contract with a published suite.**
+`@ambionframework/journal/conformance` exports `storageConformance(backend)`.
+It returns cases with a stable `name` and a `run` that throws on failure. The
+suite needs no test framework. `backend.open()` returns the `JournalOpener`
+under test. Run the cases in vitest like this:
+
+```ts
+import { storageConformance } from '@ambionframework/journal/conformance';
+
+describe.each(backends)('$name', (backend) => {
+  for (const c of storageConformance(backend)) it(c.name, c.run);
+});
+```
+
 Pi transcript storage lives in
 [`@ambionframework/pi-journal`](https://github.com/ambionframework/ambion/tree/main/packages/pi-journal).
 It uses the same storage backends and keeps each session in a separate journal.

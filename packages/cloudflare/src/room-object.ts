@@ -86,7 +86,7 @@ function alarmClock(state: DurableObjectState): Clock {
 }
 
 /** The room reaches a seat over RPC to the seat object named for it. */
-function rpcTransport(env: Env): Transport {
+export function rpcTransport(env: Env): Transport {
 	return {
 		connect(_room, context: AgentExecutionContext) {
 			const { room: roomName, seat } = context;

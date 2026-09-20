@@ -309,6 +309,42 @@
 			}
 		},
 		{
+			// The transport suite plays the room from outside the wire. It reaches
+			// the protocol and the executor types, and nothing that runs a room.
+			"includes": ["packages/ambion/src/conformance.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"./journal/*",
+											"./room/*",
+											"./tools/*",
+											"./execution/runner*",
+											"./execution/compose*",
+											"./execution/activation*",
+											"./execution/services*",
+											"./room.ts",
+											"./room-host.ts",
+											"./index.ts",
+											"./hosting.ts",
+											"@earendil-works/pi-*",
+											"@ambionframework/pi-journal"
+										],
+										"message": "A conformance suite drives the wire from outside: no log, no fold, no seat, no model."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
 			// The collaboration host uses protocol and room facts. Execution and
 			// provider services are composed by the public room facade.
 			"includes": ["packages/ambion/src/room-host.ts"],

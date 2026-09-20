@@ -7,6 +7,7 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { expect, expectTypeOf, it } from 'vitest';
+import * as conformance from '../src/conformance.ts';
 import * as hosting from '../src/hosting.ts';
 import * as main from '../src/index.ts';
 import { PACKAGE_NAME, type Seq } from '../src/index.ts';
@@ -28,7 +29,7 @@ it('builds every entry the manifest names', async () => {
 	const { exports } = await manifest();
 	const config = await read('tsdown.config.ts');
 	const built = [...config.matchAll(/'(src\/[^']+)'/g)].map((m) => m[1]);
-	expect(built).toEqual(['src/index.ts', 'src/hosting.ts']);
+	expect(built).toEqual(['src/index.ts', 'src/hosting.ts', 'src/conformance.ts']);
 	// Each subpath names a file the build writes, under the name it builds it by.
 	for (const [path, target] of Object.entries(exports)) {
 		if (path === './package.json') continue;
@@ -79,6 +80,10 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 	for (const name of Object.keys(main)) {
 		expect(hosting).not.toHaveProperty(name);
 	}
+});
+
+it('exports exactly the conformance suite and its in-process executor', () => {
+	expect(Object.keys(conformance).sort()).toEqual(['speakOnce', 'transportConformance']);
 });
 
 it('names the ports, the reads, and the visit by their final names', () => {

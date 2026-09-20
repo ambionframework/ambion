@@ -23,6 +23,10 @@
 			"types": "./dist/index.d.mts",
 			"import": "./dist/index.mjs"
 		},
+		"./conformance": {
+			"types": "./dist/conformance.d.mts",
+			"import": "./dist/conformance.mjs"
+		},
 		"./package.json": "./package.json"
 	},
 	"main": "./dist/index.mjs",

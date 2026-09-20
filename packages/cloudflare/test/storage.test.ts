@@ -6,6 +6,7 @@
 import { env, runInDurableObject } from 'cloudflare:test';
 import { assertWire, roundTrip } from '@ambionframework/ambion/hosting';
 import { namespaced } from '@ambionframework/journal';
+import { storageConformance } from '@ambionframework/journal/conformance';
 import { piSessions } from '@ambionframework/pi-journal';
 import { expect, it } from 'vitest';
 import { roomMetadata, seatMetadata, sqlStorage } from '../src/storage.ts';
@@ -132,3 +133,20 @@ it('refreshes metadata from the cursor after confirmed patches', async () => {
 		expect(after).toEqual([0, 1, 2, 3]);
 	});
 });
+
+// The cases run inside the object, where the SQLite storage lives. Each case
+// builds its suite in place, so the journal names it mints stay its own.
+const listed = storageConformance({
+	open: () => {
+		throw new Error('The listing opens no storage.');
+	},
+});
+for (const [index, c] of listed.entries()) {
+	it(`durable object SQLite ${c.name}`, async () => {
+		const stub = env.ROOM.get(env.ROOM.idFromName('storage-conformance'));
+		await runInDurableObject(stub, async (_instance, state) => {
+			const suite = storageConformance({ open: () => ({ opener: sqlStorage(state) }) });
+			await suite[index]?.run();
+		});
+	});
+}
