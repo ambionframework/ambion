@@ -1,26 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { AmbionError, exchangeUri, parseRoomUri, roomUri } from '../src/index.ts';
+import { AmbionError, messageUri, parseRoomUri, roomUri } from '../src/index.ts';
 import { isRef, REF_LIMITS, refsRefusal } from '../src/refs.ts';
 
 describe('room URIs', () => {
-	it('round-trips a room and an exchange', () => {
+	it('round-trips a room and a message', () => {
 		expect(roomUri('site')).toBe('ambion://room/site');
-		expect(exchangeUri('site', 12)).toBe('ambion://room/site/exchange/12');
+		expect(messageUri('site', 12)).toBe('ambion://room/site/message/12');
 		expect(parseRoomUri(roomUri('site'))).toEqual({ room: 'site' });
-		expect(parseRoomUri(exchangeUri('site', 12))).toEqual({ room: 'site', exchange: 12 });
+		expect(parseRoomUri(messageUri('site', 12))).toEqual({ room: 'site', message: 12 });
 	});
 
 	it.each([
 		'ambion://room/Site',
-		'ambion://room/site/exchange/0',
-		'ambion://room/site/exchange/01',
-		'ambion://room/site/exchange/1.5',
-		'ambion://room/site/exchange/9007199254740993',
+		'ambion://room/site/message/0',
+		'ambion://room/site/message/01',
+		'ambion://room/site/message/1.5',
+		'ambion://room/site/message/9007199254740993',
 		'ambion://room/site/',
 		'ambion://room/site?x=1',
 		'ambion://room/site#top',
 		'AMBION://room/site',
-		'ambion://room/site/exchange/1/extra',
+		'ambion://room/site/message/1/extra',
 		'ambion://room/',
 	])('refuses %s', (uri) => {
 		expect(parseRoomUri(uri)).toBeUndefined();
@@ -28,8 +28,8 @@ describe('room URIs', () => {
 
 	it('refuses a bad name or a bad seq when it builds', () => {
 		expect(() => roomUri('Site')).toThrow(AmbionError);
-		expect(() => exchangeUri('site', 0)).toThrow(RangeError);
-		expect(() => exchangeUri('site', 1.5)).toThrow(RangeError);
+		expect(() => messageUri('site', 0)).toThrow(RangeError);
+		expect(() => messageUri('site', 1.5)).toThrow(RangeError);
 	});
 });
 
@@ -40,7 +40,7 @@ describe('refs', () => {
 		'file:///a',
 		'mailto:a@b',
 		'ambion://room/site',
-		'ambion://room/site/exchange/12',
+		'ambion://room/site/message/12',
 	])('accepts %s', (ref) => {
 		expect(isRef(ref)).toBe(true);
 	});

@@ -34,8 +34,9 @@ An exchange records its owner, opening time, and opening message position
 its original discussion, and the observed journal watermark.
 See [the public types](../packages/ambion/src/types.ts) for the exact shapes.
 
-The exchange URI is `ambion://room/<name>/exchange/<from>`. Build it with
-`exchangeUri(name, from)`. The URI is not a stored field.
+A message URI is `ambion://room/<name>/message/<seq>`. Build the one for an
+exchange's opening message with `messageUri(name, from)`. The URI is not a
+stored field.
 
 ## 3. Three rules
 
