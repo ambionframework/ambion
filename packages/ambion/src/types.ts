@@ -544,6 +544,8 @@ export interface AgentExecutor {
 	readonly tools: readonly AmbionTool[];
 	/** Guidance composed from the agent's tool bundles. */
 	readonly guidance?: string;
+	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
+	readonly speaking?: string;
 	/**
 	 * The token limit for the record one activation reads. When set, the seat
 	 * pages the record and keeps the newest part that fits the limit, plus the
