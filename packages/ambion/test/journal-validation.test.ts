@@ -20,7 +20,7 @@ describe('room journal body validation', () => {
 				text: 'hello',
 				activationId: 'message:1:alpha:1',
 				wakes: ['beta'],
-				refs: ['https://x/a', 'ambion://room/site/exchange/3'],
+				refs: ['https://x/a', 'ambion://room/site/message/3'],
 			}),
 		).toBe(true);
 		expect(

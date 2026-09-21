@@ -43,7 +43,7 @@ The record of 'site' so far:
 [priya] Is the pour on?  (5 minutes ago)
 [worker → priya] Yes, at nine.  (5 minutes ago)
 
-priya's exchange is over: messages 2 to 3. The exchange URI is ambion://room/site/exchange/2. Write the one message with say, or end your turn."
+priya's exchange is over: it holds the messages from seq 2 to seq 3. The opening message's URI is ambion://room/site/message/2. Write the one message with say, or end your turn."
 `;
 
 exports[`the rendered prompt > renders an ordinary activation > agent 1`] = `
@@ -116,12 +116,12 @@ The record of 'site' so far:
 [priya] Is the pour on?  (5 minutes ago)
 [worker → priya] Yes, at nine.  (5 minutes ago)
 
-priya's exchange opened by message 2 is active; the marked request is the current human direction. Its URI is ambion://room/site/exchange/2. Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+priya's exchange opened by message 2 is active; the marked request is the current human direction. The opening message's URI is ambion://room/site/message/2. Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
 `;
 
 exports[`the rendered prompt > renders an ordinary activation > mechanism 1`] = `
 "You are an agent seated in a room: a shared room with a record. Every participant sees
-what is said; nobody sees your tool use. A room has a URI, and an exchange has the URI
-<room URI>/exchange/<n>. The context gives the room's URI, and the ask line at its end
-gives the current exchange."
+what is said; nobody sees your tool use. A room has a URI, and a message has the URI
+<room URI>/message/<seq>. The context gives the room's URI, and the ask line at its end
+gives the message that opened the current exchange."
 `;
