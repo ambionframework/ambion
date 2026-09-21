@@ -1,0 +1,21 @@
+{
+	"name": "@ambionframework-examples/codex",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"description": "The Codex adapter over a stdio room tools server, run on a fake codex in CI.",
+	"scripts": {
+		"check:types": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@ambionframework/ambion": "workspace:*",
+		"@modelcontextprotocol/sdk": "1.30.0",
+		"@openai/codex-sdk": "0.155.1",
+		"typebox": "^1.3.18"
+	},
+	"devDependencies": {
+		"typescript": "^7.0.2",
+		"vitest": "^4.1.11"
+	}
+}
