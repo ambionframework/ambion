@@ -215,7 +215,10 @@ export function justBashChangedPaths(
 	if (tool !== 'write' && tool !== 'edit') return [];
 	const path = (params as { path?: unknown } | null)?.path;
 	if (typeof path !== 'string' || path === '') return [];
-	return [posix.resolve(`/home/${agent.name}`, path)];
+	const home = `/home/${agent.name}`;
+	if (path === '~') return [home];
+	const expanded = path.startsWith('~/') ? posix.join(home, path.slice(2)) : path;
+	return [posix.resolve(home, expanded)];
 }
 
 /**

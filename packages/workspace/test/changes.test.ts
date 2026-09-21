@@ -44,6 +44,13 @@ describe('justBashChangedPaths', () => {
 		]);
 	});
 
+	it('expands a home prefix the way the filesystem does', () => {
+		expect(justBashChangedPaths(scribe, 'write', { path: '~/a.txt' })).toEqual([
+			'/home/scribe/a.txt',
+		]);
+		expect(justBashChangedPaths(scribe, 'edit', { path: '~' })).toEqual(['/home/scribe']);
+	});
+
 	it('passes an absolute path through', () => {
 		expect(justBashChangedPaths(scribe, 'write', { path: '/shared/c.txt' })).toEqual([
 			'/shared/c.txt',
