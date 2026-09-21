@@ -44,6 +44,11 @@ assistant ──▶ ambion, pi
 Internal dependencies use `workspace:*`; pnpm rewrites them to the release
 version while packing. The CLI and packed-consumer smoke checks exercise the
 built exports, so a broken dependency order or export map fails before release.
+The `CLI smoke test` job runs `scripts/cli-team-smoke.mjs` on every pull
+request and on `main`. The script packs every package and installs the
+archives through `file:` overrides. It runs `ambion new` for the node and
+Cloudflare templates, then installs, typechecks, and runs each project. The
+job needs no key and stops after ten minutes.
 See [`scripts/cli-team-smoke.mjs`](../scripts/cli-team-smoke.mjs) and
 [`scripts/journal-smoke.mjs`](../scripts/journal-smoke.mjs) for detailed
 consumer checks.

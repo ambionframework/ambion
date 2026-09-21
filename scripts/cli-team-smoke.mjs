@@ -83,6 +83,8 @@ async function packFixture(destination) {
 				),
 				devDependencies: {
 					'@types/node': '26.2.0',
+					// The package README examples import typebox, which a consumer installs.
+					typebox: '^1.3.18',
 					typescript: '7.0.2',
 				},
 				pnpm: { overrides },
