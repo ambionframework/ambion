@@ -51,16 +51,14 @@ export interface RoomMirror {
  * states it unconditionally, with no option to set.
  */
 export const ROOM_MIRROR_GUIDANCE = [
-	`This workspace may hold /rooms/<room name>/messages.jsonl: one JSON`,
-	`line per message, for a room that mirrors its record here. Read your`,
-	`own room's file with read or bash cat to see what happened in it.`,
+	`This workspace may hold /rooms/<room name>/messages.jsonl for any room`,
+	`that mirrors its record here. Read a room's file with read or bash`,
+	`cat. It can hold messages your own context has trimmed or folded`,
+	`into a summary, and the history of a room you are not seated in.`,
 	`Each line carries the message's own seq. A message ref names the`,
 	`same seq: ambion://room/<name>/message/<seq>. Filter it with jq:`,
 	`jq 'select(.seq == <seq>)' finds the line a ref or the ask line`,
 	`names. jq also filters by kind or from.`,
-	`The file holds every message the room has kept. Your context for`,
-	`this activation can hold fewer: a summarised or windowed-out`,
-	`message still has its line here.`,
 ].join('\n');
 
 /**
