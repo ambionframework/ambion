@@ -147,6 +147,26 @@ model loop for one pass, and reports where it left off. The first pass of an
 activation receives the whole view. Each later pass receives a `delta`: the
 fresh view and `since`, the position the session had read through.
 
+**The renderer returns three prompt parts.** `renderActivation` returns
+`mechanism`, `agent`, and `context`. Each part depends on one thing, so an
+adapter places it where it caches best.
+
+- `mechanism` depends on the kernel version only. It states how a room works.
+- `agent` depends on the definition and the purpose. It holds the name,
+  the speaking policy, the identity, and the instructions. A closing seat
+  reads its summary duties here.
+- `context` depends on the activation. It holds the clock, the room, the
+  roster, the record, and the ask line.
+
+The Pi executor sends `mechanism` and `agent` as the system prompt, and
+`context` as the first user message. `renderDelta(view, since)` renders the
+later passes: each message beyond `since` with the `[new]` prefix, or
+`undefined` when nothing is new.
+
+**A definition can replace the speaking policy.** The kernel exports
+`DEFAULT_GUIDANCE`. An executor takes a `speaking` option that replaces it.
+Tool bundle guidance stays in the `guidance` field and follows the policy.
+
 Pi is the only executor Ambion ships today. It lives in
 `@ambionframework/pi`, and the kernel imports no model library.
 `createPiExecutor` builds it from the model call, the model resolver, and the

@@ -3,7 +3,7 @@
 An exchange is the room's unit of human-directed work: one person's question
 and the discussion it starts. The implementation is
 [`room/exchange.ts`](../packages/ambion/src/room/exchange.ts), with lifecycle
-coordination in [`room-host.ts`](../packages/ambion/src/room-host.ts). Read
+coordination in [`room-host/`](../packages/ambion/src/room-host/room.ts). Read
 [`room.md`](room.md) for activation rules and [`summary.md`](summary.md) for
 the optional closing message.
 

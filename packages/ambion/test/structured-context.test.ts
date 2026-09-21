@@ -184,14 +184,14 @@ describe('structured activation context', () => {
 		const response = renderActivation(viewOf(spec.respond, facts()), product);
 		const summary = renderActivation(viewOf(spec.summarize, facts()), worker);
 
-		expect(response.systemPrompt).toContain('PRIVATE PRODUCT INSTRUCTIONS.');
+		expect(response.agent).toContain('PRIVATE PRODUCT INSTRUCTIONS.');
 		expect(response.context).toContain('Later.');
 		expect(response.context).toContain('The reserve: agents not in the room.');
 		expect(response.context).toContain('Take your turn, product:');
-		expect(summary.systemPrompt).toContain('PRIVATE WORKER INSTRUCTIONS.');
-		expect(summary.systemPrompt).not.toContain('assistant in the room');
-		expect(summary.systemPrompt).toContain('The exchange is over. Write the one message');
-		expect(summary.systemPrompt).toContain('Lead with blockers.');
+		expect(summary.agent).toContain('PRIVATE WORKER INSTRUCTIONS.');
+		expect(summary.agent).not.toContain('assistant in the room');
+		expect(summary.agent).toContain('The exchange is over. Write the one message');
+		expect(summary.agent).toContain('Lead with blockers.');
 		expect(summary.context).not.toContain('The reserve:');
 		expect(summary.context).toContain("priya's exchange is over: messages");
 		expect(summary.context).not.toContain('Later.');
@@ -264,6 +264,6 @@ describe('structured activation context', () => {
 		expect(view.context.messages.some((message) => message.kind === 'summary')).toBe(true);
 		const rendered = renderActivation(view, worker);
 		expect(rendered.context).toContain('summarised for sam below');
-		expect(rendered.systemPrompt).toContain('summarised for <name> below');
+		expect(rendered.context).toContain('summarised for <name> below');
 	});
 });

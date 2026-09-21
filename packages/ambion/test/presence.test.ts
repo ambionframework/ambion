@@ -353,7 +353,7 @@ describe('presence', () => {
 		await gv.send({ text: 'anything' }); // arrivals wake nobody, so ask
 		await waitForRoom(withGoal);
 		const prompted = lastSystemPrompt();
-		expect(prompted).toContain('This room exists to: Ship payments v2.');
+		expect(contexts.at(-1)).toContain('This room exists to: Ship payments v2.');
 		expect(prompted).toContain('Who is reading can change while you work');
 
 		prompts.length = 0;
@@ -362,7 +362,7 @@ describe('presence', () => {
 		await wv.send({ text: 'anything' });
 		await waitForRoom(without);
 		const bare = lastSystemPrompt();
-		expect(bare).not.toContain('This room exists to:');
+		expect(contexts.at(-1)).not.toContain('This room exists to:');
 		// the audience paragraph is about routing, not purpose, so it needs no goal
 		expect(bare).toContain('Who is reading can change while you work');
 		expect(await kinds(without)).toEqual(['arrived', 'said']);
