@@ -2,9 +2,13 @@
  * A permission request reaches `canUseTool`, and each answer becomes one
  * approval step. The executor lists only the built-in tools that
  * `allowedTools` names, so a request needs a pattern: `Bash(echo:*)` shows
- * the shell to the model and runs only `echo` with no request.
+ * the shell to the model and runs only `echo` with no request. Claude Code
+ * also allows read-only commands such as `pwd` with no request, so the test
+ * asks for two `touch` commands, which need permission. The callback allows
+ * the file `allowed.txt` and refuses `denied.txt`. The test checks the
+ * effect on disk.
  */
-import { mkdtemp, realpath, rm } from 'node:fs/promises';
+import { access, mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
@@ -28,9 +32,9 @@ live('approval', () => {
 			canUseTool: async (name, input) => {
 				const command = String((input as { command?: unknown }).command ?? '');
 				asked.push(`${name}:${command}`);
-				return /\bpwd\b/.test(command)
+				return /\ballowed\.txt\b/.test(command)
 					? { behavior: 'allow', updatedInput: input }
-					: { behavior: 'deny', message: 'The room allows pwd and nothing else.' };
+					: { behavior: 'deny', message: 'The room allows the file allowed.txt and nothing else.' };
 			},
 		});
 		const { session, runtime, name, events } = await open('approval', [runner]);
@@ -42,7 +46,7 @@ live('approval', () => {
 				});
 			});
 			await visit.send({
-				text: 'Run the shell command `pwd`, then run the shell command `uname -s`.',
+				text: 'Run the shell command `touch allowed.txt`, then run the shell command `touch denied.txt`.',
 			});
 			const activation = await within(started, 60_000, 'the activation starting');
 			await untilQuiet(session);
@@ -60,6 +64,13 @@ live('approval', () => {
 			const resultOf = (call: string) => results.find((r) => r.call === call);
 			for (const a of allowed) expect(resultOf(a.call)?.error).toBeUndefined();
 			for (const a of denied) expect(resultOf(a.call)?.error).toBeDefined();
+			const exists = (name: string) =>
+				access(join(cwd, name)).then(
+					() => true,
+					() => false,
+				);
+			expect(await exists('allowed.txt')).toBe(true);
+			expect(await exists('denied.txt')).toBe(false);
 			expect(events.filter((e) => e.type === 'error')).toEqual([]);
 		} finally {
 			await session.stop();
