@@ -159,9 +159,9 @@ A refuter built each one as a running probe against the code.
   corruption, and a skip hides it. `envelope` throws for it, as it throws
   for a known kind with a bad body, once the golden journals show
   the change is safe.
-- **A5. The storage conformance suite runs the rules.** D6 publishes a
-  storage conformance suite. Its cases for the compare-and-append and the
-  read past the head assert the three storage rules by name, so a
+- **A5. The storage conformance suite runs the rules.** The storage
+  conformance suite has cases for the compare-and-append and the
+  read past the head. They assert the three storage rules by name, so a
   Postgres adapter proves the same contract.
 
 ## B. The lease fold

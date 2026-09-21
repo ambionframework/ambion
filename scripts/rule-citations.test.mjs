@@ -25,3 +25,16 @@ test('no source file cites a numbered rule', () => {
 	}
 	assert.deepEqual(found, []);
 });
+
+test('planning/formal.md cites only items that planning/next.md holds', () => {
+	const planning = join(import.meta.dirname, '..', 'planning');
+	const formal = readFileSync(join(planning, 'formal.md'), 'utf8');
+	const next = readFileSync(join(planning, 'next.md'), 'utf8');
+	const defined = (text) => new Set([...text.matchAll(/\*\*([A-Z][0-9]+)\./g)].map((m) => m[1]));
+	const own = defined(formal);
+	const held = defined(next);
+	const dangling = [...formal.matchAll(/\b([C-F][0-9]+)\b/g)]
+		.map((m) => m[1])
+		.filter((id) => !own.has(id) && !held.has(id));
+	assert.deepEqual([...new Set(dangling)], []);
+});
