@@ -11,28 +11,30 @@ each page.
 
 ## Contracts
 
-| Document                    | Use it for                                                    |
-| --------------------------- | ------------------------------------------------------------- |
-| [Agent](agent.md)           | Definitions, tools, activation rules, and room operations     |
-| [Assistant](assistant.md)   | The default assistant package and the `assistant` room option |
-| [Exchange](exchange.md)     | Human questions, completion, and durable result handles       |
-| [Presence](presence.md)     | Visits, arrivals, departures, and catch-up                    |
-| [Roster](roster.md)         | Agent membership, reserve, and attention                      |
-| [Summaries](summary.md)     | Optional closing work and context replacement                 |
-| [Workspace](workspace.md)   | Shared filesystem resources and lifecycle                     |
-| [Example](example.md)       | The one runnable example: an agentic lab workspace            |
-| [Durability](durability.md) | Journal guarantees, recovery, leases, and failure evidence    |
-| [Formal](formal.md)         | The verified rules, their proofs, and how the gate runs them  |
-| [Deployment](deployment.md) | Host placement, storage, reconnect, and operational limits    |
-| [Toolchain](toolchain.md)   | Package layout, checks, CI, and release commands              |
+| Document                          | Use it for                                                    |
+| --------------------------------- | ------------------------------------------------------------- |
+| [Room](room.md)                   | Overview, glossary, and the room-wide mechanisms              |
+| [Definitions and tools](agent.md) | Definitions, tools, and the execution boundary                |
+| [Assistant](assistant.md)         | The default assistant package and the `assistant` room option |
+| [Exchange](exchange.md)           | Human questions, completion, and durable result handles       |
+| [Presence](presence.md)           | Visits, arrivals, departures, and catch-up                    |
+| [Roster](roster.md)               | Agent membership, reserve, and attention                      |
+| [Summaries](summary.md)           | Optional closing work and context replacement                 |
+| [Workspace](workspace.md)         | Shared filesystem resources and lifecycle                     |
+| [Example](example.md)             | The one runnable example: an agentic lab workspace            |
+| [Durability](durability.md)       | Journal guarantees, recovery, leases, and failure evidence    |
+| [Formal](formal.md)               | The verified rules, their proofs, and how the gate runs them  |
+| [Deployment](deployment.md)       | Host placement, storage, reconnect, and operational limits    |
+| [Toolchain](toolchain.md)         | Package layout, checks, CI, and release commands              |
 
 ## Navigation hints
 
 `assistant.md` describes the assistant package, the room configuration
 shorthand, and how the workbench example evaluates it.
 
-`agent.md` is the entry point for the runtime model. Read `exchange.md` and
-`presence.md` for the two durable concepts built on top of it. Read
+`room.md` is the entry point for the runtime model. Read `agent.md` for
+definitions, tools, and the execution boundary. Read `exchange.md` and
+`presence.md` for the two durable concepts built on the room. Read
 `durability.md` before choosing storage or recovery behavior, then
 `deployment.md` for host procedures. `formal.md` states how a rule is
 proven and how a change to one reaches the gate. `toolchain.md` is the repository guide;
