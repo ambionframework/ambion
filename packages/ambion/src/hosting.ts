@@ -19,7 +19,7 @@
  * on the executor contract and the rendering helpers this entry exports.
  *
  * The main entry is what an application needs to build a room, and it names
- * no part of this. The execution boundary section of `docs/agent.md` is the
+ * no part of this. The execution boundary section of `docs/executors.md` is the
  * design contract for the wire.
  */
 
