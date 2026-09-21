@@ -18,3 +18,7 @@ minimumReleaseAge: 1440
 # is currently empty — nothing in the tree needs one. Adding an entry means
 # accepting that package's arbitrary code execution at install time.
 onlyBuiltDependencies: []
+
+# One typebox version in the tree. Pi pins an older one; the override lifts it.
+overrides:
+  typebox: ^1.3.18
