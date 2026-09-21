@@ -26,6 +26,7 @@ live('command and file change', () => {
 				seat('writer', {
 					instructions:
 						'Do the work in the working directory with your own tools, then report with one say.',
+					nativeTools: 'codex',
 					sandboxMode: 'workspace-write',
 					workingDirectory: directory,
 				}),

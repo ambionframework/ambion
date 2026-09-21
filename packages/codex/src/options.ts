@@ -8,6 +8,7 @@
 import { fileURLToPath } from 'node:url';
 import type { AgentExecutor } from '@ambionframework/ambion/hosting';
 import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
+import { exclusiveConfig, NODE_REPL, NODE_REPL_OFF, type Scratch } from './catalog.ts';
 import { ROOM_SERVER } from './codex-trace.ts';
 import type { CodexExecutor } from './define.ts';
 
@@ -46,8 +47,23 @@ function present<T extends object>(fields: T): Partial<T> {
 	) as Partial<T>;
 }
 
-/** The options of the thread: the model and the policy the executor names. */
-export function threadOptions(executor: CodexExecutor): ThreadOptions {
+/**
+ * The options of the thread: the model and the policy the executor names.
+ * With a `scratch`, the seat has no native tools. The policy is then fixed:
+ * a read-only sandbox, no network, no approval, and an empty directory.
+ */
+export function threadOptions(executor: CodexExecutor, scratch?: Scratch): ThreadOptions {
+	if (scratch !== undefined) {
+		return {
+			model: executor.model,
+			skipGitRepoCheck: true,
+			sandboxMode: 'read-only',
+			approvalPolicy: 'never',
+			networkAccessEnabled: false,
+			workingDirectory: scratch.directory,
+			...present({ modelReasoningEffort: executor.modelReasoningEffort }),
+		};
+	}
 	return {
 		model: executor.model,
 		// A room seat runs where the application puts it, which is often no git repository.
@@ -63,8 +79,16 @@ export function threadOptions(executor: CodexExecutor): ThreadOptions {
 	};
 }
 
-/** The options of the client for one activation: the executable, its environment, and the room tools server. */
-export function clientOptions(runtime: CodexRuntime, socketPath: string): CodexOptions {
+/**
+ * The options of the client for one activation: the executable, its
+ * environment, and the room tools server. With a `scratch`, the config also
+ * turns off the native tools.
+ */
+export function clientOptions(
+	runtime: CodexRuntime,
+	socketPath: string,
+	scratch?: Scratch,
+): CodexOptions {
 	const env =
 		runtime.env &&
 		Object.fromEntries(
@@ -75,7 +99,9 @@ export function clientOptions(runtime: CodexRuntime, socketPath: string): CodexO
 	return {
 		...present({ codexPathOverride: runtime.codexPath, env }),
 		config: {
+			...(scratch === undefined ? {} : exclusiveConfig(scratch.catalog)),
 			mcp_servers: {
+				...(scratch === undefined ? {} : { [NODE_REPL]: NODE_REPL_OFF }),
 				[ROOM_SERVER]: {
 					command: process.execPath,
 					args: [serverPath(), socketPath],
