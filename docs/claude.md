@@ -3,7 +3,7 @@
 `@ambionframework/claude` runs Ambion agents on the Claude Agent SDK. This
 page holds what is specific to the Claude adapter. [Executors](executors.md)
 holds the contract between the driver and an executor, the step vocabulary,
-and the trace. [The Pi guide](pi.md) covers the other shipped family. [The
+and the trace. [The Pi guide](pi.md) covers a second shipped family, and [the Codex guide](codex.md) a third. [The
 README](../README.md) holds the positioning.
 
 ## What it is and when to use it
@@ -110,7 +110,7 @@ try {
 
 `startRoom` and `resumeRoom` take `execution` for one room run.
 `createRuntime` takes it for every room of the runtime. A room whose seats
-run on more than one family passes `composeExecutions({ pi, claude })`; see
+run on more than one family passes `composeExecutions({ pi: piExecution(), claude: claudeExecution() })`; see
 [Executors](executors.md#the-executor-contract).
 
 ## Options
@@ -387,7 +387,7 @@ import { claudeExecutorHarness } from '@ambionframework/claude/testing';
 import { describe, it } from 'vitest';
 
 // The path of a fake Claude Code executable that the caller supplies.
-const executable = new URL('./fake/claude-executable.mjs', import.meta.url).pathname;
+const executable = fileURLToPath(new URL('./fake/claude-executable.mjs', import.meta.url));
 
 for (const memory of ['activation', 'seat'] as const) {
   describe(`claude executor with ${memory} memory`, () => {
@@ -418,9 +418,9 @@ It cannot show real token counts, real cost, the real `result` shape, the
 behavior of a real session store on resume, or a real sign-in. It never runs
 a model.
 
-**No live tier exists for this package.** The live scenarios in
-`packages/ambion/test/live` run on Pi. `pnpm test:live` reaches no Claude
-seat.
+**The package has no live tier of its own.** The live tests of the
+Workbench run the `design` seat on the real Claude binary. They ask each seat
+for its tool list and for `/etc/hosts`. See [Example](example.md).
 
 ## Troubleshooting
 

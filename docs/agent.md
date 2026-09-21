@@ -32,8 +32,9 @@ const room = await startRoom({
 
 `name` identifies the agent inside the room and on the journal. `identity` is
 public roster text. `executor` names the loop the agent runs on and its
-configuration. `pi` and `claude` are the executors that ship; see
-[the Pi guide](pi.md) and [the Claude guide](claude.md). The `instructions`
+configuration. `pi`, `claude`, and `codex` are the executors that ship; see
+[the Pi guide](pi.md), [the Claude guide](claude.md), and [the Codex
+guide](codex.md). The `instructions`
 are private model guidance. `model` names a model of that family. `tools`
 and `bundles` supply the agent's domain tools. `activationTokenLimit`
 bounds the record one activation reads, and `estimateTokens` counts tokens

@@ -233,7 +233,7 @@ executable. `can` is an `ExecutorCapabilities` value with `steer`, `usage`,
 and `permanentFailure`. The suite drops each case that a false capability
 gates.
 
-Three runs exist as evidence. The scripted executor runs the suite in
+Two runs exist as evidence. The scripted executor runs the suite in
 `packages/ambion/test/executor-conformance.test.ts`. The Claude executor
 runs it against a fake Claude Code executable in
 `packages/claude/test/executor-conformance.test.ts`, through

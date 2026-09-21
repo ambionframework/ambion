@@ -84,7 +84,7 @@ try {
 **Pass `execution` to a room or to a runtime.** `startRoom` and `resumeRoom`
 take it for one room run. `createRuntime` takes it for every room of the
 runtime. A room whose seats run on more than one family passes
-`composeExecutions({ pi, claude })` from `@ambionframework/ambion/hosting`.
+`composeExecutions({ pi: piExecution(), claude: claudeExecution() })` from `@ambionframework/ambion/hosting`.
 
 ## Options
 

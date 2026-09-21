@@ -96,7 +96,7 @@ try {
 ```
 
 **Pass `execution` to a room or to a runtime.** A room whose seats run on
-more than one family passes `composeExecutions({ pi, claude })` from
+more than one family passes `composeExecutions({ pi: piExecution(), claude: claudeExecution() })` from
 `@ambionframework/ambion/hosting`. It routes each seat on the `kind` of its
 executor.
 
@@ -195,7 +195,7 @@ import { claudeExecutorHarness } from '@ambionframework/claude/testing';
 import { describe, it } from 'vitest';
 
 // The path of a fake Claude Code executable that the caller supplies.
-const executable = new URL('./fake/claude-executable.mjs', import.meta.url).pathname;
+const executable = fileURLToPath(new URL('./fake/claude-executable.mjs', import.meta.url));
 
 for (const memory of ['activation', 'seat'] as const) {
   describe(`claude executor with ${memory} memory`, () => {

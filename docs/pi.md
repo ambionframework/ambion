@@ -3,7 +3,7 @@
 `@ambionframework/pi` runs Ambion agents on Pi. This page holds what is
 specific to the Pi adapter. [Executors](executors.md) holds the contract
 between the driver and an executor, the step vocabulary, and the trace.
-[The Claude guide](claude.md) covers the other shipped family. [The
+[The Claude guide](claude.md) covers a second shipped family, and [the Codex guide](codex.md) a third. [The
 README](../README.md) holds the positioning.
 
 ## What it is and when to use it
