@@ -247,7 +247,7 @@ describe('closing summaries', () => {
 		// what its person owns reaches it in the roster, so an assistant holds no copy
 		expect(contexts[0]).toContain('Project manager. Owns the programme.');
 		// and it is addressed as the assistant it is, not as a seat that speaks
-		expect(prompts[0]).toContain("'assistant', an agent seated in the room");
+		expect(prompts[0]).toContain("You are 'assistant'.");
 		expect(prompts[0]).toContain('using the say tool');
 		expect(prompts[0]).not.toContain('Speaking is the say tool');
 		// it is told whom it writes for, and how that person reads
@@ -313,8 +313,8 @@ describe('closing summaries', () => {
 		expect(read).toContain('- assistant (idle, wakes for nothing said):');
 		expect(read).not.toContain('brings');
 		// a record that holds a summary tells its seats how to read a fold; one that does not, does not
-		expect(prompts[0]).not.toContain('summarised for <name> below');
-		expect(prompts.at(-1)).toContain('summarised for <name> below');
+		expect(contexts[0]).not.toContain('summarised for <name> below');
+		expect(contexts.at(-1)).toContain('summarised for <name> below');
 		// the record keeps every message, and nothing was rewritten
 		expect(said(await messagesOf(session))).toContain(
 			'Thursday is out: the inspector needs 48h notice.',

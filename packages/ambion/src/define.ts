@@ -61,6 +61,8 @@ export interface ExecutorOptions {
 	readonly tools?: readonly AmbionTool[];
 	/** Composable tool bundles with guidance. Bundles are flattened at definition time. */
 	readonly bundles?: readonly ToolBundle[];
+	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
+	readonly speaking?: string;
 	/** The token limit for the record one activation reads. Absent reads the whole record. */
 	readonly activationTokenLimit?: number;
 	/** How the agent counts tokens against its limit. Absent uses a length estimate. */
@@ -80,6 +82,7 @@ export function describeExecutor(options: ExecutorOptions): AgentExecutor {
 		instructions: options.instructions,
 		tools,
 		...(guidance === undefined ? {} : { guidance }),
+		...(options.speaking === undefined ? {} : { speaking: options.speaking }),
 		...recordLimit(options.activationTokenLimit, options.estimateTokens),
 	});
 }
