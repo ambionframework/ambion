@@ -1,13 +1,7 @@
 import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
-import {
-	createRuntime,
-	defineAgent,
-	pi,
-	readActivation,
-	readRoom,
-	startRoom,
-} from '../src/index.ts';
+import { pi, piExecution } from '../../pi/src/index.ts';
+import { createRuntime, defineAgent, readActivation, readRoom, startRoom } from '../src/index.ts';
 import { andrei, collect, roomName, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
 import { traceOf } from './support/trace.ts';
@@ -27,7 +21,7 @@ describe('readActivation', () => {
 			name,
 			agents: [product],
 			runtime,
-			stream: scripted(() => quiet('done')),
+			execution: piExecution({ stream: scripted(() => quiet('done')) }),
 		});
 		const events = collect(room);
 		const visit = await room.visit(andrei);
