@@ -58,6 +58,7 @@ import { decide, type Refusal } from '../room/transition.ts';
 import type {
 	AgentDefinition,
 	ClosedExchange,
+	ClosedExchangeView,
 	EndReason,
 	FailureCause,
 	HumanDefinition,
@@ -430,6 +431,10 @@ export class RoomHost implements Room, RunningRoom {
 			this.journal.lastSeq,
 			messages,
 		);
+	}
+
+	async pendingFor(person: string): Promise<ClosedExchangeView[]> {
+		return pendingFor(await this.read({ messages: false }), person);
 	}
 
 	exchange(from: Seq): waits.ExchangeHandle | undefined {
