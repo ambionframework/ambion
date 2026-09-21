@@ -88,15 +88,16 @@ export interface CodexExecutorOptions extends CodexRuntime {
 	readonly client?: (options: CodexOptions) => CodexClientLike;
 }
 
-/** The Codex executor. One instance per seat, for as long as the room runs. */
 /**
  * Codex answers in its own final message when a prompt does not say
- * otherwise. The room hears only `say`, so the first prompt says so.
+ * otherwise. The room hears only `say`, so the first prompt of each
+ * activation says so.
  */
-const HARNESS_NOTE =
+export const HARNESS_NOTE =
 	'You are a seat in a room. Your final reply in this thread reaches no one. ' +
 	'The room hears only what you send through the `say` tool, so answer with `say`, then stop.';
 
+/** The Codex executor. One instance per seat, for as long as the room runs. */
 export function createCodexExecutor(options: CodexExecutorOptions): Executor {
 	const memory: SeatMemory | undefined = remembers(options.definition) ? {} : undefined;
 	return {
