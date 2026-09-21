@@ -1,7 +1,8 @@
 # Contributing to Ambion
 
 Repository installation requires Node **>= 26.4** and pnpm 10, the OpenTUI
-floor. Every package holds the same Node floor.
+floor. Every package holds the same Node floor. The `ambion dev` client also
+runs on Bun **>= 1.3**.
 
 Ambion is a collaboration kernel for agents and humans. Read the
 [documentation index](docs/README.md) for current contracts and

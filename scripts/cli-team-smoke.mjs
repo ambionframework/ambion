@@ -121,20 +121,20 @@ async function packFixture(destination) {
   type AgentExecutionContext,
   type RoomProtocol,
   type Transport,
-} from '@ambionframework/ambion/transport';
+} from '@ambionframework/ambion/hosting';
 
 // @ts-expect-error Persisted exchange events are internal.
-import type { Close } from '@ambionframework/ambion/transport';
+import type { Close } from '@ambionframework/ambion/hosting';
 // @ts-expect-error Stored configuration is internal.
-import type { Composition } from '@ambionframework/ambion/transport';
+import type { Composition } from '@ambionframework/ambion/hosting';
 // @ts-expect-error Run fences are internal.
-import type { Fence } from '@ambionframework/ambion/transport';
+import type { Fence } from '@ambionframework/ambion/hosting';
 // @ts-expect-error Stored lease events are internal.
-import type { LeaseChange } from '@ambionframework/ambion/transport';
+import type { LeaseChange } from '@ambionframework/ambion/hosting';
 // @ts-expect-error Projected lease state is internal.
-import type { LeaseHold } from '@ambionframework/ambion/transport';
+import type { LeaseHold } from '@ambionframework/ambion/hosting';
 // @ts-expect-error Stored membership is internal.
-import type { Seating } from '@ambionframework/ambion/transport';
+import type { Seating } from '@ambionframework/ambion/hosting';
 
 const local = inProcessTransport();
 export const transport: Transport = {
@@ -164,7 +164,21 @@ export function release(room: RoomProtocol, activation: string, readThrough: num
 	);
 	await workspaceFixture(destination);
 	await assistantFixture(destination);
+	await readmeFixture(destination);
 	return archives;
+}
+
+/** Return every fenced ts block of a Markdown page, in document order. */
+export function readmeCodeBlocks(markdown) {
+	return [...markdown.matchAll(/^```ts\n([\s\S]*?)^```$/gm)].map((match) => match[1]);
+}
+
+/** Typecheck the README examples. The fixture extracts them; nothing is copied by hand. */
+async function readmeFixture(destination) {
+	const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+	const blocks = readmeCodeBlocks(readme);
+	if (blocks.length === 0) throw new Error('README.md holds no ts block to typecheck.');
+	await writeFile(join(destination, 'src', 'readme.ts'), blocks.join('\n'));
 }
 
 /** Exercise the assistant factory and shorthand through packed exports. */
@@ -173,6 +187,7 @@ async function assistantFixture(destination) {
 		join(destination, 'src', 'assistant.ts'),
 		`import assert from 'node:assert/strict';
 import { createRuntime, defineAgent, resumeRoom, startRoom, type AgentDefinition } from '@ambionframework/ambion';
+import { pi } from '@ambionframework/pi';
 import { defineAssistant } from '@ambionframework/assistant';
 
 const assistant: AgentDefinition = defineAssistant({
@@ -181,7 +196,8 @@ const assistant: AgentDefinition = defineAssistant({
   instructions: 'Retain all specialists across exchanges.',
 });
 const specialist = defineAgent({
-  name: 'specialist', identity: 'Checks facts.', instructions: 'Check facts.', model: 'test/model',
+  name: 'specialist', identity: 'Checks facts.',
+  executor: pi({ instructions: 'Check facts.', model: 'test/model' }),
 });
 const runtime = createRuntime();
 const room = await startRoom({
@@ -240,16 +256,18 @@ const hooks = registerHooks({
   },
 });
 await assert.rejects(import('@ambionframework/ambion'), /Resource loaded/);
-const { openResource, memoryBackend, directoryBackend } = await import('@ambionframework/workspace/resource');
+const { openResource } = await import('@ambionframework/workspace/resource');
+hooks.deregister();
+const { openWorkspace, memoryBackend, directoryBackend } = await import('@ambionframework/workspace');
 const agent = { name: 'writer', identity: 'Writes files' };
 const memory = openResource({ name: 'memory', backend: memoryBackend() });
 assert.equal('tools' in memory, false);
 await memory.use(agent, async (env) => {
-  const written = await env.writeFile('note.txt', 'shared data');
+  const written = await env.writeFile('note.txt', 'shared data', {});
   assert.equal(written.ok, true);
 });
 await memory.use(agent, async (env) => {
-  const read = await env.readTextFile('note.txt');
+  const read = await env.readTextFile('note.txt', {});
   assert.equal(read.ok, true);
   assert.equal(read.value, 'shared data');
 });
@@ -260,7 +278,7 @@ const root = await mkdtemp(join(tmpdir(), 'ambion-packed-resource-'));
 try {
   const directory = openResource({ name: 'directory', backend: directoryBackend(root) });
   await directory.use(agent, async (env) => {
-    const written = await env.writeFile('note.txt', 'persisted data');
+    const written = await env.writeFile('note.txt', 'persisted data', {});
     assert.equal(written.ok, true);
   });
   await directory.dispose();
@@ -272,12 +290,10 @@ try {
 } finally {
   await rm(root, { recursive: true, force: true });
 }
-hooks.deregister();
 
-const { openWorkspace, memoryBackend: facadeBackend } = await import('@ambionframework/workspace');
-const workspace = openWorkspace({ name: 'facade', backend: facadeBackend() });
+const workspace = openWorkspace({ name: 'facade', backend: memoryBackend() });
 assert.equal(workspace.tools(), workspace.tools());
-assert.deepEqual(workspace.tools().tools.map((tool) => tool.name), ['read', 'write', 'edit', 'bash']);
+assert.deepEqual(workspace.tools().tools.map((tool) => tool.name), ['read', 'write', 'edit', 'bash', 'sql']);
 await workspace.dispose();
 console.log('Packed workspace resource and facade passed.');
 `,
