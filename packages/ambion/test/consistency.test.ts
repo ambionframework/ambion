@@ -9,6 +9,7 @@
  * `AMBION_SEEDS` widens the walk; the seed prints on failure.
  */
 import { describe, expect, it } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
 import { hostingOf, inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
@@ -159,7 +160,7 @@ class Cluster {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			stream: scripted(this.cast.script),
+			execution: piExecution({ stream: scripted(this.cast.script) }),
 		});
 		this.watch();
 		await messagesOf(this.session);
@@ -244,7 +245,7 @@ class Cluster {
 				this.session = await resumeRoom(this.name, {
 					runtime: this.runtime,
 					agents,
-					stream: scripted(this.cast.script),
+					execution: piExecution({ stream: scripted(this.cast.script) }),
 				});
 				break;
 			} catch (error) {

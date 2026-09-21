@@ -1,11 +1,15 @@
 /** Public room facade that composes collaboration and execution services. */
 
-import type { StreamFn } from '@earendil-works/pi-agent-core';
-import { assertRoomName, captureAgent } from './define.ts';
+import { assertRoomName, captureAgent, DEFAULT_TRACE } from './define.ts';
 import { AmbionError } from './errors.ts';
-import { composeExecution } from './execution/compose.ts';
+import type { Executor } from './execution/executor.ts';
+import { inProcessTransport } from './execution/runner.ts';
+import { traceOpener } from './execution/trace.ts';
 import {
 	defaultRuntime,
+	type Execution,
+	type ExecutionConnector,
+	executionHostOf,
 	hostingOf,
 	type Runtime,
 	registeredRoom,
@@ -44,8 +48,8 @@ export interface StartRoomOptions {
 	summary?: string;
 	/** Public context that states what the room is for. */
 	goal?: string;
-	/** A room specific model stream override. */
-	stream?: StreamFn;
+	/** The execution for this room, such as `piExecution()`. Defaults to the runtime's. */
+	execution?: Execution;
 	/** The runtime that owns storage and lifecycle. Defaults to `defaultRuntime`. */
 	runtime?: Runtime;
 }
@@ -62,8 +66,70 @@ export interface ResumeRoomOptions {
 	agents: readonly AgentDefinition[];
 	/** The runtime that owns the room journal. */
 	runtime?: Runtime;
-	/** A room specific model stream override. */
-	stream?: StreamFn;
+	/** The execution for this room, such as `piExecution()`. Defaults to the runtime's. */
+	execution?: Execution;
+}
+
+/**
+ * The connector for one room: its own execution, else the runtime's, else
+ * one whose seats fail when the room wakes them. A room with no execution
+ * still runs its people, its record, and any transport it was given.
+ */
+function connectorFor(runtime: Runtime, own: Execution | undefined): ExecutionConnector {
+	const host = executionHostOf(runtime);
+	const execution = own ?? hostingOf(runtime).execution;
+	if (execution !== undefined) return execution.connector(host);
+	const transport = host.transport ?? inProcessTransport();
+	return {
+		connect(room, request) {
+			return transport.connect(room, {
+				clock: host.clock,
+				call: host.limits.call,
+				definition: request.definition,
+				room: request.room,
+				seat: request.seat,
+				executor: missingExecutor(request.seat),
+				emit: request.emit,
+				trace: traceOpener({
+					room: request.room,
+					agent: request.seat,
+					traces: hostingOf(runtime).traces,
+					limits: host.limits.trace,
+					policy: request.definition.trace ?? DEFAULT_TRACE,
+					emit: request.emit,
+					now: () => host.clock.now(),
+				}),
+			});
+		},
+	};
+}
+
+/** The executor of a room that has none: each activation fails at once, and a retry cannot fix it. */
+function missingExecutor(seat: string): Executor {
+	return {
+		open(activation) {
+			const error = new AmbionError(
+				'no_execution',
+				'The room has no execution. Pass `execution`, such as `piExecution()` from @ambionframework/pi, to startRoom or createRuntime.',
+			);
+			return {
+				readThrough: 0,
+				cancelled: false,
+				async pass() {
+					activation.emit({
+						type: 'error',
+						agent: seat,
+						activation: activation.id,
+						error,
+						cause: 'permanent',
+					});
+					return { failed: true, cause: 'permanent' };
+				},
+				shouldRefresh: () => false,
+				abort() {},
+			};
+		},
+	};
 }
 
 export async function startRoom(options: StartRoomOptions): Promise<Room> {
@@ -74,7 +140,7 @@ export async function startRoom(options: StartRoomOptions): Promise<Room> {
 		options.name,
 		roomRuntime(runtime, options.name),
 		composeFrom(options),
-		composeExecution(runtime, options.stream),
+		connectorFor(runtime, options.execution),
 	);
 	registerRoom(runtime, room);
 	try {
@@ -94,7 +160,7 @@ export async function resumeRoom(name: string, options: ResumeRoomOptions): Prom
 		name,
 		roomRuntime(runtime, name),
 		definitionsOf(options.agents),
-		composeExecution(runtime, options.stream),
+		connectorFor(runtime, options.execution),
 	);
 	registerRoom(runtime, room);
 	try {

@@ -1,7 +1,6 @@
 import { resolve } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
-	type CreateRuntimeOptions,
 	createRuntime,
 	type Room,
 	type RoomNotification,
@@ -10,6 +9,7 @@ import {
 	startRoom,
 } from '@ambionframework/ambion';
 import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
+import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
 import { directoryBackend, openWorkspace, type RoomMirror } from '@ambionframework/workspace';
 import { team } from './definitions.ts';
 import { scenarios, seedWorkspace } from './scenarios.ts';
@@ -49,7 +49,7 @@ interface HostedRoom extends CatalogEntry {
 export async function openRooms(
 	database: DatabaseSync,
 	directory: string,
-	stream?: CreateRuntimeOptions['stream'],
+	stream?: PiExecutionOptions['stream'],
 ) {
 	const sql: Sql = {
 		run: (query, ...params) => {
@@ -57,7 +57,10 @@ export async function openRooms(
 		},
 		all: (query, ...params) => database.prepare(query).all(...params) as Record<string, SqlValue>[],
 	};
-	const runtime = createRuntime({ storage: sqliteJournals(sql), stream });
+	const runtime = createRuntime({
+		storage: sqliteJournals(sql),
+		execution: piExecution({ stream }),
+	});
 	database.exec(
 		'CREATE TABLE IF NOT EXISTS workbench_rooms (name TEXT PRIMARY KEY, goal TEXT NOT NULL, enabled INTEGER NOT NULL)',
 	);

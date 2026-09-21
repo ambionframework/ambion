@@ -6,6 +6,7 @@
  */
 import type { Context } from '@earendil-works/pi-ai';
 import { expect } from 'vitest';
+import { type PiOptions, pi, piExecution } from '../../../pi/src/index.ts';
 import { hostingOf, inProcessTransport } from '../../src/hosting.ts';
 import {
 	createRuntime,
@@ -13,8 +14,6 @@ import {
 	defineHuman,
 	isSpoken,
 	isSummary,
-	type PiOptions,
-	pi,
 	type Room,
 	type Runtime,
 	startRoom,
@@ -113,9 +112,11 @@ export const oneExchange: Scenario = {
 			summary: assistant.name,
 			seats: { [product.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [product, assistant],
-			stream: scripted(
-				byAgent({ product: twoAnswersEach, assistant: composes([], 'The one message.') }),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({ product: twoAnswersEach, assistant: composes([], 'The one message.') }),
+				),
+			}),
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);
@@ -142,19 +143,21 @@ export const twoPeopleTwoExchanges: Scenario = {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			stream: scripted(
-				byAgent({
-					product: answersLastQuestion(['priya', 'sam']),
-					colleague: answersLastQuestion(['priya', 'sam']),
-					assistant: (context) => {
-						const person = /(\w+)'s exchange is over/.exec(contextText(context))?.[1] ?? '';
-						if (!isClosing(context) || toolResultTexts(context).includes('delivered')) {
-							return quiet();
-						}
-						return summarise(`for ${person}`);
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						product: answersLastQuestion(['priya', 'sam']),
+						colleague: answersLastQuestion(['priya', 'sam']),
+						assistant: (context) => {
+							const person = /(\w+)'s exchange is over/.exec(contextText(context))?.[1] ?? '';
+							if (!isClosing(context) || toolResultTexts(context).includes('delivered')) {
+								return quiet();
+							}
+							return summarise(`for ${person}`);
+						},
+					}),
+				),
+			}),
 		});
 		const events = collect(session);
 		const hers = await session.visit(priya);
@@ -185,14 +188,16 @@ export const seatFromReserve: Scenario = {
 			summary: assistant.name,
 			agents: [product, surveyor, assistant],
 			seats: { [assistant.name]: 'broadcast', ...{ [product.name]: 'broadcast' } },
-			stream: scripted(
-				byAgent({
-					assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
-					product: (_context, _name, call) =>
-						call <= 3 ? speak('The pour is Saturday.') : quiet(),
-					surveyor: insists('11.7 tonnes on site.'),
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
+						product: (_context, _name, call) =>
+							call <= 3 ? speak('The pour is Saturday.') : quiet(),
+						surveyor: insists('11.7 tonnes on site.'),
+					}),
+				),
+			}),
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);

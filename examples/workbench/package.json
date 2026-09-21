@@ -14,6 +14,7 @@
 		"@ambionframework/ambion": "workspace:*",
 		"@ambionframework/assistant": "workspace:*",
 		"@ambionframework/journal": "workspace:*",
+		"@ambionframework/pi": "workspace:*",
 		"@ambionframework/workspace": "workspace:*",
 		"@opentui/core": "0.5.11"
 	},

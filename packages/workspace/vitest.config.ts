@@ -23,6 +23,8 @@ export const hosting = fileURLToPath(new URL('../ambion/src/hosting.ts', import.
 /** The core's source names the journal; one module, the way the core's own suite reads it. */
 export const journal = fileURLToPath(new URL('../journal/src/index.ts', import.meta.url));
 export const piJournal = fileURLToPath(new URL('../pi-journal/src/index.ts', import.meta.url));
+/** The Pi executor, which names the core; one module, the way the core's own suite reads it. */
+export const pi = fileURLToPath(new URL('../pi/src/index.ts', import.meta.url));
 
 export default defineConfig({
 	resolve: {
@@ -30,6 +32,7 @@ export default defineConfig({
 			{ find: '@ambionframework/ambion/hosting', replacement: hosting },
 			{ find: '@ambionframework/ambion', replacement: core },
 			{ find: '@ambionframework/pi-journal', replacement: piJournal },
+			{ find: '@ambionframework/pi', replacement: pi },
 			{ find: '@ambionframework/journal', replacement: journal },
 		],
 	},

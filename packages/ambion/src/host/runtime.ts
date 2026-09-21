@@ -4,9 +4,8 @@
  * An application holds a `Runtime` as an opaque token: a clock, and a place
  * to store the record. `startRoom` and `readRoom` take one and pass it on;
  * neither reads anything else off it. Everything else a host or the
- * kernel's own internals need — the journal namespace, transcript storage,
- * the model call, the limits, and the room lifecycle registry — lives
- * behind `hostingOf`.
+ * kernel's own internals need — the journal namespace, the transport, the
+ * limits, and the room lifecycle registry — lives behind `hostingOf`.
  *
  * `Runtime`'s brand blocks a hand-written literal at compile time: nothing
  * outside this file can name the key it carries, so a value assembled from
@@ -19,17 +18,16 @@
  *
  * The clock is an interface so a test can move time by hand, and so a host
  * on a platform with its own alarms maps `alarm` to them. A journal opener
- * opens the record. A transcript opener opens Pi audit sessions.
+ * opens the record. The kernel names no model library: the host supplies an
+ * `Execution`, built by an executor package such as `@ambionframework/pi`.
  */
 
 import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework/journal';
-import type { SessionOpener } from '@ambionframework/pi-journal';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Executor } from '../execution/executor.ts';
-import { createExecutionServices } from '../execution/services.ts';
-import type { TraceOpener } from '../execution/trace.ts';
+import { type TraceOpener, traceJournals } from '../execution/trace.ts';
 import type { AgentPort, RoomProtocol } from '../protocol.ts';
-import type { AgentDefinition, Clock, ExecutionEvent, ModelResolver } from '../types.ts';
+import type { AgentDefinition, Clock, ExecutionEvent } from '../types.ts';
+import { systemClock } from './clock.ts';
 
 /** A key nobody outside this file can name. `createRuntime` is the one place that casts past it. */
 declare const RUNTIME: unique symbol;
@@ -40,6 +38,28 @@ export interface Runtime {
 	readonly clock: Clock;
 	/** The host's native storage. The runtime derives its room and Pi views from it. */
 	readonly storage: JournalOpener;
+}
+
+/**
+ * What the runtime hands an execution composition: the clock, the host's
+ * native storage, the limits, and the transport. The storage lets an
+ * executor keep its own audit beside the record.
+ */
+export interface ExecutionHost {
+	readonly clock: Clock;
+	readonly storage: JournalOpener;
+	readonly limits: Limits;
+	/** Absent, every seat is an actor in this process. */
+	readonly transport?: Transport;
+}
+
+/**
+ * The execution side of a room, as a value. An executor package builds one,
+ * such as `piExecution()`. `startRoom` and `createRuntime` take it; the
+ * kernel never reads what is inside.
+ */
+export interface Execution {
+	connector(host: ExecutionHost): ExecutionConnector;
 }
 
 /** Every bound the runtime sets, by what it bounds. One value for every room in the runtime. */
@@ -78,20 +98,18 @@ export interface Limits {
 
 /**
  * What a host, or the kernel's own internals, need beyond the application
- * view: the journal namespace, transcript storage, the model call, the
- * limits, and the room lifecycle registry. `hostingOf` is the one way to
+ * view: the journal namespace, the transport, the limits, the default
+ * execution, and the room lifecycle registry. `hostingOf` is the one way to
  * reach it from a `Runtime` value.
  */
 export interface Hosting {
 	readonly journals: JournalOpener;
 	/** Opens the trace journal of an activation, one journal per activation. */
 	readonly traces: JournalOpener;
-	readonly transcripts: SessionOpener;
 	/** How the room reaches a seat. Absent, every seat is an actor in this process. */
 	readonly transport?: Transport;
-	/** The model call every seat in this runtime makes, unless a room overrides it. */
-	readonly stream: StreamFn;
-	readonly model: ModelResolver;
+	/** The execution every room in this runtime uses, unless a room names its own. */
+	readonly execution?: Execution;
 	readonly limits: Limits;
 	/** Drop a running room from memory and write nothing. The record keeps everything. */
 	evict(name: string): void;
@@ -99,6 +117,8 @@ export interface Hosting {
 
 interface RuntimeState extends Hosting {
 	running: Map<string, RunningRoom>;
+	readonly clock: Clock;
+	readonly storage: JournalOpener;
 }
 
 const stateFor = new WeakMap<Runtime, RuntimeState>();
@@ -115,10 +135,8 @@ export function hostingOf(runtime: Runtime): Hosting {
 	return {
 		journals: found.journals,
 		traces: found.traces,
-		transcripts: found.transcripts,
 		...(found.transport === undefined ? {} : { transport: found.transport }),
-		stream: found.stream,
-		model: found.model,
+		...(found.execution === undefined ? {} : { execution: found.execution }),
 		limits: found.limits,
 		evict: found.evict,
 	};
@@ -138,6 +156,17 @@ export function registerRoom(runtime: Runtime, room: RunningRoom): void {
 export function releaseRoom(runtime: Runtime, name: string, room: RunningRoom): void {
 	const running = state(runtime).running;
 	if (running.get(name) === room) running.delete(name);
+}
+
+/** What an execution composition reads from a runtime. */
+export function executionHostOf(runtime: Runtime): ExecutionHost {
+	const found = state(runtime);
+	return {
+		clock: found.clock,
+		storage: found.storage,
+		limits: found.limits,
+		...(found.transport === undefined ? {} : { transport: found.transport }),
+	};
 }
 
 /** The dependencies that one in-process seat needs for one captured definition. */
@@ -209,10 +238,11 @@ export interface CreateRuntimeOptions {
 	/** Where the runtime opens room journals and Pi transcript sessions. */
 	storage?: JournalOpener;
 	/**
-	 * The model call. A scripted stream makes every room deterministic; the
-	 * model then resolves to a stub, because a custom stream never reads it.
+	 * The execution every room in this runtime uses, such as `piExecution()`
+	 * from `@ambionframework/pi`. A room may name its own. Absent, a seat
+	 * that needs an executor fails with an error event.
 	 */
-	stream?: StreamFn;
+	execution?: Execution;
 	/** Any field of any group. An omitted field keeps its default. */
 	limits?: { readonly [Group in keyof Limits]?: Partial<Limits[Group]> };
 }
@@ -235,13 +265,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	const running = new Map<string, RunningRoom>();
 	const storage = options.storage ?? memoryJournals();
 	const journals = namespaced(storage, 'ambion/room');
-	const services = createExecutionServices({
-		storage,
-		trace: options.limits?.trace,
-		clock: options.clock,
-		call: options.limits?.call,
-		stream: options.stream,
-	});
+	const clock = options.clock ?? systemClock();
 	const given = options.limits ?? {};
 	const limits: Limits = {
 		delivery: { resend: 5_000, ...given.delivery },
@@ -251,10 +275,10 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 			backoff: (attempt: number) => attempt * 30_000,
 			...given.activation,
 		},
-		call: services.call,
+		call: callLimits(given.call),
 		context: { messages: Number.POSITIVE_INFINITY, ...given.context },
 		message: { bytes: Number.POSITIVE_INFINITY, ...given.message },
-		trace: services.trace,
+		trace: { toolOutputBytes: 65_536, stepsPerPass: 1_000, ...given.trace },
 	};
 	// The runtime establishes these bounds here, once, for every room it runs.
 	// The pass writes an activation off at the cap, so a cap below one would
@@ -278,15 +302,14 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		}
 	}
 	// The application view: an opaque token nobody outside this file can produce.
-	const runtime = { clock: services.clock, storage } as unknown as Runtime;
+	const runtime = { clock, storage } as unknown as Runtime;
 	stateFor.set(runtime, {
 		running,
 		journals,
-		traces: services.traces,
-		transcripts: services.transcripts,
-		...(options.transport === undefined ? {} : { transport: options.transport }),
-		stream: services.stream,
-		model: services.model,
+		traces: traceJournals(storage),
+		clock,
+		storage,
+		...optional({ transport: options.transport, execution: options.execution }),
 		limits,
 		evict(name) {
 			const room = running.get(name);
@@ -295,6 +318,24 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		},
 	});
 	return runtime;
+}
+
+/** The fields of an object that hold a value. */
+function optional<T extends object>(fields: T): Partial<T> {
+	return Object.fromEntries(
+		Object.entries(fields).filter(([, value]) => value !== undefined),
+	) as Partial<T>;
+}
+
+/** The executor call bounds, checked once for every room in the runtime. */
+export function callLimits(given: Partial<Limits['call']> | undefined): Limits['call'] {
+	const attempts = given?.attempts ?? 2;
+	const timeout = given?.timeout ?? 10_000;
+	if (!Number.isSafeInteger(attempts) || attempts < 1)
+		throw new Error('Room call attempts must be a positive safe integer.');
+	if (!Number.isFinite(timeout) || timeout <= 0)
+		throw new Error('Room call timeout must be a finite positive number.');
+	return { attempts, timeout };
 }
 
 let singleton: Runtime | undefined;

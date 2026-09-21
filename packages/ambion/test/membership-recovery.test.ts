@@ -1,7 +1,8 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { createRuntime, defineAgent, defineTool, pi, startRoom } from '../src/index.ts';
+import { pi, piExecution } from '../../pi/src/index.ts';
+import { createRuntime, defineAgent, defineTool, startRoom } from '../src/index.ts';
 import { deferred, messagesOf, participantsOf, roomName, waitForRoom } from './support/room.ts';
 import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
 import { faultyJournals, gatedJournals, memory, tappedJournals } from './support/storage.ts';
@@ -60,7 +61,7 @@ describe('membership writes with fixed definitions', () => {
 			name: roomName('seat-race'),
 			agents: [chosen],
 			seats: {},
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			const results = await Promise.allSettled([
@@ -93,7 +94,7 @@ describe('membership writes with fixed definitions', () => {
 			agents: [chosen],
 			seats: {},
 			runtime: createRuntime({ storage: journals }),
-			stream: runTool('chosen'),
+			execution: piExecution({ stream: runTool('chosen') }),
 		});
 		try {
 			const seating = session.seat(chosen.name);
@@ -122,7 +123,7 @@ describe('membership writes with fixed definitions', () => {
 			agents: [chosen],
 			seats: {},
 			runtime: createRuntime({ storage: faulty.journals }),
-			stream: runTool('chosen'),
+			execution: piExecution({ stream: runTool('chosen') }),
 		});
 		try {
 			faulty.fail('after', 'message');
@@ -162,7 +163,7 @@ describe('membership writes with fixed definitions', () => {
 				agents: [chosen],
 				seats: {},
 				runtime: createRuntime({ storage: journals }),
-				stream: runTool('chosen'),
+				execution: piExecution({ stream: runTool('chosen') }),
 			});
 			try {
 				await expect(session.seat(chosen.name)).rejects.toThrow(/disk is full/);

@@ -19,6 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
 import { createRuntime, isPresence, type Room, resumeRoom } from '../src/index.ts';
 import { agents, priya, type Question, questions, sam, script, TIMING } from './support/cast.ts';
 import { idle, liveLeases, outcome, World, within } from './support/chaos.ts';
@@ -175,7 +176,7 @@ describe.each(['sqlite'])('a room killed from outside on %s', (storage) => {
 				const session = await resumeRoom(name, {
 					runtime,
 					agents,
-					stream: scripted(script),
+					execution: piExecution({ stream: scripted(script) }),
 				});
 				const events = collect(session);
 				const inheritedExchange = (await currentExchange(session)) !== undefined;

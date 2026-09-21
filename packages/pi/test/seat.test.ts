@@ -1,18 +1,14 @@
-import { noTraces } from './support/trace.ts';
 /**
  * The seat's side of the wire, driven by hand over a room the test plays:
  * one activation at a time, a steer into the one that runs, and whatever
  * queued behind it runs next.
  */
 
-import type { SessionOpener } from '@ambionframework/pi-journal';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
-import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
-import { describe, expect, it } from 'vitest';
+import type { Message } from '@ambionframework/ambion';
+import { type Clock, createRuntime, defineAgent } from '@ambionframework/ambion';
 import {
 	AgentRunner,
 	type CommitResult,
-	createPiExecutor,
 	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
@@ -20,12 +16,16 @@ import {
 	type Steer,
 	type ViewResponse,
 	type Wake,
-} from '../src/hosting.ts';
-import type { Message } from '../src/index.ts';
-import { type Clock, createRuntime, defineAgent, pi } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
-import { deferred, tick } from './support/room.ts';
-import { contextText, quiet, scripted } from './support/scripted.ts';
+} from '@ambionframework/ambion/hosting';
+import type { SessionOpener } from '@ambionframework/pi-journal';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
+import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
+import { describe, expect, it } from 'vitest';
+import { fakeClock } from '../../ambion/test/support/clock.ts';
+import { deferred, tick } from '../../ambion/test/support/room.ts';
+import { contextText, quiet, scripted } from '../../ambion/test/support/scripted.ts';
+import { noTraces } from '../../ambion/test/support/trace.ts';
+import { createExecutionServices, createPiExecutor, pi } from '../src/index.ts';
 
 const product = defineAgent({
 	name: 'product',
@@ -111,13 +111,14 @@ const deaf: StreamFn = () => createAssistantMessageEventStream();
 
 function play(stream: StreamFn = scripted(() => quiet()), transcripts?: SessionOpener) {
 	const clock = fakeClock();
-	const runtime = createRuntime({ clock, stream });
+	const runtime = createRuntime({ clock });
+	const services = createExecutionServices({ storage: runtime.storage, clock, stream });
 	const room = new PlayedRoom(clock);
 	const executor = createPiExecutor({
 		definition: product,
-		model: hostingOf(runtime).model,
-		stream: hostingOf(runtime).stream,
-		transcripts: transcripts ?? hostingOf(runtime).transcripts,
+		model: services.model,
+		stream: services.stream,
+		transcripts: transcripts ?? services.transcripts,
 		room: 'played',
 		now: () => clock.now(),
 	});
@@ -130,7 +131,7 @@ function play(stream: StreamFn = scripted(() => quiet()), transcripts?: SessionO
 		executor,
 		trace: noTraces,
 	});
-	return { room, actor, clock, runtime };
+	return { room, actor, clock, runtime, services };
 }
 
 const wakeOf = (activation: string): Wake => ({ room: 'played', seat: 'product', activation });
@@ -243,7 +244,7 @@ describe('a seat actor', () => {
 			},
 		};
 		const fixture = play(undefined, transcripts);
-		base = hostingOf(fixture.runtime).transcripts;
+		base = fixture.services.transcripts;
 		fixture.room.letGo.resolve();
 		await fixture.actor.run('message:1:product:1');
 

@@ -5,12 +5,11 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { type PiOptions, pi, piExecution } from '../../pi/src/index.ts';
 import {
 	type AgentDefinition,
 	defineAgent,
 	defineTool,
-	type PiOptions,
-	pi,
 	type Room,
 	startRoom,
 	type ToolBundle,
@@ -44,7 +43,7 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 			[assistant.name]: 'none',
 		},
 		agents: [...agents, assistant],
-		stream: scripted(byAgent(seats)),
+		execution: piExecution({ stream: scripted(byAgent(seats)) }),
 	});
 	const visit = await enter(session);
 	await visit.send({ text: 'go' });
@@ -125,12 +124,14 @@ describe('ordinary tool bundles', () => {
 			summary: assistant.name,
 			seats: { worker: 'broadcast', [assistant.name]: 'none' },
 			agents: [agent('worker', { tools: [probe] }), assistant],
-			stream: scripted(
-				byAgent({
-					worker: (_context, _who, call) =>
-						call === 1 ? callTool('probe', {}) : call === 2 ? speak('done') : quiet(),
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						worker: (_context, _who, call) =>
+							call === 1 ? callTool('probe', {}) : call === 2 ? speak('done') : quiet(),
+					}),
+				),
+			}),
 		});
 		const events = collect(session);
 		const visit = await enter(session);
@@ -165,11 +166,13 @@ describe('ordinary tool bundles', () => {
 			summary: assistant.name,
 			seats: { greeter: 'presence', [assistant.name]: 'none' },
 			agents: [agent('greeter', { tools: [probe] }), assistant],
-			stream: scripted(
-				byAgent({
-					greeter: (_context, _who, call) => (call === 1 ? callTool('probe', {}) : quiet()),
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						greeter: (_context, _who, call) => (call === 1 ? callTool('probe', {}) : quiet()),
+					}),
+				),
+			}),
 		});
 		await enter(session);
 		await waitForRoom(session);

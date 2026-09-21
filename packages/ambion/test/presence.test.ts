@@ -1,11 +1,11 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	isSpoken,
-	pi,
 	type Room,
 	readRoom,
 	startRoom,
@@ -52,7 +52,7 @@ const open = (overrides: Partial<Parameters<typeof startRoom>[0]> = {}) =>
 		name: roomName(),
 		seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 		agents: [watcher, assistant],
-		stream: recording,
+		execution: piExecution({ stream: recording }),
 		...overrides,
 	});
 
@@ -137,7 +137,7 @@ describe('presence', () => {
 			await held.promise;
 			return quiet();
 		});
-		const session = track(await open({ stream: holding }));
+		const session = track(await open({ execution: piExecution({ stream: holding }) }));
 		const visit = await session.visit(andrei);
 		await visit.send({ text: 'start something long' }); // watcher is now mid-activation
 		await providerStarted.promise;
@@ -203,7 +203,7 @@ describe('presence', () => {
 			name,
 			seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [watcher, assistant],
-			stream: recording,
+			execution: piExecution({ stream: recording }),
 			runtime,
 		});
 		const visit = await first.visit(andrei);
@@ -221,7 +221,7 @@ describe('presence', () => {
 				name,
 				seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [watcher, assistant],
-				stream: recording,
+				execution: piExecution({ stream: recording }),
 				runtime,
 			}),
 		);
@@ -302,7 +302,7 @@ describe('presence', () => {
 			name,
 			seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [watcher, assistant],
-			stream: recording,
+			execution: piExecution({ stream: recording }),
 			runtime,
 		});
 		const visit = await session.visit(andrei);
@@ -379,7 +379,7 @@ async function brittle(): Promise<{ session: Room; fail: FaultyJournals['fail'] 
 		name: roomName(),
 		seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 		agents: [watcher, assistant],
-		stream: recording,
+		execution: piExecution({ stream: recording }),
 		runtime,
 	});
 	return { session, fail: faulty.fail };
@@ -450,7 +450,7 @@ describe('a storage that fails', () => {
 				name: session.name,
 				seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [watcher, assistant],
-				stream: recording,
+				execution: piExecution({ stream: recording }),
 				runtime: createRuntime(),
 			}),
 		);
@@ -472,7 +472,7 @@ describe('a storage that fails', () => {
 				name: roomName(),
 				seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [watcher, assistant],
-				stream: recording,
+				execution: piExecution({ stream: recording }),
 				runtime: createRuntime({ storage: unreachable }),
 			}),
 		).rejects.toThrow(/unreachable/);

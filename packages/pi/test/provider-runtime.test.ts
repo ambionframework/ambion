@@ -1,6 +1,9 @@
+import { systemClock } from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import type { Api, Context, Model } from '@earendil-works/pi-ai';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
+import type { createExecutionServices, ExecutionServices } from '../src/services.ts';
 
 const catalog = vi.hoisted(() => ({
 	builtinModels: vi.fn(),
@@ -18,6 +21,11 @@ const model = {
 	api: 'fake',
 	provider: 'fake',
 } as unknown as Model<Api>;
+
+/** Services over an in-memory record: the default stream and model resolver. */
+function servicesOf(create: typeof createExecutionServices): ExecutionServices {
+	return create({ storage: memoryJournals(), clock: systemClock() });
+}
 
 describe('default provider runtime boundary', () => {
 	it('initializes one catalog for concurrent first model uses and streams through it', async () => {
@@ -42,15 +50,16 @@ describe('default provider runtime boundary', () => {
 		];
 		let streamIndex = 0;
 		catalog.streamSimple.mockImplementation(() => expectedStreams[streamIndex++]);
-		const { createRuntime, hostingOf } = await import('../src/host/runtime.ts');
-		const runtimes = [createRuntime(), createRuntime(), createRuntime()];
+		const { createExecutionServices } = await import('../src/services.ts');
+		const services = [servicesOf(createExecutionServices), servicesOf(createExecutionServices)];
+		services.push(servicesOf(createExecutionServices));
 
 		const context: Context = { systemPrompt: '', messages: [] };
 		const streams = await Promise.all(
-			runtimes.map(async (runtime) => {
-				const resolved = await hostingOf(runtime).model('fake/fast', 'worker');
+			services.map(async (one) => {
+				const resolved = await one.model('fake/fast', 'worker');
 				expect(resolved).toEqual(model);
-				return hostingOf(runtime).stream(resolved, context, {});
+				return one.stream(resolved, context, {});
 			}),
 		);
 
@@ -68,11 +77,12 @@ describe('default provider runtime boundary', () => {
 		catalog.builtinModels.mockImplementationOnce(() => {
 			throw new Error('catalog failed');
 		});
-		const { createRuntime, hostingOf } = await import('../src/host/runtime.ts');
-		const runtimes = [createRuntime(), createRuntime(), createRuntime()];
+		const { createExecutionServices } = await import('../src/services.ts');
+		const services = [servicesOf(createExecutionServices), servicesOf(createExecutionServices)];
+		services.push(servicesOf(createExecutionServices));
 
 		const results = await Promise.allSettled(
-			runtimes.map((runtime) => hostingOf(runtime).model('fake/fast', 'worker')),
+			services.map((one) => one.model('fake/fast', 'worker')),
 		);
 		expect(results).toEqual([
 			{ status: 'rejected', reason: expect.any(Error) },

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { inProcessTransport, type RoomProtocol, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	type Message,
-	pi,
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
@@ -72,7 +72,7 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			stream: scripted(saysUntilDelivered('answer')),
+			execution: piExecution({ stream: scripted(saysUntilDelivered('answer')) }),
 		});
 		try {
 			const visit = await room.visit(person);
@@ -102,7 +102,7 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			stream: scripted(saysUntilDelivered('answer')),
+			execution: piExecution({ stream: scripted(saysUntilDelivered('answer')) }),
 		});
 		const off = room.subscribe((event) => events.push(event));
 		try {

@@ -1,6 +1,6 @@
 /**
  * The Pi executor: one activation's session, from the pass the driver hands
- * it until the pass ends.
+ * it until the activation stops.
  *
  * A seat is seated for as long as the room runs. An activation lasts seconds,
  * and it owns what belongs to one:
@@ -15,19 +15,37 @@
  *   in. It reaches the provider after the request it lands during. PiContext
  *   records the structured range only when that later request receives it.
  *
- * The driver hands a session one view per pass; the session renders the
- * prompt, resolves the model and binds the tools, runs it, and reports where
- * it left off.
+ * The driver hands a session a first pass over the whole view. The session
+ * renders the prompt, resolves the model, binds the tools, and builds one Pi
+ * agent. The session keeps that agent for every later pass of the activation.
+ * A later pass prompts it with the delta: what the record holds beyond
+ * `readThrough`. The transcript of the activation stays whole.
  *
  * **Three spans, and only two are ours.** Pi has a *turn* — one request to a
  * provider and the tools it calls — and a *run*, which is one `prompt()` and
  * the turns inside it. An activation is wider than both: it is one or more
- * runs, because a message landing mid-activation rebuilds it against the
+ * runs, because a message landing mid-activation starts another run over the
  * record as it now stands. The word for what a room does to a seat is
  * `activation` ([`agent.md`](../../../docs/agent.md) rule 1), and the record
  * has called it that all along: every one lands in the seat's downstream
  * session as an `ambion/activation` entry.
  */
+import type {
+	ActivationView,
+	AgentDefinition,
+	AgentExecutor,
+	ExecutionEvent,
+	Executor,
+	ExecutorActivation,
+	ExecutorSession,
+	FailureCause,
+	PassInput,
+	PassResult,
+	RoomProtocol,
+	Seq,
+	TraceSink,
+} from '@ambionframework/ambion/hosting';
+import { renderActivation, renderLine } from '@ambionframework/ambion/hosting';
 import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/pi-journal';
 import type {
 	AgentEvent,
@@ -36,21 +54,11 @@ import type {
 	StreamFn,
 } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
-import type { ActivationView, RoomProtocol } from '../protocol.ts';
-import type {
-	AgentDefinition,
-	ExecutionEvent,
-	FailureCause,
-	ModelResolver,
-	Seq,
-} from '../types.ts';
-import type { Executor, ExecutorActivation, ExecutorSession, PassResult } from './executor.ts';
-import { PiContext } from './pi.ts';
+import { asError, persistTurns } from './audit.ts';
+import { PiContext } from './context.ts';
 import { PiSteps } from './pi-trace.ts';
-import { renderActivation } from './render.ts';
-import { seatSessionId } from './services.ts';
+import { type ModelResolver, seatSessionId } from './services.ts';
 import { binding, toolsFor } from './tools.ts';
-import type { TraceSink } from './trace.ts';
 
 /** What builds a Pi executor for one seat: its definition, and the room's model services. */
 export interface PiExecutorOptions {
@@ -105,7 +113,12 @@ export class Activation implements ExecutorSession {
 	/** The steers held before Pi first polls its queue. */
 	private held: { after: Seq; seq: Seq; line: string }[] = [];
 	private providerStarted = false;
+	/** The Pi agent of this activation. Built on the first pass, kept for the rest. */
 	private agent: PiAgent | undefined;
+	/** The view of the running pass. The tools read the room and exchange from it. */
+	private view: ActivationView | undefined;
+	/** How many messages of the agent's transcript the audit holds. */
+	private audited = 0;
 	private stopped = false;
 
 	constructor(
@@ -158,7 +171,7 @@ export class Activation implements ExecutorSession {
 		}
 	}
 
-	/** Pi's abort ends the run but not its queues; the driver stops rebuilding it too. */
+	/** Pi's abort ends the run but not its queues; the driver stops running passes too. */
 	abort(): void {
 		this.stopped = true;
 		this.agent?.abort();
@@ -167,7 +180,7 @@ export class Activation implements ExecutorSession {
 	/**
 	 * Whether the record moved past acknowledged context. A queued steer or a
 	 * newer room position requires a fresh pass. A dropped steer stays on the
-	 * record and is delivered again by that later pass's view. A cancelled
+	 * record and is delivered again by that later pass's delta. A cancelled
 	 * session always answers no, though the driver checks `cancelled` itself
 	 * first, before it ever renews on this session's behalf.
 	 */
@@ -180,7 +193,7 @@ export class Activation implements ExecutorSession {
 	}
 
 	/** One pass: read, act, and report where this session left off. */
-	async pass(view: ActivationView): Promise<PassResult> {
+	async pass(input: PassInput): Promise<PassResult> {
 		try {
 			if (this.stopped) return { failed: false };
 			// The fresh view becomes acknowledged only when Pi sends it to a provider.
@@ -189,12 +202,12 @@ export class Activation implements ExecutorSession {
 				this.trace.record({ type: 'steer', seq: dropped.seq, consumed: false });
 			}
 			this.providerStarted = false;
-			const built = await this.build(view);
+			this.view = input.view;
+			const agent = await this.agentFor(input.view);
 			if (this.stopped) return { failed: false };
-			const { agent, context } = built;
-			this.agent = agent;
-			agent.subscribe((event) => this.note(event));
-			await agent.prompt(this.context.initial(view.through, context, this.now()));
+			const prompt = this.promptFor(input);
+			if (prompt === undefined) return this.nothingNew(input.view);
+			await agent.prompt(prompt);
 			const failure = this.executionFailure(agent);
 			await this.audit(agent);
 			if (failure !== undefined) {
@@ -202,8 +215,31 @@ export class Activation implements ExecutorSession {
 			}
 			return endedForLength(agent) ? { failed: false, stop: 'length' } : { failed: false };
 		} catch (error) {
-			return this.broke(error instanceof Error ? error : new Error(String(error)));
+			return this.broke(asError(error));
 		}
+	}
+
+	/**
+	 * The record moved, but not in a way a model reads: a delta with no
+	 * message in it. The session takes the view as read, and no run starts.
+	 */
+	private nothingNew(view: ActivationView): PassResult {
+		this.context.acknowledgeThrough(view.through);
+		return { failed: false };
+	}
+
+	/**
+	 * The message that starts a run. The first pass hands the model the whole
+	 * view. A later pass hands it the delta, and none when nothing is new.
+	 */
+	private promptFor(input: PassInput): AgentMessage | undefined {
+		if (input.kind === 'view') {
+			const context = renderActivation(input.view, this.definition).context;
+			return this.context.initial(input.view.through, context, this.now());
+		}
+		const text = deltaText(input.view, input.since);
+		if (text === undefined) return undefined;
+		return this.context.delta(input.since, input.view.through, text, this.now());
 	}
 
 	/**
@@ -242,8 +278,10 @@ export class Activation implements ExecutorSession {
 
 	/** Audit failure is diagnostic only. It never changes the provider outcome. */
 	private async audit(agent: PiAgent): Promise<void> {
+		const total = agent.state.messages.length;
 		try {
-			await persistTurns(this.openAudit, agent, new Date(this.now()).toISOString());
+			await persistTurns(this.openAudit, agent, new Date(this.now()).toISOString(), this.audited);
+			this.audited = total;
 		} catch (error) {
 			try {
 				this.emit({
@@ -275,29 +313,43 @@ export class Activation implements ExecutorSession {
 	}
 
 	/**
-	 * The model over the view: the executor renders the prompt, resolves the
-	 * definition's model, and binds the permitted tools. The stream function tells the activation
+	 * The Pi agent of this activation. The first pass builds it: the executor
+	 * renders the system prompt, resolves the definition's model, and binds
+	 * the permitted tools. Later passes keep it, and give it the system
+	 * prompt of the view now in hand. The stream function tells the activation
 	 * when the model is asked, so a steer never joins the request it lands during.
 	 */
-	private async build(view: ActivationView): Promise<{ agent: PiAgent; context: string }> {
+	private async agentFor(view: ActivationView): Promise<PiAgent> {
 		const def = this.definition;
 		if (view.spec.seat !== def.name)
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
-		const rendered = renderActivation(view, def);
+		const systemPrompt = renderActivation(view, def).systemPrompt;
+		if (this.agent !== undefined) {
+			this.agent.state.systemPrompt = systemPrompt;
+			return this.agent;
+		}
 		const agent = new Agent({
 			streamFn: (model, context, options) => {
 				this.providerRequestStarted(context.messages);
 				return this.stream(model, context, options);
 			},
 			initialState: {
-				systemPrompt: rendered.systemPrompt,
-				model: await this.model(def.executor.model, def.name),
+				systemPrompt,
+				model: await this.model(modelOf(def.executor), def.name),
 				thinkingLevel: 'off',
-				tools: toolsFor(view, def, binding(this, this.room)),
+				tools: toolsFor(view, def, binding(this, this.room), () => this.currentView(view)),
 				messages: [],
 			},
 		});
-		return { agent, context: rendered.context };
+		if (this.stopped) return agent;
+		agent.subscribe((event) => this.note(event));
+		this.agent = agent;
+		return agent;
+	}
+
+	/** The view of the running pass, or the one the agent was built from. */
+	private currentView(built: ActivationView): ActivationView {
+		return this.view ?? built;
 	}
 
 	/**
@@ -314,6 +366,23 @@ export class Activation implements ExecutorSession {
 			this.trace.record({ type: 'steer', seq: context.seq, consumed: true });
 		}
 	}
+}
+
+/** The model identifier `pi()` gave the executor. Another family's executor has none. */
+function modelOf(executor: AgentExecutor): string {
+	if ('model' in executor && typeof executor.model === 'string') return executor.model;
+	throw new Error(`The Pi executor cannot run an executor of kind '${executor.kind}'.`);
+}
+
+/**
+ * What a later pass tells the model: each message that landed beyond the
+ * position it read. Each line reads as a steer does. Nothing is new when no
+ * message stands beyond `since`.
+ */
+function deltaText(view: ActivationView, since: Seq): string | undefined {
+	const fresh = view.context.messages.filter((message) => message.seq > since);
+	if (fresh.length === 0) return undefined;
+	return fresh.map((message) => `[new] ${renderLine(message)}`).join('\n');
 }
 
 /** Whether the last model message stopped at a length limit. */
@@ -398,52 +467,4 @@ function permanentText(text: string | undefined): boolean {
 	return /credit balance|authentication_error|permission_error|invalid_request_error|invalid[_\s]?api[_\s]?key|unauthorized|permission denied/i.test(
 		text,
 	);
-}
-
-/** Every turn a model took, in the downstream session that owns it. */
-export async function persistTurns(
-	open: () => Promise<PiSession>,
-	agent: PiAgent,
-	at: string,
-): Promise<void> {
-	const batch = crypto.randomUUID();
-	const messages = agent.state.messages.map((message) => {
-		// Provider messages may carry undefined-valued fields, which Pi's
-		// durability check rejects; a JSON round-trip drops them.
-		return JSON.parse(JSON.stringify(message)) as AgentMessage;
-	});
-	for (let attempt = 0; attempt < AUDIT_ATTEMPTS; attempt += 1) {
-		try {
-			const piSeat = await open();
-			await piSeat.appendEntry(
-				{
-					type: 'custom',
-					id: `${batch}:activation`,
-					customType: 'ambion/activation',
-					data: { at },
-				},
-				'main',
-			);
-			for (const [index, message] of messages.entries()) {
-				await piSeat.appendEntry(
-					{
-						type: 'message',
-						id: `${batch}:message:${index}`,
-						message,
-					},
-					'main',
-				);
-			}
-			return;
-		} catch (error) {
-			if (attempt === AUDIT_ATTEMPTS - 1) throw error;
-		}
-	}
-}
-
-/** Audit gets one retry for a lost or refused write in this activation. */
-const AUDIT_ATTEMPTS = 2;
-
-function asError(error: unknown): Error {
-	return error instanceof Error ? error : new Error(String(error));
 }

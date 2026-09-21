@@ -1,12 +1,13 @@
+import { piSessions } from '@ambionframework/pi-journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { type ActivationSpec, hostingOf, seatSessionId } from '../src/hosting.ts';
+import { pi, piExecution, seatSessionId } from '../../pi/src/index.ts';
+import type { ActivationSpec } from '../src/hosting.ts';
 import {
 	type AgentParticipantInfo,
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	type HumanParticipantInfo,
-	pi,
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
@@ -32,10 +33,14 @@ describe('participant views', () => {
 			name: roomName('participants'),
 			agents: [writer()],
 			runtime,
-			stream: scripted((context) => {
-				contexts.push(`${context.systemPrompt ?? ''}\n${contextText(context)}`);
-				const text = contextText(context);
-				return text.includes('Question?') && !text.includes('Answer.') ? speak('Answer.') : quiet();
+			execution: piExecution({
+				stream: scripted((context) => {
+					contexts.push(`${context.systemPrompt ?? ''}\n${contextText(context)}`);
+					const text = contextText(context);
+					return text.includes('Question?') && !text.includes('Answer.')
+						? speak('Answer.')
+						: quiet();
+				}),
 			}),
 		});
 		try {
@@ -148,7 +153,7 @@ describe('participant views', () => {
 			agents: [writer()],
 			seats: { writer: 'none' },
 			runtime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			await room.visit(defineHuman({ name: 'reader', identity: 'Reads the room.' }));
@@ -179,9 +184,13 @@ describe('participant views', () => {
 			name: roomName('participant-audit'),
 			agents: [writer()],
 			runtime,
-			stream: scripted((context) => {
-				const text = contextText(context);
-				return text.includes('Question?') && !text.includes('Answer.') ? speak('Answer.') : quiet();
+			execution: piExecution({
+				stream: scripted((context) => {
+					const text = contextText(context);
+					return text.includes('Question?') && !text.includes('Answer.')
+						? speak('Answer.')
+						: quiet();
+				}),
 			}),
 		});
 		try {
@@ -193,7 +202,7 @@ describe('participant views', () => {
 
 			const expectedId = JSON.stringify(['ambion/seat-session', room.name, 'writer']);
 			expect(seatSessionId(room.name, 'writer')).toBe(expectedId);
-			const transcript = await hostingOf(runtime).transcripts.open(expectedId);
+			const transcript = await piSessions(runtime.storage).open(expectedId);
 			expect(await transcript.getMetadata()).toMatchObject({
 				id: expectedId,
 				parentSessionId: room.name,

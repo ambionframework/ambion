@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	pi,
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
@@ -37,9 +37,11 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			stream: scripted(() => {
-				calls += 1;
-				throw new Error('400 Your credit balance is too low to make this request');
+			execution: piExecution({
+				stream: scripted(() => {
+					calls += 1;
+					throw new Error('400 Your credit balance is too low to make this request');
+				}),
 			}),
 		});
 		const events = collect(room);
@@ -72,10 +74,12 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			stream: scripted(() => {
-				calls += 1;
-				// The token count reads like a 400 status, but a rate limit is transient.
-				throw new Error('429 rate limit of 400,000 input tokens per minute exceeded');
+			execution: piExecution({
+				stream: scripted(() => {
+					calls += 1;
+					// The token count reads like a 400 status, but a rate limit is transient.
+					throw new Error('429 rate limit of 400,000 input tokens per minute exceeded');
+				}),
 			}),
 		});
 		const events = collect(room);
@@ -105,9 +109,11 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			stream: scripted(() => {
-				calls += 1;
-				throw new Error('503 the provider is overloaded');
+			execution: piExecution({
+				stream: scripted(() => {
+					calls += 1;
+					throw new Error('503 the provider is overloaded');
+				}),
 			}),
 		});
 		const events = collect(room);

@@ -13,7 +13,7 @@
  * changes the outcome of the activation or its lease. One journal holds one
  * activation, so each attempt has its own trace.
  */
-import { Journal, type JournalOpener } from '@ambionframework/journal';
+import { Journal, type JournalOpener, namespaced } from '@ambionframework/journal';
 import type { Limits } from '../host/runtime.ts';
 import {
 	addUsage,
@@ -92,6 +92,11 @@ export interface TraceOptions {
 	readonly policy: TracePolicy;
 	readonly emit: (event: ExecutionEvent) => void;
 	readonly now: () => number;
+}
+
+/** The trace journals over one storage: one journal for each activation. */
+export function traceJournals(storage: JournalOpener): JournalOpener {
+	return namespaced(storage, 'ambion/trace');
 }
 
 /** A sink for one activation. It opens the trace journal on the first write. */

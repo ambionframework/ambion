@@ -1,4 +1,5 @@
-import { defineAgent, pi, startRoom } from '@ambionframework/ambion';
+import { defineAgent, startRoom } from '@ambionframework/ambion';
+import { pi, piExecution } from '@ambionframework/pi';
 import type { ExecutionEnv, FileInfo } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, err, FileError, ok } from '@earendil-works/pi-agent-core';
 import { Bash, InMemoryFs } from 'just-bash';
@@ -233,15 +234,17 @@ describe('the workspace audit log', () => {
 		const session = await startRoom({
 			name: roomId,
 			agents: [worker],
-			stream: scripted(
-				byAgent({
-					worker: (_context, _who, call) => {
-						if (call === 1) return callTool('write', { path: 'notes.txt', content: 'done\n' });
-						if (call > 2) return quiet();
-						return speak('written');
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						worker: (_context, _who, call) => {
+							if (call === 1) return callTool('write', { path: 'notes.txt', content: 'done\n' });
+							if (call > 2) return quiet();
+							return speak('written');
+						},
+					}),
+				),
+			}),
 		});
 		const visit = await enter(session);
 		const exchange = await visit.send({ text: 'go' });

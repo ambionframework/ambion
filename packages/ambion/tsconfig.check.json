@@ -1,0 +1,17 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		// The tests build rooms with the Pi executor, which names the core by its
+		// package name. The mapping sends that name to the core's own source, so
+		// the type-checker sees one core.
+		//
+		// The mapping lives here because `tsdown` reads `tsconfig.json`: a build
+		// that followed it would emit the Pi package's declarations into its
+		// source tree.
+		"paths": {
+			"@ambionframework/ambion": ["./src/index.ts"],
+			"@ambionframework/ambion/hosting": ["./src/hosting.ts"]
+		}
+	},
+	"include": ["src", "test"]
+}

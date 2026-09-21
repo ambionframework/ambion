@@ -4,7 +4,7 @@
  * and a seat, and everything beyond the application view a host needs from a
  * `Runtime`, for a host that runs the two apart.
  */
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { expect, expectTypeOf, it } from 'vitest';
 import * as conformance from '../src/conformance.ts';
@@ -50,12 +50,10 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 		'defineHuman',
 		'defineTool',
 		'exchangeUri',
-		'fromPiTool',
 		'isPresence',
 		'isSpoken',
 		'isSummary',
 		'parseRoomUri',
-		'pi',
 		'readExchange',
 		'readRoom',
 		'resumeRoom',
@@ -69,14 +67,21 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 	expect(Object.keys(hosting).sort()).toEqual([
 		'AgentRunner',
 		'DEFAULT_TRACE',
+		'SAY',
+		'SEAT',
+		'UNSEAT',
 		'assertWire',
-		'createExecutionServices',
-		'createPiExecutor',
+		'callLimits',
+		'describeExecutor',
 		'hostingOf',
 		'inProcessTransport',
+		'refusal',
+		'renderActivation',
+		'renderLine',
 		'roundTrip',
 		'runningRoom',
-		'seatSessionId',
+		'summaryToolDescription',
+		'traceJournals',
 		'traceOpener',
 	]);
 	for (const name of Object.keys(main)) {
@@ -100,5 +105,30 @@ it('names the ports, the reads, and the visit by their final names', () => {
 		main.ExchangeRead | undefined
 	>();
 	expectTypeOf<Awaited<ReturnType<typeof main.readRoom>>>().toEqualTypeOf<main.RoomRead>();
-	expectTypeOf<main.StartRoomOptions>().toHaveProperty('stream');
+	expectTypeOf<main.StartRoomOptions>().toHaveProperty('execution');
+	expectTypeOf<main.StartRoomOptions>().not.toHaveProperty('stream');
+});
+
+/** The specifiers one built file imports, whatever the quote or the form. */
+const importsOf = (code: string): string[] =>
+	[...code.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1] ?? '');
+
+it('names no model library: the manifest lists none, and no source file imports one', async () => {
+	const {
+		dependencies = {},
+		peerDependencies = {},
+		optionalDependencies = {},
+	} = JSON.parse(await read('package.json')) as Record<string, Record<string, string> | undefined>;
+	const declared = Object.keys({ ...dependencies, ...peerDependencies, ...optionalDependencies });
+	expect(declared.filter((name) => /^@earendil-works\/|pi-journal$|\/pi$/.test(name))).toEqual([]);
+	const root = fileURLToPath(new URL('../src', import.meta.url));
+	const files = (await readdir(root, { recursive: true })).filter((file) => file.endsWith('.ts'));
+	expect(files.length).toBeGreaterThan(20);
+	for (const file of files) {
+		const imported = importsOf(await read(`src/${file}`));
+		const models = imported.filter((name) =>
+			/^@earendil-works\/|pi-journal$|ambion\/pi$/.test(name),
+		);
+		expect({ file, models }).toEqual({ file, models: [] });
+	}
 });
