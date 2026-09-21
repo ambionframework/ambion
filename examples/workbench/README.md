@@ -144,7 +144,9 @@ of the terminal shows the family beside each agent name.
 
 The workspace, lab, and instrument tools reach every seat as tool bundles.
 `src/rooms.ts` composes the three executions with `composeExecutions` from
-`@ambionframework/ambion/hosting`.
+`@ambionframework/ambion/hosting`. It passes them because it checks keys,
+sets the environment, and lets a test script a family. A room with no such
+need takes the default execution of each family.
 
 ### One tool set, one filesystem, no native tool
 

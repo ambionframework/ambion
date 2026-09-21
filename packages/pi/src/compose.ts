@@ -7,7 +7,12 @@ import type {
 	RoomProtocol,
 	Transport,
 } from '@ambionframework/ambion/hosting';
-import { DEFAULT_TRACE, inProcessTransport, traceOpener } from '@ambionframework/ambion/hosting';
+import {
+	DEFAULT_TRACE,
+	inProcessTransport,
+	registerDefaultExecution,
+	traceOpener,
+} from '@ambionframework/ambion/hosting';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createPiExecutor } from './executor.ts';
 import { createExecutionServices } from './services.ts';
@@ -29,6 +34,12 @@ export interface PiExecutionOptions {
 export function piExecution(options: PiExecutionOptions = {}): Execution {
 	return { connector: (host) => connectorFor(host, options) };
 }
+
+/**
+ * A room with no `execution` runs each `pi` seat on this execution.
+ * Loading the package registers it.
+ */
+registerDefaultExecution('pi', () => piExecution());
 
 function connectorFor(host: ExecutionHost, options: PiExecutionOptions): ExecutionConnector {
 	const services = createExecutionServices({

@@ -1,13 +1,14 @@
 # @ambionframework/codex
 
 **Run Ambion agents on the Codex SDK.** `codex()` defines the executor of an
-agent. `codexExecution()` gives a runtime or a room the services that run it.
-The kernel, `@ambionframework/ambion`, imports no model library. This package
-holds the Codex SDK and the MCP SDK.
+agent. A room with no `execution` runs each Codex seat on the default
+execution. `codexExecution()` gives a runtime or a room the same services
+with options. The kernel, `@ambionframework/ambion`, imports no model
+library. This package holds the Codex SDK and the MCP SDK.
 
 ```ts
 import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
-import { codex, codexExecution } from '@ambionframework/codex';
+import { codex } from '@ambionframework/codex';
 
 const planner = defineAgent({
   name: 'planner',
@@ -24,7 +25,6 @@ const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 const room = await startRoom({
   name: 'delivery',
   agents: [planner],
-  execution: codexExecution(),
 });
 const visit = await room.visit(priya);
 await visit.send({ text: 'Is the plan ready?' });

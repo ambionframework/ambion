@@ -109,9 +109,11 @@ try {
 }
 ```
 
-`startRoom` and `resumeRoom` take `execution` for one room run.
-`createRuntime` takes it for every room of the runtime. A room whose seats
-run on more than one family passes `composeExecutions({ pi: piExecution(), claude: claudeExecution() })`; see
+**A room with no `execution` runs each Claude seat on the default Claude
+execution.** A host that sets `env`, or a path to the executable, passes
+`claudeExecution(options)` to a room or to `createRuntime`. A room whose
+seats run on more than one family needs no `composeExecutions` when each
+family package is loaded. See
 [Executors](executors.md#the-executor-contract).
 
 ## Options
@@ -427,7 +429,7 @@ for its tool list and for `/etc/hosts`. See [Example](example.md).
 
 | Symptom                                                             | Cause                                                                                                                      |
 | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Each seat fails at once with `no_execution`                         | The room has no `execution`. Pass `claudeExecution()` to the room or the runtime.                                          |
+| Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `claudeExecution()`.                   |
 | `The Claude executor cannot run an executor of kind 'pi'`           | A Pi seat ran under `claudeExecution()`. Route with `composeExecutions`.                                                   |
 | The model cannot see `Bash` or `Read`                               | `allowedTools` does not name it. The list gives the built-in tools, and an empty list gives none.                          |
 | Every request is denied                                             | `canUseTool` is absent, or it throws. The executor denies both. Read the `approval` steps.                                 |

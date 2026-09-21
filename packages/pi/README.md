@@ -39,7 +39,7 @@ suffix `_API_KEY`. The id `anthropic/claude-sonnet-5` reads
 
 ```ts
 import { defineAgent, defineHuman, defineTool, startRoom } from '@ambionframework/ambion';
-import { pi, piExecution } from '@ambionframework/pi';
+import { pi } from '@ambionframework/pi';
 import { Type } from 'typebox';
 
 const stock = defineTool({
@@ -66,7 +66,6 @@ const priya = defineHuman({ name: 'priya', identity: 'Coordinates deliveries.' }
 const room = await startRoom({
   name: 'delivery',
   agents: [inventory],
-  execution: piExecution(),
 });
 
 try {
@@ -81,10 +80,10 @@ try {
 }
 ```
 
-**Pass `execution` to a room or to a runtime.** `startRoom` and `resumeRoom`
-take it for one room run. `createRuntime` takes it for every room of the
-runtime. A room whose seats run on more than one family passes
-`composeExecutions({ pi: piExecution(), claude: claudeExecution() })` from `@ambionframework/ambion/hosting`.
+**A room with no `execution` runs each Pi seat on the default Pi
+execution.** Importing the package registers it. A host that needs a
+scripted stream, custom storage, a transport, or limits passes
+`piExecution(options)` to a room or to `createRuntime`.
 
 ## Options
 
@@ -201,7 +200,7 @@ registry, the price tables, or a real model. The live scenarios of
 
 ## Troubleshooting
 
-- **`no_execution`.** The room has no `execution`. Pass `piExecution()`.
+- **`no_execution`.** No loaded package serves the kind of the seat. Import the executor package.
 - **`Unknown model`.** The id needs the form `provider/model-id` and a
   provider that the registry lists. The failure is transient, so the room
   retries it to the cap.

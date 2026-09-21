@@ -7,9 +7,11 @@ import type { Executor } from './execution/executor.ts';
 import { inProcessTransport } from './execution/runner.ts';
 import { readTrace, traceOpener } from './execution/trace.ts';
 import {
+	defaultConnectorOf,
 	defaultRuntime,
 	type Execution,
 	type ExecutionConnector,
+	type ExecutionHost,
 	executionHostOf,
 	hostingOf,
 	type Runtime,
@@ -74,13 +76,25 @@ export interface ResumeRoomOptions {
 
 /**
  * The connector for one room: its own execution, else the runtime's, else
- * one whose seats fail when the room wakes them. A room with no execution
+ * the default of each seat's executor kind, else one whose seats fail when
+ * the room wakes them. A room with no execution
  * still runs its people, its record, and any transport it was given.
  */
 function connectorFor(runtime: Runtime, own: Execution | undefined): ExecutionConnector {
 	const host = executionHostOf(runtime);
 	const execution = own ?? hostingOf(runtime).execution;
 	if (execution !== undefined) return execution.connector(host);
+	const missing = missingConnector(runtime, host);
+	return {
+		connect(room, request) {
+			const kind = request.definition.executor.kind;
+			return (defaultConnectorOf(runtime, kind) ?? missing).connect(room, request);
+		},
+	};
+}
+
+/** The connector for a seat whose kind has no execution: its activations fail. */
+function missingConnector(runtime: Runtime, host: ExecutionHost): ExecutionConnector {
 	const transport = host.transport ?? inProcessTransport();
 	return {
 		connect(room, request) {
@@ -112,7 +126,7 @@ function missingExecutor(seat: string): Executor {
 		open(activation) {
 			const error = new AmbionError(
 				'no_execution',
-				'The room has no execution. Pass `execution`, such as `piExecution()` from @ambionframework/pi, to startRoom or createRuntime.',
+				'The room has no execution. Load the executor package of the agent, or pass `execution`, such as `piExecution()` from @ambionframework/pi, to startRoom or createRuntime.',
 			);
 			return {
 				readThrough: 0,

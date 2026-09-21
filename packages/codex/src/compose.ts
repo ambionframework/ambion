@@ -10,6 +10,7 @@ import type {
 import {
 	DEFAULT_TRACE,
 	inProcessTransport,
+	registerDefaultExecution,
 	traceJournals,
 	traceOpener,
 } from '@ambionframework/ambion/hosting';
@@ -30,6 +31,12 @@ const TRACE_LIMITS = { toolOutputBytes: 65_536, stepsPerPass: 1_000 };
 export function codexExecution(options: CodexExecutionOptions = {}): Execution {
 	return { connector: (host) => connectorFor(host, options) };
 }
+
+/**
+ * A room with no `execution` runs each `codex` seat on this execution.
+ * Loading the package registers it.
+ */
+registerDefaultExecution('codex', () => codexExecution());
 
 function connectorFor(host: ExecutionHost, options: CodexExecutionOptions): ExecutionConnector {
 	const traces = traceJournals(host.storage);

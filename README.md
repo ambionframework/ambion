@@ -74,7 +74,7 @@ the directory through the workspace tools.
 
 ```ts
 import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
-import { pi, piExecution } from '@ambionframework/pi';
+import { pi } from '@ambionframework/pi';
 import { directoryBackend, openWorkspace } from '@ambionframework/workspace';
 
 const shared = openWorkspace({ name: 'delivery', backend: directoryBackend('./shared') });
@@ -109,7 +109,6 @@ const room = await startRoom({
   agents: [inventory, scheduling],
   seats: { inventory: 'broadcast', scheduling: 'broadcast' },
   summary: 'scheduling',
-  execution: piExecution(),
 });
 
 const visit = await room.visit(priya);
@@ -125,9 +124,12 @@ try {
 }
 ```
 
-`execution` names the executor family that runs the seats. The kernel
-imports no model library, so `piExecution()` comes from
-`@ambionframework/pi`. A room with no `execution` fails each seat it wakes.
+**A room with no `execution` runs each seat on the default of its family.**
+Importing `@ambionframework/pi` registers the default Pi execution, which
+keeps transcripts in the storage of the runtime. The kernel imports no model
+library. A host that needs custom storage, a transport, or limits passes an
+`execution`, as the mixed example below shows. An executor kind that no
+loaded package serves fails each seat it wakes with `no_execution`.
 
 The exchange opens on the question and closes when no seat has work left.
 Both agents wake, read the directory, and speak or stay silent. A `say`
@@ -166,10 +168,9 @@ are the only tools of every seat, next to the three room tools.
 
 ```ts
 import { defineAgent, startRoom, type ToolBundle } from '@ambionframework/ambion';
-import { composeExecutions } from '@ambionframework/ambion/hosting';
-import { claude, claudeExecution } from '@ambionframework/claude';
-import { codex, codexExecution } from '@ambionframework/codex';
-import { pi, piExecution } from '@ambionframework/pi';
+import { claude } from '@ambionframework/claude';
+import { codex } from '@ambionframework/codex';
+import { pi } from '@ambionframework/pi';
 import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
 
 const workspace = openWorkspace({ name: 'lab', backend: memoryBackend() });
@@ -205,22 +206,40 @@ const room = await startRoom({
   goal: 'Choose a part and plan its test.',
   agents: [datasheets, design, experiments],
   seats: { datasheets: 'broadcast', design: 'broadcast', experiments: 'broadcast' },
+});
+
+await room.stop();
+```
+
+The room routes each seat to the default execution of its family. A host
+that needs its own storage, transport, or limits builds the executions and
+passes them to `createRuntime`. `composeExecutions` routes each seat on the
+`kind` of its executor.
+
+<!-- ts: standalone -->
+
+```ts
+import { createRuntime } from '@ambionframework/ambion';
+import { composeExecutions } from '@ambionframework/ambion/hosting';
+import { claudeExecution } from '@ambionframework/claude';
+import { codexExecution } from '@ambionframework/codex';
+import { piExecution } from '@ambionframework/pi';
+
+export const runtime = createRuntime({
+  limits: { call: { timeout: 30_000 } },
   execution: composeExecutions({
     pi: piExecution(),
     claude: claudeExecution(),
     codex: codexExecution(),
   }),
 });
-
-await room.stop();
 ```
 
 **The shape is the workbench.** [`examples/workbench`](examples/workbench)
 builds its team the same way: one list of `bundles` serves every seat, and
-each seat gets its executor from `executorFor` in `definitions.ts`. The
-execution of each family is one entry of `composeExecutions`. A definition
-names its family through its executor, and the room routes each seat to that
-entry.
+each seat gets its executor from `executorFor` in `definitions.ts`. A
+definition names its family through its executor, and the room routes each
+seat to the default execution of that family.
 
 | Family | On                             | Off                                    | How the package enforces it                                                               | Test that guards it                                                                                                                      |
 | ------ | ------------------------------ | -------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |

@@ -47,7 +47,8 @@ specialists collaborate through directed messages and report back once.
 **The team runs on three executor families.** The assistant and the
 datasheets specialist run on Pi. The design specialist runs on
 `@ambionframework/claude`. The experiments specialist runs on
-`@ambionframework/codex`. `composeExecutions` routes each seat to its family.
+`@ambionframework/codex`. The workbench passes its own executions with
+`composeExecutions`, because it checks keys and lets a test script a family.
 
 | Family | Model                              | Key                 | Seats                 |
 | ------ | ---------------------------------- | ------------------- | --------------------- |
