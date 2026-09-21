@@ -18,7 +18,7 @@ import {
 	type Runtime,
 	startRoom,
 } from '../../src/index.ts';
-import { fakeClock } from './clock.ts';
+import { fakeClock } from '../../src/testing.ts';
 import { invariants } from './invariants.ts';
 import { collect, messagesOf, participantsOf, roomName, waitForRoom } from './room.ts';
 import {

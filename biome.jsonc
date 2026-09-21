@@ -100,6 +100,7 @@
 		//   answers.ts                    what the room answers a seat's three calls with
 		//   tools/                        the workspace port, and the four tools over it
 		//   execution/                   the execution side of the wire: driver, contract, rendering
+		//   testing/                      the deterministic test tools, over the vocabulary and the execution contract
 		//   room-host/                    the room's state and mechanisms over the journal, split by concern
 		//   room.ts                     the room facade, which composes them all
 		//
@@ -341,6 +342,39 @@
 											"@ambionframework/pi-journal"
 										],
 										"message": "A conformance suite drives the wire from outside: no log, no fold, no seat, no model."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// The test tools read the vocabulary, the runtime value and the execution
+			// contract. They run no room and name no model library.
+			"includes": ["packages/ambion/src/testing/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"../journal/*",
+											"../room/*",
+											"../tools/*",
+											"../room.ts",
+											"../room-host/*",
+											"../index.ts",
+											"../hosting.ts",
+											"@earendil-works/*",
+											"@ambionframework/pi",
+											"@ambionframework/pi-journal"
+										],
+										"message": "The test tools read the vocabulary and the execution contract, run no room, and name no model library."
 									}
 								]
 							}

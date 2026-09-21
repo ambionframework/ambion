@@ -12,6 +12,7 @@ import { piExecution } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/host/runtime.ts';
 import { inProcessTransport } from '../src/hosting.ts';
 import { createRuntime, resumeRoom, startRoom } from '../src/index.ts';
+import { fakeClock } from '../src/testing.ts';
 import {
 	agents,
 	assistant,
@@ -23,7 +24,6 @@ import {
 	troubled,
 } from './support/cast.ts';
 import { World, within } from './support/chaos.ts';
-import { fakeClock } from './support/clock.ts';
 import { collect, messagesOf, roomName, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { memory } from './support/storage.ts';

@@ -21,6 +21,7 @@ import { inProcessTransport } from '../src/hosting.ts';
 import { createRuntime, type Room, resumeRoom, startRoom } from '../src/index.ts';
 import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
+import { type FakeClock, fakeClock } from '../src/testing.ts';
 import {
 	agents,
 	assistant,
@@ -33,7 +34,6 @@ import {
 	TIMING,
 } from './support/cast.ts';
 import { idle } from './support/chaos.ts';
-import { type FakeClock, fakeClock } from './support/clock.ts';
 import { History, standing, violations } from './support/history.ts';
 import { collect, messagesOf, roomName, storedOf, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';

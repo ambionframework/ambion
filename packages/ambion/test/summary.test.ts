@@ -18,7 +18,7 @@ import {
 	type SummaryMessage,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock } from '../src/testing.ts';
 import {
 	assistantEnded,
 	closedExchange,

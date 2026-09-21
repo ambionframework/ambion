@@ -22,8 +22,8 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
+import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { liveLeases } from './support/chaos.ts';
-import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
 import {
 	currentExchange,
