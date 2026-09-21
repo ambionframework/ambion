@@ -142,10 +142,6 @@ the scope has evidence on the tagged commit.
       Needs 1. Each consumer starts when its packages exist.
 - [ ] **4.** Node 26 tests and CLI; workerd tests; the historical
       Cloudflare wake and cut races reproduced on current code.
-- [ ] **5.** The chaos sweep at 200 seeds; Dafny proofs for every changed rule;
-      golden journals; the live tier on Pi, Claude, and Codex; results
-      recorded under `planning/evidence/`. The live tier of `main` is red
-      on one model-sensitive assistant case; diagnose it first.
 - [ ] **6.** Recovery evidence: duplicate wake, takeover, delayed cut, audit
       retry, clock skew, process pause, uncooperative tool.
 - [ ] **7.** Summary evidence: silence, corrections, conflicting constraints,
