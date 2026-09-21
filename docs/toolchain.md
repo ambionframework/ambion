@@ -11,8 +11,10 @@ platform plans live in [the plan](../planning/next.md) and
 packages/
   ambion/       runtime library
   assistant/    default assistant agent and behavioral guidance
+  claude/       Claude Agent SDK executor: claude() and claudeExecution()
   cli/          ambion binary and project generator
   cloudflare/   Durable Object adapter
+  codex/        Codex SDK executor: codex() and codexExecution()
   journal/      append-only journal storage
   pi/           Pi executor: pi(), piExecution(), and the seat transcript audit
   pi-journal/   Pi session persistence over journal storage
@@ -24,13 +26,15 @@ planning/       the plan, the backlog, the rules to write, and dated evidence
 .github/        CI, live, and release workflows
 ```
 
-The eight `packages/*` entries are publishable and share a lockstep version.
+The ten `packages/*` entries are publishable and share a lockstep version.
 Examples are private. The package graph is:
 
 ```text
 ambion ──▶ journal
 pi ──▶ ambion, journal, pi-journal
 pi-journal ──▶ journal
+claude ──▶ ambion
+codex ──▶ ambion
 cli ──▶ ambion
 cloudflare ──▶ ambion, journal, pi
 workspace ──▶ ambion
@@ -198,11 +202,19 @@ The live workflow runs the same scenarios on a real provider. It runs after a
 change lands on `main`, on a weekly schedule, and by dispatch. It does not run
 on a pull request, because a real-model run costs money. It requires
 `ANTHROPIC_API_KEY`, uses `AMBION_MODEL` (the default is
-`anthropic/claude-sonnet-5`), and cancels a superseded run. Run it locally with:
+`anthropic/claude-sonnet-5`), and cancels a superseded run. Run it locally
+with:
 
 ```sh
 pnpm test:live
 ```
+
+`@ambionframework/codex` has a live tier of its own. The live workflow does
+not pass `CODEX_API_KEY` yet, so the Codex files skip there. The files skip when
+`CODEX_API_KEY` is unset, and they run on the model `gpt-5.6-luna`. Run one
+file with `pnpm --filter @ambionframework/codex run test:live`, which builds
+the package first because Codex spawns the built room tools server. See
+[Codex](codex.md).
 
 The scripted suite and live tier share invariants. The scripted tier also runs
 the failure matrix, process kill, random walk, consistency history, and split

@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"01a0c21d-0c4c-7532-9c1c-345766ea01ab"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"/bin/zsh -lc 'echo hello-from-codex'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"/bin/zsh -lc 'echo hello-from-codex'","aggregated_output":"hello-from-codex\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"It printed `hello-from-codex`."}}
+{"type":"turn.completed","usage":{"input_tokens":24900,"cached_input_tokens":12399,"cache_write_input_tokens":12495,"output_tokens":80,"reasoning_output_tokens":8}}

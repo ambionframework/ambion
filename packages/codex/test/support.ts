@@ -1,5 +1,5 @@
 /**
- * What the unit tests share: the fake executable, a view of a small room,
+ * What the unit tests share: a view of a small room,
  * one activation opened over a room that records what the seat commits, and
  * a client of the room tools server.
  */
@@ -11,25 +11,23 @@ import type {
 	CommitRequest,
 	CommitResult,
 	ExecutionEvent,
-	ExecutorSession,
 	RoomProtocol,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import type { ThreadEvent } from '@openai/codex-sdk';
 import { type Bridge, startBridge } from '../src/bridge.ts';
 import { type CodexOptions, codex, createCodexExecutor } from '../src/index.ts';
-import type { FakeScenario } from '../src/testing.ts';
 import type { Binding } from '../src/tools.ts';
 
-export const executable = fileURLToPath(new URL('./fake/codex', import.meta.url));
 const server = fileURLToPath(new URL('../src/room-tools-server.ts', import.meta.url));
 
 export const seat = (options: Partial<CodexOptions> = {}): AgentDefinition =>
 	defineAgent({
 		name: 'gpt',
 		identity: 'Answers what is asked.',
-		executor: codex({ instructions: 'Answer once.', model: 'codex-fake', ...options }),
+		executor: codex({ instructions: 'Answer once.', model: 'gpt-5.6-luna', ...options }),
 	});
 
 /** The view a seat reads when the person asked one question at position 1. */
@@ -102,40 +100,66 @@ export function lands(request: CommitRequest): CommitResult {
 	};
 }
 
-export interface Opened {
-	readonly session: ExecutorSession;
-	readonly steps: Step[];
-	readonly commits: CommitRequest[];
-	readonly events: ExecutionEvent[];
+/** What a replay client saw: each thread it opened, and each prompt it ran. */
+interface Replayed {
+	readonly opened: { readonly resume: string | undefined }[];
+	readonly prompts: string[];
 }
 
-/** Open one activation of `definition` over the fake, with a scenario. */
+/**
+ * A client whose threads replay recorded events. Turn `n` of the run plays
+ * `turns[n]`. A turn that is an `Error` makes the run reject, as the SDK does
+ * when the `codex` process exits before it says anything.
+ */
+function replay(turns: readonly (readonly ThreadEvent[] | Error)[]) {
+	const seen: Replayed = { opened: [], prompts: [] };
+	let next = 0;
+	const thread = () => ({
+		runStreamed: async (prompt: string) => {
+			seen.prompts.push(prompt);
+			const turn = turns[next++];
+			if (turn === undefined) throw new Error('The replay has no turn left.');
+			if (turn instanceof Error) throw turn;
+			return {
+				events: (async function* () {
+					yield* turn;
+				})(),
+			};
+		},
+	});
+	const client = () => ({
+		startThread: () => {
+			seen.opened.push({ resume: undefined });
+			return thread();
+		},
+		resumeThread: (id: string) => {
+			seen.opened.push({ resume: id });
+			return thread();
+		},
+	});
+	return { client, seen };
+}
+
+/** An executor of `definition` over a replay client, and a way to open its activations. */
 export function open(
-	scenario: FakeScenario,
+	turns: readonly (readonly ThreadEvent[] | Error)[],
 	definition: AgentDefinition = seat(),
 	answer: (request: CommitRequest) => CommitResult = lands,
-): Opened {
+) {
 	const steps: Step[] = [];
 	const events: ExecutionEvent[] = [];
 	const { room, commits } = roomOf(answer);
+	const { client, seen } = replay(turns);
 	const trace: TraceSink = {
 		startPass: () => {},
 		record: (step) => void steps.push(step),
 		usage: () => undefined,
 		close: async () => {},
 	};
-	const executor = createCodexExecutor({
-		definition,
-		codexPath: executable,
-		env: { ...process.env, AMBION_FAKE: JSON.stringify(scenario) },
-	});
-	const session = executor.open({
-		id: 'message:1:gpt:1',
-		room,
-		emit: (event) => void events.push(event),
-		trace,
-	});
-	return { session, steps, commits, events };
+	const executor = createCodexExecutor({ definition, client });
+	const activate = (id = 'message:1:gpt:1') =>
+		executor.open({ id, room, emit: (event) => void events.push(event), trace });
+	return { executor, steps, commits, events, activate, seen };
 }
 
 /** A room tools server behind a real socket, and an MCP client of it. */
