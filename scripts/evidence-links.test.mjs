@@ -177,3 +177,24 @@ test('a page that cites an item "in `next.md`" cites an item that the plan holds
 		}
 	}
 });
+
+test('an "Item in next.md" column cites only items and phases that next.md holds', () => {
+	const plan = readFileSync(join(root, 'planning/next.md'), 'utf8');
+	const holds = (label) =>
+		/^phase \d+$/i.test(label)
+			? new RegExp(`^### ${label}\\.`, 'im').test(plan)
+			: new RegExp(`^\\| ${label} `, 'm').test(plan);
+	for (const name of readdirSync(join(root, 'docs')).filter((n) => n.endsWith('.md'))) {
+		const rows = readFileSync(join(root, 'docs', name), 'utf8').split('\n');
+		const head = rows.findIndex((row) => /^\|.*Item in next\.md/.test(row));
+		if (head < 0) continue;
+		const column = rows[head].split('|').findIndex((cell) => /Item in next\.md/.test(cell));
+		const end = rows.findIndex((row, i) => i > head && !row.startsWith('|'));
+		for (const row of rows.slice(head + 2, end < 0 ? undefined : end)) {
+			const cell = row.split('|')[column] ?? '';
+			for (const label of cell.match(/\b[A-F]\d+\b|\bphase \d+\b/gi) ?? []) {
+				assert.ok(holds(label), `docs/${name}: next.md holds no "${label}"`);
+			}
+		}
+	}
+});

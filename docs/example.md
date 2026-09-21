@@ -206,13 +206,12 @@ SQLite journal, with the CLI terminal in place of the workbench interface.
 
 ## Beyond the current scope
 
-**The fuller lab vision waits for later phases.** The original design named
-five specialists over data resources and instruments, with two executor
-families and a drill-down interface. These parts need kernel work that
-[next.md](../planning/next.md) schedules. Workbench grows into them as the
-phases land.
+**The fuller lab vision waits for later work.** The original design named
+five specialists over data resources and instruments, and a drill-down
+interface. The Instruments agent and the Data Analysis agent need
+application resources that [next.md](../planning/next.md) does not
+schedule for 0.1.0. Workbench grows into them after the release.
 
-| Deferred capability                                  | Item in next.md |
-| ---------------------------------------------------- | --------------- |
-| An Instruments agent and a Data Analysis agent       | E1, F10         |
-| The Claude Agent SDK executor beside the Pi executor | F10, phase 4    |
+| Deferred capability                            | Item in next.md |
+| ---------------------------------------------- | --------------- |
+| An Instruments agent and a Data Analysis agent | None            |
