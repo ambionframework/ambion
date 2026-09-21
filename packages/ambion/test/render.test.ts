@@ -122,6 +122,7 @@ describe('the URIs a prompt states', () => {
 		const rendered = renderActivation(view, worker);
 		expect(rendered.systemPrompt).toContain(roomUri('site'));
 		expect(rendered.systemPrompt).toContain('refs');
+		expect(rendered.context).toContain('opened by message 4');
 		expect(rendered.context).toContain(messageUri('site', 4));
 	});
 

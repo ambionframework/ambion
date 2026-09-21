@@ -14,10 +14,11 @@ its review found unbounded `taskChanges` scanned on every reconcile pass,
 exchange open, and a `stop()` that cancels every open task. The 0.2 shape
 builds on references and the awaiting outcome: a working room is a room;
 the delegating message carries a ref to
-`ambion://room/<working>/exchange/<from>`; the origin exchange is
+`ambion://room/<working>/message/<from>`; the origin exchange is
 `awaiting` the working room's owner; when the working room closes, the
 host delivers one message with a ref back, and attention routes it. Status
-is a read of the referenced exchange. Rebuild it on the incremental fold.
+is a read of the exchange the referenced message opened. Rebuild it on the
+incremental fold.
 
 **A notice from a resource.** The first event ingress: a message kind with
 a ref, no author, and routing by attention, so an agent wakes when the

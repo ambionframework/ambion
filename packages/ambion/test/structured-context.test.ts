@@ -193,7 +193,7 @@ describe('structured activation context', () => {
 		expect(summary.systemPrompt).toContain('The exchange is over. Write the one message');
 		expect(summary.systemPrompt).toContain('Lead with blockers.');
 		expect(summary.context).not.toContain('The reserve:');
-		expect(summary.context).toContain("priya's exchange is over: messages");
+		expect(summary.context).toContain("priya's exchange is over: it holds the messages");
 		expect(summary.context).not.toContain('Later.');
 		// The closing seat reads the arrival that came before its own exchange,
 		// with a divider marking where its own exchange begins.
