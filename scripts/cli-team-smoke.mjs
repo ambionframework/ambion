@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 /** Check a packed CLI in a project outside the repository. */
 import { chmod, cp, mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
@@ -396,9 +397,8 @@ async function checkNewCommand(destination, target, archives, template) {
 		throw new Error(`The new ${template} project contains a workspace dependency.`);
 	if (generated.ambion?.template !== template)
 		throw new Error(`The new ${template} project has the wrong template marker.`);
-	const npmrc = await readFile(join(target, '.npmrc'), 'utf8');
-	if (!npmrc.includes('@ambionframework:registry=https://npm.pkg.github.com'))
-		throw new Error('The new project is missing its package registry configuration.');
+	if (existsSync(join(target, '.npmrc')))
+		throw new Error('The new project carries a registry configuration.');
 	if (template === 'cloudflare') await checkCloudflareFiles(target);
 	const overwrite = capture('pnpm', ['exec', 'ambion', 'new', target], destination);
 	if (overwrite.status === 0 || !overwrite.output.includes('overwrite'))

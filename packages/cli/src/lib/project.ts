@@ -104,10 +104,7 @@ async function rewriteWrangler(target: string, name: string): Promise<void> {
 }
 
 async function restoreDotfiles(target: string): Promise<void> {
-	for (const [sourceName, targetName] of [
-		['gitignore', '.gitignore'],
-		['npmrc', '.npmrc'],
-	] as const) {
+	for (const [sourceName, targetName] of [['gitignore', '.gitignore']] as const) {
 		const source = resolve(target, sourceName);
 		try {
 			await writeFile(resolve(target, targetName), await readFile(source));

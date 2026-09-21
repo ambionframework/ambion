@@ -60,3 +60,42 @@ export function sharedVersion(packages) {
 	}
 	return [...versions][0];
 }
+
+/**
+ * The packages in dependency order: a package follows every workspace package
+ * it depends on. Ties keep the sorted name order, so the result is stable.
+ */
+export function dependencyOrder(packages) {
+	const byName = new Map(packages.map((entry) => [entry.manifest.name, entry]));
+	const ordered = [];
+	const seen = new Set();
+	const visit = (entry) => {
+		if (seen.has(entry.manifest.name)) return;
+		seen.add(entry.manifest.name);
+		for (const dependency of workspaceDependencies(entry.manifest)) {
+			const target = byName.get(dependency);
+			if (target) visit(target);
+		}
+		ordered.push(entry);
+	};
+	for (const entry of packages) visit(entry);
+	return ordered;
+}
+
+/** The names a manifest depends on at install time, in every dependency field. */
+function workspaceDependencies(manifest) {
+	const fields = ['dependencies', 'peerDependencies', 'optionalDependencies'];
+	return fields.flatMap((field) => Object.keys(manifest[field] ?? {})).sort();
+}
+
+const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?$/;
+
+/**
+ * True for a release, a prerelease, or a stamped dev version such as
+ * 0.1.0-dev.42.g1a2b3c4. A numeric identifier with a leading zero is invalid.
+ */
+export function isVersion(version) {
+	if (!VERSION.test(version)) return false;
+	const identifiers = (version.split('-')[1] ?? '').split('.').filter(Boolean);
+	return identifiers.every((part) => !/^0\d+$/.test(part));
+}
