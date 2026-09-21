@@ -55,11 +55,44 @@ export type SummaryOutcome =
 	| { readonly status: 'silent' }
 	| { readonly status: 'failed' };
 
+/** How an activation stands: at work, or ended for a reason. */
+export type ActivationOutcome =
+	| { readonly status: 'running' }
+	| {
+			readonly status: EndReason;
+			/** Set when a cancellation ended the activation. */
+			readonly cancelled?: true;
+			/** Why the activation failed, on a failed or abandoned activation. */
+			readonly cause?: FailureCause;
+	  };
+
+/** One activation of an exchange, as the exchange read lists it. */
+export interface ExchangeActivation {
+	/** The activation id. */
+	readonly id: string;
+	readonly seat: string;
+	/** The attempt number. A retry of a wake is a new attempt. */
+	readonly attempt: number;
+	/** `respond` answers a message. `summary` writes the closing summary. */
+	readonly purpose: 'respond' | 'summary';
+	readonly outcome: ActivationOutcome;
+	/** What the activation spent, once it ended and recorded usage. */
+	readonly usage?: Usage;
+	/** The harness session of the activation. No executor records one yet. */
+	readonly session?: { readonly harness: string; readonly id: string };
+}
+
 /** A detached exchange view that can be read without starting a room. */
 export type ExchangeView =
-	| (ExchangeRef & { readonly status: 'open' })
+	| (ExchangeRef & {
+			readonly status: 'open';
+			/** Every activation since the exchange opened, in journal order. */
+			readonly activations: readonly ExchangeActivation[];
+	  })
 	| (ClosedExchange & {
 			readonly status: 'closed';
+			/** Every activation in the range, every attempt and the summary included. */
+			readonly activations: readonly ExchangeActivation[];
 			readonly summary: SummaryOutcome;
 			/** The sum of every activation in the range, the summary activation included. */
 			readonly usage?: Usage;

@@ -28,9 +28,11 @@
 import { decodeActivationId } from '../activation-id.ts';
 import type { Close } from '../journal/events.ts';
 import {
+	type ActivationOutcome,
 	addUsage,
 	type ClosedExchange,
 	copyMessage,
+	type ExchangeActivation,
 	type ExchangeRef,
 	type ExchangeView,
 	isSpoken,
@@ -119,6 +121,7 @@ function closedExchangeView(
 	return {
 		...closedExchange(close, messages),
 		status: 'closed',
+		activations: activationsInRange(leases, close.from, close.through).map(exchangeActivation),
 		summary: summaryOutcome(close, messages, leases, cancelledAt),
 		...(usage === undefined ? {} : { usage }),
 	};
@@ -139,6 +142,30 @@ function activationsInRange(
 		const position = decodeActivationId(lease.id)?.position;
 		return position !== undefined && position >= from && position <= through;
 	});
+}
+
+/** What a lease says about how its activation stands. */
+function outcomeOf(lease: LeaseHold): ActivationOutcome {
+	if (lease.phase === 'running') return { status: 'running' };
+	return {
+		status: lease.reason,
+		...(lease.cancelled === true ? { cancelled: true as const } : {}),
+		...(lease.cause === undefined ? {} : { cause: lease.cause }),
+	};
+}
+
+/** Map one lease to the activation the exchange read lists. */
+export function exchangeActivation(lease: LeaseHold): ExchangeActivation {
+	const id = decodeActivationId(lease.id);
+	if (id === undefined) throw new Error(`Malformed activation id '${lease.id}'.`);
+	return {
+		id: lease.id,
+		seat: id.seat,
+		attempt: id.attempt,
+		purpose: id.source === 'closed' ? 'summary' : 'respond',
+		outcome: outcomeOf(lease),
+		...(lease.usage === undefined ? {} : { usage: { ...lease.usage } }),
+	};
 }
 
 /** The sum of what the activations in the range spent, or nothing when none recorded usage. */
@@ -189,7 +216,11 @@ export function exchangeViews(
 	cancelledAt?: number,
 ): ExchangeView[] {
 	const closed = closes.map((close) => closedExchangeView(close, messages, leases, cancelledAt));
-	return open === undefined ? closed : [...closed, { status: 'open', ...open }];
+	if (open === undefined) return closed;
+	const activations = [...leases.values()]
+		.filter((lease) => (decodeActivationId(lease.id)?.position ?? 0) >= open.from)
+		.map(exchangeActivation);
+	return [...closed, { status: 'open', ...open, activations }];
 }
 
 function summaryOutcome(

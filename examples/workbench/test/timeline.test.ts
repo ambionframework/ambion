@@ -54,6 +54,7 @@ const closed: ExchangeView = {
 	from: 98,
 	through: 134,
 	status: 'closed',
+	activations: [],
 	owner: 'theo',
 	at: AT,
 	summary: { status: 'published', summary: summaryOf(145, 'theo') },
@@ -91,6 +92,7 @@ describe('buildTimeline', () => {
 			from: 59,
 			through: 61,
 			status: 'closed',
+			activations: [],
 			owner: 'mira',
 			at: AT,
 			summary: { status: 'published', summary: summaryOf(66, 'mira') },
@@ -104,6 +106,7 @@ describe('buildTimeline', () => {
 			from: 4,
 			through: 9,
 			status: 'closed',
+			activations: [],
 			owner: 'mira',
 			at: AT,
 			summary: { status: 'silent' },
@@ -118,6 +121,7 @@ describe('buildTimeline', () => {
 			from: 75,
 			through: 75,
 			status: 'closed',
+			activations: [],
 			owner: 'theo',
 			at: AT,
 			summary: { status: 'silent' },
@@ -135,7 +139,7 @@ describe('buildTimeline', () => {
 
 	it('keeps the open exchange in the open, and ends with a live block', () => {
 		const messages = [said(4, 'mira'), said(6, 'assistant', 'design'), said(9, 'mira')];
-		const open: ExchangeView = { from: 4, status: 'open', owner: 'mira', at: AT };
+		const open: ExchangeView = { from: 4, status: 'open', owner: 'mira', at: AT, activations: [] };
 		const blocks = build(messages, [open], {
 			open: { owner: 'mira' },
 			working: ['assistant', 'design'],
@@ -151,7 +155,13 @@ describe('buildTimeline', () => {
 	});
 
 	it('shows an earlier exchange collapsed beside a newer open one', () => {
-		const later: ExchangeView = { from: 150, status: 'open', owner: 'mira', at: AT };
+		const later: ExchangeView = {
+			from: 150,
+			status: 'open',
+			owner: 'mira',
+			at: AT,
+			activations: [],
+		};
 		const blocks = build([...thread, said(150, 'mira')], [closed, later], {
 			open: { owner: 'mira' },
 		});
