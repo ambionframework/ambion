@@ -11,7 +11,6 @@ import type { TSchema } from 'typebox';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = RecordSeq;
-
 /** `Omit` over each member of a union, so a discriminated body keeps its shape. */
 export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
@@ -21,7 +20,7 @@ export type EndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandon
 /**
  * Why an activation failed. A permanent failure does not pass on a retry, so
  * the room abandons it at once. A transient failure may pass, so the room
- * retries it to the cap. An authentication or a bad request is permanent; a
+ * retries it to the cap. An authentication or a bad request is permanent. A
  * rate limit, a server error, or a lost connection is transient.
  */
 export type FailureCause = 'permanent' | 'transient';
@@ -78,8 +77,7 @@ export interface ExchangeActivation {
 	readonly outcome: ActivationOutcome;
 	/** What the activation spent, once it ended and recorded usage. */
 	readonly usage?: Usage;
-	/** The harness session of the activation. No executor records one yet. */
-	readonly session?: { readonly harness: string; readonly id: string };
+	readonly session?: HarnessSession;
 }
 
 /**
@@ -427,6 +425,9 @@ export interface Usage {
 	readonly cacheWrite: number;
 	readonly cost?: number;
 }
+
+/** A harness session that an ended activation recorded. The room never reads the id. */
+export type HarnessSession = { readonly harness: string; readonly id: string };
 
 /** Two totals added. `cost` stays absent until a step carries it. */
 export function addUsage(total: Usage | undefined, step: Usage): Usage {

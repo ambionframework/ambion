@@ -6,7 +6,14 @@ import { type Close, type Composition, JOURNAL_FORMAT, type Seating } from '../j
 import type { Bodies, Body, Entry, Kind } from '../journal/journal.ts';
 import type { ActivationSpec, CommitRequest } from '../protocol.ts';
 import { refsRefusal } from '../refs.ts';
-import type { EndReason, FailureCause, Message, PresenceMessage, Usage } from '../types.ts';
+import type {
+	EndReason,
+	FailureCause,
+	HarnessSession,
+	Message,
+	PresenceMessage,
+	Usage,
+} from '../types.ts';
 import { activationSpec } from './activation.ts';
 import { applyEvent, baseOf, type FoldOptions, isFixed, project, type RoomState } from './fold.ts';
 import { isExpired, isLive } from './lease.ts';
@@ -49,6 +56,7 @@ type LeaseCommand =
 			readThrough: number;
 			cause?: FailureCause;
 			usage?: Usage;
+			session?: HarnessSession;
 	  };
 type ComposeCommand = { type: 'compose'; composition: Body<Composition> };
 type CloseCommand = { type: 'close'; close: Close };
@@ -638,7 +646,7 @@ function end(
 	const invalid = invalidProgress(state, command.readThrough);
 	if (invalid !== undefined) return invalid;
 	const known = state.leases.get(command.id);
-	const { reason, cause, usage } = command;
+	const { reason, cause, usage, session } = command;
 	if (!mayEnd(known?.phase, reason, known !== undefined && isExpired(known, now)))
 		return { event: undefined };
 	return {
@@ -652,6 +660,7 @@ function end(
 				readThrough: acknowledged(known?.readThrough, command.readThrough),
 				...(cause === undefined ? {} : { cause }),
 				...(usage === undefined ? {} : { usage }),
+				...(session === undefined ? {} : { session }),
 			},
 		},
 	};

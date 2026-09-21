@@ -44,6 +44,7 @@ export type {
 	ExchangeRef,
 	ExchangeView,
 	ExecutionEvent,
+	HarnessSession,
 	HumanDefinition,
 	HumanParticipantInfo,
 	Message,

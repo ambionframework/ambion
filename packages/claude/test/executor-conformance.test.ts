@@ -9,6 +9,9 @@ import { claudeExecutorHarness } from '../src/testing.ts';
 
 const executable = fileURLToPath(new URL('./fake/claude-executable.mjs', import.meta.url));
 
-describe('claude executor', () => {
-	for (const c of executorConformance(claudeExecutorHarness({ executable }))) it(c.name, c.run);
-});
+for (const memory of ['activation', 'seat'] as const) {
+	describe(`claude executor with ${memory} memory`, () => {
+		for (const c of executorConformance(claudeExecutorHarness({ executable, memory })))
+			it(c.name, c.run);
+	});
+}

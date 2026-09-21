@@ -117,6 +117,11 @@ it('names the ports, the reads, and the visit by their final names', () => {
 	expectTypeOf<Awaited<ReturnType<typeof main.readRoom>>>().toEqualTypeOf<main.RoomRead>();
 	expectTypeOf<main.StartRoomOptions>().toHaveProperty('execution');
 	expectTypeOf<main.StartRoomOptions>().not.toHaveProperty('stream');
+	expectTypeOf<main.HarnessSession>().toEqualTypeOf<hosting.HarnessSession>();
+	expectTypeOf<hosting.ActivationSpec['resume']>().toEqualTypeOf<main.HarnessSession | undefined>();
+	expectTypeOf<hosting.ExecutorSession['session']>().toEqualTypeOf<
+		main.HarnessSession | undefined
+	>();
 });
 
 /** The specifiers one built file imports, whatever the quote or the form. */

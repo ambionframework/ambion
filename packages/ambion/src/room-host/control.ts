@@ -17,7 +17,7 @@ import {
 	stopWork as stopWorkDecision,
 } from '../room/transition.ts';
 import type { EndReason, FailureCause, Message, Seq } from '../types.ts';
-import { copyMessage, type Usage } from '../types.ts';
+import { copyMessage, type HarnessSession, type Usage } from '../types.ts';
 import {
 	messageKeyConflict,
 	type RoomBase,
@@ -162,6 +162,7 @@ export async function end(
 	readThrough: Seq,
 	cause?: FailureCause,
 	usage?: Usage,
+	session?: HarnessSession,
 ): Promise<boolean | { refusal: Refusal }> {
 	const appended = await submit(host.journal, 'lease', () =>
 		decide(
@@ -173,6 +174,7 @@ export async function end(
 				readThrough,
 				...(cause === undefined ? {} : { cause }),
 				...(usage === undefined ? {} : { usage }),
+				...(session === undefined ? {} : { session }),
 			},
 			host.now(),
 		),
@@ -269,6 +271,7 @@ function applyEvent(
 			event.body.readThrough,
 			event.body.cause,
 			event.body.usage,
+			event.body.session,
 		).then((result) => {
 			return requireEnd(result);
 		});

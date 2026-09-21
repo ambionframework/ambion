@@ -76,6 +76,8 @@ export interface QueryInput {
 	readonly names: readonly string[];
 	readonly canUseTool: CanUseTool;
 	readonly runtime: ClaudeRuntime;
+	/** The session to resume. Read only when the executor keeps `seat` memory. */
+	readonly resume?: string;
 }
 
 /** The entries of `fields` that hold a value. */
@@ -90,6 +92,8 @@ export function queryOptions(input: QueryInput): Options {
 	// The approver answers for the room tools. A mode that never asks needs them listed.
 	const listed = executor.permissionMode === 'dontAsk' ? input.names : [];
 	const allowed = [...listed, ...(executor.allowedTools ?? [])];
+	const seat = executor.memory === 'seat';
+	const resume = seat ? input.resume : undefined;
 	return {
 		model: executor.model,
 		systemPrompt: input.systemPrompt,
@@ -97,14 +101,16 @@ export function queryOptions(input: QueryInput): Options {
 		// The echo of each user message is what advances `readThrough`.
 		extraArgs: { 'replay-user-messages': null },
 		includePartialMessages: true,
-		// One session for one activation. `memory: 'seat'` will resume by id.
-		persistSession: false,
+		// `activation` memory keeps no session. `seat` memory persists one and resumes it by id.
+		persistSession: seat,
 		mcpServers: { [ROOM_SERVER]: input.server },
 		strictMcpConfig: true,
 		tools: builtinNames(executor.allowedTools ?? []),
 		allowedTools: allowed,
 		canUseTool: input.canUseTool,
 		...present({
+			resume,
+			forkSession: resume === undefined ? undefined : false,
 			disallowedTools: executor.disallowedTools && [...executor.disallowedTools],
 			permissionMode: executor.permissionMode,
 			maxBudgetUsd: executor.maxBudgetUsd,

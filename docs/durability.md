@@ -233,6 +233,21 @@ both start and resume.
 - **A new format adds a reader and one named upgrade.** The upgrade turns
   the older fold input into the newer one. No second format exists yet.
 
+**A `session` on an ended lease entry is an additive field.** An executor
+that keeps memory across activations (`memory: 'seat'`) hands the driver a
+harness session at release. The room writes it as `session: { harness, id }`
+on the `ended` entry and folds the latest one per seat into `spec.resume`
+for the next activation. The room never reads the id. A reader that
+predates the field ignores it, and an entry without it folds as before.
+
+- **The Pi id is fixed.** It names the seat session that `pi-journal` keeps
+  in the same storage. The kept transcript lives in the process. After a
+  restart the seat reads the whole view and appends to the same session.
+- **The Claude id comes from the SDK.** A restart on the same disk resumes
+  it. A host that loses the SDK session store, such as a Cloudflare
+  Durable Object, cannot resume. The executor then starts a fresh session,
+  and the next release records the new id. The activation does not fail.
+
 Cancellation adds the `cancel` entry kind. Older runtimes must not resume a
 journal that contains cancellation entries, because they do not interpret
 that boundary.

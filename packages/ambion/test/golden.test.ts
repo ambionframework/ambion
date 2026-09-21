@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
+import { lastSession } from '../src/room/lease.ts';
 import { readView } from '../src/room/read.ts';
 import type { ExchangeView, RoomRead } from '../src/types.ts';
 import { goldenScenarios } from './support/golden.ts';
@@ -104,6 +105,18 @@ if (process.env.GOLDEN === 'write') {
 			const fences = entries.filter((entry) => entry.kind === 'run');
 			expect(fences).toHaveLength(2);
 			for (const fence of fences) expect(fence.body).toMatchObject({ format: 1 });
+		});
+
+		it('records the seat session on each ended activation, and folds the last one', async () => {
+			const entries = await load<Entry[]>('session.journal.json');
+			const ended = entries.flatMap((entry) =>
+				entry.kind === 'lease' && entry.body.phase === 'ended' ? [entry.body] : [],
+			);
+			expect(ended.length).toBeGreaterThanOrEqual(2);
+			for (const change of ended) expect(change.session?.harness).toBe('pi');
+			const state = foldRoom(entries, { backoff });
+			expect(lastSession(state.leases, 'worker')).toEqual(ended.at(-1)?.session);
+			expect(lastSession(state.leases, 'nobody')).toBeUndefined();
 		});
 
 		it('reads a journal whose fence has no format as format 1', async () => {
