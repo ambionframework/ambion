@@ -150,16 +150,18 @@ work and is not part of this contract yet.
 
 ## The harness matrix
 
-**Two executor families ship today.** Pi and the Claude Agent SDK both
-implement the contract. The Anthropic SDK tool runner and the Codex SDK are
-anticipated families. No package or example for either exists yet.
+**Three executor families ship today.** Pi, the Claude Agent SDK, and the
+Codex SDK implement the contract. The Anthropic SDK tool runner is an
+anticipated family. No package for it exists yet.
 
 | Family                    | Package                   | Loop owner | Steer during a pass                 | Status      |
 | ------------------------- | ------------------------- | ---------- | ----------------------------------- | ----------- |
 | Pi agent core             | `@ambionframework/pi`     | Caller     | Yes, through `agent.steer`          | Shipped     |
 | Claude Agent SDK          | `@ambionframework/claude` | Harness    | Yes, on the SDK `user` echo         | Shipped     |
+| Codex SDK                 | `@ambionframework/codex`  | Harness    | None; the next `run` takes the line | Shipped     |
 | Anthropic SDK tool runner | None                      | Caller     | Between turns                       | Anticipated |
-| Codex SDK                 | None                      | Harness    | None; the next `run` takes the line | Anticipated |
+
+The [Codex guide](codex.md) describes the Codex package.
 
 **A family that cannot steer still passes.** Its `readThrough` advances at
 the pass boundary, and the driver holds a steer for the next pass. The
@@ -234,3 +236,9 @@ runs it against a fake Claude Code executable in
 `packages/claude/test/executor-conformance.test.ts`, through
 `claudeExecutorHarness` from `@ambionframework/claude/testing`. Neither run
 needs a key or a network.
+
+The Codex executor does not run the suite. A real model cannot follow a
+scripted plan, and a fake `codex` proves only that the adapter agrees with
+its own guess about the SDK. The Codex package tests its mapping on events
+that a real `codex` recorded, and it runs its executor claims in a live
+tier. See [Codex](codex.md).

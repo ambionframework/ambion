@@ -16,6 +16,7 @@ each page.
 | [Room](room.md)                   | Overview, glossary, and the room-wide mechanisms                       |
 | [Definitions and tools](agent.md) | Definitions and tools                                                  |
 | [Executors](executors.md)         | The executor contract, steps, the trace, and adapters                  |
+| [Codex](codex.md)                 | The Codex SDK executor: install, options, trust, and testing           |
 | [Assistant](assistant.md)         | The default assistant package and the `assistant` room option          |
 | [Exchange](exchange.md)           | Human questions, completion, and durable result handles                |
 | [Presence](presence.md)           | Visits, arrivals, departures, and catch-up                             |

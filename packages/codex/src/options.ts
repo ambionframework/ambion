@@ -27,8 +27,17 @@ export function codexOf(executor: AgentExecutor): CodexExecutor {
 	throw new Error(`The Codex executor cannot run an executor of kind '${executor.kind}'.`);
 }
 
-/** The room tools server. Codex runs it with the Node that runs this process. */
-const SERVER = fileURLToPath(new URL('./room-tools-server.ts', import.meta.url));
+/**
+ * The path of the room tools server, beside the module at `from`. Codex
+ * runs the server with the Node that runs this process. In the source tree
+ * the server is a `.ts` file, and Node strips its types. In the published
+ * package the module is a built `.mjs` file, and the server is the built
+ * `room-tools-server.mjs` in the same directory.
+ */
+export function serverPath(from: string | URL = import.meta.url): string {
+	const built = new URL(from).pathname.endsWith('.ts') ? 'ts' : 'mjs';
+	return fileURLToPath(new URL(`./room-tools-server.${built}`, from));
+}
 
 /** The entries of `fields` that hold a value. */
 function present<T extends object>(fields: T): Partial<T> {
@@ -69,7 +78,7 @@ export function clientOptions(runtime: CodexRuntime, socketPath: string): CodexO
 			mcp_servers: {
 				[ROOM_SERVER]: {
 					command: process.execPath,
-					args: [SERVER, socketPath],
+					args: [serverPath(), socketPath],
 					// The room tools are the seat's own. Under approvalPolicy 'never', Codex denies an MCP call that needs approval.
 					default_tools_approval_mode: 'approve',
 					startup_timeout_sec: 30,

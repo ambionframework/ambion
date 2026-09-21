@@ -420,6 +420,7 @@
 				"packages/cli/src/**",
 				"packages/pi/src/**",
 				"packages/claude/src/**",
+				"packages/codex/src/**",
 				"packages/workspace/src/**",
 				"examples/**/src/**"
 			],

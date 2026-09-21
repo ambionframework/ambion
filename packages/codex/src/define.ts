@@ -36,12 +36,19 @@ export interface CodexOptions extends CodexPolicy {
 	activationTokenLimit?: number;
 	/** How the agent counts tokens against its limit. Absent uses a length estimate. */
 	estimateTokens?: (text: string) => number;
+	/**
+	 * What the agent remembers between activations. `activation` opens a
+	 * Codex thread per activation. `seat` resumes one thread per seat and
+	 * records its id with each release. Absent means `activation`.
+	 */
+	memory?: 'activation' | 'seat';
 }
 
 /** An agent's Codex executor: the Codex SDK loop, model, instructions, tools and policy. */
 export interface CodexExecutor extends AgentExecutor, CodexPolicy {
 	readonly kind: 'codex';
 	readonly model: string;
+	readonly memory?: 'activation' | 'seat';
 }
 
 const POLICY = [
@@ -67,5 +74,6 @@ export function codex(options: CodexOptions): CodexExecutor {
 		...policyOf(options),
 		kind: 'codex' as const,
 		model: options.model,
+		...(options.memory === undefined ? {} : { memory: options.memory }),
 	});
 }

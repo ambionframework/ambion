@@ -90,8 +90,10 @@ export function changedPaths(event: ThreadEvent): string[] {
 }
 
 /**
- * The tokens of a turn as ambion counts them. Codex counts cached tokens
- * inside its input tokens, and reports no cost.
+ * The tokens of a turn as ambion counts them. Codex counts the tokens it
+ * read from the cache and the tokens it wrote to the cache inside its input
+ * tokens, and reports no cost. The recorded turns show it: a first turn
+ * reports 12387 input tokens with 12384 of them written to the cache.
  */
 export function usageOf(usage: {
 	input_tokens: number;
@@ -100,7 +102,10 @@ export function usageOf(usage: {
 	output_tokens: number;
 }): Usage {
 	return {
-		input: Math.max(0, usage.input_tokens - usage.cached_input_tokens),
+		input: Math.max(
+			0,
+			usage.input_tokens - usage.cached_input_tokens - (usage.cache_write_input_tokens ?? 0),
+		),
 		output: usage.output_tokens,
 		cacheRead: usage.cached_input_tokens,
 		cacheWrite: usage.cache_write_input_tokens ?? 0,

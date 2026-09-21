@@ -159,7 +159,7 @@ describe('usage and paths', () => {
 				reasoning_output_tokens: 0,
 			},
 		});
-		expect(step).toEqual({ type: 'usage', input: 120, output: 30, cacheRead: 10, cacheWrite: 5 });
+		expect(step).toEqual({ type: 'usage', input: 115, output: 30, cacheRead: 10, cacheWrite: 5 });
 		expect(usageOf({ input_tokens: 1, cached_input_tokens: 4, output_tokens: 0 }).input).toBe(0);
 	});
 

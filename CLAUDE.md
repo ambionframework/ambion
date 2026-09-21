@@ -21,6 +21,7 @@ newer, the OpenTUI floor.
 | `packages/journal`    | An append-only journal: one queue, fenced by run, with conditional commits                                                                   |
 | `packages/pi`         | The Pi executor: `pi()`, `piExecution()`, and the seat transcript audit; the kernel imports no model library                                 |
 | `packages/claude`     | The Claude Agent SDK executor: `claude()` and `claudeExecution()`, tested on a fake executable                                               |
+| `packages/codex`      | The Codex SDK executor: `codex()` and `codexExecution()`, over a stdio room tools server; live-tested, no fake                               |
 | `packages/pi-journal` | Full Pi transcript sessions over the generic journal storage contract                                                                        |
 | `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem                                                                |
 | `docs/trust.md`       | Design contract for what one owner guarantees another, and what the kernel does not defend — read before exposing a room to untrusted agents |
@@ -37,7 +38,6 @@ newer, the OpenTUI floor.
 | `docs/formal.md`      | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                                  |
 | `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                                               |
 | `examples/workbench`  | Runnable example: rooms and an OpenTUI terminal in one process                                                                               |
-| `examples/codex`      | The Codex adapter over a stdio room tools server, tested on a fake `codex`; private, no build                                                |
 | `planning/evidence/`  | Dated evidence: reports of the retired site example under `reports/`, dated reviews, and the results that phase 8 records                    |
 | `planning/`           | `next.md`: the must-have scope and plan for 0.1.0; `backlog.md`: everything after; `formal.md`: the verified rules to write                  |
 

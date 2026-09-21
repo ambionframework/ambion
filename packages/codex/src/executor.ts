@@ -14,6 +14,11 @@
  *   turn starts, so `readThrough` moves to the view's position on
  *   `turn.started`. A say that the room answers `missed` moves it to the
  *   last missed line, which the model reads in the same tool result.
+ * - **Memory.** With `memory: 'seat'` the executor keeps the thread id
+ *   that `thread.started` reports. The next activation resumes that
+ *   thread. After a restart the id comes from `spec.resume`, which the room
+ *   read off the journal. A resume that Codex cannot honor fails before
+ *   `thread.started`, and the activation starts a fresh thread instead.
  * - **Steer.** The session has no `steer`. Codex takes no message into a
  *   turn that runs. The driver holds the line, and the next pass reads it.
  * - **Cut.** `abort` signals the turn. `close` stops the socket and the
@@ -25,6 +30,7 @@ import type {
 	Executor,
 	ExecutorActivation,
 	ExecutorSession,
+	HarnessSession,
 	PassInput,
 	PassResult,
 	RoomProtocol,
@@ -45,6 +51,22 @@ import { type CodexRuntime, clientOptions, codexOf, threadOptions } from './opti
 import { passResultOf } from './services.ts';
 import type { Binding } from './tools.ts';
 
+/** What a seat with memory keeps between activations: the thread id Codex reported last. */
+interface SeatMemory {
+	id?: string;
+}
+
+/** Whether the executor resumes one thread for the seat. */
+function remembers(definition: AgentDefinition): boolean {
+	return 'memory' in definition.executor && definition.executor.memory === 'seat';
+}
+
+/** The thread the room recorded for this seat, when a Codex activation ended with one. */
+function resumeOf(view: ActivationView): string | undefined {
+	const { resume } = view.spec;
+	return resume?.harness === 'codex' ? resume.id : undefined;
+}
+
 /** The part of a Codex thread that a pass uses. */
 interface CodexThreadLike {
 	runStreamed(
@@ -56,6 +78,7 @@ interface CodexThreadLike {
 /** The part of the Codex client that an activation uses. */
 interface CodexClientLike {
 	startThread(options?: ThreadOptions): CodexThreadLike;
+	resumeThread(id: string, options?: ThreadOptions): CodexThreadLike;
 }
 
 /** What builds a Codex executor for one seat: its definition, and the runtime that runs it. */
@@ -67,9 +90,10 @@ export interface CodexExecutorOptions extends CodexRuntime {
 
 /** The Codex executor. One instance per seat, for as long as the room runs. */
 export function createCodexExecutor(options: CodexExecutorOptions): Executor {
+	const memory: SeatMemory | undefined = remembers(options.definition) ? {} : undefined;
 	return {
 		open(activation: ExecutorActivation): ExecutorSession {
-			return new Activation(activation, options);
+			return new Activation(activation, options, memory);
 		},
 	};
 }
@@ -107,6 +131,13 @@ class Activation implements ExecutorSession {
 	private readonly trace: TraceSink;
 	private readonly definition: AgentDefinition;
 	private readonly options: CodexExecutorOptions;
+	/** The seat's memory across activations. Absent when the seat keeps none. */
+	private readonly memory: SeatMemory | undefined;
+	/** The thread this activation asked Codex to resume. Cleared when the resume fails. */
+	private resuming: string | undefined;
+	/** Whether Codex reported `thread.started` for the thread in use. */
+	private heard = false;
+	private client: CodexClientLike | undefined;
 	private readonly steps = new CodexSteps();
 	/** Aborts when the activation is cut. The tools read its signal. */
 	private readonly cut = new AbortController();
@@ -123,13 +154,20 @@ class Activation implements ExecutorSession {
 	private serial = 0;
 	private stopped = false;
 
-	constructor(activation: ExecutorActivation, options: CodexExecutorOptions) {
+	constructor(activation: ExecutorActivation, options: CodexExecutorOptions, memory?: SeatMemory) {
 		this.id = activation.id;
 		this.room = activation.room;
 		this.emit = activation.emit;
 		this.trace = activation.trace;
 		this.definition = options.definition;
 		this.options = options;
+		this.memory = memory;
+	}
+
+	/** The Codex thread to record with the release. Absent until Codex reports one, and when the seat keeps no memory. */
+	get session(): HarnessSession | undefined {
+		const id = this.memory?.id;
+		return id === undefined ? undefined : { harness: 'codex', id };
 	}
 
 	/** The seq this activation may commit against: the freshness boundary `readThrough`. */
@@ -173,10 +211,32 @@ class Activation implements ExecutorSession {
 			const thread = await this.start(input.view);
 			if (this.stopped) return { failed: false };
 			this.reading = input.view.through;
+			return this.finish(await this.attempt(thread, prompt));
+		} catch (error) {
+			return this.finish(this.broke(error));
+		}
+	}
+
+	/**
+	 * Run the prompt on the thread. A resume that Codex cannot honor fails
+	 * before `thread.started`. The prompt then runs on a fresh thread.
+	 */
+	private async attempt(thread: CodexThreadLike, prompt: string): Promise<PassResult> {
+		const result = await this.settle(thread, prompt);
+		if (!result.failed || this.resuming === undefined || this.heard || this.stopped) return result;
+		this.resuming = undefined;
+		if (this.memory !== undefined) this.memory.id = undefined;
+		const fresh = this.begin(undefined);
+		this.thread = fresh;
+		return this.settle(fresh, prompt);
+	}
+
+	/** One run of the prompt. A fault of the run is a transient failure. */
+	private async settle(thread: CodexThreadLike, prompt: string): Promise<PassResult> {
+		try {
 			return await this.run(thread, prompt);
 		} catch (error) {
-			if (this.stopped) return { failed: false };
-			return this.broke(error instanceof Error ? error : new Error(String(error)));
+			return this.broke(error);
 		}
 	}
 
@@ -200,9 +260,20 @@ class Activation implements ExecutorSession {
 		this.bridge = bridge;
 		if (this.stopped) bridge.close();
 		const make = this.options.client ?? ((options: CodexOptions) => new Codex(options));
-		const client = make(clientOptions(this.options, bridge.socketPath));
-		this.thread = client.startThread(threadOptions(codexOf(this.definition.executor)));
+		this.client = make(clientOptions(this.options, bridge.socketPath));
+		this.resuming = this.memory === undefined ? undefined : (this.memory.id ?? resumeOf(view));
+		this.thread = this.begin(this.resuming);
 		return this.thread;
+	}
+
+	/** Open a thread: the one to resume when `resume` names it, else a fresh one. */
+	private begin(resume: string | undefined): CodexThreadLike {
+		if (this.client === undefined) throw new Error('The Codex client is not open.');
+		const options = threadOptions(codexOf(this.definition.executor));
+		this.heard = false;
+		return resume === undefined
+			? this.client.startThread(options)
+			: this.client.resumeThread(resume, options);
 	}
 
 	/** What the room tools reach. */
@@ -253,11 +324,15 @@ class Activation implements ExecutorSession {
 			if (ending.over(event)) break;
 		}
 		if (this.stopped) return { failed: false };
-		return this.finish(passResultOf(ending.failure()));
+		return passResultOf(ending.failure());
 	}
 
 	/** One thread event: its steps, its changed paths, and the position the turn read. */
 	private handle(event: ThreadEvent): void {
+		if (event.type === 'thread.started') {
+			this.heard = true;
+			if (this.memory !== undefined) this.memory.id = event.thread_id;
+		}
 		if (event.type === 'turn.started') this.advance(this.reading);
 		this.bridge?.note(changedPaths(event));
 		for (const step of this.steps.steps(event)) {
@@ -298,10 +373,12 @@ class Activation implements ExecutorSession {
 	}
 
 	/**
-	 * Record a fault of this executor, such as a lost process or a build
-	 * error. It is transient, so the room tries the activation again.
+	 * The result for a fault of this executor, such as a lost process or a
+	 * build error. It is transient, so the room tries the activation again.
 	 */
-	private broke(error: Error): PassResult {
-		return this.finish({ failed: true, cause: 'transient', message: error.message });
+	private broke(error: unknown): PassResult {
+		if (this.stopped) return { failed: false };
+		const message = error instanceof Error ? error.message : String(error);
+		return { failed: true, cause: 'transient', message };
 	}
 }
