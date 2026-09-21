@@ -1,9 +1,12 @@
 {
-	"name": "ambion-team",
+	"name": "ambion-cloudflare",
 	"version": "0.1.0",
 	"private": true,
 	"packageManager": "pnpm@10.20.0",
 	"type": "module",
+	"ambion": {
+		"template": "cloudflare"
+	},
 	"description": "A small Ambion team running on Cloudflare Durable Objects.",
 	"scripts": {
 		"dev": "ambion dev",

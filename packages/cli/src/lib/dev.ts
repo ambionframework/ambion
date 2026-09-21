@@ -4,6 +4,8 @@ import { createConnection } from 'node:net';
 import { resolve } from 'node:path';
 import { parseEnv } from 'node:util';
 import { WorkerClient, WorkerError } from './client.ts';
+import { openHostClient } from './host-client.ts';
+import type { Template } from './project.ts';
 
 const DEFAULT_PORT = 8787;
 const READY_TIMEOUT_MS = 30_000;
@@ -70,48 +72,63 @@ function assertInteractiveTerminal(): void {
 	throw new DevError('ambion dev needs an interactive terminal (stdin and stdout must be TTYs).');
 }
 
-function readEnvValue(text: string, key: string): string | undefined {
+type Vars = Record<string, string | undefined>;
+
+/** The file that holds a project's credentials: `.dev.vars` for Wrangler, `.env` for Node. */
+const VARS_FILE: Record<Template, string> = { cloudflare: '.dev.vars', node: '.env' };
+const EXAMPLE_HINT: Record<Template, string> = {
+	cloudflare: '.dev.vars.example to .dev.vars',
+	node: '.env.example to .env',
+};
+const NOT_A_PROJECT = (directory: string): DevError =>
+	new DevError(`'${directory}' is not an Ambion project. Run \u001b[1mambion new\u001b[0m first.`);
+
+async function readVars(directory: string, template: Template): Promise<Vars> {
+	let text: string;
 	try {
-		return parseEnv(text)[key];
+		text = await readFile(resolve(directory, VARS_FILE[template]), 'utf8');
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {};
+		throw error;
+	}
+	try {
+		return parseEnv(text);
 	} catch {
-		return undefined;
+		// A file that does not parse holds no usable credential.
+		return {};
 	}
 }
 
-async function credentialKey(directory: string): Promise<string> {
-	const path = resolve(directory, '.dev.vars');
+function credentialKey(model: string | undefined): string {
+	const provider = (model ?? 'anthropic/claude-sonnet-5')
+		.split('/')[0]
+		?.replace(/[^a-z0-9]/gi, '_')
+		.toUpperCase();
+	return provider === undefined || provider === '' ? DEFAULT_CREDENTIAL_KEY : `${provider}_API_KEY`;
+}
+
+/** Fail at start when the model has no credential. A room without one never answers. */
+function requireCredential(vars: Vars, template: Template): void {
+	const key = credentialKey(vars.AMBION_MODEL);
+	if (vars[key]) return;
+	throw new DevError(`No ${key} found. Copy ${EXAMPLE_HINT[template]} and set ${key}.`);
+}
+
+/** Read the kind of project: the `ambion.template` marker, else the Wrangler file. */
+export async function detectTemplate(directory: string): Promise<Template> {
+	let manifest: { ambion?: { template?: unknown } };
 	try {
-		const text = await readFile(path, 'utf8');
-		const model = readEnvValue(text, 'AMBION_MODEL') ?? 'anthropic/claude-sonnet-5';
-		const provider = model
-			.split('/')[0]
-			?.replace(/[^a-z0-9]/gi, '_')
-			.toUpperCase();
-		return provider === undefined || provider === ''
-			? DEFAULT_CREDENTIAL_KEY
-			: `${provider}_API_KEY`;
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-		return DEFAULT_CREDENTIAL_KEY;
+		manifest = JSON.parse(await readFile(resolve(directory, 'package.json'), 'utf8'));
+	} catch {
+		throw NOT_A_PROJECT(directory);
 	}
-}
-
-async function hasCredential(directory: string, key: string): Promise<boolean> {
-	try {
-		const text = await readFile(resolve(directory, '.dev.vars'), 'utf8');
-		return Boolean(readEnvValue(text, key));
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-		return false;
-	}
-}
-
-async function checkProject(directory: string): Promise<void> {
+	const marker = manifest.ambion?.template;
+	if (marker === 'node' || marker === 'cloudflare') return marker;
 	try {
 		await access(resolve(directory, 'wrangler.jsonc'));
-		await access(resolve(directory, 'package.json'));
+		return 'cloudflare';
 	} catch {
-		throw new DevError(`'${directory}' is not an Ambion project. Run [1mambion new[0m first.`);
+		throw NOT_A_PROJECT(directory);
 	}
 }
 
@@ -262,42 +279,66 @@ async function stopChild(child: ChildProcess): Promise<void> {
 	if (child.exitCode === null && child.signalCode === null) kill('SIGKILL');
 }
 
-/** Start Wrangler, connect the generated room, and run its terminal interface. */
-export async function runDev(args: readonly string[]): Promise<void> {
-	assertOpenTuiRuntime();
-	assertInteractiveTerminal();
-	const parsed = parseDevArguments(args);
-	await checkProject(parsed.directory);
-	const requiredKey = await credentialKey(parsed.directory);
-	if (!(await hasCredential(parsed.directory, requiredKey))) {
-		throw new DevError(
-			`No ${requiredKey} found. Copy .dev.vars.example to .dev.vars and set ${requiredKey}.`,
-		);
+function interruptOn(controller: AbortController, extra?: () => void): () => void {
+	const onInterrupt = () => {
+		controller.abort();
+		extra?.();
+	};
+	process.once('SIGINT', onInterrupt);
+	process.once('SIGTERM', onInterrupt);
+	return () => {
+		process.removeListener('SIGINT', onInterrupt);
+		process.removeListener('SIGTERM', onInterrupt);
+	};
+}
+
+/** Host the room of a Node project in this process and run its terminal. */
+async function runNodeDev(directory: string, vars: Vars): Promise<void> {
+	// The project reads its model and key from the environment at load. A value
+	// the shell already set wins over the file.
+	for (const [name, value] of Object.entries(vars)) {
+		if (value !== undefined) process.env[name] ??= value;
 	}
-	await assertPortFree(parsed.port);
+	requireCredential({ ...vars, ...process.env }, 'node');
+	const logs: string[] = [];
+	const controller = new AbortController();
+	const stopInterrupts = interruptOn(controller);
+	let client: Awaited<ReturnType<typeof openHostClient>> | undefined;
+	try {
+		client = await openHostClient(directory, (message) => appendLines(logs, message));
+		const started = await client.start();
+		await client.join();
+		const { runTerminalRoom } = await import('./tui.ts');
+		await runTerminalRoom({ client, roomName: started.started, logs, signal: controller.signal });
+	} finally {
+		stopInterrupts();
+		await client?.close();
+	}
+}
+
+/** Start Wrangler, connect the generated Worker, and run its terminal. */
+async function runCloudflareDev(directory: string, port: number, vars: Vars): Promise<void> {
+	requireCredential(vars, 'cloudflare');
+	await assertPortFree(port);
 	const logs: string[] = [];
 	const child = spawn(
 		'pnpm',
-		['exec', 'wrangler', 'dev', '--ip', '127.0.0.1', '--port', String(parsed.port)],
-		{ cwd: parsed.directory, env: process.env, stdio: ['ignore', 'pipe', 'pipe'], detached: true },
+		['exec', 'wrangler', 'dev', '--ip', '127.0.0.1', '--port', String(port)],
+		{ cwd: directory, env: process.env, stdio: ['ignore', 'pipe', 'pipe'], detached: true },
 	);
 	const controller = new AbortController();
 	child.once('error', (error) => {
 		appendLines(logs, error.message);
 	});
 	let childStop: Promise<void> | undefined;
-	const onInterrupt = () => {
-		controller.abort();
+	const stopInterrupts = interruptOn(controller, () => {
 		childStop ??= stopChild(child);
-	};
-	process.once('SIGINT', onInterrupt);
-	process.once('SIGTERM', onInterrupt);
+	});
 	child.stdout?.on('data', (chunk: Buffer | string) => appendLines(logs, chunk));
 	child.stderr?.on('data', (chunk: Buffer | string) => appendLines(logs, chunk));
-	let client: WorkerClient | undefined;
 	try {
-		client = new WorkerClient(`http://127.0.0.1:${parsed.port}`);
-		await waitForReady(child, client, logs, parsed.port, controller.signal);
+		const client = new WorkerClient(`http://127.0.0.1:${port}`);
+		await waitForReady(child, client, logs, port, controller.signal);
 		const started = await client.start();
 		await client.join();
 		const { runTerminalRoom } = await import('./tui.ts');
@@ -306,11 +347,21 @@ export async function runDev(args: readonly string[]): Promise<void> {
 		if (error instanceof WorkerError && error.status === 0)
 			throw new DevError(`The local Worker stopped responding: ${error.message}`);
 		if (error instanceof DevError) throw error;
-		throw startupMessage(error, logs, parsed.port);
+		throw startupMessage(error, logs, port);
 	} finally {
-		process.removeListener('SIGINT', onInterrupt);
-		process.removeListener('SIGTERM', onInterrupt);
-		if (childStop === undefined) childStop = stopChild(child);
+		stopInterrupts();
+		childStop ??= stopChild(child);
 		await childStop;
 	}
+}
+
+/** Run the terminal room of a generated project, on Wrangler or in this process. */
+export async function runDev(args: readonly string[]): Promise<void> {
+	assertOpenTuiRuntime();
+	assertInteractiveTerminal();
+	const parsed = parseDevArguments(args);
+	const template = await detectTemplate(parsed.directory);
+	const vars = await readVars(parsed.directory, template);
+	if (template === 'node') await runNodeDev(parsed.directory, vars);
+	else await runCloudflareDev(parsed.directory, parsed.port, vars);
 }

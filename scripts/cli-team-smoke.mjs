@@ -306,17 +306,62 @@ async function installAndCheck(destination, archives) {
 		throw new Error(`The packed CLI did not report a version: ${version.output}`);
 }
 
-async function checkNewCommand(destination, target, archives) {
-	const created = capture('pnpm', ['exec', 'ambion', 'new', target], destination);
+const RESTART_SCRIPT = `import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { byAgent, quiet, scripted, speak } from '@ambionframework/pi/testing';
+import { openHost } from './src/host.ts';
+
+const stream = scripted(byAgent({ planner: (_context, _agent, call) => (call === 1 ? speak('Begin.') : quiet()) }));
+const directory = await mkdtemp(join(tmpdir(), 'ambion-node-restart-'));
+try {
+  const first = await openHost({ directory, stream });
+  await first.join();
+  const sent = await first.send('Does a restart keep this?');
+  for (let wait = 0; wait < 100; wait += 1) {
+    const exchange = (await first.read()).exchanges.find((item) => item.from === sent.from);
+    if (exchange?.status === 'closed') break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  await first.close();
+  const second = await openHost({ directory, stream });
+  const read = await second.read();
+  await second.close();
+  assert.ok(read.messages.some((message) => message.kind === 'said' && message.text === 'Does a restart keep this?'));
+  console.log('Packed node project restart passed.');
+} finally {
+  await rm(directory, { recursive: true, force: true });
+}
+`;
+
+async function checkNewCommand(destination, target, archives, template) {
+	const created = capture(
+		'pnpm',
+		['exec', 'ambion', 'new', target, '--template', template],
+		destination,
+	);
 	if (created.status !== 0 || !created.output.includes(`Created ${target}`))
-		throw new Error(`The CLI could not create a project: ${created.output}`);
+		throw new Error(`The CLI could not create a ${template} project: ${created.output}`);
 	const generatedPath = join(target, 'package.json');
 	const generated = JSON.parse(await readFile(generatedPath, 'utf8'));
 	if (JSON.stringify(generated).includes('workspace:'))
-		throw new Error('The new project contains a workspace dependency.');
+		throw new Error(`The new ${template} project contains a workspace dependency.`);
+	if (generated.ambion?.template !== template)
+		throw new Error(`The new ${template} project has the wrong template marker.`);
 	const npmrc = await readFile(join(target, '.npmrc'), 'utf8');
 	if (!npmrc.includes('@ambionframework:registry=https://npm.pkg.github.com'))
 		throw new Error('The new project is missing its package registry configuration.');
+	if (template === 'cloudflare') await checkCloudflareFiles(target);
+	const overwrite = capture('pnpm', ['exec', 'ambion', 'new', target], destination);
+	if (overwrite.status === 0 || !overwrite.output.includes('overwrite'))
+		throw new Error('The CLI accepted an existing project directory.');
+	await installCreatedProject(destination, target, generated, generatedPath, archives);
+	if (template === 'cloudflare') run('pnpm', ['exec', 'wrangler', 'deploy', '--dry-run'], target);
+	else await checkNodeRestart(target);
+}
+
+async function checkCloudflareFiles(target) {
 	const wrangler = JSON.parse(await readFile(join(target, 'wrangler.jsonc'), 'utf8'));
 	const bindings = wrangler.durable_objects?.bindings;
 	if (
@@ -325,10 +370,12 @@ async function checkNewCommand(destination, target, archives) {
 		!bindings.some((binding) => binding.name === 'SEAT' && binding.class_name === 'SeatObject')
 	)
 		throw new Error('The new project is missing its Cloudflare Durable Object bindings.');
-	const overwrite = capture('pnpm', ['exec', 'ambion', 'new', target], destination);
-	if (overwrite.status === 0 || !overwrite.output.includes('overwrite'))
-		throw new Error('The CLI accepted an existing project directory.');
-	await installCreatedProject(destination, target, generated, generatedPath, archives);
+}
+
+/** Open the packed Node project, ask a question, close it, and read it again after a reopen. */
+async function checkNodeRestart(target) {
+	await writeFile(join(target, 'restart-check.mjs'), RESTART_SCRIPT);
+	run(process.execPath, ['restart-check.mjs'], target);
 }
 
 async function installCreatedProject(destination, target, generated, generatedPath, archives) {
@@ -358,7 +405,6 @@ async function installCreatedProject(destination, target, generated, generatedPa
 	await writeFile(generatedPath, `${JSON.stringify(generated, null, '\t')}\n`);
 	run('pnpm', ['install', '--ignore-scripts', '--frozen-lockfile=false'], target);
 	run('pnpm', ['check:types'], target);
-	run('pnpm', ['exec', 'wrangler', 'deploy', '--dry-run'], target);
 }
 
 async function smoke() {
@@ -370,10 +416,14 @@ async function smoke() {
 	try {
 		const archives = await packFixture(destination);
 		await installAndCheck(destination, archives);
-		const created = join(parent, 'created-team');
-		await checkNewCommand(destination, created, archives);
-		credentialPath = await writeCredential(created, live);
-		if (live) run('pnpm', ['exec', 'ambion', 'dev'], created);
+		for (const template of ['node', 'cloudflare']) {
+			const created = join(parent, `created-${template}`);
+			await checkNewCommand(destination, created, archives, template);
+			if (live && template === 'cloudflare') {
+				credentialPath = await writeCredential(created, live);
+				run('pnpm', ['exec', 'ambion', 'dev'], created);
+			}
+		}
 		console.log(`Packed consumer smoke passed: ${destination}`);
 	} finally {
 		if (credentialPath) await unlink(credentialPath).catch(() => undefined);

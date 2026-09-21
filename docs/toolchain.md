@@ -122,7 +122,7 @@ Use these commands at the repository root:
 | Command                      | Purpose                                                                |
 | ---------------------------- | ---------------------------------------------------------------------- |
 | `pnpm build`                 | Build every package through Turborepo                                  |
-| `pnpm check:types`           | Type-check packages and the CLI team template after their builds       |
+| `pnpm check:types`           | Type-check packages and both CLI templates after their builds          |
 | `pnpm test`                  | Run report checks and the scripted Vitest suites                       |
 | `pnpm check:format`          | Verify Prettier formatting                                             |
 | `pnpm check:lint`            | Run Biome with warnings as errors, then Knip                           |

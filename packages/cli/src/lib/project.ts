@@ -4,17 +4,44 @@ import { fileURLToPath } from 'node:url';
 
 const PROJECT_NAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
+const TEMPLATES = ['node', 'cloudflare'] as const;
+export type Template = (typeof TEMPLATES)[number];
+export const DEFAULT_TEMPLATE: Template = 'node';
+
+const DEPENDENCIES: Record<Template, readonly string[]> = {
+	node: [
+		'@ambionframework/ambion',
+		'@ambionframework/journal',
+		'@ambionframework/pi',
+		'@ambionframework/cli',
+	],
+	cloudflare: [
+		'@ambionframework/ambion',
+		'@ambionframework/cloudflare',
+		'@ambionframework/pi',
+		'@ambionframework/cli',
+	],
+};
+
 export class ProjectError extends Error {}
 
-function templateCandidates(): string[] {
+/** Narrow a `--template` value. An unknown name is a `ProjectError`. */
+export function parseTemplate(value: string): Template {
+	const template = TEMPLATES.find((name) => name === value);
+	if (template === undefined)
+		throw new ProjectError(`Unknown template '${value}'. Use ${TEMPLATES.join(' or ')}.`);
+	return template;
+}
+
+function templateCandidates(template: Template): string[] {
 	return [
-		fileURLToPath(new URL('../templates/team/', import.meta.url)),
-		fileURLToPath(new URL('../../templates/team/', import.meta.url)),
+		fileURLToPath(new URL(`../templates/${template}/`, import.meta.url)),
+		fileURLToPath(new URL(`../../templates/${template}/`, import.meta.url)),
 	];
 }
 
-async function templateDirectory(): Promise<string> {
-	for (const candidate of templateCandidates()) {
+async function templateDirectory(template: Template): Promise<string> {
+	for (const candidate of templateCandidates(template)) {
 		try {
 			await access(candidate);
 			return candidate;
@@ -22,7 +49,7 @@ async function templateDirectory(): Promise<string> {
 			// The first path is for the bundled file. The second is for source tests.
 		}
 	}
-	throw new ProjectError('The Ambion team template is missing from this installation.');
+	throw new ProjectError(`The Ambion ${template} template is missing from this installation.`);
 }
 
 function projectName(directory: string): string {
@@ -48,19 +75,19 @@ async function ensureTargetIsEmpty(target: string): Promise<void> {
 	}
 }
 
-async function rewritePackage(target: string, name: string, version: string): Promise<void> {
+async function rewritePackage(
+	target: string,
+	name: string,
+	version: string,
+	template: Template,
+): Promise<void> {
 	const path = resolve(target, 'package.json');
 	const packageJson = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
 	packageJson.name = name;
 	for (const section of ['dependencies', 'devDependencies']) {
 		const dependencies = packageJson[section];
 		if (typeof dependencies !== 'object' || dependencies === null) continue;
-		for (const dependency of [
-			'@ambionframework/ambion',
-			'@ambionframework/cloudflare',
-			'@ambionframework/pi',
-			'@ambionframework/cli',
-		]) {
+		for (const dependency of DEPENDENCIES[template]) {
 			if (Object.hasOwn(dependencies, dependency)) {
 				(dependencies as Record<string, unknown>)[dependency] = version;
 			}
@@ -91,22 +118,26 @@ async function restoreDotfiles(target: string): Promise<void> {
 	}
 }
 
-/** Create a team project from the packaged template. */
-export async function createProject(directory: string, version: string): Promise<string> {
+/** Create a project from a packaged template. The default template runs in Node. */
+export async function createProject(
+	directory: string,
+	version: string,
+	template: Template = DEFAULT_TEMPLATE,
+): Promise<string> {
 	if (directory.trim() === '') throw new ProjectError('A project directory is required.');
+	const source = await templateDirectory(parseTemplate(template));
 	const target = resolve(directory);
 	const name = projectName(target);
-	const template = await templateDirectory();
 	await ensureTargetIsEmpty(target);
-	for (const entry of await readdir(template)) {
-		await cp(resolve(template, entry), resolve(target, entry), {
+	for (const entry of await readdir(source)) {
+		await cp(resolve(source, entry), resolve(target, entry), {
 			recursive: true,
 			force: false,
 			errorOnExist: true,
 		});
 	}
 	await restoreDotfiles(target);
-	await rewritePackage(target, name, version);
-	await rewriteWrangler(target, name);
+	await rewritePackage(target, name, version, template);
+	if (template === 'cloudflare') await rewriteWrangler(target, name);
 	return target;
 }

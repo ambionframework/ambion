@@ -19,7 +19,6 @@ interface TeamEnv extends Env {
 }
 
 type RoomStub = DurableObjectStub<RoomObject>;
-type ReadResult = Awaited<ReturnType<RoomStub['read']>>;
 
 class RequestError extends Error {}
 
@@ -69,26 +68,6 @@ async function participants(stub: RoomStub): Promise<ParticipantInfo[]> {
 	return [...(await stub.read({ messages: false })).participants];
 }
 
-/** The status the dev client reads, computed from the room's read model. */
-function statusOf(read: ReadResult, from: Seq | undefined) {
-	const exchange =
-		from === undefined ? read.exchange : read.exchanges.find((item) => item.from === from);
-	if (from !== undefined && exchange === undefined)
-		throw new RequestError(`Exchange '${from}' is not on the record.`);
-	const working = from === undefined ? exchange !== undefined : exchange?.status === 'open';
-	const exchangeState = working ? 'working' : from === undefined ? 'idle' : 'completed';
-	return {
-		name: read.name,
-		initialized: read.initialized,
-		...(read.goal === undefined ? {} : { goal: read.goal }),
-		participants: [...read.participants],
-		exchanges: [...read.exchanges],
-		exchange,
-		watermark: read.watermark,
-		exchangeState,
-	};
-}
-
 async function start(
 	stub: RoomStub,
 ): Promise<{ started: string; participants: ParticipantInfo[] }> {
@@ -127,25 +106,17 @@ async function send(stub: RoomStub, request: Request): Promise<unknown> {
 	});
 }
 
-async function exchange(stub: RoomStub, url: URL): Promise<unknown> {
-	const from = numberParam(url, 'from');
-	return from === undefined ? null : ((await stub.exchange(from)) ?? null);
-}
-
 type Route = (stub: RoomStub, request: Request, url: URL) => Promise<unknown>;
 
 const routes: Record<string, Route> = {
 	'POST /start': async (stub) => start(stub),
 	'POST /join': (stub, request) => join(stub, request),
 	'POST /send': (stub, request) => send(stub, request),
-	'GET /messages': async (stub, _request, url) => {
+	// One detached read: the messages after `since`, the roster, and every exchange.
+	'GET /read': async (stub, _request, url) => {
 		const since = numberParam(url, 'since');
-		const read = await stub.read(since === undefined ? {} : { messages: { since } });
-		return [...read.messages];
+		return stub.read(since === undefined ? {} : { messages: { since } });
 	},
-	'GET /exchange': (stub, _request, url) => exchange(stub, url),
-	'GET /status': async (stub, _request, url) =>
-		statusOf(await stub.read({ messages: false }), numberParam(url, 'from')),
 	'GET /health': async () => ({ ok: true, room: ROOM_NAME }),
 };
 
@@ -156,15 +127,7 @@ async function route(request: Request, env: TeamEnv): Promise<Response> {
 	return json(
 		{
 			error: 'Route not found.',
-			routes: [
-				'GET /health',
-				'POST /start',
-				'POST /join',
-				'POST /send',
-				'GET /messages',
-				'GET /exchange',
-				'GET /status',
-			],
+			routes: ['GET /health', 'POST /start', 'POST /join', 'POST /send', 'GET /read'],
 		},
 		404,
 	);

@@ -126,6 +126,9 @@ importers:
       '@ambionframework/cloudflare':
         specifier: workspace:*
         version: link:../cloudflare
+      '@ambionframework/journal':
+        specifier: workspace:*
+        version: link:../journal
       '@ambionframework/pi':
         specifier: workspace:*
         version: link:../pi
