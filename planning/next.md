@@ -39,8 +39,9 @@ holds on main.
 
 **Ambion is a collaboration kernel for agents and humans.** The
 [README](../README.md) holds the statement, the key technical facts, and
-what is new, written for the 0.1.0 surface. All ten novelties it lists exist on main. The open work is the release
-evidence in phase 8, two documentation steps, and the items below.
+what is new, written for the 0.1.0 surface. All ten novelties it lists
+exist on main. The open work is the release evidence in phase 8, two
+documentation steps, and the items below.
 
 ## The scope
 
