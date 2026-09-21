@@ -3,7 +3,8 @@
 `@ambionframework/pi` runs Ambion agents on Pi. This page holds what is
 specific to the Pi adapter. [Executors](executors.md) holds the contract
 between the driver and an executor, the step vocabulary, and the trace.
-[The Claude guide](claude.md) covers a second shipped family, and [the Codex guide](codex.md) a third. [The
+[The Claude guide](claude.md) covers a second shipped family, and [the
+Codex guide](codex.md) a third. [The
 README](../README.md) holds the positioning.
 
 ## What it is and when to use it
@@ -391,20 +392,21 @@ provider, the length of a real context, or what a real model says.
 `packages/ambion/test/live` use `pi()` and `piExecution()` with a key from
 `<PROVIDER>_API_KEY`. `pnpm test:live` runs them and costs money. CI runs the
 tier on `main` and on a weekly schedule. See [Toolchain](toolchain.md). The
-Pi package has no live test of its own.
+Pi package has no live test of its own. The Workbench live tests also run
+Pi seats.
 
 ## Troubleshooting
 
-| Symptom                                                   | Cause                                                                                                      |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Each seat fails at once with `no_execution`               | The room has no `execution`. Pass `piExecution()` to the room or the runtime.                              |
-| `Unknown model '...': expected 'provider/model-id'`       | The id has no provider prefix, or the registry lacks it. The failure is transient, so the room retries it. |
-| The seat is abandoned after one attempt                   | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY` and the credit of the account.     |
-| `The Pi executor cannot run an executor of kind 'claude'` | A Claude seat ran under `piExecution()`. Route with `composeExecutions`.                                   |
-| `An agent estimateTokens needs an activationTokenLimit.`  | `estimateTokens` is set with no limit.                                                                     |
-| An `audit_error` event                                    | The audit write failed twice. Check the storage. The activation is unaffected.                             |
-| The agent never speaks                                    | Silence is legal. Read the trace with `readActivation` to see the thinking and the tool calls.             |
-| A say returns `Not delivered — the room moved`            | The freshness rule refused a say against newer record. The model reads the new messages and decides again. |
-| A steer shows `consumed: false`                           | The pass ended before the next provider request. The next delta carries the line.                          |
-| The first activation after a restart re-reads the record  | `memory: 'seat'` keeps the transcript in the process. A restart starts a new one.                          |
-| The activation ends with `stop: 'length'`                 | The last model message hit a length limit. Shorten the record with `activationTokenLimit`.                 |
+| Symptom                                                             | Cause                                                                                                      |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Each seat fails at once with `no_execution`                         | The room has no `execution`. Pass `piExecution()` to the room or the runtime.                              |
+| `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is transient, so the room retries it. |
+| The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY` and the credit of the account.     |
+| `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat ran under `piExecution()`. Route with `composeExecutions`.                                   |
+| `An agent estimateTokens needs an activationTokenLimit.`            | `estimateTokens` is set with no limit.                                                                     |
+| An `audit_error` event                                              | The audit write failed twice. Check the storage. The activation is unaffected.                             |
+| The agent never speaks                                              | Silence is legal. Read the trace with `readActivation` to see the thinking and the tool calls.             |
+| A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again. |
+| A steer shows `consumed: false`                                     | The pass ended before the next provider request. The next delta carries the line.                          |
+| The first activation after a restart re-reads the record            | `memory: 'seat'` keeps the transcript in the process. A restart starts a new one.                          |
+| The activation ends with `stop: 'length'`                           | The last model message hit a length limit. Shorten the record with `activationTokenLimit`.                 |
