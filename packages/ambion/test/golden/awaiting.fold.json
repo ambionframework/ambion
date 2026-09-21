@@ -1,0 +1,68 @@
+{
+	"name": "golden",
+	"initialized": true,
+	"messages": [],
+	"participants": [
+		{
+			"kind": "agent",
+			"name": "worker",
+			"identity": "Answers the question.",
+			"status": "idle",
+			"attention": "broadcast"
+		},
+		{
+			"kind": "human",
+			"name": "sam",
+			"identity": "Site foreman.",
+			"presence": "absent"
+		},
+		{
+			"kind": "human",
+			"name": "priya",
+			"identity": "Project manager.",
+			"presence": "absent"
+		}
+	],
+	"exchanges": [
+		{
+			"owner": "priya",
+			"from": 5,
+			"through": 7,
+			"at": "2026-01-01T09:00:00.000Z",
+			"status": "closed",
+			"activations": [
+				{
+					"id": "message:5:worker:1",
+					"seat": "worker",
+					"attempt": 1,
+					"purpose": "respond",
+					"outcome": {
+						"status": "released"
+					},
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"cost": 0
+					}
+				}
+			],
+			"summary": {
+				"status": "silent"
+			},
+			"outcome": {
+				"kind": "awaiting",
+				"person": "sam"
+			},
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			}
+		}
+	],
+	"watermark": 12
+}

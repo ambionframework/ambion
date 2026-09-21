@@ -1,0 +1,171 @@
+/**
+ * The scripted runs that write the golden journals. Each one drives a real
+ * room on memory storage under a fake clock, so the journal holds only what
+ * the runtime writes. `GOLDEN=write` runs them and saves the result.
+ */
+
+import type { JournalEntry } from '@ambionframework/journal';
+import { pi, piExecution } from '../../../pi/src/index.ts';
+import { hostingOf } from '../../src/hosting.ts';
+import {
+	createRuntime,
+	defineAgent,
+	defineHuman,
+	type Room,
+	resumeRoom,
+	startRoom,
+} from '../../src/index.ts';
+import { fakeClock } from '../../src/testing.ts';
+import { roomName, storedOf, tick, waitForRoom } from './room.ts';
+import { byAgent, isClosing, quiet, says, scripted, summarise } from './scripted.ts';
+import { memory } from './storage.ts';
+
+const worker = defineAgent({
+	name: 'worker',
+	identity: 'Answers the question.',
+	executor: pi({ instructions: 'answer the question', model: 'scripted/worker' }),
+});
+const assistant = defineAgent({
+	name: 'assistant',
+	identity: 'Writes a closing summary.',
+	executor: pi({ instructions: 'summarise the discussion', model: 'scripted/assistant' }),
+});
+const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
+
+/** What a scenario hands the driver: the room, and the storage to read back. */
+type Drive = (room: Room) => Promise<void>;
+
+interface Setup {
+	readonly agents: (typeof worker)[];
+	readonly summary?: string;
+	readonly seats: Record<string, 'broadcast' | 'named' | 'none'>;
+	readonly stream: Parameters<typeof scripted>[0];
+	readonly attempts?: number;
+	readonly drive: Drive;
+}
+
+async function record(setup: Setup): Promise<readonly JournalEntry[]> {
+	const opened = await memory.open();
+	const runtime = createRuntime({
+		storage: opened.storage,
+		clock: fakeClock(),
+		limits: { activation: { attempts: setup.attempts ?? 3, backoff: () => 0 } },
+	});
+	const room = await startRoom({
+		name: roomName('golden'),
+		runtime,
+		agents: setup.agents,
+		...(setup.summary === undefined ? {} : { summary: setup.summary }),
+		seats: setup.seats,
+		execution: piExecution({ stream: scripted(setup.stream) }),
+	});
+	try {
+		await setup.drive(room);
+		await room.stop();
+		return await storedOf(hostingOf(runtime).journals, room.name);
+	} finally {
+		await room.stop();
+		await opened.dispose();
+	}
+}
+
+const complete = (): Promise<readonly JournalEntry[]> =>
+	record({
+		agents: [worker, assistant],
+		summary: assistant.name,
+		seats: { worker: 'broadcast', assistant: 'none' },
+		stream: byAgent({
+			worker: says(['Thursday works.']),
+			assistant: (context) => (isClosing(context) ? summarise('Thursday works.') : quiet()),
+		}),
+		async drive(room) {
+			await (await room.visit(priya)).send({ text: 'Can I tell the client Thursday?' });
+			await waitForRoom(room);
+		},
+	});
+
+const awaiting = (): Promise<readonly JournalEntry[]> =>
+	record({
+		agents: [worker],
+		seats: { worker: 'broadcast' },
+		stream: byAgent({ worker: says(['Sam, can you confirm the slab?'], 'sam') }),
+		async drive(room) {
+			await room.visit(sam);
+			await (await room.visit(priya)).send({ text: 'Is the slab poured?' });
+			await waitForRoom(room);
+		},
+	});
+
+const cancelled = (): Promise<readonly JournalEntry[]> =>
+	record({
+		agents: [worker],
+		seats: { worker: 'broadcast' },
+		stream: () => new Promise<never>(() => {}),
+		async drive(room) {
+			await (await room.visit(priya)).send({ text: 'Is the slab poured?' });
+			await tick();
+			await tick();
+			await room.abort();
+		},
+	});
+
+const exhausted = (): Promise<readonly JournalEntry[]> =>
+	record({
+		agents: [worker],
+		seats: { worker: 'named' },
+		attempts: 1,
+		stream: () => {
+			throw new Error('400 Your credit balance is too low to make this request');
+		},
+		async drive(room) {
+			await (await room.visit(priya)).send({ to: worker.name, text: 'Answer me.' });
+			await waitForRoom(room);
+		},
+	});
+
+/** A room that stops and resumes: two runs, and the second fences the first. */
+async function resumed(): Promise<readonly JournalEntry[]> {
+	const opened = await memory.open();
+	const clock = fakeClock();
+	const runtime = () =>
+		createRuntime({
+			storage: opened.storage,
+			clock,
+			limits: { activation: { attempts: 3, backoff: () => 0 } },
+		});
+	const execution = piExecution({
+		stream: scripted(byAgent({ worker: says(['Thursday works.']) })),
+	});
+	const first = runtime();
+	const room = await startRoom({
+		name: roomName('golden'),
+		runtime: first,
+		agents: [worker],
+		seats: { worker: 'broadcast' },
+		execution,
+	});
+	let again: Room | undefined;
+	try {
+		await (await room.visit(priya)).send({ text: 'Can I tell the client Thursday?' });
+		await waitForRoom(room);
+		await room.stop();
+		again = await resumeRoom(room.name, { runtime: runtime(), agents: [worker], execution });
+		await waitForRoom(again);
+		await again.stop();
+		return await storedOf(hostingOf(first).journals, room.name);
+	} finally {
+		await again?.stop();
+		await room.stop();
+		await opened.dispose();
+	}
+}
+
+/** Every golden scenario, by fixture name. */
+export const goldenScenarios: Readonly<Record<string, () => Promise<readonly JournalEntry[]>>> = {
+	complete,
+	awaiting,
+	cancelled,
+	exhausted,
+	resumed,
+};

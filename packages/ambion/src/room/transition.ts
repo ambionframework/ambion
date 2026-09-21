@@ -2,7 +2,7 @@
 
 import { decodeActivationId } from '../activation-id.ts';
 import type { AmbionErrorCode } from '../errors.ts';
-import type { Close, Composition, Seating } from '../journal/events.ts';
+import { type Close, type Composition, JOURNAL_FORMAT, type Seating } from '../journal/events.ts';
 import type { Bodies, Body, Entry, Kind } from '../journal/journal.ts';
 import type { ActivationSpec, CommitRequest } from '../protocol.ts';
 import { refsRefusal } from '../refs.ts';
@@ -151,7 +151,7 @@ export function decide(
 					: undefined,
 			};
 		case 'run':
-			return { event: { kind: 'run', body: { at: iso(now) } } };
+			return { event: { kind: 'run', body: { at: iso(now), format: JOURNAL_FORMAT } } };
 		case 'cancel':
 			return {
 				event: {
