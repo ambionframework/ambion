@@ -66,98 +66,7 @@ Application code works with definitions, rooms, visits, and exchanges. Seats
 change through room operations. Activations, leases, executors, and the trace
 belong to the hosting entry, `@ambionframework/ambion/hosting`.
 
-## A small room
-
-Two specialists share one directory and answer one person. Each definition
-owns its instructions, its model, and its executor. Both run on Pi and reach
-the directory through the workspace tools.
-
-```ts
-import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
-import { pi } from '@ambionframework/pi';
-import { directoryBackend, openWorkspace } from '@ambionframework/workspace';
-
-const shared = openWorkspace({ name: 'delivery', backend: directoryBackend('./shared') });
-
-const inventory = defineAgent({
-  name: 'inventory',
-  identity: 'Checks stock constraints.',
-  executor: pi({
-    model: 'anthropic/claude-sonnet-5',
-    instructions:
-      'Read stock.csv before you answer. State a constraint only when it changes the answer.',
-    bundles: [shared.tools()],
-  }),
-});
-
-const scheduling = defineAgent({
-  name: 'scheduling',
-  identity: 'Checks delivery capacity.',
-  executor: pi({
-    model: 'anthropic/claude-sonnet-5',
-    instructions:
-      'Read capacity.md before you answer. State a constraint only when it changes the answer.',
-    bundles: [shared.tools()],
-  }),
-});
-
-const priya = defineHuman({ name: 'priya', identity: 'Coordinates customer deliveries.' });
-
-const room = await startRoom({
-  name: 'delivery',
-  goal: 'Check delivery promises against stock and capacity.',
-  agents: [inventory, scheduling],
-  seats: { inventory: 'broadcast', scheduling: 'broadcast' },
-  summary: 'scheduling',
-});
-
-const visit = await room.visit(priya);
-const exchange = await visit.send({ text: 'Can we promise 10 units for Thursday?' });
-
-try {
-  for (const message of await exchange.waitForClose()) {
-    if (message.kind === 'said') console.log(`${message.from}: ${message.text}`, message.refs);
-  }
-  await visit.leave();
-} finally {
-  await room.stop();
-}
-```
-
-**A room with no `execution` runs each seat on the default of its family.**
-Importing `@ambionframework/pi` registers the default Pi execution, which
-keeps transcripts in the storage of the runtime. The kernel imports no model
-library. A host that needs custom storage, a transport, or limits passes an
-`execution`, as the mixed example below shows. An executor kind that no
-loaded package serves fails each seat it wakes with `no_execution`.
-
-The exchange opens on the question and closes when no seat has work left.
-Both agents wake, read the directory, and speak or stay silent. A `say`
-that read a stale record is refused with the messages it missed. The
-`summary` seat writes one summary for Priya, and later prompts read it in
-place of the discussion. Leave an agent out of `seats` to keep it in the
-reserve; the room seats it by name when a question needs it.
-
-**Read the work afterwards.** Every read works on a running room and on a
-stopped one.
-
-```ts
-import { readActivation, readExchange } from '@ambionframework/ambion';
-
-const closed = await readExchange('delivery', exchange.from);
-for (const activation of closed?.exchange.activations ?? []) {
-  const read = await readActivation('delivery', activation.id);
-  const steps = read?.passes.flatMap((pass) => pass.steps) ?? [];
-  console.log(activation.seat, activation.outcome, activation.usage?.cost, steps.length);
-}
-```
-
-`room.read()` returns the conversation and participant state without
-waiting for an agent. `subscribe` streams messages and steps live, each with
-its activation id, so a user interface merges the live stream and the read
-the same way.
-
-## One team on three harnesses
+## A team on three harnesses
 
 **Every family reaches the world through the same tools.** The team below
 runs one seat on Pi, one on the Claude Agent SDK, and one on the Codex SDK.
@@ -167,7 +76,7 @@ are the only tools of every seat, next to the three room tools.
 <!-- ts: standalone -->
 
 ```ts
-import { defineAgent, startRoom, type ToolBundle } from '@ambionframework/ambion';
+import { defineAgent, defineHuman, startRoom, type ToolBundle } from '@ambionframework/ambion';
 import { claude } from '@ambionframework/claude';
 import { codex } from '@ambionframework/codex';
 import { pi } from '@ambionframework/pi';
@@ -201,39 +110,46 @@ const experiments = defineAgent({
   }),
 });
 
+const priya = defineHuman({ name: 'priya', identity: 'Designs the test bench.' });
+
 const room = await startRoom({
   name: 'lab',
   goal: 'Choose a part and plan its test.',
   agents: [datasheets, design, experiments],
-  seats: { datasheets: 'broadcast', design: 'broadcast', experiments: 'broadcast' },
 });
 
-await room.stop();
+const visit = await room.visit(priya);
+const exchange = await visit.send({ text: 'Which regulator fits a 3.3 V, 2 A rail?' });
+
+try {
+  for (const message of await exchange.waitForClose()) {
+    if (message.kind === 'said') console.log(`${message.from}: ${message.text}`, message.refs);
+  }
+  await visit.leave();
+} finally {
+  await room.stop();
+}
 ```
 
-The room routes each seat to the default execution of its family. A host
-that needs its own storage, transport, or limits builds the executions and
-passes them to `createRuntime`. `composeExecutions` routes each seat on the
-`kind` of its executor.
+**A room seats every agent at `broadcast` by default.** With no `seats`
+option, each definition in `agents` becomes a member that wakes on every
+message. Pass `seats` to choose other members or another attention, or an
+empty map to keep every agent in the reserve. See
+[Roster](docs/roster.md#configuration).
 
-<!-- ts: standalone -->
+**A room with no `execution` runs each seat on the default of its family.**
+Importing a family package registers its default execution, which keeps
+transcripts in the storage of the runtime. The kernel imports no model
+library. A host that needs custom storage, a transport, or limits builds the
+executions and passes them to `createRuntime`; see
+[Executors](docs/executors.md). An executor kind that no loaded package
+serves fails each seat it wakes with `no_execution`.
 
-```ts
-import { createRuntime } from '@ambionframework/ambion';
-import { composeExecutions } from '@ambionframework/ambion/hosting';
-import { claudeExecution } from '@ambionframework/claude';
-import { codexExecution } from '@ambionframework/codex';
-import { piExecution } from '@ambionframework/pi';
-
-export const runtime = createRuntime({
-  limits: { call: { timeout: 30_000 } },
-  execution: composeExecutions({
-    pi: piExecution(),
-    claude: claudeExecution(),
-    codex: codexExecution(),
-  }),
-});
-```
+**The exchange opens on the question and closes when no seat has work
+left.** Every seat wakes, reads the workspace, and speaks or stays silent. A
+`say` that read a stale record is refused with the messages it missed. Every
+read works on a running room and on a stopped one; see
+[Exchange](docs/exchange.md).
 
 **The shape is the workbench.** [`examples/workbench`](examples/workbench)
 builds its team the same way: one list of `bundles` serves every seat, and

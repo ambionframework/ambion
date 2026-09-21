@@ -18,7 +18,8 @@ const room = await startRoom({
 });
 ```
 
-If `seats` is omitted, every defined agent starts as a member at `broadcast`.
+**The default seating puts every defined agent at `broadcast`.** If `seats`
+is omitted, every defined agent starts as a member at `broadcast`.
 An empty map starts every defined agent in the reserve. `summary` names one
 defined agent that may receive closing work. It does not create a separate
 membership type. `summary` must name an agent in `seats`. A room start
