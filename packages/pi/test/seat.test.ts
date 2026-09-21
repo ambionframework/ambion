@@ -17,11 +17,11 @@ import {
 	type ViewResponse,
 	type Wake,
 } from '@ambionframework/ambion/hosting';
+import { fakeClock } from '@ambionframework/ambion/testing';
 import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { fakeClock } from '../../ambion/test/support/clock.ts';
 import { deferred, tick } from '../../ambion/test/support/room.ts';
 import { contextText, quiet, scripted } from '../../ambion/test/support/scripted.ts';
 import { noTraces } from '../../ambion/test/support/trace.ts';

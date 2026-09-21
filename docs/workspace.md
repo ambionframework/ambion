@@ -1,9 +1,11 @@
 # The workspace
 
-**Applications own domain data and tool resources.** The optional
-`@ambionframework/workspace` package provides a workspace resource and its
-filesystem. Agents receive access through ordinary tool bundles. Workspace
-files remain separate from the collaboration journal.
+**The workspace is the just-bash and Pi binding of the resource
+contract.** The optional `@ambionframework/workspace` package provides a
+workspace resource and its filesystem. Agents receive access through
+ordinary tool bundles. Workspace files remain separate from the
+collaboration journal. [Resources](resources.md) states the contract, the
+SQL binding, and the rules for references and provenance.
 
 ## Open one resource
 
@@ -367,83 +369,17 @@ just-bash is the default implementation, and it has these specific behaviors:
 - **The dialect is SQLite.** Dates are functions, `||` joins text, and a column
   type is an affinity.
 
-## Query a SQL resource
+## The resource contract
 
-**A SQL resource is a second binding of the resource contract.**
-`openSqlResource` from `@ambionframework/workspace/sql` opens one SQLite
-database through `node:sqlite`. The database is a file of its own. It shares
-no connection and no transaction with the journal. The `sql` tool above
-is a different database, inside the workspace filesystem.
-
-```ts
-import { openSqlResource } from '@ambionframework/workspace/sql';
-
-const lab = openSqlResource({
-  name: 'lab',
-  location: './lab.db',
-  schema: 'CREATE TABLE IF NOT EXISTS runs (id INTEGER PRIMARY KEY, label TEXT, agent TEXT)',
-  writable: ['runs'],
-});
-const agent = defineAgent({ ..., bundles: [lab.tools()] });
-```
-
-**`query` reads and never writes.** It runs one statement on a read-only
-handle, and it sets `query_only` before each run. An INSERT, an UPDATE, or a
-statement that changes the schema fails. The preview shows 50 rows unless the
-caller sets `maxRows`.
-
-**`record` is the only write.** It inserts one row into a table that the host
-lists in `writable`. It refuses any other table and any unknown column. When
-the table has the columns `agent`, `room`, `activation`, `exchange_owner`,
-`exchange_from`, or `at`, `record` fills them from the tool context. A caller
-cannot set these columns.
-
-**The resource does not deduplicate.** A retried activation that calls `record`
-again inserts again. Give the table a UNIQUE constraint when a row must appear
-once. The `schema` runs at every open, so write it to run again.
-
-## Use a resource without the room runtime
-
-`@ambionframework/workspace/resource` is the neutral resource contract. It
-exports `openResource` and the types `ResourceBackend`, `ResourceEnv`,
-`WorkspaceAgent`, and `WorkspaceResource`. This entry loads no Ambion runtime
-and no model library.
-
-```ts
-import { openResource, type ResourceBackend } from '@ambionframework/workspace/resource';
-
-interface NoteEnv {
-  readonly notes: string[];
-  cleanup(): Promise<void>;
-}
-
-const backend: ResourceBackend<NoteEnv> = {
-  connect: async () => ({ notes: [], cleanup: async () => {} }),
-  destroy: async () => {},
-};
-
-const resource = openResource({ name: 'team-notes', backend });
-await resource.use({ name: 'surveyor', identity: 'Quantity surveyor.' }, (env) => {
-  env.notes.push('Checked the plan.');
-});
-await resource.dispose();
-```
-
-`WorkspaceResource<Env>` exposes `name`, `use`, `dispose`, and `destroy`.
-`ResourceBackend<Env>` needs `connect` and `destroy`; `dispose` is optional.
-`ResourceEnv` is the smallest environment: one `cleanup()` method with no
-argument. The owner calls it after every operation. A binding picks its own
-`Env` that extends `ResourceEnv`.
+The contract lives in [Resources](resources.md).
 
 The memory and directory backends are the Pi binding. They export from the
 root entry, with `WorkspaceEnv`, the Pi `ExecutionEnv` that has a zero-argument
-`cleanup()`. `WorkspaceBackend` extends `ResourceBackend<WorkspaceEnv>`.
-
-The root `openWorkspace` function creates this same owner and binds the
-backend tools to its `use` method. `WorkspaceBackend` adds Pi harness tools
-and optional guidance to the resource backend contract. `Workspace` adds
-`tools()` to the resource surface. Direct operations and tool calls share
-one queue and one lifecycle. Existing root imports and tool bundles are unchanged.
+`cleanup()`. `WorkspaceBackend` extends `ResourceBackend<WorkspaceEnv>` and
+adds Pi harness tools and optional guidance. `openWorkspace` creates the
+resource owner and binds the backend tools to its `use` method. `Workspace`
+adds `tools()` to the resource surface. Direct operations and tool calls share
+one queue and one lifecycle.
 
 ## Destroy a resource
 

@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { hostingOf, reconcileRoom } from '../src/hosting.ts';
 import { createRuntime, isSpoken, readRoom, startRoom } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock } from '../src/testing.ts';
 import { andrei, assistant, messagesOf, roomName, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
 import { childStorage, memory, sqlite } from './support/storage.ts';

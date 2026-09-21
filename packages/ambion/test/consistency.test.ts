@@ -22,9 +22,9 @@ import {
 } from '../src/index.ts';
 import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
+import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
 import { liveLeases } from './support/chaos.ts';
-import { type FakeClock, fakeClock } from './support/clock.ts';
 import { type Entry, History, standing, violations } from './support/history.ts';
 import { invariants } from './support/invariants.ts';
 import {

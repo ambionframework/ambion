@@ -9,7 +9,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock } from '../src/testing.ts';
 import { assistant, crash, deferred, roomName, stateOf, waitForRoom } from './support/room.ts';
 import { byAgent, quiet, scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';

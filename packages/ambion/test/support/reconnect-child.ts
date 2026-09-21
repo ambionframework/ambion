@@ -13,7 +13,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../../src/index.ts';
-import { fakeClock } from './clock.ts';
+import { fakeClock } from '../../src/testing.ts';
 import { messagesOf } from './room.ts';
 import { quiet, scripted, speak } from './scripted.ts';
 import { nodeSql } from './storage.ts';

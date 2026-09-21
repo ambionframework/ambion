@@ -22,7 +22,7 @@ import {
 	type Visit,
 } from '../src/index.ts';
 import type { LeaseChange } from '../src/journal/events.ts';
-import { type FakeClock, fakeClock } from './support/clock.ts';
+import { type FakeClock, fakeClock } from '../src/testing.ts';
 import {
 	assistant,
 	assistantEnded,
