@@ -205,7 +205,9 @@ pnpm test:live
 ```
 
 `AMBION_HARNESS` is `pi` (the default) or `claude`. It selects the executor of
-the live seats, and the workflow runs the tier once for each value.
+the live seats. The workflow runs the tier under `pi` only. A matrix on
+`AMBION_HARNESS` that adds `claude` is pending. Run the `claude` tier by hand
+with `AMBION_HARNESS=claude pnpm test:live`.
 
 The scripted suite and live tier share invariants. The scripted tier also runs
 the failure matrix, process kill, random walk, consistency history, and split
