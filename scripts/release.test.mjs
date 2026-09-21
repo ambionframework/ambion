@@ -357,6 +357,11 @@ describe('release.mjs against a fake registry', () => {
 		for (const call of steps) {
 			assert.equal(call.options.env.NODE_AUTH_TOKEN, undefined);
 			assert.ok(call.options.env.NPM_CONFIG_USERCONFIG);
+			// npm refuses one file as both the user config and the global config.
+			assert.notEqual(
+				call.options.env.NPM_CONFIG_USERCONFIG,
+				call.options.env.NPM_CONFIG_GLOBALCONFIG,
+			);
 			assert.ok(!call.options.cwd.startsWith(ROOT));
 		}
 		assert.ok(steps[0].args.includes(`--package=@ambionframework/cli@${VERSION}`));

@@ -161,13 +161,15 @@ function cleanEnvironment(base, home, registry) {
 	const kept = Object.entries(base).filter(
 		([key]) => !/^(npm_config_|NPM_CONFIG_|NODE_AUTH_TOKEN|NPM_TOKEN|GITHUB_TOKEN)/.test(key),
 	);
-	const empty = join(home, 'empty-npmrc');
+	// npm refuses one file as both the user and the global config.
+	const userConfig = join(home, 'empty-user-npmrc');
+	const globalConfig = join(home, 'empty-global-npmrc');
 	return {
 		...Object.fromEntries(kept),
 		HOME: home,
 		XDG_CONFIG_HOME: join(home, '.config'),
-		NPM_CONFIG_USERCONFIG: empty,
-		NPM_CONFIG_GLOBALCONFIG: empty,
+		NPM_CONFIG_USERCONFIG: userConfig,
+		NPM_CONFIG_GLOBALCONFIG: globalConfig,
 		NPM_CONFIG_REGISTRY: registry,
 	};
 }
@@ -196,7 +198,8 @@ export async function verify(ctx, options = {}) {
 	}
 	const home = await mkdtemp(join(tmpdir(), 'ambion-verify-'));
 	try {
-		await writeFile(join(home, 'empty-npmrc'), '');
+		await writeFile(join(home, 'empty-user-npmrc'), '');
+		await writeFile(join(home, 'empty-global-npmrc'), '');
 		const env = cleanEnvironment(ctx.env, home, ctx.registry);
 		const consumer = join(home, 'consumer');
 		const resource = join(home, 'resource');
