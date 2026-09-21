@@ -21,7 +21,7 @@ or later and ESM. Supply agent definitions, provider credentials, and domain
 tools. Keep the process alive while agents work. The default in-memory
 journals lose their contents when their storage instance is lost.
 
-The [small room](../README.md#a-small-room) uses this model.
+The [three-harness team](../README.md#a-team-on-three-harnesses) uses this model.
 Pi remains the supported model loop; its integration supplies provider access.
 
 ## Persistent Node
