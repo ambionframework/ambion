@@ -6,5 +6,5 @@ import { configDefaults, defineConfig } from 'vitest/config';
  * through its built entries, so `pnpm build` runs first.
  */
 export default defineConfig({
-	test: { exclude: [...configDefaults.exclude], testTimeout: 20_000 },
+	test: { exclude: [...configDefaults.exclude], testTimeout: 40_000 },
 });

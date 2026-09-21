@@ -61,6 +61,13 @@ export interface CodexHarnessOptions {
 }
 
 /**
+ * How long a case waits, in milliseconds. Each turn starts two Node
+ * processes, and a CI runner took over 5 seconds for one case of two
+ * turns. The suite default of 5_000 is too short for that.
+ */
+export const CODEX_PATIENCE = 20_000;
+
+/**
  * The harness that runs the executor suite on the Codex executor. It
  * declares usage and permanent failure, because Codex reports its tokens
  * and names a refusal. It declares no steer, because Codex takes no message
@@ -75,6 +82,7 @@ export function codexExecutorHarness(options: CodexHarnessOptions): ExecutorHarn
 				codexPath: options.executable,
 				env: { ...process.env, ...options.env, AMBION_FAKE: JSON.stringify(scenarioOf(plan)) },
 			}),
+		patience: CODEX_PATIENCE,
 		can: { steer: false, usage: true, permanentFailure: true },
 	};
 }
