@@ -35,7 +35,7 @@ export const answersLastQuestion =
 	(context, name) => {
 		const text = contextText(context);
 		const asked = new RegExp(
-			`^\\[(?:${people.join('|')})(?: → ([a-z0-9-]+))?\\] (.+?)(?: {2}\\(.*\\))?$`,
+			`^(?:\\[new\\] )?\\[(?:${people.join('|')})(?: → ([a-z0-9-]+))?\\] (.+?)(?: {2}\\(.*\\))?$`,
 			'gm',
 		);
 		const last = [...text.matchAll(asked)].at(-1);
@@ -57,7 +57,7 @@ export const answersLastQuestion =
 export function unanswered(context: Context, name: string, people: string[]): string[] {
 	const text = contextText(context);
 	const asked = new RegExp(
-		`^\\[(?:${people.join('|')})(?: → ([a-z0-9-]+))?\\] (.+?)(?: {2}\\(.*\\))?$`,
+		`^(?:\\[new\\] )?\\[(?:${people.join('|')})(?: → ([a-z0-9-]+))?\\] (.+?)(?: {2}\\(.*\\))?$`,
 		'gm',
 	);
 	const open = [...text.matchAll(asked)]
