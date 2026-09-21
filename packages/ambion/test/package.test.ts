@@ -94,7 +94,11 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 });
 
 it('exports exactly the conformance suite and its in-process executor', () => {
-	expect(Object.keys(conformance).sort()).toEqual(['speakOnce', 'transportConformance']);
+	expect(Object.keys(conformance).sort()).toEqual([
+		'executorConformance',
+		'speakOnce',
+		'transportConformance',
+	]);
 });
 
 it('names the ports, the reads, and the visit by their final names', () => {
