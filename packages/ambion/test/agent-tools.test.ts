@@ -1,6 +1,7 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { defineAgent, defineHuman, defineTool, pi, type ToolBundle } from '../src/index.ts';
+import { pi } from '../../pi/src/index.ts';
+import { defineAgent, defineHuman, defineTool, type ToolBundle } from '../src/index.ts';
 import { refusal } from './support/errors.ts';
 
 const tool = (name: string) =>

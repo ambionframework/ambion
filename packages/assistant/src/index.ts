@@ -1,4 +1,5 @@
-import { type AgentDefinition, defineAgent, type PiOptions, pi } from '@ambionframework/ambion';
+import { type AgentDefinition, defineAgent } from '@ambionframework/ambion';
+import { type PiOptions, pi } from '@ambionframework/pi';
 
 /** Options for the reusable room assistant definition. */
 export interface DefineAssistantOptions extends Pick<PiOptions, 'model' | 'tools' | 'bundles'> {

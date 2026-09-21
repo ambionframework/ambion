@@ -6,12 +6,11 @@ import {
 	defineAgent,
 	defineTool,
 	isSpoken,
-	type PiOptions,
-	pi,
 	type Room,
 	startRoom,
 	type ToolContext,
 } from '@ambionframework/ambion';
+import { type PiOptions, pi, piExecution } from '@ambionframework/pi';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import type { Context } from '@earendil-works/pi-ai';
@@ -94,7 +93,7 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 	const session = await startRoom({
 		name: name('workspace'),
 		agents,
-		stream: scripted(byAgent(seats)),
+		execution: piExecution({ stream: scripted(byAgent(seats)) }),
 	});
 	const visit = await enter(session);
 	const exchange = await visit.send({ text: 'go' });

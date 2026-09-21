@@ -2,10 +2,10 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	pi,
 	type Room,
 	startRoom,
 } from '@ambionframework/ambion';
+import { pi, piExecution } from '@ambionframework/pi';
 import {
 	type Context,
 	createAssistantMessageEventStream,
@@ -38,44 +38,46 @@ async function requestAfterSteer(): Promise<{ system: string; steered: string }>
 		return snapshot?.messages.some((m) => m.kind === 'said' && m.from === 'inventory') ?? false;
 	};
 	const runtime = createRuntime({
-		stream: (model, context) => {
-			const out = createAssistantMessageEventStream();
-			const closing = context.tools?.length === 1;
-			const tail = context.messages.at(-1);
-			const steered = tail?.role === 'user' && lastText(context).startsWith('[');
-			let message = fauxAssistantMessage('', { stopReason: 'stop' });
-			let hold = false;
-			if (model.id.endsWith('inventory')) {
-				if (!specialistAnswered)
+		execution: piExecution({
+			stream: (model, context) => {
+				const out = createAssistantMessageEventStream();
+				const closing = context.tools?.length === 1;
+				const tail = context.messages.at(-1);
+				const steered = tail?.role === 'user' && lastText(context).startsWith('[');
+				let message = fauxAssistantMessage('', { stopReason: 'stop' });
+				let hold = false;
+				if (model.id.endsWith('inventory')) {
+					if (!specialistAnswered)
+						message = fauxAssistantMessage(
+							[fauxToolCall('say', { to: 'assistant', text: 'There are 8 units in stock.' })],
+							{ stopReason: 'toolUse' },
+						);
+					specialistAnswered = true;
+				} else if (closing) {
+					message = fauxAssistantMessage([fauxToolCall('say', { text: '8 units.' })], {
+						stopReason: 'toolUse',
+					});
+				} else if (steered) {
+					captured = { system: context.systemPrompt ?? '', steered: lastText(context) };
+				} else if (tail?.role === 'toolResult') {
+					hold = true;
+				} else {
 					message = fauxAssistantMessage(
-						[fauxToolCall('say', { to: 'assistant', text: 'There are 8 units in stock.' })],
+						[fauxToolCall('say', { to: 'inventory', text: 'Check the stock of SKU A.' })],
 						{ stopReason: 'toolUse' },
 					);
-				specialistAnswered = true;
-			} else if (closing) {
-				message = fauxAssistantMessage([fauxToolCall('say', { text: '8 units.' })], {
-					stopReason: 'toolUse',
-				});
-			} else if (steered) {
-				captured = { system: context.systemPrompt ?? '', steered: lastText(context) };
-			} else if (tail?.role === 'toolResult') {
-				hold = true;
-			} else {
-				message = fauxAssistantMessage(
-					[fauxToolCall('say', { to: 'inventory', text: 'Check the stock of SKU A.' })],
-					{ stopReason: 'toolUse' },
-				);
-			}
-			void (async () => {
-				out.push({ type: 'start', partial: message });
-				if (hold) {
-					for (let wait = 0; wait < 200 && !(await specialistSpoke()); wait += 1) await sleep(10);
-					await sleep(50);
 				}
-				out.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
-			})();
-			return out;
-		},
+				void (async () => {
+					out.push({ type: 'start', partial: message });
+					if (hold) {
+						for (let wait = 0; wait < 200 && !(await specialistSpoke()); wait += 1) await sleep(10);
+						await sleep(50);
+					}
+					out.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
+				})();
+				return out;
+			},
+		}),
 	});
 	room = await startRoom({
 		name: 'steer-marker',

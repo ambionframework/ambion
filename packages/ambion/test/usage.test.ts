@@ -3,8 +3,9 @@
  * event, and the closed exchange. A resumed room folds the same total.
  */
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import type { RoomNotification, Usage } from '../src/index.ts';
-import { createRuntime, defineAgent, pi, readExchange, startRoom } from '../src/index.ts';
+import { createRuntime, defineAgent, readExchange, startRoom } from '../src/index.ts';
 import { andrei, collect, roomName, storedOf, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
@@ -52,7 +53,7 @@ describe.each(storages)('usage on $name storage', (storage) => {
 				name,
 				agents: [product],
 				runtime,
-				stream: scripted(() => ({ ...quiet('done'), usage: spent })),
+				execution: piExecution({ stream: scripted(() => ({ ...quiet('done'), usage: spent })) }),
 			});
 			const events = collect(room);
 			const visit = await room.visit(andrei);

@@ -37,8 +37,8 @@ model guidance. `model` names a Pi provider model. `tools` and `bundles`
 supply the agent's domain tools. `activationTokenLimit` bounds the record one
 activation reads, and `estimateTokens` counts tokens against it. Without a
 limit, an activation reads the whole record the room serves. See
-`limits.context.messages` under History and limits. The seat runs
-`estimateTokens`, so it never crosses the wire. `trace` sets what the trace
+`limits.context.messages` in [History and limits](room.md#history-and-limits).
+The seat runs `estimateTokens`, so it never crosses the wire. `trace` sets what the trace
 keeps of the agent's work; see [Steps and the trace](#steps-and-the-trace).
 
 `summary` is an optional name from `agents`. It assigns closing work to that
@@ -115,14 +115,19 @@ the closed set in `errors.ts`; its message is for a person.
 This section moves to `executors.md` in phase 7 step 4. That page does not
 exist yet.
 
-**The host configures execution before starting the room.** A connector captures
-the model call, model resolver, transcript storage, clock, and call retry policy.
-The room supplies the captured agent definition and receives an execution port.
-It does not construct a model runner or choose execution services.
+**The host configures execution before starting the room.** An `Execution`
+is a value that an executor package builds, such as `piExecution()` from
+`@ambionframework/pi`. The runtime gives it the clock, the storage, the call
+retry policy, and the transport. It returns a connector. The room supplies
+the captured agent definition and receives an execution port. It does not
+construct a model runner or choose execution services.
 
-`startRoom` and `resumeRoom` supply this composition by default. Their `stream`
-override applies to one room run. Other rooms retain their own definitions and
-model calls, including when they use the same agent names.
+`createRuntime` takes an `execution` for every room of the runtime. `startRoom`
+and `resumeRoom` take an `execution` for one room run. Other rooms retain
+their own definitions and model calls, including when they use the same agent
+names. A room with no `execution` still runs its people and its record. Each
+seat that the room wakes fails at once with a `no_execution` error, and the
+failure is permanent.
 
 **A transport receives room calls and executor dependencies separately.**
 `Transport.connect(room, context)` receives a plain `RoomProtocol` facade with
@@ -138,10 +143,17 @@ execution dependencies where the agent runs. Only protocol data crosses RPC.
 queue, and the record window. It knows no model and no provider. For each
 activation it opens one `ExecutorSession` from `AgentExecutionContext.executor` and
 passes the windowed record to it. A session renders a prompt, runs its own
-model loop for one pass, and reports where it left off. Pi is the only
-executor Ambion ships today: `createPiExecutor` builds it from the model
-call, the model resolver, and transcript storage that `createExecutionServices`
-supplies. Both are available from `/hosting` for remote hosts.
+model loop for one pass, and reports where it left off. The first pass of an
+activation receives the whole view. Each later pass receives a `delta`: the
+fresh view and `since`, the position the session had read through.
+
+Pi is the only executor Ambion ships today. It lives in
+`@ambionframework/pi`, and the kernel imports no model library.
+`createPiExecutor` builds it from the model call, the model resolver, and the
+transcript storage that `createExecutionServices` supplies. Both are
+available from that package for remote hosts. The Pi executor builds one Pi
+`Agent` on the first pass and keeps it. A later pass prompts that agent with
+the messages that landed beyond `readThrough`.
 
 The runtime keeps lifecycle control separately. `runningRoom(runtime, name)`
 returns the same restricted room-call surface. Room decisions use the journal
@@ -155,7 +167,7 @@ their existing JSON shapes.
 Hosts use room reads and exchange handles for collaboration history.
 Executors use `ActivationView`, `CommitResult`, and `LeaseResponse`.
 `EndReason` is part of lease requests. Participant views omit `sessionId`.
-Audit consumers import `seatSessionId` from `/hosting` and supply the room
+Audit consumers import `seatSessionId` from `@ambionframework/pi` and supply the room
 and agent names.
 
 ## Steps and the trace

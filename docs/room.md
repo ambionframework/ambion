@@ -166,6 +166,21 @@ of context, and its summary stands for it when one exists. An agent with no
 limit reads the whole record. The record keeps every message for human review
 in both cases.
 
+`limits.context.messages` caps the record at the room, for every seat and
+for every executor. The room serves the newest `messages` entries of the
+record an activation may read. The floor moves past a summarised range it
+would split. The open exchange stays whole, so a cap smaller than the open
+exchange serves the exchange in full. The view holds up to `messages`
+entries plus the open exchange. The cap counts messages and does not count
+bytes. The default is unbounded. A seat with `activationTokenLimit` windows
+further, inside what the room serves.
+
+When a view holds less than the whole record, `context.omitted` counts the
+messages below the first one served. The rendered record then opens with one
+line: `── N earlier messages not shown ──`. The line shows for summarised and
+unsummarised history alike. The room does not record the cap. A room resumed
+under another cap serves a different view of the same record.
+
 Ambion does not promise bounded replay. The record window bounds model input
 and not the journal fold. Domain tools can act before a contribution commits.
 Room freshness does not make external effects transactional. Hosts own

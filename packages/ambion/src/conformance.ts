@@ -10,9 +10,13 @@
  * test framework, so it runs in Node and in workerd alike.
  */
 import type { ConformanceCase } from '@ambionframework/journal/conformance';
-import type { Executor, ExecutorActivation, ExecutorSession } from './execution/executor.ts';
+import type {
+	Executor,
+	ExecutorActivation,
+	ExecutorSession,
+	PassInput,
+} from './execution/executor.ts';
 import {
-	type ActivationView,
 	type AgentPort,
 	assertWire,
 	type CommitRequest,
@@ -67,7 +71,7 @@ export function speakOnce(): Executor {
 				get cancelled() {
 					return cancelled;
 				},
-				async pass(view: ActivationView) {
+				async pass({ view }: PassInput) {
 					const response = await activation.room.commit({
 						activation: activation.id,
 						key: `${activation.id}:say`,

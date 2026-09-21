@@ -1,9 +1,10 @@
+import { defineAgent, defineTool, startRoom } from '@ambionframework/ambion';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { expect, it, vi } from 'vitest';
-import { defineAgent, defineTool, fromPiTool, pi, startRoom } from '../src/index.ts';
-import { enter, roomName, waitForRoom } from './support/room.ts';
-import { callTool, quiet, scripted, toolResultTexts } from './support/scripted.ts';
+import { enter, roomName, waitForRoom } from '../../ambion/test/support/room.ts';
+import { callTool, quiet, scripted, toolResultTexts } from '../../ambion/test/support/scripted.ts';
+import { fromPiTool, pi, piExecution } from '../src/index.ts';
 
 const parameters = Type.Object({ count: Type.Number() });
 
@@ -99,10 +100,12 @@ it('prepares native arguments once per call and validates before execution', asy
 	const room = await startRoom({
 		name: roomName('native-adapter'),
 		agents: [worker],
-		stream: scripted((context, _agent, call) => {
-			results.splice(0, results.length, ...toolResultTexts(context));
-			if (call === 1) return callTool('count', { count: 'invalid' });
-			return call === 2 ? callTool('count', { count: '7' }) : quiet();
+		execution: piExecution({
+			stream: scripted((context, _agent, call) => {
+				results.splice(0, results.length, ...toolResultTexts(context));
+				if (call === 1) return callTool('count', { count: 'invalid' });
+				return call === 2 ? callTool('count', { count: '7' }) : quiet();
+			}),
 		}),
 	});
 	try {

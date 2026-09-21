@@ -1,15 +1,17 @@
 import {
 	type Attention,
-	type CreateRuntimeOptions,
 	createRuntime,
-	defaultRuntime,
 	defineAgent,
 	defineHuman,
 	type Message,
-	pi,
 	startRoom,
 } from '@ambionframework/ambion';
-import { hostingOf } from '@ambionframework/ambion/hosting';
+import {
+	createExecutionServices,
+	type PiExecutionOptions,
+	pi,
+	piExecution,
+} from '@ambionframework/pi';
 import {
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,
@@ -30,11 +32,11 @@ async function evaluate(options: {
 	attention?: Attention;
 	instructions?: string;
 }) {
-	const hosting = hostingOf(defaultRuntime());
-	const resolved = await hosting.model(model, 'assistant');
+	const services = createExecutionServices({ storage: createRuntime().storage });
+	const resolved = await services.model(model, 'assistant');
 	let answered = false;
-	const stream: NonNullable<CreateRuntimeOptions['stream']> = (requested, context, settings) => {
-		if (requested.id === model) return hosting.stream(resolved, context, settings);
+	const stream: NonNullable<PiExecutionOptions['stream']> = (requested, context, settings) => {
+		if (requested.id === model) return services.stream(resolved, context, settings);
 		const result = createAssistantMessageEventStream();
 		const message = answered
 			? fauxAssistantMessage('', { stopReason: 'stop' })
@@ -59,7 +61,7 @@ async function evaluate(options: {
 		assistant,
 		agents: [specialist],
 		seats: options.attention === undefined ? {} : { inventory: options.attention },
-		runtime: createRuntime({ stream }),
+		runtime: createRuntime({ execution: piExecution({ stream }) }),
 	});
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {

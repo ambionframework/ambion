@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { type RoomProtocol, runningRoom, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	exchangeUri,
-	pi,
 	type Room,
 	type Runtime,
 	readRoom,
@@ -100,9 +100,11 @@ describe('the message byte limit', () => {
 		const results: string[][] = [];
 		const runtime = createRuntime({
 			...limits,
-			stream: scripted((context) => {
-				results.push(toolResultTexts(context));
-				return toolResultTexts(context).length === 0 ? speak(long) : quiet();
+			execution: piExecution({
+				stream: scripted((context) => {
+					results.push(toolResultTexts(context));
+					return toolResultTexts(context).length === 0 ? speak(long) : quiet();
+				}),
 			}),
 		});
 		const room = await startRoom({ name: roomName('byte-say'), runtime, agents: [worker] });

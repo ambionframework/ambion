@@ -1,11 +1,11 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	defineTool,
-	pi,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
@@ -60,20 +60,26 @@ describe('room bindings', () => {
 			name: roomName('binding-one'),
 			runtime,
 			agents: [first],
-			stream: scripted((context, _agent, call) => {
-				prompts.push(context.systemPrompt ?? '');
-				return call === 1 && toolNames(context).includes('first') ? callTool('first', {}) : quiet();
+			execution: piExecution({
+				stream: scripted((context, _agent, call) => {
+					prompts.push(context.systemPrompt ?? '');
+					return call === 1 && toolNames(context).includes('first')
+						? callTool('first', {})
+						: quiet();
+				}),
 			}),
 		});
 		const two = await startRoom({
 			name: roomName('binding-two'),
 			runtime,
 			agents: [second],
-			stream: scripted((context, _agent, call) => {
-				prompts.push(context.systemPrompt ?? '');
-				return call === 1 && toolNames(context).includes('second')
-					? callTool('second', {})
-					: quiet();
+			execution: piExecution({
+				stream: scripted((context, _agent, call) => {
+					prompts.push(context.systemPrompt ?? '');
+					return call === 1 && toolNames(context).includes('second')
+						? callTool('second', {})
+						: quiet();
+				}),
 			}),
 		});
 		const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
@@ -98,7 +104,7 @@ describe('room bindings', () => {
 			name,
 			runtime: createRuntime({ storage: opened.storage }),
 			agents: [analyst],
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		await waitForRoom(first);
 		await expect(
@@ -130,7 +136,7 @@ describe('room bindings', () => {
 			agents: [original],
 			seats: {},
 			runtime: createRuntime({ storage: faulty.journals }),
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			faulty.fail(true, 'message');

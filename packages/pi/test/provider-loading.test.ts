@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 const node = process.env.AMBION_NODE ?? process.execPath;
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 const entry = pathToFileURL(`${packageRoot}/dist/index.mjs`).href;
-const hostingEntry = pathToFileURL(`${packageRoot}/dist/hosting.mjs`).href;
 const loader = fileURLToPath(new URL('./support/import-trace-loader.mjs', import.meta.url));
 
 function runFreshProcess(code: string): Promise<{ code: number | null; stderr: string }> {
@@ -33,9 +32,10 @@ function runFreshProcess(code: string): Promise<{ code: number | null; stderr: s
 }
 
 describe('provider loading', () => {
-	it('does not load the provider catalog while importing and reading the public entry', async () => {
+	it('does not load the provider catalog while importing the Pi entry and reading a room', async () => {
 		const result = await runFreshProcess(
-			`const { readRoom } = await import(${JSON.stringify(entry)});
+			`const { readRoom } = await import('@ambionframework/ambion');
+			await import(${JSON.stringify(entry)});
 			await readRoom('lazy-provider-test');`,
 		);
 		expect(result.code).toBe(0);
@@ -47,7 +47,8 @@ describe('provider loading', () => {
 			`const { createAssistantMessageEventStream, fauxAssistantMessage } = await import(
 				'@earendil-works/pi-ai'
 			);
-			const { startRoom, defineAgent, defineHuman, pi } = await import(${JSON.stringify(entry)});
+			const { startRoom, defineAgent, defineHuman } = await import('@ambionframework/ambion');
+			const { pi, piExecution } = await import(${JSON.stringify(entry)});
 			const stream = (_model, _context, options) => {
 				const stream = createAssistantMessageEventStream();
 				const message = fauxAssistantMessage('', { stopReason: 'stop' });
@@ -72,7 +73,7 @@ describe('provider loading', () => {
 				name: 'lazy-scripted-check',
 				agents: [worker, assistant],
 				summary: assistant.name,
-				stream,
+				execution: piExecution({ stream }),
 			});
 			const visit = await room.visit(defineHuman({ name: 'person', identity: 'tester' }));
 			const exchange = await visit.send({ text: 'hello' });
@@ -85,9 +86,11 @@ describe('provider loading', () => {
 
 	it('loads the catalog when the default model resolver is first used', async () => {
 		const result = await runFreshProcess(
-			`const { createRuntime } = await import(${JSON.stringify(entry)});
-			const { hostingOf } = await import(${JSON.stringify(hostingEntry)});
-			const model = await hostingOf(createRuntime()).model('anthropic/claude-sonnet-4-5', 'test');
+			`const { systemClock } = await import('@ambionframework/ambion');
+			const { memoryJournals } = await import('@ambionframework/journal');
+			const { createExecutionServices } = await import(${JSON.stringify(entry)});
+			const services = createExecutionServices({ storage: memoryJournals(), clock: systemClock() });
+			const model = await services.model('anthropic/claude-sonnet-4-5', 'test');
 			if (model.id !== 'claude-sonnet-4-5' || model.provider !== 'anthropic') {
 				throw new Error('unexpected model');
 			}`,

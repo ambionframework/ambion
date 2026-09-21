@@ -6,9 +6,10 @@
  * the message. Both reach the trace as the same block. The sink joins the
  * deltas.
  */
+
+import type { Step } from '@ambionframework/ambion';
 import type { AgentEvent } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
-import type { Step } from '../types.ts';
 
 const isAssistant = (message: { role?: unknown }): message is AssistantMessage =>
 	message.role === 'assistant';

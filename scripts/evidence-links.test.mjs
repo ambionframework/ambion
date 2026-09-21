@@ -64,3 +64,21 @@ test('prose lines the evidence move rewrote stay within 78 columns', () => {
 		}
 	}
 });
+
+test('a docs page that cites a section "under" a heading holds that heading', () => {
+	const names = readdirSync(join(root, 'docs')).filter((n) => n.endsWith('.md'));
+	for (const name of names) {
+		const raw = readFileSync(join(root, 'docs', name), 'utf8');
+		const own = anchorsOf(raw);
+		const prose = raw.replace(/\s+/g, ' ');
+		for (const [, heading] of prose.matchAll(/ under ([A-Z][a-z]+(?: and [a-z]+)?)\./g)) {
+			assert.ok(own.has(slug(heading)), `docs/${name}: "under ${heading}" matches no heading`);
+		}
+	}
+});
+
+test('room.md documents the room-level context cap', () => {
+	const text = readFileSync(join(root, 'docs/room.md'), 'utf8');
+	assert.ok(text.includes('`limits.context.messages`'));
+	assert.ok(text.includes('earlier messages not shown'));
+});

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { type AgentPort, hostingOf, inProcessTransport, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	pi,
 	type Room,
 	type RoomNotification,
 	resumeRoom,
@@ -116,7 +116,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			agents: [agent],
 			seats: { [agent.name]: 'broadcast' },
 			runtime: firstRuntime,
-			stream: stream,
+			execution: piExecution({ stream: stream }),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -136,7 +136,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			resumed = await resumeRoom(name, {
 				agents: [agent],
 				runtime: throwingRuntime,
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			const reentered = await resumed.visit(person);
 			const confirmed = observed(reentered.send({ text: 'second', key: 'submission-second' }));
@@ -154,7 +154,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			resumed = await resumeRoom(name, {
 				agents: [agent],
 				runtime: healthyRuntime,
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			const retryVisit = await resumed.visit(person);
 			const retry = await retryVisit.send({ text: 'second', key: 'submission-second' });
@@ -222,10 +222,12 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			agents: [agent],
 			seats: { [agent.name]: 'broadcast' },
 			runtime: firstRuntime,
-			stream: scripted(async () => {
-				started.resolve();
-				await held.promise;
-				return quiet();
+			execution: piExecution({
+				stream: scripted(async () => {
+					started.resolve();
+					await held.promise;
+					return quiet();
+				}),
 			}),
 		});
 		let resumed: Room | undefined;
@@ -247,7 +249,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			resumed = await resumeRoom(name, {
 				agents: [agent],
 				runtime: failingRuntime,
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			expect(runningLeases(resumed)).toBeGreaterThan(0);
 			const resumedVisit = await resumed.visit(person);
@@ -287,7 +289,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			recovered = await resumeRoom(name, {
 				agents: [agent],
 				runtime: healthyRuntime,
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			expect(
 				(await messagesOf(recovered)).filter(
@@ -430,7 +432,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			agents: [agent],
 			seats: { [agent.name]: 'broadcast' },
 			runtime: firstRuntime,
-			stream: stream,
+			execution: piExecution({ stream: stream }),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -449,7 +451,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			resumed = await resumeRoom(name, {
 				agents: [agent],
 				runtime: failingRuntime,
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 
 			const stopped = observed(resumed.stop());

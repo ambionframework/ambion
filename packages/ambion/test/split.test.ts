@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { JournalEntry } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/host/runtime.ts';
 import { inProcessTransport } from '../src/hosting.ts';
 import { createRuntime, type Room, resumeRoom, startRoom } from '../src/index.ts';
@@ -92,7 +93,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			stream: scripted(script),
+			execution: piExecution({ stream: scripted(script) }),
 		});
 		const events = collect(room);
 		const hers = await room.visit(priya);
@@ -109,7 +110,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 		const taken = await resumeRoom(name, {
 			runtime: second,
 			agents,
-			stream: scripted(script),
+			execution: piExecution({ stream: scripted(script) }),
 		});
 		const his = await taken.visit(sam);
 		await history.run('sam', 'deliver', 'q3', () => his.send({ text: 'Third?', key: 'q3' }));
@@ -218,7 +219,11 @@ describe('a split: two live hosts over one SQLite database', () => {
 			const journals = childJournals('sqlite', dir);
 			const clock = fakeClock(Date.now());
 			const runtime = createRuntime({ storage: childStorage('sqlite', dir), clock, ...TIMING });
-			const session = await resumeRoom(name, { runtime, agents, stream: scripted(script) });
+			const session = await resumeRoom(name, {
+				runtime,
+				agents,
+				execution: piExecution({ stream: scripted(script) }),
+			});
 			await quietNow(session, clock);
 			const [, second] = questions;
 			if (second === undefined) throw new Error('cast');

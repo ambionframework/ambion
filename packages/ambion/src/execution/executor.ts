@@ -4,7 +4,7 @@
  * The driver owns the lease, its renewal, the cut, the wake queue, and the
  * decision to run another pass. An executor owns one pass over the record
  * it is handed: it renders a prompt, runs its model loop once, and reports
- * where it left off. Pi is the only executor today; a session's `steer` is
+ * where it left off. A session's `steer` is
  * optional because a later executor family may only take context between
  * passes, never during one.
  */
@@ -21,6 +21,18 @@ export interface ExecutorActivation {
 	/** Where the executor records the steps it owns. The driver owns the sink and closes it. */
 	readonly trace: TraceSink;
 }
+
+/**
+ * What the driver hands one pass. The first pass of an activation gets the
+ * `view`: the record it reads whole. Every later pass gets a `delta`: the
+ * record as it stands now, and `since`, the position the session had read
+ * through before the driver asked again. A session that keeps its model
+ * loop across passes prompts with what came after `since`; a session that
+ * does not reads the view whole.
+ */
+export type PassInput =
+	| { readonly kind: 'view'; readonly view: ActivationView }
+	| { readonly kind: 'delta'; readonly since: Seq; readonly view: ActivationView };
 
 /** What one pass reports back to the driver. */
 export interface PassResult {
@@ -47,7 +59,7 @@ export interface ExecutorSession {
 	 * never earns another round trip, whatever `shouldRefresh` would say.
 	 */
 	readonly cancelled: boolean;
-	pass(view: ActivationView): Promise<PassResult>;
+	pass(input: PassInput): Promise<PassResult>;
 	/**
 	 * Steer context into a live pass. Absent when the executor family cannot
 	 * steer mid-run; a dropped steer is not lost, because the record already

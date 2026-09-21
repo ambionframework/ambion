@@ -47,6 +47,7 @@ async function packFixture(destination) {
 		'journal',
 		'pi-journal',
 		'ambion',
+		'pi',
 		'assistant',
 		'workspace',
 		'cloudflare',
@@ -337,6 +338,7 @@ async function installCreatedProject(destination, target, generated, generatedPa
 			'@ambionframework/cloudflare',
 			'@ambionframework/cli',
 			'@ambionframework/journal',
+			'@ambionframework/pi',
 			'@ambionframework/pi-journal',
 		].map((name) => {
 			const filename = archives[name];

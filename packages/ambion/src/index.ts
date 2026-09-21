@@ -6,16 +6,11 @@
  * needed to resume a room; executable definitions are supplied for each run.
  */
 
-export type {
-	DefineAgentOptions,
-	DefineHumanOptions,
-	DefineToolOptions,
-	PiOptions,
-} from './define.ts';
-export { defineAgent, defineHuman, defineTool, fromPiTool, pi } from './define.ts';
+export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
+export { defineAgent, defineHuman, defineTool } from './define.ts';
 export type { AmbionErrorCode } from './errors.ts';
 export { AmbionError } from './errors.ts';
-export type { CreateRuntimeOptions, Runtime } from './host/runtime.ts';
+export type { CreateRuntimeOptions, Execution, Runtime } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, systemClock } from './host/runtime.ts';
 export type { RoomUri } from './refs.ts';
 export { exchangeUri, parseRoomUri, roomUri } from './refs.ts';
@@ -44,9 +39,7 @@ export type {
 	HumanDefinition,
 	HumanParticipantInfo,
 	Message,
-	ModelResolver,
 	ParticipantInfo,
-	PiExecutor,
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,
@@ -61,6 +54,9 @@ export type {
 	SummaryOutcome,
 	ToolBundle,
 	ToolContext,
+	ToolExecutionMode,
+	ToolResult,
+	ToolUpdate,
 	TracePolicy,
 	TraceStep,
 	Usage,

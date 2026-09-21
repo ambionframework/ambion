@@ -1,7 +1,7 @@
 import { access, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { CreateRuntimeOptions } from '@ambionframework/ambion';
+import type { PiExecutionOptions } from '@ambionframework/pi';
 import { type Person, people } from './definitions.ts';
 import { type FileContent, type FileEntry, listFiles, readFile } from './files.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
@@ -47,7 +47,7 @@ export interface OpenOptions {
 	/** Where the journals and the workspace live. A directory with no journals starts fresh. */
 	directory: string;
 	/** A model stream, for tests. The default calls the configured provider. */
-	stream?: CreateRuntimeOptions['stream'];
+	stream?: PiExecutionOptions['stream'];
 }
 
 type Rooms = Awaited<ReturnType<typeof openRooms>>;

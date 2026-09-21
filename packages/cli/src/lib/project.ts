@@ -58,6 +58,7 @@ async function rewritePackage(target: string, name: string, version: string): Pr
 		for (const dependency of [
 			'@ambionframework/ambion',
 			'@ambionframework/cloudflare',
+			'@ambionframework/pi',
 			'@ambionframework/cli',
 		]) {
 			if (Object.hasOwn(dependencies, dependency)) {

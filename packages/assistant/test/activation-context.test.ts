@@ -1,4 +1,5 @@
-import { createRuntime, defineAgent, defineHuman, pi, startRoom } from '@ambionframework/ambion';
+import { createRuntime, defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
+import { pi, piExecution } from '@ambionframework/pi';
 import {
 	type Context,
 	createAssistantMessageEventStream,
@@ -43,33 +44,35 @@ async function captureActivations(attention: 'reserve' | 'named'): Promise<Captu
 		['writer:1', answer()],
 	]);
 	const runtime = createRuntime({
-		stream: (model, context: Context) => {
-			const agent = model.id.endsWith('writer') ? 'writer' : 'assistant';
-			const tools = context.tools?.map((tool) => tool.name) ?? [];
-			const closing = tools.length === 1 && tools[0] === 'say';
-			captures.push({
-				agent,
-				phase,
-				closing,
-				tools,
-				system: context.systemPrompt ?? '',
-				input: JSON.stringify(context.messages),
-			});
-			const key = `${agent}:${phase}`;
-			const call = closing
-				? fauxToolCall('say', { text: 'R-19: draft supplied; no files edited.' })
-				: planned.get(key);
-			planned.delete(key);
-			const message = call
-				? fauxAssistantMessage([call], { stopReason: 'toolUse' })
-				: fauxAssistantMessage('', { stopReason: 'stop' });
-			const stream = createAssistantMessageEventStream();
-			queueMicrotask(() => {
-				stream.push({ type: 'start', partial: message });
-				stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
-			});
-			return stream;
-		},
+		execution: piExecution({
+			stream: (model, context: Context) => {
+				const agent = model.id.endsWith('writer') ? 'writer' : 'assistant';
+				const tools = context.tools?.map((tool) => tool.name) ?? [];
+				const closing = tools.length === 1 && tools[0] === 'say';
+				captures.push({
+					agent,
+					phase,
+					closing,
+					tools,
+					system: context.systemPrompt ?? '',
+					input: JSON.stringify(context.messages),
+				});
+				const key = `${agent}:${phase}`;
+				const call = closing
+					? fauxToolCall('say', { text: 'R-19: draft supplied; no files edited.' })
+					: planned.get(key);
+				planned.delete(key);
+				const message = call
+					? fauxAssistantMessage([call], { stopReason: 'toolUse' })
+					: fauxAssistantMessage('', { stopReason: 'stop' });
+				const stream = createAssistantMessageEventStream();
+				queueMicrotask(() => {
+					stream.push({ type: 'start', partial: message });
+					stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
+				});
+				return stream;
+			},
+		}),
 	});
 	const room = await startRoom({
 		name: `prompt-review-${attention}`,

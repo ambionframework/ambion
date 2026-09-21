@@ -1,6 +1,7 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
-import { createRuntime, defineAgent, pi, type Room, resumeRoom, startRoom } from '../src/index.ts';
+import { pi, piExecution } from '../../pi/src/index.ts';
+import { createRuntime, defineAgent, type Room, resumeRoom, startRoom } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
 import {
 	andrei,
@@ -57,9 +58,11 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 				name: roomName('audit-outcome'),
 				agents: [product],
 				runtime: runtime(),
-				stream: scripted(() => {
-					calls += 1;
-					return outcome === 'spoken' && calls === 1 ? speak('Accepted answer.') : quiet();
+				execution: piExecution({
+					stream: scripted(() => {
+						calls += 1;
+						return outcome === 'spoken' && calls === 1 ? speak('Accepted answer.') : quiet();
+					}),
 				}),
 			});
 			const events = collect(room);
@@ -83,9 +86,11 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 				resumed = await resumeRoom(room.name, {
 					runtime: runtime(),
 					agents: [product],
-					stream: scripted(() => {
-						calls += 1;
-						return quiet();
+					execution: piExecution({
+						stream: scripted(() => {
+							calls += 1;
+							return quiet();
+						}),
 					}),
 				});
 				await waitForRoom(resumed, 'quiet', 2_000);
@@ -109,17 +114,19 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 			summary: assistant.name,
 			seats: { [product.name]: 'broadcast', [assistant.name]: 'none' },
 			runtime: createRuntime({ clock, storage: auditOutage(opened.storage) }),
-			stream: scripted(
-				byAgent({
-					product: says(['First fact.', 'Second fact.']),
-					assistant: () => {
-						summaryCalls += 1;
-						return outcome === 'published' && summaryCalls === 1
-							? summarise('Consolidated answer.')
-							: quiet();
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						product: says(['First fact.', 'Second fact.']),
+						assistant: () => {
+							summaryCalls += 1;
+							return outcome === 'published' && summaryCalls === 1
+								? summarise('Consolidated answer.')
+								: quiet();
+						},
+					}),
+				),
+			}),
 		});
 		const events = collect(room);
 		try {
@@ -156,9 +163,11 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 					await releaseAudit.promise;
 				}),
 			}),
-			stream: scripted((context) => {
-				contexts.push(contextText(context));
-				return quiet();
+			execution: piExecution({
+				stream: scripted((context) => {
+					contexts.push(contextText(context));
+					return quiet();
+				}),
 			}),
 		});
 		const events = collect(room);
@@ -198,10 +207,12 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 				storage: auditOutage(opened.storage),
 				limits: { activation: { attempts: 2, backoff: () => 100 } },
 			}),
-			stream: scripted(() => {
-				calls += 1;
-				if (calls === 1) throw new Error('Provider unavailable.');
-				return calls === 2 ? speak('Recovered answer.') : quiet();
+			execution: piExecution({
+				stream: scripted(() => {
+					calls += 1;
+					if (calls === 1) throw new Error('Provider unavailable.');
+					return calls === 2 ? speak('Recovered answer.') : quiet();
+				}),
 			}),
 		});
 		const events = collect(room);

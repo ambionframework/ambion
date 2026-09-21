@@ -6,8 +6,9 @@
  * follows it.
  */
 import { afterAll, describe, expect, it, vi } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { inProcessTransport, runningRoom } from '../src/hosting.ts';
-import { createRuntime, defineAgent, defineHuman, pi, startRoom } from '../src/index.ts';
+import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import { foldRoom } from '../src/room/fold.ts';
@@ -362,7 +363,7 @@ describe('the room runs the verified rules', () => {
 			storage: opened.storage,
 			clock: fakeClock(),
 			transport: inProcessTransport(),
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		const room = await startRoom({
 			name: roomName('binding-close'),
@@ -374,7 +375,7 @@ describe('the room runs the verified rules', () => {
 					executor: pi({ instructions: 'Answer.', model: 'scripted/product' }),
 				}),
 			],
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Person.' }));

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pi } from '../../pi/src/index.ts';
 import type {
 	AgentExecutionContext,
 	CommitRequest,
@@ -12,7 +13,6 @@ import {
 	defineAgent,
 	isSpoken,
 	type Message,
-	pi,
 	type RoomNotification,
 	readRoom,
 	startRoom,

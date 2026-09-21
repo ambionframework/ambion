@@ -1,8 +1,9 @@
+import { piSessions } from '@ambionframework/pi-journal';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it } from 'vitest';
+import { pi, piExecution, seatSessionId } from '../../pi/src/index.ts';
 import { renderRecord } from '../src/execution/render.ts';
-import { hostingOf, seatSessionId } from '../src/hosting.ts';
 import type { AgentDefinition } from '../src/index.ts';
 import {
 	createRuntime,
@@ -11,7 +12,6 @@ import {
 	defineTool,
 	isSpoken,
 	type Message,
-	pi,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -131,7 +131,7 @@ async function open(options: {
 			[(options.assistant ?? assistant).name]:
 				options.seats?.[(options.assistant ?? assistant).name] ?? 'none',
 		},
-		stream: scripted(options.script),
+		execution: piExecution({ stream: scripted(options.script) }),
 		runtime: options.runtime ?? runtime,
 	});
 	started.push(session);
@@ -659,7 +659,7 @@ describe('closing summaries', () => {
 		const seatSession = (await participantsOf(session)).find((value) => value.name === 'assistant');
 		if (seatSession?.kind !== 'agent') throw new Error('The assistant seat is absent.');
 		const entries = await (
-			await hostingOf(transcriptRuntime).transcripts.open(
+			await piSessions(transcriptRuntime.storage).open(
 				seatSessionId(session.name, seatSession.name),
 			)
 		).findEntries();
@@ -1164,7 +1164,9 @@ describe('a room without a summary writer', () => {
 			name: roomName(),
 			agents: [product],
 			runtime,
-			stream: scripted(byAgent({ product: insists('Thursday is out.') })),
+			execution: piExecution({
+				stream: scripted(byAgent({ product: insists('Thursday is out.') })),
+			}),
 		});
 		const events = collect(session);
 
