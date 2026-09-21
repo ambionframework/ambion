@@ -94,3 +94,48 @@ export async function seedWorkspace(path: string): Promise<void> {
 		await writeIfAbsent(target, content);
 	}
 }
+
+/**
+ * The lab records: projects, test plans, runs, and results. Every table that
+ * agents write has the provenance columns, and the resource fills them. The
+ * UNIQUE constraint on a run makes a retried activation fail instead of
+ * recording the run twice.
+ */
+export const labSchema = `
+CREATE TABLE IF NOT EXISTS projects (
+	name TEXT PRIMARY KEY,
+	goal TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS test_plans (
+	id INTEGER PRIMARY KEY,
+	project TEXT NOT NULL REFERENCES projects (name),
+	title TEXT NOT NULL,
+	steps TEXT NOT NULL,
+	agent TEXT, room TEXT, activation TEXT, exchange_owner TEXT, exchange_from TEXT, at TEXT
+);
+CREATE TABLE IF NOT EXISTS runs (
+	id INTEGER PRIMARY KEY,
+	project TEXT NOT NULL REFERENCES projects (name),
+	plan_id INTEGER REFERENCES test_plans (id),
+	label TEXT NOT NULL,
+	agent TEXT, room TEXT, activation TEXT, exchange_owner TEXT, exchange_from TEXT, at TEXT,
+	UNIQUE (activation, label)
+);
+CREATE TABLE IF NOT EXISTS results (
+	id INTEGER PRIMARY KEY,
+	run_id INTEGER NOT NULL REFERENCES runs (id),
+	metric TEXT NOT NULL,
+	value REAL NOT NULL,
+	unit TEXT NOT NULL,
+	agent TEXT, room TEXT, activation TEXT, exchange_owner TEXT, exchange_from TEXT, at TEXT
+);
+${scenarios
+	.map(
+		({ name, goal }) =>
+			`INSERT OR IGNORE INTO projects (name, goal) VALUES ('${name}', '${goal.replace(/'/g, "''")}');`,
+	)
+	.join('\n')}
+`;
+
+/** The lab tables an agent may append to. Projects stay fixed. */
+export const labWritable = ['test_plans', 'runs', 'results'] as const;
