@@ -198,6 +198,14 @@ The CLI job drives `packages/cli/bin/ambion.mjs`, verifies versions, rejects an
 unknown command, and packs all packages. This checks the artifact users will
 run, including package resolution and `files` lists.
 
+The CLI job also runs `pnpm run check:packages` after the build. The check
+reads `pnpm-lock.yaml` and every publishable manifest. It fails on more than
+one `typebox` version, a CommonJS export, a missing export or types path, a
+pack list without `dist`, the README, or the license, a pack list with
+source, test, or config files, versions out of lockstep, and a different
+`engines.node`. Each package carries a copy of the root `LICENSE`, because
+`pnpm pack` does not add the root file.
+
 The live workflow runs the same scenarios on a real provider. It runs after a
 change lands on `main`, on a weekly schedule, and by dispatch. It does not run
 on a pull request, because a real-model run costs money. It requires

@@ -99,6 +99,9 @@ jobs:
             exit 1
           fi
 
+      - name: package hygiene
+        run: pnpm run check:packages
+
       - name: packages pack cleanly
         run: |
           node scripts/version.mjs --check
