@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { hostingOf } from '../src/hosting.ts';
+import { createRuntime, startRoom } from '../src/index.ts';
 import { roomJournal } from '../src/journal/journal.ts';
 import { validateRoomBody } from '../src/journal/validate.ts';
-import { roomName } from './support/room.ts';
+import { roomName, storedOf } from './support/room.ts';
 import { memory } from './support/storage.ts';
 
 const seating = { name: 'alpha', identity: 'Researcher', attention: 'broadcast' };
@@ -164,6 +166,32 @@ describe('room journal body validation', () => {
 			expect(() => validateRoomBody('composition', body)).toThrow(
 				/unsupported room composition version.*version 2.*new journal.*externally/i,
 			);
+		}
+	});
+
+	it('reads a run entry with format 1, or with no format, and refuses another format', () => {
+		expect(validateRoomBody('run', { at, format: 1 })).toBe(true);
+		expect(validateRoomBody('run', { at })).toBe(true);
+		for (const format of [2, 0, 1.5, '1'])
+			expect(() => validateRoomBody('run', { at, format })).toThrow(
+				/unsupported journal format.*format 1|invalid room journal body/i,
+			);
+		expect(() => validateRoomBody('run', { at, format: 2 })).toThrow(
+			/unsupported journal format \(2\).*format 1/i,
+		);
+	});
+
+	it('writes format 1 on the run entry of a started room', async () => {
+		const opened = await memory.open();
+		const name = roomName('run-format');
+		const runtime = createRuntime({ storage: opened.storage });
+		const room = await startRoom({ name, runtime, agents: [], seats: {} });
+		try {
+			const stored = await storedOf(hostingOf(runtime).journals, name);
+			expect(stored.find((entry) => entry.kind === 'run')?.body).toMatchObject({ format: 1 });
+		} finally {
+			await room.stop();
+			await opened.dispose();
 		}
 	});
 

@@ -1,0 +1,123 @@
+[
+	{
+		"kind": "run",
+		"body": {
+			"at": "2026-01-01T09:00:00.000Z",
+			"format": 1
+		},
+		"seq": 1,
+		"run": "run-1"
+	},
+	{
+		"kind": "composition",
+		"body": {
+			"version": 2,
+			"agents": [
+				{
+					"name": "worker",
+					"identity": "Answers the question.",
+					"attention": "named"
+				}
+			],
+			"available": [],
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 2,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "arrived",
+			"from": "priya",
+			"subject": "priya",
+			"identity": "Project manager.",
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 3,
+		"key": "key-1",
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "said",
+			"at": "2026-01-01T09:00:00.000Z",
+			"from": "priya",
+			"to": "worker",
+			"text": "Answer me.",
+			"wakes": ["worker"]
+		},
+		"seq": 4,
+		"key": "key-2",
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:4:worker:1",
+			"phase": "running",
+			"expiresAt": 1767258060000,
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 0
+		},
+		"seq": 5,
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:4:worker:1",
+			"phase": "ended",
+			"reason": "failed",
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 4,
+			"cause": "permanent",
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			}
+		},
+		"seq": 6,
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:4:worker:2",
+			"phase": "ended",
+			"reason": "abandoned",
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 0,
+			"cause": "permanent"
+		},
+		"seq": 7,
+		"run": "run-1"
+	},
+	{
+		"kind": "close",
+		"body": {
+			"owner": "priya",
+			"from": 4,
+			"through": 4,
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 8,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "left",
+			"from": "priya",
+			"subject": "priya",
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 9,
+		"key": "key-3",
+		"run": "run-1"
+	}
+]

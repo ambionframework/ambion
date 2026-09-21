@@ -77,7 +77,7 @@ class Walk {
 	private build(): Entry {
 		this.seq += 1;
 		const r = this.random();
-		if (r < 0.04) return { kind: 'run', seq: this.seq, body: { at: this.at() } };
+		if (r < 0.04) return { kind: 'run', seq: this.seq, body: { at: this.at(), format: 1 } };
 		if (r < 0.09) return this.composition();
 		if (r < 0.19) return this.presence();
 		if (r < 0.36) return this.said();

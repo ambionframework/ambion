@@ -110,7 +110,7 @@ release story.
 **Goal:** every journal field and every read the release needs land, then
 the freeze.
 
-- [ ] **16.** `format: 1` on the run entry; golden journals per chaos scenario
+- [x] **16.** `format: 1` on the run entry; golden journals per chaos scenario
       with expected folds, replayed in CI; the compatibility promise in
       `durability.md` (D3). Needs phase 3 step 2, because the
       goldens must hold every field and every outcome.
