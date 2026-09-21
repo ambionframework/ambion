@@ -140,7 +140,7 @@ describe('executor tool authority', () => {
 		expect(
 			names(
 				toolsFor(
-					view({ kind: 'summarize', exchange: 4, person: 'priya', through: 7 }),
+					view({ kind: 'summarize', exchange: 4, person: 'priya', people: ['priya'], through: 7 }),
 					worker,
 					held,
 				),
@@ -152,7 +152,7 @@ describe('executor tool authority', () => {
 		const commits: CommitRequest[] = [];
 		const activation = activationFor('closed:4:worker:1', worker);
 		const tools = toolsFor(
-			view({ kind: 'summarize', exchange: 4, person: 'priya', through: 7 }),
+			view({ kind: 'summarize', exchange: 4, person: 'priya', people: ['priya'], through: 7 }),
 			worker,
 			binding(activation, roomThatCommits(commits)),
 		);
@@ -182,7 +182,7 @@ describe('executor tool authority', () => {
 				worker,
 			);
 			const purpose: ActivationView['spec']['purpose'] = closing
-				? { kind: 'summarize', exchange: 4, person: 'priya', through: 7 }
+				? { kind: 'summarize', exchange: 4, person: 'priya', people: ['priya'], through: 7 }
 				: { kind: 'respond', message: 4 };
 			const held = binding(activation, roomThatCommits(commits));
 			const say = toolsFor(view(purpose), worker, held)[0];

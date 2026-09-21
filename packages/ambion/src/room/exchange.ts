@@ -25,7 +25,7 @@
  * The design contract is `docs/exchange.md`.
  */
 
-import { decodeActivationId } from '../activation-id.ts';
+import { type ActivationSource, decodeActivationId } from '../activation-id.ts';
 import type { Close } from '../journal/events.ts';
 import {
 	type ActivationOutcome,
@@ -33,6 +33,7 @@ import {
 	type ClosedExchange,
 	copyMessage,
 	type ExchangeActivation,
+	type ExchangeOutcome,
 	type ExchangeRef,
 	type ExchangeView,
 	isSpoken,
@@ -47,6 +48,7 @@ import { type LeaseHold, removedAfter } from './lease.ts';
 import {
 	coversExchange,
 	type Draft,
+	exchangeOutcome,
 	lastOf,
 	openingQuestion,
 	summaryVerdict,
@@ -110,19 +112,128 @@ function draftsOf(
 		);
 }
 
-/** Build one detached closed exchange view from the recorded close. */
-function closedExchangeView(
-	close: Close,
+/** What the outcome and the recipients of a closed exchange read besides the close itself. */
+export interface OutcomeFacts {
+	/** The people of the room, by name. */
+	readonly people: ReadonlySet<string>;
+	/** The `through` of each close a cancellation wrote. */
+	readonly cancelClosed: readonly Seq[];
+}
+
+/** What one pass over the room shares among its closed exchanges. */
+interface Pass extends OutcomeFacts {
+	messages: readonly Message[];
+	summaries: readonly SummaryMessage[];
+	leases: ReadonlyMap<string, LeaseHold>;
+	/** The position of the last thing each person said. */
+	lastSaid: ReadonlyMap<string, Seq>;
+	cancelledAt: Seq | undefined;
+}
+
+/** The position of the first message at or after `seq` in an ordered record. */
+function indexAtOrAfter(messages: readonly Message[], seq: Seq): number {
+	let low = 0;
+	let high = messages.length;
+	while (low < high) {
+		const middle = (low + high) >>> 1;
+		if ((messages[middle]?.seq ?? 0) < seq) low = middle + 1;
+		else high = middle;
+	}
+	return low;
+}
+
+/** The messages of an inclusive range, from an ordered record. */
+function rangeOf(messages: readonly Message[], from: Seq, through: Seq): Message[] {
+	return messages.slice(indexAtOrAfter(messages, from), indexAtOrAfter(messages, through + 1));
+}
+
+/**
+ * The people a closing activation addresses: the owner first, then every
+ * other person who spoke in the range, in the order they first spoke.
+ */
+export function recipientsOf(
 	messages: readonly Message[],
-	leases: ReadonlyMap<string, LeaseHold>,
-	cancelledAt?: number,
-): Extract<ExchangeView, { status: 'closed' }> {
-	const usage = exchangeUsage(close.from, close.through, leases);
+	from: Seq,
+	through: Seq,
+	owner: string,
+	people: ReadonlySet<string>,
+): string[] {
+	const recipients = [owner];
+	for (const message of rangeOf(messages, from, through)) {
+		if (message.kind !== 'said' || !people.has(message.from)) continue;
+		if (!recipients.includes(message.from)) recipients.push(message.from);
+	}
+	return recipients;
+}
+
+/**
+ * The person the last spoken message of the range asks, when they have said
+ * nothing since. The owner asked the question, so a message to the owner is
+ * the answer and asks nothing.
+ */
+function awaitedPerson(
+	owner: string,
+	range: readonly Message[],
+	people: ReadonlySet<string>,
+	lastSaid: ReadonlyMap<string, Seq>,
+): string | undefined {
+	const last = range.findLast(isSpoken);
+	const person = last?.to;
+	if (last === undefined || person === undefined || person === owner) return undefined;
+	if (!people.has(person)) return undefined;
+	return (lastSaid.get(person) ?? 0) > last.seq ? undefined : person;
+}
+
+/** The outcome of one closed exchange. The rule fixes the priority; this reads the facts. */
+function exchangeOutcomeOf(
+	close: Close,
+	range: readonly Message[],
+	pass: Pass,
+	exhausted: boolean,
+): ExchangeOutcome {
+	const person = awaitedPerson(close.owner, range, pass.people, pass.lastSaid);
+	const kind = exchangeOutcome(
+		pass.cancelClosed.includes(close.through),
+		exhausted,
+		person !== undefined,
+	);
+	// The rule decides. The re-test narrows the TypeScript type only.
+	if (kind === 'awaiting' && person !== undefined) return { kind, person };
+	return { kind: kind === 'awaiting' ? 'complete' : kind };
+}
+
+/** The summaries of a closed range, one per recipient, in recipient order. */
+function summariesOf(close: Close, range: readonly Message[], pass: Pass): SummaryMessage[] {
+	const recipients = recipientsOf(range, close.from, close.through, close.owner, pass.people);
+	return recipients.flatMap((person) => {
+		const summary = pass.summaries.find((message) =>
+			coversExchange(
+				message.to,
+				message.covers.from,
+				message.covers.through,
+				person,
+				close.from,
+				close.through,
+			),
+		);
+		return summary === undefined ? [] : [copyMessage(summary)];
+	});
+}
+
+/** Build one detached closed exchange view from the recorded close. */
+function closedExchangeView(close: Close, pass: Pass): Extract<ExchangeView, { status: 'closed' }> {
+	const { usage, exhausted } = workOf(close.from, close.through, pass.leases);
+	const range = rangeOf(pass.messages, close.from, close.through);
+	const summaries = summariesOf(close, range, pass);
 	return {
-		...closedExchange(close, messages),
+		...closedExchange(close, pass.messages),
 		status: 'closed',
-		activations: activationsInRange(leases, close.from, close.through).map(exchangeActivation),
-		summary: summaryOutcome(close, messages, leases, cancelledAt),
+		activations: activationsInRange(pass.leases, close.from, close.through).map(({ lease }) =>
+			exchangeActivation(lease),
+		),
+		summary: summaryOutcome(close, pass.messages, pass.leases, pass.cancelledAt),
+		outcome: exchangeOutcomeOf(close, range, pass, exhausted),
+		...(summaries.length === 0 ? {} : { summaries }),
 		...(usage === undefined ? {} : { usage }),
 	};
 }
@@ -137,10 +248,11 @@ function activationsInRange(
 	leases: ReadonlyMap<string, LeaseHold>,
 	from: Seq,
 	through: Seq,
-): LeaseHold[] {
-	return [...leases.values()].filter((lease) => {
-		const position = decodeActivationId(lease.id)?.position;
-		return position !== undefined && position >= from && position <= through;
+): { lease: LeaseHold; source: ActivationSource }[] {
+	return [...leases.values()].flatMap((lease) => {
+		const parsed = decodeActivationId(lease.id);
+		const inRange = parsed !== undefined && parsed.position >= from && parsed.position <= through;
+		return inRange ? [{ lease, source: parsed.source }] : [];
 	});
 }
 
@@ -168,18 +280,23 @@ export function exchangeActivation(lease: LeaseHold): ExchangeActivation {
 	};
 }
 
-/** The sum of what the activations in the range spent, or nothing when none recorded usage. */
-function exchangeUsage(
+/**
+ * What the activations in the range spent, or nothing when none recorded
+ * usage, and whether the room gave up on a response activation.
+ */
+function workOf(
 	from: Seq,
 	through: Seq,
 	leases: ReadonlyMap<string, LeaseHold>,
-): Usage | undefined {
-	let total: Usage | undefined;
-	for (const { usage } of activationsInRange(leases, from, through)) {
-		if (usage === undefined) continue;
-		total = addUsage(total, usage);
+): { usage: Usage | undefined; exhausted: boolean } {
+	let usage: Usage | undefined;
+	let exhausted = false;
+	for (const { lease, source } of activationsInRange(leases, from, through)) {
+		if (lease.usage !== undefined) usage = addUsage(usage, lease.usage);
+		if (source === 'message' && lease.phase === 'ended' && lease.reason === 'abandoned')
+			exhausted = true;
 	}
-	return total;
+	return { usage, exhausted };
 }
 
 /** Select the detached closed handle shared by waits and read views. */
@@ -207,15 +324,33 @@ export function discussionMessages(
 		.map(copyMessage);
 }
 
+/** The position of the last thing each person said. */
+function lastSaidBy(messages: readonly Message[], people: ReadonlySet<string>): Map<string, Seq> {
+	const last = new Map<string, Seq>();
+	for (const message of messages) {
+		if (message.kind === 'said' && people.has(message.from)) last.set(message.from, message.seq);
+	}
+	return last;
+}
+
 /** Build detached exchange views in journal order, including the current open exchange. */
 export function exchangeViews(
 	closes: readonly Close[],
 	messages: readonly Message[],
 	open: ExchangeRef | undefined,
 	leases: ReadonlyMap<string, LeaseHold>,
-	cancelledAt?: number,
+	cancelledAt: number | undefined,
+	facts: OutcomeFacts,
 ): ExchangeView[] {
-	const closed = closes.map((close) => closedExchangeView(close, messages, leases, cancelledAt));
+	const pass: Pass = {
+		...facts,
+		messages,
+		summaries: messages.filter(isSummary),
+		leases,
+		lastSaid: lastSaidBy(messages, facts.people),
+		cancelledAt,
+	};
+	const closed = closes.map((close) => closedExchangeView(close, pass));
 	if (open === undefined) return closed;
 	const activations = [...leases.values()]
 		.filter((lease) => (decodeActivationId(lease.id)?.position ?? 0) >= open.from)

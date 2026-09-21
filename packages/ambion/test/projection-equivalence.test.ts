@@ -2,7 +2,7 @@
  * The incremental projection against the fold.
  *
  * A seeded walk writes journal entries straight at the fold layer: people
- * come and go, seats are seated and unseated, a summary lands long after its
+ * come and go, messages are directed at people, seats are seated and unseated, a summary lands long after its
  * close, a cancellation cuts running work, and new leases follow it. After
  * every entry the projection that `advance` built must equal `foldRoom` over
  * the whole history. At a random cut the walk drops the projection and
@@ -16,6 +16,7 @@ import type { Close, Composition, LeaseChange } from '../src/journal/events.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { advance, emptyProjection, projectState, replay } from '../src/room/projection.ts';
+import { readView } from '../src/room/read.ts';
 
 const SEEDS = Number(process.env.AMBION_SEEDS ?? 50);
 const STEPS = 160;
@@ -137,7 +138,14 @@ class Walk {
 	private said(): Entry {
 		const from = this.chance(0.55) ? this.pick(PEOPLE) : this.pick(SEATS);
 		const wakes = SEATS.filter(() => this.chance(0.3));
-		return this.message({ kind: 'said', from, text: 'Words.', ...(wakes.length ? { wakes } : {}) });
+		const to = this.chance(0.3) ? this.pick([...PEOPLE, ...SEATS]) : undefined;
+		return this.message({
+			kind: 'said',
+			from,
+			text: 'Words.',
+			...(to === undefined ? {} : { to }),
+			...(wakes.length ? { wakes } : {}),
+		});
 	}
 
 	private change(): LeaseChange {
@@ -223,12 +231,20 @@ describe('the incremental projection equals the fold', () => {
 				const state = projectState(projection);
 				const reference = foldRoom(walk.entries, retry);
 				expect(state, `seed ${seed} step ${step} (${entry.kind})`).toEqual(reference);
+				// The outcomes and the summaries of every closed exchange agree as well.
+				const seen = readView('room', state, start, entry.seq, false);
+				expect(seen.exchanges, `seed ${seed} step ${step} exchanges`).toEqual(
+					readView('room', reference, start, entry.seq, false).exchanges,
+				);
 				retained.push({ state, snapshot: structuredClone(state) });
 				freeze(state);
 				if (step === cut) {
 					// A restart: the resumed room replays the record and goes on.
 					projection = replay(walk.entries, retry);
 					expect(projectState(projection), `seed ${seed} replay`).toEqual(reference);
+					expect(
+						readView('room', projectState(projection), start, entry.seq, false).exchanges,
+					).toEqual(readView('room', reference, start, entry.seq, false).exchanges);
 				}
 			}
 			for (const held of retained) expect(held.state).toEqual(held.snapshot);

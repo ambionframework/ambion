@@ -12,6 +12,11 @@ export const SUMMARY_DUTIES = [
 	`Ending your turn without calling say leaves the range whole for whoever reads it.`,
 ];
 
-export function summaryToolDescription(person: string): string {
+export function summaryToolDescription(
+	person: string,
+	people: readonly string[] = [person],
+): string {
+	if (people.length > 1)
+		return `Write the message one person reads for this exchange. Call it once for each of ${people.join(', ')}, and set \`to\` to that person. End your turn to leave a range whole. Put the URI of what the message cites in refs.`;
 	return `Write the one message ${person} reads for this exchange. Use the assigned recipient and exchange. Call it once, or end your turn to leave the range whole. Put the URI of what the message cites in refs.`;
 }
