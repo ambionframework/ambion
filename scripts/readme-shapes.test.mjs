@@ -35,3 +35,14 @@ test('no README example calls env.writeFile or env.readTextFile', () => {
 		}
 	}
 });
+
+test('the README shows the three families with the workspace tools only', () => {
+	const code = blocksOf('README.md').join('\n');
+	for (const call of ['pi({', 'claude({', 'codex({', 'composeExecutions({']) {
+		assert.ok(code.includes(call), `README.md: no ${call} example`);
+	}
+	assert.match(code, /nativeTools: 'none'/, 'README.md: the Codex seat keeps a native tool');
+	assert.match(code, /modelReasoningEffort: 'medium'/);
+	assert.doesNotMatch(code, /allowedTools|disallowedTools/, 'README.md: a Claude tool policy');
+	assert.match(code, /memoryBackend\(\)/, 'README.md: the example is not hermetic');
+});
