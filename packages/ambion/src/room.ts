@@ -23,7 +23,7 @@ import { discussionMessages } from './room/exchange.ts';
 import { foldRoom } from './room/fold.ts';
 import type { MessageSelection } from './room/read.ts';
 import { captureMessageSelection, readView } from './room/read.ts';
-import { type CompositionDraft, type Room, RoomHost } from './room-host.ts';
+import { type CompositionDraft, type Room, RoomHost } from './room-host/room.ts';
 import type {
 	AgentDefinition,
 	Attention,
@@ -35,7 +35,7 @@ import type {
 	TraceStep,
 } from './types.ts';
 
-export type { ExchangeHandle, Room, RoomRead, Visit } from './room-host.ts';
+export type { ExchangeHandle, Room, RoomRead, Visit } from './room-host/room.ts';
 
 export interface StartRoomOptions {
 	/** The room name shared by all runs over its journal. */

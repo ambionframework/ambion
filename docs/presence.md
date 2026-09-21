@@ -1,7 +1,7 @@
 # Presence
 
 Presence is the contract for people in a room. The implementation is in
-[`room-host.ts`](../packages/ambion/src/room-host.ts), with the durable fold in
+[`room-host/`](../packages/ambion/src/room-host/room.ts), with the durable fold in
 [`room/presence.ts`](../packages/ambion/src/room/presence.ts) and the message
 shapes in [`types.ts`](../packages/ambion/src/types.ts). Read
 [`room.md`](room.md) first: presence follows the same journal, routing, and
@@ -64,7 +64,7 @@ They wait on the journal and are available after the person returns.
 ## 4. The visit
 
 The public handle is deliberately small: a `human` definition, a live `lastDeparture`
-position, `send(input)`, and `leave()`. See the [`Visit` declaration](../packages/ambion/src/room-host.ts)
+position, `send(input)`, and `leave()`. See the [`Visit` declaration](../packages/ambion/src/room-host/people.ts)
 for the exact TypeScript signature.
 
 `lastDeparture` is a live read of the person's latest durable `left` message. It is
