@@ -77,6 +77,41 @@ test('a docs page that cites a section "under" a heading holds that heading', ()
 	}
 });
 
+const stepsOf = (body) =>
+	new Map(
+		[
+			...body.matchAll(
+				/^(?:- \[[ x]\] \*\*|)(\d+)\.(?:\*\*| \[[ x]\]) ([\s\S]*?)(?=^\d+\. \[|^- \[[ x]\] \*\*|^\*\*Evidence|^### |(?![\s\S]))/gm,
+			),
+		].map((s) => [s[1], s[2].replace(/\s+/g, ' ')]),
+	);
+
+test('a plan step names only open steps and items that the plan holds', () => {
+	const text = readFileSync(join(root, 'planning/next.md'), 'utf8');
+	const [scope, items] = text.split('## The items');
+	const phases = new Map();
+	const parts = scope.split(/^### Phase (\d+)\./m).slice(1);
+	for (let i = 0; i < parts.length; i += 2) {
+		phases.set(parts[i], stepsOf(parts[i + 1]));
+	}
+	const itemIds = new Set([...items.matchAll(/^\*\*([A-Z]\d+)\./gm)].map((m) => m[1]));
+	for (const [phase, steps] of phases) {
+		for (const [n, body] of steps) {
+			for (const [, id] of body.matchAll(/\b([A-Z]\d+)\b(?=[,)])/g)) {
+				assert.ok(itemIds.has(id), `phase ${phase} step ${n}: item ${id} is not in the items`);
+			}
+			for (const [, list] of body.matchAll(/Needs (\d+(?: and \d+)?)\./g)) {
+				for (const ref of list.split(' and ')) {
+					assert.ok(steps.has(ref) && ref !== n, `phase ${phase} step ${n}: bad Needs ${ref}`);
+				}
+			}
+			for (const [, p, s] of body.matchAll(/phase (\d+) step (\d+)/g)) {
+				assert.ok(phases.get(p)?.has(s), `phase ${phase} step ${n}: phase ${p} has no step ${s}`);
+			}
+		}
+	}
+});
+
 test('room.md documents the room-level context cap', () => {
 	const text = readFileSync(join(root, 'docs/room.md'), 'utf8');
 	assert.ok(text.includes('`limits.context.messages`'));

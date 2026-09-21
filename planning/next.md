@@ -97,7 +97,7 @@ story; **P2** is in scope and can land last.
 | Lane | Chain                                                      | Priority |
 | ---- | ---------------------------------------------------------- | -------- |
 | A    | Phase 2: 14; 16; 17                                        | P0       |
-| B    | Phase 4: 1 then 2; 4; 5 then 6 and 7                       | P1       |
+| B    | Phase 4: 1 then 2; 3; 4 then 5 and 6                       | P1       |
 | C    | Phase 3: 2; 3 then 4                                       | P1       |
 | D    | Phase 5: 2, 3, and 5 together; 4                           | P1       |
 | E    | Phase 8: 1 now; 2 and 3 as each package lands; 4 to 8 last | P0       |
@@ -141,11 +141,11 @@ Each bold label is a stable name that other steps cite.
        per activation; streaming input for steer with the user echo
        advancing `readThrough`; hooks and tool messages as steps; a
        permission request as an `approval` step; policy options passed
-       through; a fake executable in CI (F5, F6). Needs 2 and 4.
-5. [ ] `memory: 'activation' | 'seat'` on both adapters (F9). Needs 5.
+       through; a fake executable in CI (F5, F6). Needs 2 and 3.
+5. [ ] `memory: 'activation' | 'seat'` on both adapters (F9). Needs 4.
 6. [ ] `examples/codex`: a thread per activation; the stdio room tools
        server over a local socket; items as steps; `file_change` paths as
-       `refs`; a fake `codex` on `PATH` in CI (F6, F10). Needs 5.
+       `refs`; a fake `codex` on `PATH` in CI (F6, F10). Needs 4.
 
 **Evidence:** both adapters pass the executor suite on fakes; a room with
 one Pi seat and one Claude seat in CI; prompt snapshots; the assistant
@@ -211,20 +211,20 @@ the code it describes lands, so pages run beside the code.
 1. [ ] `docs/room.md`: the overview and the glossary; the index leads with
        it; `agent.md` becomes the definitions and tools page (C4, C5).
 2. [ ] `durability.md`: the format promise, stop semantics, permanent
-       failure, commit retry (A1, A2, D1, D3). Needs phase 2 step 16.
-3. [ ] `docs/envelope.md`: the limits table and the measured envelope (B1).
+       failure, commit retry (D3). Needs phase 2 step 16.
+3. [ ] `docs/envelope.md`: the limits table and the measured envelope.
        The incremental projection costs 0.4 ms per new question at 100
        closed exchanges, 1.4 ms at 1,000, and 4.9 ms at 4,000; a replay at
        4,000 costs 729 ms.
 4. [ ] `docs/executors.md`: the contract, the steps, the harness matrix,
-       how to write an adapter (F). Needs phase 4 step 5.
+       how to write an adapter (F). Needs phase 4 step 4.
 5. [ ] `docs/resources.md`: the contract, references, provenance;
        `workspace.md` becomes the Pi binding page (E4, E6). Needs
        phase 5.
 6. [ ] `docs/patterns.md`: the human patterns table (E7). Needs phase 3
        step 2.
 7. [ ] `docs/trust.md`: guarantees between owners, membership authority,
-       harness memory (D8, F9). Needs phase 4 step 6.
+       harness memory (D8, F9). Needs phase 4 step 5.
 8. [ ] Retire the residue: rule citations, migration notes, package
        descriptions, comment voice, and
        `planning/evidence/reports/README.md` (C4). Needs 1.
@@ -262,7 +262,7 @@ the scope has evidence on the tagged commit.
        under `planning/evidence/`. Needs phase 2 step 16 and phase 6.
 6. [ ] Recovery evidence: duplicate wake, takeover, delayed cut, audit
        retry, clock skew, process pause, uncooperative tool. Needs phase 3
-       and phase 4 step 5.
+       and phase 4 step 4.
 7. [ ] Summary evidence: silence, corrections, conflicting constraints,
        multiple humans, late summaries. Needs phase 3 step 2.
 8. [ ] Sign off F1 to F9 above in `planning/evidence/0.1.0.md`; tag
