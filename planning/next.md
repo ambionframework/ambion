@@ -40,8 +40,8 @@ holds on main.
 **Ambion is a collaboration kernel for agents and humans.** The
 [README](../README.md) holds the statement, the key technical facts, and
 what is new, written for the 0.1.0 surface. All ten novelties it lists
-exist on main. The open work is the release evidence in phase 8, two
-documentation steps, and the items below.
+exist on main. The open work is the release evidence in phase 8 and the
+item below.
 
 ## The scope
 
@@ -113,59 +113,45 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Two lanes run at once.** Steps in different lanes share no files. A step
-names the steps it needs; a step with no "Needs" line starts now. **P0**
-blocks the tag; **P2** is in scope and can land last.
+**One lane remains.** A step names the steps it needs; a step with no
+"Needs" line starts now. **P0** blocks the tag.
 
-| Lane | Chain                                         | Priority |
-| ---- | --------------------------------------------- | -------- |
-| B    | Phase 8: 1 now; 2 and 3 after it; 4 to 8 last | P0       |
-| C    | Documentation: the changelog                  | P2       |
+| Lane | Chain                                   | Priority |
+| ---- | --------------------------------------- | -------- |
+| B    | Phase 8: 1 now; 2 after it; 4 to 8 last | P0       |
 
-**The critical path is phase 8.** Phase 4 (executors), phase 6 (the
-workbench and `ambion new`), and phase 7 (the guides, `trust.md`, and the
-README check) are complete on main.
-
-### Phase 7. Documentation, what remains (P2)
-
-- [ ] **9.** The 0.1.0 changelog entry. Last.
-
-**Evidence:** the changelog names each package.
+**The critical path is phase 8.**
 
 ### Phase 8. Release evidence and sign-off (P0)
 
 **Goal:** the packages install from a public registry, and every claim in
 the scope has evidence on the tagged commit.
 
-1. [ ] Two release channels (D7). Done: CI publishes a dev build from
-       `main` to GitHub Packages under `dev`; `scripts/release.mjs` stages
-       an official release on npmjs under `next`, verifies it outside the
-       repo, and promotes it to `latest`; no install path needs a token
-       for npmjs. Remains, and belongs to the owner: the first real
-       `stage`, `verify`, and `promote` from a local machine. CI never
-       publishes to npmjs and holds no npmjs token. Every consumer check
-       below installs from the staged version.
-2. [ ] Packed consumers outside the monorepo: journal alone; pi-journal
-       with journal; kernel with pi; kernel with claude; kernel with codex;
-       the workbench; the generated Node and Cloudflare projects; the
-       resource-only import. `scripts/cli-team-smoke.mjs` exists and no CI
-       job runs it; wire it in.
-       Needs 1. Each consumer starts when its packages exist.
-3. [ ] One TypeBox version; ESM exports and declarations; package
-       contents; lockstep versions. Needs 2.
-4. [ ] Node 26 tests and CLI; workerd tests; the historical
-       Cloudflare wake and cut races reproduced on current code.
-5. [ ] The chaos sweep at 200 seeds; Dafny proofs for every changed rule;
-       golden journals; the live tier on Pi, Claude, and Codex; results
-       recorded under `planning/evidence/`. The live tier of `main` is red
-       on one model-sensitive assistant case; diagnose it first. The Claude
-       live tier (PR 236) and a Codex value for `AMBION_HARNESS` are open.
-6. [ ] Recovery evidence: duplicate wake, takeover, delayed cut, audit
-       retry, clock skew, process pause, uncooperative tool.
-7. [ ] Summary evidence: silence, corrections, conflicting constraints,
-       multiple humans, late summaries.
-8. [ ] Sign off F1 to F9 above in `planning/evidence/0.1.0.md`; tag
-       `v0.1.0`. Needs every step above.
+- [ ] **1.** Two release channels (D7). Done: CI publishes a dev build from
+      `main` to GitHub Packages under `dev`; `scripts/release.mjs` stages
+      an official release on npmjs under `next`, verifies it outside the
+      repo, and promotes it to `latest`; no install path needs a token
+      for npmjs. Remains, and belongs to the owner: the first real
+      `stage`, `verify`, and `promote` from a local machine. CI never
+      publishes to npmjs and holds no npmjs token. Every consumer check
+      below installs from the staged version.
+- [ ] **2.** Packed consumers outside the monorepo: journal alone; pi-journal
+      with journal; kernel with pi; kernel with claude; kernel with codex;
+      the workbench; the generated Node and Cloudflare projects; the
+      resource-only import.
+      Needs 1. Each consumer starts when its packages exist.
+- [ ] **4.** Node 26 tests and CLI; workerd tests; the historical
+      Cloudflare wake and cut races reproduced on current code.
+- [ ] **5.** The chaos sweep at 200 seeds; Dafny proofs for every changed rule;
+      golden journals; the live tier on Pi, Claude, and Codex; results
+      recorded under `planning/evidence/`. The live tier of `main` is red
+      on one model-sensitive assistant case; diagnose it first.
+- [ ] **6.** Recovery evidence: duplicate wake, takeover, delayed cut, audit
+      retry, clock skew, process pause, uncooperative tool.
+- [ ] **7.** Summary evidence: silence, corrections, conflicting constraints,
+      multiple humans, late summaries.
+- [ ] **8.** Sign off F1 to F9 above in `planning/evidence/0.1.0.md`; tag
+      `v0.1.0`. Needs every step above.
 
 **Evidence:** `npm install @ambionframework/ambion` works without a token;
 every consumer above installs and typechecks; the sign-off table names a
