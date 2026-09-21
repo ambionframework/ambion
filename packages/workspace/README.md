@@ -50,11 +50,12 @@ types. It loads neither the Ambion runtime nor a model library.
 ```ts
 import { memoryBackend, openResource } from '@ambionframework/workspace';
 
-const drive = openResource({ name: 'team-site', backend: memoryBackend() });
-await drive.use({ name: 'surveyor', identity: 'Quantity surveyor.' }, async (env) => {
-  const result = await env.writeFile('notes.txt', 'Checked the plan.', {});
-  if (!result.ok) throw result.error;
+const backend = memoryBackend({
+  seed: async (write) => write.writeFile('notes.txt', 'Checked the plan.'),
 });
+const drive = openResource({ name: 'team-site', backend });
+// `drive.use(agent, operation)` runs one operation with an agent's environment.
+console.log(await backend.readFiles());
 await drive.dispose();
 ```
 

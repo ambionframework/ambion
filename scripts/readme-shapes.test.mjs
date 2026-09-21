@@ -27,12 +27,11 @@ test('every defineAgent example passes an executor and no model fields', () => {
 	}
 });
 
-test('every env.writeFile and env.readTextFile example passes a context', () => {
+test('no README example calls env.writeFile or env.readTextFile', () => {
+	// Those calls need a harness Context, which a README reader cannot build.
 	for (const page of pages) {
 		for (const block of blocksOf(page)) {
-			for (const [call] of block.matchAll(/env\.(writeFile|readTextFile)\([^;]*\);/g)) {
-				assert.match(call, /\{\}\)|context\)/, `${page}: ${call} has no context argument`);
-			}
+			assert.doesNotMatch(block, /env\.(writeFile|readTextFile)\(/, `${page}: needs a Context`);
 		}
 	}
 });
