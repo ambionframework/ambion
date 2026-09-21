@@ -46,6 +46,13 @@ import {
 	type TurnOptions,
 } from '@openai/codex-sdk';
 import { type Bridge, startBridge } from './bridge.ts';
+import {
+	type CatalogSource,
+	installedCatalog,
+	PermanentError,
+	type Scratch,
+	scratchFor,
+} from './catalog.ts';
 import { CodexSteps, changedPaths, isRoomTool } from './codex-trace.ts';
 import { type CodexRuntime, clientOptions, codexOf, threadOptions } from './options.ts';
 import { passResultOf } from './services.ts';
@@ -86,7 +93,18 @@ export interface CodexExecutorOptions extends CodexRuntime {
 	readonly definition: AgentDefinition;
 	/** Builds the client. Absent, the SDK's own `Codex`. */
 	readonly client?: (options: CodexOptions) => CodexClientLike;
+	/** Answers the catalog entry of a model. Absent, `codex debug models` on the installed binary. */
+	readonly catalog?: CatalogSource;
 }
+
+/**
+ * Codex answers in its own final message when a prompt does not say
+ * otherwise. The room hears only `say`, so the first prompt of each
+ * activation says so.
+ */
+export const HARNESS_NOTE =
+	'You are a seat in a room. Your final reply in this thread reaches no one. ' +
+	'The room hears only what you send through the `say` tool, so answer with `say`, then stop.';
 
 /** The Codex executor. One instance per seat, for as long as the room runs. */
 export function createCodexExecutor(options: CodexExecutorOptions): Executor {
@@ -149,6 +167,8 @@ class Activation implements ExecutorSession {
 	/** Where the turn in flight reads through. It takes effect when the turn starts. */
 	private reading = 0;
 	private bridge: Bridge | undefined;
+	/** The patched catalog and the empty directory. Absent when nativeTools is 'codex'. */
+	private scratch: Scratch | undefined;
 	private thread: CodexThreadLike | undefined;
 	private view: ActivationView | undefined;
 	private serial = 0;
@@ -196,6 +216,7 @@ class Activation implements ExecutorSession {
 	close(): void {
 		this.abort();
 		this.bridge?.close();
+		this.scratch?.remove();
 	}
 
 	/** One pass: read, act, and report where this session left off. */
@@ -246,7 +267,7 @@ class Activation implements ExecutorSession {
 		if (this.thread !== undefined) return renderActivation(input.view, this.definition).context;
 		// The thread has no system prompt of its own, so the first prompt carries it.
 		const { mechanism, agent, context } = renderActivation(input.view, this.definition);
-		return `${mechanism}\n\n${agent}\n\n${context}`;
+		return `${HARNESS_NOTE}\n\n${mechanism}\n\n${agent}\n\n${context}`;
 	}
 
 	/** Open the socket and the thread on the first pass. Later passes keep them. */
@@ -254,22 +275,38 @@ class Activation implements ExecutorSession {
 		if (this.thread !== undefined) return this.thread;
 		if (view.spec.seat !== this.definition.name)
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
+		// The catalog comes first. A model with no entry fails before anything opens.
+		const scratch = await this.seal();
+		// Keep the scratch before the bridge opens, so a failed bridge still removes it on close.
+		this.scratch = scratch;
 		const bridge = await startBridge(view, this.definition, this.binding(), () =>
 			this.currentView(view),
 		);
 		this.bridge = bridge;
-		if (this.stopped) bridge.close();
+		if (this.stopped) {
+			bridge.close();
+			scratch?.remove();
+		}
 		const make = this.options.client ?? ((options: CodexOptions) => new Codex(options));
-		this.client = make(clientOptions(this.options, bridge.socketPath));
+		this.client = make(clientOptions(this.options, bridge.socketPath, scratch));
 		this.resuming = this.memory === undefined ? undefined : (this.memory.id ?? resumeOf(view));
 		this.thread = this.begin(this.resuming);
 		return this.thread;
 	}
 
+	/** The scratch of a seat with no native tools. A seat with `nativeTools: 'codex'` has none. */
+	private async seal(): Promise<Scratch | undefined> {
+		const executor = codexOf(this.definition.executor);
+		if (executor.nativeTools === 'codex') return undefined;
+		const source =
+			this.options.catalog ?? installedCatalog(this.options.codexPath, this.options.env);
+		return scratchFor(executor.model, source);
+	}
+
 	/** Open a thread: the one to resume when `resume` names it, else a fresh one. */
 	private begin(resume: string | undefined): CodexThreadLike {
 		if (this.client === undefined) throw new Error('The Codex client is not open.');
-		const options = threadOptions(codexOf(this.definition.executor));
+		const options = threadOptions(codexOf(this.definition.executor), this.scratch);
 		this.heard = false;
 		return resume === undefined
 			? this.client.startThread(options)
@@ -375,10 +412,12 @@ class Activation implements ExecutorSession {
 	/**
 	 * The result for a fault of this executor, such as a lost process or a
 	 * build error. It is transient, so the room tries the activation again.
+	 * A model with no catalog entry is permanent.
 	 */
 	private broke(error: unknown): PassResult {
 		if (this.stopped) return { failed: false };
 		const message = error instanceof Error ? error.message : String(error);
-		return { failed: true, cause: 'transient', message };
+		const cause = error instanceof PermanentError ? 'permanent' : 'transient';
+		return { failed: true, cause, message };
 	}
 }

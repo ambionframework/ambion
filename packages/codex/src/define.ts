@@ -42,6 +42,16 @@ export interface CodexOptions extends CodexPolicy {
 	 * records its id with each release. Absent means `activation`.
 	 */
 	memory?: 'activation' | 'seat';
+	/**
+	 * The native tools of Codex. `none`, the default, turns off every one: the
+	 * seat reaches the world only through the room tools and `tools`. The
+	 * executor then sets the sandbox, the approval policy, the network, and
+	 * the working directory itself, and ignores those options. `codex` keeps
+	 * the native tools of the model and applies the policy options. Under
+	 * `codex` a seat with Code Mode reads host files whatever `sandboxMode`
+	 * says.
+	 */
+	nativeTools?: 'none' | 'codex';
 }
 
 /** An agent's Codex executor: the Codex SDK loop, model, instructions, tools and policy. */
@@ -49,6 +59,7 @@ export interface CodexExecutor extends AgentExecutor, CodexPolicy {
 	readonly kind: 'codex';
 	readonly model: string;
 	readonly memory?: 'activation' | 'seat';
+	readonly nativeTools?: 'none' | 'codex';
 }
 
 const POLICY = [
@@ -75,5 +86,6 @@ export function codex(options: CodexOptions): CodexExecutor {
 		kind: 'codex' as const,
 		model: options.model,
 		...(options.memory === undefined ? {} : { memory: options.memory }),
+		nativeTools: options.nativeTools ?? 'none',
 	});
 }

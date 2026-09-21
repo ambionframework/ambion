@@ -3,6 +3,7 @@
  * one activation opened over a room that records what the seat commits, and
  * a client of the room tools server.
  */
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineAgent, type Step } from '@ambionframework/ambion';
 import type {
@@ -16,10 +17,24 @@ import type {
 } from '@ambionframework/ambion/hosting';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import type { ThreadEvent } from '@openai/codex-sdk';
+import type {
+	CodexOptions as SdkClientOptions,
+	ThreadEvent,
+	ThreadOptions,
+} from '@openai/codex-sdk';
 import { type Bridge, startBridge } from '../src/bridge.ts';
+import type { CatalogEntry, CatalogSource } from '../src/catalog.ts';
 import { type CodexOptions, codex, createCodexExecutor } from '../src/index.ts';
 import type { Binding } from '../src/tools.ts';
+
+/** The catalog entries that a real `codex` 0.155.1 printed, for `gpt-5.6-luna` and `gpt-5.5`. */
+export const catalogFixture = JSON.parse(
+	readFileSync(new URL('./fixtures/catalog-0.155.1.json', import.meta.url), 'utf8'),
+) as { models: CatalogEntry[] };
+
+/** A catalog source that reads the recorded entries. */
+export const recordedCatalog: CatalogSource = async (model) =>
+	catalogFixture.models.find((entry) => entry.slug === model);
 
 const server = fileURLToPath(new URL('../src/room-tools-server.ts', import.meta.url));
 
@@ -104,6 +119,9 @@ export function lands(request: CommitRequest): CommitResult {
 interface Replayed {
 	readonly opened: { readonly resume: string | undefined }[];
 	readonly prompts: string[];
+	/** The options of the client and of each thread, in order. */
+	readonly clients: SdkClientOptions[];
+	readonly threads: ThreadOptions[];
 }
 
 /**
@@ -112,7 +130,7 @@ interface Replayed {
  * when the `codex` process exits before it says anything.
  */
 function replay(turns: readonly (readonly ThreadEvent[] | Error)[]) {
-	const seen: Replayed = { opened: [], prompts: [] };
+	const seen: Replayed = { opened: [], prompts: [], clients: [], threads: [] };
 	let next = 0;
 	const thread = () => ({
 		runStreamed: async (prompt: string) => {
@@ -127,16 +145,21 @@ function replay(turns: readonly (readonly ThreadEvent[] | Error)[]) {
 			};
 		},
 	});
-	const client = () => ({
-		startThread: () => {
-			seen.opened.push({ resume: undefined });
-			return thread();
-		},
-		resumeThread: (id: string) => {
-			seen.opened.push({ resume: id });
-			return thread();
-		},
-	});
+	const client = (options: SdkClientOptions) => {
+		seen.clients.push(options);
+		return {
+			startThread: (threadOptions?: ThreadOptions) => {
+				seen.opened.push({ resume: undefined });
+				if (threadOptions) seen.threads.push(threadOptions);
+				return thread();
+			},
+			resumeThread: (id: string, threadOptions?: ThreadOptions) => {
+				seen.opened.push({ resume: id });
+				if (threadOptions) seen.threads.push(threadOptions);
+				return thread();
+			},
+		};
+	};
 	return { client, seen };
 }
 
@@ -145,6 +168,7 @@ export function open(
 	turns: readonly (readonly ThreadEvent[] | Error)[],
 	definition: AgentDefinition = seat(),
 	answer: (request: CommitRequest) => CommitResult = lands,
+	catalog: CatalogSource = recordedCatalog,
 ) {
 	const steps: Step[] = [];
 	const events: ExecutionEvent[] = [];
@@ -156,7 +180,7 @@ export function open(
 		usage: () => undefined,
 		close: async () => {},
 	};
-	const executor = createCodexExecutor({ definition, client });
+	const executor = createCodexExecutor({ definition, client, catalog });
 	const activate = (id = 'message:1:gpt:1') =>
 		executor.open({ id, room, emit: (event) => void events.push(event), trace });
 	return { executor, steps, commits, events, activate, seen };

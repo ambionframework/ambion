@@ -129,7 +129,7 @@ describe('say', () => {
 			arguments: { text: 'Done.', refs: ['room://lab', '/work/plan.md'] },
 		});
 		await client.callTool(say('Again.'));
-		expect(commits[0]?.intent).toMatchObject({ refs: ['room://lab', '/work/plan.md'] });
+		expect(commits[0]?.intent).toMatchObject({ refs: ['room://lab', 'file:///work/plan.md'] });
 		expect(commits[1]?.intent).not.toHaveProperty('refs');
 	});
 
@@ -139,8 +139,8 @@ describe('say', () => {
 		await client.callTool(say());
 		await client.callTool(say());
 		expect(commits.map((commit) => commit.intent)).toMatchObject([
-			{ refs: ['/work/plan.md'] },
-			{ refs: ['/work/plan.md'] },
+			{ refs: ['file:///work/plan.md'] },
+			{ refs: ['file:///work/plan.md'] },
 		]);
 	});
 });
@@ -220,5 +220,16 @@ describe('the bridge', () => {
 		const result = await client.callTool(say());
 		expect(result.isError).toBe(true);
 		expect(commits).toHaveLength(1);
+	});
+});
+
+describe('resources', () => {
+	it('offers none: a resource request gets Method not found', async () => {
+		const { client } = await on(lands);
+		await expect(client.readResource({ uri: 'file:///etc/hosts' })).rejects.toMatchObject({
+			code: -32601,
+		});
+		await expect(client.listResources()).rejects.toMatchObject({ code: -32601 });
+		await expect(client.listResourceTemplates()).rejects.toMatchObject({ code: -32601 });
 	});
 });

@@ -9,14 +9,22 @@ contract that the package implements.
 
 **A seat that Codex runs.** `codex()` defines the executor of an agent.
 `codexExecution()` gives a room or a runtime the services that run it. Codex
-owns the model loop, its built-in tools, and its thread. The room owns the
-record, the rules, and the freshness of every say.
+owns the model loop and its thread. The room owns the record, the rules, and
+the freshness of every say.
 
-**Use it when the seat needs the tools of Codex.** Codex edits files, runs
-shell commands, and searches the web inside a sandbox. A Pi seat has the
-tools that you give it, and no others. Both kinds join one room. A room whose
-seats run on more than one family passes `composeExecutions` from
+**A seat has no native tools by default.** It reaches the world only through
+the room tools and the tools that you give it, as a Pi seat does. Set
+`nativeTools: 'codex'` to give the seat the tools of Codex: file edits,
+shell commands, and web search. Both kinds of seat join one room. A room
+whose seats run on more than one family passes `composeExecutions` from
 `@ambionframework/ambion/hosting`.
+
+**Three MCP helper tools remain.** Codex adds `list_mcp_resources`,
+`list_mcp_resource_templates`, and `read_mcp_resource` whenever an MCP server
+is on, and no setting turns them off on codex 0.155.1. They reach only the
+MCP servers of the seat. The room tools server offers no resource, and it
+answers each call with `Method not found`, so they read nothing. A unit
+test of the server proves it with a `file:///etc/hosts` request.
 
 **The kernel gains no dependency.** `@ambionframework/ambion` imports no model
 library. `@openai/codex-sdk` and `@modelcontextprotocol/sdk` belong to this
@@ -55,9 +63,6 @@ const planner = defineAgent({
     instructions: 'Speak when the plan lacks evidence.',
     model: 'gpt-5.6-luna',
     modelReasoningEffort: 'medium',
-    sandboxMode: 'workspace-write',
-    approvalPolicy: 'never',
-    workingDirectory: '/work/plans',
     memory: 'seat',
   }),
 });
@@ -94,12 +99,20 @@ The executor passes each policy field to the Codex SDK unchanged.
 | `activationTokenLimit`  | The whole record   | The token limit for the record one activation reads          |
 | `estimateTokens`        | Length estimate    | How the agent counts tokens against its limit                |
 | `memory`                | `'activation'`     | `'seat'` resumes one thread for the seat                     |
+| `nativeTools`           | `'none'`           | `'none'` turns off every native tool; `'codex'` keeps them   |
 | `sandboxMode`           | Codex default      | `read-only`, `workspace-write`, or `danger-full-access`      |
 | `approvalPolicy`        | Codex default      | `never`, `on-request`, `on-failure`, or `untrusted`          |
 | `modelReasoningEffort`  | Codex default      | `minimal` up to `ultra`, as the SDK lists them               |
 | `networkAccessEnabled`  | Codex default      | Whether a command may use the network                        |
 | `workingDirectory`      | Process directory  | The directory where Codex works                              |
 | `additionalDirectories` | None               | More directories that Codex may write                        |
+
+**`nativeTools: 'none'` fixes the policy.** The executor then sets
+`sandboxMode` to `read-only`, `approvalPolicy` to `never`,
+`networkAccessEnabled` to `false`, and `workingDirectory` to an empty
+temporary directory. It ignores those four options and
+`additionalDirectories`.
+They apply only with `nativeTools: 'codex'`.
 
 **`codexExecution(options)` takes the runtime of the executable.**
 
@@ -153,7 +166,8 @@ that calls it, and a test covers both cases.
 real binary answers every `say` with "MCP tool call requires approval, but
 approval policy is never", and the seat answers in plain text that the room
 never records. The room tools belong to the seat, so the config approves
-them. Codex still applies its own policy to its built-in tools.
+them. With `nativeTools: 'codex'`, Codex applies its own policy to its
+native tools.
 
 ## How an activation runs
 
@@ -214,7 +228,8 @@ executor reports it as a room event and never as a tool event.
 
 **A completed patch feeds `refs`.** The executor collects the paths of each
 completed `file_change`. The next ordinary `say` cites them in `refs`, and
-the bridge holds each path once.
+the bridge holds each path once. A ref is an absolute URI with a scheme, so
+the executor writes each path as a `file:` URI. The room refuses a bare path.
 
 **The package writes no `approval` step.** Codex answers its own approvals by
 its policy and reports none through the SDK.
@@ -287,25 +302,78 @@ thread. Freshness governs speech in both modes.
 
 ## The trust boundary
 
-**Codex runs on the host.** The seat has the reach of the `codex` process,
-and the options of `codex()` set that reach.
+**A seat has no native tools by default.** `nativeTools: 'none'` gives the
+seat the room tools (`say`, `seat`, `unseat`) and the tools of `tools` and
+`bundles`. Every seat of a room that uses the default has the same tools.
+Files reach the seat only through the tools that the application gives it,
+such as the workspace tools.
 
-| Option                 | What it decides                                               |
-| ---------------------- | ------------------------------------------------------------- |
-| `sandboxMode`          | What a command may write: nothing, the workspace, or all      |
-| `approvalPolicy`       | When Codex asks before it acts; a headless seat cannot answer |
-| `networkAccessEnabled` | Whether a command may reach the network                       |
-| `workingDirectory`     | The directory where the seat works                            |
+**Code Mode ignores the sandbox.** This is a fact about Codex 0.155.1.
+Code Mode is a JavaScript runtime that the model calls through `exec` and
+`wait`. On a read-only sandbox, with no network and a deny permission
+profile, its JavaScript still read `/etc/hosts` and listed `/Users` through
+`fs`. It could not start a process or reach the network. `sandboxMode` and
+permission profiles do not confine it. A feature flag cannot turn it off,
+because the model catalog turns it on: `gpt-5.6-luna` has
+`tool_mode: 'code_mode_only'`. `gpt-5.5` has no tool mode.
+
+**The default replaces the catalog entry.** A custom catalog overrides the
+entry of a model. The executor runs `codex debug models` on the installed
+binary once for each binary in the process and patches the entry of the seat
+model. It writes the patched catalog to a temporary directory and passes the
+path as `model_catalog_json`. The recipe has five parts:
+
+1. **The catalog entry.** `tool_mode`, `apply_patch_tool_type`, and
+   `multi_agent_version` are `null`. `input_modalities` is `['text']`.
+   `supports_search_tool`, `supports_image_detail_original`, and the three
+   `include_*_usage_instructions` flags are `false`. `node_repl_disabled` is
+   `true`. `experimental_supported_tools` is empty. This removes Code Mode,
+   the patch tool, image input, and the search tool.
+2. **The features.** The config sets 31 features to `false`, among them
+   `shell_tool`, `unified_exec`, `code_mode`, `code_mode_only`, `apps`,
+   `plugins`, `computer_use`, `multi_agent`, and `hooks`. This removes the
+   shell and the tools that a feature adds.
+3. **The tool switches.** `web_search` is `'disabled'`. `tools.view_image`
+   is `false`. `update_plan` and `experimental_request_user_input` are
+   disabled.
+4. **The bundled REPL.** Codex adds a `node_repl` MCP server. The config
+   declares `mcp_servers.node_repl` as disabled, by name, beside the room
+   server. Without it the tool list holds `mcp__node_repl.js`.
+5. **Defense in depth.** The thread runs on a read-only sandbox, with no
+   network, no approval, and an empty temporary directory as its working
+   directory. No repository and no host file is the default context.
+
+The temporary directory of each activation holds the patched catalog and the
+empty working directory. The executor removes it when the activation closes,
+and at process exit.
+
+**A model with no catalog entry does not start.** The activation fails as
+permanent. The message names the model and says that `nativeTools: 'none'`
+needs a catalog entry. The executor never leaves native tools on by
+accident. Use a model that `codex debug models` lists, or set
+`nativeTools: 'codex'`.
+
+**`nativeTools: 'codex'` opens the host.** The seat keeps the tools of the
+model. A seat with Code Mode reads host files whatever `sandboxMode` says.
+`sandboxMode`, `approvalPolicy`, `networkAccessEnabled`, and
+`workingDirectory` then set what a command may do, and Code Mode is outside
+their reach. Use it only for a seat that may read the host.
+
+**The version pin guards the recipe.** The package pins `@openai/codex-sdk`
+0.155.1, which brings `codex` 0.155.1. The feature names and the catalog
+fields belong to that version. A newer `codex` can add a native tool that
+the recipe does not turn off. Run the live exclusivity test
+(`test/live/exclusive.test.ts`) against a new version, and trust the version
+only when it passes.
 
 **The environment includes the key by default.** With no `env` on
-`codexExecution()`, the binary inherits `process.env`. A command that the
-seat runs can read `CODEX_API_KEY` from it. Pass an `env` that leaves the key
-out to prevent that, and sign in with `codex login` instead.
+`codexExecution()`, the binary inherits `process.env`. A command that runs
+under `nativeTools: 'codex'` can read `CODEX_API_KEY` from it. Pass an `env`
+that leaves the key out to prevent that, and sign in with `codex login`
+instead.
 
-**Built-in tools follow the Codex policy.** A `file_change` or a
-`command_execution` is what Codex decides it may do under `sandboxMode` and
-`approvalPolicy`. The room tools are approved, because they only call the
-room and the room checks each call.
+**The room tools are approved.** They only call the room, and the room
+checks each call.
 
 ## Testing
 
@@ -325,13 +393,14 @@ runs the executor on the recorded events to test the memory modes.
 **The live tier proves the claims that recorded events cannot.** Each file
 holds the smallest room that proves one claim.
 
-| File                       | Claim                                                                     |
-| -------------------------- | ------------------------------------------------------------------------- |
-| `test/live/loop.test.ts`   | A seat speaks through `say`; no approval error; usage above zero          |
-| `test/live/tools.test.ts`  | A command and a file change become steps; the next say cites the path     |
-| `test/live/steer.test.ts`  | A line sent during a run is held, and the next pass reads it              |
-| `test/live/memory.test.ts` | A resumed thread answers from the first activation; a bogus id falls back |
-| `test/live/mixed.test.ts`  | A Pi seat and a Codex seat both speak                                     |
+| File                          | Claim                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `test/live/loop.test.ts`      | A seat speaks through `say`; no approval error; usage above zero                                                    |
+| `test/live/tools.test.ts`     | A command and a file change become steps; the next say cites the path                                               |
+| `test/live/exclusive.test.ts` | The default seat has exactly the room tools and its own; it reads no host file; `'codex'` restores the native tools |
+| `test/live/steer.test.ts`     | A line sent during a run is held, and the next pass reads it                                                        |
+| `test/live/memory.test.ts`    | A resumed thread answers from the first activation; a bogus id falls back                                           |
+| `test/live/mixed.test.ts`     | A Pi seat and a Codex seat both speak                                                                               |
 
 **Run the live tier with a key.** Every definition sets the model
 `gpt-5.6-luna` and `modelReasoningEffort: 'medium'`. A file skips when
@@ -348,6 +417,12 @@ The mixed file also needs the key of the Pi model (`AMBION_MODEL`, default
 vitest.live.config.ts test/live/loop.test.ts`.
 
 ## Troubleshooting
+
+**The seat answers in its final message and nobody hears it.** Codex has its
+own final-answer channel. The room hears only `say`. The first prompt of a
+thread says so. A seat that still ends with plain text and no `say` shows a
+`text` step and no `tool_call` in its trace, and `activation_end` reports
+`spoke: false`.
 
 **Every say is denied.** The seat answers in plain text, and the record holds
 nothing. The trace shows a `tool_result` with "MCP tool call requires
@@ -370,3 +445,10 @@ different account than the one that started the thread.
 
 **A run fails with a sign-in message.** The failure is permanent, so the room
 does not retry. Set `CODEX_API_KEY`, or run `codex login`.
+
+**A native tool shows up after a Codex upgrade.** The seat lists or calls a
+tool that is not a room tool and not one of yours. A newer `codex` added a
+feature or a catalog field that the recipe does not cover. Run
+`test/live/exclusive.test.ts` to see the name. Compare `codex debug models`
+and the feature list of the new version with `src/catalog.ts`. Add the
+feature or the field, and keep the version pinned until the test passes.
