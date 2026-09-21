@@ -65,7 +65,8 @@ the manufacturer datasheets.
 
 **The lab records live in `lab.db`, apart from the journal.** The
 `projects`, `test_plans`, `runs`, `results`, and `operations` tables hold
-them. The SQL resource stamps provenance on every recorded row.
+them. The SQL resource stamps provenance on every recorded row
+(see [Resources](resources.md)).
 
 **Two simulated instruments sit on the lab database.** `led-current` has a
 limit of 20 mA. `bench-supply` has a limit of 5 V. The Design specialist and

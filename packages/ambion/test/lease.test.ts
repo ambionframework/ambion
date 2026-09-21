@@ -1,7 +1,7 @@
 /**
  * A wake is safe to send twice, a lost one is sent again, a lost release
  * expires, and a lost wake into a running activation is read off the
- * record. Rule 4 of the design:
+ * record. The design says:
  * every activation's id is derived from the journal, so nothing that crosses
  * the wire has to arrive exactly once.
  */

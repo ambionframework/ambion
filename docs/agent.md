@@ -105,14 +105,15 @@ canonical forms. The room refuses an `ambion:` ref that is not canonical. The
 prompt states the room URI and the URI of the open or covered exchange. An
 agent reads numbered positions, so it cannot build the URI of an older
 exchange. A workspace path is not a ref. Cite a file with a `file:` URI or
-another absolute URI that the application chooses.
+another absolute URI that the application chooses. [Resources](resources.md)
+states how a resource change is cited.
 
 **A refusal is typed.** The room throws `AmbionError`. Its `code` is one of
 the closed set in `errors.ts`; its message is for a person.
 
 ## Execution boundary
 
-This section moves to `executors.md` in phase 7 step 4. That page does not
+This section moves to `executors.md` in phase 7 step 3. That page does not
 exist yet.
 
 **The host configures execution before starting the room.** An `Execution`
@@ -192,7 +193,7 @@ and agent names.
 
 ## Steps and the trace
 
-This section moves to `executors.md` in phase 7 step 4. That page does not
+This section moves to `executors.md` in phase 7 step 3. That page does not
 exist yet.
 
 **A step is one thing an activation did.** The step vocabulary has ten

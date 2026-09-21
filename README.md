@@ -192,7 +192,7 @@ the same way.
 - **Artifacts by reference.** A message and a summary carry `refs`, URIs the
   kernel validates, stores, and renders, and never reads behind. Rooms and
   exchanges have URIs. Every resource change carries the activation, the
-  exchange, and the room that made it. See [Workspace](docs/workspace.md).
+  exchange, and the room that made it. See [Resources](docs/resources.md).
 - **The workspace mirrors the collaboration onto itself.** An audit log
   records every tool call the workspace served, as one JSON line: the room,
   the agent, the tool, the arguments, and the result. A room mirror copies
