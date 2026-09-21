@@ -41,7 +41,7 @@ holds on main.
 [README](../README.md) holds the statement, the key technical facts, and
 what is new, written for the 0.1.0 surface. All ten novelties it lists
 exist on main. The open work is the release evidence in phase 8 and the
-item below.
+public registry (D7).
 
 ## The scope
 
