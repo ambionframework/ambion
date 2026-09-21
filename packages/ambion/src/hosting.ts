@@ -52,7 +52,7 @@ export type {
 	Limits,
 	Transport,
 } from './host/runtime.ts';
-export { callLimits, hostingOf, runningRoom } from './host/runtime.ts';
+export { callLimits, hostingOf, reconcileRoom, runningRoom } from './host/runtime.ts';
 export type {
 	ActivationPurpose,
 	ActivationSpec,

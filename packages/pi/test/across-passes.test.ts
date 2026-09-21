@@ -12,9 +12,9 @@ import {
 	type RoomProtocol,
 	type ViewResponse,
 } from '@ambionframework/ambion/hosting';
+import { fakeClock } from '@ambionframework/ambion/testing';
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { fakeClock } from '../../ambion/test/support/clock.ts';
 import { tick } from '../../ambion/test/support/room.ts';
 import { contextText, quiet, scripted } from '../../ambion/test/support/scripted.ts';
 import { noTraces } from '../../ambion/test/support/trace.ts';

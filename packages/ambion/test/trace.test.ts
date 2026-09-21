@@ -28,7 +28,7 @@ import {
 	type TracePolicy,
 } from '../src/index.ts';
 import { assertWire, roundTrip } from '../src/protocol.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock } from '../src/testing.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
 import { quiet, scripted, speak } from './support/scripted.ts';
 import { traceOf } from './support/trace.ts';

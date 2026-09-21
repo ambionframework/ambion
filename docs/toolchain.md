@@ -44,11 +44,14 @@ See [`scripts/cli-team-smoke.mjs`](../scripts/cli-team-smoke.mjs) and
 [`scripts/journal-smoke.mjs`](../scripts/journal-smoke.mjs) for detailed
 consumer checks.
 
-The core has three published entries:
+The core has four published entries:
 
 - `@ambionframework/ambion` for hosts.
 - `@ambionframework/ambion/hosting` for a room and seat separated by a wire.
 - `@ambionframework/ambion/conformance` for the transport suite.
+- `@ambionframework/ambion/testing` for the scripted executor, `settled`, and
+  `fakeClock`. It imports no model library. `@ambionframework/pi/testing`
+  holds the scripted Pi stream.
 
 The core imports no platform modules. Workspace filesystem code owns Node
 dependencies; Cloudflare code owns Durable Object integration.
@@ -118,7 +121,7 @@ Use these commands at the repository root:
 | Command                      | Purpose                                                                |
 | ---------------------------- | ---------------------------------------------------------------------- |
 | `pnpm build`                 | Build every package through Turborepo                                  |
-| `pnpm check:types`           | Type-check packages after their builds                                 |
+| `pnpm check:types`           | Type-check packages and the CLI team template after their builds       |
 | `pnpm test`                  | Run report checks and the scripted Vitest suites                       |
 | `pnpm check:format`          | Verify Prettier formatting                                             |
 | `pnpm check:lint`            | Run Biome with warnings as errors, then Knip                           |

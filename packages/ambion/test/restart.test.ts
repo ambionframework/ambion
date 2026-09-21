@@ -19,7 +19,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { type FakeClock, fakeClock } from './support/clock.ts';
+import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { refusal } from './support/errors.ts';
 import {
 	assistantEnded,

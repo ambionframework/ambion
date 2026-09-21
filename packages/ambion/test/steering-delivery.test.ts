@@ -8,7 +8,7 @@ import {
 	type Wake,
 } from '../src/hosting.ts';
 import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock } from '../src/testing.ts';
 import { assistant, deferred, messagesOf, roomName, stateOf, waitForRoom } from './support/room.ts';
 import { byAgent, contextText, quiet, scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';

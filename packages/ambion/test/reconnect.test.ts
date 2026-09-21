@@ -16,7 +16,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock } from '../src/testing.ts';
 import { deferred, messagesOf, participantsOf, roomName, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
 import { gatedJournals, storages } from './support/storage.ts';

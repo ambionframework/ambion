@@ -6,7 +6,6 @@
  */
 
 import { env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
-import type { Message } from '@ambionframework/ambion';
 import type { LeaseResponse, RoomProtocol, Steer } from '@ambionframework/ambion/hosting';
 import { namespaced } from '@ambionframework/journal';
 import { piSessions } from '@ambionframework/pi-journal';
@@ -41,7 +40,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	// end of the pass, and released
 	await runDurableObjectAlarm(seat);
 	const said = await until(async () => {
-		const messages: Message[] = await room.messages();
+		const messages = (await room.read()).messages;
 		return messages.find((m) => m.kind === 'said' && m.from === 'product');
 	});
 	expect(said).toMatchObject({
@@ -80,13 +79,15 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	await seat.hold(true);
 	const secondExchange = await room.send({ from: 'priya', text: 'And the pump?', key: 'q2' });
 	expect(await until(async () => (await seat.wakes()) >= 3)).toBe(true);
-	expect((await room.participants()).find((s) => s.name === 'product')).toMatchObject({
+	expect(
+		(await room.read({ messages: false })).participants.find((s) => s.name === 'product'),
+	).toMatchObject({
 		status: 'active',
 	});
 	// the hold lifts: the seat takes the wake it holds, and the exchange closes
 	await seat.hold(false);
 	const answered = await until(async () => {
-		const messages: Message[] = await room.messages();
+		const messages = (await room.read()).messages;
 		return messages.filter((m) => m.kind === 'said' && m.from === 'product').length === 2;
 	});
 	expect(answered).toBe(true);
@@ -125,7 +126,7 @@ it('cancels an unclaimed wake over RPC and closes its exchange', async () => {
 	// The revoked exchange remains addressable by its opening sequence, while
 	// the product has no answer to publish.
 	expect(await room.exchange(exchange.from)).toEqual(exchange);
-	const messages: Message[] = await room.messages();
+	const messages = (await room.read()).messages;
 	expect(messages.filter((m) => m.from === 'product')).toEqual([]);
 });
 

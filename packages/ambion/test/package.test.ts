@@ -29,7 +29,7 @@ it('builds every entry the manifest names', async () => {
 	const { exports } = await manifest();
 	const config = await read('tsdown.config.ts');
 	const built = [...config.matchAll(/'(src\/[^']+)'/g)].map((m) => m[1]);
-	expect(built).toEqual(['src/index.ts', 'src/hosting.ts', 'src/conformance.ts']);
+	expect(built).toEqual(['src/index.ts', 'src/hosting.ts', 'src/conformance.ts', 'src/testing.ts']);
 	// Each subpath names a file the build writes, under the name it builds it by.
 	for (const [path, target] of Object.entries(exports)) {
 		if (path === './package.json') continue;
@@ -78,6 +78,7 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'describeExecutor',
 		'hostingOf',
 		'inProcessTransport',
+		'reconcileRoom',
 		'refusal',
 		'renderActivation',
 		'renderDelta',

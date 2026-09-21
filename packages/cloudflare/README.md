@@ -24,9 +24,9 @@ What is built:
 - **`RoomObject`** runs the room. Its constructor resumes an initialized room
   unless explicitly stopped; an uninitialized named record waits for
   an explicit `start`. It exposes `start`, `visit`, `send`, `leave`, `seat`,
-  `unseat`, `abort`, `read`, `messages`, `participants`, `exchange`,
+  `unseat`, `abort`, `read`, `exchange`,
   `waitForClose` and `waitForSummary` over RPC, and the three calls a seat makes: `view`, `commit`
-  and `lease`. Its `alarm()` runs `reconcile()`.
+  and `lease`. Its `alarm()` runs `reconcileRoom`.
   Identity and presence come from the room journal. Restart restores handles
   only for present humans; `send` never enters the room implicitly. Explicit
   `visit` ensures presence, and repeated `leave` is harmless.
@@ -52,8 +52,9 @@ requires definition names in the room metadata. Every seat uses the same room
 tools, including `say`, `seat`, and `unseat`.
 
 `read()` returns the detached coherent room projection, including stopped
-records. `messages()` and `participants()` use that projection; the live
-`waitForClose()` and `waitForSummary()` conveniences retain their wait behavior
+records. Messages, participants, exchanges, and the watermark come from
+it. The alarm calls `reconcileRoom` from the hosting entry, which reaches
+the running room by name. The live `waitForClose()` and `waitForSummary()` conveniences retain their wait behavior
 and require a running room. Use `read()` to inspect a stopped open exchange or
 its recorded summary outcome.
 

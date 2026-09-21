@@ -2,7 +2,7 @@ import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { pi, piExecution } from '../../pi/src/index.ts';
 import { createRuntime, defineAgent, type Room, resumeRoom, startRoom } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock } from '../src/testing.ts';
 import {
 	andrei,
 	assistant,
