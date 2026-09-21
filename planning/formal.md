@@ -157,8 +157,8 @@ A refuter built each one as a running probe against the code.
 - **A4. A malformed seq.** `positionOf` skips a stored entry whose seq is
   not a place, as it skips a foreign kind. A known kind with a bad seq is
   corruption, and a skip hides it. `envelope` throws for it, as it throws
-  for a known kind with a bad body, once D3's golden journals can show
-  the change is safe.
+  for a known kind with a bad body, once the golden journals in
+  `test/golden` show the change is safe.
 - **A5. The storage conformance suite runs the rules.** D6 publishes a
   storage conformance suite. Its cases for the compare-and-append and the
   read past the head assert the three storage rules by name, so a
@@ -534,7 +534,7 @@ checks an activation id on a lease's `id` and on a message's
 `activationId`, and reads no other kind. A close or a run with an
 `activationId` field passes. **F8.** `storedIdAccepted(kind, present,
 wellFormed)` would state what the validator does. A refusal of the field
-on other kinds is a schema change that D3 in `next.md` takes.
+on other kinds is a schema change that a later journal format takes.
 
 ## G. The exchange, the summary, and the roster
 
