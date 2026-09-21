@@ -44,6 +44,11 @@ assistant ──▶ ambion, pi
 Internal dependencies use `workspace:*`; pnpm rewrites them to the release
 version while packing. The CLI and packed-consumer smoke checks exercise the
 built exports, so a broken dependency order or export map fails before release.
+The `CLI smoke test` job runs `scripts/cli-team-smoke.mjs` on every pull
+request and on `main`. The script packs every package and installs the
+archives through `file:` overrides. It runs `ambion new` for the node and
+Cloudflare templates, then installs, typechecks, and runs each project. The
+job needs no key and stops after ten minutes.
 See [`scripts/cli-team-smoke.mjs`](../scripts/cli-team-smoke.mjs) and
 [`scripts/journal-smoke.mjs`](../scripts/journal-smoke.mjs) for detailed
 consumer checks.
@@ -197,6 +202,14 @@ repository jobs plus the LemmaScript reusable workflow:
 The CLI job drives `packages/cli/bin/ambion.mjs`, verifies versions, rejects an
 unknown command, and packs all packages. This checks the artifact users will
 run, including package resolution and `files` lists.
+
+The CLI job also runs `pnpm run check:packages` after the build. The check
+reads `pnpm-lock.yaml` and every publishable manifest. It fails on more than
+one `typebox` version, a CommonJS export, a missing export or types path, a
+pack list without `dist`, the README, or the license, a pack list with
+source, test, or config files, versions out of lockstep, and a different
+`engines.node`. Each package carries a copy of the root `LICENSE`, because
+`pnpm pack` does not add the root file.
 
 The live workflow runs the same scenarios on a real provider. It runs after a
 change lands on `main`, on a weekly schedule, and by dispatch. It does not run

@@ -117,10 +117,10 @@ means two things or two names mean one.
 names the steps it needs; a step with no "Needs" line starts now. **P0**
 blocks the tag; **P2** is in scope and can land last.
 
-| Lane | Chain                                                      | Priority |
-| ---- | ---------------------------------------------------------- | -------- |
-| B    | Phase 8: 1 now; 2 and 3 after it; 4 to 8 last              | P0       |
-| C    | Documentation: the API reference (D10), then the changelog | P2       |
+| Lane | Chain                                         | Priority |
+| ---- | --------------------------------------------- | -------- |
+| B    | Phase 8: 1 now; 2 and 3 after it; 4 to 8 last | P0       |
+| C    | Documentation: the changelog                  | P2       |
 
 **The critical path is phase 8.** Phase 4 (executors), phase 6 (the
 workbench and `ambion new`), and phase 7 (the guides, `trust.md`, and the
@@ -128,12 +128,9 @@ README check) are complete on main.
 
 ### Phase 7. Documentation, what remains (P2)
 
-- [ ] **8.** A generated API reference per entry with a CI staleness check
-      (D10). P2.
 - [ ] **9.** The 0.1.0 changelog entry. Last.
 
-**Evidence:** the API reference builds in CI; the changelog names each
-package.
+**Evidence:** the changelog names each package.
 
 ### Phase 8. Release evidence and sign-off (P0)
 
@@ -182,10 +179,6 @@ Each item states the problem, the solution, and the impact.
 
 **D7. A public registry.** Every install path requires a GitHub token.
 Publish the ten packages to npmjs at 0.1.0.
-
-**D10. An API reference.** The docs point at source files for shapes.
-Generate a reference per entry from the emitted declarations into
-`docs/api/` and fail CI when it is stale.
 
 ## Package decisions
 

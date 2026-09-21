@@ -1,0 +1,205 @@
+#!/usr/bin/env node
+/**
+ * Checks the publishable packages for release hygiene.
+ *
+ * Run it after a build. Every finding is an error and the process exits
+ * nonzero when there is one.
+ *
+ *   node scripts/package-hygiene.mjs
+ */
+import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
+import { publishablePackages, ROOT, sharedVersion } from './packages.mjs';
+
+const run = promisify(execFile);
+
+/** One finding names its rule, its package, and what is wrong. */
+function finding(rule, name, message) {
+	return { rule, package: name, message };
+}
+
+/** (a) The lockfile resolves one typebox version. */
+export function checkTypebox(lockText) {
+	const versions = [...lockText.matchAll(/^ {2}typebox@([^:\s(]+):/gm)].map((match) => match[1]);
+	const unique = [...new Set(versions)].sort();
+	if (unique.length <= 1) return [];
+	return [finding('typebox', '(lockfile)', `typebox resolves to ${unique.join(', ')}.`)];
+}
+
+/** Every string target in an exports value, with the path of keys that led to it. */
+function exportTargets(value, path = []) {
+	if (typeof value === 'string') return [{ path, target: value }];
+	if (value === null || typeof value !== 'object') return [];
+	return Object.entries(value).flatMap(([key, child]) => exportTargets(child, [...path, key]));
+}
+
+/** True for an exports object whose keys are conditions and not subpaths. */
+function isConditionMap(value) {
+	return (
+		value !== null &&
+		typeof value === 'object' &&
+		Object.keys(value).every((key) => !key.startsWith('.'))
+	);
+}
+
+/** Every condition map inside an exports value, with its subpath. */
+function conditionMaps(value, subpath = '.') {
+	if (value === null || typeof value !== 'object') return [];
+	if (isConditionMap(value)) {
+		const nested = Object.values(value).flatMap((child) => conditionMaps(child, subpath));
+		return [{ subpath, map: value }, ...nested];
+	}
+	return Object.entries(value).flatMap(([key, child]) => conditionMaps(child, key));
+}
+
+/** (b) The package is ESM only. */
+export function checkEsm(manifest) {
+	const name = manifest.name;
+	const found = [];
+	if (manifest.type !== 'module') found.push(finding('esm', name, 'type is not "module".'));
+	for (const { path, target } of exportTargets(manifest.exports)) {
+		if (path.includes('require')) {
+			found.push(finding('esm', name, `exports has a require condition (${path.join(' > ')}).`));
+		}
+		if (/\.c[jt]s$/.test(target)) {
+			found.push(finding('esm', name, `exports target ${target} is CommonJS.`));
+		}
+	}
+	if (typeof manifest.main === 'string' && /\.c[jt]s$/.test(manifest.main)) {
+		found.push(finding('esm', name, `main ${manifest.main} is CommonJS.`));
+	}
+	return found;
+}
+
+/** (c) Every export and types path exists, and each entry has a types target. */
+export function checkExports(manifest, exists) {
+	const name = manifest.name;
+	const targets = exportTargets(manifest.exports).map(({ target }) => target);
+	const fields = ['main', 'types'].map((field) => manifest[field]);
+	const paths = [...new Set([...targets, ...fields])]
+		.filter((path) => typeof path === 'string' && !path.includes('*'))
+		.sort();
+	const missing = paths
+		.filter((path) => !exists(path))
+		.map((path) => finding('exports', name, `${path} does not exist.`));
+	const untyped = conditionMaps(manifest.exports)
+		.filter(({ map }) => hasUntypedRuntime(map))
+		.map(({ subpath }) => finding('types', name, `export ${subpath} has no types condition.`));
+	return [...missing, ...untyped];
+}
+
+/** True for a condition map with a JavaScript target and no types condition. */
+function hasUntypedRuntime(map) {
+	const runtime = map.import ?? map.default;
+	return typeof runtime === 'string' && /\.m?js$/.test(runtime) && !('types' in map);
+}
+
+const FORBIDDEN =
+	/^(src\/|test\/|tests\/|tsconfig[^/]*\.json$|tsdown\.config\.|vitest[^/]*\.config\.|biome\.jsonc?$|knip\.json$|.*\.test\.[cm]?[jt]s$)/;
+
+/** (d) The pack list holds dist, the README and the license, and no source or config. */
+export function checkPack(name, files) {
+	const found = [];
+	if (!files.some((file) => file.startsWith('dist/'))) {
+		found.push(finding('pack', name, 'pack list has no dist file.'));
+	}
+	if (!files.some((file) => /^README(\.md)?$/i.test(file))) {
+		found.push(finding('pack', name, 'pack list has no README.'));
+	}
+	if (!files.some((file) => /^LICEN[CS]E(\.md|\.txt)?$/i.test(file))) {
+		found.push(finding('pack', name, 'pack list has no license.'));
+	}
+	for (const file of files.filter((entry) => FORBIDDEN.test(entry))) {
+		found.push(finding('pack', name, `pack list holds ${file}.`));
+	}
+	return found;
+}
+
+/** (e) Versions agree, and an internal dependency is workspace:* or the same version. */
+export function checkLockstep(manifests) {
+	const found = [];
+	let version;
+	try {
+		version = sharedVersion(manifests.map((manifest) => ({ manifest })));
+	} catch (error) {
+		found.push(finding('version', '(all)', error.message.split('. ')[0]));
+	}
+	return [...found, ...checkRanges(manifests, version)];
+}
+
+/** The internal dependencies of one manifest, as [name, range] pairs. */
+function internalDependencies(manifest, names) {
+	const fields = ['dependencies', 'peerDependencies', 'optionalDependencies'];
+	return fields
+		.flatMap((field) => Object.entries(manifest[field] ?? {}))
+		.filter(([dependency]) => names.has(dependency));
+}
+
+/** A finding for each internal range that is neither workspace:* nor the version. */
+function checkRanges(manifests, version) {
+	const names = new Set(manifests.map((manifest) => manifest.name));
+	return manifests.flatMap((manifest) =>
+		internalDependencies(manifest, names)
+			.filter(([, range]) => range !== 'workspace:*' && range !== (version ?? manifest.version))
+			.map(([dependency, range]) =>
+				finding('range', manifest.name, `${dependency} has range ${range}.`),
+			),
+	);
+}
+
+/** (f) engines.node is the same in every package. */
+export function checkEngines(manifests) {
+	const values = new Set(manifests.map((manifest) => manifest.engines?.node));
+	if (values.size <= 1) return [];
+	const list = [...values].map((value) => value ?? 'missing').sort();
+	return [finding('engines', '(all)', `engines.node differs: ${list.join(', ')}.`)];
+}
+
+/** The files `npm pack` would put in the tarball, without writing one. */
+async function packList(dir) {
+	const { stdout } = await run('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
+		cwd: dir,
+	});
+	return JSON.parse(stdout)[0].files.map((file) => file.path);
+}
+
+/** Every finding for the current tree. */
+export async function checkTree() {
+	const packages = await publishablePackages();
+	const manifests = packages.map((entry) => entry.manifest);
+	const found = [
+		...checkTypebox(await readFile(join(ROOT, 'pnpm-lock.yaml'), 'utf8')),
+		...checkLockstep(manifests),
+		...checkEngines(manifests),
+	];
+	const perPackage = await Promise.all(
+		packages.map(async ({ dir, manifest }) => [
+			...checkEsm(manifest),
+			...checkExports(manifest, (path) => existsSync(join(dir, path))),
+			...checkPack(manifest.name, await packList(dir)),
+		]),
+	);
+	return [...found, ...perPackage.flat()];
+}
+
+async function main() {
+	const found = await checkTree();
+	for (const entry of found) console.error(`${entry.rule}: ${entry.package}: ${entry.message}`);
+	if (found.length > 0) {
+		console.error(`${found.length} package hygiene finding(s).`);
+		process.exitCode = 1;
+		return;
+	}
+	console.log('Package hygiene: no findings.');
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+	main().catch((error) => {
+		console.error(error instanceof Error ? error.message : String(error));
+		process.exitCode = 1;
+	});
+}

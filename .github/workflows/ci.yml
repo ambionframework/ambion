@@ -99,7 +99,18 @@ jobs:
             exit 1
           fi
 
+      - name: package hygiene
+        run: pnpm run check:packages
+
       - name: packages pack cleanly
         run: |
           node scripts/version.mjs --check
           node scripts/publish.mjs --pack-only
+
+      # Packs every package, installs the archives through file: overrides in a
+      # project outside the repository, and runs `ambion new` for both
+      # templates. Each generated project installs, typechecks, and runs.
+      # Only third-party dependencies come from the registry. It needs no key.
+      - name: generated projects install, typecheck, and run
+        run: node scripts/cli-team-smoke.mjs
+        timeout-minutes: 10
