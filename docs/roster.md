@@ -68,7 +68,8 @@ also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
 - An unknown name or a human name is refused.
 - Agent tool commits return `unchanged` when the requested membership already holds.
 - A host `room.seat` / `room.unseat` call that repeats an already-satisfied
-  request resolves without writing a new entry.
+  request resolves without writing a new entry. A host `seat` that asks for
+  other attention or fixing than the held seat has is refused.
 - Neither path writes another membership entry for that request.
 
 ## Fixed seats

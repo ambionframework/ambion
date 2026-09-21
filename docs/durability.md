@@ -225,6 +225,9 @@ both start and resume.
 - **A format 1 journal stays readable.** A later runtime reads it and folds
   the same state. The golden journals in
   [`test/golden`](../packages/ambion/test/golden) hold that fold.
+- **A key carries a space prefix.** A delivery key starts with `delivery:`
+  and a commit key starts with `commit:`, so equal text in the two never
+  collides. A key with no prefix, from an older journal, reads as written.
 - **A run entry with no `format` reads as format 1.** Journals from before
   the field share the body shape.
 - **An unknown format is refused.** A runtime that reads `format: 2` throws

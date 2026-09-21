@@ -117,11 +117,10 @@ means two things or two names mean one.
 names the steps it needs; a step with no "Needs" line starts now. **P0**
 blocks the tag; **P2** is in scope and can land last.
 
-| Lane | Chain                                                           | Priority |
-| ---- | --------------------------------------------------------------- | -------- |
-| B    | Phase 8: 1 now; 2 and 3 after it; 4 to 8 last                   | P0       |
-| C    | Documentation: the API reference (D10), then the changelog      | P2       |
-| D    | The small sharp edges (C6), before the evidence runs of phase 8 | P1       |
+| Lane | Chain                                                      | Priority |
+| ---- | ---------------------------------------------------------- | -------- |
+| B    | Phase 8: 1 now; 2 and 3 after it; 4 to 8 last              | P0       |
+| C    | Documentation: the API reference (D10), then the changelog | P2       |
 
 **The critical path is phase 8.** Phase 4 (executors), phase 6 (the
 workbench and `ambion new`), and phase 7 (the guides, `trust.md`, and the
@@ -174,15 +173,6 @@ commit and a run for each claim.
 ## The items
 
 Each item states the problem, the solution, and the impact.
-
-### C. Developer experience
-
-**C6. Small sharp edges.** A `summary` name no seat holds gives no summary
-and no warning; `visit.send()` returns a handle whose `owner` can be another
-person; host `seat()` rejects a repeat while the agent tool returns
-`unchanged`; the `say` key and a human delivery key share one key space.
-Refuse the unheld summary name, add `opened` to
-the handle, make the host operation idempotent, and prefix the key kinds.
 
 ### D. Scope the release did not name
 
