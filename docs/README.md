@@ -11,25 +11,26 @@ each page.
 
 ## Contracts
 
-| Document                          | Use it for                                                    |
-| --------------------------------- | ------------------------------------------------------------- |
-| [Room](room.md)                   | Overview, glossary, and the room-wide mechanisms              |
-| [Definitions and tools](agent.md) | Definitions and tools                                         |
-| [Executors](executors.md)         | The executor contract, steps, the trace, and adapters         |
-| [Assistant](assistant.md)         | The default assistant package and the `assistant` room option |
-| [Exchange](exchange.md)           | Human questions, completion, and durable result handles       |
-| [Presence](presence.md)           | Visits, arrivals, departures, and catch-up                    |
-| [Roster](roster.md)               | Agent membership, reserve, and attention                      |
-| [Patterns](patterns.md)           | The human collaboration patterns the room represents          |
-| [Summaries](summary.md)           | Optional closing work and context replacement                 |
-| [Resources](resources.md)         | The resource contract, references, and provenance             |
-| [Workspace](workspace.md)         | The Pi filesystem binding of the resource contract            |
-| [Example](example.md)             | The one runnable example: an agentic lab workspace            |
-| [Durability](durability.md)       | Journal guarantees, recovery, leases, and failure evidence    |
-| [Formal](formal.md)               | The verified rules, their proofs, and how the gate runs them  |
-| [Deployment](deployment.md)       | Host placement, storage, reconnect, and operational limits    |
-| [Envelope](envelope.md)           | Configurable limits and the measured cost of the fold         |
-| [Toolchain](toolchain.md)         | Package layout, checks, CI, and release commands              |
+| Document                          | Use it for                                                             |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| [Room](room.md)                   | Overview, glossary, and the room-wide mechanisms                       |
+| [Definitions and tools](agent.md) | Definitions and tools                                                  |
+| [Executors](executors.md)         | The executor contract, steps, the trace, and adapters                  |
+| [Assistant](assistant.md)         | The default assistant package and the `assistant` room option          |
+| [Exchange](exchange.md)           | Human questions, completion, and durable result handles                |
+| [Presence](presence.md)           | Visits, arrivals, departures, and catch-up                             |
+| [Roster](roster.md)               | Agent membership, reserve, and attention                               |
+| [Trust](trust.md)                 | What one owner guarantees another, and what the kernel does not defend |
+| [Patterns](patterns.md)           | The human collaboration patterns the room represents                   |
+| [Summaries](summary.md)           | Optional closing work and context replacement                          |
+| [Resources](resources.md)         | The resource contract, references, and provenance                      |
+| [Workspace](workspace.md)         | The Pi filesystem binding of the resource contract                     |
+| [Example](example.md)             | The one runnable example: an agentic lab workspace                     |
+| [Durability](durability.md)       | Journal guarantees, recovery, leases, and failure evidence             |
+| [Formal](formal.md)               | The verified rules, their proofs, and how the gate runs them           |
+| [Deployment](deployment.md)       | Host placement, storage, reconnect, and operational limits             |
+| [Envelope](envelope.md)           | Configurable limits and the measured cost of the fold                  |
+| [Toolchain](toolchain.md)         | Package layout, checks, CI, and release commands                       |
 
 ## Navigation hints
 
@@ -45,6 +46,7 @@ shorthand, and how the workbench example evaluates it.
 definitions and tools. Read `executors.md` for the execution boundary, the
 steps, and how to write an adapter. Read `exchange.md` and
 `presence.md` for the two durable concepts built on the room. Read
+`trust.md` before you expose a room to untrusted agents. Read
 `durability.md` before choosing storage or recovery behavior, then
 `deployment.md` for host procedures. `envelope.md` lists every
 configurable limit and the cost of the fold. `formal.md` states how a rule is
