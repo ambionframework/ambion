@@ -48,6 +48,8 @@ async function packFixture(destination) {
 		'pi-journal',
 		'ambion',
 		'pi',
+		'claude',
+		'codex',
 		'assistant',
 		'workspace',
 		'cloudflare',
@@ -173,12 +175,32 @@ export function readmeCodeBlocks(markdown) {
 	return [...markdown.matchAll(/^```ts\n([\s\S]*?)^```$/gm)].map((match) => match[1]);
 }
 
+/**
+ * Group the ts blocks of a page into modules. Blocks join into one module,
+ * except that a block after the `<!-- ts: standalone -->` marker starts its own.
+ */
+export function readmeModules(markdown) {
+	const marker = '<!-- ts: standalone -->\n\n';
+	const modules = [];
+	for (const match of markdown.matchAll(/^```ts\n([\s\S]*?)^```$/gm)) {
+		const own = markdown.slice(0, match.index).endsWith(marker);
+		if (own || modules.length === 0) modules.push([match[1]]);
+		else modules[modules.length - 1].push(match[1]);
+	}
+	return modules.map((blocks) => blocks.join('\n'));
+}
+
 /** Typecheck the README examples. The fixture extracts them; nothing is copied by hand. */
 async function readmeFixture(destination) {
 	const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
-	const blocks = readmeCodeBlocks(readme);
-	if (blocks.length === 0) throw new Error('README.md holds no ts block to typecheck.');
-	await writeFile(join(destination, 'src', 'readme.ts'), blocks.join('\n'));
+	const modules = readmeModules(readme);
+	if (modules.length === 0) throw new Error('README.md holds no ts block to typecheck.');
+	for (const [index, source] of modules.entries()) {
+		await writeFile(
+			join(destination, 'src', index === 0 ? 'readme.ts' : `readme-${index}.ts`),
+			source,
+		);
+	}
 	for (const name of PACKAGE_READMES) {
 		const page = await readFile(join(ROOT, 'packages', name, 'README.md'), 'utf8');
 		for (const [index, block] of readmeCodeBlocks(page).entries()) {

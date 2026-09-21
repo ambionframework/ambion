@@ -155,6 +155,96 @@ waiting for an agent. `subscribe` streams messages and steps live, each with
 its activation id, so a user interface merges the live stream and the read
 the same way.
 
+## One team on three harnesses
+
+**Every family reaches the world through the same tools.** The team below
+runs one seat on Pi, one on the Claude Agent SDK, and one on the Codex SDK.
+It has one in-memory workspace and no file on the host. The workspace tools
+are the only tools of every seat, next to the three room tools.
+
+<!-- ts: standalone -->
+
+```ts
+import { defineAgent, startRoom, type ToolBundle } from '@ambionframework/ambion';
+import { composeExecutions } from '@ambionframework/ambion/hosting';
+import { claude, claudeExecution } from '@ambionframework/claude';
+import { codex, codexExecution } from '@ambionframework/codex';
+import { pi, piExecution } from '@ambionframework/pi';
+import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
+
+const workspace = openWorkspace({ name: 'lab', backend: memoryBackend() });
+const bundles: ToolBundle[] = [workspace.tools()];
+const instructions = 'Read /shared/kit.md before you answer. Cite the path of each fact.';
+
+const datasheets = defineAgent({
+  name: 'datasheets',
+  identity: 'States part limits with their source.',
+  executor: pi({ model: 'anthropic/claude-sonnet-5', instructions, bundles }),
+});
+
+const design = defineAgent({
+  name: 'design',
+  identity: 'Chooses parts and values.',
+  executor: claude({ model: 'claude-sonnet-5', instructions, bundles }),
+});
+
+const experiments = defineAgent({
+  name: 'experiments',
+  identity: 'Writes short, repeatable test plans.',
+  executor: codex({
+    model: 'gpt-5.6-luna',
+    modelReasoningEffort: 'medium',
+    nativeTools: 'none',
+    instructions,
+    bundles,
+  }),
+});
+
+const room = await startRoom({
+  name: 'lab',
+  goal: 'Choose a part and plan its test.',
+  agents: [datasheets, design, experiments],
+  seats: { datasheets: 'broadcast', design: 'broadcast', experiments: 'broadcast' },
+  execution: composeExecutions({
+    pi: piExecution(),
+    claude: claudeExecution(),
+    codex: codexExecution(),
+  }),
+});
+
+await room.stop();
+```
+
+**The shape is the workbench.** [`examples/workbench`](examples/workbench)
+builds its team the same way: one list of `bundles` serves every seat, and
+each seat gets its executor from `executorFor` in `definitions.ts`. The
+execution of each family is one entry of `composeExecutions`. A definition
+names its family through its executor, and the room routes each seat to that
+entry.
+
+| Family | On                             | Off                                    | How the package enforces it                                                               | Test that guards it                                                                                                                      |
+| ------ | ------------------------------ | -------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Pi     | Room tools and workspace tools | Everything else; Pi has no native tool | The executor gives the model the room tools and the tools of `bundles` only               | `examples/workbench/test/live/tool-set.test.ts`                                                                                          |
+| Claude | Room tools and workspace tools | Every built-in tool of Claude Code     | With no `allowedTools`, the executor passes an empty `--tools` list and reads no settings | `packages/claude/test/policy.test.ts` on the fake executable; `examples/workbench/test/live/tool-set.test.ts` on the model               |
+| Codex  | Room tools and workspace tools | Every native tool, and Code Mode       | `nativeTools: 'none'` sets the tool policy and replaces the model catalog entry           | `packages/codex/test/exclusive.test.ts` on the options; `packages/codex/test/live/exclusive.test.ts` and the workbench test on the model |
+
+**What the live tests prove.** One tool set, one filesystem, and no native
+tool rest on the live exclusivity tests. `tool-set.test.ts` lists the tools
+of each seat that has a key, finds the same list for every seat with no
+native tool in it, and shows that one seat reads a file another seat wrote.
+It also shows that a seat cannot read `/etc/hosts`.
+`packages/codex/test/live/exclusive.test.ts` does the same for a Codex seat.
+Both tiers skip a family with no key, and they run only on request.
+
+**`nativeTools: 'none'` turns off Codex Code Mode.** Its JavaScript runtime
+reads the host filesystem outside the sandbox on Codex 0.155.1. See
+[Codex](docs/codex.md#the-trust-boundary).
+
+Each family has a guide with its options and its tests. Read the
+[Pi](packages/pi/README.md), [Claude](packages/claude/README.md), and
+[Codex](docs/codex.md) pages, and [Executors](docs/executors.md) for the
+contract that all three meet.
+
 ## Key technical facts
 
 - **One append-only journal per room.** Messages, arrivals, departures,
