@@ -179,7 +179,16 @@ async function readmeFixture(destination) {
 	const blocks = readmeCodeBlocks(readme);
 	if (blocks.length === 0) throw new Error('README.md holds no ts block to typecheck.');
 	await writeFile(join(destination, 'src', 'readme.ts'), blocks.join('\n'));
+	for (const name of PACKAGE_READMES) {
+		const page = await readFile(join(ROOT, 'packages', name, 'README.md'), 'utf8');
+		for (const [index, block] of readmeCodeBlocks(page).entries()) {
+			await writeFile(join(destination, 'src', `readme-${name}-${index}.ts`), block);
+		}
+	}
 }
+
+/** The package READMEs whose ts blocks are whole modules over packed exports. */
+const PACKAGE_READMES = ['ambion', 'workspace', 'pi'];
 
 /** Exercise the assistant factory and shorthand through packed exports. */
 async function assistantFixture(destination) {
