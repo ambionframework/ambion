@@ -13,9 +13,8 @@ the experimental FFI that OpenTUI requires.
 
 ## Install the CLI
 
-Until the 0.1.0 release reaches npmjs, a dev build installs from GitHub
-Packages with a read token; see
-[the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
+The packages install from npmjs with no token. A dev build of `main` installs
+from GitHub Packages; see [the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
 Install the CLI:
 
 ```sh

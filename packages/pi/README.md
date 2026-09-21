@@ -26,8 +26,8 @@ when the agent needs the built-in tools of Claude Code.
 npm install @ambionframework/ambion @ambionframework/pi
 ```
 
-Every package needs Node 26.4 or newer. Until the packages publish to npmjs,
-installation needs a GitHub Packages read token; see
+Every package needs Node 26.4 or newer. The packages install from npmjs with no token. A dev build of `main` installs
+from GitHub Packages; see
 [the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
 
 **The registry reads the key from the environment.** The variable is the

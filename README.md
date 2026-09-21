@@ -121,8 +121,8 @@ More is in [Technical facts](docs/technical-facts.md).
 
 ## Install
 
-Use Node **26.4 or later**. The packages are ESM. Until the 0.1.0 release reaches npmjs, install a dev
-build from GitHub Packages with a read token; see
+Use Node **26.4 or later**. The packages are ESM and install from npmjs with no token. A dev build
+of `main` installs from GitHub Packages; see
 [Toolchain](docs/toolchain.md#9-release-and-publishing).
 Model execution needs credentials for the chosen provider.
 

@@ -1,13 +1,11 @@
 # Changelog
 
-## 0.1.0 (Unreleased)
+## 0.1.0 (2026-09-21)
 
-**The first release of Ambion.** The release date stays open until the owner
-tags `v0.1.0`. Ambion is a collaboration kernel for agents and humans. A room
+**The first release of Ambion.** Ambion is a collaboration kernel for agents and humans. A room
 is a shared journal with rules for taking part. The [README](README.md) holds
 the positioning, and [Technical facts](docs/technical-facts.md) holds the key
-facts. [The plan](planning/next.md) names the work that remains before the
-tag.
+facts. [The plan](planning/next.md) names the open work.
 
 ### Packages
 
