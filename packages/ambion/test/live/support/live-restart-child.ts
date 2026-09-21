@@ -4,7 +4,6 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { sqliteJournals } from '@ambionframework/journal';
-import { pi, piExecution } from '../../../../pi/src/index.ts';
 import { inProcessTransport, type RoomProtocol, type Transport } from '../../../src/hosting.ts';
 import {
 	createRuntime,
@@ -18,6 +17,7 @@ import {
 } from '../../../src/index.ts';
 import { messagesOf, participantsOf } from '../../support/room.ts';
 import { nodeSql } from '../../support/storage.ts';
+import { executionFor, executorFor } from './harness.ts';
 
 const [phase, directory] = process.argv.slice(2);
 if (directory === undefined || (phase !== 'start' && phase !== 'resume')) {
@@ -31,21 +31,19 @@ const person = defineHuman({ name: 'andrei', identity: 'Founder. Asks the questi
 const fast = defineAgent({
 	name: 'fast',
 	identity: 'Answers the key fact in one short sentence.',
-	executor: pi({
+	executor: executorFor({
 		instructions:
 			'Answer exactly once in one short sentence. Include the words FAST_CONFIRMED. ' +
 			'Do not send another answer after that.',
-		model: process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5',
 	}),
 });
 const slow = defineAgent({
 	name: 'slow',
 	identity: 'Answers the key fact after a restart.',
-	executor: pi({
+	executor: executorFor({
 		instructions:
 			'Answer exactly once in one short sentence. Include the words SLOW_RECOVERED. ' +
 			'Do not send another answer after that.',
-		model: process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5',
 	}),
 });
 
@@ -98,7 +96,7 @@ async function start(): Promise<void> {
 	const runtime = createRuntime({
 		storage,
 		transport: startTransport(),
-		execution: piExecution(),
+		execution: executionFor(),
 		limits: { lease: { ttl: 5_000, deadline: 120_000 }, activation: { backoff: () => 0 } },
 	});
 	const room = await startRoom({ name, agents: [fast, slow], runtime });
@@ -150,7 +148,7 @@ async function resume(): Promise<void> {
 	const runtime = createRuntime({
 		storage,
 		transport: inProcessTransport(),
-		execution: piExecution(),
+		execution: executionFor(),
 		limits: { lease: { ttl: 5_000, deadline: 120_000 }, activation: { backoff: () => 0 } },
 	});
 	const room = await resumeRoom(name, { runtime, agents: [fast, slow] });

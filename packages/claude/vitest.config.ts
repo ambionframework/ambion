@@ -29,5 +29,5 @@ export default defineConfig({
 			{ find: '@ambionframework/pi', replacement: source('../pi/src/index.ts') },
 		],
 	},
-	test: { exclude: [...configDefaults.exclude], testTimeout: 20_000 },
+	test: { exclude: [...configDefaults.exclude, 'test/live/**'], testTimeout: 20_000 },
 });

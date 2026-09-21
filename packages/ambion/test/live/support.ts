@@ -3,17 +3,18 @@
  * a deadline on the room going quiet, and the invariants the record holds
  * whatever the model said, and what a run cost.
  *
+ * `AMBION_HARNESS` picks the executor family: `pi` (the default), `claude` or
+ * `codex`. Every test runs under each with the same claims.
+ *
  * A live test proves what a scripted stream cannot: that a model id resolves
- * through Pi's registry, that a real provider accepts the tools the room
+ * through the harness, that a real provider accepts the tools the room
  * gives a seat, that the judgment the prompt asks for holds on a real model,
  * and that a real request can be cancelled. It does not prove the routing;
  * `../room.test.ts` and its neighbours prove that, deterministically.
  */
 import { memoryJournals } from '@ambionframework/journal';
-import { piSessions } from '@ambionframework/pi-journal';
-import type { Usage } from '@earendil-works/pi-ai';
 import { describe } from 'vitest';
-import { type PiOptions, pi, piExecution, seatSessionId } from '../../../pi/src/index.ts';
+import type { PiOptions } from '../../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -22,19 +23,20 @@ import {
 	type Message,
 	type Room,
 	type RoomNotification,
-	type Runtime,
 	type StartRoomOptions,
 	startRoom,
 } from '../../src/index.ts';
-import { collect, participantsOf, roomName, waitForRoom } from '../support/room.ts';
+import { collect, roomName, waitForRoom } from '../support/room.ts';
+import {
+	executionFor,
+	executorFor,
+	HARNESS,
+	KEY_VAR,
+	MODEL,
+	REPORTS_COST,
+} from './support/harness.ts';
 
-/** The model every live seat runs on. The example reads the same variable. */
-export const MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
-
-/** The key's variable, derived the way `registryStream` derives it. */
-export const KEY_VAR = `${MODEL.slice(0, MODEL.indexOf('/'))
-	.toUpperCase()
-	.replace(/-/g, '_')}_API_KEY`;
+export { executionFor, executorFor, HARNESS, KEY_VAR, MODEL, REPORTS_COST };
 
 /** `describe` when the key is set; a skipped block when it is not. */
 export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(!process.env[KEY_VAR]);
@@ -46,8 +48,8 @@ type AgentOptions = { identity: string } & Omit<PiOptions, 'model'> & { model?: 
 
 /** An agent on the live model. */
 export const agent = (name: string, options: AgentOptions) => {
-	const { identity, model, ...piOptions } = options;
-	return defineAgent({ name, identity, executor: pi({ model: model ?? MODEL, ...piOptions }) });
+	const { identity, ...rest } = options;
+	return defineAgent({ name, identity, executor: executorFor(rest) });
 };
 
 /** The room's assistant, with the judgment both of its activations share. */
@@ -56,8 +58,7 @@ export const assistant = defineAgent({
 	identity:
 		'Seats a specialist from the reserve when a question needs one, and writes the one ' +
 		'message a person reads when their exchange closes.',
-	executor: pi({
-		model: MODEL,
+	executor: executorFor({
 		instructions: `
 		When a question opens and specialists are on call, seat each specialist
 		whose identity touches the question. Leave a specialist in the reserve
@@ -78,7 +79,7 @@ type RoomOptions = Omit<StartRoomOptions, 'name' | 'stream' | 'runtime'>;
 
 /** A live room with explicit participants and fresh storage for its record and transcripts. */
 export async function open(prefix: string, options: RoomOptions) {
-	const runtime = createRuntime({ storage: memoryJournals(), execution: piExecution() });
+	const runtime = createRuntime({ storage: memoryJournals(), execution: executionFor() });
 	const session = await startRoom({
 		...options,
 		name: roomName(prefix),
@@ -134,29 +135,22 @@ export interface Spent {
 }
 
 /**
- * What a room spent, read off the seats' own downstream sessions: every
- * activation lands there with the provider's usage on each turn.
+ * What a room spent, read from the room's own record: each activation of
+ * every exchange carries the usage its executor reported. Both harnesses
+ * report through the same path.
  */
-export async function spent(runtime: Runtime, session: Room): Promise<Spent> {
+export async function spent(session: Room): Promise<Spent> {
 	const total: Spent = { activations: 0, tokens: 0, cost: 0 };
-	for (const info of await participantsOf(session)) {
-		if (info.kind !== 'agent') continue;
-		const seat = await piSessions(runtime.storage).open(seatSessionId(session.name, info.name));
-		for (const entry of await seat.findEntries()) add(total, entry);
+	for (const exchange of (await session.read()).exchanges) {
+		for (const activation of exchange.activations) {
+			total.activations += 1;
+			const usage = activation.usage;
+			if (usage === undefined) continue;
+			total.tokens += usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
+			total.cost += usage.cost ?? 0;
+		}
 	}
 	return total;
-}
-
-function add(total: Spent, entry: { type: string; customType?: string }): void {
-	if (entry.type === 'custom' && entry.customType === 'ambion/activation') {
-		total.activations += 1;
-		return;
-	}
-	if (entry.type !== 'message') return;
-	const message = (entry as { message?: { role?: string; usage?: Usage } }).message;
-	if (message?.role !== 'assistant' || message.usage === undefined) return;
-	total.tokens += message.usage.totalTokens;
-	total.cost += message.usage.cost.total;
 }
 
 /**

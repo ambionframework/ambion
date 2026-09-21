@@ -68,6 +68,7 @@ pnpm install
 pnpm check     # format, build, typecheck, lint, test — the gate CI runs
 pnpm format    # biome --write, then prettier --write
 pnpm test:live # the room on a real model; needs <PROVIDER>_API_KEY and costs money
+AMBION_HARNESS=<pi|claude|codex> pnpm test:live # one harness; claude needs ANTHROPIC_API_KEY, codex needs CODEX_API_KEY
 pnpm chaos     # the sweeps on both storages, the handover at every write, the kill at every third write, 200 seeds of the walk and the history
 pnpm check:lemmascript # prove every *.verified.ts and *.proofs.dfy with Dafny; CI runs it, a contributor needs Dafny on PATH
 pnpm rule:check <file> # regenerate and prove one rules file after an edit

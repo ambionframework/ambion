@@ -32,30 +32,47 @@ env:
 
 jobs:
   live:
-    name: Live tests on ${{ inputs.model || 'anthropic/claude-sonnet-5' }}
+    name: Live tests on ${{ matrix.harness }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      # One harness failing does not stop the others: each run costs money
+      # and says something about its own executor.
+      fail-fast: false
+      matrix:
+        harness: [pi, claude, codex]
     env:
+      AMBION_HARNESS: ${{ matrix.harness }}
       AMBION_MODEL: ${{ inputs.model || 'anthropic/claude-sonnet-5' }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # `pi` and `claude` read the Anthropic key. `codex` reads its own key
+      # and runs its own model. A job sees the key of its harness only.
+      ANTHROPIC_API_KEY: ${{ matrix.harness != 'codex' && secrets.ANTHROPIC_API_KEY || '' }}
+      CODEX_API_KEY: ${{ matrix.harness == 'codex' && secrets.CODEX_API_KEY || '' }}
     steps:
+      # A harness whose secret is empty skips: every later step waits on
+      # this one. The run says which harness skipped.
+      - name: the key is present
+        id: key
+        run: |
+          if [ "$AMBION_HARNESS" = codex ]; then key="$CODEX_API_KEY"; else key="$ANTHROPIC_API_KEY"; fi
+          if [ -n "$key" ]; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No key for the $AMBION_HARNESS harness: the repository secret is empty, so the job skips."
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v5
+        if: steps.key.outputs.present == 'true'
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@v4
+        if: steps.key.outputs.present == 'true'
       - uses: actions/setup-node@v5
+        if: steps.key.outputs.present == 'true'
         with:
           node-version: 26
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-
-      # Without a key every live test skips, and a green run would say
-      # nothing. The job fails instead, so a missing secret is visible.
-      - name: the key is present
-        run: |
-          [ -n "$ANTHROPIC_API_KEY" ] || {
-            echo 'ANTHROPIC_API_KEY is not set: add it to the repository secrets.' >&2
-            exit 1
-          }
-
-      - run: pnpm run test:live
+      - if: steps.key.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.key.outputs.present == 'true'
+        run: pnpm run test:live

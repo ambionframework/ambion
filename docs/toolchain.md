@@ -213,17 +213,23 @@ source, test, or config files, versions out of lockstep, and a different
 
 The live workflow runs the same scenarios on a real provider. It runs after a
 change lands on `main`, on a weekly schedule, and by dispatch. It does not run
-on a pull request, because a real-model run costs money. It requires
-`ANTHROPIC_API_KEY`, uses `AMBION_MODEL` (the default is
-`anthropic/claude-sonnet-5`), and cancels a superseded run. Run it locally
+on a pull request, because a real-model run costs money. It runs one
+job per harness. The `pi` and `claude` jobs read `ANTHROPIC_API_KEY` and use
+`AMBION_MODEL` (the default is `anthropic/claude-sonnet-5`). The `codex` job
+reads `CODEX_API_KEY`. The workflow cancels a superseded run. Run it locally
 with:
 
 ```sh
 pnpm test:live
 ```
 
-`@ambionframework/codex` has a live tier of its own. The live workflow does
-not pass `CODEX_API_KEY` yet, so the Codex files skip there. The files skip when
+`AMBION_HARNESS` is `pi` (the default), `claude`, or `codex`. It selects the
+executor of the live seats. The live workflow runs a matrix on the three
+values. A harness whose secret is empty skips. Run one harness by hand with
+`AMBION_HARNESS=codex pnpm test:live`. The `codex` harness reads
+`CODEX_API_KEY` and runs the model `gpt-5.6-luna`.
+
+`@ambionframework/codex` has a live tier of its own. Its files skip when
 `CODEX_API_KEY` is unset, and they run on the model `gpt-5.6-luna`. Run one
 file with `pnpm --filter @ambionframework/codex run test:live`, which builds
 the package first because Codex spawns the built room tools server. See

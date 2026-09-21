@@ -38,7 +38,7 @@ live('judgment', () => {
 				question, end your turn without calling say.
 			`,
 		});
-		const { session, runtime, events } = await open('declines', { agents: [weather, payroll] });
+		const { session, events } = await open('declines', { agents: [weather, payroll] });
 		const visit = await enter(session, person);
 		await visit.send({ text: 'Will it rain on site today?' });
 		await untilQuiet(session);
@@ -52,7 +52,7 @@ live('judgment', () => {
 		expect(saidBy(messages, 'payroll')).toEqual([]);
 		expect(saidByAgents(messages, [person.name])).toHaveLength(1);
 		await invariants(session, events);
-		report('declining', await spent(runtime, session));
+		report('declining', await spent(session));
 		await session.stop();
 	});
 
@@ -81,7 +81,7 @@ live('judgment', () => {
 				has answered, end your turn without calling say.
 			`,
 		});
-		const { session, runtime, events } = await open('directed', {
+		const { session, events } = await open('directed', {
 			agents: [desk, stock],
 			seats: { [desk.name]: 'broadcast', [stock.name]: 'named' },
 		});
@@ -109,7 +109,7 @@ live('judgment', () => {
 		expect(answer).toHaveLength(1);
 		expect(answer[0]?.text).toContain('42');
 		await invariants(session, events);
-		report('a directed say', await spent(runtime, session));
+		report('a directed say', await spent(session));
 		await session.stop();
 	});
 });

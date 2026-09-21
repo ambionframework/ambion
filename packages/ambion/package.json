@@ -51,7 +51,7 @@
 		"build": "tsdown",
 		"check:types": "tsc -p tsconfig.check.json --noEmit",
 		"test": "vitest run",
-		"test:live": "pnpm --filter '@ambionframework/ambion...' build && vitest run --config vitest.live.config.ts",
+		"test:live": "pnpm --filter '@ambionframework/ambion...' --filter '@ambionframework/codex...' build && vitest run --config vitest.live.config.ts",
 		"test:watch": "vitest"
 	},
 	"devDependencies": {
