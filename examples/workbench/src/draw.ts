@@ -127,6 +127,8 @@ export class Painter {
 		if (!view) return [fg(palette.muted)('Opening…')];
 		if (view.status !== 'running')
 			return [fg(palette.muted)(`${view.name} is ${view.status}. Use /resume.`)];
+		const waiting = session.attention[0];
+		if (waiting) return [fg(palette.coral)('● '), fg(palette.muted)(waiting)];
 		if (view.exchange)
 			return [fg(palette.coral)('● '), fg(palette.muted)('A new message steers the open exchange')];
 		return [fg(palette.green)('● '), fg(palette.muted)('Active')];

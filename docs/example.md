@@ -82,7 +82,7 @@ the assistant call `operate`.
 
 The table is append-only. The status of an operation is its latest row. The
 instrument checks the numeric limit only. It does not verify who approved.
-The terminal display of the approval is phase 6 work.
+The terminal shows a `requested` operation to the exchange owner until a later row answers it.
 
 ### The rooms
 
@@ -149,6 +149,10 @@ automated test yet.
 | Two people work the kit through separate rooms                  | Visits, presence, and catch-up by position | Scripted                                                                      |
 | One specialist records a run and another reads it back          | A second resource, apart from the journal  | Scripted: `record` stamps provenance, `query` reads the row from `lab.db`     |
 | The Design specialist drives an instrument above its limit      | An action that waits for a person          | Scripted: `operate` records a request, `approve_operation` records the answer |
+| The terminal shows the cost of an exchange                      | Cost per exchange is real                  | Scripted: formatting from synthetic usage. Live: `usage.cost` is positive     |
+| The terminal opens the steps of an activation                   | A drill-down into the trace                | Scripted: the host reads the trace, and the model groups passes and steps     |
+| An exchange ends on a message to a person                       | `awaiting` reads as waiting on that person | Scripted: the discussion flag, and a note for the person named                |
+| An instrument request waits for its owner                       | The terminal shows an approval             | Scripted: the host lists the request, and drops it once a later row answers   |
 
 The kernel chaos tier covers a kill during work. This example does not.
 
@@ -174,6 +178,8 @@ examples/workbench/
     feed.ts            the room feed: one read at a time
     commands.ts        the slash commands and their suggestions
     timeline.ts        the record grouped into questions, threads, and summaries
+    steps.ts           the steps of an activation, and the cost of a run
+    approvals.ts       the instrument operations that wait for an answer
     text.ts            one line of text fitted to a width, with an ellipsis
     header-fit.ts      what the header rows show at one width
     transcript.ts      the conversation
@@ -205,10 +211,8 @@ families and a drill-down interface. These parts need kernel work that
 [next.md](../planning/next.md) schedules. Workbench grows into them as the
 phases land.
 
-| Deferred capability                                       | Item in next.md |
-| --------------------------------------------------------- | --------------- |
-| An Instruments agent and a Data Analysis agent            | E1, F10         |
-| The Claude Agent SDK executor beside the Pi executor      | F10, phase 4    |
-| Artifact references on messages and summaries             | E5              |
-| An exchange that reads as `awaiting` a person             | E7              |
-| Cost per exchange, and a drill-down into activation steps | F7, F8          |
+| Deferred capability                                  | Item in next.md |
+| ---------------------------------------------------- | --------------- |
+| An Instruments agent and a Data Analysis agent       | E1, F10         |
+| The Claude Agent SDK executor beside the Pi executor | F10, phase 4    |
+| Artifact references on messages and summaries        | E5              |
