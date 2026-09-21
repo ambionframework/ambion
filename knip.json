@@ -11,6 +11,10 @@
 		"packages/*": {
 			"project": ["src/**/*.ts"]
 		},
+		"packages/claude": {
+			"project": ["src/**/*.ts"],
+			"ignoreDependencies": ["@ambionframework/journal"]
+		},
 		"packages/cli": {
 			"project": ["src/**/*.ts"],
 			"ignoreDependencies": [

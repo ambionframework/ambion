@@ -75,6 +75,7 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'UNSEAT',
 		'assertWire',
 		'callLimits',
+		'composeExecutions',
 		'describeExecutor',
 		'hostingOf',
 		'inProcessTransport',

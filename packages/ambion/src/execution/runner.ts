@@ -153,6 +153,7 @@ export class AgentRunner implements AgentPort {
 			// A trace that never took a step opens no journal. A failed write is a
 			// `trace_error`, and it never reaches the lease.
 			await trace.close();
+			closeQuietly(session);
 			await this.next();
 		}
 	}
@@ -560,6 +561,15 @@ function passOver(
 ): Promise<PassResult> {
 	trace.startPass(input.kind, input.view.through);
 	return session.pass(input);
+}
+
+/** Close a session. A close that throws leaves the activation as it ended. */
+function closeQuietly(session: ExecutorSession): void {
+	try {
+		session.close?.();
+	} catch {
+		// The activation is over. A failed close changes no outcome.
+	}
 }
 
 /** What the room answered to a commit, as a `room` step. */
