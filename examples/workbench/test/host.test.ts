@@ -276,6 +276,20 @@ describe('Workbench host', () => {
 		await expect(workbench.file('/shared/fake.db')).rejects.toThrow(/not a SQLite database/);
 	});
 
+	it('previews a lab table by its lab URI, and refuses any other name', async () => {
+		const workbench = await open(joinPath(await freshDirectory(), 'run'));
+		expect(await workbench.labTables()).toEqual(
+			expect.arrayContaining(['projects', 'runs', 'results', 'operations']),
+		);
+		const preview = await workbench.labTable('lab:///projects');
+		expect(preview.path).toBe('lab:///projects');
+		expect(preview.tables?.map((table) => table.name)).toEqual(['projects']);
+		expect(preview.text).toContain('# projects');
+		await expect(workbench.labTable('lab:///nothing')).rejects.toThrow(/No such lab table/);
+		await expect(workbench.labTable('/etc/hosts')).rejects.toThrow(/Use lab:/);
+		await expect(workbench.labTable('lab:///sqlite_master')).rejects.toThrow(/No such lab table/);
+	});
+
 	it('aborts an open exchange and keeps the room available', async () => {
 		const workbench = await open(joinPath(await freshDirectory(), 'run'), () =>
 			createAssistantMessageEventStream(),

@@ -37,13 +37,14 @@ export const people = [
 export type Person = (typeof people)[number];
 
 /** The shared rules every agent follows. The kernel adds the collaboration rules. */
-const shared =
+export const shared =
 	'This is a lab workbench for a toy Arduino kit. Read /library for the datasheets and /shared/kit.md for the kit and the house rules before you act. ' +
 	'Cite the exact datasheet path when you state a specification, for example /library/led-5mm.md. ' +
 	'Do not invent a value that a datasheet does not give. If a datasheet does not cover a case, say so. ' +
 	'The example connects no real hardware, so treat every measurement as a planned value, not a reading. ' +
 	'Respect explicit human constraints; they override role defaults and survive every specialist handoff. When the person says not to edit files, do not call write or shell tools that change files; give the answer in your reply. ' +
 	'The lab database holds the projects, test_plans, runs, results, and operations tables. Read it with `query` and append with `record`. `query` cannot change data. ' +
+	'Cite what you rely on in `refs`, one URI each. A workspace file is file:///<path>, for example file:///library/led-5mm.md. A lab table is lab:///<table>, for example lab:///runs. The terminal opens a ref that names an existing file or table, and marks any other ref. ' +
 	'Report only actions your tool results support. You have local file and shell tools, and no web, email, or hardware tools. ';
 
 /** The specialists. Each one has a narrow scope and reports back once. */

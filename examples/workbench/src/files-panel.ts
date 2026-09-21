@@ -186,7 +186,7 @@ export class FilesPanel {
 		const width = Math.max(...matches.map((file) => file.path.length));
 		const chunks = matches.slice(start, start + LIST_ROWS).flatMap((file, offset) => {
 			const chosen = start + offset === browser.index;
-			const line = `${chosen ? '▸ ' : '  '}${file.path.padEnd(width)}  ${bytes(file.size)}`;
+			const line = `${chosen ? '▸ ' : '  '}${file.path.padEnd(width)}  ${file.kind === 'table' ? 'table' : bytes(file.size)}`;
 			const tail = offset === LIST_ROWS - 1 ? '' : '\n';
 			return [
 				chosen ? bg(palette.selected)(fg(palette.accent)(line)) : fg(palette.muted)(line),

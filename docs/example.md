@@ -142,7 +142,9 @@ interface.
   on disk. The next start resumes them.
 - **Terminal.** `src/tui.ts` is an OpenTUI application on a dark theme. It has
   a multi-line composer with a room chip, and slash commands to switch person
-  or room, create a room, search workspace files in a side panel, and stop, resume, or abort.
+  or room, create a room, search workspace files in a side panel, and stop, resume, or abort. It shows
+  the refs of each message and opens a file, a lab table, or a message from
+  one (see the [Workbench README](../examples/workbench/README.md)).
   The person picks an identity on the first screen.
 - **Brand.** The terminal reads its colors from the repository brand kit in
   `brand/tokens/ambion.tokens.json`.
@@ -186,6 +188,7 @@ automated test yet.
 | One specialist records a run and another reads it back          | A second resource, apart from the journal  | Scripted: `record` stamps provenance, `query` reads the row from `lab.db`     |
 | The Design specialist drives an instrument above its limit      | An action that waits for a person          | Scripted: `operate` records a request, `approve_operation` records the answer |
 | The terminal shows the cost of an exchange                      | Cost per exchange is real                  | Scripted: formatting from synthetic usage. Live: `usage.cost` is positive     |
+| A message cites a file, a table, or a message                   | A ref opens as a file or a table opens     | Scripted: refs resolve, opens match the panel, a host path stays shut         |
 | The terminal opens the steps of an activation                   | A drill-down into the trace                | Scripted: the host reads the trace, and the model groups passes and steps     |
 | An exchange ends on a message to a person                       | `awaiting` reads as waiting on that person | Scripted: the discussion flag, and a note for the person named                |
 | An instrument request waits for its owner                       | The terminal shows an approval             | Scripted: the host lists the request, and drops it once a later row answers   |
@@ -209,7 +212,8 @@ examples/workbench/
     rooms.ts           the host lifecycle and the room catalog
     workbench.ts       the host: open, read, watch, send, control, create, files
     names.ts           the room name and goal rules
-    files.ts           the workspace list and one file preview
+    files.ts           the workspace list, one file preview, and one lab table preview
+    refs.ts            the refs of a message: parse, resolve, and one chip line
     session.ts         the terminal's state and commands, without OpenTUI
     feed.ts            the room feed: one read at a time
     commands.ts        the slash commands and their suggestions
