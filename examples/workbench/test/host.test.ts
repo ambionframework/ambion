@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join as joinPath } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { byAgent, callTool, quiet, speak } from '@ambionframework/ambion/testing';
 import type { PiExecutionOptions } from '@ambionframework/pi';
 import {
 	createAssistantMessageEventStream,
@@ -10,6 +11,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openWorkbench, type Workbench } from '../src/workbench.ts';
+import { scriptedFamilies } from './scripted-families.ts';
 
 const opened: { workbench: Workbench; directory: string }[] = [];
 
@@ -34,18 +36,17 @@ function scriptedResponse(agent: string, call: number, closing: boolean) {
 			[fauxToolCall('say', { to: 'design', text: 'Thanks, that is clear.' })],
 			{ stopReason: 'toolUse' },
 		);
-	if (agent === 'design' && call === 1)
-		return fauxAssistantMessage(
-			[fauxToolCall('write', { path: 'shared/plan.md', content: PLAN })],
-			{ stopReason: 'toolUse' },
-		);
-	if (agent === 'design' && call === 2)
-		return fauxAssistantMessage(
-			[fauxToolCall('say', { to: 'assistant', text: 'Resistor chosen.' })],
-			{ stopReason: 'toolUse' },
-		);
 	return fauxAssistantMessage('quiet', { stopReason: 'stop' });
 }
+
+/** The design seat runs on the Claude family. A script drives it, with no key. */
+const designScript = byAgent({
+	design: (_step, _seat, call) => {
+		if (call === 1) return callTool('write', { path: 'shared/plan.md', content: PLAN });
+		if (call === 2) return speak('Resistor chosen.', 'assistant');
+		return quiet();
+	},
+});
 
 const makeStream = (): PiExecutionOptions['stream'] => {
 	const calls = new Map<string, number>();
@@ -77,7 +78,11 @@ const makeStream = (): PiExecutionOptions['stream'] => {
 };
 
 async function open(directory: string, stream = makeStream()) {
-	const workbench = await openWorkbench({ directory, stream });
+	const workbench = await openWorkbench({
+		directory,
+		stream,
+		executions: scriptedFamilies(designScript),
+	});
 	opened.push({ workbench, directory });
 	return workbench;
 }

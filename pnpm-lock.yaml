@@ -38,6 +38,12 @@ importers:
       '@ambionframework/assistant':
         specifier: workspace:*
         version: link:../../packages/assistant
+      '@ambionframework/claude':
+        specifier: workspace:*
+        version: link:../../packages/claude
+      '@ambionframework/codex':
+        specifier: workspace:*
+        version: link:../../packages/codex
       '@ambionframework/journal':
         specifier: workspace:*
         version: link:../../packages/journal

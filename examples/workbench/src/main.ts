@@ -1,17 +1,17 @@
 import { parseArgs } from 'node:util';
+import { describeUnavailable } from './families.ts';
 import { runWorkbench } from './tui.ts';
 
 const USAGE = 'Usage: pnpm start [directory] [--as <person>]';
 
-/** Fail at start when the model has no credential. A room without one never answers. */
-function requireCredential(): void {
-	const model = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
-	const provider = model.slice(0, model.indexOf('/'));
-	const variable = `${provider.toUpperCase().replace(/-/g, '_')}_API_KEY`;
-	if (process.env[variable]) return;
-	throw new Error(
-		`No credential for ${model}. Set ${variable} in the environment or in examples/workbench/.env, then run pnpm start again.`,
-	);
+/**
+ * Say which seats cannot run for want of a key. The Workbench still starts and
+ * runs the other seats. The terminal shows the same fact beside each seat name.
+ */
+function reportMissingKeys(): void {
+	for (const line of describeUnavailable()) {
+		console.error(`${line} Set it in the environment or in examples/workbench/.env.`);
+	}
 }
 
 try {
@@ -20,7 +20,7 @@ try {
 		allowPositionals: true,
 	});
 	if (positionals.length > 1) throw new Error(USAGE);
-	requireCredential();
+	reportMissingKeys();
 	await runWorkbench({
 		directory: positionals[0] ?? '.data',
 		person: values.as ?? process.env.WORKBENCH_USER,
