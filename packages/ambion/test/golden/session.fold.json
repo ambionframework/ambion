@@ -1,0 +1,107 @@
+{
+	"name": "golden",
+	"initialized": true,
+	"messages": [],
+	"participants": [
+		{
+			"kind": "agent",
+			"name": "worker",
+			"identity": "Answers the question.",
+			"status": "idle",
+			"attention": "broadcast"
+		},
+		{
+			"kind": "human",
+			"name": "priya",
+			"identity": "Project manager.",
+			"presence": "absent"
+		}
+	],
+	"exchanges": [
+		{
+			"owner": "priya",
+			"from": 4,
+			"through": 6,
+			"at": "2026-01-01T09:00:00.000Z",
+			"status": "closed",
+			"activations": [
+				{
+					"id": "message:4:worker:1",
+					"seat": "worker",
+					"attempt": 1,
+					"purpose": "respond",
+					"outcome": {
+						"status": "released"
+					},
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"cost": 0
+					},
+					"session": {
+						"harness": "pi",
+						"id": "[\"ambion/seat-session\",\"golden-6\",\"worker\"]"
+					}
+				}
+			],
+			"summary": {
+				"status": "silent"
+			},
+			"outcome": {
+				"kind": "complete"
+			},
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			}
+		},
+		{
+			"owner": "priya",
+			"from": 10,
+			"through": 10,
+			"at": "2026-01-01T09:00:00.000Z",
+			"status": "closed",
+			"activations": [
+				{
+					"id": "message:10:worker:1",
+					"seat": "worker",
+					"attempt": 1,
+					"purpose": "respond",
+					"outcome": {
+						"status": "released"
+					},
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"cost": 0
+					},
+					"session": {
+						"harness": "pi",
+						"id": "[\"ambion/seat-session\",\"golden-6\",\"worker\"]"
+					}
+				}
+			],
+			"summary": {
+				"status": "silent"
+			},
+			"outcome": {
+				"kind": "complete"
+			},
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			}
+		}
+	],
+	"watermark": 15
+}

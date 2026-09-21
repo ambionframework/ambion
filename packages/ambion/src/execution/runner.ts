@@ -24,6 +24,7 @@ import type {
 	EndReason,
 	ExecutionEvent,
 	FailureCause,
+	HarnessSession,
 	Message,
 	Seq,
 	Step,
@@ -190,6 +191,7 @@ export class AgentRunner implements AgentPort {
 				current.session.readThrough,
 				last?.cause,
 				current.trace.usage(),
+				current.session.session,
 			);
 		}
 	}
@@ -328,6 +330,7 @@ export class AgentRunner implements AgentPort {
 		readThrough: Seq,
 		cause: FailureCause | undefined,
 		usage: Usage | undefined,
+		session: HarnessSession | undefined,
 	): Promise<void> {
 		const released = await this.calls(
 			() =>
@@ -338,6 +341,7 @@ export class AgentRunner implements AgentPort {
 					readThrough,
 					...(cause === undefined ? {} : { cause }),
 					...(usage === undefined ? {} : { usage }),
+					...(session === undefined ? {} : { session }),
 				}),
 			this.current?.cutOff,
 		);

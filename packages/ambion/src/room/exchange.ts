@@ -277,6 +277,7 @@ export function exchangeActivation(lease: LeaseHold): ExchangeActivation {
 		purpose: id.source === 'closed' ? 'summary' : 'respond',
 		outcome: outcomeOf(lease),
 		...(lease.usage === undefined ? {} : { usage: { ...lease.usage } }),
+		...(lease.session === undefined ? {} : { session: { ...lease.session } }),
 	};
 }
 

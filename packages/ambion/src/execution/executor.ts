@@ -9,7 +9,7 @@
  * passes, never during one.
  */
 import type { ActivationView, RoomProtocol } from '../protocol.ts';
-import type { ExecutionEvent, FailureCause, Seq } from '../types.ts';
+import type { ExecutionEvent, FailureCause, HarnessSession, Seq } from '../types.ts';
 import type { TraceSink } from './trace.ts';
 
 /** What one activation gives its executor to open a session. */
@@ -53,6 +53,13 @@ export interface PassResult {
  */
 export interface ExecutorSession {
 	readonly readThrough: Seq;
+	/**
+	 * The harness session to record with the release, read after the last
+	 * pass beside `readThrough`. A session that keeps no memory across
+	 * activations leaves it out. The room records the id and hands it to the
+	 * seat's next activation as `spec.resume`; it never reads the id.
+	 */
+	readonly session?: HarnessSession;
 	/**
 	 * Whether `abort` was called. The driver checks this before it asks the
 	 * room for anything else on this session's behalf: a cancelled session

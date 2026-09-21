@@ -1,0 +1,208 @@
+[
+	{
+		"kind": "run",
+		"body": {
+			"at": "2026-01-01T09:00:00.000Z",
+			"format": 1
+		},
+		"seq": 1,
+		"run": "run-1"
+	},
+	{
+		"kind": "composition",
+		"body": {
+			"version": 2,
+			"agents": [
+				{
+					"name": "worker",
+					"identity": "Answers the question.",
+					"attention": "broadcast"
+				}
+			],
+			"available": [],
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 2,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "arrived",
+			"from": "priya",
+			"subject": "priya",
+			"identity": "Project manager.",
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 3,
+		"key": "key-1",
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "said",
+			"at": "2026-01-01T09:00:00.000Z",
+			"from": "priya",
+			"text": "Can I tell the client Thursday?",
+			"wakes": ["worker"]
+		},
+		"seq": 4,
+		"key": "key-2",
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:4:worker:1",
+			"phase": "running",
+			"expiresAt": 1767258060000,
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 0
+		},
+		"seq": 5,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "said",
+			"text": "Thursday works.",
+			"at": "2026-01-01T09:00:00.000Z",
+			"activationId": "message:4:worker:1",
+			"from": "worker"
+		},
+		"seq": 6,
+		"key": "key-3",
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:4:worker:1",
+			"phase": "running",
+			"expiresAt": 1767258060000,
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 6
+		},
+		"seq": 7,
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:4:worker:1",
+			"phase": "ended",
+			"reason": "released",
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 6,
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			},
+			"session": {
+				"harness": "pi",
+				"id": "[\"ambion/seat-session\",\"golden-6\",\"worker\"]"
+			}
+		},
+		"seq": 8,
+		"run": "run-1"
+	},
+	{
+		"kind": "close",
+		"body": {
+			"owner": "priya",
+			"from": 4,
+			"through": 6,
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 9,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "said",
+			"at": "2026-01-01T09:00:00.000Z",
+			"from": "priya",
+			"text": "And Friday?",
+			"wakes": ["worker"]
+		},
+		"seq": 10,
+		"key": "key-4",
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:10:worker:1",
+			"phase": "running",
+			"expiresAt": 1767258060000,
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 0
+		},
+		"seq": 11,
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:10:worker:1",
+			"phase": "running",
+			"expiresAt": 1767258060000,
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 10
+		},
+		"seq": 12,
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:10:worker:1",
+			"phase": "ended",
+			"reason": "released",
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 10,
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			},
+			"session": {
+				"harness": "pi",
+				"id": "[\"ambion/seat-session\",\"golden-6\",\"worker\"]"
+			}
+		},
+		"seq": 13,
+		"run": "run-1"
+	},
+	{
+		"kind": "close",
+		"body": {
+			"owner": "priya",
+			"from": 10,
+			"through": 10,
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 14,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "left",
+			"from": "priya",
+			"subject": "priya",
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 15,
+		"key": "key-5",
+		"run": "run-1"
+	}
+]
