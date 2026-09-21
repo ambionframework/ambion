@@ -40,7 +40,7 @@ live('the workspace', () => {
 			`,
 			bundles: [store.tools()],
 		});
-		const { session, runtime, events } = await open('workspace', { agents: [librarian] });
+		const { session, events } = await open('workspace', { agents: [librarian] });
 		const visit = await enter(session, person);
 		const exchange = await visit.send({ text: 'How many lanterns are in crate-19?' });
 		await exchange.waitForSummary();
@@ -60,7 +60,7 @@ live('the workspace', () => {
 		);
 		expect(journal?.text).toMatch(/checked/i);
 		await invariants(session, events);
-		report('the workspace', await spent(runtime, session));
+		report('the workspace', await spent(session));
 		await session.stop();
 		await store.destroy();
 	});
@@ -88,7 +88,7 @@ live('the workspace', () => {
 			`,
 			bundles: [store.tools()],
 		});
-		const { session, runtime, events } = await open('workspace', { agents: [analyst] });
+		const { session, events } = await open('workspace', { agents: [analyst] });
 		const visit = await enter(session, person);
 		const exchange = await visit.send({ text: 'What is the total tonnes for grade C30?' });
 		await exchange.waitForSummary();
@@ -101,7 +101,7 @@ live('the workspace', () => {
 		expect(answer.length).toBeGreaterThanOrEqual(1);
 		expect(answer.map((m) => m.text).join(' ')).toMatch(/\b25\b/);
 		await invariants(session, events);
-		report('the workspace', await spent(runtime, session));
+		report('the workspace', await spent(session));
 		await session.stop();
 		await store.destroy();
 	});

@@ -6,12 +6,12 @@
 
 import { memoryJournals } from '@ambionframework/journal';
 import { expect, it } from 'vitest';
-import { piExecution } from '../../../pi/src/index.ts';
 import { createRuntime, isPresence, readRoom, startRoom } from '../../src/index.ts';
 import { collect, roomName } from '../support/room.ts';
 import {
 	agent,
 	assistant,
+	executionFor,
 	invariants,
 	live,
 	person,
@@ -31,7 +31,7 @@ live('the record', () => {
 				and answer with one say, quoting the code exactly.
 			`,
 		});
-		const runtime = createRuntime({ storage: memoryJournals(), execution: piExecution() });
+		const runtime = createRuntime({ storage: memoryJournals(), execution: executionFor() });
 		const name = roomName('record');
 
 		const first = await startRoom({
@@ -67,7 +67,7 @@ live('the record', () => {
 		expect(messages.filter(isPresence).map((m) => m.kind)).toEqual(['arrived', 'left', 'arrived']);
 		expect(saidBy([...messages], person.name)).toHaveLength(2);
 		await invariants(second, secondEvents);
-		const total = await spent(runtime, second);
+		const total = await spent(second);
 		expect(total.activations).toBeGreaterThanOrEqual(2);
 		report('the record', total);
 		await second.stop();

@@ -1,7 +1,8 @@
 /**
  * The model, the key and the loop. `docs/agent.md` §1: without a `stream`,
- * a model resolves as `provider/model-id` from Pi's catalog and the key comes
- * from the environment. Nothing scripted touches that path.
+ * a model resolves as `provider/model-id` from Pi's catalog, or as a Claude
+ * model id under `AMBION_HARNESS=claude`, and the key comes from the
+ * environment. Nothing scripted touches that path.
  */
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
@@ -41,8 +42,8 @@ const clerk = () =>
 	});
 
 live('the model and the loop', () => {
-	it('resolves the model from its id, runs a tool through Pi, and stamps the say', async () => {
-		const { session, runtime, events } = await open('loop', { agents: [clerk()] });
+	it('resolves the model from its id, runs a tool through the harness, and stamps the say', async () => {
+		const { session, events } = await open('loop', { agents: [clerk()] });
 		const visit = await enter(session, person);
 		await visit.send({ text: 'What is the status of order 7781?' });
 		await untilQuiet(session);
@@ -69,8 +70,8 @@ live('the model and the loop', () => {
 		);
 		await invariants(session, events);
 
-		// The seat's downstream session holds the turns, with the provider's usage on them.
-		const total = await spent(runtime, session);
+		// The room's record of the activations holds the usage the harness reported.
+		const total = await spent(session);
 		expect(total.activations).toBeGreaterThanOrEqual(1);
 		expect(total.tokens).toBeGreaterThan(0);
 		expect(total.cost).toBeGreaterThan(0);

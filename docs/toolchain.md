@@ -204,6 +204,9 @@ on a pull request, because a real-model run costs money. It requires
 pnpm test:live
 ```
 
+`AMBION_HARNESS` is `pi` (the default) or `claude`. It selects the executor of
+the live seats, and the workflow runs the tier once for each value.
+
 The scripted suite and live tier share invariants. The scripted tier also runs
 the failure matrix, process kill, random walk, consistency history, and split
 host checks. See [`test/support/invariants.ts`](../packages/ambion/test/support/invariants.ts)
