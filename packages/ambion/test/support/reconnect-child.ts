@@ -4,11 +4,11 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { sqliteJournals } from '@ambionframework/journal';
+import { pi, piExecution } from '../../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	pi,
 	readRoom,
 	resumeRoom,
 	startRoom,
@@ -38,10 +38,12 @@ const runtime = createRuntime({
 	storage: sqliteJournals(nodeSql(database)),
 	clock,
 	limits: { lease: { ttl: 100, deadline: 1_000 }, activation: { backoff: () => 0 } },
-	stream: scripted(async (_context, _agent, call) => {
-		if (phase === 'resume') return call === 1 ? speak('Recovered answer.') : quiet();
-		started.resolve();
-		return new Promise<ReturnType<typeof quiet>>(() => {});
+	execution: piExecution({
+		stream: scripted(async (_context, _agent, call) => {
+			if (phase === 'resume') return call === 1 ? speak('Recovered answer.') : quiet();
+			started.resolve();
+			return new Promise<ReturnType<typeof quiet>>(() => {});
+		}),
 	}),
 });
 

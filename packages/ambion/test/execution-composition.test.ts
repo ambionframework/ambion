@@ -1,11 +1,11 @@
+import { piSessions } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution, seatSessionId } from '../../pi/src/index.ts';
 import {
 	type AgentExecutionContext,
-	hostingOf,
 	inProcessTransport,
 	type RoomProtocol,
-	seatSessionId,
 	type Transport,
 } from '../src/hosting.ts';
 import {
@@ -14,7 +14,6 @@ import {
 	defineHuman,
 	isSpoken,
 	type Message,
-	pi,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
@@ -72,9 +71,11 @@ describe('execution composition', () => {
 		const secondCalls: Call[] = [];
 		let defaultCalls = 0;
 		const runtime = createRuntime({
-			stream: scripted(() => {
-				defaultCalls += 1;
-				return quiet();
+			execution: piExecution({
+				stream: scripted(() => {
+					defaultCalls += 1;
+					return quiet();
+				}),
 			}),
 		});
 		const firstDefinition = definition('First writer.', 'Use the first room instructions.');
@@ -85,13 +86,13 @@ describe('execution composition', () => {
 			name: roomName('execution-first'),
 			runtime,
 			agents: [firstDefinition],
-			stream: firstStream,
+			execution: piExecution({ stream: firstStream }),
 		});
 		const second = await startRoom({
 			name: roomName('execution-second'),
 			runtime,
 			agents: [secondDefinition],
-			stream: secondStream,
+			execution: piExecution({ stream: secondStream }),
 		});
 		try {
 			await Promise.all([
@@ -102,10 +103,10 @@ describe('execution composition', () => {
 
 			expect(await spokenTexts(first)).toEqual(['First question?', 'First answer.']);
 			expect(await spokenTexts(second)).toEqual(['Second question?', 'Second answer.']);
-			const firstTranscript = await hostingOf(runtime).transcripts.open(
+			const firstTranscript = await piSessions(runtime.storage).open(
 				seatSessionId(first.name, 'writer'),
 			);
-			const secondTranscript = await hostingOf(runtime).transcripts.open(
+			const secondTranscript = await piSessions(runtime.storage).open(
 				seatSessionId(second.name, 'writer'),
 			);
 			expect(await firstTranscript.getMetadata()).toMatchObject({ parentSessionId: first.name });
@@ -148,12 +149,17 @@ describe('execution composition', () => {
 		const firstCalls: Call[] = [];
 		const fallbackCalls: Call[] = [];
 		const fallback = answer('Other question?', 'Runtime answer.', fallbackCalls);
-		const runtime = createRuntime({ storage: opened.storage, stream: fallback });
+		const runtime = createRuntime({
+			storage: opened.storage,
+			execution: piExecution({ stream: fallback }),
+		});
 		const first = await startRoom({
 			name: roomName('execution-resume-first'),
 			runtime,
 			agents: [definition('Original writer.', 'Use the original instructions.')],
-			stream: answer('Original question?', 'Original answer.', firstCalls),
+			execution: piExecution({
+				stream: answer('Original question?', 'Original answer.', firstCalls),
+			}),
 		});
 		const second = await startRoom({
 			name: roomName('execution-resume-second'),
@@ -169,7 +175,9 @@ describe('execution composition', () => {
 			resumed = await resumeRoom(first.name, {
 				runtime,
 				agents: [definition('Replacement writer.', 'Use the replacement instructions.')],
-				stream: answer('Replacement question?', 'Replacement answer.', firstCalls),
+				execution: piExecution({
+					stream: answer('Replacement question?', 'Replacement answer.', firstCalls),
+				}),
 			});
 			const replacement = await (
 				await resumed.visit(defineHuman({ name: 'replacement-person', identity: 'A new visitor.' }))
@@ -200,7 +208,7 @@ describe('execution composition', () => {
 		const wrappedStream = answer('Wrapped question?', 'Wrapped answer.', wrappedCalls);
 		const runtime = createRuntime({
 			transport: forwardingTransport(connections),
-			stream: wrappedStream,
+			execution: piExecution({ stream: wrappedStream }),
 		});
 		const wrapped = definition('Wrapped writer.', 'Use the wrapped room instructions.');
 		const room = await startRoom({
@@ -223,7 +231,7 @@ describe('execution composition', () => {
 			expect(
 				wrappedCalls.some((call) => call.systemPrompt.includes(wrapped.executor.instructions)),
 			).toBe(true);
-			const transcript = await hostingOf(runtime).transcripts.open(
+			const transcript = await piSessions(runtime.storage).open(
 				seatSessionId(room.name, wrapped.name),
 			);
 			expect(await transcript.getMetadata()).toMatchObject({

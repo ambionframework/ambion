@@ -46,21 +46,21 @@
 	},
 	"scripts": {
 		"build": "tsdown",
-		"check:types": "tsc --noEmit",
+		"check:types": "tsc -p tsconfig.check.json --noEmit",
 		"test": "vitest run",
 		"test:live": "pnpm --filter '@ambionframework/ambion^...' build && vitest run --config vitest.live.config.ts",
 		"test:watch": "vitest"
 	},
 	"devDependencies": {
+		"@ambionframework/pi-journal": "workspace:*",
+		"@earendil-works/pi-agent-core": "^0.85.1",
+		"@earendil-works/pi-ai": "^0.85.1",
 		"tsdown": "^0.22.14",
 		"typescript": "^7.0.2",
 		"vitest": "^4.1.11"
 	},
 	"dependencies": {
 		"@ambionframework/journal": "workspace:*",
-		"@ambionframework/pi-journal": "workspace:*",
-		"@earendil-works/pi-agent-core": "^0.85.1",
-		"@earendil-works/pi-ai": "^0.85.1",
 		"typebox": "^1.3.18"
 	}
 }

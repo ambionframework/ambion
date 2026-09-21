@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	type AgentExecutionContext,
 	type AgentPort,
@@ -12,7 +13,6 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	pi,
 	type Room,
 	resumeRoom,
 	startRoom,
@@ -83,7 +83,7 @@ describe('durable cancellation', () => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			const visit = await room.visit(person);
@@ -160,9 +160,11 @@ describe('durable cancellation', () => {
 				agents: [worker],
 				seats: { [worker.name]: 'broadcast' },
 				runtime,
-				stream: scripted(() => {
-					started.resolve();
-					return new Promise<never>(() => {});
+				execution: piExecution({
+					stream: scripted(() => {
+						started.resolve();
+						return new Promise<never>(() => {});
+					}),
 				}),
 			});
 			try {
@@ -197,13 +199,17 @@ describe('durable cancellation', () => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
-			stream: deaf,
+			execution: piExecution({ stream: deaf }),
 		});
 		const oldAbort = old.abort();
 		await cancelStarted.promise;
 		hostingOf(runtime).evict(name);
 		const nextRuntime = createRuntime({ storage: opened.storage });
-		const next = await resumeRoom(name, { agents: [worker], runtime: nextRuntime, stream: deaf });
+		const next = await resumeRoom(name, {
+			agents: [worker],
+			runtime: nextRuntime,
+			execution: piExecution({ stream: deaf }),
+		});
 		try {
 			const visit = await next.visit(person);
 			const exchange = await visit.send({ text: 'new run work' });
@@ -223,7 +229,7 @@ describe('durable cancellation', () => {
 			name: roomName('cancel-cut'),
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
-			stream: deaf,
+			execution: piExecution({ stream: deaf }),
 		});
 		try {
 			const visit = await room.visit(person);
@@ -275,7 +281,7 @@ describe('durable cancellation', () => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
-			stream: deaf,
+			execution: piExecution({ stream: deaf }),
 		});
 		try {
 			const visit = await room.visit(person);
@@ -303,16 +309,18 @@ describe('durable cancellation', () => {
 			summary: assistant.name,
 			agents: [worker, assistant],
 			seats: { [worker.name]: 'broadcast', [assistant.name]: 'none' },
-			stream: scripted(
-				byAgent({
-					worker: (_context, _agent, call) => (call === 1 ? speak('answer') : quiet()),
-					assistant: (context) => {
-						if (!isClosing(context)) return quiet();
-						summaryStarted.resolve();
-						return new Promise<never>(() => {});
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						worker: (_context, _agent, call) => (call === 1 ? speak('answer') : quiet()),
+						assistant: (context) => {
+							if (!isClosing(context)) return quiet();
+							summaryStarted.resolve();
+							return new Promise<never>(() => {});
+						},
+					}),
+				),
+			}),
 		});
 		try {
 			const visit = await room.visit(person);
@@ -342,7 +350,7 @@ describe.each(storages)('cancellation storage recovery (%s)', (storage: Storage)
 				agents: [worker],
 				seats: { [worker.name]: 'broadcast' },
 				runtime,
-				stream: deaf,
+				execution: piExecution({ stream: deaf }),
 			});
 			try {
 				const visit = await room.visit(person);
@@ -372,7 +380,7 @@ describe.each(storages)('cancellation storage recovery (%s)', (storage: Storage)
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
-			stream: deaf,
+			execution: piExecution({ stream: deaf }),
 		});
 		try {
 			const visit = await room.visit(person);
@@ -422,7 +430,7 @@ it('does not retry cancelled work after a restart', async () => {
 		agents: [worker],
 		seats: { [worker.name]: 'broadcast' },
 		runtime,
-		stream: stream,
+		execution: piExecution({ stream: stream }),
 	});
 	const visit = await room.visit(person);
 	const exchange = await visit.send({ text: 'do not retry' });
@@ -436,7 +444,11 @@ it('does not retry cancelled work after a restart', async () => {
 	);
 	expect(ended).toBeDefined();
 	hostingOf(runtime).evict(name);
-	const resumed = await resumeRoom(name, { runtime, agents: [worker], stream: stream });
+	const resumed = await resumeRoom(name, {
+		runtime,
+		agents: [worker],
+		execution: piExecution({ stream: stream }),
+	});
 	try {
 		await waitForRoom(resumed);
 		expect(calls).toBe(1);

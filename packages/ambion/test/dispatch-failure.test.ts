@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	hostingOf,
 	inProcessTransport,
@@ -10,7 +11,6 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	pi,
 	type Room,
 	type RoomNotification,
 	resumeRoom,
@@ -98,7 +98,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 					},
 				},
 			}),
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		const throwing = room.subscribe((event) => {
 			if (event.type === 'delivery_error') throw new Error('observer failed');
@@ -158,7 +158,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		const off = room.subscribe((event) => events.push(event));
 		try {
@@ -225,7 +225,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 					},
 				},
 			}),
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			const visit = await room.visit(human);
@@ -258,7 +258,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime: firstRuntime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -272,7 +272,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			resumed = await resumeRoom(name, {
 				agents: [worker],
 				runtime: createRuntime({ storage: opened.storage, clock, transport: inProcessTransport() }),
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			const snapshot = await resumed.read({ messages: false });
 			expect(snapshot.exchange).toBeUndefined();
@@ -311,7 +311,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime: firstRuntime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -342,7 +342,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			resumed = await resumeRoom(name, {
 				agents: [worker],
 				runtime: createRuntime({ storage: opened.storage, clock, transport }),
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			await resumed.reconcile();
 			await flush();
@@ -372,7 +372,7 @@ describe.each(storages)('dispatch failures on $name storage', (storage) => {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		const events: RoomNotification[] = [];
 		const off = room.subscribe((event) => events.push(event));

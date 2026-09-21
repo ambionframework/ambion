@@ -1,5 +1,6 @@
-import { defineAgent, defineHuman, pi } from '@ambionframework/ambion';
+import { defineAgent, defineHuman } from '@ambionframework/ambion';
 import { defineAssistant } from '@ambionframework/assistant';
+import { pi } from '@ambionframework/pi';
 import type { Workspace } from '@ambionframework/workspace';
 
 /** The people who use the Workbench. Each one reads results a different way. */

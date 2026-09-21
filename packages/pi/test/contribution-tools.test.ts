@@ -1,7 +1,4 @@
-import type { SessionOpener } from '@ambionframework/pi-journal';
-import { describe, expect, it, vi } from 'vitest';
-import { Activation, type PiExecutorOptions } from '../src/execution/activation.ts';
-import { binding, toolsFor } from '../src/execution/tools.ts';
+import { type AgentDefinition, defineAgent } from '@ambionframework/ambion';
 import type {
 	ActivationView,
 	CommitRequest,
@@ -10,9 +7,13 @@ import type {
 	LeaseResponse,
 	RoomProtocol,
 	ViewResponse,
-} from '../src/hosting.ts';
-import { type AgentDefinition, defineAgent, pi } from '../src/index.ts';
-import { noTrace } from './support/trace.ts';
+} from '@ambionframework/ambion/hosting';
+import type { SessionOpener } from '@ambionframework/pi-journal';
+import { describe, expect, it, vi } from 'vitest';
+import { noTrace } from '../../ambion/test/support/trace.ts';
+import { Activation, type PiExecutorOptions } from '../src/executor.ts';
+import { pi } from '../src/index.ts';
+import { binding, toolsFor } from '../src/tools.ts';
 
 const worker = defineAgent({
 	name: 'worker',

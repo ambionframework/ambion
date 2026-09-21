@@ -1,4 +1,5 @@
 import { defineAgent, defineHuman } from '@ambionframework/ambion';
+import { pi } from '@ambionframework/pi';
 
 export const MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
 export const ROOM_NAME = 'team';

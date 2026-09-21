@@ -1,12 +1,12 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	type ExchangeHandle,
-	pi,
 	type Room,
 	resumeRoom,
 	startRoom,
@@ -89,9 +89,11 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 			agents: [alpha, assistant],
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
-			stream: scripted(
-				byAgent({ alpha: says(['First fact.', 'Second fact.']), assistant: summaryFor(outcome) }),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({ alpha: says(['First fact.', 'Second fact.']), assistant: summaryFor(outcome) }),
+				),
+			}),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -104,9 +106,11 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 			resumed = await resumeRoom(room.name, {
 				runtime: runtime(),
 				agents: [alpha, assistant],
-				stream: scripted(() => {
-					calls += 1;
-					return quiet();
+				execution: piExecution({
+					stream: scripted(() => {
+						calls += 1;
+						return quiet();
+					}),
 				}),
 			});
 			const recovered = resumed.exchange(exchange.from);
@@ -139,9 +143,14 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 			agents: [alpha, assistant],
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
-			stream: scripted(
-				byAgent({ alpha: says(['First fact.', 'Second fact.']), assistant: summaryFor('failed') }),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						alpha: says(['First fact.', 'Second fact.']),
+						assistant: summaryFor('failed'),
+					}),
+				),
+			}),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -152,7 +161,9 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 			resumed = await resumeRoom(room.name, {
 				runtime: runtime(),
 				agents: [alpha, assistant],
-				stream: scripted(byAgent({ assistant: summaryFor('published') })),
+				execution: piExecution({
+					stream: scripted(byAgent({ assistant: summaryFor('published') })),
+				}),
 			});
 			const recovered = resumed.exchange(exchange.from);
 			if (recovered === undefined) throw new Error('Expected the recorded exchange.');
@@ -191,7 +202,7 @@ describe('exchange completion handles', () => {
 				storage: faulty.journals,
 				transport: inProcessTransport(),
 			}),
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			const visit = await room.visit(priya);
@@ -258,9 +269,11 @@ describe('exchange completion handles', () => {
 			agents: [alpha, beta, assistant],
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
-			stream: scripted((context, agent) =>
-				agent === assistant.name ? summaryReply(context) : specialistReply(context, agent),
-			),
+			execution: piExecution({
+				stream: scripted((context, agent) =>
+					agent === assistant.name ? summaryReply(context) : specialistReply(context, agent),
+				),
+			}),
 		});
 		try {
 			const visit = await room.visit(priya);
@@ -317,19 +330,21 @@ describe('exchange completion handles', () => {
 			agents: [alpha, beta, assistant],
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
-			stream: scripted(async (context, agent) => {
-				if (agent === assistant.name) {
-					if (!isClosing(context)) return quiet();
-					summaryStarted.resolve();
-					await summaryRelease.promise;
-					throw new Error('summary failed');
-				}
-				const text = contextText(context);
-				if (!text.includes('No summary?')) return quiet();
-				const count = answers.get(agent) ?? 0;
-				if (count >= 2) return quiet();
-				answers.set(agent, count + 1);
-				return speak(`${agent} answer ${count + 1}.`);
+			execution: piExecution({
+				stream: scripted(async (context, agent) => {
+					if (agent === assistant.name) {
+						if (!isClosing(context)) return quiet();
+						summaryStarted.resolve();
+						await summaryRelease.promise;
+						throw new Error('summary failed');
+					}
+					const text = contextText(context);
+					if (!text.includes('No summary?')) return quiet();
+					const count = answers.get(agent) ?? 0;
+					if (count >= 2) return quiet();
+					answers.set(agent, count + 1);
+					return speak(`${agent} answer ${count + 1}.`);
+				}),
 			}),
 		});
 		try {

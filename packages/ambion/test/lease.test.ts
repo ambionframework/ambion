@@ -7,6 +7,7 @@
  */
 import type { Context } from '@earendil-works/pi-ai';
 import { afterEach, describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { decodeActivationId } from '../src/activation-id.ts';
 import { hostingOf, inProcessTransport, type RoomProtocol } from '../src/hosting.ts';
 import {
@@ -15,7 +16,6 @@ import {
 	defineHuman,
 	isSpoken,
 	isSummary,
-	pi,
 	type Room,
 	type Runtime,
 	startRoom,
@@ -81,7 +81,7 @@ async function open(
 		seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 		agents: [solo, assistant],
 		runtime,
-		stream: scripted(script),
+		execution: piExecution({ stream: scripted(script) }),
 	});
 	started.push(session);
 	return { session, clock, runtime };
@@ -425,12 +425,14 @@ describe('a lease judged where its change is written', () => {
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
 			runtime: createRuntime({ clock, storage: journals }),
-			stream: scripted(async (_c, _a, call) => {
-				if (call === 1) {
-					await held.promise;
-					return speak('late but alive');
-				}
-				return call === 2 ? speak('recovered after expiry') : quiet();
+			execution: piExecution({
+				stream: scripted(async (_c, _a, call) => {
+					if (call === 1) {
+						await held.promise;
+						return speak('late but alive');
+					}
+					return call === 2 ? speak('recovered after expiry') : quiet();
+				}),
 			}),
 		});
 		started.push(session);
@@ -501,22 +503,24 @@ describe('a lease judged where its change is written', () => {
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
 			runtime,
-			stream: scripted(
-				byAgent({
-					solo: async (context, name, call) => {
-						if (!contextText(context).includes('Second?')) {
-							return says(['a1', 'a2'])(context, name, call);
-						}
-						await held.promise;
-						return says(['a3', 'a4'])(context, name, call);
-					},
-					assistant: (context, _name, call) => {
-						if (!isClosing(context)) return quiet();
-						if (call === 1) throw new Error('the model failed');
-						return summarise('The one message.');
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						solo: async (context, name, call) => {
+							if (!contextText(context).includes('Second?')) {
+								return says(['a1', 'a2'])(context, name, call);
+							}
+							await held.promise;
+							return says(['a3', 'a4'])(context, name, call);
+						},
+						assistant: (context, _name, call) => {
+							if (!isClosing(context)) return quiet();
+							if (call === 1) throw new Error('the model failed');
+							return summarise('The one message.');
+						},
+					}),
+				),
+			}),
 		});
 		started.push(session);
 		const events = collect(session);

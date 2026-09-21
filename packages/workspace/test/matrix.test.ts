@@ -9,6 +9,7 @@
  */
 
 import { isSpoken, startRoom } from '@ambionframework/ambion';
+import { piExecution } from '@ambionframework/pi';
 import { describe, expect, it } from 'vitest';
 import { collect, deferred } from '../../ambion/test/support/room.ts';
 import {
@@ -54,30 +55,33 @@ const twoWorkspaces: Scenario = {
 			name,
 			runtime,
 			agents: [alpha, beta, gamma],
-			stream: scripted(
-				byAgent({
-					alpha: async (context, _name, call) => {
-						alphaResults.push(...toolResultTexts(context).slice(alphaResults.length));
-						if (call === 1)
-							return callTool('write', { path: '/home/alpha/note.txt', content: 'one' });
-						if (call === 2) {
-							await destroyed.promise;
-							return callTool('read', { path: '/home/alpha/note.txt' });
-						}
-						return call === 3 ? speak('alpha done') : quiet();
-					},
-					beta: (context, _name, call) => {
-						betaResults.push(...toolResultTexts(context).slice(betaResults.length));
-						if (call === 1) return callTool('bash', { command: 'echo two > /home/beta/note.txt' });
-						if (call === 2) return callTool('read', { path: '/home/beta/note.txt' });
-						return call === 3 ? speak('beta done') : quiet();
-					},
-					gamma: (context) => {
-						expect(toolNames(context)).toEqual(['say', 'seat', 'unseat']);
-						return quiet();
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						alpha: async (context, _name, call) => {
+							alphaResults.push(...toolResultTexts(context).slice(alphaResults.length));
+							if (call === 1)
+								return callTool('write', { path: '/home/alpha/note.txt', content: 'one' });
+							if (call === 2) {
+								await destroyed.promise;
+								return callTool('read', { path: '/home/alpha/note.txt' });
+							}
+							return call === 3 ? speak('alpha done') : quiet();
+						},
+						beta: (context, _name, call) => {
+							betaResults.push(...toolResultTexts(context).slice(betaResults.length));
+							if (call === 1)
+								return callTool('bash', { command: 'echo two > /home/beta/note.txt' });
+							if (call === 2) return callTool('read', { path: '/home/beta/note.txt' });
+							return call === 3 ? speak('beta done') : quiet();
+						},
+						gamma: (context) => {
+							expect(toolNames(context)).toEqual(['say', 'seat', 'unseat']);
+							return quiet();
+						},
+					}),
+				),
+			}),
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);

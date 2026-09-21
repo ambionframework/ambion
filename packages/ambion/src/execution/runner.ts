@@ -29,7 +29,7 @@ import type {
 	Step,
 	Usage,
 } from '../types.ts';
-import type { ExecutorSession, PassResult } from './executor.ts';
+import type { ExecutorSession, PassInput, PassResult } from './executor.ts';
 import { renderLine, windowToLimit } from './render.ts';
 import type { TraceSink } from './trace.ts';
 
@@ -211,12 +211,14 @@ export class AgentRunner implements AgentPort {
 		cancelled: Promise<void>,
 	): Promise<PassResult | undefined> {
 		let last: PassResult | undefined;
+		let since: Seq | undefined;
 		try {
 			for (;;) {
 				const opened = await this.viewFor(id, cancelled);
 				if ('stale' in opened) return last;
 				const view = opened.view;
-				last = await passOver(session, trace, view, last === undefined);
+				last = await passOver(session, trace, passInput(view, since));
+				since = session.readThrough;
 				if (last.failed || session.cancelled || view.spec.purpose.kind !== 'respond') return last;
 				if (!(await this.needsRefresh(id, session, cancelled))) return last;
 			}
@@ -554,11 +556,10 @@ export class AgentRunner implements AgentPort {
 function passOver(
 	session: ExecutorSession,
 	trace: TraceSink,
-	view: ActivationView,
-	first: boolean,
+	input: PassInput,
 ): Promise<PassResult> {
-	trace.startPass(first ? 'view' : 'delta', view.through);
-	return session.pass(view);
+	trace.startPass(input.kind, input.view.through);
+	return session.pass(input);
 }
 
 /** What the room answered to a commit, as a `room` step. */
@@ -597,6 +598,11 @@ const RECORD_PAGE = 64;
 /** The token estimate when an agent declares a budget but no estimator. */
 function defaultEstimate(text: string): number {
 	return Math.ceil(text.length / 4);
+}
+
+/** The first pass reads the whole view. A later pass reads what came after `since`. */
+function passInput(view: ActivationView, since: Seq | undefined): PassInput {
+	return since === undefined ? { kind: 'view', view } : { kind: 'delta', since, view };
 }
 
 /**

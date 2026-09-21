@@ -4,8 +4,9 @@
  * exchange whole. An older closed exchange with no summary falls out of context.
  */
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { inProcessTransport, type RoomProtocol, type Transport } from '../src/hosting.ts';
-import { createRuntime, defineAgent, pi, startRoom } from '../src/index.ts';
+import { createRuntime, defineAgent, startRoom } from '../src/index.ts';
 import { priya, sam } from './support/cast.ts';
 import { andrei, messagesOf, roomName, waitForRoom } from './support/room.ts';
 import {
@@ -66,7 +67,7 @@ describe('a limit windows the record', () => {
 				estimateTokens: (text) => text.length,
 			}),
 		});
-		const runtime = createRuntime({ stream: scripted(capture) });
+		const runtime = createRuntime({ execution: piExecution({ stream: scripted(capture) }) });
 		const room = await startRoom({ name: roomName('limit'), runtime, agents: [worker] });
 
 		await (await room.visit(andrei)).send({ text: 'alpha marker' });
@@ -98,7 +99,7 @@ describe('a limit windows the record', () => {
 			executor: pi({ instructions: 'Answer the current question.', model: 'scripted/worker' }),
 		});
 		const runtime = createRuntime({
-			stream: scripted(capture),
+			execution: piExecution({ stream: scripted(capture) }),
 			limits: { context: { messages: 1 } },
 		});
 		const room = await startRoom({ name: roomName('room-cap'), runtime, agents: [worker] });
@@ -131,7 +132,7 @@ describe('a limit windows the record', () => {
 		});
 		const runtime = createRuntime({
 			transport: spyTransport(pages),
-			stream: scripted(answersEveryQuestion(['andrei'])),
+			execution: piExecution({ stream: scripted(answersEveryQuestion(['andrei'])) }),
 			limits: { context: { messages: 2 } },
 		});
 		const room = await startRoom({ name: roomName('room-cap-wire'), runtime, agents: [worker] });
@@ -159,7 +160,7 @@ describe('a limit windows the record', () => {
 		});
 		const runtime = createRuntime({
 			transport: spyTransport(pages),
-			stream: scripted(answersEveryQuestion(['andrei'])),
+			execution: piExecution({ stream: scripted(answersEveryQuestion(['andrei'])) }),
 		});
 		const room = await startRoom({ name: roomName('limit-wire'), runtime, agents: [worker] });
 
@@ -197,11 +198,13 @@ describe('a limit windows the record', () => {
 			}),
 		});
 		const runtime = createRuntime({
-			stream: scripted((context, name, call) =>
-				name === 'scribe'
-					? scribeScript(context, name, call)
-					: answersEveryQuestion(['andrei'])(context, name, call),
-			),
+			execution: piExecution({
+				stream: scripted((context, name, call) =>
+					name === 'scribe'
+						? scribeScript(context, name, call)
+						: answersEveryQuestion(['andrei'])(context, name, call),
+				),
+			}),
 		});
 		const room = await startRoom({
 			name: roomName('limit-summary'),
@@ -250,11 +253,13 @@ describe('a limit windows the record', () => {
 			}),
 		});
 		const runtime = createRuntime({
-			stream: scripted((context, name, call) =>
-				name === 'scribe'
-					? scribeScript(context, name, call)
-					: answersEveryQuestion(['sam', 'priya'])(context, name, call),
-			),
+			execution: piExecution({
+				stream: scripted((context, name, call) =>
+					name === 'scribe'
+						? scribeScript(context, name, call)
+						: answersEveryQuestion(['sam', 'priya'])(context, name, call),
+				),
+			}),
 		});
 		const room = await startRoom({
 			name: roomName('limit-summary-background'),
@@ -294,7 +299,7 @@ describe('a limit windows the record', () => {
 		});
 		const runtime = createRuntime({
 			transport: spyTransport(pages),
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		// The reader starts in the reserve, so the record grows without any read.
 		const room = await startRoom({

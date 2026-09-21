@@ -7,7 +7,6 @@
  * people in another. What each refuses is as much of the contract as what it
  * takes — a name the room can address, and a composition of ordinary tools.
  */
-import type { AgentTool, AgentToolResult, ToolExecutionMode } from '@earendil-works/pi-agent-core';
 import { IsSchema, type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
 import { AmbionError } from './errors.ts';
@@ -16,9 +15,10 @@ import type {
 	AgentExecutor,
 	AmbionTool,
 	HumanDefinition,
-	PiExecutor,
 	ToolBundle,
 	ToolContext,
+	ToolExecutionMode,
+	ToolResult,
 	TracePolicy,
 } from './types.ts';
 
@@ -27,7 +27,7 @@ export interface DefineAgentOptions {
 	name: string;
 	/** The agent's public face — injected into every participant's context as part of the roster. */
 	identity: string;
-	/** The executor this agent runs on. Build one with `pi()`. */
+	/** The executor this agent runs on. Build one with the executor package, such as `pi()`. */
 	executor: AgentExecutor;
 	/** What the trace keeps of this agent's work. Absent keeps `DEFAULT_TRACE`. */
 	trace?: TracePolicy;
@@ -52,30 +52,32 @@ function capturePolicy(agent: string, policy: TracePolicy | undefined): TracePol
 	return Object.freeze({ thinking: policy.thinking, toolOutput: policy.toolOutput });
 }
 
-export interface PiOptions {
+/** What `describeExecutor` reads: the fields every executor family shares. */
+export interface ExecutorOptions {
+	readonly kind: string;
 	/** The private half: the agent's own voice, and the home of all judgment. */
-	instructions: string;
-	/** A Pi model identifier, `provider/model-id`. */
-	model: string;
+	readonly instructions: string;
 	/** The agent's own normalized tools. */
-	tools?: readonly AmbionTool[];
+	readonly tools?: readonly AmbionTool[];
 	/** Composable tool bundles with guidance. Bundles are flattened at definition time. */
-	bundles?: readonly ToolBundle[];
+	readonly bundles?: readonly ToolBundle[];
 	/** The token limit for the record one activation reads. Absent reads the whole record. */
-	activationTokenLimit?: number;
+	readonly activationTokenLimit?: number;
 	/** How the agent counts tokens against its limit. Absent uses a length estimate. */
-	estimateTokens?: (text: string) => number;
+	readonly estimateTokens?: (text: string) => number;
 }
 
-/** The Pi executor: Pi's agent loop, model, instructions, and tools. */
-export function pi(options: PiOptions): PiExecutor {
+/**
+ * The neutral half of an executor: validated, flattened, and frozen. An
+ * executor family adds its own fields to the value this returns.
+ */
+export function describeExecutor(options: ExecutorOptions): AgentExecutor {
 	const input = flattenTools(options.tools, options.bundles);
 	const guidance = guidanceOf(options.bundles);
 	const tools = Object.freeze(input.map((tool) => captureTool(tool)));
 	return Object.freeze({
-		kind: 'pi',
+		kind: options.kind,
 		instructions: options.instructions,
-		model: options.model,
 		tools,
 		...(guidance === undefined ? {} : { guidance }),
 		...recordLimit(options.activationTokenLimit, options.estimateTokens),
@@ -126,22 +128,19 @@ export function captureAgent(agent: AgentDefinition): AgentDefinition {
 	});
 }
 
-/** Capture one executor at a room boundary. Pi is the only executor today. */
-function captureExecutor(executor: PiExecutor): PiExecutor {
+/**
+ * Capture one executor at a room boundary. The copy is deep, so a field an
+ * executor family adds, such as a model, survives without a name here.
+ */
+function captureExecutor(executor: AgentExecutor): AgentExecutor {
 	const tools = Object.freeze(
 		executor.tools.map((tool) => {
 			assertTool(tool);
 			return captureTool(tool);
 		}),
 	);
-	return Object.freeze({
-		kind: 'pi',
-		instructions: executor.instructions,
-		model: executor.model,
-		tools,
-		...(executor.guidance === undefined ? {} : { guidance: executor.guidance }),
-		...recordLimit(executor.activationTokenLimit, executor.estimateTokens),
-	});
+	recordLimit(executor.activationTokenLimit, executor.estimateTokens);
+	return capture({ ...executor, tools });
 }
 
 export interface DefineHumanOptions {
@@ -184,21 +183,22 @@ export interface DefineToolOptions<TParameters extends TSchema> {
 	prepareArguments?: (args: unknown) => Static<TParameters>;
 	executionMode?: ToolExecutionMode;
 	/**
-	 * Return a string (or Pi's full content shape when needed). Throw on failure.
+	 * Return a string (or the full content shape when needed). Throw on failure.
 	 * `ctx.agent` identifies the calling agent and `ctx.signal` is the abort
-	 * signal Pi gives the tool call. `ctx.room`, `ctx.activation`, and
+	 * signal the executor gives the tool call. `ctx.room`, `ctx.activation`, and
 	 * `ctx.exchange` name the room, the activation, and the open exchange the
 	 * call ran in.
 	 */
 	execute: (
 		params: Static<TParameters>,
 		ctx: ToolContext,
-	) => Promise<string | AgentToolResult<unknown>> | string | AgentToolResult<unknown>;
+	) => Promise<string | ToolResult> | string | ToolResult;
 }
 
 /**
  * Define one typed tool. The callback receives parsed parameters and the
- * calling agent context. Native Pi tools use `fromPiTool` at this boundary.
+ * calling agent context. A native Pi tool goes through `fromPiTool`, from
+ * `@ambionframework/pi`.
  */
 export function defineTool<TParameters extends TSchema>(
 	options: DefineToolOptions<TParameters>,
@@ -222,30 +222,6 @@ export function defineTool<TParameters extends TSchema>(
 			}
 			return execute(params, context);
 		},
-	});
-}
-
-/** Adapt one native Pi tool to the normalized Ambion calling convention. */
-export function fromPiTool<TParameters extends TSchema, TDetails>(
-	tool: AgentTool<TParameters, TDetails>,
-): AmbionTool {
-	assertDefineToolOptions(tool);
-	const execute = tool.execute;
-	return defineTool<TSchema>({
-		name: tool.name,
-		description: tool.description,
-		parameters: tool.parameters,
-		label: tool.label,
-		prepareArguments: tool.prepareArguments,
-		executionMode: tool.executionMode,
-		execute: (params, context) =>
-			execute(
-				context.callId,
-				// defineTool validates the captured schema. Pi can use a different TypeBox version.
-				params as Parameters<AgentTool<TParameters, TDetails>['execute']>[1],
-				context.signal,
-				context.onUpdate,
-			),
 	});
 }
 

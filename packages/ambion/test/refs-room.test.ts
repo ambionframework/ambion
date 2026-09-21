@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -7,7 +8,6 @@ import {
 	isSpoken,
 	isSummary,
 	type Message,
-	pi,
 	readExchange,
 	readRoom,
 	resumeRoom,
@@ -56,7 +56,7 @@ describe.each(storages)('refs through the room on $name storage', (storage) => {
 			seats: { product: 'broadcast', assistant: 'none' },
 			summary: assistant.name,
 			runtime: createRuntime({ storage: opened.storage }),
-			stream,
+			execution: piExecution({ stream }),
 		});
 		try {
 			const events = collect(room);
@@ -76,7 +76,11 @@ describe.each(storages)('refs through the room on $name storage', (storage) => {
 			await room.stop();
 
 			const runtime = createRuntime({ storage: opened.storage });
-			const resumed = await resumeRoom(name, { agents: [product, assistant], runtime, stream });
+			const resumed = await resumeRoom(name, {
+				agents: [product, assistant],
+				runtime,
+				execution: piExecution({ stream }),
+			});
 			try {
 				const read = await readExchange(name, exchange.from, { runtime });
 				const whole = await readRoom(name, { runtime });

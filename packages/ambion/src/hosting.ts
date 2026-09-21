@@ -13,39 +13,45 @@
  * Every shape a call carries is here, because a transport serialises them.
  * `assertWire` and `roundTrip` hold a value to what the wire can carry.
  *
- * `hostingOf(runtime)` is the other half: the journal namespace, transcript
- * storage, the model call, wake and retry policy, and the room lifecycle
- * registry, none of which the main entry exposes.
+ * `hostingOf(runtime)` is the other half: the journal namespace, wake and
+ * retry policy, and the room lifecycle registry, none of which the main
+ * entry exposes. An executor package, such as `@ambionframework/pi`, builds
+ * on the executor contract and the rendering helpers this entry exports.
  *
  * The main entry is what an application needs to build a room, and it names
  * no part of this. The execution boundary section of `docs/agent.md` is the
  * design contract for the wire.
  */
 
-export { DEFAULT_TRACE } from './define.ts';
-export { createPiExecutor, type PiExecutorOptions } from './execution/activation.ts';
+export type { ExecutorOptions } from './define.ts';
+export { DEFAULT_TRACE, describeExecutor, SAY, SEAT, UNSEAT } from './define.ts';
 export type {
 	Executor,
 	ExecutorActivation,
 	ExecutorSession,
+	PassInput,
 	PassResult,
 } from './execution/executor.ts';
+export { refusal, renderActivation, renderLine } from './execution/render.ts';
 export { AgentRunner, inProcessTransport } from './execution/runner.ts';
-export {
-	createExecutionServices,
-	type ExecutionServices,
-	type ExecutionServicesOptions,
-	seatSessionId,
-	type TraceLimits,
-} from './execution/services.ts';
+export { summaryToolDescription } from './execution/summary.ts';
 export {
 	type TraceOpener,
 	type TraceOptions,
 	type TraceSink,
+	traceJournals,
 	traceOpener,
 } from './execution/trace.ts';
-export type { AgentExecutionContext, Hosting, Limits, Transport } from './host/runtime.ts';
-export { hostingOf, runningRoom } from './host/runtime.ts';
+export type {
+	AgentExecutionContext,
+	Execution,
+	ExecutionConnector,
+	ExecutionHost,
+	Hosting,
+	Limits,
+	Transport,
+} from './host/runtime.ts';
+export { callLimits, hostingOf, runningRoom } from './host/runtime.ts';
 export type {
 	ActivationPurpose,
 	ActivationSpec,
@@ -66,4 +72,12 @@ export type {
 	Wake,
 } from './protocol.ts';
 export { assertWire, roundTrip } from './protocol.ts';
-export type { EndReason } from './types.ts';
+export type {
+	AgentDefinition,
+	AgentExecutor,
+	Clock,
+	EndReason,
+	ExecutionEvent,
+	FailureCause,
+	Seq,
+} from './types.ts';

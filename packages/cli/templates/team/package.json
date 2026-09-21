@@ -12,7 +12,8 @@
 	},
 	"dependencies": {
 		"@ambionframework/ambion": "0.0.0",
-		"@ambionframework/cloudflare": "0.0.0"
+		"@ambionframework/cloudflare": "0.0.0",
+		"@ambionframework/pi": "0.0.0"
 	},
 	"devDependencies": {
 		"@ambionframework/cli": "0.0.0",

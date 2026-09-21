@@ -1,11 +1,11 @@
 import type { JournalEntry, JournalOpener } from '@ambionframework/journal';
+import { pi } from '../../../pi/src/index.ts';
 import { hostingOf } from '../../src/hosting.ts';
 import {
 	defineAgent,
 	defineHuman,
 	type Message,
 	type ParticipantInfo,
-	pi,
 	type Room,
 	type RoomNotification,
 	type Runtime,

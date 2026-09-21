@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { pi } from '../../pi/src/index.ts';
 import { type Runtime, runningRoom } from '../src/host/runtime.ts';
-import {
-	createRuntime,
-	defineAgent,
-	defineHuman,
-	pi,
-	resumeRoom,
-	startRoom,
-} from '../src/index.ts';
+import { createRuntime, defineAgent, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
 import type { Intent } from '../src/protocol.ts';
 import { fakeClock } from './support/clock.ts';
 import { crash, messagesOf, roomName, stateOf } from './support/room.ts';

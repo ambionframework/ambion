@@ -1,6 +1,6 @@
 /** Pi-specific context delivery and consumption tracking for one activation. */
+import type { Seq } from '@ambionframework/ambion/hosting';
 import type { UserMessage } from '@earendil-works/pi-ai';
-import type { Seq } from '../types.ts';
 
 interface ContextRange {
 	after: Seq;
@@ -25,6 +25,13 @@ export class PiContext {
 	initial(through: Seq, line: string, timestamp: number): UserMessage {
 		const message = userMessage(line, timestamp);
 		this.ranges.set(message, { after: 0, through });
+		return message;
+	}
+
+	/** What a later pass hands the model: the record beyond `after`, through `through`. */
+	delta(after: Seq, through: Seq, line: string, timestamp: number): UserMessage {
+		const message = userMessage(line, timestamp);
+		this.ranges.set(message, { after, through });
 		return message;
 	}
 

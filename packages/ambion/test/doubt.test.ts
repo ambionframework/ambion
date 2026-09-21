@@ -4,6 +4,7 @@
  * way it hears what it wrote.
  */
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { type CommitResult, inProcessTransport, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
@@ -12,7 +13,6 @@ import {
 	isPresence,
 	isSpoken,
 	isSummary,
-	pi,
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
@@ -65,7 +65,7 @@ async function room(name: string) {
 		summary: assistant.name,
 		seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 		agents: [alpha, assistant],
-		stream: scripted(script),
+		execution: piExecution({ stream: scripted(script) }),
 	});
 	return { opened, faulty, clock, session, events: collect(session) };
 }
@@ -108,15 +108,17 @@ describe('a room in doubt', () => {
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, assistant],
-			stream: scripted(
-				byAgent({
-					alpha: says(['one', 'two']),
-					assistant: (context) =>
-						isClosing(context) && !toolResultTexts(context).includes('delivered')
-							? summarise('The one message.')
-							: quiet(),
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						alpha: says(['one', 'two']),
+						assistant: (context) =>
+							isClosing(context) && !toolResultTexts(context).includes('delivered')
+								? summarise('The one message.')
+								: quiet(),
+					}),
+				),
+			}),
 		});
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'First?', key: 'q1' });
@@ -162,7 +164,7 @@ describe('a room in doubt', () => {
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, assistant],
-			stream: scripted(script),
+			execution: piExecution({ stream: scripted(script) }),
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);

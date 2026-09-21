@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	inProcessTransport,
 	type LeaseRequest,
@@ -6,7 +7,7 @@ import {
 	type Transport,
 	type Wake,
 } from '../src/hosting.ts';
-import { createRuntime, defineAgent, defineHuman, pi, startRoom } from '../src/index.ts';
+import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
 import { assistant, deferred, messagesOf, roomName, stateOf, waitForRoom } from './support/room.ts';
 import { byAgent, contextText, quiet, scripted } from './support/scripted.ts';
@@ -83,18 +84,20 @@ describe.each(storages)('messages across activation completion on $name', (stora
 				agents: [alpha, assistant],
 				seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
 				runtime: createRuntime({ storage: opened.storage, clock, transport: observed.transport }),
-				stream: scripted(
-					byAgent({
-						alpha: async (context, _agent, call) => {
-							contexts.push(contextText(context));
-							if (call === 2) {
-								nextStarted.resolve();
-								await nextRelease.promise;
-							}
-							return quiet();
-						},
-					}),
-				),
+				execution: piExecution({
+					stream: scripted(
+						byAgent({
+							alpha: async (context, _agent, call) => {
+								contexts.push(contextText(context));
+								if (call === 2) {
+									nextStarted.resolve();
+									await nextRelease.promise;
+								}
+								return quiet();
+							},
+						}),
+					),
+				}),
 			});
 			try {
 				const visit = await room.visit(priya);
@@ -147,18 +150,20 @@ describe.each(storages)('messages across activation completion on $name', (stora
 			agents: [alpha, assistant],
 			seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
 			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
-			stream: scripted(
-				byAgent({
-					alpha: async (context, _agent, call) => {
-						contexts.push(contextText(context));
-						if (call === 1) {
-							started.resolve();
-							await release.promise;
-						}
-						return quiet();
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						alpha: async (context, _agent, call) => {
+							contexts.push(contextText(context));
+							if (call === 1) {
+								started.resolve();
+								await release.promise;
+							}
+							return quiet();
+						},
+					}),
+				),
+			}),
 		});
 		try {
 			const visit = await room.visit(priya);

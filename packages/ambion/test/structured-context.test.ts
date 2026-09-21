@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { pi } from '../../pi/src/index.ts';
 import { renderActivation } from '../src/execution/render.ts';
 import type { ActivationSpec, ContextParticipant } from '../src/hosting.ts';
 import { assertWire, roundTrip } from '../src/hosting.ts';
-import { defineAgent, pi } from '../src/index.ts';
+import { defineAgent } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { viewOf } from '../src/room/view.ts';

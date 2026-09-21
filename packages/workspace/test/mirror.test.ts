@@ -8,7 +8,8 @@ import type {
 	Seq,
 	Visit,
 } from '@ambionframework/ambion';
-import { defineAgent, pi, startRoom } from '@ambionframework/ambion';
+import { defineAgent, startRoom } from '@ambionframework/ambion';
+import { pi, piExecution } from '@ambionframework/pi';
 import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { enter, roomName as name } from '../../ambion/test/support/room.ts';
@@ -251,15 +252,17 @@ describe('Workspace.mirror', () => {
 		const session = await startRoom({
 			name: roomId,
 			agents: [worker],
-			stream: scripted(
-				byAgent({
-					worker: (_context, _who, call) => {
-						if (call === 1) return speak('first');
-						if (call === 2) return speak('second');
-						return quiet();
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						worker: (_context, _who, call) => {
+							if (call === 1) return speak('first');
+							if (call === 2) return speak('second');
+							return quiet();
+						},
+					}),
+				),
+			}),
 		});
 		const mirror = await site.mirror(session);
 		const visit = await enter(session);

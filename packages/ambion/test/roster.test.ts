@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	type AgentDefinition,
 	type Attention,
@@ -7,7 +8,6 @@ import {
 	defineHuman,
 	isPresence,
 	type Message,
-	pi,
 	type Room,
 	type RoomNotification,
 	startRoom,
@@ -93,7 +93,7 @@ async function open(options: {
 		seats,
 		...(options.summary ? { summary: writer.name } : {}),
 		runtime,
-		stream: scripted(options.script),
+		execution: piExecution({ stream: scripted(options.script) }),
 	});
 	started.push(session);
 	return session;
@@ -314,7 +314,7 @@ describe('ordinary unseating and host membership', () => {
 		const resumed = await resumeRoom(name, {
 			agents: [product, surveyor],
 			runtime,
-			stream: scripted(byAgent({})),
+			execution: piExecution({ stream: scripted(byAgent({})) }),
 		});
 		started.push(resumed);
 		expect(await seatNames(resumed)).toEqual([product.name]);
