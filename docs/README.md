@@ -11,29 +11,30 @@ each page.
 
 ## Contracts
 
-| Document                          | Use it for                                                             |
-| --------------------------------- | ---------------------------------------------------------------------- |
-| [Room](room.md)                   | Overview, glossary, and the room-wide mechanisms                       |
-| [Definitions and tools](agent.md) | Definitions and tools                                                  |
-| [Executors](executors.md)         | The executor contract, steps, the trace, and adapters                  |
-| [Pi executor](pi.md)              | The Pi package: options, sessions, audit, testing                      |
-| [Claude executor](claude.md)      | The Claude Agent SDK package: policy, trust, memory, testing           |
-| [Codex](codex.md)                 | The Codex SDK executor: install, options, trust, and testing           |
-| [Assistant](assistant.md)         | The default assistant package and the `assistant` room option          |
-| [Exchange](exchange.md)           | Human questions, completion, and durable result handles                |
-| [Presence](presence.md)           | Visits, arrivals, departures, and catch-up                             |
-| [Roster](roster.md)               | Agent membership, reserve, and attention                               |
-| [Trust](trust.md)                 | What one owner guarantees another, and what the kernel does not defend |
-| [Patterns](patterns.md)           | The human collaboration patterns the room represents                   |
-| [Summaries](summary.md)           | Optional closing work and context replacement                          |
-| [Resources](resources.md)         | The resource contract, references, and provenance                      |
-| [Workspace](workspace.md)         | The Pi filesystem binding of the resource contract                     |
-| [Example](example.md)             | The one runnable example: an agentic lab workspace                     |
-| [Durability](durability.md)       | Journal guarantees, recovery, leases, and failure evidence             |
-| [Formal](formal.md)               | The verified rules, their proofs, and how the gate runs them           |
-| [Deployment](deployment.md)       | Host placement, storage, reconnect, and operational limits             |
-| [Envelope](envelope.md)           | Configurable limits and the measured cost of the fold                  |
-| [Toolchain](toolchain.md)         | Package layout, checks, CI, and release commands                       |
+| Document                              | Use it for                                                             |
+| ------------------------------------- | ---------------------------------------------------------------------- |
+| [Room](room.md)                       | Overview, glossary, and the room-wide mechanisms                       |
+| [Technical facts](technical-facts.md) | Key facts, what is new, packages, and the limits of 0.1.0              |
+| [Definitions and tools](agent.md)     | Definitions and tools                                                  |
+| [Executors](executors.md)             | The executor contract, steps, the trace, and adapters                  |
+| [Pi executor](pi.md)                  | The Pi package: options, sessions, audit, testing                      |
+| [Claude executor](claude.md)          | The Claude Agent SDK package: policy, trust, memory, testing           |
+| [Codex](codex.md)                     | The Codex SDK executor: install, options, trust, and testing           |
+| [Assistant](assistant.md)             | The default assistant package and the `assistant` room option          |
+| [Exchange](exchange.md)               | Human questions, completion, and durable result handles                |
+| [Presence](presence.md)               | Visits, arrivals, departures, and catch-up                             |
+| [Roster](roster.md)                   | Agent membership, reserve, and attention                               |
+| [Trust](trust.md)                     | What one owner guarantees another, and what the kernel does not defend |
+| [Patterns](patterns.md)               | The human collaboration patterns the room represents                   |
+| [Summaries](summary.md)               | Optional closing work and context replacement                          |
+| [Resources](resources.md)             | The resource contract, references, and provenance                      |
+| [Workspace](workspace.md)             | The Pi filesystem binding of the resource contract                     |
+| [Example](example.md)                 | The one runnable example: an agentic lab workspace                     |
+| [Durability](durability.md)           | Journal guarantees, recovery, leases, and failure evidence             |
+| [Formal](formal.md)                   | The verified rules, their proofs, and how the gate runs them           |
+| [Deployment](deployment.md)           | Host placement, storage, reconnect, and operational limits             |
+| [Envelope](envelope.md)               | Configurable limits and the measured cost of the fold                  |
+| [Toolchain](toolchain.md)             | Package layout, checks, CI, and release commands                       |
 
 ## Navigation hints
 
