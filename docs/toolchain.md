@@ -53,8 +53,10 @@ The core has three published entries:
 The core imports no platform modules. Workspace filesystem code owns Node
 dependencies; Cloudflare code owns Durable Object integration.
 
-The core separates collaboration from execution. `room-host.ts` coordinates
-the journal and pure decisions under `room/`. `execution/` owns the agent
+The core separates collaboration from execution. `room-host/` coordinates
+the journal and pure decisions under `room/`. Its `room.ts` holds the state
+and the phases. `people.ts`, `dispatch.ts`, `waits.ts`, and `control.ts` hold one
+mechanism each. `execution/` owns the agent
 runner, the executor contract, and rendering. It imports no model library:
 `@ambionframework/pi` holds Pi and depends on the core. `room.ts` composes
 both behind the public facade.
