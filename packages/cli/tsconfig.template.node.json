@@ -1,0 +1,10 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"incremental": false,
+		"types": ["node"]
+	},
+	"include": ["templates/node/src"]
+}

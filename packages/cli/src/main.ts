@@ -7,7 +7,8 @@
  */
 import { PACKAGE_NAME } from '@ambionframework/ambion';
 import { runDev } from './lib/dev.ts';
-import { createProject, ProjectError } from './lib/project.ts';
+import { parseNewArguments } from './lib/new-arguments.ts';
+import { createProject, type Template } from './lib/project.ts';
 import { cliVersion } from './lib/version.ts';
 
 function help(version: string): string {
@@ -17,11 +18,35 @@ function help(version: string): string {
 		'  -v, --version   Print the version',
 		'  -h, --help      Print this message',
 		'',
-		'  new <directory> Create an Ambion team project',
+		'  new <directory> [--template node|cloudflare]',
+		'                  Create an Ambion team project. The default template is node.',
 		'  dev [directory] Start the local team room',
 		'',
 		`Powered by ${PACKAGE_NAME}.`,
 	].join('\n');
+}
+
+const NEXT_STEPS: Record<Template, readonly string[]> = {
+	node: [
+		'      # set GITHUB_TOKEN to a GitHub Packages read:packages token',
+		'      pnpm install',
+		'      cp .env.example .env',
+		'      # set ANTHROPIC_API_KEY in .env',
+		'      pnpm exec ambion dev',
+	],
+	cloudflare: [
+		'      # set GITHUB_TOKEN to a GitHub Packages read:packages token',
+		'      pnpm install',
+		'      cp .dev.vars.example .dev.vars',
+		'      # set ANTHROPIC_API_KEY in .dev.vars',
+		'      pnpm exec ambion dev',
+	],
+};
+
+async function create(args: readonly string[]): Promise<void> {
+	const { directory, template } = parseNewArguments(args);
+	const target = await createProject(directory, cliVersion(), template);
+	console.log([`Created ${target}.`, '', `Next: cd ${target}`, ...NEXT_STEPS[template]].join('\n'));
 }
 
 async function main(argv: readonly string[]): Promise<void> {
@@ -32,21 +57,7 @@ async function main(argv: readonly string[]): Promise<void> {
 		return;
 	}
 	if (first === 'new') {
-		if (argv[1] === undefined || argv[2] !== undefined)
-			throw new ProjectError('Usage: ambion new <directory>.');
-		const target = await createProject(argv[1], cliVersion());
-		console.log(
-			[
-				`Created ${target}.`,
-				'',
-				`Next: cd ${target}`,
-				'      # set GITHUB_TOKEN to a GitHub Packages read:packages token',
-				'      pnpm install',
-				'      cp .dev.vars.example .dev.vars',
-				'      # set ANTHROPIC_API_KEY in .dev.vars',
-				'      pnpm exec ambion dev',
-			].join('\n'),
-		);
+		await create(argv.slice(1));
 		return;
 	}
 	if (first === 'dev') {

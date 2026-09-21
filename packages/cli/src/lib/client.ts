@@ -1,15 +1,23 @@
-import type {
-	AgentParticipantInfo,
-	ExchangeRef,
-	Message,
-	ParticipantInfo,
-} from '@ambionframework/ambion';
+import type { ExchangeRef, ParticipantInfo, RoomRead } from '@ambionframework/ambion';
 
-export interface RoomStatus {
-	name: string;
-	participants: ParticipantInfo[];
-	exchange: ExchangeRef | undefined;
-	exchangeState: 'idle' | 'working' | 'completed';
+export interface StartResponse {
+	started: string;
+	participants: readonly ParticipantInfo[];
+}
+
+export interface JoinResponse {
+	joined: string;
+	participants: readonly ParticipantInfo[];
+}
+
+/** What the terminal needs of a room. A Worker and a Node host both provide it. */
+export interface RoomClient {
+	health(): Promise<{ ok: boolean }>;
+	start(): Promise<StartResponse>;
+	join(name?: string): Promise<JoinResponse>;
+	send(text: string): Promise<ExchangeRef>;
+	/** A detached read. With `since`, the messages come back after that sequence. */
+	read(options?: { since?: number }): Promise<RoomRead>;
 }
 
 export class WorkerError extends Error {
@@ -22,26 +30,10 @@ export class WorkerError extends Error {
 	}
 }
 
-interface StartResponse {
-	started: string;
-	participants: ParticipantInfo[];
-}
-
-interface JoinResponse {
-	joined: string;
-	participants: ParticipantInfo[];
-}
-
-export interface ExchangeResult {
-	owner: string;
-	from: number;
-	at: string;
-}
-
 export type FetchFunction = typeof fetch;
 
-/** Small HTTP client for the generated team's local Worker. */
-export class WorkerClient {
+/** Small HTTP client for the generated Cloudflare project's local Worker. */
+export class WorkerClient implements RoomClient {
 	private readonly base: string;
 	private readonly requestFetch: FetchFunction;
 
@@ -62,18 +54,14 @@ export class WorkerClient {
 		return this.post('/join', { name });
 	}
 
-	async send(text: string): Promise<ExchangeResult> {
+	async send(text: string): Promise<ExchangeRef> {
 		return this.post('/send', { from: 'human', text });
 	}
 
-	async messages(since?: number): Promise<Message[]> {
+	async read(options: { since?: number } = {}): Promise<RoomRead> {
+		const { since } = options;
 		const suffix = since === undefined ? '' : `?since=${encodeURIComponent(String(since))}`;
-		return this.get(`/messages${suffix}`);
-	}
-
-	async status(from?: number): Promise<RoomStatus> {
-		const suffix = from === undefined ? '' : `?from=${encodeURIComponent(String(from))}`;
-		return this.get(`/status${suffix}`);
+		return this.get(`/read${suffix}`);
 	}
 
 	private async get<T>(path: string): Promise<T> {
@@ -126,10 +114,4 @@ export class WorkerClient {
 		}
 		return value as T;
 	}
-}
-
-export function agentParticipants(status: RoomStatus): AgentParticipantInfo[] {
-	return status.participants.filter(
-		(participant): participant is AgentParticipantInfo => participant.kind === 'agent',
-	);
 }

@@ -1,4 +1,4 @@
-import type { Message } from '@ambionframework/ambion';
+import type { Message, RoomRead } from '@ambionframework/ambion';
 import {
 	BoxRenderable,
 	createCliRenderer,
@@ -7,10 +7,11 @@ import {
 	ScrollBoxRenderable,
 	TextRenderable,
 } from '@opentui/core';
-import { agentParticipants, type RoomStatus, type WorkerClient } from './client.ts';
+import type { RoomClient } from './client.ts';
+import { deriveStatus, type RoomStatus } from './status.ts';
 
 export interface TuiOptions {
-	client: WorkerClient;
+	client: RoomClient;
 	roomName: string;
 	logs: string[];
 	signal?: AbortSignal;
@@ -43,11 +44,15 @@ function latestError(logs: readonly string[]): string | undefined {
 	return [...logs].reverse().find(actionableError);
 }
 
-function statusText(status: RoomStatus, exchangeState: RoomStatus['exchangeState']): string {
-	const agents = agentParticipants(status);
-	return exchangeState === 'working' || agents.some((agent) => agent.status === 'active')
-		? 'Working…'
-		: 'Ready';
+function statusText(status: RoomStatus): string {
+	const active = status.participants.some(
+		(participant) => participant.kind === 'agent' && participant.status === 'active',
+	);
+	return [
+		status.state === 'working' || active ? 'Working…' : 'Ready',
+		...(status.cost === undefined ? [] : [status.cost]),
+		...(status.awaiting === undefined ? [] : [`Waiting on ${status.awaiting}`]),
+	].join(' · ');
 }
 
 function errorMessage(error: unknown): string {
@@ -95,7 +100,6 @@ export async function runTerminalRoom(options: TuiOptions): Promise<void> {
 	let messages: Message[] = [];
 	let cursor = 0;
 	let exchangeFrom: number | undefined;
-	let exchangeState: RoomStatus['exchangeState'] = 'idle';
 	let activityText = 'Connecting…';
 	let lastError = latestError(options.logs.splice(0));
 	let sending = false;
@@ -119,23 +123,21 @@ export async function runTerminalRoom(options: TuiOptions): Promise<void> {
 		lastError = errorMessage(error);
 		renderActivity();
 	};
-	const renderSnapshot = (snapshot: RoomStatus, next: Message[]): void => {
-		if (next.length > 0) {
-			messages = [...messages, ...next];
+	const renderSnapshot = (read: RoomRead): void => {
+		if (read.messages.length > 0) {
+			messages = [...messages, ...read.messages];
 			cursor = messages.at(-1)?.seq ?? cursor;
 		}
+		const status = deriveStatus(read, exchangeFrom);
 		updateConversation(conversationText, messages);
-		exchangeState = snapshot.exchangeState;
-		if (exchangeFrom !== undefined && exchangeState === 'completed') exchangeFrom = undefined;
-		activityText = statusText(snapshot, exchangeState);
-		header.content = `Ambion · ${snapshot.name} · ${snapshot.participants.map((participant) => participant.name).join(', ') || 'no participants'}`;
+		activityText = statusText(status);
+		header.content = `Ambion · ${status.name} · ${status.participants.map((participant) => participant.name).join(', ') || 'no participants'}`;
 		renderActivity();
 	};
 	const pull = async (): Promise<void> => {
 		syncLogError();
-		const snapshot = await options.client.status(exchangeFrom);
-		const next = await options.client.messages(cursor === 0 ? undefined : cursor);
-		if (!stopped) renderSnapshot(snapshot, next);
+		const read = await options.client.read(cursor === 0 ? {} : { since: cursor });
+		if (!stopped) renderSnapshot(read);
 	};
 	const refresh = async (): Promise<void> => {
 		if (stopped || refreshing) return;
@@ -163,7 +165,6 @@ export async function runTerminalRoom(options: TuiOptions): Promise<void> {
 				if (stopped) return;
 				if (input.value.trim() === text) input.value = '';
 				exchangeFrom = exchange.from;
-				exchangeState = 'working';
 				activityText = 'Working…';
 				renderActivity();
 				void refresh();
