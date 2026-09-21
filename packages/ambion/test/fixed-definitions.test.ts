@@ -61,6 +61,47 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 		}
 	});
 
+	it('rejects a summary name that no definition holds, and names it', async () => {
+		const opened = await storage.open();
+		try {
+			await expect(
+				startRoom({
+					name: roomName('unknown-writer-rejected'),
+					agents: [alpha],
+					summary: 'ghost',
+					runtime: createRuntime({ storage: opened.storage }),
+					execution: piExecution({ stream: silent() }),
+				}),
+			).rejects.toThrow(/summary agent 'ghost'/);
+		} finally {
+			await opened.dispose();
+		}
+	});
+
+	it('resolves a host seat call that repeats a held seat, without a new entry', async () => {
+		const opened = await storage.open();
+		const room = await startRoom({
+			name: roomName('seat-repeat'),
+			agents: [alpha, beta],
+			seats: { alpha: 'broadcast' },
+			runtime: createRuntime({ storage: opened.storage }),
+			execution: piExecution({ stream: silent() }),
+		});
+		try {
+			await room.seat('alpha');
+			await room.seat('beta');
+			const before = (await participantsOf(room)).length;
+			const entries = (await messagesOf(room)).length;
+			await expect(room.seat('beta')).resolves.toBeUndefined();
+			await expect(room.seat('alpha')).resolves.toBeUndefined();
+			expect((await participantsOf(room)).length).toBe(before);
+			expect((await messagesOf(room)).length).toBe(entries);
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
+	});
+
 	it('leaves a closed exchange without a summary while the host holds the writer out of the room', async () => {
 		const opened = await storage.open();
 		const runtime = createRuntime({ storage: opened.storage });

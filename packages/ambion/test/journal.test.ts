@@ -47,6 +47,10 @@ describe('key spaces', () => {
 		expect(placed(entry)).toEqual({ ...say('one'), seq: 1, key: 'k1' });
 	});
 
+	it('gives a delivery token and a commit token of equal text two keys', () => {
+		expect(spaced('delivery', 'same')).not.toBe(spaced('commit', 'same'));
+	});
+
 	it('passes an untagged key through unchanged, for an entry from before key spaces', () => {
 		const entry = { kind: 'message' as const, seq: 1, key: 'k1', body: say('one') };
 		expect(placed(entry)).toEqual({ ...say('one'), seq: 1, key: 'k1' });
