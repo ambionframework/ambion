@@ -408,14 +408,14 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 	const purpose = spec.purpose;
 	if (purpose.kind === 'summarize') {
 		return (
-			`${purpose.person}'s exchange is over: messages ${purpose.exchange} ` +
-			`to ${purpose.through}. The opening message's URI is ` +
+			`${purpose.person}'s exchange is over: it holds the messages from seq ` +
+			`${purpose.exchange} to seq ${purpose.through}. The opening message's URI is ` +
 			`${messageUri(context.name, purpose.exchange)}. ${action(purpose.kind)}`
 		);
 	}
 	// A seat seated during an exchange reads which question it was seated for.
 	const open = context.exchange
-		? `${context.exchange.owner}'s exchange opened by message ${context.exchange.from} is active; the marked request is the current human direction. Its URI is ${messageUri(context.name, context.exchange.from)}. `
+		? `${context.exchange.owner}'s exchange opened by message ${context.exchange.from} is active; the marked request is the current human direction. The opening message's URI is ${messageUri(context.name, context.exchange.from)}. `
 		: '';
 	return (
 		`${open}Take your turn, ${def.name}: this is ordinary work. ` +

@@ -26,9 +26,9 @@ activations from its opening question to its durable close.
 
 ## 2. The shape
 
-An exchange records its owner, opening time, and opening message position
-(`from`). A durable close fixes its inclusive final message position
-(`through`). Journal administration can occupy positions between messages.
+An exchange records its owner, opening time, and opening message seq
+(`from`). A durable close fixes its inclusive final message seq
+(`through`). Journal administration can occupy seqs between messages.
 `ExchangeRef` carries identity. `ExchangeView` carries recorded state.
 `ExchangeHandle` provides live waits. An `ExchangeRead` contains a view,
 its original discussion, and the observed journal watermark.

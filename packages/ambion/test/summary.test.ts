@@ -257,7 +257,7 @@ describe('closing summaries', () => {
 		// own seq: the same number a workspace mirror writes for each message,
 		// so a reader can find the cited line outside the room too.
 		expect(contexts[0]).toContain(
-			"priya's exchange is over: messages 4 to 7. The opening message's URI is ambion://room/",
+			"priya's exchange is over: it holds the messages from seq 4 to seq 7. The opening message's URI is ambion://room/",
 		);
 	});
 
