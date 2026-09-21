@@ -129,6 +129,15 @@ CREATE TABLE IF NOT EXISTS results (
 	unit TEXT NOT NULL,
 	agent TEXT, room TEXT, activation TEXT, exchange_owner TEXT, exchange_from TEXT, at TEXT
 );
+CREATE TABLE IF NOT EXISTS operations (
+	id INTEGER PRIMARY KEY,
+	instrument TEXT NOT NULL,
+	setpoint REAL NOT NULL,
+	outcome TEXT NOT NULL,
+	request_id INTEGER REFERENCES operations (id),
+	reading REAL,
+	agent TEXT, room TEXT, activation TEXT, exchange_owner TEXT, exchange_from TEXT, at TEXT
+);
 ${scenarios
 	.map(
 		({ name, goal }) =>
@@ -138,4 +147,10 @@ ${scenarios
 `;
 
 /** The lab tables an agent may append to. Projects stay fixed. */
-export const labWritable = ['test_plans', 'runs', 'results'] as const;
+export const labWritable = ['test_plans', 'runs', 'results', 'operations'] as const;
+
+/** The simulated instruments. An operation above the limit needs the approval of a person. */
+export const instruments = [
+	{ name: 'led-current', quantity: 'LED current', unit: 'mA', limit: 20 },
+	{ name: 'bench-supply', quantity: 'supply voltage', unit: 'V', limit: 5 },
+] as const;

@@ -45,7 +45,7 @@ import type {
 	Seq,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
-import { renderActivation, renderLine } from '@ambionframework/ambion/hosting';
+import { renderActivation, renderDelta } from '@ambionframework/ambion/hosting';
 import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/pi-journal';
 import type {
 	AgentEvent,
@@ -237,7 +237,7 @@ export class Activation implements ExecutorSession {
 			const context = renderActivation(input.view, this.definition).context;
 			return this.context.initial(input.view.through, context, this.now());
 		}
-		const text = deltaText(input.view, input.since);
+		const text = renderDelta(input.view, input.since);
 		if (text === undefined) return undefined;
 		return this.context.delta(input.since, input.view.through, text, this.now());
 	}
@@ -323,7 +323,8 @@ export class Activation implements ExecutorSession {
 		const def = this.definition;
 		if (view.spec.seat !== def.name)
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
-		const systemPrompt = renderActivation(view, def).systemPrompt;
+		const { mechanism, agent: seat } = renderActivation(view, def);
+		const systemPrompt = `${mechanism}\n\n${seat}`;
 		if (this.agent !== undefined) {
 			this.agent.state.systemPrompt = systemPrompt;
 			return this.agent;
@@ -372,17 +373,6 @@ export class Activation implements ExecutorSession {
 function modelOf(executor: AgentExecutor): string {
 	if ('model' in executor && typeof executor.model === 'string') return executor.model;
 	throw new Error(`The Pi executor cannot run an executor of kind '${executor.kind}'.`);
-}
-
-/**
- * What a later pass tells the model: each message that landed beyond the
- * position it read. Each line reads as a steer does. Nothing is new when no
- * message stands beyond `since`.
- */
-function deltaText(view: ActivationView, since: Seq): string | undefined {
-	const fresh = view.context.messages.filter((message) => message.seq > since);
-	if (fresh.length === 0) return undefined;
-	return fresh.map((message) => `[new] ${renderLine(message)}`).join('\n');
 }
 
 /** Whether the last model message stopped at a length limit. */

@@ -120,8 +120,8 @@ describe('the URIs a prompt states', () => {
 			},
 		};
 		const rendered = renderActivation(view, worker);
-		expect(rendered.systemPrompt).toContain(roomUri('site'));
-		expect(rendered.systemPrompt).toContain('refs');
+		expect(rendered.context).toContain(roomUri('site'));
+		expect(rendered.agent).toContain('refs');
 		expect(rendered.context).toContain(exchangeUri('site', 4));
 	});
 
@@ -135,6 +135,8 @@ describe('the URIs a prompt states', () => {
 			context,
 		};
 		const rendered = renderActivation(view, worker);
-		expect(`${rendered.systemPrompt}${rendered.context}`).toContain(exchangeUri('site', 4));
+		expect(`${rendered.mechanism}${rendered.agent}${rendered.context}`).toContain(
+			exchangeUri('site', 4),
+		);
 	});
 });

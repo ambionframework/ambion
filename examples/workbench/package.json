@@ -16,7 +16,8 @@
 		"@ambionframework/journal": "workspace:*",
 		"@ambionframework/pi": "workspace:*",
 		"@ambionframework/workspace": "workspace:*",
-		"@opentui/core": "0.5.11"
+		"@opentui/core": "0.5.11",
+		"typebox": "^1.3.18"
 	},
 	"devDependencies": {
 		"typescript": "^7.0.2",

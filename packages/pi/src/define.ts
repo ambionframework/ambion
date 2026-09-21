@@ -19,6 +19,8 @@ export interface PiOptions {
 	tools?: readonly AmbionTool[];
 	/** Composable tool bundles with guidance. Bundles are flattened at definition time. */
 	bundles?: readonly ToolBundle[];
+	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
+	speaking?: string;
 	/** The token limit for the record one activation reads. Absent reads the whole record. */
 	activationTokenLimit?: number;
 	/** How the agent counts tokens against its limit. Absent uses a length estimate. */
