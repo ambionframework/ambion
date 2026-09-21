@@ -70,6 +70,11 @@ and tool that the config controls, and runs the thread on a read-only
 sandbox in an empty directory. A model with no catalog entry fails as
 permanent.
 
+**Three MCP helper tools remain.** Codex adds `list_mcp_resources`,
+`list_mcp_resource_templates`, and `read_mcp_resource` when an MCP server is
+on. They reach only the room tools server, which offers no resource and
+answers `Method not found`, so they read nothing. A unit test proves it.
+
 **`nativeTools: 'codex'` opens the host.** The seat keeps the tools of the
 model, and a seat with Code Mode reads host files whatever `sandboxMode`
 says. The policy options apply only under `'codex'`: `sandboxMode`,

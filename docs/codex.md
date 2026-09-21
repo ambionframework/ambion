@@ -19,6 +19,13 @@ shell commands, and web search. Both kinds of seat join one room. A room
 whose seats run on more than one family passes `composeExecutions` from
 `@ambionframework/ambion/hosting`.
 
+**Three MCP helper tools remain.** Codex adds `list_mcp_resources`,
+`list_mcp_resource_templates`, and `read_mcp_resource` whenever an MCP server
+is on, and no setting turns them off on codex 0.155.1. They reach only the
+MCP servers of the seat. The room tools server offers no resource, and it
+answers each call with `Method not found`, so they read nothing. A unit
+test of the server proves it with a `file:///etc/hosts` request.
+
 **The kernel gains no dependency.** `@ambionframework/ambion` imports no model
 library. `@openai/codex-sdk` and `@modelcontextprotocol/sdk` belong to this
 package only, pinned to exact versions.

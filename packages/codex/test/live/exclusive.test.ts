@@ -7,10 +7,13 @@
  *   reads a file.
  * - With `nativeTools: 'codex'`, the native tools return.
  *
- * Codex adds a server prefix to the name of an MCP tool. The test removes
- * it. If a Codex upgrade shows `list_mcp_resources` and `read_mcp_resource`
- * because an MCP server exists, the first claim may allow exactly those two.
- * Today it allows neither. Any other native tool in the list fails the test.
+ * Codex adds a prefix to the name of a tool. The test removes it. Codex adds
+ * three MCP helper tools whenever any MCP server is on: `list_mcp_resources`,
+ * `list_mcp_resource_templates`, and `read_mcp_resource`. No setting turns
+ * them off. They reach only the MCP servers of the seat, and the room tools
+ * server offers no resource: `test/tools.test.ts` shows that it answers each
+ * resource request with `Method not found`. Any other native tool in the list
+ * fails this test.
  */
 import { defineTool } from '@ambionframework/ambion';
 import { Type } from 'typebox';
@@ -33,6 +36,9 @@ const ROOM = ['say', 'seat', 'unseat'];
 /** The tools of the room and the one tool of the application. */
 const ALLOWED = [...ROOM, 'lookup'];
 
+/** The MCP helpers that Codex adds when an MCP server is on. They reach nothing here. */
+const HELPERS = ['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource'];
+
 /** Native tools that no exclusive seat may hold. */
 const FORBIDDEN = [
 	'exec',
@@ -47,8 +53,6 @@ const FORBIDDEN = [
 	'node_repl',
 	'request_user_input',
 	'spawn_agent',
-	'list_mcp_resources',
-	'read_mcp_resource',
 	'tool_search',
 ];
 
@@ -60,7 +64,8 @@ const lookup = defineTool({
 });
 
 /** A tool name without the prefix that Codex adds: `mcp__ambion__say`, `ambion.say`. */
-const bare = (name: string) => name.replace(/^.*(?:__|\.)(?=[^_.]+$)/, '');
+const bare = (name: string) =>
+	name.replace(/^(?:functions\.|mcp__ambion__|mcp__ambion\.|ambion\.)/, '');
 
 const LIST =
 	'List every tool you can call, one tool name per line, with no other text. ' +
@@ -97,7 +102,10 @@ live('nativeTools', () => {
 						.filter((line) => line !== ''),
 				),
 			].sort();
-			expect(names).toEqual([...ALLOWED].sort());
+			expect(names.filter((name) => !HELPERS.includes(name))).toEqual([...ALLOWED].sort());
+			for (const name of names.filter((name) => HELPERS.includes(name))) {
+				expect(HELPERS).toContain(name);
+			}
 			for (const name of FORBIDDEN) expect(names).not.toContain(name);
 			expect(errorsIn(events)).toEqual([]);
 		} finally {
@@ -116,8 +124,15 @@ live('nativeTools', () => {
 			});
 			await untilQuiet(room);
 			const [activation] = activationsOf(events, 'clerk');
-			const called = await calledIn(name, activation, runtime);
-			expect(called.filter((tool) => !ROOM.includes(tool))).toEqual([]);
+			const called = (await calledIn(name, activation, runtime)).map((tool) =>
+				tool.replace(/^(?:codex__|functions\.)/, ''),
+			);
+			// The seat may try an MCP helper. The room tools server answers it with Method not found.
+			expect(called.filter((tool) => !ROOM.includes(tool) && !HELPERS.includes(tool))).toEqual([]);
+			const said = saidBy((await room.read()).messages, 'clerk')
+				.map((message) => message.text)
+				.join('\n');
+			expect(said).not.toMatch(/Host Database|127\.0\.0\.1|localhost/);
 			expect(errorsIn(events)).toEqual([]);
 		} finally {
 			await room.stop();
