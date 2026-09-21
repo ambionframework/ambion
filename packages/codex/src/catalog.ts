@@ -150,19 +150,28 @@ function codexBinary(codexPath?: string): string {
 /** The catalogs that `codex debug models` printed, by binary. A failed run leaves no entry. */
 const catalogs = new Map<string, Promise<readonly CatalogEntry[]>>();
 
+/** How long `codex debug models` may run. A hung binary would hold the first pass for ever. */
+const CATALOG_TIMEOUT_MS = 30_000;
+
 /** Run `codex debug models` once for each binary in this process. */
 function catalogOf(
 	binary: string,
 	env: Readonly<Record<string, string | undefined>> | undefined,
+	timeout: number,
 ): Promise<readonly CatalogEntry[]> {
 	const cached = catalogs.get(binary);
 	if (cached !== undefined) return cached;
 	const pending = run(binary, ['debug', 'models'], {
 		maxBuffer: 256 * 1024 * 1024,
+		timeout,
 		env: { ...process.env, ...env },
 	}).then(({ stdout }) => {
-		const parsed = JSON.parse(stdout) as { models?: readonly CatalogEntry[] };
-		return parsed.models ?? [];
+		try {
+			const parsed = JSON.parse(stdout) as { models?: readonly CatalogEntry[] };
+			return parsed.models ?? [];
+		} catch {
+			throw new Error(`'${binary} debug models' printed text that is not JSON.`);
+		}
 	});
 	catalogs.set(binary, pending);
 	pending.catch(() => catalogs.delete(binary));
@@ -176,9 +185,10 @@ export type CatalogSource = (model: string) => Promise<CatalogEntry | undefined>
 export function installedCatalog(
 	codexPath: string | undefined,
 	env: Readonly<Record<string, string | undefined>> | undefined,
+	timeout: number = CATALOG_TIMEOUT_MS,
 ): CatalogSource {
 	return async (model) => {
-		const models = await catalogOf(codexBinary(codexPath), env);
+		const models = await catalogOf(codexBinary(codexPath), env, timeout);
 		return models.find((entry) => entry.slug === model);
 	};
 }

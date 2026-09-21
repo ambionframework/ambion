@@ -110,7 +110,8 @@ The executor passes each policy field to the Codex SDK unchanged.
 **`nativeTools: 'none'` fixes the policy.** The executor then sets
 `sandboxMode` to `read-only`, `approvalPolicy` to `never`,
 `networkAccessEnabled` to `false`, and `workingDirectory` to an empty
-temporary directory. It ignores those four options and `additionalDirectories`.
+temporary directory. It ignores those four options and
+`additionalDirectories`.
 They apply only with `nativeTools: 'codex'`.
 
 **`codexExecution(options)` takes the runtime of the executable.**
@@ -165,7 +166,8 @@ that calls it, and a test covers both cases.
 real binary answers every `say` with "MCP tool call requires approval, but
 approval policy is never", and the seat answers in plain text that the room
 never records. The room tools belong to the seat, so the config approves
-them. With `nativeTools: 'codex'`, Codex applies its own policy to its native tools.
+them. With `nativeTools: 'codex'`, Codex applies its own policy to its
+native tools.
 
 ## How an activation runs
 

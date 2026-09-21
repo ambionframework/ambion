@@ -277,11 +277,12 @@ class Activation implements ExecutorSession {
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
 		// The catalog comes first. A model with no entry fails before anything opens.
 		const scratch = await this.seal();
+		// Keep the scratch before the bridge opens, so a failed bridge still removes it on close.
+		this.scratch = scratch;
 		const bridge = await startBridge(view, this.definition, this.binding(), () =>
 			this.currentView(view),
 		);
 		this.bridge = bridge;
-		this.scratch = scratch;
 		if (this.stopped) {
 			bridge.close();
 			scratch?.remove();
