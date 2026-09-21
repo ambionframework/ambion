@@ -10,7 +10,7 @@
  *   makes carries it.
  * - **What it acknowledged.** `readThrough` is the highest contiguous
  *   position in provider input. A provider request or an accepted ordinary
- *   say advances it. Rule 5 refuses a draft against a newer record.
+ *   say advances it. Freshness refuses a draft against a newer record.
  * - **What arrived while it worked.** A message that lands mid-activation is steered
  *   in. It reaches the provider after the request it lands during. PiContext
  *   records the structured range only when that later request receives it.
@@ -26,7 +26,7 @@
  * the turns inside it. An activation is wider than both: it is one or more
  * runs, because a message landing mid-activation starts another run over the
  * record as it now stands. The word for what a room does to a seat is
- * `activation` ([`agent.md`](../../../docs/agent.md) rule 1), and the record
+ * `activation` ([`agent.md`](../../../docs/agent.md), Execution boundary), and the record
  * has called it that all along: every one lands in the seat's downstream
  * session as an `ambion/activation` entry.
  */
@@ -137,7 +137,7 @@ export class Activation implements ExecutorSession {
 		this.openAudit = openAudit;
 	}
 
-	/** The seq this activation may commit against: rule 5's `readThrough`. */
+	/** The seq this activation may commit against: the freshness boundary `readThrough`. */
 	get readThrough(): Seq {
 		return this.context.readThrough;
 	}
@@ -159,7 +159,7 @@ export class Activation implements ExecutorSession {
 
 	/**
 	 * A message landed while this activation was working. It reaches the model as a
-	 * steer (rule 2). PiContext records its range without parsing rendered text.
+	 * steer. PiContext records its range without parsing rendered text.
 	 */
 	steer(after: Seq, seq: Seq, line: string): void {
 		const context = { after, seq, line };

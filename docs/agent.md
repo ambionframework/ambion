@@ -113,7 +113,7 @@ the closed set in `errors.ts`; its message is for a person.
 
 ## Execution boundary
 
-This section moves to `executors.md` in phase 7 step 4. That page does not
+This section moves to `executors.md` in phase 7 step 3. That page does not
 exist yet.
 
 **The host configures execution before starting the room.** An `Execution`
@@ -193,7 +193,7 @@ and agent names.
 
 ## Steps and the trace
 
-This section moves to `executors.md` in phase 7 step 4. That page does not
+This section moves to `executors.md` in phase 7 step 3. That page does not
 exist yet.
 
 **A step is one thing an activation did.** The step vocabulary has ten

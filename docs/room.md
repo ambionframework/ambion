@@ -158,6 +158,10 @@ does not reinterpret old assistant definitions or opening activation ids.
 Start a new journal, or migrate the history outside Ambion, before you resume
 it.
 
+An activation opens a fresh executor session. Passes within one activation
+share that session. Nothing carries model context across activations unless
+an adapter keeps a session for the seat; that option is not on main yet.
+
 The journal retains complete history. An agent that sets
 `activationTokenLimit` reads a bounded record. The seat pages the record from
 the tail through the call `view(activation, range)`. It keeps the newest part

@@ -47,7 +47,7 @@ export interface PassResult {
 
 /**
  * One activation's session with its executor: opened once, passed over as
- * the record moves, then discarded. `readThrough` is rule 5's boundary — the
+ * the record moves, then discarded. `readThrough` is the freshness boundary — the
  * highest position the session has consumed — and the driver reads it both
  * mid-pass, to renew the lease, and after, to release it.
  */
