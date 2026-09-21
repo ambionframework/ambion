@@ -32,6 +32,8 @@ This file is the whole plan for 0.2.0: the scope, the order of the work,
 the evidence each step needs, and the reason behind each item.
 [backlog.md](backlog.md) holds everything after 0.2.0. The
 [changelog](../CHANGELOG.md) records what 0.1.0 shipped.
+[simplify.md](simplify.md) proposes the consolidation and hygiene work the
+owner can fold into this scope.
 
 **An item lands with its evidence or stays open.** Every checkbox names an
 item in [the items](#the-items). A phase closes when its evidence line
