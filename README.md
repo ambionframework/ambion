@@ -295,7 +295,7 @@ the evidence for each model.
 
 - Full history remains in storage and replay. `limits.context` bounds what
   one activation reads, and `limits.message` bounds what one message
-  carries.
+  carries. [Envelope](docs/envelope.md) lists every limit and its default.
 - Activation deadlines and retry caps impose no total exchange budget.
   Continuing contributions keep an exchange open.
 - Tools can act before a contribution commits. Applications own effect
