@@ -268,6 +268,9 @@ four commands. Each command is idempotent.
 | `promote` | Run `npm dist-tag add` to set `latest` on every package                                                       |
 | `status`  | Print the dist-tags of every package                                                                          |
 
+`verify` checks the node template. The packed consumer checks of the plan cover
+the Cloudflare template.
+
 `stage` refuses when the tree is dirty. It also refuses when HEAD is not the
 commit of the tag `v<version>`, when the versions disagree, or when npmjs holds
 every package at that version. A partial earlier run is not a refusal: `stage` skips the

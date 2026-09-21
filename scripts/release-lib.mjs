@@ -50,6 +50,7 @@ export async function withTokenConfig(registry, env, fn) {
 	const dir = await mkdtemp(join(tmpdir(), 'ambion-npmrc-'));
 	const file = join(dir, 'npmrc');
 	try {
+		// npm matches the key on the host and the path. Both real registries have no path.
 		const host = new URL(registry).host;
 		await writeFile(file, `//${host}/:_authToken=\${NODE_AUTH_TOKEN}\n`, { mode: 0o600 });
 		return await fn(file);

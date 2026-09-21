@@ -106,6 +106,11 @@ async function pnpmAnswer(args, state) {
 }
 
 async function npmAnswer(registry, args, state, call) {
+	const config = args.indexOf('--userconfig');
+	if (config !== -1) {
+		call.configText = await readFile(args[config + 1], 'utf8');
+		call.configPath = args[config + 1];
+	}
 	if (args[0] === 'view') return npmView(registry, args, state);
 	if (args[0] === 'publish') return npmPublish(registry, args, state, call);
 	if (args[0] === 'dist-tag') return npmDistTag(registry, args);
@@ -277,7 +282,15 @@ describe('release.mjs against a fake registry', () => {
 		const everything = JSON.stringify(runner.calls.map((c) => [c.command, c.args]));
 		assert.ok(!everything.includes(TOKEN));
 		assert.ok(!logs.join('\n').includes(TOKEN));
-		const withConfig = publishCalls();
+		const withConfig = runner.calls.filter((c) => c.configText !== undefined);
+		assert.ok(
+			withConfig.some((c) => c.args[0] === 'dist-tag'),
+			'promote sends a config',
+		);
+		assert.ok(
+			withConfig.some((c) => c.args[0] === 'publish'),
+			'stage sends a config',
+		);
 		for (const call of withConfig) {
 			assert.equal(
 				call.configText.trim(),
