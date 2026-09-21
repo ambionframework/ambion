@@ -92,7 +92,7 @@ const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?$/;
 
 /**
  * True for a release, a prerelease, or a stamped dev version such as
- * 0.1.0-dev.42.g1a2b3c4. A numeric identifier with a leading zero is invalid.
+ * 0.2.0-dev.42.g1a2b3c4. A numeric identifier with a leading zero is invalid.
  */
 export function isVersion(version) {
 	if (!VERSION.test(version)) return false;
