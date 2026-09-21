@@ -53,7 +53,9 @@ it('reports audit failure while a remote seat completes its contribution', async
 		expect(messages.filter((message) => message.from === 'product')).toHaveLength(1);
 		expect(events.filter((event) => event.event === 'error')).toEqual([]);
 		expect(
-			(await room.participants()).find((participant) => participant.name === 'product'),
+			(await room.read({ messages: false })).participants.find(
+				(participant) => participant.name === 'product',
+			),
 		).toMatchObject({ status: 'idle' });
 	} finally {
 		await room.abort();

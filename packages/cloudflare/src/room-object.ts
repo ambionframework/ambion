@@ -10,9 +10,7 @@ import type {
 	Attention,
 	Clock,
 	ExchangeRef,
-	ExchangeView,
 	Message,
-	ParticipantInfo,
 	ReadRoomOptions,
 	Room,
 	RoomRead,
@@ -32,7 +30,7 @@ import type {
 	ViewRange,
 	ViewResponse,
 } from '@ambionframework/ambion/hosting';
-import { runningRoom } from '@ambionframework/ambion/hosting';
+import { reconcileRoom, runningRoom } from '@ambionframework/ambion/hosting';
 import type { JournalOpener } from '@ambionframework/journal';
 import { definitionOf, runtimeFor } from './configure.ts';
 import type { SeatObject } from './seat-object.ts';
@@ -49,17 +47,6 @@ export interface StartOptions {
 	agents?: readonly string[];
 	seats?: Record<string, Attention>;
 	goal?: string;
-}
-
-export interface RoomStatus {
-	name: string;
-	initialized: boolean;
-	goal?: string;
-	participants: ParticipantInfo[];
-	exchanges: readonly ExchangeView[];
-	exchange: ExchangeView | undefined;
-	watermark: Seq;
-	exchangeState: 'idle' | 'working' | 'completed';
 }
 
 export interface Person {
@@ -240,49 +227,11 @@ export class RoomObject extends DurableObject<Env> {
 		this.visits.clear();
 	}
 
-	async messages(since?: Seq): Promise<Message[]> {
-		const snapshot = await this.read(since === undefined ? {} : { messages: { since } });
-		return [...snapshot.messages];
-	}
-
-	async participants(): Promise<ParticipantInfo[]> {
-		const snapshot = await this.read({ messages: false });
-		return [...snapshot.participants];
-	}
-
 	/** Read a detached coherent projection, including stopped records. */
 	async read(options: Pick<ReadRoomOptions, 'messages'> = {}): Promise<RoomRead> {
 		const name = (await this.metadata.read()).name;
 		if (name === undefined) throw new Error('The room is not started.');
 		return readRoom(name, { ...options, runtime: this.runtime });
-	}
-
-	/** Read the current room and the state of one exchange without changing it. */
-	async status(from?: Seq): Promise<RoomStatus> {
-		const snapshot = await this.read({ messages: false });
-		const exchange =
-			from === undefined
-				? snapshot.exchange
-				: snapshot.exchanges.find((item) => item.from === from);
-		if (from !== undefined && exchange === undefined)
-			throw new Error(`Exchange '${from}' is not on the record.`);
-		return {
-			name: snapshot.name,
-			initialized: snapshot.initialized,
-			...(snapshot.goal === undefined ? {} : { goal: snapshot.goal }),
-			participants: [...snapshot.participants],
-			exchanges: [...snapshot.exchanges],
-			exchange,
-			watermark: snapshot.watermark,
-			exchangeState:
-				from === undefined
-					? snapshot.exchange === undefined
-						? 'idle'
-						: 'working'
-					: exchange?.status === 'open'
-						? 'working'
-						: 'completed',
-		};
 	}
 
 	async exchange(from: Seq) {
@@ -323,7 +272,7 @@ export class RoomObject extends DurableObject<Env> {
 
 	/** The room's alarm is its clock: it folds, decides, writes and sends. */
 	override async alarm(): Promise<void> {
-		await this.room?.reconcile();
+		if (this.room !== undefined) await reconcileRoom(this.runtime, this.room.name);
 	}
 
 	private running(): Room {
