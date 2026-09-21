@@ -213,14 +213,8 @@ Completion needs a confirmed journal read with no execution obligations left.
 
 - **Stop preserves an open exchange.** A resumed run closes it and assigns a
   new summary through reconciliation. A summary that stop revoked stays failed.
-- **Concurrent calls share one operation.** After a durable failure a caller
-  may retry. Admission stays closed and the name releases even on failure.
-- **A later run's fence guards its state.** An old retry cannot change the
-  presence or work of the new run.
 
-`abort()` writes one cancellation boundary and keeps the room running.
-`hostingOf(runtime).evict(name)` drops local handles and writes no departure.
-It releases no lease. [`deployment.md`](deployment.md) holds the host steps.
+[`deployment.md`](deployment.md) holds the host steps.
 
 ## Storage compatibility
 
