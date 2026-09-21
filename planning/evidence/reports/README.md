@@ -1,4 +1,4 @@
-# Demos
+# Reports
 
 Reports below preserve historical runs. API names in those reports describe
 the version that produced each run. Current code uses `agents`, `seats`, and

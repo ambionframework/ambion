@@ -96,14 +96,14 @@ story; **P2** is in scope and can land last.
 
 | Lane | Chain                                                      | Priority |
 | ---- | ---------------------------------------------------------- | -------- |
-| A    | Phase 2: 14; 16; 17                                        | P0       |
+| A    | Phase 2: 16; 17                                            | P0       |
 | B    | Phase 4: 1 then 2; 3; 4 then 5 and 6                       | P1       |
 | C    | Phase 3: 2; 3 then 4                                       | P1       |
-| D    | Phase 5: 2, 3, and 5 together; 4                           | P1       |
+| D    | Phase 5: 4                                                 | P1       |
 | E    | Phase 8: 1 now; 2 and 3 as each package lands; 4 to 8 last | P0       |
 | F    | Phases 6 and 7: each item after the code it describes      | P1       |
 
-**The critical path is 14, then 6.2, then 8.** Start lane A first; when hands run short, take lane B before D and D before C:
+**The critical path is 16 and 6.2, then 8.** Start lane A first; when hands run short, take lane B before D and D before C:
 the adapters carry the story, the resources feed the example, and the fold
 has the least user-visible surface.
 
@@ -114,10 +114,9 @@ the freeze.
 
 Each bold label is a stable name that other steps cite.
 
-- [ ] **14.** `activations` on the exchange read; `readActivation` (F8).
 - [ ] **16.** `format: 1` on the run entry; golden journals per chaos scenario
       with expected folds, replayed in CI; the compatibility promise in
-      `durability.md` (D3). Needs 14 and phase 3 step 2, because the
+      `durability.md` (D3). Needs phase 3 step 2, because the
       goldens must hold every field and every outcome.
 - [ ] **17.** The freeze: a note at the top of this file; additive changes only
       from here to the tag. Needs 16.
@@ -157,13 +156,7 @@ package's prompt shrinks to what the kernel does not enforce.
 them, and a second resource joins the workspace on the one resource
 contract.
 
-2. [ ] A change log in the workspace binding keyed by activation, with
-       `changes({ exchange })` (E6).
-3. [ ] A read-only SQL resource over `node:sqlite` with `query` and
-       `record` tools, for the example (E4).
 4. [ ] The instrument resource for the example, with approval on a limit.
-       Needs 3.
-5. [ ] Workspace `/dev/null` and the backend matrix on both backends.
 
 **Evidence:** two resources on one contract; "what changed during this
 exchange" answered from the change log; a summary that cites a ref.
@@ -191,7 +184,7 @@ three specialists ([docs/example.md](../docs/example.md)).
 
 2. [ ] The terminal shows steps per activation, the cost per exchange, and
        `awaiting` and `approval` to the person (F8). Needs phase 3 step 2
-       and phase 2 step 14, plus phase 5 step 4 for `approval`.
+       and phase 5 step 4 for `approval`.
 3. [ ] `ambion new --template node` derived from the example; the
        Cloudflare template on `read()` (C3). Needs 2 and phase 3 step 4.
 
@@ -208,32 +201,23 @@ one provider; a restart preserves the question.
 mechanism, with no history of names they never used. Each page starts when
 the code it describes lands, so pages run beside the code.
 
-1. [ ] `docs/room.md`: the overview and the glossary; the index leads with
-       it; `agent.md` becomes the definitions and tools page (C4, C5).
 2. [ ] `durability.md`: the format promise, stop semantics, permanent
        failure, commit retry (D3). Needs phase 2 step 16.
-3. [ ] `docs/envelope.md`: the limits table and the measured envelope.
-       The incremental projection costs 0.4 ms per new question at 100
-       closed exchanges, 1.4 ms at 1,000, and 4.9 ms at 4,000; a replay at
-       4,000 costs 729 ms.
-4. [ ] `docs/executors.md`: the contract, the steps, the harness matrix,
+3. [ ] `docs/executors.md`: the contract, the steps, the harness matrix,
        how to write an adapter (F). Needs phase 4 step 4.
-5. [ ] `docs/resources.md`: the contract, references, provenance;
+4. [ ] `docs/resources.md`: the contract, references, provenance;
        `workspace.md` becomes the Pi binding page (E4, E6). Needs
        phase 5.
-6. [ ] `docs/patterns.md`: the human patterns table (E7). Needs phase 3
+5. [ ] `docs/patterns.md`: the human patterns table (E7). Needs phase 3
        step 2.
-7. [ ] `docs/trust.md`: guarantees between owners, membership authority,
+6. [ ] `docs/trust.md`: guarantees between owners, membership authority,
        harness memory (D8, F9). Needs phase 4 step 5.
-8. [ ] Retire the residue: rule citations, migration notes, package
-       descriptions, comment voice, and
-       `planning/evidence/reports/README.md` (C4). Needs 1.
-9. [ ] The `README.md` example typechecked against the packed entries;
+7. [ ] The `README.md` example typechecked against the packed entries;
        package READMEs; the CLI README; `CONTRIBUTING.md` with the Node
        floors. Needs phase 6 step 3.
-10. [ ] A generated API reference per entry with a CI staleness check
-        (D10). P2. Needs 9.
-11. [ ] The 0.1.0 changelog entry. Last.
+8. [ ] A generated API reference per entry with a CI staleness check
+       (D10). P2. Needs 7.
+9. [ ] The 0.1.0 changelog entry. Last.
 
 **Evidence:** every page in the index has one owner section; no numbered
 rule citations remain in source; the API reference builds in CI; the
@@ -313,15 +297,6 @@ the public read; remove the `stubModel` cast.
 Node and the CLI creates only a Cloudflare Worker. Add
 `--template node`, derived from the workbench with one room and two
 definitions, and make it the default.
-
-**C4. Retire pre-release residue.** Eight source comments cite numbered
-rules that `docs/agent.md` no longer has; four migration notes describe
-renames before any release; the core manifest describes "a minimalist
-framework for ambient-aware, always-on agents";
-`planning/evidence/reports/README.md` names a removed API. Fix each before
-the tag, and state two limits the docs omit: passes share no model context
-without an adapter session, and a second person's question inside an open
-exchange belongs to that exchange.
 
 **C5. One word, one meaning.** "Seat" names membership, the `seats` map,
 the `seat()` operation, the executor dependencies, and the wire. "Exchange"
