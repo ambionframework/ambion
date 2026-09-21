@@ -127,14 +127,19 @@ means two things or two names mean one.
 **Goal:** the packages install from a public registry, and every claim in
 the scope has evidence on the tagged commit.
 
-- [ ] **1.** Two release channels (D7). The owner runs the first real `stage`,
-      `verify`, and `promote` from a local machine. CI never publishes to
-      npmjs and holds no npmjs token. Every consumer check below installs
-      from the staged version.
+- [ ] **1.** Two release channels (D7). Done: CI publishes a dev build from
+      `main` to GitHub Packages under `dev`; `scripts/release.mjs` stages
+      an official release on npmjs under `next`, verifies it outside the
+      repo, and promotes it to `latest`; no install path needs a token
+      for npmjs. Remains, and belongs to the owner: the first real
+      `stage`, `verify`, and `promote` from a local machine. CI never
+      publishes to npmjs and holds no npmjs token. Every consumer check
+      below installs from the staged version.
 - [ ] **2.** Packed consumers outside the monorepo: journal alone; pi-journal
       with journal; kernel with pi; kernel with claude; kernel with codex;
       the workbench; the generated Node and Cloudflare projects; the
-      resource-only import. Needs 1. Each consumer starts when its packages exist.
+      resource-only import.
+      Needs 1. Each consumer starts when its packages exist.
 - [ ] **4.** Node 26 tests and CLI; workerd tests; the historical
       Cloudflare wake and cut races reproduced on current code.
 - [ ] **5.** The chaos sweep at 200 seeds; Dafny proofs for every changed rule;
