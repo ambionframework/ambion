@@ -7,7 +7,18 @@ const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 const entry = pathToFileURL(`${packageRoot}/dist/index.mjs`).href;
 const loader = fileURLToPath(new URL('./support/import-trace-loader.mjs', import.meta.url));
 
-function runFreshProcess(code: string): Promise<{ code: number | null; stderr: string }> {
+/**
+ * A fresh process imports the built entry through a tracing loader. CI runs
+ * other suites at the same time, so the import takes several seconds. The
+ * process gets a budget well above that; the test timeout sits above the budget.
+ */
+const processBudgetMs = 60_000;
+const testBudgetMs = 90_000;
+
+function runFreshProcess(
+	code: string,
+	budgetMs = processBudgetMs,
+): Promise<{ code: number | null; stderr: string }> {
 	return new Promise((resolve, reject) => {
 		const child = spawn(node, ['--loader', loader, '--input-type=module', '-e', code], {
 			stdio: ['ignore', 'ignore', 'pipe'],
@@ -16,7 +27,7 @@ function runFreshProcess(code: string): Promise<{ code: number | null; stderr: s
 		const timer = setTimeout(() => {
 			child.kill('SIGKILL');
 			reject(new Error('fresh import process timed out'));
-		}, 10_000);
+		}, budgetMs);
 		child.stderr.on('data', (chunk: Buffer) => {
 			stderr += chunk.toString();
 		});
@@ -31,7 +42,13 @@ function runFreshProcess(code: string): Promise<{ code: number | null; stderr: s
 	});
 }
 
-describe('provider loading', () => {
+describe('provider loading', { timeout: testBudgetMs }, () => {
+	it('kills a process that outlives its budget', async () => {
+		await expect(runFreshProcess('setInterval(() => {}, 1000);', 300)).rejects.toThrow(
+			'fresh import process timed out',
+		);
+	});
+
 	it('does not load the provider catalog while importing the Pi entry and reading a room', async () => {
 		const result = await runFreshProcess(
 			`const { readRoom } = await import('@ambionframework/ambion');
