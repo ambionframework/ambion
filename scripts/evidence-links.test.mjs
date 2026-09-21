@@ -153,3 +153,16 @@ test('room.md documents the room-level context cap', () => {
 	assert.ok(text.includes('`limits.context.messages`'));
 	assert.ok(text.includes('earlier messages not shown'));
 });
+
+test('a page that cites an item "in `next.md`" cites an item that the plan holds', () => {
+	const plan = readFileSync(join(root, 'planning/next.md'), 'utf8');
+	const itemIds = new Set([...plan.matchAll(/^\*\*([A-Z]\d+)\./gm)].map((m) => m[1]));
+	for (const dir of ['docs', 'planning']) {
+		for (const name of readdirSync(join(root, dir)).filter((n) => n.endsWith('.md'))) {
+			const text = readFileSync(join(root, dir, name), 'utf8').replace(/\s+/g, ' ');
+			for (const [, id] of text.matchAll(/\b([A-Z]\d+) in `next\.md`/g)) {
+				assert.ok(itemIds.has(id), `${dir}/${name}: item ${id} is not in next.md`);
+			}
+		}
+	}
+});
