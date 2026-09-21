@@ -4,7 +4,9 @@ import { refOf } from '../src/tools.ts';
 
 describe('refOf', () => {
 	it('turns an absolute path into a file URI', () => {
-		expect(refOf('/tmp/codex-cap/file-change/note.txt')).toBe('file:///tmp/codex-cap/file-change/note.txt');
+		expect(refOf('/tmp/codex-cap/file-change/note.txt')).toBe(
+			'file:///tmp/codex-cap/file-change/note.txt',
+		);
 	});
 
 	it('encodes what a URI cannot hold', () => {

@@ -108,9 +108,7 @@ export function refOf(value: string): string {
 /** The intent a say stands for: its text and refs trimmed, paths as `file:` URIs, and no empty field. */
 function saidBy(args: SayArgs, changed: readonly string[]): Intent {
 	const to = args.to?.trim();
-	const cited = [...(args.refs ?? []), ...changed]
-		.map(refOf)
-		.filter((ref) => ref.length > 0);
+	const cited = [...(args.refs ?? []), ...changed].map(refOf).filter((ref) => ref.length > 0);
 	const refs = [...new Set(cited)];
 	return {
 		kind: 'said',
