@@ -145,7 +145,7 @@ describe('coherent room reads', () => {
 				through: 3,
 				summary: { status: 'published', summary: published },
 			}),
-			{ status: 'open', ...open },
+			{ status: 'open', ...open, activations: [] },
 		]);
 		const closed = snapshot.exchanges[0];
 		if (closed === undefined || closed.status !== 'closed' || closed.summary.status !== 'published')
