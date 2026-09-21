@@ -112,9 +112,10 @@ const room = await startRoom({
   execution: piExecution(),
 });
 
+const visit = await room.visit(priya);
+const exchange = await visit.send({ text: 'Can we promise 10 units for Thursday?' });
+
 try {
-  const visit = await room.visit(priya);
-  const exchange = await visit.send({ text: 'Can we promise 10 units for Thursday?' });
   for (const message of await exchange.waitForClose()) {
     if (message.kind === 'said') console.log(`${message.from}: ${message.text}`, message.refs);
   }
@@ -142,9 +143,10 @@ stopped one.
 import { readActivation, readExchange } from '@ambionframework/ambion';
 
 const closed = await readExchange('delivery', exchange.from);
-for (const activation of closed?.activations ?? []) {
-  const { steps } = await readActivation('delivery', activation.id);
-  console.log(activation.seat, activation.outcome, activation.usage.cost, steps.length);
+for (const activation of closed?.exchange.activations ?? []) {
+  const read = await readActivation('delivery', activation.id);
+  const steps = read?.passes.flatMap((pass) => pass.steps) ?? [];
+  console.log(activation.seat, activation.outcome, activation.usage?.cost, steps.length);
 }
 ```
 

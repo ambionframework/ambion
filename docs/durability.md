@@ -265,6 +265,8 @@ of an activation, so `released` and `failed` ends carry it. An end the room
 writes (`expired`, `revoked`, `abandoned`) carries none, and the exchange sum
 omits what those attempts spent.
 
+[Trust](trust.md) states what one seat can and cannot do to the record.
+
 Platform behavior remains a host concern. The Cloudflare adapter relies on one
 Durable Object instance and its SQLite storage; a resumed object fences stale
 writes. Other placement, network, and credential guarantees must be supplied by

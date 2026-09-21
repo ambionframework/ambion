@@ -7,6 +7,16 @@ const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 const entry = pathToFileURL(`${packageRoot}/dist/index.mjs`).href;
 const loader = fileURLToPath(new URL('./support/import-trace-loader.mjs', import.meta.url));
 
+/**
+ * A fresh process imports the built Pi entry and the provider catalog. It takes
+ * under one second alone and several seconds when the other packages test in
+ * parallel on a CI runner. The limit stays far above that cost. The Vitest
+ * limit of each test stays above the process limit, so the process error
+ * reaches the report.
+ */
+const processLimit = 60_000;
+const testLimit = 90_000;
+
 function runFreshProcess(code: string): Promise<{ code: number | null; stderr: string }> {
 	return new Promise((resolve, reject) => {
 		const child = spawn(node, ['--loader', loader, '--input-type=module', '-e', code], {
@@ -16,7 +26,7 @@ function runFreshProcess(code: string): Promise<{ code: number | null; stderr: s
 		const timer = setTimeout(() => {
 			child.kill('SIGKILL');
 			reject(new Error('fresh import process timed out'));
-		}, 10_000);
+		}, processLimit);
 		child.stderr.on('data', (chunk: Buffer) => {
 			stderr += chunk.toString();
 		});
@@ -32,19 +42,25 @@ function runFreshProcess(code: string): Promise<{ code: number | null; stderr: s
 }
 
 describe('provider loading', () => {
-	it('does not load the provider catalog while importing the Pi entry and reading a room', async () => {
-		const result = await runFreshProcess(
-			`const { readRoom } = await import('@ambionframework/ambion');
+	it(
+		'does not load the provider catalog while importing the Pi entry and reading a room',
+		async () => {
+			const result = await runFreshProcess(
+				`const { readRoom } = await import('@ambionframework/ambion');
 			await import(${JSON.stringify(entry)});
 			await readRoom('lazy-provider-test');`,
-		);
-		expect(result.code).toBe(0);
-		expect(result.stderr).not.toContain('AMBION_PROVIDER_IMPORT:');
-	});
+			);
+			expect(result.code).toBe(0);
+			expect(result.stderr).not.toContain('AMBION_PROVIDER_IMPORT:');
+		},
+		testLimit,
+	);
 
-	it('does not load the provider catalog during scripted room execution', async () => {
-		const result = await runFreshProcess(
-			`const { createAssistantMessageEventStream, fauxAssistantMessage } = await import(
+	it(
+		'does not load the provider catalog during scripted room execution',
+		async () => {
+			const result = await runFreshProcess(
+				`const { createAssistantMessageEventStream, fauxAssistantMessage } = await import(
 				'@earendil-works/pi-ai'
 			);
 			const { startRoom, defineAgent, defineHuman } = await import('@ambionframework/ambion');
@@ -79,14 +95,18 @@ describe('provider loading', () => {
 			const exchange = await visit.send({ text: 'hello' });
 			await exchange.waitForSummary();
 			await room.stop();`,
-		);
-		expect(result.code).toBe(0);
-		expect(result.stderr).not.toContain('AMBION_PROVIDER_IMPORT:');
-	});
+			);
+			expect(result.code).toBe(0);
+			expect(result.stderr).not.toContain('AMBION_PROVIDER_IMPORT:');
+		},
+		testLimit,
+	);
 
-	it('loads the catalog when the default model resolver is first used', async () => {
-		const result = await runFreshProcess(
-			`const { systemClock } = await import('@ambionframework/ambion');
+	it(
+		'loads the catalog when the default model resolver is first used',
+		async () => {
+			const result = await runFreshProcess(
+				`const { systemClock } = await import('@ambionframework/ambion');
 			const { memoryJournals } = await import('@ambionframework/journal');
 			const { createExecutionServices } = await import(${JSON.stringify(entry)});
 			const services = createExecutionServices({ storage: memoryJournals(), clock: systemClock() });
@@ -94,8 +114,10 @@ describe('provider loading', () => {
 			if (model.id !== 'claude-sonnet-4-5' || model.provider !== 'anthropic') {
 				throw new Error('unexpected model');
 			}`,
-		);
-		expect(result.code).toBe(0);
-		expect(result.stderr).toContain('AMBION_PROVIDER_IMPORT:');
-	});
+			);
+			expect(result.code).toBe(0);
+			expect(result.stderr).toContain('AMBION_PROVIDER_IMPORT:');
+		},
+		testLimit,
+	);
 });
