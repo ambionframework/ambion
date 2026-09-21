@@ -47,6 +47,36 @@ does not restrict who may address or steer whom.
 | Tool and provider side effects | The room does not run an effect once. A call can repeat after a timeout or a cancel.               | [Durability](durability.md) section 5                  |
 | Secrets in transcripts         | The record keeps every token. The trace holds tool output. The byte cap limits size only.          | [Durability](durability.md), [Executors](executors.md) |
 
+## What each harness exposes
+
+**Every family reaches the world through the same tools.** The workbench team runs
+one seat on Pi, one on the Claude Agent SDK, and one on the Codex SDK. One
+list of `bundles` serves every seat, so every seat holds the room tools and
+the workspace tools and no other tool.
+
+| Family | On                             | Off                                    | How the package enforces it                                                               | Test that guards it                                                                                                                      |
+| ------ | ------------------------------ | -------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Pi     | Room tools and workspace tools | Everything else; Pi has no native tool | The executor gives the model the room tools and the tools of `bundles` only               | `examples/workbench/test/live/tool-set.test.ts`                                                                                          |
+| Claude | Room tools and workspace tools | Every built-in tool of Claude Code     | With no `allowedTools`, the executor passes an empty `--tools` list and reads no settings | `packages/claude/test/policy.test.ts` on the fake executable; `examples/workbench/test/live/tool-set.test.ts` on the model               |
+| Codex  | Room tools and workspace tools | Every native tool, and Code Mode       | `nativeTools: 'none'` sets the tool policy and replaces the model catalog entry           | `packages/codex/test/exclusive.test.ts` on the options; `packages/codex/test/live/exclusive.test.ts` and the workbench test on the model |
+
+**What the live tests prove.** One tool set, one filesystem, and no native
+tool rest on the live exclusivity tests. `tool-set.test.ts` lists the tools
+of each seat that has a key, finds the same list for every seat with no
+native tool in it, and shows that one seat reads a file another seat wrote.
+It also shows that a seat cannot read `/etc/hosts`.
+`packages/codex/test/live/exclusive.test.ts` does the same for a Codex seat.
+Both tiers skip a family with no key, and they run only on request.
+
+**`nativeTools: 'none'` turns off Codex Code Mode.** Its JavaScript runtime
+reads the host filesystem outside the sandbox on Codex 0.155.1. See
+[Codex](codex.md#the-trust-boundary).
+
+Each family has a guide with its options and its tests. Read the
+[Pi](../packages/pi/README.md), [Claude](../packages/claude/README.md), and
+[Codex](codex.md) pages, and [Executors](executors.md) for the
+contract that all three meet.
+
 ## Harness memory
 
 **A seat with `memory: 'seat'` holds state the record does not show.** It
