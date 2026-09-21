@@ -214,7 +214,8 @@ executor reports it as a room event and never as a tool event.
 
 **A completed patch feeds `refs`.** The executor collects the paths of each
 completed `file_change`. The next ordinary `say` cites them in `refs`, and
-the bridge holds each path once.
+the bridge holds each path once. A ref is an absolute URI with a scheme, so
+the executor writes each path as a `file:` URI. The room refuses a bare path.
 
 **The package writes no `approval` step.** Codex answers its own approvals by
 its policy and reports none through the SDK.
@@ -348,6 +349,12 @@ The mixed file also needs the key of the Pi model (`AMBION_MODEL`, default
 vitest.live.config.ts test/live/loop.test.ts`.
 
 ## Troubleshooting
+
+**The seat answers in its final message and nobody hears it.** Codex has its
+own final-answer channel. The room hears only `say`. The first prompt of a
+thread says so. A seat that still ends with plain text and no `say` shows a
+`text` step and no `tool_call` in its trace, and `activation_end` reports
+`spoke: false`.
 
 **Every say is denied.** The seat answers in plain text, and the record holds
 nothing. The trace shows a `tool_result` with "MCP tool call requires

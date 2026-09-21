@@ -88,6 +88,15 @@ export interface CodexExecutorOptions extends CodexRuntime {
 	readonly client?: (options: CodexOptions) => CodexClientLike;
 }
 
+/**
+ * Codex answers in its own final message when a prompt does not say
+ * otherwise. The room hears only `say`, so the first prompt of each
+ * activation says so.
+ */
+export const HARNESS_NOTE =
+	'You are a seat in a room. Your final reply in this thread reaches no one. ' +
+	'The room hears only what you send through the `say` tool, so answer with `say`, then stop.';
+
 /** The Codex executor. One instance per seat, for as long as the room runs. */
 export function createCodexExecutor(options: CodexExecutorOptions): Executor {
 	const memory: SeatMemory | undefined = remembers(options.definition) ? {} : undefined;
@@ -246,7 +255,7 @@ class Activation implements ExecutorSession {
 		if (this.thread !== undefined) return renderActivation(input.view, this.definition).context;
 		// The thread has no system prompt of its own, so the first prompt carries it.
 		const { mechanism, agent, context } = renderActivation(input.view, this.definition);
-		return `${mechanism}\n\n${agent}\n\n${context}`;
+		return `${HARNESS_NOTE}\n\n${mechanism}\n\n${agent}\n\n${context}`;
 	}
 
 	/** Open the socket and the thread on the first pass. Later passes keep them. */

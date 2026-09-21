@@ -11,6 +11,8 @@
  * the missed lines to the model in the same result, so the read position
  * moves to the last of them at once.
  */
+import { isAbsolute } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { AmbionTool, Message, ToolResult } from '@ambionframework/ambion';
 import type {
 	ActivationView,
@@ -97,12 +99,16 @@ interface SayArgs {
 	refs?: string[];
 }
 
-/** The intent a say stands for: its text and refs trimmed, and no empty field. */
+/** A ref is one absolute URI with a scheme. Codex reports a changed file as a path, so a path becomes a `file:` URI. */
+export function refOf(value: string): string {
+	const ref = value.trim();
+	return isAbsolute(ref) ? pathToFileURL(ref).href : ref;
+}
+
+/** The intent a say stands for: its text and refs trimmed, paths as `file:` URIs, and no empty field. */
 function saidBy(args: SayArgs, changed: readonly string[]): Intent {
 	const to = args.to?.trim();
-	const cited = [...(args.refs ?? []), ...changed]
-		.map((ref) => ref.trim())
-		.filter((ref) => ref.length > 0);
+	const cited = [...(args.refs ?? []), ...changed].map(refOf).filter((ref) => ref.length > 0);
 	const refs = [...new Set(cited)];
 	return {
 		kind: 'said',
