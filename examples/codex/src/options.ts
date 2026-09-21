@@ -70,6 +70,8 @@ export function clientOptions(runtime: CodexRuntime, socketPath: string): CodexO
 				[ROOM_SERVER]: {
 					command: process.execPath,
 					args: [SERVER, socketPath],
+					// The room tools are the seat's own. Under approvalPolicy 'never', Codex denies an MCP call that needs approval.
+					default_tools_approval_mode: 'approve',
 					startup_timeout_sec: 30,
 					tool_timeout_sec: 600,
 				},
