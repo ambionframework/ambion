@@ -355,7 +355,12 @@ describe('Workbench host steps and approvals', () => {
 		const id = activations[0]?.id ?? '';
 		const read = await workbench.activation('bringup', id);
 		expect(read?.activation).toBe(id);
-		expect(Array.isArray(read?.passes)).toBe(true);
+		const passes = read?.passes ?? [];
+		expect(passes.length).toBeGreaterThan(0);
+		const steps = passes.flatMap((pass) => pass.steps);
+		const types = steps.map((step) => step.type);
+		expect(types).toContain('tool_call');
+		expect(types.at(-1)).toBe('end');
 		expect(await workbench.activation('bringup', 'not-an-id')).toBeUndefined();
 		await expect(workbench.activation('nowhere', id)).rejects.toThrow(/Unknown room/);
 	}, 20_000);
