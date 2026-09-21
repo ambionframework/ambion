@@ -449,3 +449,15 @@ and authorization for external services.
 
 Backends perform raw filesystem I/O below the owner. They do not maintain a
 second destruction mark or a second operation queue.
+
+### The null device
+
+**`/dev/null` discards writes and reads empty on both backends.** A
+redirect to it, and a `write` tool call on it, change nothing. The device
+lives in a layer above the filesystem, so the directory backend writes no
+`dev` entry under its root and the memory backend holds no `/dev` file.
+
+**The standard devices are present on both backends.** `/dev/zero`,
+`/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd` exist and read
+empty. `/dev/zero` does not stream bytes. `ls /dev` lists the same names on
+each backend.
