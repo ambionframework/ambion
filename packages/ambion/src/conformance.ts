@@ -6,10 +6,24 @@
  * sequence and the shape of those calls. It never checks what an executor
  * says, so any executor that speaks once passes the same cases.
  *
+ * `executorConformance` is the second suite. It lives in
+ * `conformance-executor.ts` and is exported here.
+ *
  * A case is a name and a `run` that throws on failure. The suite needs no
  * test framework, so it runs in Node and in workerd alike.
  */
 import type { ConformanceCase } from '@ambionframework/journal/conformance';
+import {
+	type Call,
+	check,
+	claims,
+	LEASE_MS,
+	leases,
+	operations,
+	pause,
+	released,
+	until,
+} from './conformance-support.ts';
 import type {
 	Executor,
 	ExecutorActivation,
@@ -29,6 +43,12 @@ import {
 } from './protocol.ts';
 import type { Message, Seq } from './types.ts';
 
+export {
+	type ExecutorCapabilities,
+	type ExecutorHarness,
+	type ExecutorPlan,
+	executorConformance,
+} from './conformance-executor.ts';
 export type { ConformanceCase };
 
 /** What a transport under test gives the suite. */
@@ -95,12 +115,6 @@ export function speakOnce(): Executor {
 
 // -- the scripted room --------------------------------------------------------
 
-interface Call {
-	readonly op: 'view' | 'commit' | 'lease';
-	readonly request: unknown;
-	readonly response: unknown;
-}
-
 interface Script {
 	/** The view answer waits until the case calls `release`. */
 	readonly holdView?: boolean;
@@ -115,8 +129,6 @@ interface ScriptedRoom {
 	readonly calls: Call[];
 	readonly violations: string[];
 }
-
-const LEASE_MS = 60_000;
 
 /** The room the suite plays: one person, one question, one seat, one activation. */
 function scriptedRoom(name: string, seat: string, script: Script): ScriptedRoom {
@@ -245,21 +257,6 @@ function scriptedRoom(name: string, seat: string, script: Script): ScriptedRoom 
 
 // -- the cases ----------------------------------------------------------------
 
-/** Polls every 20 ms until `read` holds, or fails after `patience`. */
-async function until(read: () => boolean, patience: number, what: string): Promise<void> {
-	const deadline = Date.now() + patience;
-	while (!read()) {
-		if (Date.now() > deadline) throw new Error(`Nothing came within ${patience} ms: ${what}.`);
-		await new Promise((resolve) => setTimeout(resolve, 20));
-	}
-}
-
-const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-const check = (condition: boolean, what: string): void => {
-	if (!condition) throw new Error(what);
-};
-
 interface Session {
 	readonly port: AgentPort;
 	readonly room: ScriptedRoom;
@@ -271,16 +268,6 @@ interface Session {
 }
 
 type Body = (session: Session) => Promise<void>;
-
-const operations = (room: ScriptedRoom, op: Call['op']) => room.calls.filter((c) => c.op === op);
-
-const leases = (room: ScriptedRoom) =>
-	operations(room, 'lease').map((c) => c.request as LeaseRequest);
-
-const released = (room: ScriptedRoom) => leases(room).some((r) => r.operation === 'release');
-
-const claims = (room: ScriptedRoom) => leases(room).filter((r) => r.operation === 'claim').length;
-
 const cases: readonly (readonly [string, Script, Body])[] = [
 	[
 		'carries a wake to the seat, which claims, views, commits, and releases over the wire',

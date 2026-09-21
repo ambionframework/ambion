@@ -10,7 +10,15 @@ import { inProcessTransport } from '../execution/runner.ts';
 import { traceJournals, traceOpener } from '../execution/trace.ts';
 import type { Execution, ExecutionConnector, ExecutionHost } from '../host/runtime.ts';
 import type { ActivationView, CommitResult } from '../protocol.ts';
-import type { AgentDefinition, Intent, Seq, ToolContext, ToolResult } from '../types.ts';
+import type {
+	AgentDefinition,
+	FailureCause,
+	Intent,
+	Seq,
+	ToolContext,
+	ToolResult,
+	Usage,
+} from '../types.ts';
 
 /** One tool call of a scripted turn. */
 export interface Call {
@@ -51,6 +59,23 @@ export const callTool = (tool: string, args: Record<string, unknown> = {}): Turn
 export const speak = (text: string, to?: string): Turn =>
 	callTool('say', to ? { to, text } : { text });
 
+/** A turn that records the usage of a model request as a `usage` step. */
+export const spend = (usage: Usage): Turn => callTool('usage', { ...usage });
+
+/**
+ * An error a script throws to end the activation as a failure of a given
+ * cause. Any other error ends it as transient.
+ */
+export class ScriptedFailure extends Error {
+	readonly failure: FailureCause;
+
+	constructor(failure: FailureCause, message: string) {
+		super(message);
+		this.name = 'ScriptedFailure';
+		this.failure = failure;
+	}
+}
+
 /** A turn with no call. The seat has nothing to add. */
 export const quiet = (): Turn => [];
 
@@ -85,6 +110,19 @@ const textOf = (result: string | ToolResult): string =>
 	typeof result === 'string'
 		? result
 		: result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+
+const count = (value: unknown): number => (typeof value === 'number' ? value : 0);
+
+/** The usage a `spend` call carries. */
+function usageOf(args: Record<string, unknown>): Usage {
+	return {
+		input: count(args.input),
+		output: count(args.output),
+		cacheRead: count(args.cacheRead),
+		cacheWrite: count(args.cacheWrite),
+		...(typeof args.cost === 'number' ? { cost: args.cost } : {}),
+	};
+}
 
 /** What the seat learns from a commit, and whether the activation must stop. */
 function answer(response: CommitResult): { text: string; over: boolean } {
@@ -153,14 +191,15 @@ class ScriptedSession implements ExecutorSession {
 	}
 
 	private broke(error: Error): PassResult {
+		const cause = error instanceof ScriptedFailure ? error.failure : 'transient';
 		this.activation.emit({
 			type: 'error',
 			agent: this.definition.name,
 			activation: this.activation.id,
 			error,
-			cause: 'transient',
+			cause,
 		});
-		return { failed: true, cause: 'transient', message: error.message };
+		return { failed: true, cause, message: error.message };
 	}
 
 	/** The count of steps this seat has had in the room, across its activations. */
@@ -172,6 +211,11 @@ class ScriptedSession implements ExecutorSession {
 
 	private async run(call: Call): Promise<void> {
 		if (this.stopped) return;
+		if (call.tool === 'usage') {
+			this.activation.trace.record({ type: 'usage', ...usageOf(call.args) });
+			this.results.push({ tool: call.tool, text: 'recorded' });
+			return;
+		}
 		const intent = intentOf(call);
 		const text = intent === undefined ? await this.invoke(call) : await this.commit(intent);
 		this.results.push({ tool: call.tool, text });
