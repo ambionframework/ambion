@@ -6,6 +6,7 @@
 
 import { memoryJournals } from '@ambionframework/journal';
 import { expect, it } from 'vitest';
+import { piExecution } from '../../../pi/src/index.ts';
 import { createRuntime, isPresence, readRoom, startRoom } from '../../src/index.ts';
 import { collect, roomName } from '../support/room.ts';
 import {
@@ -30,7 +31,7 @@ live('the record', () => {
 				and answer with one say, quoting the code exactly.
 			`,
 		});
-		const runtime = createRuntime({ storage: memoryJournals() });
+		const runtime = createRuntime({ storage: memoryJournals(), execution: piExecution() });
 		const name = roomName('record');
 
 		const first = await startRoom({
