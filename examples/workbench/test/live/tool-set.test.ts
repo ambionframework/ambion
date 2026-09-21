@@ -1,7 +1,7 @@
 /**
  * One tool set and one filesystem on the real families. Three claims:
  *
- * - Each specialist lists the same tool names, and none of them is a native tool.
+ * - Each seat, the assistant included, lists the same tool names, and none of them is a native tool.
  * - One specialist writes a file with the workspace tool, and the others read it back.
  * - A request to read `/etc/hosts` reaches no tool that reads a host file.
  *
@@ -37,8 +37,8 @@ import { instruments, labSchema, labWritable } from '../../src/scenarios.ts';
 
 const QUIET_MS = 150_000;
 
-/** The specialists, each with the family it runs on. */
-const specialists = ['datasheets', 'design', 'experiments'] as const;
+/** The assistant and the specialists, each with the family it runs on. */
+const specialists = ['assistant', 'datasheets', 'design', 'experiments'] as const;
 
 /** Native tool names of the three harnesses. No seat holds one. */
 const NATIVE = [
@@ -103,7 +103,7 @@ async function openRoom(seats: readonly string[]) {
 	const room = await startRoom({
 		name,
 		goal: 'Report on the tools you hold.',
-		agents: built.specialists.filter((agent) => seats.includes(agent.name)),
+		agents: built.agents.filter((agent) => seats.includes(agent.name)),
 		runtime,
 		seats: Object.fromEntries(seats.map((seat) => [seat, 'named' as const])),
 	});
@@ -170,7 +170,7 @@ const namesIn = (text: string): string[] =>
 const available = specialists.filter((seat) => hasKey(familyOf(seat)));
 
 describe.skipIf(available.length === 0)('Workbench tool set on every family', () => {
-	it('lists the same tools for every specialist, and no native tool', async () => {
+	it('lists the same tools for every seat, and no native tool', async () => {
 		const opened = await openRoom(available);
 		try {
 			const lists = new Map<string, string[]>();
