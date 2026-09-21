@@ -35,6 +35,7 @@ summary.
 
 ```ts
 import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
+import { pi, piExecution } from '@ambionframework/pi';
 
 const you = defineHuman({
   name: 'you',
@@ -44,14 +45,18 @@ const you = defineHuman({
 const inventory = defineAgent({
   name: 'inventory',
   identity: 'Checks stock constraints.',
-  instructions: 'Use supplied stock facts. State a constraint only when it changes the answer.',
-  model: 'anthropic/claude-sonnet-5',
+  executor: pi({
+    model: 'anthropic/claude-sonnet-5',
+    instructions: 'Use supplied stock facts. State a constraint only when it changes the answer.',
+  }),
 });
 const editor = defineAgent({
   name: 'editor',
   identity: 'Consolidates the closed exchange.',
-  instructions: 'Preserve the decision and the facts that support it.',
-  model: 'anthropic/claude-sonnet-5',
+  executor: pi({
+    model: 'anthropic/claude-sonnet-5',
+    instructions: 'Preserve the decision and the facts that support it.',
+  }),
 });
 
 const room = await startRoom({
@@ -59,6 +64,7 @@ const room = await startRoom({
   goal: 'Check delivery promises against stock.',
   summary: 'editor',
   agents: [inventory, editor],
+  execution: piExecution(),
 });
 
 try {
