@@ -24,6 +24,10 @@
 				"@cloudflare/workers-types"
 			]
 		},
+		"examples/codex": {
+			"entry": ["src/index.ts", "src/room-tools-server.ts", "src/testing.ts", "test/fake/codex"],
+			"project": ["src/**/*.ts", "test/**/*.ts", "test/fake/codex"]
+		},
 		"examples/workbench": {
 			"project": ["src/**/*.ts"]
 		},
