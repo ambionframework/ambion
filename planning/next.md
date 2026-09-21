@@ -59,8 +59,8 @@ ingress are future work.
   lab workspace in [docs/example.md](../docs/example.md).
 - **Two entries.** `@ambionframework/ambion` for applications and
   `@ambionframework/ambion/hosting` for hosts and adapters.
-- **The kernel imports no model library.** Pi becomes an executor package
-  and the Claude Agent SDK a second one (E2, F10).
+- **The kernel imports no model library.** The Claude Agent SDK is a second
+  executor package (F10).
 - **Speech enters the record through `say` only**, on every executor.
 - **The freeze.** After phase 2, every change to the main entry and to the
   journal bodies is additive until the tag.
@@ -97,8 +97,8 @@ story; **P2** is in scope and can land last.
 | Lane | Chain                                                      | Priority |
 | ---- | ---------------------------------------------------------- | -------- |
 | A    | Phase 2: 14; 16; 17                                        | P0       |
-| B    | Phase 4: 1 then 2; 3 then 4; 5 then 6 and 7                | P1       |
-| C    | Phase 3: 1 then 2; 3 then 4                                | P1       |
+| B    | Phase 4: 1 then 2; 3; 4 then 5 and 6                       | P1       |
+| C    | Phase 3: 2; 3 then 4                                       | P1       |
 | D    | Phase 5: 2, 3, and 5 together; 4                           | P1       |
 | E    | Phase 8: 1 now; 2 and 3 as each package lands; 4 to 8 last | P0       |
 | F    | Phases 6 and 7: each item after the code it describes      | P1       |
@@ -134,23 +134,18 @@ Each bold label is a stable name that other steps cite.
        removed; the repository's tests moved onto it (C2).
 2. [ ] The executor conformance suite on the scripted executor (D6, F10).
        Needs 1.
-3. [ ] `@ambionframework/pi`: the Pi executor moved out of the kernel, so
-       the kernel imports no model library; the `Agent` kept across passes;
-       `prompt()` with the delta; the Pi journal as its private audit (E2,
-       F2, F5). The Pi executor writes its steps to the trace sink.
-4. [ ] Three prompt parts and `renderDelta`; the default speaking policy as
+3. [ ] Three prompt parts and `renderDelta`; the default speaking policy as
        one replaceable constant; prompt snapshots for an ordinary and a
-       closing activation (B6, F3). Needs 3.
-5. [ ] `@ambionframework/claude`: room tools through `createSdkMcpServer`
+       closing activation (B6, F3).
+4. [ ] `@ambionframework/claude`: room tools through `createSdkMcpServer`
        per activation; streaming input for steer with the user echo
        advancing `readThrough`; hooks and tool messages as steps; a
        permission request as an `approval` step; policy options passed
-       through; a fake executable in CI (F5, F6). Needs 2 and 4.
-6. [ ] `memory: 'activation' | 'seat'` on both adapters (F9). Needs 3
-       and 5.
-7. [ ] `examples/codex`: a thread per activation; the stdio room tools
+       through; a fake executable in CI (F5, F6). Needs 2 and 3.
+5. [ ] `memory: 'activation' | 'seat'` on both adapters (F9). Needs 4.
+6. [ ] `examples/codex`: a thread per activation; the stdio room tools
        server over a local socket; items as steps; `file_change` paths as
-       `refs`; a fake `codex` on `PATH` in CI (F6, F10). Needs 5.
+       `refs`; a fake `codex` on `PATH` in CI (F6, F10). Needs 4.
 
 **Evidence:** both adapters pass the executor suite on fakes; a room with
 one Pi seat and one Claude seat in CI; prompt snapshots; the assistant
@@ -159,7 +154,8 @@ package's prompt shrinks to what the kernel does not enforce.
 ### Phase 5. Resources and artifacts (P1)
 
 **Goal:** artifacts are references on the record with provenance behind
-them, and the workspace is one binding of one resource contract.
+them, and a second resource joins the workspace on the one resource
+contract.
 
 2. [ ] A change log in the workspace binding keyed by activation, with
        `changes({ exchange })` (E6).
@@ -177,21 +173,15 @@ exchange" answered from the change log; a summary that cites a ref.
 **Goal:** a current operation costs what the current work costs, and each
 mechanism reads in one place.
 
-1. [ ] The incremental projection with the equivalence property test under
-       cancellation, reseating, late summaries, takeover, and restart (B1).
-       The equivalence test guards it against the changes that phase 2
-       makes to the fold inputs.
 2. [ ] Exchange outcomes: complete, cancelled, exhausted, `awaiting`;
        `pendingFor(person)`; a summary for each person who spoke (E7).
-       Needs 1.
 3. [ ] `room-host.ts` split by mechanism with a file budget in the gate
-       (B2). Needs 1.
+       (B2).
 4. [ ] The Cloudflare object on the core read model; alarms through
        `reconcileRoom` in hosting (B9). Needs 3.
 
-**Evidence:** the equivalence test; the envelope remeasured at 100, 1,000,
-and 4,000 closed exchanges; outcome reads after restart; the Cloudflare
-template on `read()`.
+**Evidence:** outcome reads after restart; the Cloudflare template on
+`read()`.
 
 ### Phase 6. The workbench example and the user interface (P1)
 
@@ -221,18 +211,20 @@ the code it describes lands, so pages run beside the code.
 1. [ ] `docs/room.md`: the overview and the glossary; the index leads with
        it; `agent.md` becomes the definitions and tools page (C4, C5).
 2. [ ] `durability.md`: the format promise, stop semantics, permanent
-       failure, commit retry (A1, A2, D1, D3). Needs phase 2 step 16.
-3. [ ] `docs/envelope.md`: the limits table and the measured envelope (B1).
-       Needs phase 3 step 1.
+       failure, commit retry (D3). Needs phase 2 step 16.
+3. [ ] `docs/envelope.md`: the limits table and the measured envelope.
+       The incremental projection costs 0.4 ms per new question at 100
+       closed exchanges, 1.4 ms at 1,000, and 4.9 ms at 4,000; a replay at
+       4,000 costs 729 ms.
 4. [ ] `docs/executors.md`: the contract, the steps, the harness matrix,
-       how to write an adapter (F). Needs phase 4 step 5.
+       how to write an adapter (F). Needs phase 4 step 4.
 5. [ ] `docs/resources.md`: the contract, references, provenance;
        `workspace.md` becomes the Pi binding page (E4, E6). Needs
        phase 5.
 6. [ ] `docs/patterns.md`: the human patterns table (E7). Needs phase 3
        step 2.
 7. [ ] `docs/trust.md`: guarantees between owners, membership authority,
-       harness memory (D8, F9). Needs phase 4 step 6.
+       harness memory (D8, F9). Needs phase 4 step 5.
 8. [ ] Retire the residue: rule citations, migration notes, package
        descriptions, comment voice, and
        `planning/evidence/reports/README.md` (C4). Needs 1.
@@ -270,7 +262,7 @@ the scope has evidence on the tagged commit.
        under `planning/evidence/`. Needs phase 2 step 16 and phase 6.
 6. [ ] Recovery evidence: duplicate wake, takeover, delayed cut, audit
        retry, clock skew, process pause, uncooperative tool. Needs phase 3
-       and phase 4 steps 3 and 5.
+       and phase 4 step 4.
 7. [ ] Summary evidence: silence, corrections, conflicting constraints,
        multiple humans, late summaries. Needs phase 3 step 2.
 8. [ ] Sign off F1 to F9 above in `planning/evidence/0.1.0.md`; tag
@@ -285,29 +277,6 @@ commit and a run for each claim.
 Each item states the problem, the solution, and the impact.
 
 ### B. Architecture
-
-**B1. Fold the journal incrementally.** `state()` calls `evolve()` per new
-entry, and [`fold.ts`](../packages/ambion/src/room/fold.ts) recomputes people,
-roster, exchange, pending wakes, and owed drafts from the whole history on
-each call; 1,000 closed exchanges cost 590 ms to fold and 48 ms per new
-question, and 4,000 cost 10 seconds and 412 ms. PR #152 adds a clone per
-heard entry. Make `RoomState` an evolving projection with indexes that one
-entry updates, keep `foldRoom` as the reference, and add one property test
-that compares both under cancellation, reseating, late summaries, takeover,
-and restart. A room with a year of history answers at the speed of one with
-a day.
-
-**Hold each derived projection as an addressed value the entry updates.** The
-Pi 0.85.1 session storage names its derived state under a `Value<T>` address:
-a branch tip, a lane state, an operation state. Each commit updates that value
-as part of the write, so a read hits the value at its current version and
-replays nothing. Ambion applies the shape to the in-memory projection. The
-roster, the open exchange, the pending wakes, and the owed drafts each become
-an addressed field that one entry updates as it lands. `foldRoom` replays the
-whole log and stays the reference for correctness. The equivalence property
-test proves the projection and the fold agree. A durable checkpoint that lets
-a resume skip settled history is a later format change
-([backlog](backlog.md)).
 
 **B2. Split the room host by mechanism.** `room-host.ts` holds 1,468 lines
 and seven mechanisms; the complexity rule bounds a function and nothing
@@ -426,18 +395,14 @@ holds a model is an executor. Everything that holds data is a resource.
 seat reaches the room through `view`, `commit`, and `lease`, and the room
 reaches a seat through `wake`, `steer`, and `cut`, in plain JSON.
 
-**E2. Pi leaves the kernel.** `Runtime` and the hosting state still carry
-a Pi stream, a model resolver, and a transcript opener, and the runner still
-builds a Pi `Agent`. Move each into `@ambionframework/pi` so the kernel
-imports no model library, and reduce every framework to the contract in F2.
-
 **E3. Neutral room tools and a headless adapter as the proof.** Nothing in
 the repository mentions MCP or a headless run. Expose the three room tools
 in the hosting entry, serve them over MCP bound to one activation, and add
 the Codex example (F6, F10).
 
 **E4. A SQL resource in the example.** Add a read-only SQL resource over
-`node:sqlite` with `query` and `record` tools, on the resource contract.
+`node:sqlite` with `query` and `record` tools, on the neutral resource
+contract.
 
 **E6. A change log for resources.** Let the workspace binding keep a change
 log keyed by activation with `changes({ exchange })`. The log answers what
@@ -495,30 +460,22 @@ identity to rebuild a step list. Every surface reports usage. Two take a
 message during a run and two do not, so steering is a capability an
 adapter declares, and correctness rests on freshness alone.
 
-**F2. Passes carry a delta and tools.** A harness keeps its
-session between turns and resumes by id; the Pi executor builds a new
-`Agent` per pass and rereads the whole record. The executor contract in
-`execution/executor.ts` has `open`, `pass(view)`, optional `steer`, and
-`abort`. It needs the tools at `open`, a delta input, and a richer result.
+**F2. Tools at open and a session id on release.** A harness keeps its
+session between turns and resumes by id. The executor contract in
+`execution/executor.ts` gives a pass the view or a delta. It still needs
+the room tools at `open` and a richer result.
 
 ```ts
 interface ExecutorActivation {
-  spec: ActivationSpec;
   tools: readonly RoomTool[];
-  signal: AbortSignal;
 }
-type PassInput =
-  { kind: 'view'; view: ActivationView } | { kind: 'delta'; since: Seq; view: ActivationView };
 interface PassResult {
-  readThrough: Seq;
-  stop: 'stopped' | 'length' | 'aborted';
-  failure?: { cause: 'permanent' | 'transient'; error: Error };
+  stop?: 'length' | 'aborted';
   session?: { harness: string; id: string };
 }
 ```
 
-The driver renders a delta for every pass after the first and records
-`session` on the release.
+The driver records `session` on the release.
 
 **F3. Three prompt parts and a delta.** The renderer returns `mechanism`
 (per kernel version), `agent` (per definition), and `context` (per pass);
@@ -526,12 +483,12 @@ each adapter places them: the Pi system prompt, the Anthropic `system` with
 `cache_control`, the Claude Agent SDK `appendSystemPrompt`, a Codex
 preamble or `AGENTS.md`. `renderDelta(view, since)` renders a later pass.
 
-**F5. Steering by capability, correctness by freshness.** The driver
-delivers a steer to `session.steer` when the adapter defines it and holds
-it for the next pass otherwise. `readThrough` advances only on evidence:
-Pi's provider request, the Claude Agent SDK's `user` echo, and for Codex
-the pass boundary. An unconsumed steer or a moved record triggers a delta
-pass.
+**F5. Steering by capability, correctness by freshness.** The Pi executor
+defines `session.steer` and advances `readThrough` at Pi's provider
+request. The Claude adapter advances `readThrough` on the Claude Agent
+SDK's `user` echo. A Codex adapter has no `steer` and advances
+`readThrough` at the pass boundary, so the driver holds a steer for the
+next pass.
 
 **F6. Room tools on every surface.** Write the three room tools once per
 adapter in its own form; three fixed schemas need no conversion. Bind each

@@ -48,21 +48,25 @@ live('the model and the loop', () => {
 		await untilQuiet(session);
 
 		const messages = await messagesOf(session);
-		expect(events).toContainEqual({
-			type: 'tool_execution_start',
-			agent: 'clerk',
-			activation: expect.any(String),
-			toolName: 'lookup_order',
-		});
+		expect(events).toContainEqual(
+			expect.objectContaining({
+				type: 'tool_execution_start',
+				agent: 'clerk',
+				activation: expect.any(String),
+				toolName: 'lookup_order',
+			}),
+		);
 		const said = saidBy(messages, 'clerk');
 		expect(said).toHaveLength(1);
 		expect(said[0]?.text).toContain('ZK-4410');
-		expect(events).toContainEqual({
-			type: 'activation_end',
-			agent: 'clerk',
-			activation: expect.any(String),
-			spoke: true,
-		});
+		expect(events).toContainEqual(
+			expect.objectContaining({
+				type: 'activation_end',
+				agent: 'clerk',
+				activation: expect.any(String),
+				spoke: true,
+			}),
+		);
 		await invariants(session, events);
 
 		// The seat's downstream session holds the turns, with the provider's usage on them.
@@ -97,12 +101,14 @@ live('the model and the loop', () => {
 			expect(errors).toHaveLength(1);
 			expect(errors[0]).toMatch(/^clerk: /);
 			expect(saidBy(await messagesOf(session), 'clerk')).toEqual([]);
-			expect(events).toContainEqual({
-				type: 'activation_end',
-				agent: 'clerk',
-				activation: expect.any(String),
-				spoke: false,
-			});
+			expect(events).toContainEqual(
+				expect.objectContaining({
+					type: 'activation_end',
+					agent: 'clerk',
+					activation: expect.any(String),
+					spoke: false,
+				}),
+			);
 		} finally {
 			try {
 				await session.stop();

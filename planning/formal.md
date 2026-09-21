@@ -732,9 +732,9 @@ scope decision removed them.
 **Tranche 3a landed over the rules' own inputs.** The lease lemmas fold a
 history of `Change` values and cancellation markers with `applyChange`
 and `cancelHold`, and the exchange lemmas take the `Message` and
-`CloseRef` values the rules take. Neither needs the addressed projection
-of B1 in `next.md`; the projection from an entry to those values stays
-with the scripted suites. The roster fold lemma waits for B1. Two
+`CloseRef` values the rules take. Neither needs the addressed projection,
+which landed in PR #196; the projection from an entry to those values
+stays with the scripted suites. The roster fold lemma waits for it. Two
 liveness facts stay open: a measure the stop loop decreases, and a
 measure each reconciliation pass decreases, so the `PASSES` bound is a
 proof. Today only the chaos drain and the walk's `drained` check witness

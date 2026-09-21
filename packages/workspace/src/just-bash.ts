@@ -38,6 +38,7 @@ import {
 import { Bash, type IFileSystem, InMemoryFs } from 'just-bash';
 import type { WorkspaceBackend } from './backend.ts';
 import { BashEnv } from './bash-env.ts';
+import { DEV_DIR, withDevices } from './devices.ts';
 import type { WorkspaceAgent } from './resource.ts';
 import { createSqlTool, SHARED_DATABASE } from './sql.ts';
 
@@ -46,7 +47,13 @@ async function connectOver(fs: IFileSystem, agent: WorkspaceAgent): Promise<Bash
 	const home = `/home/${agent.name}`;
 	await fs.mkdir(home, { recursive: true });
 	return new BashEnv(
-		new Bash({ fs, cwd: home, env: { HOME: home }, javascript: true, python: true }),
+		new Bash({
+			fs: withDevices(fs),
+			cwd: home,
+			env: { HOME: home },
+			javascript: true,
+			python: true,
+		}),
 		home,
 	);
 }
@@ -131,6 +138,7 @@ async function walk(fs: IFileSystem, dir: string): Promise<MemoryBackendFile[]> 
 	const files: MemoryBackendFile[] = [];
 	for (const entry of await fs.readdir(dir)) {
 		const path = posix.join(dir, entry);
+		if (path === DEV_DIR) continue;
 		const stat = await fs.lstat(path);
 		if (stat.isDirectory) files.push(...(await walk(fs, path)));
 		else if (!stat.isSymbolicLink) files.push({ path, text: await fs.readFile(path) });
@@ -199,7 +207,26 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
 		readFiles: async () => listFiles(await resource.get()),
 		tools: justBashTools(),
 		guidance: JUST_BASH_GUIDANCE,
+		changedPaths: justBashChangedPaths,
 	};
+}
+
+/**
+ * The paths a `write` or `edit` call changed, resolved against the agent's
+ * home. Every other tool, `bash` included, leaves no change record.
+ */
+export function justBashChangedPaths(
+	agent: WorkspaceAgent,
+	tool: string,
+	params: unknown,
+): readonly string[] {
+	if (tool !== 'write' && tool !== 'edit') return [];
+	const path = (params as { path?: unknown } | null)?.path;
+	if (typeof path !== 'string' || path === '') return [];
+	const home = `/home/${agent.name}`;
+	if (path === '~') return [home];
+	const expanded = path.startsWith('~/') ? posix.join(home, path.slice(2)) : path;
+	return [posix.resolve(home, expanded)];
 }
 
 /**
@@ -254,5 +281,6 @@ export function directoryBackend(root: string): WorkspaceBackend {
 		dispose: async () => resource.clear(),
 		tools: justBashTools(),
 		guidance: JUST_BASH_GUIDANCE,
+		changedPaths: justBashChangedPaths,
 	};
 }

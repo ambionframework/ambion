@@ -13,7 +13,7 @@ import { memoryJournals } from '@ambionframework/journal';
 import { piSessions } from '@ambionframework/pi-journal';
 import type { Usage } from '@earendil-works/pi-ai';
 import { describe } from 'vitest';
-import { type PiOptions, pi, seatSessionId } from '../../../pi/src/index.ts';
+import { type PiOptions, pi, piExecution, seatSessionId } from '../../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -78,7 +78,7 @@ type RoomOptions = Omit<StartRoomOptions, 'name' | 'stream' | 'runtime'>;
 
 /** A live room with explicit participants and fresh storage for its record and transcripts. */
 export async function open(prefix: string, options: RoomOptions) {
-	const runtime = createRuntime({ storage: memoryJournals() });
+	const runtime = createRuntime({ storage: memoryJournals(), execution: piExecution() });
 	const session = await startRoom({
 		...options,
 		name: roomName(prefix),
