@@ -31,11 +31,13 @@ it('each second-level heading of docs/room.md has one owner page', async () => {
 	expect(room.filter((heading) => agent.includes(heading))).toEqual([]);
 });
 
-it('the glossary names agent.md as the owner of Step while it lives there', async () => {
+it('the glossary names executors.md as the owner of Step', async () => {
 	const room = await read('../../../docs/room.md');
 	const agent = await read('../../../docs/agent.md');
+	const executors = await read('../../../docs/executors.md');
 	const row = room.split('\n').find((line) => line.startsWith('| Step '));
-	expect(agent).toContain('## Steps and the trace');
-	expect(row).toContain('(agent.md)');
+	expect(executors).toContain('## The step vocabulary');
+	expect(agent).not.toContain('## Steps and the trace');
+	expect(row).toContain('(executors.md)');
 	expect(row).not.toContain('PENDING');
 });

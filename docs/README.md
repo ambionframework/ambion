@@ -14,7 +14,8 @@ each page.
 | Document                          | Use it for                                                    |
 | --------------------------------- | ------------------------------------------------------------- |
 | [Room](room.md)                   | Overview, glossary, and the room-wide mechanisms              |
-| [Definitions and tools](agent.md) | Definitions, tools, and the execution boundary                |
+| [Definitions and tools](agent.md) | Definitions and tools                                         |
+| [Executors](executors.md)         | The executor contract, steps, the trace, and adapters         |
 | [Assistant](assistant.md)         | The default assistant package and the `assistant` room option |
 | [Exchange](exchange.md)           | Human questions, completion, and durable result handles       |
 | [Presence](presence.md)           | Visits, arrivals, departures, and catch-up                    |
@@ -41,7 +42,8 @@ filesystem binding.
 shorthand, and how the workbench example evaluates it.
 
 `room.md` is the entry point for the runtime model. Read `agent.md` for
-definitions, tools, and the execution boundary. Read `exchange.md` and
+definitions and tools. Read `executors.md` for the execution boundary, the
+steps, and how to write an adapter. Read `exchange.md` and
 `presence.md` for the two durable concepts built on the room. Read
 `durability.md` before choosing storage or recovery behavior, then
 `deployment.md` for host procedures. `envelope.md` lists every
