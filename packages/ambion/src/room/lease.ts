@@ -30,7 +30,7 @@
 import type { JournalEntry } from '@ambionframework/journal';
 import { type ActivationSource, decodeActivationId, encodeActivationId } from '../activation-id.ts';
 import type { LeaseChange } from '../journal/events.ts';
-import type { Message, Seq, Usage } from '../types.ts';
+import type { HarnessSession, Message, Seq, Usage } from '../types.ts';
 import type { MessageDelivery } from './delivery.ts';
 import {
 	applyChange,
@@ -48,6 +48,8 @@ import {
 export type LeaseHold = Hold & {
 	/** What the activation spent, from the ended entry its driver wrote. */
 	readonly usage?: Usage;
+	/** The harness session the ended entry recorded. */
+	readonly session?: HarnessSession;
 };
 
 /**
@@ -70,9 +72,30 @@ export function applyLease(
 ): void {
 	const known = leases.get(change.id);
 	const next: LeaseHold = applyChange(known, change, seq);
-	// An ended lease is final: only the entry that ends it carries usage.
-	const usage = change.phase === 'ended' && next !== known ? change.usage : undefined;
-	leases.set(change.id, usage === undefined ? next : { ...next, usage });
+	// An ended lease is final: only the entry that ends it carries usage and session.
+	const ending = change.phase === 'ended' && next !== known ? change : undefined;
+	leases.set(change.id, {
+		...next,
+		...(ending?.usage === undefined ? {} : { usage: ending.usage }),
+		...(ending?.session === undefined ? {} : { session: ending.session }),
+	});
+}
+
+/**
+ * The session the seat's latest ended activation recorded, or nothing. The
+ * latest is the one whose end entry stands highest on the journal.
+ */
+export function lastSession(
+	leases: ReadonlyMap<string, LeaseHold>,
+	seat: string,
+): HarnessSession | undefined {
+	let latest: LeaseHold | undefined;
+	for (const lease of leases.values()) {
+		if (lease.phase !== 'ended' || lease.session === undefined) continue;
+		if (seatOf(lease.id) !== seat) continue;
+		if (latest?.phase !== 'ended' || lease.until > latest.until) latest = lease;
+	}
+	return latest?.session;
 }
 
 export const isExpired = (lease: LeaseHold, now: number): boolean =>

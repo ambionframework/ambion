@@ -25,7 +25,9 @@ import { appendFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 
 const config = JSON.parse(process.env.AMBION_FAKE ?? '{"turns":[]}');
-const session = 'fake-session';
+const args = process.argv.slice(2);
+const resumed = args.find((arg) => arg.startsWith('--resume='))?.slice('--resume='.length);
+const session = resumed ?? config.session ?? `fake-session-${process.pid}`;
 
 const log = (entry) => {
 	if (config.log !== undefined) appendFileSync(config.log, `${JSON.stringify(entry)}\n`);
@@ -33,7 +35,7 @@ const log = (entry) => {
 const out = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
 
 let count = 0;
-const next = (prefix) => `${prefix}_${++count}`;
+const next = (prefix) => `${prefix}_${process.pid}_${++count}`;
 const envelope = (fields) => ({
 	...fields,
 	parent_tool_use_id: null,
@@ -61,6 +63,10 @@ const until = async (ready) => {
 };
 
 log({ argv: process.argv.slice(2), cwd: process.cwd() });
+if (resumed !== undefined && config.rejectResume === true) {
+	process.stderr.write(`No conversation found with session ID: ${resumed}\n`);
+	process.exit(1);
+}
 
 /** A control request to the SDK, answered by a control response with the same id. */
 async function ask(request) {

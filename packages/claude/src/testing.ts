@@ -59,22 +59,32 @@ export interface ClaudeHarnessOptions {
 	readonly executable: string;
 	/** Extra environment for the fake. */
 	readonly env?: Readonly<Record<string, string | undefined>>;
+	/** The memory mode of the executors the harness opens. Absent means `activation`. */
+	readonly memory?: 'activation' | 'seat';
 }
 
 /**
  * The harness that runs the executor suite on the Claude executor. It
  * declares steering, usage and permanent failure, because the SDK takes a
- * message during a run, reports its spend, and names a refusal.
+ * message during a run, reports its spend, and names a refusal. It declares
+ * memory when the harness opens `seat` executors.
  */
 export function claudeExecutorHarness(options: ClaudeHarnessOptions): ExecutorHarness {
 	return {
 		open: (plan, definition) =>
 			createClaudeExecutor({
 				// The suite names a neutral executor. The seat runs on a Claude one.
-				definition: { ...definition, executor: claude({ instructions: '', model: 'fake' }) },
+				definition: {
+					...definition,
+					executor: claude({
+						instructions: '',
+						model: 'fake',
+						...(options.memory === undefined ? {} : { memory: options.memory }),
+					}),
+				},
 				pathToClaudeCodeExecutable: options.executable,
 				env: { ...process.env, ...options.env, AMBION_FAKE: JSON.stringify(scenarioOf(plan)) },
 			}),
-		can: { steer: true, usage: true, permanentFailure: true },
+		can: { steer: true, usage: true, permanentFailure: true, memory: options.memory === 'seat' },
 	};
 }

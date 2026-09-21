@@ -16,6 +16,11 @@
  *   pass in flight waits for the record: the next delta carries it.
  * - **Cut.** `abort` interrupts the query. `close` ends the input and the
  *   process, and the driver calls it when the activation is over.
+ * - **Memory.** With `memory: 'seat'` the query persists its session and
+ *   the executor keeps the id the SDK reports. The next activation resumes
+ *   it. After a restart the id comes from `spec.resume`, which the room
+ *   read off the journal. A resume the SDK cannot honor starts a fresh
+ *   session, and the release records the new id.
  */
 import type {
 	ActivationView,
@@ -23,6 +28,7 @@ import type {
 	Executor,
 	ExecutorActivation,
 	ExecutorSession,
+	HarnessSession,
 	PassInput,
 	PassResult,
 	RoomProtocol,
@@ -34,7 +40,7 @@ import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/c
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps, plainName } from './claude-trace.ts';
 import { approver, type ClaudeRuntime, claudeOf, queryOptions } from './options.ts';
-import { passResultOf } from './services.ts';
+import { passResultOf, sessionOf } from './services.ts';
 import { Echoes, Inbox, userMessage } from './steer.ts';
 import { type Binding, roomServer } from './tools.ts';
 
@@ -48,11 +54,22 @@ export interface ClaudeExecutorOptions extends ClaudeRuntime {
 	readonly query?: (params: { prompt: AsyncIterable<SDKUserMessage>; options?: Options }) => Query;
 }
 
+/** What a seat with memory keeps between activations: the session the SDK reported last. */
+interface SeatMemory {
+	id?: string;
+}
+
+/** Whether the executor resumes one session for the seat. */
+function remembers(definition: AgentDefinition): boolean {
+	return 'memory' in definition.executor && definition.executor.memory === 'seat';
+}
+
 /** The Claude executor. One instance per seat, for as long as the room runs. */
 export function createClaudeExecutor(options: ClaudeExecutorOptions): Executor {
+	const memory: SeatMemory | undefined = remembers(options.definition) ? {} : undefined;
 	return {
 		open(activation: ExecutorActivation): ExecutorSession {
-			return new Activation(activation, options);
+			return new Activation(activation, options, memory);
 		},
 	};
 }
@@ -74,7 +91,7 @@ class Activation implements ExecutorSession {
 	private readonly runtime: ClaudeRuntime;
 	private readonly open: NonNullable<ClaudeExecutorOptions['query']>;
 	private readonly steps = new ClaudeSteps();
-	private readonly inbox = new Inbox();
+	private inbox = new Inbox();
 	private readonly echoes = new Echoes();
 	/** Aborts when the activation is cut. The tools read its signal. */
 	private readonly cut = new AbortController();
@@ -84,6 +101,16 @@ class Activation implements ExecutorSession {
 	private readonly named = new Map<string, string>();
 	/** The steers held before the query starts. */
 	private held: Held[] = [];
+	/** The messages sent and not yet echoed. A restart of the query sends them again. */
+	private readonly outbox = new Map<string, SDKUserMessage>();
+	/** The seat's memory across activations. Absent when the seat keeps none. */
+	private readonly memory: SeatMemory | undefined;
+	/** The session this activation asked the SDK to resume. */
+	private resuming: string | undefined;
+	/** Whether the query has sent any message. */
+	private heard = false;
+	/** Opens the query. Set on the first pass. */
+	private begin: (() => Query) | undefined;
 	private through = 0;
 	private stream: Query | undefined;
 	/** Set while a pass waits for its result. It settles the pass. */
@@ -93,7 +120,7 @@ class Activation implements ExecutorSession {
 	private serial = 0;
 	private stopped = false;
 
-	constructor(activation: ExecutorActivation, options: ClaudeExecutorOptions) {
+	constructor(activation: ExecutorActivation, options: ClaudeExecutorOptions, memory?: SeatMemory) {
 		this.id = activation.id;
 		this.room = activation.room;
 		this.emit = activation.emit;
@@ -101,6 +128,13 @@ class Activation implements ExecutorSession {
 		this.definition = options.definition;
 		this.runtime = options;
 		this.open = options.query ?? query;
+		this.memory = memory;
+	}
+
+	/** The Claude session to record with the release. Absent until the SDK reports one, and when the seat keeps no memory. */
+	get session(): HarnessSession | undefined {
+		const id = this.memory?.id;
+		return id === undefined ? undefined : { harness: 'claude', id };
 	}
 
 	/** The seq this activation may commit against: the freshness boundary `readThrough`. */
@@ -200,7 +234,9 @@ class Activation implements ExecutorSession {
 		this.serial += 1;
 		const uuid = crypto.randomUUID();
 		this.echoes.expect(uuid, sent);
-		this.inbox.push(userMessage(text, uuid));
+		const message = userMessage(text, uuid);
+		this.outbox.set(uuid, message);
+		this.inbox.push(message);
 	}
 
 	/** Open the query on the first pass. Later passes keep it. */
@@ -213,17 +249,36 @@ class Activation implements ExecutorSession {
 			this.currentView(view),
 		);
 		const executor = claudeOf(this.definition.executor);
-		const stream = this.open({
-			prompt: this.inbox,
-			options: queryOptions({
-				executor,
-				systemPrompt: `${mechanism}\n\n${agent}`,
-				server,
-				names,
-				canUseTool: approver(executor, this.trace, names),
-				runtime: this.runtime,
-			}),
-		});
+		this.resuming = this.memory === undefined ? undefined : (this.memory.id ?? resumeOf(view));
+		this.begin = () =>
+			this.open({
+				prompt: this.inbox,
+				options: queryOptions({
+					executor,
+					systemPrompt: `${mechanism}\n\n${agent}`,
+					server,
+					names,
+					canUseTool: approver(executor, this.trace, names),
+					runtime: this.runtime,
+					...(this.resuming === undefined ? {} : { resume: this.resuming }),
+				}),
+			});
+		const stream = this.begin();
+		this.stream = stream;
+		void this.consume(stream);
+	}
+
+	/**
+	 * Start the query again without the session it could not resume. The
+	 * messages that wait for an echo go to the new input.
+	 */
+	private restart(begin: () => Query): void {
+		this.resuming = undefined;
+		if (this.memory !== undefined) this.memory.id = undefined;
+		this.inbox.end();
+		this.inbox = new Inbox();
+		for (const message of this.outbox.values()) this.inbox.push(message);
+		const stream = begin();
 		this.stream = stream;
 		void this.consume(stream);
 	}
@@ -266,12 +321,20 @@ class Activation implements ExecutorSession {
 			});
 		} catch (error) {
 			if (this.stopped) return;
+			// A resume the SDK cannot honor fails before it says anything. Begin a fresh session.
+			if (this.resuming !== undefined && !this.heard && this.begin !== undefined) {
+				this.restart(this.begin);
+				return;
+			}
 			this.finish(this.broke(error instanceof Error ? error : new Error(String(error))));
 		}
 	}
 
 	/** One SDK message: its steps, its echo, and, for a result, the end of the pass. */
 	private handle(message: SDKMessage): void {
+		this.heard = true;
+		const session = sessionOf(message);
+		if (session !== undefined && this.memory !== undefined) this.memory.id = session.id;
 		for (const step of this.steps.steps(message)) {
 			this.trace.record(step);
 			if (step.type === 'tool_call') this.started(step.call, step.name);
@@ -309,6 +372,7 @@ class Activation implements ExecutorSession {
 	private echoed(message: Extract<SDKMessage, { type: 'user' }>): void {
 		const sent = this.echoes.confirm(message.uuid);
 		if (sent === undefined) return;
+		if (message.uuid !== undefined) this.outbox.delete(message.uuid);
 		const contiguous = sent.steer === undefined || sent.steer.after <= this.through;
 		if (contiguous) this.advance(sent.through);
 		if (sent.steer !== undefined) {
@@ -363,4 +427,10 @@ class Activation implements ExecutorSession {
 		});
 		return { failed: true, cause: 'transient', message: error.message };
 	}
+}
+
+/** The session the room recorded for this seat, when a Claude activation ended with one. */
+function resumeOf(view: ActivationView): string | undefined {
+	const { resume } = view.spec;
+	return resume?.harness === 'claude' ? resume.id : undefined;
 }

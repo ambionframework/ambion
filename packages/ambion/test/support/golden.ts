@@ -25,6 +25,15 @@ const worker = defineAgent({
 	identity: 'Answers the question.',
 	executor: pi({ instructions: 'answer the question', model: 'scripted/worker' }),
 });
+const keeper = defineAgent({
+	name: 'worker',
+	identity: 'Answers the question.',
+	executor: pi({
+		instructions: 'answer the question',
+		model: 'scripted/worker',
+		memory: 'seat',
+	}),
+});
 const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Writes a closing summary.',
@@ -81,6 +90,21 @@ const complete = (): Promise<readonly JournalEntry[]> =>
 		}),
 		async drive(room) {
 			await (await room.visit(priya)).send({ text: 'Can I tell the client Thursday?' });
+			await waitForRoom(room);
+		},
+	});
+
+/** A seat with `seat` memory answers two questions. Each ended activation records the session. */
+const session = (): Promise<readonly JournalEntry[]> =>
+	record({
+		agents: [keeper],
+		seats: { worker: 'broadcast' },
+		stream: byAgent({ worker: says(['Thursday works.']) }),
+		async drive(room) {
+			const person = await room.visit(priya);
+			await person.send({ text: 'Can I tell the client Thursday?' });
+			await waitForRoom(room);
+			await person.send({ text: 'And Friday?' });
 			await waitForRoom(room);
 		},
 	});
@@ -168,4 +192,5 @@ export const goldenScenarios: Readonly<Record<string, () => Promise<readonly Jou
 	cancelled,
 	exhausted,
 	resumed,
+	session,
 };

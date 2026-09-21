@@ -45,8 +45,8 @@ describe('verified rules', () => {
 		expectTypeOf<LeaseEndReason>().toEqualTypeOf<EndReason>();
 		expectTypeOf<FailureCause>().toEqualTypeOf<PublicFailureCause>();
 		expectTypeOf<LeasePhase>().toEqualTypeOf<'running' | 'ended'>();
-		// Usage is a fact of the record the rules never read, so the rules omit it.
-		expectTypeOf<Change>().toEqualTypeOf<DistributiveOmit<LeaseChange, 'usage'>>();
+		// Usage and session are facts of the record the rules never read, so the rules omit them.
+		expectTypeOf<Change>().toEqualTypeOf<DistributiveOmit<LeaseChange, 'usage' | 'session'>>();
 		expectTypeOf<Source>().toEqualTypeOf<ActivationSource>();
 		expectTypeOf<ActivationFields>().toEqualTypeOf<ActivationId>();
 		// The room adds the people a closing activation addresses to the rule's grant.
@@ -54,7 +54,7 @@ describe('verified rules', () => {
 		expectTypeOf<OutcomeKind>().toEqualTypeOf<ExchangeOutcome['kind']>();
 		expectTypeOf<Close>().toMatchTypeOf<CloseFact>();
 		// The room's hold is the rule's hold plus the derived `cancelled` marker.
-		expectTypeOf<Hold>().toEqualTypeOf<DistributiveOmit<LeaseHold, 'usage'>>();
+		expectTypeOf<Hold>().toEqualTypeOf<DistributiveOmit<LeaseHold, 'usage' | 'session'>>();
 	});
 
 	it('folds one lease entry: ended is final, since is fixed, readThrough never moves back', () => {

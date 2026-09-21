@@ -99,6 +99,7 @@ const usage = Type.Object(
 	},
 	extra,
 );
+const harnessSession = Type.Object({ harness: Type.String(), id: Type.String() }, extra);
 const leaseEnded = Type.Object(
 	{
 		id: Type.String(),
@@ -113,6 +114,7 @@ const leaseEnded = Type.Object(
 		at: Type.String(),
 		readThrough: seq,
 		usage: Type.Optional(usage),
+		session: Type.Optional(harnessSession),
 	},
 	extra,
 );

@@ -6,11 +6,10 @@
  */
 import { type JournalOpener, memoryJournals } from '@ambionframework/journal';
 import type { ConformanceCase } from '@ambionframework/journal/conformance';
+import { type ExecutorRoom, executorRoom, type RoomScript } from './conformance-executor-room.ts';
 import {
-	type Call,
 	check,
 	claims,
-	LEASE_MS,
 	leases,
 	operations,
 	pause,
@@ -22,23 +21,13 @@ import type { Executor } from './execution/executor.ts';
 import { inProcessTransport } from './execution/runner.ts';
 import { readTrace, traceJournals, traceOpener } from './execution/trace.ts';
 import { systemClock } from './host/clock.ts';
-import {
-	type AgentPort,
-	type CommitRequest,
-	type CommitResult,
-	type LeaseRequest,
-	type LeaseResponse,
-	type RoomProtocol,
-	roundTrip,
-	type ViewResponse,
-} from './protocol.ts';
+import type { AgentPort, CommitResult, LeaseRequest } from './protocol.ts';
 import {
 	type AgentDefinition,
 	addUsage,
 	type ExecutionEvent,
 	type FailureCause,
-	type Message,
-	type Seq,
+	type HarnessSession,
 	type TraceStep,
 	type Usage,
 } from './types.ts';
@@ -68,6 +57,11 @@ export interface ExecutorCapabilities {
 	readonly usage: boolean;
 	/** The executor can end an activation as a permanent failure. */
 	readonly permanentFailure: boolean;
+	/**
+	 * The harness opens executors that keep memory across activations, and
+	 * the executor records a harness session with each release. Absent means false.
+	 */
+	readonly memory?: boolean;
 }
 
 /** What an executor under test gives the suite. */
@@ -85,156 +79,6 @@ export interface ExecutorHarness {
 	close?(): Promise<void>;
 }
 
-interface RoomScript {
-	/** The first commit waits until the case calls `release`. */
-	readonly hold?: boolean;
-	/** The first `said` commit finds a new message from the person. */
-	readonly misses?: boolean;
-	/** The first renewal after a landed say finds a new message from the person. */
-	readonly advances?: boolean;
-}
-
-interface ExecutorRoom {
-	readonly protocol: RoomProtocol;
-	readonly calls: Call[];
-	/** Lets a held commit answer. */
-	release(): void;
-	/** Add a message from the person to the record. */
-	append(text: string): Message;
-	/** The messages the seat landed, in order. */
-	landed(): Message[];
-}
-
-/** A room like `scriptedRoom` that also answers `missed`, holds a commit, and moves the record. */
-function executorRoom(name: string, seat: string, script: RoomScript): ExecutorRoom {
-	const activation = `message:1:${seat}:1`;
-	const calls: Call[] = [];
-	const messages: Message[] = [
-		{
-			kind: 'said',
-			seq: 1,
-			at: new Date(0).toISOString(),
-			from: 'priya',
-			text: 'When is the pour?',
-		},
-	];
-	const byKey = new Map<string, Message>();
-	const state = { ended: false, missed: false, advanced: false };
-	let open = () => {};
-	const held =
-		script.hold === true
-			? new Promise<void>((resolve) => {
-					open = resolve;
-				})
-			: undefined;
-	const lastSeq = (): Seq => messages.at(-1)?.seq ?? 1;
-	const append = (text: string): Message => {
-		const message: Message = {
-			kind: 'said',
-			seq: lastSeq() + 1,
-			at: new Date().toISOString(),
-			from: 'priya',
-			text,
-		};
-		messages.push(message);
-		return message;
-	};
-
-	const record = <T>(op: Call['op'], request: unknown, answer: () => T | Promise<T>) => {
-		const entry = { op, request: roundTrip(request), response: undefined as unknown };
-		calls.push(entry);
-		return Promise.resolve()
-			.then(answer)
-			.then((response) => {
-				calls[calls.indexOf(entry)] = { ...entry, response: roundTrip(response) };
-				return response;
-			});
-	};
-
-	const stale = { stale: 'the lease ended' };
-
-	const view = (): ViewResponse => ({
-		view: {
-			spec: { id: activation, seat, attempt: 1, purpose: { kind: 'respond', message: 1 } },
-			through: lastSeq(),
-			context: {
-				name,
-				now: Date.now(),
-				participants: [
-					{
-						kind: 'human',
-						name: 'priya',
-						identity: 'Project manager.',
-						presence: 'present',
-						messagesSinceDeparture: 0,
-					},
-					{
-						kind: 'agent',
-						name: seat,
-						identity: 'Says a plan.',
-						status: 'active',
-						attention: 'broadcast',
-					},
-				],
-				messages: [...messages],
-				exchange: { owner: 'priya', from: 1 },
-				reserve: [],
-			},
-		},
-	});
-
-	/** A say lands unless a message from another author sits past what the seat read. */
-	const land = (request: CommitRequest, text: string): CommitResult => {
-		const seen = request.readThrough ?? lastSeq();
-		const newer = messages.filter((m) => m.seq > seen && m.from !== seat);
-		if (newer.length > 0) return { missed: newer };
-		const message: Message = {
-			kind: 'said',
-			seq: lastSeq() + 1,
-			key: request.key,
-			activationId: activation,
-			at: new Date().toISOString(),
-			from: seat,
-			text,
-		};
-		messages.push(message);
-		byKey.set(request.key, message);
-		return { committed: message };
-	};
-
-	const commit = async (request: CommitRequest): Promise<CommitResult> => {
-		await held;
-		if (state.ended || request.activation !== activation) return stale;
-		const again = byKey.get(request.key);
-		if (again !== undefined) return { committed: again };
-		if (request.intent.kind !== 'said') return { refused: 'the suite takes a said only' };
-		if (script.misses === true && !state.missed) {
-			state.missed = true;
-			append('One more thing: the crew starts at six.');
-		}
-		return land(request, request.intent.text);
-	};
-
-	const lease = (request: LeaseRequest): LeaseResponse => {
-		if (state.ended || request.activation !== activation) return stale;
-		if (request.operation === 'release') state.ended = true;
-		const moves = request.operation === 'renew' && script.advances === true && !state.advanced;
-		if (moves && byKey.size > 0) {
-			state.advanced = true;
-			append('And bring the forms.');
-		}
-		return { ok: { expiresAt: Date.now() + LEASE_MS, lastSeq: lastSeq() } };
-	};
-
-	const protocol: RoomProtocol = {
-		view: (id) =>
-			record('view', { id }, () => (id === activation && !state.ended ? view() : stale)),
-		commit: (request) => record('commit', request, () => commit(request)),
-		lease: (request) => record('lease', request, () => lease(request)),
-	};
-	return { protocol, calls, release: open, append, landed: () => [...byKey.values()] };
-}
-
 interface Run {
 	readonly port: AgentPort;
 	readonly room: ExecutorRoom;
@@ -242,7 +86,8 @@ interface Run {
 	readonly names: { room: string; seat: string };
 	readonly activation: string;
 	readonly patience: number;
-	wake(): Promise<void>;
+	/** Wake the seat for the first activation, or for the one that `activation` names. */
+	wake(activation?: string): Promise<void>;
 	waitFor(read: () => boolean, what: string): Promise<void>;
 	/** The trace steps once the `end` step landed. */
 	trace(): Promise<TraceStep[]>;
@@ -261,6 +106,10 @@ const commitsOf = (room: ExecutorRoom) =>
 	);
 
 type Release = LeaseRequest & { operation: 'release' };
+
+/** Every release the room saw, in order. */
+const releasesOf = (run: Run): Release[] =>
+	leases(run.room).filter((request): request is Release => request.operation === 'release');
 
 /** The release the room saw, with the read position it carries. */
 function releaseWith(run: Run): Release {
@@ -464,6 +313,47 @@ const usageCase: ExecutorCase = {
 	},
 };
 
+/**
+ * Two activations of one seat. Each release records a session, the room
+ * hands the recorded session to the next activation as `spec.resume`, and
+ * the executor ends the second activation with the same session.
+ */
+const memoryCase: ExecutorCase = {
+	name: 'records a session with each release, and resumes it in the next activation',
+	plan: { kind: 'sayOnce', text: TEXT },
+	room: {},
+	body: async (run) => {
+		await run.wake();
+		await run.waitFor(() => releasesOf(run).length === 1, 'the first release');
+		const first = releasesOf(run)[0]?.session;
+		check(first !== undefined && first.id !== '', 'the first release records no session');
+		const line = run.room.append('And the pump?');
+		const next = `message:${line.seq}:${run.names.seat}:1`;
+		await run.wake(next);
+		await run.waitFor(() => releasesOf(run).length === 2, 'the second release');
+		const resumed = operations(run.room, 'view').find(
+			(call) => (call.request as { id?: string }).id === next,
+		);
+		const answer = resumed?.response as
+			{ view?: { spec?: { resume?: HarnessSession } } } | undefined;
+		const spec = answer?.view?.spec;
+		check(
+			JSON.stringify(spec?.resume) === JSON.stringify(first),
+			'the second view does not carry the recorded session',
+		);
+		const second = releasesOf(run)[1];
+		check(
+			JSON.stringify(second?.session) === JSON.stringify(first),
+			'the second release records another session than the one it resumed',
+		);
+		check(run.room.landed().length === 2, `${run.room.landed().length} says landed, expected 2`);
+		check(
+			(second?.readThrough ?? 0) >= line.seq,
+			'the second release reads through less than the new message',
+		);
+	},
+};
+
 const orderCase: ExecutorCase = {
 	name: 'writes the trace in order, with one end step and one pass step for each pass',
 	plan: { kind: 'sayEachPass', text: TEXT },
@@ -494,6 +384,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 		can.steer ? liveSteer : heldSteer,
 		...(can.permanentFailure ? [permanentFailure] : []),
 		...(can.usage ? [usageCase] : []),
+		...(can.memory === true ? [memoryCase] : []),
 		orderCase,
 	];
 	let count = 0;
@@ -537,7 +428,8 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 				names,
 				activation,
 				patience,
-				wake: () => port.wake({ room: names.room, seat: names.seat, activation }),
+				wake: (id = activation) =>
+					port.wake({ room: names.room, seat: names.seat, activation: id }),
 				waitFor: (read, what) => until(read, patience, what),
 				trace: () => traceWhenEnded(traces, names.room, activation, patience),
 			});

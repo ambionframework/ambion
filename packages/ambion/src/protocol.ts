@@ -16,6 +16,7 @@ import type {
 	AgentParticipantInfo,
 	EndReason,
 	FailureCause,
+	HarnessSession,
 	HumanParticipantInfo,
 	Intent,
 	Message,
@@ -43,6 +44,11 @@ export interface ActivationSpec {
 	readonly seat: string;
 	readonly attempt: number;
 	readonly purpose: ActivationPurpose;
+	/**
+	 * The session the seat's latest ended activation recorded. A harness that
+	 * keeps memory across activations resumes from it. The room only carries it.
+	 */
+	readonly resume?: HarnessSession;
 }
 
 // -- the room reaching a seat -------------------------------------------------
@@ -170,6 +176,7 @@ export type LeaseRequest =
 			readThrough: Seq;
 			cause?: FailureCause;
 			usage?: Usage;
+			session?: HarnessSession;
 	  };
 
 /**

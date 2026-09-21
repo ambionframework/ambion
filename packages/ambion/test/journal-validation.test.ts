@@ -115,6 +115,26 @@ describe('room journal body validation', () => {
 			}),
 		).toBe(true);
 		expect(
+			validateRoomBody('lease', {
+				id: 'message:1:alpha:1',
+				phase: 'ended',
+				reason: 'released',
+				at: '2026-01-01T00:00:00.000Z',
+				readThrough: 3,
+				session: { harness: 'claude', id: 'abc' },
+			}),
+		).toBe(true);
+		expect(() =>
+			validateRoomBody('lease', {
+				id: 'message:1:alpha:1',
+				phase: 'ended',
+				reason: 'released',
+				at: '2026-01-01T00:00:00.000Z',
+				readThrough: 3,
+				session: { harness: 'claude' },
+			}),
+		).toThrow(/kind 'lease'/);
+		expect(
 			validateRoomBody('close', {
 				owner: 'andrei',
 				from: 1,

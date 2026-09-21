@@ -2,8 +2,8 @@
  * How a Claude Agent SDK result maps to a pass result: the failure it
  * reports, its cause, and the length stop.
  */
-import type { FailureCause, PassResult } from '@ambionframework/ambion/hosting';
-import type { SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { FailureCause, HarnessSession, PassResult } from '@ambionframework/ambion/hosting';
+import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 
 /** HTTP statuses a retry cannot fix: a bad request and the billing and authentication refusals. */
 const PERMANENT_STATUS = new Set([400, 401, 402, 403, 404, 405, 422]);
@@ -53,4 +53,14 @@ export function passResultOf(result: SDKResultMessage): PassResult {
 		return { failed: true, cause: causeOf(message, statusOf(result)), message };
 	}
 	return { failed: false };
+}
+
+/**
+ * The session a `system` init or a `result` message names, or nothing. The
+ * SDK generates the id, and the room records it to resume the seat later.
+ */
+export function sessionOf(message: SDKMessage): HarnessSession | undefined {
+	if (message.type !== 'result' && !(message.type === 'system' && message.subtype === 'init'))
+		return undefined;
+	return message.session_id === '' ? undefined : { harness: 'claude', id: message.session_id };
 }

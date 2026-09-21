@@ -62,5 +62,10 @@ no `canUseTool`, the executor denies each request.
 that the SDK spawns through `pathToClaudeCodeExecutable`. The suite needs no
 key and no network.
 
-**Not yet built.** `memory: 'seat'`, which resumes one SDK session for each
-seat, is planned in `planning/next.md`.
+**Choose the memory of the seat.** `memory: 'activation'` is the default. It
+opens one SDK session for each activation and persists nothing. `memory:
+'seat'` persists the session and resumes it in the next activation of the
+seat. The release records the session id, and the room hands it back after
+a restart. A host that loses the SDK session store starts a fresh session,
+and the next release records the new id. Freshness governs speech in both
+modes: a say against unread record gets a `missed` answer.
