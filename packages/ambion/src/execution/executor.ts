@@ -78,6 +78,12 @@ export interface ExecutorSession {
 	 * report; `cancelled` is what stops the driver from running another.
 	 */
 	abort(): void;
+	/**
+	 * Release what the session holds, such as a process. The driver calls it
+	 * once, after the release of the activation and after `abort`. A session
+	 * that holds nothing leaves it out.
+	 */
+	close?(): void;
 }
 
 /** Builds sessions for one seat's activations. One executor per seat, for its whole lifetime. */

@@ -419,6 +419,7 @@
 				"packages/cloudflare/src/**",
 				"packages/cli/src/**",
 				"packages/pi/src/**",
+				"packages/claude/src/**",
 				"packages/workspace/src/**",
 				"examples/**/src/**"
 			],
@@ -430,10 +431,14 @@
 							"options": {
 								"patterns": [
 									{
-										// `@ambionframework/ambion/hosting` is a published entry, and
-										// the manifest names it. Every other path reaches inside the core.
-										"group": ["@ambionframework/ambion/!(hosting)", "**/packages/ambion/src/*"],
-										"message": "Reach the core through `@ambionframework/ambion` or its `/hosting` entry, never a file inside it."
+										// `@ambionframework/ambion/hosting` and `/conformance` are
+										// published entries, and the manifest names them. Every other
+										// path reaches inside the core.
+										"group": [
+											"@ambionframework/ambion/!(hosting|conformance)",
+											"**/packages/ambion/src/*"
+										],
+										"message": "Reach the core through `@ambionframework/ambion` or its `/hosting` or `/conformance` entry, never a file inside it."
 									}
 								]
 							}

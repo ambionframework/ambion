@@ -62,6 +62,35 @@ export interface Execution {
 	connector(host: ExecutionHost): ExecutionConnector;
 }
 
+/**
+ * One execution for a room whose seats run on different executor families.
+ * It routes each seat to the execution named for the `kind` of its executor,
+ * such as `{ pi: piExecution(), claude: claudeExecution() }`. A seat of
+ * another kind fails when the room connects it.
+ */
+export function composeExecutions(byKind: Readonly<Record<string, Execution>>): Execution {
+	return {
+		connector(host) {
+			const connectors = new Map(
+				Object.entries(byKind).map(([kind, execution]) => [kind, execution.connector(host)]),
+			);
+			return {
+				connect(room, request) {
+					const kind = request.definition.executor.kind;
+					const connector = connectors.get(kind);
+					if (connector === undefined) {
+						const known = [...connectors.keys()].join(', ');
+						throw new Error(
+							`No execution serves seat '${request.seat}' of kind '${kind}'. Known kinds: ${known}.`,
+						);
+					}
+					return connector.connect(room, request);
+				},
+			};
+		},
+	};
+}
+
 /** Every bound the runtime sets, by what it bounds. One value for every room in the runtime. */
 export interface Limits {
 	/** How long a wake stays unanswered before the room sends it again. */

@@ -149,7 +149,9 @@ activation it opens one `ExecutorSession` from `AgentExecutionContext.executor` 
 passes the windowed record to it. A session renders a prompt, runs its own
 model loop for one pass, and reports where it left off. The first pass of an
 activation receives the whole view. Each later pass receives a `delta`: the
-fresh view and `since`, the position the session had read through.
+fresh view and `since`, the position the session had read through. A session
+that holds a process implements `close`. The driver calls it once, after the
+release of the activation.
 
 **The renderer returns three prompt parts.** `renderActivation` returns
 `mechanism`, `agent`, and `context`. Each part depends on one thing, so an
