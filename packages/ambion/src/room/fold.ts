@@ -47,6 +47,8 @@ export interface RoomState {
 	readonly closes: Close[];
 	/** The latest cancellation marker, whose journal position bounds old work. */
 	readonly cancelledAt?: Seq;
+	/** The `through` of each close that a cancellation wrote. */
+	readonly cancelClosed: readonly Seq[];
 	readonly leases: Map<string, LeaseHold>;
 	readonly deliveries: Map<Seq, MessageDelivery>;
 	readonly pending: PendingWake[];
@@ -70,6 +72,7 @@ export interface BaseFacts {
 	messages: Message[];
 	closes: Close[];
 	cancelledAt: Seq | undefined;
+	cancelClosed: Seq[];
 	leases: Map<string, LeaseHold>;
 	composition: Composition | undefined;
 	deliveries: Map<Seq, MessageDelivery>;
@@ -80,6 +83,7 @@ export const baseOf = (state: RoomState): BaseFacts => ({
 	messages: [...state.messages],
 	closes: [...state.closes],
 	cancelledAt: state.cancelledAt,
+	cancelClosed: [...state.cancelClosed],
 	leases: new Map(state.leases),
 	composition: state.composition,
 	deliveries: new Map(state.deliveries),
@@ -90,6 +94,7 @@ export const older = (): BaseFacts => ({
 	messages: [],
 	closes: [],
 	cancelledAt: undefined,
+	cancelClosed: [],
 	leases: new Map(),
 	composition: undefined,
 	deliveries: new Map(),
@@ -110,7 +115,10 @@ export function applyEvent(read: BaseFacts, entry: Entry): void {
 	if (entry.kind === 'cancel') {
 		read.cancelledAt = entry.seq;
 		cancelLeases(read.leases, entry.seq, entry.body.at);
-		if (entry.body.close !== undefined) read.closes.push(entry.body.close);
+		if (entry.body.close !== undefined) {
+			read.closes.push(entry.body.close);
+			read.cancelClosed.push(entry.body.close.through);
+		}
 		return;
 	}
 	if (entry.kind === 'lease') {
@@ -131,7 +139,7 @@ export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomS
 
 /** Derives all room views from the base facts. */
 export function project(read: BaseFacts, options: FoldOptions): RoomState {
-	const { messages, closes, leases, composition, deliveries, cancelledAt } = read;
+	const { messages, closes, leases, composition, deliveries, cancelledAt, cancelClosed } = read;
 	const people = foldPeople(messages);
 	const roster = foldRoster(composition, messages);
 	const exchange = openExchange(messages, closes, [...people.keys()]);
@@ -151,6 +159,7 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		exchange,
 		closes,
 		cancelledAt,
+		cancelClosed,
 		leases,
 		deliveries,
 		pending,

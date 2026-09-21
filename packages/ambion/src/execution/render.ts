@@ -449,7 +449,14 @@ function header(view: ActivationView, def: AgentDefinition): string[] {
 function reader(view: ActivationView): string[] {
 	if (view.spec.purpose.kind !== 'summarize') return [];
 	const person = view.spec.purpose.person;
+	const { people } = view.spec.purpose;
 	const lines = [`You are writing for ${person}.`];
+	if (people.length > 1)
+		lines.push(
+			`These people spoke in the exchange: ${people.join(', ')}. Write one message for each, and`,
+			`set \`to\` to that person. This list replaces the rule to answer no other person.`,
+			`The reading preferences below belong to ${person}. Keep the message for each other person plain.`,
+		);
 	if (view.context.preferences) lines.push(`How ${person} reads:`, view.context.preferences.trim());
 	return lines;
 }

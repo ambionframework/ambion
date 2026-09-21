@@ -396,6 +396,27 @@ export function endingOf(running: boolean, stale: boolean, pastExpiry: boolean):
 	return pastExpiry ? 'expired' : 'stays';
 }
 
+/** How a closed exchange ended. The same tags as `ExchangeOutcome` in `types.ts`. */
+export type OutcomeKind = 'complete' | 'cancelled' | 'exhausted' | 'awaiting';
+
+//@ contract A closed exchange reads cancelled before exhausted, exhausted before awaiting, and awaiting before complete. Each outcome needs its own fact, and complete needs none.
+export function exchangeOutcome(
+	cancelled: boolean,
+	exhausted: boolean,
+	awaiting: boolean,
+): OutcomeKind {
+	//@ ensures cancelled ==> \result == 'cancelled'
+	//@ ensures !cancelled && exhausted ==> \result == 'exhausted'
+	//@ ensures !cancelled && !exhausted && awaiting ==> \result == 'awaiting'
+	//@ ensures !cancelled && !exhausted && !awaiting ==> \result == 'complete'
+	//@ ensures \result == 'cancelled' ==> cancelled
+	//@ ensures \result == 'exhausted' ==> !cancelled && exhausted
+	//@ ensures \result == 'awaiting' ==> !cancelled && !exhausted && awaiting
+	if (cancelled) return 'cancelled';
+	if (exhausted) return 'exhausted';
+	return awaiting ? 'awaiting' : 'complete';
+}
+
 /** A lease as the liveness rules read it. */
 export interface LiveLease {
 	readonly source: Source;

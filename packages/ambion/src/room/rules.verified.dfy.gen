@@ -44,6 +44,8 @@ datatype Ending = revoked | expired | stays
 
 datatype Source = message | closed
 
+datatype OutcomeKind = complete | cancelled | exhausted | awaiting
+
 datatype LiveLease = LiveLease(source: Source, seat: string, phase: LeasePhase, expiresAt: int)
 
 datatype OwedActivation = OwedActivation(source: Source, seat: string)
@@ -478,6 +480,31 @@ lemma endingOf_ensures(running: bool, stale: bool, pastExpiry: bool)
   ensures (running ==> !(stale) ==> !(pastExpiry) ==> endingOf(running, stale, pastExpiry).stays?)
   ensures (endingOf(running, stale, pastExpiry).expired? ==> !(stale))
   ensures ((!endingOf(running, stale, pastExpiry).stays?) ==> running)
+{
+}
+
+function exchangeOutcome(cancelled: bool, exhausted: bool, awaiting: bool): OutcomeKind
+{
+  if cancelled then
+    OutcomeKind.cancelled
+  else
+    if exhausted then
+      OutcomeKind.exhausted
+    else
+      if awaiting then
+        OutcomeKind.awaiting
+      else
+        OutcomeKind.complete
+}
+
+lemma exchangeOutcome_ensures(cancelled: bool, exhausted: bool, awaiting: bool)
+  ensures (cancelled ==> exchangeOutcome(cancelled, exhausted, awaiting).cancelled?)
+  ensures (!(cancelled) ==> exhausted ==> exchangeOutcome(cancelled, exhausted, awaiting).exhausted?)
+  ensures (!(cancelled) ==> !(exhausted) ==> awaiting ==> exchangeOutcome(cancelled, exhausted, awaiting).awaiting?)
+  ensures (!(cancelled) ==> !(exhausted) ==> !(awaiting) ==> exchangeOutcome(cancelled, exhausted, awaiting).complete?)
+  ensures (exchangeOutcome(cancelled, exhausted, awaiting).cancelled? ==> cancelled)
+  ensures (exchangeOutcome(cancelled, exhausted, awaiting).exhausted? ==> (!(cancelled) && exhausted))
+  ensures (exchangeOutcome(cancelled, exhausted, awaiting).awaiting? ==> ((!(cancelled) && !(exhausted)) && awaiting))
 {
 }
 

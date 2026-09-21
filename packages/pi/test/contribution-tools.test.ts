@@ -129,7 +129,7 @@ describe('contribution tools', () => {
 		const abort = vi.spyOn(activation, 'abort');
 		const acknowledge = vi.spyOn(activation, 'acknowledgeThrough');
 		const tool = toolsFor(
-			view({ kind: 'summarize', exchange: 2, person: 'priya', through: 4 }),
+			view({ kind: 'summarize', exchange: 2, person: 'priya', people: ['priya'], through: 4 }),
 			worker,
 			binding(
 				activation,

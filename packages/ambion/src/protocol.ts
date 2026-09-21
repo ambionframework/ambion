@@ -30,7 +30,10 @@ export type ActivationPurpose =
 	| {
 			readonly kind: 'summarize';
 			readonly exchange: Seq;
+			/** The exchange owner, whose summary completes the close. */
 			readonly person: string;
+			/** Every person the closing activation addresses, the owner first. */
+			readonly people: readonly string[];
 			readonly through: Seq;
 	  };
 

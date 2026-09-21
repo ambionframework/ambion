@@ -2,6 +2,7 @@
 
 import { decodeActivationId } from '../activation-id.ts';
 import type { ActivationSpec } from '../protocol.ts';
+import { recipientsOf } from './exchange.ts';
 import type { RoomState } from './fold.ts';
 import { removedAfter } from './lease.ts';
 import { activationGrant, closeFor, wellFormed } from './rules.verified.ts';
@@ -27,5 +28,15 @@ export function activationSpec(id: string, state: RoomState): ActivationSpec | u
 		recorded,
 		close,
 	);
-	return grant === undefined ? undefined : { id, ...grant };
+	if (grant === undefined) return undefined;
+	const { purpose } = grant;
+	if (purpose.kind === 'respond') return { id, ...grant, purpose };
+	const people = recipientsOf(
+		state.messages,
+		purpose.exchange,
+		purpose.through,
+		purpose.person,
+		new Set(state.people.keys()),
+	);
+	return { id, ...grant, purpose: { ...purpose, people } };
 }

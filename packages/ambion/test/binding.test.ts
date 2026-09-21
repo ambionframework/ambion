@@ -12,6 +12,7 @@ import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index
 import type { Entry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import { foldRoom } from '../src/room/fold.ts';
+import { readView } from '../src/room/read.ts';
 import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
 import { bindings } from './support/binding.ts';
@@ -171,6 +172,22 @@ describe('the room runs the verified rules', () => {
 			{ kind: 'lease', body: { id, phase: 'ended', reason: 'expired' } },
 		]);
 		expect(reconcile(claimed()).events).toEqual([]);
+	});
+
+	it('reads an exchange outcome as exchangeOutcome answers', () => {
+		bind.once(rules.exchangeOutcome, 'exhausted');
+		const read = readView(
+			'room',
+			foldRoom([composition, person, question, closed3], options),
+			now,
+			4,
+			false,
+		);
+		expect(read.exchanges).toMatchObject([{ status: 'closed', outcome: { kind: 'exhausted' } }]);
+		expect(
+			readView('room', foldRoom([composition, person, question, closed3], options), now, 4, false)
+				.exchanges,
+		).toMatchObject([{ outcome: { kind: 'complete' } }]);
 	});
 
 	it('keeps a pending wake only when survivesCancellation says so', () => {

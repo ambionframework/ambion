@@ -54,6 +54,7 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 		'isSpoken',
 		'isSummary',
 		'parseRoomUri',
+		'pendingFor',
 		'readActivation',
 		'readExchange',
 		'readRoom',

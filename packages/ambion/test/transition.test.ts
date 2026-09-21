@@ -175,7 +175,7 @@ describe('room transition', () => {
 			options,
 		);
 		expect(activationSpec('closed:3:writer:1', closed)).toMatchObject({
-			purpose: { kind: 'summarize', exchange: 3, person: 'priya', through: 3 },
+			purpose: { kind: 'summarize', exchange: 3, person: 'priya', people: ['priya'], through: 3 },
 		});
 		expect(activationSpec('closed:3:product:1', closed)).toBeUndefined();
 	});
