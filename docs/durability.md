@@ -135,9 +135,8 @@ cause is a rate limit, a server error, or a lost connection.
 - **A permanent failure ends in one attempt.** The room records `abandoned`
   at once. A permanent cause on any failed lease makes the whole activation
   permanent.
-- **A transient failure retries to the cap.** The room retries under
-  `hostingOf(runtime).limits.activation` and records `abandoned` at
-  `attempts`. This activation retry is room-driven and spends an attempt.
+- **A transient failure retries to the cap.** The activation retry in the
+  lease paragraph above is room-driven. Each retry spends an attempt.
 - **A room without an execution fails every activation as permanent.** The
   error code is `no_execution`.
 - **The Pi executor reads a status only from a provider diagnostic.** It
