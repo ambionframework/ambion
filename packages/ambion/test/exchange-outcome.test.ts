@@ -90,6 +90,12 @@ describe('exchange outcomes', () => {
 		expect(pendingFor(read, 'sam')).toEqual([]);
 	});
 
+	it('does not await the owner of the exchange', () => {
+		const read = readOf([...room, said(4, 'priya'), said(5, 'worker', 'priya'), close(6, 4, 5)]);
+		expect(closed(read)[0]?.outcome).toEqual({ kind: 'complete' });
+		expect(pendingFor(read, 'priya')).toEqual([]);
+	});
+
 	it('does not await an agent', () => {
 		const read = readOf([...room, said(4, 'priya'), said(5, 'worker', 'worker'), close(6, 4, 5)]);
 		expect(closed(read)[0]?.outcome).toEqual({ kind: 'complete' });

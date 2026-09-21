@@ -19,6 +19,7 @@ each page.
 | [Exchange](exchange.md)           | Human questions, completion, and durable result handles       |
 | [Presence](presence.md)           | Visits, arrivals, departures, and catch-up                    |
 | [Roster](roster.md)               | Agent membership, reserve, and attention                      |
+| [Patterns](patterns.md)           | The human collaboration patterns the room represents          |
 | [Summaries](summary.md)           | Optional closing work and context replacement                 |
 | [Resources](resources.md)         | The resource contract, references, and provenance             |
 | [Workspace](workspace.md)         | The Pi filesystem binding of the resource contract            |
@@ -30,6 +31,8 @@ each page.
 | [Toolchain](toolchain.md)         | Package layout, checks, CI, and release commands              |
 
 ## Navigation hints
+
+Read `patterns.md` to find which primitive represents a human pattern.
 
 Read `resources.md` for the resource contract and `workspace.md` for the
 filesystem binding.

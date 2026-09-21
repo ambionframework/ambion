@@ -26,6 +26,23 @@ test('docs/resources.md prose wraps at about 78 columns', () => {
 	assert.deepEqual(longProse(text), []);
 });
 
+test('docs/patterns.md prose wraps at about 78 columns', () => {
+	const text = readFileSync(new URL('../docs/patterns.md', import.meta.url), 'utf8');
+	assert.deepEqual(longProse(text), []);
+});
+
+// docs/patterns.md adds no mechanism. Exchange and summary own these rules.
+test('docs/patterns.md does not restate rules that other pages own', () => {
+	const text = readFileSync(new URL('../docs/patterns.md', import.meta.url), 'utf8');
+	const restated = [
+		/said nothing since/i,
+		/clears when that person speaks/i,
+		/owner\s+is first/i,
+		/refuses a second summary/i,
+	];
+	assert.deepEqual(restated.filter((pattern) => pattern.test(text)).map(String), []);
+});
+
 test('docs/envelope.md prose wraps at about 78 columns', () => {
 	const text = readFileSync(new URL('../docs/envelope.md', import.meta.url), 'utf8');
 	assert.deepEqual(longProse(text), []);
