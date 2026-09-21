@@ -150,6 +150,7 @@ to build from source.
 [Documentation](docs/README.md) maps the design contracts and hosting
 guidance. [Contributing](CONTRIBUTING.md) covers builds and checks.
 [The plan](planning/next.md) names the work that remains before the tag.
+[The changelog](CHANGELOG.md) lists the packages of 0.1.0.
 
 ## License
 
