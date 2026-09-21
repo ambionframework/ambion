@@ -173,6 +173,8 @@ export interface RunOptions {
 	person?: string;
 	/** A model stream, for tests. */
 	stream?: OpenOptions['stream'];
+	/** Scripted executions for the Claude and Codex seats, for tests. */
+	executions?: OpenOptions['executions'];
 }
 
 /**
@@ -180,7 +182,11 @@ export interface RunOptions {
  * are active while the terminal runs. When it ends, the person leaves and the rooms stop.
  */
 export async function runWorkbench(options: RunOptions): Promise<void> {
-	const host = await openWorkbench({ directory: options.directory, stream: options.stream });
+	const host = await openWorkbench({
+		directory: options.directory,
+		stream: options.stream,
+		executions: options.executions,
+	});
 	try {
 		const identity = options.person
 			? host.people.find((person) => person.name === options.person)

@@ -21,7 +21,8 @@ From the repository root, install and build with Node 26.4 or later:
 pnpm install
 pnpm build
 cd examples/workbench
-export ANTHROPIC_API_KEY=...
+export ANTHROPIC_API_KEY=...   # Pi and Claude seats
+export CODEX_API_KEY=...       # Codex seat
 pnpm start                  # uses ./.data
 pnpm start ./bench --as mira   # a directory, and a person
 ```
@@ -31,8 +32,14 @@ directory with no `rooms.db` gets the three sample rooms and the datasheets.
 A directory that has one resumes its rooms, including a room you created
 and a room you stopped. Set `WORKBENCH_USER` instead of `--as` to pick a
 person. Without either, the first screen asks who you are. Set
-`AMBION_MODEL` and its provider credential to change the model. The default
-is `anthropic/claude-sonnet-5`.
+`AMBION_MODEL` and its provider credential to change the model of the Pi
+seats. The default is `anthropic/claude-sonnet-5`.
+
+**A seat with no key does not run, and the others do.** At start, the
+Workbench prints one line for each seat whose family has no key. The header
+of the terminal marks that seat with `no key`. An activation of that seat
+fails at once with the name of the missing variable, and the room keeps
+running.
 
 The terminal reads its colors from the repository brand kit in the root
 [`brand/`](../../brand) directory. The example has no HTTP interface.
@@ -97,18 +104,39 @@ the record, so a restart keeps them.
 
 ## The team
 
-**One assistant coordinates three specialists.** The assistant answers
-ordinary messages, brings in a specialist, and writes the closing summary.
+**One assistant coordinates three specialists, and the specialists run on
+three executor families.** The assistant answers ordinary messages, brings
+in a specialist, and writes the closing summary.
 
-| Agent           | Scope                                                              |
-| --------------- | ------------------------------------------------------------------ |
-| **Assistant**   | Understands the request, seats a specialist, and returns a summary |
-| **Datasheets**  | Reads `/library` and states exact limits with their source         |
-| **Design**      | Chooses parts and values, and shows the circuit math               |
-| **Experiments** | Turns a question into a short, repeatable test plan                |
+| Agent           | Scope                                                              | Family | Model                              | Key                 |
+| --------------- | ------------------------------------------------------------------ | ------ | ---------------------------------- | ------------------- |
+| **Assistant**   | Understands the request, seats a specialist, and returns a summary | Pi     | `anthropic/claude-sonnet-5`        | `ANTHROPIC_API_KEY` |
+| **Datasheets**  | Reads `/library` and states exact limits with their source         | Pi     | `anthropic/claude-sonnet-5`        | `ANTHROPIC_API_KEY` |
+| **Design**      | Chooses parts and values, and shows the circuit math               | Claude | `claude-sonnet-5`                  | `ANTHROPIC_API_KEY` |
+| **Experiments** | Turns a question into a short, repeatable test plan                | Codex  | `gpt-5.6-luna`, reasoning `medium` | `CODEX_API_KEY`     |
 
 The assistant uses `defineAssistant` from `@ambionframework/assistant`. Each
-room seats the specialists it needs. The reserve holds the rest.
+room seats the specialists it needs. The reserve holds the rest. The header
+of the terminal shows the family beside each agent name.
+
+The design seat allows no Claude built-in tool, and the experiments seat
+runs Codex under a read-only sandbox with no network. The workspace, lab, and
+instrument tools reach both seats as tool bundles. `src/rooms.ts` composes
+the three executions with `composeExecutions` from
+`@ambionframework/ambion/hosting`.
+
+## Tests
+
+**The scripted tier needs no key and no network.** Run it with
+`pnpm --filter @ambionframework-examples/workbench test`. The tests give the
+Pi seats a scripted model stream. They give the Claude and Codex seats a
+scripted execution from `@ambionframework/ambion/testing`.
+
+**The live tier runs each scenario on the real families.** Run it with
+`pnpm --filter @ambionframework-examples/workbench test:live`. It costs money.
+A scenario skips when a family that it uses has no key: the `bringup`
+scenario needs `ANTHROPIC_API_KEY`, and the `sensing` scenario needs
+`ANTHROPIC_API_KEY` and `CODEX_API_KEY`.
 
 ## The rooms
 
@@ -187,6 +215,8 @@ workspace resources.
 | `src/files-panel.ts` | The files panel beside the conversation               |
 | `src/database.ts`    | The SQLite preview: tables and their first rows       |
 | `src/tui.ts`         | The terminal: layout, keys, and the run loop          |
+| `src/families.ts`    | The family, model, and key of each seat               |
+| `src/unavailable.ts` | The execution of a family that has no key             |
 | `src/main.ts`        | The entry point                                       |
 | `src/brand.ts`       | The product name and the terminal palette             |
 | `library/`           | The datasheets                                        |

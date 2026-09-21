@@ -35,14 +35,31 @@ ordinary messages, seats a specialist, and writes the closing summary. It
 uses `defineAssistant` from `@ambionframework/assistant`, seated at
 `broadcast`. It writes the closing summary.
 
-| Agent           | Scope                                                      |
-| --------------- | ---------------------------------------------------------- |
-| **Datasheets**  | Reads `/library` and states exact limits with their source |
-| **Design**      | Chooses parts and values, and shows the circuit math       |
-| **Experiments** | Turns a question into a short, repeatable test plan        |
+| Agent           | Scope                                                      | Family |
+| --------------- | ---------------------------------------------------------- | ------ |
+| **Datasheets**  | Reads `/library` and states exact limits with their source | Pi     |
+| **Design**      | Chooses parts and values, and shows the circuit math       | Claude |
+| **Experiments** | Turns a question into a short, repeatable test plan        | Codex  |
 
 Each room seats the specialists it needs. The reserve holds the rest. The
 specialists collaborate through directed messages and report back once.
+
+**The team runs on three executor families.** The assistant and the
+datasheets specialist run on Pi. The design specialist runs on
+`@ambionframework/claude`. The experiments specialist runs on
+`@ambionframework/codex`. `composeExecutions` routes each seat to its family.
+
+| Family | Model                              | Key                 | Seats                 |
+| ------ | ---------------------------------- | ------------------- | --------------------- |
+| Pi     | `anthropic/claude-sonnet-5`        | `ANTHROPIC_API_KEY` | Assistant, datasheets |
+| Claude | `claude-sonnet-5`                  | `ANTHROPIC_API_KEY` | Design                |
+| Codex  | `gpt-5.6-luna`, reasoning `medium` | `CODEX_API_KEY`     | Experiments           |
+
+A seat with no key reports the missing variable and does not run. The other
+seats run. The scripted tests give the Claude and Codex seats a scripted
+execution, so they need no key. The live tests skip a scenario when a family
+that it uses has no key. See the
+[Workbench README](../examples/workbench/README.md) for the commands.
 
 ### The shared workspace
 
@@ -192,6 +209,8 @@ examples/workbench/
     draw.ts            the painter: header, conversation, and composer chrome
     keys.ts            the input: mode, browse selection, and key routing
     tui.ts             the terminal: builds the parts and runs the loop
+    families.ts        the family, model, and key of each seat
+    unavailable.ts     the execution of a family that has no key
     main.ts            the entry point
   library/             the datasheets as text
   test/                scripted tests: host, session, feed, commands, timeline, text, header,
@@ -207,12 +226,11 @@ SQLite journal, with the CLI terminal in place of the workbench interface.
 ## Beyond the current scope
 
 **The fuller lab vision waits for later phases.** The original design named
-five specialists over data resources and instruments, with two executor
-families and a drill-down interface. These parts need kernel work that
+five specialists over data resources and instruments, with a drill-down
+interface. These parts need kernel work that
 [next.md](../planning/next.md) schedules. Workbench grows into them as the
 phases land.
 
-| Deferred capability                                  | Item in next.md |
-| ---------------------------------------------------- | --------------- |
-| An Instruments agent and a Data Analysis agent       | E1, F10         |
-| The Claude Agent SDK executor beside the Pi executor | F10, phase 4    |
+| Deferred capability                            | Item in next.md |
+| ---------------------------------------------- | --------------- |
+| An Instruments agent and a Data Analysis agent | E1, F10         |
