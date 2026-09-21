@@ -99,13 +99,16 @@ and never reads behind a ref. The `say` tool trims each ref and drops blank
 ones. A direct `visit.send` keeps refs exactly and refuses a bad one.
 
 **The room owns the `ambion` scheme.** `roomUri(name)` gives
-`ambion://room/<name>`. `exchangeUri(name, from)` gives
-`ambion://room/<name>/exchange/<from>`. `parseRoomUri` reads only these
+`ambion://room/<name>`. `messageUri(name, seq)` gives
+`ambion://room/<name>/message/<seq>`. `parseRoomUri` reads only these
 canonical forms. The room refuses an `ambion:` ref that is not canonical. The
-prompt states the room URI and the URI of the open or covered exchange. An
-agent reads numbered positions, so it cannot build the URI of an older
-exchange. A workspace path is not a ref. Cite a file with a `file:` URI or
-another absolute URI that the application chooses.
+prompt states the room URI and the URI of the message that opened the
+current exchange. The seq in a message URI is the same `seq` a workspace
+mirror writes for that message, so a reader can find the cited line in
+`/rooms/<name>/messages.jsonl` (see
+[the mirror](workspace.md#mirror-a-rooms-messages)). A workspace path is not
+a ref. Cite a file with a `file:` URI or another absolute URI that the
+application chooses.
 
 **A refusal is typed.** The room throws `AmbionError`. Its `code` is one of
 the closed set in `errors.ts`; its message is for a person.

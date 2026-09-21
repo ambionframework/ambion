@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
 import { renderActivation, renderLine, renderRecord } from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
-import { defineAgent, exchangeUri, roomUri } from '../src/index.ts';
+import { defineAgent, messageUri, roomUri } from '../src/index.ts';
 import type { Message } from '../src/types.ts';
 
 describe('the omission line', () => {
@@ -122,7 +122,7 @@ describe('the URIs a prompt states', () => {
 		const rendered = renderActivation(view, worker);
 		expect(rendered.systemPrompt).toContain(roomUri('site'));
 		expect(rendered.systemPrompt).toContain('refs');
-		expect(rendered.context).toContain(exchangeUri('site', 4));
+		expect(rendered.context).toContain(messageUri('site', 4));
 	});
 
 	it('states the covered exchange for a summary', () => {
@@ -132,6 +132,6 @@ describe('the URIs a prompt states', () => {
 			context,
 		};
 		const rendered = renderActivation(view, worker);
-		expect(`${rendered.systemPrompt}${rendered.context}`).toContain(exchangeUri('site', 4));
+		expect(`${rendered.systemPrompt}${rendered.context}`).toContain(messageUri('site', 4));
 	});
 });

@@ -13,7 +13,7 @@ export { AmbionError } from './errors.ts';
 export type { CreateRuntimeOptions, Execution, Runtime } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, systemClock } from './host/runtime.ts';
 export type { RoomUri } from './refs.ts';
-export { exchangeUri, parseRoomUri, roomUri } from './refs.ts';
+export { messageUri, parseRoomUri, roomUri } from './refs.ts';
 export type {
 	ActivationPass,
 	ActivationRead,
