@@ -13,15 +13,7 @@ the experimental FFI that OpenTUI requires.
 
 ## Install the CLI
 
-The packages use GitHub Packages. Set `GITHUB_TOKEN` to a classic personal
-access token with `read:packages`. Add these lines to your user `~/.npmrc`:
-
-```ini
-@ambionframework:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
-Install the CLI:
+The packages publish to npmjs. Install the CLI:
 
 ```sh
 npm install --global @ambionframework/cli
@@ -48,9 +40,11 @@ cp .env.example .env   # cloudflare: cp .dev.vars.example .dev.vars
 ambion dev
 ```
 
-The generated `.npmrc` configures GitHub Packages. It references
-`GITHUB_TOKEN` without storing a token. Keep that variable available when you
-install dependencies. No local package archives are needed.
+The generated project has no `.npmrc`. It installs from npmjs and needs no
+token. No local package archives are needed.
+
+To try a dev build from `main`, see the dev channel in
+[the toolchain](../../docs/toolchain.md).
 
 The team contains the `planner` and `reviewer` agents and the `human`
 participant. Both agents can contribute to each question. The planner is also

@@ -58,7 +58,7 @@ tagged commit.** The phases below deliver them; the items explain them.
 | F6 Tools and resources            | Neutral JSON Schema tools; three room tools on every surface; one resource contract with a filesystem binding and a SQL binding; provenance on every tool call.                                                                                               |
 | F7 Observation and control        | Detached reads for room, exchange, activation, and step; live events with activation ids; typed refusals; abort and stop with documented scope.                                                                                                               |
 | F8 Deployment                     | Embedded Node, persistent Node with SQLite, and Cloudflare Durable Objects, each with restart evidence; a Node template and a Cloudflare template from `ambion new`.                                                                                          |
-| F9 Distribution and evidence      | Ten packages on npmjs with provenance; packed consumers outside the monorepo; Node 26; the workbench example scripted and live on three families; a conformance suite for executors.                                                                          |
+| F9 Distribution and evidence      | Ten packages on npmjs; packed consumers outside the monorepo; Node 26; the workbench example scripted and live on three families; a conformance suite for executors.                                                                                          |
 
 **Deployment models.** The same rules serve four placements.
 
@@ -140,10 +140,14 @@ package.
 **Goal:** the packages install from a public registry, and every claim in
 the scope has evidence on the tagged commit.
 
-1. [ ] Publish to npmjs under a prerelease tag; remove the token
-       instructions; the release workflow verifies a consumer from npmjs
-       (D7). Needs nothing. Start now, because every consumer check below
-       installs from it.
+1. [ ] Two release channels (D7). Done: CI publishes a dev build from
+       `main` to GitHub Packages under `dev`; `scripts/release.mjs` stages
+       an official release on npmjs under `next`, verifies it outside the
+       repo, and promotes it to `latest`; no install path needs a token
+       for npmjs. Remains, and belongs to the owner: the first real
+       `stage`, `verify`, and `promote` from a local machine. CI never
+       publishes to npmjs and holds no npmjs token. Every consumer check
+       below installs from the staged version.
 2. [ ] Packed consumers outside the monorepo: journal alone; pi-journal
        with journal; kernel with pi; kernel with claude; kernel with codex;
        the workbench; the generated Node and Cloudflare projects; the
@@ -177,7 +181,7 @@ Each item states the problem, the solution, and the impact.
 ### D. Scope the release did not name
 
 **D7. A public registry.** Every install path requires a GitHub token.
-Publish the ten packages to npmjs with provenance at 0.1.0.
+Publish the ten packages to npmjs at 0.1.0.
 
 **D10. An API reference.** The docs point at source files for shapes.
 Generate a reference per entry from the emitted declarations into

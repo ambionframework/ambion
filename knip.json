@@ -4,7 +4,7 @@
 	"workspaces": {
 		".": {
 			"entry": [
-				"scripts/{version,publish,report,report-cloudflare,cli-team-smoke,journal-smoke,projection-envelope}.mjs"
+				"scripts/{version,publish,release,report,report-cloudflare,cli-team-smoke,journal-smoke,projection-envelope}.mjs"
 			],
 			"project": ["scripts/*.mjs"]
 		},

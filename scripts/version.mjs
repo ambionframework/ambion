@@ -10,9 +10,7 @@
  *   node scripts/version.mjs --check     # verify they already agree
  */
 import { readFile, writeFile } from 'node:fs/promises';
-import { publishablePackages, sharedVersion } from './packages.mjs';
-
-const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+import { isVersion, publishablePackages, sharedVersion } from './packages.mjs';
 
 async function main(argv) {
 	const packages = await publishablePackages();
@@ -33,7 +31,7 @@ async function main(argv) {
 	}
 
 	const version = argv[0];
-	if (!version || !SEMVER.test(version)) {
+	if (!version || !isVersion(version)) {
 		console.error('Usage: node scripts/version.mjs <x.y.z[-tag]> | --check');
 		process.exitCode = 1;
 		return;

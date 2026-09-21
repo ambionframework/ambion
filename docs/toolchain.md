@@ -23,7 +23,7 @@ examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
 scripts/        package discovery, versioning, publishing, reports
 docs/           design and operational contracts
 planning/       the plan, the backlog, the rules to write, and dated evidence
-.github/        CI, live, and release workflows
+.github/        CI, live, and dev-release workflows
 ```
 
 The ten `packages/*` entries are publishable and share a lockstep version.
@@ -94,10 +94,10 @@ and an empty `onlyBuiltDependencies` allowlist. Do not bypass either setting
 without a reviewed reason. CI uses `--frozen-lockfile`, and workflow checkouts
 set `persist-credentials: false`.
 
-Releases use GitHub Packages at `https://npm.pkg.github.com` under the
-`@ambionframework` scope. Credentials come from `NODE_AUTH_TOKEN` or the
-workflow's `GITHUB_TOKEN`; never commit them. The release workflow packs once,
-attests those exact tarballs, then publishes them.
+Two channels publish under the `@ambionframework` scope: dev builds to
+GitHub Packages and official releases to npmjs (section 9). The token comes
+from `NODE_AUTH_TOKEN` in the environment. Never commit it. No script writes it
+to a file or passes it in an argument. CI holds no npmjs token.
 
 ## 4. TypeScript configuration
 
@@ -138,7 +138,7 @@ Use these commands at the repository root:
 | `pnpm test:live`             | Run provider-backed live suites                                        |
 | `pnpm chaos`                 | Run widened failure sweeps (`AMBION_SEEDS=200`)                        |
 | `pnpm version:set <x.y.z>`   | Set all publishable package versions                                   |
-| `pnpm publish:packages`      | Pack or publish release artifacts                                      |
+| `pnpm publish:packages`      | Pack or publish to one channel (`--channel dev` or `release`)          |
 
 LemmaScript source, its generated `.dfy.gen` and `.dfy`, and a hand-written
 `.proofs.dfy` are kept together. The `.dfy` equals the generation, so
@@ -223,7 +223,13 @@ and [`durability.md`](durability.md) for the claims those tests enforce.
 
 ## 9. Release and publishing
 
-All publishable packages use GitHub Packages and the `@ambionframework` scope.
+Two channels publish the ten packages under the `@ambionframework` scope.
+
+| Channel | Registry                     | Dist-tag         | Who publishes                 |
+| ------- | ---------------------------- | ---------------- | ----------------------------- |
+| dev     | `https://npm.pkg.github.com` | `dev`            | CI, on every push to `main`   |
+| release | `https://registry.npmjs.org` | `next`, `latest` | The owner, on a local machine |
+
 Versions are lockstep:
 
 ```sh
@@ -231,44 +237,71 @@ node scripts/version.mjs 0.1.0   # set versions
 node scripts/version.mjs --check # verify agreement
 ```
 
-Pack once and publish those exact archives:
+**Dev builds come from CI.** `.github/workflows/dev-release.yml` runs on a
+push to `main` that changes more than Markdown, `docs/`, and `planning/`. It
+stamps the version `0.1.0-dev.<run number>.g<sha7>` in the runner and commits
+nothing. The `g` prefix keeps the commit identifier from becoming a numeric
+identifier with a leading zero, which semver forbids. The job runs the gate,
+packs once, and publishes those tarballs to GitHub Packages under `dev` with
+the built-in `GITHUB_TOKEN`. It has the permissions `contents: read` and
+`packages: write`, and a concurrency group that queues runs.
 
-```sh
-node scripts/publish.mjs --pack-only  # writes dist-release/*.tgz
-node scripts/publish.mjs --skip-pack  # publishes the existing archives
-```
-
-The publisher is idempotent: it skips an existing `name@version`, supports
-`--dry-run` and `--tag`, and can resume after a partial failure. It refuses
-version disagreement or a missing token. `pnpm pack` rewrites workspace
-dependencies to their release version.
-
-The release workflow runs the full gate before publishing:
-
-```text
-install → check:types → check:lint → build → test
-        → version agreement → tag/version agreement
-        → pack → attest → publish → packed consumer check
-```
-
-Tag pushes publish; manual dispatch defaults to a dry run. A real publish
-verifies the public install path by installing the exact CLI version, running
-`ambion new`, then type-checking and dry-running the generated Worker bundle.
-
-Consumers of the current GitHub Packages registry need authentication:
+**Consume a dev build with one `.npmrc` line.** GitHub Packages needs a token
+with `read:packages`, even for a public package.
 
 ```ini
 @ambionframework:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
-Use an environment variable or CI secret, never an inline token. The stable
-public-install registry remains a distribution decision tracked in planning.
+Use an environment variable and never an inline token. Install with
+`npm install @ambionframework/ambion@dev`.
+
+**Official releases stay on the owner's machine.** `scripts/release.mjs` has
+four commands. Each command is idempotent.
+
+| Command   | What it does                                                                                                  |
+| --------- | ------------------------------------------------------------------------------------------------------------- |
+| `stage`   | Run the guards and the gate, pack once, publish to npmjs under `next`                                         |
+| `verify`  | Install from npmjs outside the repo with no token, run `ambion new`, typecheck, and import the resource entry |
+| `promote` | Run `npm dist-tag add` to set `latest` on every package                                                       |
+| `status`  | Print the dist-tags of every package                                                                          |
+
+`stage` refuses when the tree is dirty, when HEAD is not the commit of the tag
+`v<version>`, when the versions disagree, or when every package is on npmjs at
+that version already. A partial earlier run is not a refusal: `stage` skips the
+published packages and finishes the rest. Without `--yes` it asks on the
+terminal and names each package and version. `--dry-run` runs the guards, the
+gate, and the pack, then runs `npm publish --dry-run`. It never reaches the
+publish endpoint and needs no token. `--otp <code>` reaches npm on `stage` and
+`promote`.
+
+**The token never leaves the environment.** The script reads `NODE_AUTH_TOKEN`
+from the environment. It writes a temporary npm user config that holds the text
+`${NODE_AUTH_TOKEN}`, hands its path to npm, and deletes it after the command.
+No file, log line, or argument list holds the token. `verify` removes the
+token and every npm setting from the environment of the consumer.
+
+`scripts/publish.mjs` is the lower layer. `--channel dev` or `--channel release`
+picks the registry, and `--registry` overrides it. It packs once and publishes
+those exact tarballs. It skips a published `name@version` and supports
+`--dry-run`, `--tag`, `--pack-only`, and `--skip-pack`. A release publish needs
+`--yes`. `pnpm pack` rewrites workspace dependencies to their release version.
+
+The sequence for 0.1.0, after the version and the tag are in place:
+
+```sh
+node scripts/release.mjs stage --dry-run
+NODE_AUTH_TOKEN=... node scripts/release.mjs stage
+node scripts/release.mjs verify
+NODE_AUTH_TOKEN=... node scripts/release.mjs promote --otp <code>
+```
+
+The packages carry no provenance attestation at 0.1.0.
 
 ## 10. Departures from Flue
 
 Ambion keeps the pnpm, Turborepo, Biome, Prettier, Knip, tsdown, and Vitest
-shape but supplies its own CI/release workflows and lockstep versioning script.
-The release scripts are intentionally small, side-effect-free when imported,
-and operate on one packed artifact set so the attested and published bytes
-match.
+shape but supplies its own CI/dev-release workflow and lockstep versioning
+script. The release scripts are small, side-effect-free when imported, and
+operate on one packed artifact set, so the published bytes are the packed bytes.
