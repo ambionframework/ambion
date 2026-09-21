@@ -1,16 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { inProcessTransport } from '../src/hosting.ts';
-import {
-	createRuntime,
-	defineAgent,
-	defineHuman,
-	pi,
-	resumeRoom,
-	startRoom,
-} from '../src/index.ts';
-import { fakeClock, isClosing, quiet, scripted, settled, speak } from '../src/testing.ts';
-import { roomName, storedOf } from './support/room.ts';
-import { toolNames } from './support/scripted.ts';
+import { createRuntime, defineAgent, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
+import { fakeClock } from '../src/testing.ts';
+import { roomName, storedOf, waitForRoom } from './support/room.ts';
+import { isClosing, quiet, scripted, speak, toolNames } from './support/scripted.ts';
 import { memory, storages } from './support/storage.ts';
 
 const assistant = defineAgent({
@@ -35,7 +29,7 @@ async function open(options: Partial<Parameters<typeof startRoom>[0]> = {}) {
 		storage: opened.storage,
 		clock: fakeClock(),
 		transport: inProcessTransport(),
-		stream: scripted(() => quiet()),
+		execution: piExecution({ stream: scripted(() => quiet()) }),
 	});
 	const room = await startRoom({
 		name: roomName('assistant-shorthand'),
@@ -43,7 +37,7 @@ async function open(options: Partial<Parameters<typeof startRoom>[0]> = {}) {
 		assistant,
 		agents: [builder, reviewer],
 		seats: { builder: 'named', reviewer: 'none' },
-		stream: scripted(() => quiet()),
+		execution: piExecution({ stream: scripted(() => quiet()) }),
 		...options,
 	});
 	return { opened, room };
@@ -148,7 +142,7 @@ describe('assistant room shorthand', () => {
 			storage: opened.storage,
 			clock: fakeClock(),
 			transport: inProcessTransport(),
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			const room = await startRoom({
@@ -179,13 +173,15 @@ describe('assistant room shorthand', () => {
 			assistant,
 			agents: [builder],
 			seats: { builder: 'broadcast' },
-			stream: scripted((context, agent, call) => {
-				if (agent === 'builder' && call === 1) return speak('The answer.');
-				if (agent === 'assistant' && isClosing(context)) {
-					closingTools.push(toolNames(context));
-					return speak('The answer, summarized.');
-				}
-				return quiet();
+			execution: piExecution({
+				stream: scripted((context, agent, call) => {
+					if (agent === 'builder' && call === 1) return speak('The answer.');
+					if (agent === 'assistant' && isClosing(context)) {
+						closingTools.push(toolNames(context));
+						return speak('The answer, summarized.');
+					}
+					return quiet();
+				}),
 			}),
 		});
 		try {
@@ -215,7 +211,10 @@ describe('assistant room shorthand', () => {
 		'preserves changed membership and summary assignment after $name resume',
 		async (storage) => {
 			const opened = await storage.open();
-			const runtime = createRuntime({ storage: opened.storage, stream: scripted(() => quiet()) });
+			const runtime = createRuntime({
+				storage: opened.storage,
+				execution: piExecution({ stream: scripted(() => quiet()) }),
+			});
 			const room = await startRoom({
 				name: roomName('assistant-resume'),
 				runtime,
@@ -226,7 +225,7 @@ describe('assistant room shorthand', () => {
 			try {
 				await room.unseat(builder.name);
 				await room.seat(reviewer.name);
-				await settled(room);
+				await waitForRoom(room);
 				await room.stop();
 				const resumedRuntime = createRuntime({ storage: opened.storage });
 				await expect(
@@ -235,7 +234,11 @@ describe('assistant room shorthand', () => {
 				const resumed = await resumeRoom(room.name, {
 					runtime: resumedRuntime,
 					agents: [assistant, builder, reviewer],
-					stream: scripted((context) => (isClosing(context) ? speak('Resumed summary.') : quiet())),
+					execution: piExecution({
+						stream: scripted((context) =>
+							isClosing(context) ? speak('Resumed summary.') : quiet(),
+						),
+					}),
 				});
 				try {
 					expect((await resumed.read()).participants.map((seat) => seat.name)).toEqual([

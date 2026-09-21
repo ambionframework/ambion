@@ -1,17 +1,16 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	defineTool,
-	pi,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { callTool, quiet, scripted, settled } from '../src/testing.ts';
-import { exchangeClosed, messagesOf, participantsOf, roomName } from './support/room.ts';
-import { toolNames } from './support/scripted.ts';
+import { messagesOf, participantsOf, roomName, waitForRoom } from './support/room.ts';
+import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
 import { faultyJournals, memory } from './support/storage.ts';
 
 describe('room bindings', () => {
@@ -61,26 +60,32 @@ describe('room bindings', () => {
 			name: roomName('binding-one'),
 			runtime,
 			agents: [first],
-			stream: scripted((context, _agent, call) => {
-				prompts.push(context.systemPrompt ?? '');
-				return call === 1 && toolNames(context).includes('first') ? callTool('first', {}) : quiet();
+			execution: piExecution({
+				stream: scripted((context, _agent, call) => {
+					prompts.push(context.systemPrompt ?? '');
+					return call === 1 && toolNames(context).includes('first')
+						? callTool('first', {})
+						: quiet();
+				}),
 			}),
 		});
 		const two = await startRoom({
 			name: roomName('binding-two'),
 			runtime,
 			agents: [second],
-			stream: scripted((context, _agent, call) => {
-				prompts.push(context.systemPrompt ?? '');
-				return call === 1 && toolNames(context).includes('second')
-					? callTool('second', {})
-					: quiet();
+			execution: piExecution({
+				stream: scripted((context, _agent, call) => {
+					prompts.push(context.systemPrompt ?? '');
+					return call === 1 && toolNames(context).includes('second')
+						? callTool('second', {})
+						: quiet();
+				}),
 			}),
 		});
 		const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
 		await (await one.visit(person)).send({ text: 'First?' });
 		await (await two.visit(person)).send({ text: 'Second?' });
-		await Promise.all([exchangeClosed(one), exchangeClosed(two)]);
+		await Promise.all([waitForRoom(one, 'settled'), waitForRoom(two, 'settled')]);
 		expect(calls.sort()).toEqual(['first', 'second']);
 		expect(prompts.some((prompt) => prompt.includes('Use first.'))).toBe(true);
 		expect(prompts.some((prompt) => prompt.includes('Use second.'))).toBe(true);
@@ -99,16 +104,16 @@ describe('room bindings', () => {
 			name,
 			runtime: createRuntime({ storage: opened.storage }),
 			agents: [analyst],
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
-		await settled(first);
+		await waitForRoom(first);
 		await expect(
 			resumeRoom(name, { runtime: createRuntime({ storage: opened.storage }), agents: [] }),
 		).rejects.toThrow(/has no binding/);
 		await (
 			await first.visit(defineHuman({ name: 'priya', identity: 'Project manager.' }))
 		).send({ text: 'Still mine?' });
-		await settled(first);
+		await waitForRoom(first);
 		expect(
 			(await messagesOf(first)).some(
 				(message) => message.kind === 'said' && message.text === 'Still mine?',
@@ -131,7 +136,7 @@ describe('room bindings', () => {
 			agents: [original],
 			seats: {},
 			runtime: createRuntime({ storage: faulty.journals }),
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			faulty.fail(true, 'message');

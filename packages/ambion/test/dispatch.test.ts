@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { inProcessTransport, type Transport, type Wake } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	pi,
 	type Room,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { byAgent, fakeClock, quiet, scripted, settled } from '../src/testing.ts';
-import { assistant, crash, deferred, roomName, stateOf } from './support/room.ts';
+import { fakeClock } from '../src/testing.ts';
+import { assistant, crash, deferred, roomName, stateOf, waitForRoom } from './support/room.ts';
+import { byAgent, quiet, scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const alpha = defineAgent({
@@ -63,24 +64,26 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 			agents: [alpha, beta, assistant],
 			seats: { [assistant.name]: 'broadcast', ...{ [alpha.name]: 'broadcast' } },
 			runtime: createRuntime({ storage: opened.storage, clock, transport: transport.transport }),
-			stream: scripted(
-				byAgent({
-					alpha: () => {
-						alphaStarted.resolve();
-						return quiet();
-					},
-					assistant: () => {
-						assistantStarted.resolve();
-						return quiet();
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						alpha: () => {
+							alphaStarted.resolve();
+							return quiet();
+						},
+						assistant: () => {
+							assistantStarted.resolve();
+							return quiet();
+						},
+					}),
+				),
+			}),
 		});
 		try {
 			const exchange = await (await room.visit(priya)).send({ text: 'Who can answer?' });
 			// No caller-driven reconciliation or clock advance starts these activations.
 			await Promise.all([alphaStarted.promise, assistantStarted.promise]);
-			await settled(room);
+			await waitForRoom(room);
 			expect(clock.now()).toBe(before);
 			expect(activations(transport.sent)).toEqual([
 				`message:${exchange.from}:alpha:1`,
@@ -107,7 +110,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 			agents: [alpha, beta, assistant],
 			seats: { [assistant.name]: 'broadcast', ...{ [alpha.name]: 'broadcast' } },
 			runtime: firstRuntime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -124,9 +127,9 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 			resumed = await resumeRoom(room.name, {
 				runtime: createRuntime({ storage: opened.storage, clock, transport: recovered.transport }),
 				agents: [alpha, beta, assistant],
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
-			await settled(resumed);
+			await waitForRoom(resumed);
 			expect(clock.now()).toBe(before);
 			expect(activations(lost.sent)).toEqual(expected);
 			expect(activations(recovered.sent)).toEqual(expected);

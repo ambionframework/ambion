@@ -1,7 +1,6 @@
 import { resolve } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
-	type CreateRuntimeOptions,
 	createRuntime,
 	type Room,
 	type RoomNotification,
@@ -10,9 +9,15 @@ import {
 	startRoom,
 } from '@ambionframework/ambion';
 import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
-import { directoryBackend, openWorkspace, type RoomMirror } from '@ambionframework/workspace';
+import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
+import {
+	directoryBackend,
+	openSqlResource,
+	openWorkspace,
+	type RoomMirror,
+} from '@ambionframework/workspace';
 import { team } from './definitions.ts';
-import { scenarios, seedWorkspace } from './scenarios.ts';
+import { labSchema, labWritable, scenarios, seedWorkspace } from './scenarios.ts';
 
 /** What a person can do to a room's work. Abort ends the open exchange. Stop and resume end and start a run. */
 export type RoomAction = 'abort' | 'stop' | 'resume';
@@ -49,7 +54,7 @@ interface HostedRoom extends CatalogEntry {
 export async function openRooms(
 	database: DatabaseSync,
 	directory: string,
-	stream?: CreateRuntimeOptions['stream'],
+	stream?: PiExecutionOptions['stream'],
 ) {
 	const sql: Sql = {
 		run: (query, ...params) => {
@@ -57,7 +62,10 @@ export async function openRooms(
 		},
 		all: (query, ...params) => database.prepare(query).all(...params) as Record<string, SqlValue>[],
 	};
-	const runtime = createRuntime({ storage: sqliteJournals(sql), stream });
+	const runtime = createRuntime({
+		storage: sqliteJournals(sql),
+		execution: piExecution({ stream }),
+	});
 	database.exec(
 		'CREATE TABLE IF NOT EXISTS workbench_rooms (name TEXT PRIMARY KEY, goal TEXT NOT NULL, enabled INTEGER NOT NULL)',
 	);
@@ -75,7 +83,20 @@ export async function openRooms(
 		await workspace.dispose().catch(() => {});
 		throw error;
 	}
-	const roomTeam = team(workspace);
+	// The lab records live in their own file, apart from the journal database.
+	let lab: ReturnType<typeof openSqlResource>;
+	try {
+		lab = openSqlResource({
+			name: 'lab',
+			location: resolve(directory, 'lab.db'),
+			schema: labSchema,
+			writable: labWritable,
+		});
+	} catch (error) {
+		await workspace.dispose().catch(() => {});
+		throw error;
+	}
+	const roomTeam = team(workspace, lab);
 	let workspaceTail = Promise.resolve();
 	function withWorkspace<T>(operation: () => Promise<T>): Promise<T> {
 		if (closing) fail('The host is stopping.');
@@ -226,6 +247,7 @@ export async function openRooms(
 		await closeEntries().catch(() => {});
 		await workspaceTail.catch(() => {});
 		await workspace.dispose().catch(() => {});
+		await lab.dispose().catch(() => {});
 		throw error;
 	}
 	return {
@@ -255,6 +277,7 @@ export async function openRooms(
 			await closeEntries();
 			await workspaceTail;
 			await workspace.dispose();
+			await lab.dispose();
 		},
 	};
 }

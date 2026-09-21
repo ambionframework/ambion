@@ -6,6 +6,7 @@
  */
 import type { Context } from '@earendil-works/pi-ai';
 import { expect } from 'vitest';
+import { type PiOptions, pi, piExecution } from '../../../pi/src/index.ts';
 import { hostingOf, inProcessTransport } from '../../src/hosting.ts';
 import {
 	createRuntime,
@@ -13,29 +14,24 @@ import {
 	defineHuman,
 	isSpoken,
 	isSummary,
-	type PiOptions,
-	pi,
 	type Room,
 	type Runtime,
 	startRoom,
 } from '../../src/index.ts';
+import { fakeClock } from '../../src/testing.ts';
+import { invariants } from './invariants.ts';
+import { collect, messagesOf, participantsOf, roomName, waitForRoom } from './room.ts';
 import {
+	answersLastQuestion,
 	byAgent,
-	fakeClock,
+	contextText,
+	insists,
 	isClosing,
 	quiet,
 	type Script,
 	scripted,
-	settled,
-	speak,
-} from '../../src/testing.ts';
-import { invariants } from './invariants.ts';
-import { collect, messagesOf, participantsOf, roomName } from './room.ts';
-import {
-	answersLastQuestion,
-	contextText,
-	insists,
 	seat,
+	speak,
 	summarise,
 	toolNames,
 	toolResultTexts,
@@ -116,14 +112,16 @@ export const oneExchange: Scenario = {
 			summary: assistant.name,
 			seats: { [product.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [product, assistant],
-			stream: scripted(
-				byAgent({ product: twoAnswersEach, assistant: composes([], 'The one message.') }),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({ product: twoAnswersEach, assistant: composes([], 'The one message.') }),
+				),
+			}),
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'Can I tell the client Thursday?' });
-		await settled(session);
+		await waitForRoom(session);
 		const record = await messagesOf(session);
 		expect(record.filter(isSpoken).map((m) => m.from)).toEqual(['priya', 'product', 'product']);
 		const summary = record.find(isSummary);
@@ -145,27 +143,29 @@ export const twoPeopleTwoExchanges: Scenario = {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			stream: scripted(
-				byAgent({
-					product: answersLastQuestion(['priya', 'sam']),
-					colleague: answersLastQuestion(['priya', 'sam']),
-					assistant: (context) => {
-						const person = /(\w+)'s exchange is over/.exec(contextText(context))?.[1] ?? '';
-						if (!isClosing(context) || toolResultTexts(context).includes('delivered')) {
-							return quiet();
-						}
-						return summarise(`for ${person}`);
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						product: answersLastQuestion(['priya', 'sam']),
+						colleague: answersLastQuestion(['priya', 'sam']),
+						assistant: (context) => {
+							const person = /(\w+)'s exchange is over/.exec(contextText(context))?.[1] ?? '';
+							if (!isClosing(context) || toolResultTexts(context).includes('delivered')) {
+								return quiet();
+							}
+							return summarise(`for ${person}`);
+						},
+					}),
+				),
+			}),
 		});
 		const events = collect(session);
 		const hers = await session.visit(priya);
 		const his = await session.visit(sam);
 		await hers.send({ text: 'First?' });
-		await settled(session);
+		await waitForRoom(session);
 		await his.send({ text: 'Second?' });
-		await settled(session);
+		await waitForRoom(session);
 		await hers.leave();
 		const summaries = (await messagesOf(session)).filter(isSummary);
 		expect(summaries.map((m) => [m.to, m.text])).toEqual([
@@ -188,19 +188,21 @@ export const seatFromReserve: Scenario = {
 			summary: assistant.name,
 			agents: [product, surveyor, assistant],
 			seats: { [assistant.name]: 'broadcast', ...{ [product.name]: 'broadcast' } },
-			stream: scripted(
-				byAgent({
-					assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
-					product: (_context, _name, call) =>
-						call <= 3 ? speak('The pour is Saturday.') : quiet(),
-					surveyor: insists('11.7 tonnes on site.'),
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
+						product: (_context, _name, call) =>
+							call <= 3 ? speak('The pour is Saturday.') : quiet(),
+						surveyor: insists('11.7 tonnes on site.'),
+					}),
+				),
+			}),
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'Is there enough steel for the pour?' });
-		await settled(session);
+		await waitForRoom(session);
 		const record = await messagesOf(session);
 		expect(record.find((m) => m.kind === 'seated')).toMatchObject({
 			from: 'assistant',

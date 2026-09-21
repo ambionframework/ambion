@@ -4,6 +4,7 @@
  * Both cases use the public seat calls over memory and SQLite journals.
  */
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	type AgentPort,
 	hostingOf,
@@ -17,14 +18,14 @@ import {
 	defineAgent,
 	defineHuman,
 	isSpoken,
-	pi,
 	type Room,
 	type Runtime,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { type FakeClock, fakeClock, quiet, scripted } from '../src/testing.ts';
+import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { roomName, storedOf } from './support/room.ts';
+import { quiet, scripted } from './support/scripted.ts';
 import { type OpenedStorage, type Storage, storages } from './support/storage.ts';
 
 const runner = defineAgent({
@@ -96,7 +97,7 @@ async function interrupted(storage: Storage): Promise<InterruptedRoom> {
 		agents: [runner],
 		seats: { [runner.name]: 'broadcast' },
 		runtime: first,
-		stream: scripted(() => quiet()),
+		execution: piExecution({ stream: scripted(() => quiet()) }),
 	});
 	const visit = await session.visit(person);
 	await session.reconcile();
@@ -196,7 +197,7 @@ describe.each(storages)('inherited leases on $name', (storage) => {
 			resumed = await resumeRoom(state.name, {
 				runtime: second,
 				agents: [runner],
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			const calls = resumedCalls(second, state.name);
 			expect(recording.wakes).toEqual([]);
@@ -244,7 +245,7 @@ describe.each(storages)('inherited leases on $name', (storage) => {
 			resumed = await resumeRoom(state.name, {
 				runtime: second,
 				agents: [runner],
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			expect(recording.wakes).toEqual([]);
 			await state.clock.advance(999);

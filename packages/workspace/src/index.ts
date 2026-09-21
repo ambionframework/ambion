@@ -24,6 +24,8 @@ export { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 export type { AuditEntry, AuditLog, AuditLogOptions } from './audit.ts';
 export { DEFAULT_AUDIT_LOG, openAuditLog } from './audit.ts';
 export type { WorkspaceBackend, WorkspaceEnv } from './backend.ts';
+export type { ChangeLog, ChangeLogOptions, ChangeQuery, WorkspaceChange } from './changes.ts';
+export { DEFAULT_CHANGE_LOG, openChangeLog } from './changes.ts';
 export type {
 	MemoryBackendFile,
 	MemoryBackendOptions,
@@ -43,6 +45,14 @@ export type {
 } from './resource.ts';
 export { openResource } from './resource.ts';
 export { SHARED_DATABASE } from './sql.ts';
+export type {
+	SqlProvenance,
+	SqlResource,
+	SqlResourceEnv,
+	SqlResourceOptions,
+	SqlValue,
+} from './sql-resource.ts';
+export { openSqlResource, PROVENANCE_COLUMNS } from './sql-resource.ts';
 export type { Workspace } from './workspace.ts';
 export { openWorkspace } from './workspace.ts';
 

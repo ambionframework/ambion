@@ -2,9 +2,10 @@
  * The worker the workerd tier runs: it configures the definitions and the
  * scripted model call, and exports the two objects `wrangler.jsonc` binds.
  */
-import { defineAgent, pi } from '@ambionframework/ambion';
+import { defineAgent } from '@ambionframework/ambion';
+import { pi } from '@ambionframework/pi';
 import { configure, RoomObject, SeatObject } from '../src/index.ts';
-import { stream } from './answers.ts';
+import { scripted } from './scripted.ts';
 
 export const assistant = defineAgent({
 	name: 'assistant',
@@ -26,7 +27,7 @@ export const slow = defineAgent({
 
 configure({
 	agents: [assistant, product, slow],
-	stream,
+	stream: scripted,
 	// Alarms fire on their own in workerd: a wake nobody takes is sent again this often.
 	limits: { delivery: { resend: 50 } },
 });

@@ -6,16 +6,18 @@
  * follows it.
  */
 import { afterAll, describe, expect, it, vi } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { inProcessTransport, runningRoom } from '../src/hosting.ts';
-import { createRuntime, defineAgent, defineHuman, pi, startRoom } from '../src/index.ts';
+import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
-import { fakeClock, quiet, scripted, settled } from '../src/testing.ts';
+import { fakeClock } from '../src/testing.ts';
 import { bindings } from './support/binding.ts';
-import { closedExchange, roomName } from './support/room.ts';
+import { closedExchange, roomName, waitForRoom } from './support/room.ts';
+import { quiet, scripted } from './support/scripted.ts';
 import { memory } from './support/storage.ts';
 
 vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
@@ -361,7 +363,7 @@ describe('the room runs the verified rules', () => {
 			storage: opened.storage,
 			clock: fakeClock(),
 			transport: inProcessTransport(),
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		const room = await startRoom({
 			name: roomName('binding-close'),
@@ -373,7 +375,7 @@ describe('the room runs the verified rules', () => {
 					executor: pi({ instructions: 'Answer.', model: 'scripted/product' }),
 				}),
 			],
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Person.' }));
@@ -394,7 +396,7 @@ describe('the room runs the verified rules', () => {
 			bind.once(rules.admitsClose, false);
 			await peer.lease({ activation, operation: 'release', reason: 'released', readThrough: 4 });
 			await visit.send({ text: 'Again.' });
-			await settled(room);
+			await waitForRoom(room);
 			expect(closedExchange(room, first.from)).toBeDefined();
 			expect(vi.mocked(rules.admitsClose).mock.calls.length).toBeGreaterThan(1);
 		} finally {

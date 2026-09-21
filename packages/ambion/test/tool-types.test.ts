@@ -1,12 +1,11 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { expect, expectTypeOf, it } from 'vitest';
+import { fromPiTool, pi } from '../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineTool,
-	fromPiTool,
-	pi,
 	startRoom,
 	type ToolBundle,
 } from '../src/index.ts';

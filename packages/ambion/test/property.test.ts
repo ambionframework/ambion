@@ -8,13 +8,13 @@
  * `AMBION_SEEDS` widens the walk; the seed prints on failure.
  */
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { hostingOf, inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	isSummary,
-	pi,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -22,15 +22,7 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import {
-	byAgent,
-	type FakeClock,
-	fakeClock,
-	isClosing,
-	quiet,
-	scripted,
-	settled,
-} from '../src/testing.ts';
+import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { liveLeases } from './support/chaos.ts';
 import { invariants } from './support/invariants.ts';
 import {
@@ -40,8 +32,17 @@ import {
 	participantsOf,
 	roomName,
 	storedOf,
+	waitForRoom,
 } from './support/room.ts';
-import { answersLastQuestion, summarise, toolResultTexts } from './support/scripted.ts';
+import {
+	answersLastQuestion,
+	byAgent,
+	isClosing,
+	quiet,
+	scripted,
+	summarise,
+	toolResultTexts,
+} from './support/scripted.ts';
 import { type FailMode, memory, tappedJournals } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
 
@@ -178,7 +179,7 @@ class Walk {
 			summary: assistant.name,
 			agents: [alpha, beta, gamma, assistant],
 			seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast', [beta.name]: 'named' },
-			stream: scripted(script),
+			execution: piExecution({ stream: scripted(script) }),
 		});
 		this.watch();
 		await messagesOf(this.session);
@@ -265,7 +266,7 @@ class Walk {
 				this.session = await resumeRoom(this.name, {
 					runtime: this.runtime,
 					agents: [assistant, alpha, beta, gamma],
-					stream: scripted(script),
+					execution: piExecution({ stream: scripted(script) }),
 				});
 				break;
 			} catch (error) {
@@ -282,7 +283,7 @@ class Walk {
 		this.faults.length = 0;
 		this.disk = false;
 		for (let i = 0; i < 6; i += 1) await this.clock.advance(61_000);
-		await within(settled(this.session), 10_000, 'quiet after the drain');
+		await within(waitForRoom(this.session), 10_000, 'quiet after the drain');
 	}
 }
 

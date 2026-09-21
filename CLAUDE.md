@@ -19,6 +19,7 @@ newer, the OpenTUI floor.
 | `packages/cli`        | Project creation and local rooms through Wrangler and OpenTUI; ships with the Cloudflare adapter                            |
 | `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Publishable; tested in workerd                                |
 | `packages/journal`    | An append-only journal: one queue, fenced by run, with conditional commits                                                  |
+| `packages/pi`         | The Pi executor: `pi()`, `piExecution()`, and the seat transcript audit; the kernel imports no model library                |
 | `packages/pi-journal` | Full Pi transcript sessions over the generic journal storage contract                                                       |
 | `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem                                               |
 | `docs/agent.md`       | Design contract for the core — read before changing the runtime                                                             |
@@ -117,8 +118,10 @@ vitest.live.config.ts test/live/<file>.test.ts`) over the whole suite. Run the
   write.
 - Cognitive complexity: max 10 in source, 15 in tests.
 - Prettier formats (tabs, single quotes, width 100, semicolons); Biome lints.
-- Tests are vitest. A scripted `stream` from `@ambionframework/ambion/testing`
-  makes a room deterministic; `settled(room)` waits for it.
+- Tests are vitest. A scripted execution from `@ambionframework/ambion/testing`
+  makes a room deterministic; `settled(room)` waits for it. The kernel entry
+  imports no model library. A scripted Pi stream comes from
+  `@ambionframework/pi/testing`.
 
 ## Writing documentation
 

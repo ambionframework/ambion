@@ -15,12 +15,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { JournalEntry } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/host/runtime.ts';
 import { inProcessTransport } from '../src/hosting.ts';
 import { createRuntime, type Room, resumeRoom, startRoom } from '../src/index.ts';
 import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
-import { type FakeClock, fakeClock, scripted, settled } from '../src/testing.ts';
+import { type FakeClock, fakeClock } from '../src/testing.ts';
 import {
 	agents,
 	assistant,
@@ -34,7 +35,8 @@ import {
 } from './support/cast.ts';
 import { idle } from './support/chaos.ts';
 import { History, standing, violations } from './support/history.ts';
-import { collect, messagesOf, roomName, storedOf } from './support/room.ts';
+import { collect, messagesOf, roomName, storedOf, waitForRoom } from './support/room.ts';
+import { scripted } from './support/scripted.ts';
 import { childJournals, childStorage, gatedJournals, memory, sqlite } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
@@ -91,12 +93,12 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			stream: scripted(script),
+			execution: piExecution({ stream: scripted(script) }),
 		});
 		const events = collect(room);
 		const hers = await room.visit(priya);
 		await history.run('priya', 'deliver', 'q1', () => hers.send({ text: 'First?', key: 'q1' }));
-		await settled(room);
+		await waitForRoom(room);
 		// paused: a delivery on the first host is in flight and held
 		gate = new Promise((resolve) => {
 			release = resolve;
@@ -108,17 +110,17 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 		const taken = await resumeRoom(name, {
 			runtime: second,
 			agents,
-			stream: scripted(script),
+			execution: piExecution({ stream: scripted(script) }),
 		});
 		const his = await taken.visit(sam);
 		await history.run('sam', 'deliver', 'q3', () => his.send({ text: 'Third?', key: 'q3' }));
-		await settled(taken);
+		await waitForRoom(taken);
 		// The first host comes back. Its held write sees the newer storage position,
 		// so it is refused before the host acknowledges it.
 		release();
 		await held;
 		await history.run('priya', 'deliver', 'q4', () => hers.send({ text: 'Fourth?', key: 'q4' }));
-		await settled(room);
+		await waitForRoom(room);
 		await history.run(
 			'sam',
 			'read',
@@ -217,7 +219,11 @@ describe('a split: two live hosts over one SQLite database', () => {
 			const journals = childJournals('sqlite', dir);
 			const clock = fakeClock(Date.now());
 			const runtime = createRuntime({ storage: childStorage('sqlite', dir), clock, ...TIMING });
-			const session = await resumeRoom(name, { runtime, agents, stream: scripted(script) });
+			const session = await resumeRoom(name, {
+				runtime,
+				agents,
+				execution: piExecution({ stream: scripted(script) }),
+			});
 			await quietNow(session, clock);
 			const [, second] = questions;
 			if (second === undefined) throw new Error('cast');

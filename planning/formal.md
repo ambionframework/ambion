@@ -327,7 +327,7 @@ and `room-host.ts` run them, and the binding test names them.
 
 **`decide` was a set of case splits with no contract.** Each helper in
 `transition.ts` is a table over a few booleans, and each table is a
-promise of `docs/agent.md`: the say lock, the lease deadline, one lease
+promise of `docs/room.md` and `docs/exchange.md`: the say lock, the lease deadline, one lease
 per seat, the reason gate, the purpose grant, the close admission, and the
 one-summary rule. A rule per table moves the table into the rules file and
 leaves the helper as the adapter that reads the state.
@@ -495,7 +495,7 @@ close)`** answers the grant `activationSpec` computes: nothing for a
   roster or removed after the cause, a `respond` purpose only for a
   recorded message position, a `summarize` purpose only for a close that
   names the seat as writer; the grant's seat and attempt are the id's own,
-  and the purpose kind is fixed by the id's source. `docs/agent.md`
+  and the purpose kind is fixed by the id's source. `docs/room.md`
   "Activation and context" promises every clause. `activationSpec` is the
   adapter: decode, guard `wellFormed`, project the removal with
   `removedAfter`, find the close with `closeFor`, and run the rule.
@@ -732,9 +732,9 @@ scope decision removed them.
 **Tranche 3a landed over the rules' own inputs.** The lease lemmas fold a
 history of `Change` values and cancellation markers with `applyChange`
 and `cancelHold`, and the exchange lemmas take the `Message` and
-`CloseRef` values the rules take. Neither needs the addressed projection
-of B1 in `next.md`; the projection from an entry to those values stays
-with the scripted suites. The roster fold lemma waits for B1. Two
+`CloseRef` values the rules take. Neither needs the addressed projection,
+which landed in PR #196; the projection from an entry to those values
+stays with the scripted suites. The roster fold lemma waits for it. Two
 liveness facts stay open: a measure the stop loop decreases, and a
 measure each reconciliation pass decreases, so the `PASSES` bound is a
 proof. Today only the chaos drain and the walk's `drained` check witness

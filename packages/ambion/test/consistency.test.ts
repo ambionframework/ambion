@@ -9,6 +9,7 @@
  * `AMBION_SEEDS` widens the walk; the seed prints on failure.
  */
 import { describe, expect, it } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
 import { hostingOf, inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
@@ -21,12 +22,20 @@ import {
 } from '../src/index.ts';
 import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
-import { type FakeClock, fakeClock, scripted, settled } from '../src/testing.ts';
+import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
 import { liveLeases } from './support/chaos.ts';
 import { type Entry, History, standing, violations } from './support/history.ts';
 import { invariants } from './support/invariants.ts';
-import { messagesOf, roomName, runningLeases, stateOf, storedOf } from './support/room.ts';
+import {
+	messagesOf,
+	roomName,
+	runningLeases,
+	stateOf,
+	storedOf,
+	waitForRoom,
+} from './support/room.ts';
+import { scripted } from './support/scripted.ts';
 import { type FailMode, gatedJournals, memory, sqlite, tappedJournals } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
 
@@ -151,7 +160,7 @@ class Cluster {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			stream: scripted(this.cast.script),
+			execution: piExecution({ stream: scripted(this.cast.script) }),
 		});
 		this.watch();
 		await messagesOf(this.session);
@@ -236,7 +245,7 @@ class Cluster {
 				this.session = await resumeRoom(this.name, {
 					runtime: this.runtime,
 					agents,
-					stream: scripted(this.cast.script),
+					execution: piExecution({ stream: scripted(this.cast.script) }),
 				});
 				break;
 			} catch (error) {
@@ -283,7 +292,7 @@ class Cluster {
 		await this.resuming;
 		// in steps under the expiry, so an activation in flight renews across them
 		for (let i = 0; i < 14; i += 1) await this.advance(31_000);
-		await within(settled(this.session), 10_000, 'quiet after the drain');
+		await within(waitForRoom(this.session), 10_000, 'quiet after the drain');
 	}
 
 	async check(): Promise<void> {

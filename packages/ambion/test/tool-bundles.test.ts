@@ -5,19 +5,25 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { type PiOptions, pi, piExecution } from '../../pi/src/index.ts';
 import {
 	type AgentDefinition,
 	defineAgent,
 	defineTool,
-	type PiOptions,
-	pi,
 	type Room,
 	startRoom,
 	type ToolBundle,
 	type ToolContext,
 } from '../src/index.ts';
-import { byAgent, callTool, quiet, type Script, scripted, settled, speak } from '../src/testing.ts';
-import { assistant, collect, enter, messagesOf, roomName as name } from './support/room.ts';
+import {
+	assistant,
+	collect,
+	enter,
+	messagesOf,
+	roomName as name,
+	waitForRoom,
+} from './support/room.ts';
+import { byAgent, callTool, quiet, type Script, scripted, speak } from './support/scripted.ts';
 
 function agent(agentName: string, options: Partial<PiOptions> = {}) {
 	return defineAgent({
@@ -37,11 +43,11 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 			[assistant.name]: 'none',
 		},
 		agents: [...agents, assistant],
-		stream: scripted(byAgent(seats)),
+		execution: piExecution({ stream: scripted(byAgent(seats)) }),
 	});
 	const visit = await enter(session);
 	await visit.send({ text: 'go' });
-	await settled(session);
+	await waitForRoom(session);
 	return session;
 }
 
@@ -118,17 +124,19 @@ describe('ordinary tool bundles', () => {
 			summary: assistant.name,
 			seats: { worker: 'broadcast', [assistant.name]: 'none' },
 			agents: [agent('worker', { tools: [probe] }), assistant],
-			stream: scripted(
-				byAgent({
-					worker: (_context, _who, call) =>
-						call === 1 ? callTool('probe', {}) : call === 2 ? speak('done') : quiet(),
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						worker: (_context, _who, call) =>
+							call === 1 ? callTool('probe', {}) : call === 2 ? speak('done') : quiet(),
+					}),
+				),
+			}),
 		});
 		const events = collect(session);
 		const visit = await enter(session);
 		await visit.send({ text: 'go' });
-		await settled(session);
+		await waitForRoom(session);
 		const messages = await messagesOf(session);
 		const question = messages.find((message) => message.kind === 'said' && message.text === 'go');
 		const said = messages.find((message) => message.kind === 'said' && message.from === 'worker');
@@ -158,14 +166,16 @@ describe('ordinary tool bundles', () => {
 			summary: assistant.name,
 			seats: { greeter: 'presence', [assistant.name]: 'none' },
 			agents: [agent('greeter', { tools: [probe] }), assistant],
-			stream: scripted(
-				byAgent({
-					greeter: (_context, _who, call) => (call === 1 ? callTool('probe', {}) : quiet()),
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						greeter: (_context, _who, call) => (call === 1 ? callTool('probe', {}) : quiet()),
+					}),
+				),
+			}),
 		});
 		await enter(session);
-		await settled(session);
+		await waitForRoom(session);
 		expect(seen).toHaveLength(1);
 		expect(seen[0]?.room).toBe(session.name);
 		expect(typeof seen[0]?.activation).toBe('string');

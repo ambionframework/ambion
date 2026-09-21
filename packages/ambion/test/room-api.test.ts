@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
@@ -6,17 +7,23 @@ import {
 	defineHuman,
 	isSpoken,
 	isSummary,
-	pi,
 	type Room,
 	type Runtime,
 	readRoom,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock, isClosing, quiet, scripted, settled, speak } from '../src/testing.ts';
+import { fakeClock } from '../src/testing.ts';
 import { refusal } from './support/errors.ts';
-import { closedExchange, crash, deferred, messagesOf, roomName } from './support/room.ts';
-import { contextText, summarise } from './support/scripted.ts';
+import {
+	closedExchange,
+	crash,
+	deferred,
+	messagesOf,
+	roomName,
+	waitForRoom,
+} from './support/room.ts';
+import { contextText, isClosing, quiet, scripted, speak, summarise } from './support/scripted.ts';
 import { memory, type OpenedStorage, storages } from './support/storage.ts';
 
 const assistant = defineAgent({
@@ -81,7 +88,7 @@ async function world(
 		name: roomName('room-api'),
 		runtime,
 		agents: [alpha],
-		stream: answer,
+		execution: piExecution({ stream: answer }),
 		...options,
 	});
 	return { opened, runtime, room };
@@ -178,7 +185,12 @@ describe('the room API', () => {
 				transport: inProcessTransport(),
 			});
 			const name = roomName(`room-read-open-${storage.name}`);
-			const room = await startRoom({ name, runtime, agents: [alpha], stream: answer });
+			const room = await startRoom({
+				name,
+				runtime,
+				agents: [alpha],
+				execution: piExecution({ stream: answer }),
+			});
 			try {
 				await (await room.visit(priya)).send({ text: 'Stay open?', key: 'open-1' });
 				crash(runtime, room);
@@ -196,11 +208,11 @@ describe('the room API', () => {
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, beta, assistant],
-			stream: withSummary(),
+			execution: piExecution({ stream: withSummary() }),
 		});
 		try {
 			const visit = await room.visit(priya);
-			await settled(room);
+			await waitForRoom(room);
 			const exchange = await visit.send({ text: 'Can we ship?', key: 'ship-1' });
 
 			expect(exchange.owner).toBe(priya.name);
@@ -249,9 +261,11 @@ describe('the room API', () => {
 			summary: assistant.name,
 			seats: { [assistant.name]: 'none' },
 			agents: [assistant],
-			stream: scripted((_context, agent, call) =>
-				agent === 'assistant' ? quiet() : call === 2 ? speak('One answer.') : quiet(),
-			),
+			execution: piExecution({
+				stream: scripted((_context, agent, call) =>
+					agent === 'assistant' ? quiet() : call === 2 ? speak('One answer.') : quiet(),
+				),
+			}),
 		});
 		try {
 			const exchange = await (
@@ -268,10 +282,12 @@ describe('the room API', () => {
 	it('maps a send to its final close when a newer message arrives before close commit', async () => {
 		const gate = deferred();
 		const { opened, room } = await world(memory, {
-			stream: scripted(async (_context, _agent, call) => {
-				if (call !== 2) return quiet();
-				await gate.promise;
-				return quiet();
+			execution: piExecution({
+				stream: scripted(async (_context, _agent, call) => {
+					if (call !== 2) return quiet();
+					await gate.promise;
+					return quiet();
+				}),
 			}),
 		});
 		try {
@@ -325,10 +341,12 @@ describe('the room API', () => {
 	it('rejects an exchange conversation wait when the room is stopped before close', async () => {
 		const held = deferred();
 		const { opened, room } = await world(memory, {
-			stream: scripted(async (_context, _agent, call) => {
-				if (call !== 2) return quiet();
-				await held.promise;
-				return quiet();
+			execution: piExecution({
+				stream: scripted(async (_context, _agent, call) => {
+					if (call !== 2) return quiet();
+					await held.promise;
+					return quiet();
+				}),
 			}),
 		});
 		const exchange = await (await room.visit(priya)).send({ text: 'Hold?', key: 'stop-1' });
@@ -353,7 +371,7 @@ describe('the room API', () => {
 			name,
 			runtime,
 			agents: [alpha],
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			const sent = await (await first.visit(priya)).send({ text: 'Persist?', key: 'resume-1' });
@@ -365,7 +383,7 @@ describe('the room API', () => {
 			const resumed = await resumeRoom(name, {
 				runtime,
 				agents: [alpha],
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			try {
 				const recovered = resumed.exchange(sent.from);

@@ -1,17 +1,24 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { type AgentPort, hostingOf, inProcessTransport, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	pi,
 	type Room,
 	type RoomNotification,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { quiet, scripted, settled } from '../src/testing.ts';
-import { messagesOf, participantsOf, roomName, runningLeases, stateOf } from './support/room.ts';
+import {
+	messagesOf,
+	participantsOf,
+	roomName,
+	runningLeases,
+	stateOf,
+	waitForRoom,
+} from './support/room.ts';
+import { quiet, scripted } from './support/scripted.ts';
 import { faultyJournals, storages } from './support/storage.ts';
 
 const person = defineHuman({ name: 'andrei', identity: 'Founder.' });
@@ -109,7 +116,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			agents: [agent],
 			seats: { [agent.name]: 'broadcast' },
 			runtime: firstRuntime,
-			stream: stream,
+			execution: piExecution({ stream: stream }),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -129,7 +136,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			resumed = await resumeRoom(name, {
 				agents: [agent],
 				runtime: throwingRuntime,
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			const reentered = await resumed.visit(person);
 			const confirmed = observed(reentered.send({ text: 'second', key: 'submission-second' }));
@@ -147,7 +154,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			resumed = await resumeRoom(name, {
 				agents: [agent],
 				runtime: healthyRuntime,
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			const retryVisit = await resumed.visit(person);
 			const retry = await retryVisit.send({ text: 'second', key: 'submission-second' });
@@ -215,10 +222,12 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			agents: [agent],
 			seats: { [agent.name]: 'broadcast' },
 			runtime: firstRuntime,
-			stream: scripted(async () => {
-				started.resolve();
-				await held.promise;
-				return quiet();
+			execution: piExecution({
+				stream: scripted(async () => {
+					started.resolve();
+					await held.promise;
+					return quiet();
+				}),
 			}),
 		});
 		let resumed: Room | undefined;
@@ -240,7 +249,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			resumed = await resumeRoom(name, {
 				agents: [agent],
 				runtime: failingRuntime,
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			expect(runningLeases(resumed)).toBeGreaterThan(0);
 			const resumedVisit = await resumed.visit(person);
@@ -280,7 +289,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			recovered = await resumeRoom(name, {
 				agents: [agent],
 				runtime: healthyRuntime,
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			expect(
 				(await messagesOf(recovered)).filter(
@@ -307,9 +316,9 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			const events: RoomNotification[] = [];
 			const off = room.subscribe((event) => events.push(event));
 			await visit.send({ text: 'question', key: 'submission-order' });
-			await settled(room);
+			await waitForRoom(room);
 			await visit.send({ text: 'follow-up', key: 'submission-order-2' });
-			await settled(room);
+			await waitForRoom(room);
 			const before = types(events);
 			expect(before).toEqual([
 				'message',
@@ -374,7 +383,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 
 			faulty.fail(false);
 			await messagesOf(room);
-			await settled(room);
+			await waitForRoom(room);
 			expect(
 				events.filter(
 					(event) => event.type === 'message' && event.message.key === 'submission-recovered',
@@ -384,7 +393,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 
 			const later = await visit.send({ text: 'later', key: 'submission-later' });
 			expect(later.owner).toBe(person.name);
-			await settled(room);
+			await waitForRoom(room);
 			expect(
 				events.filter(
 					(event) => event.type === 'message' && event.message.key === 'submission-later',
@@ -423,7 +432,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			agents: [agent],
 			seats: { [agent.name]: 'broadcast' },
 			runtime: firstRuntime,
-			stream: stream,
+			execution: piExecution({ stream: stream }),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -442,7 +451,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			resumed = await resumeRoom(name, {
 				agents: [agent],
 				runtime: failingRuntime,
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 
 			const stopped = observed(resumed.stop());

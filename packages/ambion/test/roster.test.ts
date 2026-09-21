@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	type AgentDefinition,
 	type Attention,
@@ -7,23 +8,30 @@ import {
 	defineHuman,
 	isPresence,
 	type Message,
-	pi,
 	type Room,
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
+import { fakeClock } from '../src/testing.ts';
+import {
+	collect,
+	deferred,
+	messagesOf,
+	participantsOf,
+	roomName,
+	waitForRoom,
+} from './support/room.ts';
 import {
 	byAgent,
 	callTool,
-	fakeClock,
+	contextText,
 	quiet,
 	type Script,
 	scripted,
-	settled,
+	seat,
 	speak,
-} from '../src/testing.ts';
-import { collect, deferred, messagesOf, participantsOf, roomName } from './support/room.ts';
-import { contextText, seat, toolNames } from './support/scripted.ts';
+	toolNames,
+} from './support/scripted.ts';
 
 const product = defineAgent({
 	name: 'product',
@@ -85,7 +93,7 @@ async function open(options: {
 		seats,
 		...(options.summary ? { summary: writer.name } : {}),
 		runtime,
-		stream: scripted(options.script),
+		execution: piExecution({ stream: scripted(options.script) }),
 	});
 	started.push(session);
 	return session;
@@ -120,7 +128,7 @@ describe('ordinary participation', () => {
 		const events = collect(session);
 
 		await (await session.visit(priya)).send({ text: 'How much steel is on site?' });
-		await settled(session);
+		await waitForRoom(session);
 
 		expect(tools[0]).toEqual(['say', 'seat', 'unseat']);
 		expect(contexts[0]).toContain('The reserve: agents not in the room.');
@@ -149,7 +157,7 @@ describe('ordinary participation', () => {
 		});
 
 		await (await session.visit(priya)).send({ text: 'Bring everyone needed.' });
-		await settled(session);
+		await waitForRoom(session);
 
 		expect(await seatNames(session)).toEqual(['product', 'surveyor', 'architect', 'greeter']);
 		expect(kinds(await messagesOf(session))).toEqual([
@@ -175,7 +183,7 @@ describe('ordinary participation', () => {
 		});
 
 		await (await session.visit(priya)).send({ text: 'Is the team ready?' });
-		await settled(session);
+		await waitForRoom(session);
 
 		const record = await messagesOf(session);
 		expect(record.filter((message) => message.kind === 'seated')).toHaveLength(0);
@@ -196,7 +204,7 @@ describe('ordinary participation', () => {
 		const events = collect(session);
 
 		await (await session.visit(priya)).send({ text: 'Who should join?' });
-		await settled(session);
+		await waitForRoom(session);
 
 		expect(activated(events)).toContain('greeter');
 		expect(activated(events)).toContain('surveyor');
@@ -232,7 +240,7 @@ describe('ordinary participation', () => {
 			});
 		});
 		held.resolve();
-		await settled(session);
+		await waitForRoom(session);
 
 		expect(contexts.at(-1)).toContain('[surveyor → product] The drawings will settle this.');
 		expect(await seatNames(session)).toContain(architect.name);
@@ -253,7 +261,7 @@ describe('ordinary unseating and host membership', () => {
 		const events = collect(session);
 
 		await (await session.visit(priya)).send({ text: 'Can anyone decide?' });
-		await settled(session);
+		await waitForRoom(session);
 
 		const record = await messagesOf(session);
 		expect(
@@ -274,7 +282,7 @@ describe('ordinary unseating and host membership', () => {
 		});
 
 		await (await session.visit(priya)).send({ text: 'Remove the writer.' });
-		await settled(session);
+		await waitForRoom(session);
 
 		const record = await messagesOf(session);
 		expect(record.some((message) => message.kind === 'unseated')).toBe(false);
@@ -289,7 +297,7 @@ describe('ordinary unseating and host membership', () => {
 		});
 
 		await session.seat(surveyor.name);
-		await settled(session);
+		await waitForRoom(session);
 		expect(await seatNames(session)).toEqual([product.name, surveyor.name]);
 		await session.unseat(surveyor.name);
 		expect(await seatNames(session)).toEqual([product.name]);
@@ -306,7 +314,7 @@ describe('ordinary unseating and host membership', () => {
 		const resumed = await resumeRoom(name, {
 			agents: [product, surveyor],
 			runtime,
-			stream: scripted(byAgent({})),
+			execution: piExecution({ stream: scripted(byAgent({})) }),
 		});
 		started.push(resumed);
 		expect(await seatNames(resumed)).toEqual([product.name]);

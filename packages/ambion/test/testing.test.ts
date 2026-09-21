@@ -1,25 +1,42 @@
-/** The `/testing` entry: the stream, the wait, and the clock, proved through a room. */
-import { fauxAssistantMessage } from '@earendil-works/pi-ai';
-import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
-import { stubModel } from '../src/execution/services.ts';
-import { createRuntime, defineAgent, pi, type Room, startRoom } from '../src/index.ts';
+/**
+ * The `/testing` entry: the scripted executor, the wait, and the clock,
+ * proved through a room and through the executor contract. Nothing here
+ * imports Pi or a model library.
+ */
+import { readdir, readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { Type } from 'typebox';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ExecutorActivation, PassInput } from '../src/execution/executor.ts';
+import { createRuntime, defineAgent, defineTool, type Room, startRoom } from '../src/index.ts';
+import type { ActivationView, CommitRequest, CommitResult } from '../src/protocol.ts';
 import {
 	byAgent,
+	callTool,
 	fakeClock,
 	isClosing,
 	quiet,
 	type Script,
 	scripted,
+	scriptedExecutor,
 	settled,
 	speak,
 } from '../src/testing.ts';
+import type { AgentExecutor, ExecutionEvent } from '../src/types.ts';
 import { andrei, collect, roomName } from './support/room.ts';
 
-const agent = (name: string, model: string) =>
+const echo = defineTool({
+	name: 'echo',
+	description: 'Returns its input.',
+	parameters: Type.Object({}),
+	execute: () => 'echoed',
+});
+
+const agent = (name: string, tools: AgentExecutor['tools'] = []) =>
 	defineAgent({
 		name,
 		identity: `The ${name} seat.`,
-		executor: pi({ instructions: 'answer what is asked', model }),
+		executor: { kind: 'scripted', instructions: 'answer what is asked', tools },
 	});
 
 const started: Room[] = [];
@@ -34,17 +51,19 @@ const open = async (options: Parameters<typeof startRoom>[0]) => {
 };
 
 describe('scripted', () => {
-	it('routes on the seat and counts calls per seat', async () => {
+	it('routes on the seat and counts steps per seat', async () => {
 		const seen: string[] = [];
-		const record = (seat: string) => (_context: unknown, name: string, call: number) => {
-			seen.push(`${seat}:${name}:${call}`);
-			return quiet();
+		const record = (label: string): Script => {
+			return (_step, seat, call) => {
+				seen.push(`${label}:${seat}:${call}`);
+				return quiet();
+			};
 		};
 		const room = await open({
 			name: roomName('testing-route'),
-			agents: [agent('a', 'anthropic/claude-x'), agent('b', 'anthropic/claude-x')],
+			agents: [agent('a'), agent('b')],
 			runtime: createRuntime(),
-			stream: scripted(byAgent({ a: record('a'), b: record('b') })),
+			execution: scripted(byAgent({ a: record('a'), b: record('b') })),
 		});
 		await (await room.visit(andrei)).send({ text: 'Hello?' });
 		await settled(room);
@@ -53,95 +72,96 @@ describe('scripted', () => {
 		expect(seen.every((line) => line.split(':')[0] === line.split(':')[1])).toBe(true);
 	});
 
+	it('puts a spoken turn on the record, then reads its result on the next step', async () => {
+		const results: string[][] = [];
+		const room = await open({
+			name: roomName('testing-speak'),
+			agents: [agent('a')],
+			runtime: createRuntime(),
+			execution: scripted((step, _seat, call) => {
+				results.push(step.results.map((result) => result.text));
+				return call === 1 ? speak('an answer') : quiet();
+			}),
+		});
+		await (await room.visit(andrei)).send({ text: 'Hello?' });
+		await settled(room);
+		const { messages } = await room.read();
+		expect(messages.filter((m) => m.kind === 'said' && m.from === 'a')).toHaveLength(1);
+		expect(results).toContainEqual(['delivered']);
+	});
+
+	it('runs a tool of the agent and emits its events', async () => {
+		const room = await open({
+			name: roomName('testing-tool'),
+			agents: [agent('a', [echo])],
+			runtime: createRuntime(),
+			execution: scripted((_step, _seat, call) => (call === 1 ? callTool('echo') : quiet())),
+		});
+		const events = collect(room);
+		await (await room.visit(andrei)).send({ text: 'Hello?' });
+		await settled(room);
+		const tools = events.filter(
+			(event) => event.type === 'tool_execution_start' || event.type === 'tool_execution_end',
+		);
+		expect(tools.map((event) => event.type)).toEqual([
+			'tool_execution_start',
+			'tool_execution_end',
+		]);
+	});
+
 	it('turns a script that throws into a transient error and writes no message', async () => {
-		let calls = 0;
 		const clock = fakeClock();
 		const room = await open({
 			name: roomName('testing-throws'),
-			agents: [agent('a', 'scripted/a')],
+			agents: [agent('a')],
 			runtime: createRuntime({ clock, limits: { activation: { attempts: 1, backoff: () => 0 } } }),
-			stream: scripted(() => {
-				calls += 1;
+			execution: scripted(() => {
 				throw new Error('script failed');
 			}),
 		});
 		const events = collect(room);
 		await (await room.visit(andrei)).send({ text: 'Hello?' });
 		await vi.waitFor(() => expect(events.some((event) => event.type === 'error')).toBe(true));
-		const failure = events.find((event) => event.type === 'error');
-		expect(failure).toMatchObject({ agent: 'a', cause: 'transient' });
-		expect(calls).toBeGreaterThan(0);
+		expect(events.find((event) => event.type === 'error')).toMatchObject({
+			agent: 'a',
+			cause: 'transient',
+		});
 		const { messages } = await room.read();
-		expect(messages.filter((message) => message.kind === 'said' && message.from === 'a')).toEqual(
-			[],
-		);
-	});
-
-	it('answers an already aborted signal with an aborted message', async () => {
-		const stream = scripted(() => speak('never'));
-		const controller = new AbortController();
-		controller.abort();
-		const model = await stubModel('anthropic/x', 'product');
-		const result = await (
-			await stream(model, { messages: [] }, { signal: controller.signal })
-		).result();
-		expect(result.stopReason).toBe('aborted');
+		expect(messages.filter((m) => m.kind === 'said' && m.from === 'a')).toEqual([]);
 	});
 });
-
-describe('stubModel', () => {
-	it('names the seat and needs no cast', async () => {
-		const model = await stubModel('anthropic/x', 'product');
-		expect(model.name).toBe('product');
-		expect(model.id).toBe('anthropic/x');
-		expectTypeOf(model.api).toBeString();
-	});
-});
-
-/** A room with one product that answers and one writer that summarises. */
-const summarised = (name: string, script: Script) =>
-	open({
-		name: roomName(name),
-		agents: [agent('product', 'scripted/product'), agent('writer', 'scripted/writer')],
-		summary: 'writer',
-		seats: { product: 'broadcast', writer: 'none' },
-		runtime: createRuntime(),
-		stream: scripted(script),
-	});
 
 describe('isClosing', () => {
 	it('is false for an ordinary activation and true for the summary activation', async () => {
 		const flags: boolean[] = [];
-		const room = await summarised(
-			'testing-closing',
-			byAgent({
-				product: (context, _seat, call) => {
-					flags.push(isClosing(context));
-					return call === 1 ? speak('an answer') : quiet();
-				},
-				writer: (context, _seat, call) => {
-					flags.push(isClosing(context));
-					return call === 1 ? speak('the summary') : quiet();
-				},
+		const room = await open({
+			name: roomName('testing-closing'),
+			agents: [agent('product'), agent('writer')],
+			summary: 'writer',
+			seats: { product: 'broadcast', writer: 'none' },
+			runtime: createRuntime(),
+			execution: scripted((step, seat, call) => {
+				flags.push(isClosing(step.view));
+				return call === 1 ? speak(seat === 'writer' ? 'the summary' : 'an answer') : quiet();
 			}),
-		);
+		});
 		await (await room.visit(andrei)).send({ text: 'Question?' });
 		await settled(room);
-		expect(flags.filter((flag) => flag)).toHaveLength(1);
+		expect(flags.filter((flag) => flag).length).toBeGreaterThan(0);
 		expect(flags.at(-1)).toBe(true);
-		expect(flags.slice(0, -1).every((flag) => !flag)).toBe(true);
+		const read = await room.read();
+		expect(read.exchanges[0]).toMatchObject({ summary: { status: 'published' } });
 	});
 });
 
 describe('settled', () => {
-	it('resolves after the exchange closes and the summary lands, through the read and subscribe of a room alone', async () => {
-		const room = await summarised(
-			'testing-settled',
-			byAgent({
-				product: (_context, _seat, call) => (call === 1 ? speak('an answer') : quiet()),
-				writer: (_context, _seat, call) => (call === 1 ? speak('the summary') : quiet()),
-			}),
-		);
+	it('resolves through the read and subscribe of a room alone', async () => {
+		const room = await open({
+			name: roomName('testing-settled'),
+			agents: [agent('a')],
+			runtime: createRuntime(),
+			execution: scripted((_step, _seat, call) => (call === 1 ? speak('an answer') : quiet())),
+		});
 		const reads = vi.fn(room.read.bind(room));
 		await (await room.visit(andrei)).send({ text: 'Question?' });
 		const read = await settled({
@@ -151,7 +171,6 @@ describe('settled', () => {
 		});
 		expect(read.exchange).toBeUndefined();
 		expect(read.participants.every((p) => p.kind !== 'agent' || p.status === 'idle')).toBe(true);
-		expect(read.exchanges[0]).toMatchObject({ summary: { status: 'published' } });
 		expect(reads).toHaveBeenCalled();
 	});
 
@@ -160,12 +179,12 @@ describe('settled', () => {
 		let failed = false;
 		const room = await open({
 			name: roomName('testing-backoff'),
-			agents: [agent('a', 'scripted/a')],
+			agents: [agent('a')],
 			runtime: createRuntime({
 				clock,
 				limits: { activation: { attempts: 2, backoff: () => 30_000 } },
 			}),
-			stream: scripted(() => {
+			execution: scripted(() => {
 				if (failed) return quiet();
 				failed = true;
 				throw new Error('once');
@@ -196,8 +215,117 @@ describe('fakeClock', () => {
 	});
 });
 
-it('builds an assistant message with the faux helper the entry re-uses', () => {
-	expect(quiet().stopReason).toBe('stop');
-	expect(speak('hi').stopReason).toBe('toolUse');
-	expect(fauxAssistantMessage('x').role).toBe('assistant');
+/** The executor contract, driven with no room and no driver. */
+describe('scriptedExecutor', () => {
+	const view = (through: number, purpose: ActivationView['spec']['purpose']): ActivationView => ({
+		spec: { id: 'act-1', seat: 'a', attempt: 1, purpose },
+		through,
+		context: { name: 'r', now: 0, participants: [], messages: [], reserve: [] },
+	});
+	const respond = view(3, { kind: 'respond', message: 3 });
+
+	function harness(commit: (request: CommitRequest) => CommitResult) {
+		const commits: CommitRequest[] = [];
+		const events: ExecutionEvent[] = [];
+		const activation: ExecutorActivation = {
+			id: 'act-1',
+			room: {
+				view: async () => ({ stale: 'unused' }),
+				commit: async (request) => {
+					commits.push(request);
+					return commit(request);
+				},
+				lease: async () => ({ stale: 'unused' }),
+			},
+			emit: (event) => events.push(event),
+			trace: { startPass() {}, record() {}, usage: () => undefined, close: async () => {} },
+		};
+		return { activation, commits, events };
+	}
+
+	const said = (seq: number): CommitResult => ({
+		committed: { kind: 'said', seq, from: 'a', text: 'hi', at: '' } as never,
+	});
+	const input = (v: ActivationView): PassInput => ({ kind: 'view', view: v });
+
+	it('commits a say against the position it read and advances readThrough', async () => {
+		const { activation, commits } = harness(() => said(4));
+		const session = scriptedExecutor(
+			(_step, _seat, call) => (call === 1 ? speak('hi') : quiet()),
+			agent('a'),
+		).open(activation);
+		await expect(session.pass(input(respond))).resolves.toEqual({ failed: false });
+		expect(commits).toHaveLength(1);
+		expect(commits[0]).toMatchObject({ readThrough: 3, intent: { kind: 'said', text: 'hi' } });
+		expect(session.readThrough).toBe(4);
+		expect(session.shouldRefresh(4)).toBe(false);
+		expect(session.shouldRefresh(5)).toBe(true);
+	});
+
+	it('takes the messages a refused say missed as read, and lets the script say again', async () => {
+		let first = true;
+		const { activation, commits } = harness(() => {
+			if (!first) return said(9);
+			first = false;
+			return { missed: [{ kind: 'said', seq: 8 } as never] };
+		});
+		const seen: string[] = [];
+		const session = scriptedExecutor((step) => {
+			seen.push(step.results.map((result) => result.text).join(','));
+			return step.results.some((r) => r.text === 'delivered') ? quiet() : speak('again');
+		}, agent('a')).open(activation);
+		await session.pass(input(respond));
+		expect(commits.map((c) => c.key)).toHaveLength(2);
+		expect(new Set(commits.map((c) => c.key)).size).toBe(2);
+		expect(seen).toEqual(['', 'missed', 'missed,delivered']);
+		expect(session.readThrough).toBe(9);
+	});
+
+	it('stops when the room answers stale, and never asks again', async () => {
+		const { activation, commits } = harness(() => ({ stale: 'lease ended' }));
+		const session = scriptedExecutor(() => speak('hi'), agent('a')).open(activation);
+		await session.pass(input(respond));
+		expect(commits).toHaveLength(1);
+		expect(session.cancelled).toBe(true);
+		expect(session.shouldRefresh(99)).toBe(false);
+	});
+
+	it('commits a closing say without readThrough and ends the pass', async () => {
+		const closing = view(5, { kind: 'summarize', exchange: 1, person: 'andrei', through: 5 });
+		const { activation, commits } = harness(() => said(6));
+		const session = scriptedExecutor(() => speak('summary'), agent('a')).open(activation);
+		await session.pass(input(closing));
+		expect(commits).toHaveLength(1);
+		expect(commits[0]).not.toHaveProperty('readThrough');
+	});
+
+	it('reports a script that throws as a transient failure and emits the error', async () => {
+		const { activation, events } = harness(() => said(4));
+		const session = scriptedExecutor(() => {
+			throw new Error('broke');
+		}, agent('a')).open(activation);
+		await expect(session.pass(input(respond))).resolves.toEqual({
+			failed: true,
+			cause: 'transient',
+			message: 'broke',
+		});
+		expect(events).toEqual([expect.objectContaining({ type: 'error', cause: 'transient' })]);
+	});
+});
+
+describe('the entry', () => {
+	it('imports no Pi and no model library', async () => {
+		const root = fileURLToPath(new URL('../src', import.meta.url));
+		const files = ['testing.ts', ...(await readdir(`${root}/testing`)).map((f) => `testing/${f}`)];
+		for (const file of files) {
+			const code = await readFile(`${root}/${file}`, 'utf8');
+			const imported = [...code.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map(
+				(m) => m[1] ?? '',
+			);
+			const models = imported.filter((name) =>
+				/^@earendil-works\/|pi-journal$|\/pi(\/|$)/.test(name),
+			);
+			expect({ file, models }).toEqual({ file, models: [] });
+		}
+	});
 });

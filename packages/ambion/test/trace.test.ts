@@ -1,4 +1,4 @@
-import { memoryJournals } from '@ambionframework/journal';
+import { type JournalOpener, memoryJournals } from '@ambionframework/journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import {
 	createAssistantMessageEventStream,
@@ -8,11 +8,11 @@ import {
 } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { createExecutionServices, createPiExecutor, pi, piExecution } from '../../pi/src/index.ts';
 import { openTrace, traceOpener } from '../src/execution/trace.ts';
 import {
 	AgentRunner,
 	type CommitResult,
-	createPiExecutor,
 	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
@@ -24,13 +24,13 @@ import {
 	createRuntime,
 	defineAgent,
 	defineTool,
-	pi,
 	startRoom,
 	type TracePolicy,
 } from '../src/index.ts';
 import { assertWire, roundTrip } from '../src/protocol.ts';
-import { fakeClock, quiet, scripted, settled, speak } from '../src/testing.ts';
-import { andrei, collect, deferred, roomName, tick } from './support/room.ts';
+import { fakeClock } from '../src/testing.ts';
+import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
+import { quiet, scripted, speak } from './support/scripted.ts';
 import { traceOf } from './support/trace.ts';
 
 const product = defineAgent({
@@ -51,7 +51,7 @@ async function ranOnce(runtime: Runtime, room: string, events: readonly RoomNoti
 async function ask(room: Room, text: string): Promise<void> {
 	const visit = await room.visit(andrei);
 	await visit.send({ text });
-	await settled(room, { timeout: 2_000 });
+	await waitForRoom(room, 'quiet', 2_000);
 }
 
 describe('the trace of a room activation', () => {
@@ -62,16 +62,18 @@ describe('the trace of a room activation', () => {
 			name,
 			agents: [product],
 			runtime,
-			stream: scripted((_context, _agent, call) =>
-				call === 1
-					? fauxAssistantMessage(
-							[fauxThinking('weighing it'), fauxToolCall('say', { text: 'Yes.' })],
-							{
-								stopReason: 'toolUse',
-							},
-						)
-					: quiet('done'),
-			),
+			execution: piExecution({
+				stream: scripted((_context, _agent, call) =>
+					call === 1
+						? fauxAssistantMessage(
+								[fauxThinking('weighing it'), fauxToolCall('say', { text: 'Yes.' })],
+								{
+									stopReason: 'toolUse',
+								},
+							)
+						: quiet('done'),
+				),
+			}),
 		});
 		const events = collect(room);
 		await ask(room, 'Ready?');
@@ -111,7 +113,7 @@ describe('the trace of a room activation', () => {
 			name,
 			agents: [product],
 			runtime,
-			stream: deltaStream(['al', 'pha', ' beta']),
+			execution: piExecution({ stream: deltaStream(['al', 'pha', ' beta']) }),
 		});
 		const events = collect(room);
 		await ask(room, 'Hello?');
@@ -131,7 +133,9 @@ describe('the trace of a room activation', () => {
 			name,
 			agents: [product],
 			runtime: first,
-			stream: scripted((_context, _agent, call) => (call === 1 ? speak('Yes.') : quiet())),
+			execution: piExecution({
+				stream: scripted((_context, _agent, call) => (call === 1 ? speak('Yes.') : quiet())),
+			}),
 		});
 		const events = collect(room);
 		await ask(room, 'Ready?');
@@ -186,7 +190,12 @@ describe('the trace limits and policy', () => {
 	) {
 		const runtime = createRuntime(limits);
 		const name = roomName('trace-policy');
-		const room = await startRoom({ name, agents: [agent], runtime, stream: script() });
+		const room = await startRoom({
+			name,
+			agents: [agent],
+			runtime,
+			execution: piExecution({ stream: script() }),
+		});
 		const events = collect(room);
 		await ask(room, 'Look?');
 		return (await ranOnce(runtime, name, events)).steps;
@@ -318,15 +327,16 @@ class PlayedRoom implements RoomProtocol {
 
 function play(stream: StreamFn) {
 	const clock = fakeClock();
-	const runtime = createRuntime({ clock, stream });
+	const runtime = createRuntime({ clock, execution: piExecution({ stream }) });
+	const services = createExecutionServices({ storage: memoryJournals(), clock, stream });
 	const hosting = hostingOf(runtime);
 	const room = new PlayedRoom(() => clock.now());
 	const events: ExecutionEvent[] = [];
 	const executor = createPiExecutor({
 		definition: product,
-		model: hosting.model,
-		stream: hosting.stream,
-		transcripts: hosting.transcripts,
+		model: services.model,
+		stream: services.stream,
+		transcripts: services.transcripts,
 		room: 'played',
 		now: () => clock.now(),
 	});
@@ -445,25 +455,25 @@ describe('the steps the driver owns', () => {
 	});
 
 	it('reports a failed trace write and never fails the activation', async () => {
-		const runtime = createRuntime({
-			stream: scripted(() => quiet()),
-			storage: {
-				open: async () => ({
-					read: async (after) => ({ entries: [], position: after }),
-					append: async () => {
-						throw new Error('trace storage down');
-					},
-				}),
-			},
-		});
+		const storage: JournalOpener = {
+			open: async () => ({
+				read: async (after) => ({ entries: [], position: after }),
+				append: async () => {
+					throw new Error('trace storage down');
+				},
+			}),
+		};
+		const stream = scripted(() => quiet());
+		const runtime = createRuntime({ storage, execution: piExecution({ stream }) });
+		const services = createExecutionServices({ storage, clock: runtime.clock, stream });
 		const hosting = hostingOf(runtime);
 		const events: ExecutionEvent[] = [];
 		const room = new PlayedRoom(() => runtime.clock.now());
 		const executor = createPiExecutor({
 			definition: product,
-			model: hosting.model,
-			stream: hosting.stream,
-			transcripts: hosting.transcripts,
+			model: services.model,
+			stream: services.stream,
+			transcripts: services.transcripts,
 			room: 'played',
 			now: () => 0,
 		});

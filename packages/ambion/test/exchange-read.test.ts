@@ -1,16 +1,11 @@
 import type { JournalOpener, JournalStorage } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
-import {
-	createRuntime,
-	defineAgent,
-	defineHuman,
-	pi,
-	readExchange,
-	startRoom,
-} from '../src/index.ts';
-import { quiet, scripted } from '../src/testing.ts';
-import { deferred, exchangeClosed, roomName, tick } from './support/room.ts';
-import { contextText } from './support/scripted.ts';
+import { pi, piExecution } from '../../pi/src/index.ts';
+import { createRuntime, defineAgent, defineHuman, readExchange, startRoom } from '../src/index.ts';
+import { exchangeActivation } from '../src/room/exchange.ts';
+import type { LeaseHold } from '../src/room/lease.ts';
+import { deferred, roomName, tick, waitForRoom } from './support/room.ts';
+import { contextText, quiet, scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const at = '2026-01-01T00:00:00.000Z';
@@ -112,17 +107,19 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 			name: roomName(`exchange-read-open-${storage.name}`),
 			runtime,
 			agents: [agent],
-			stream: scripted(async (context) => {
-				if (!contextText(context).includes('What is open?')) return quiet();
-				started.resolve();
-				await release.promise;
-				return quiet();
+			execution: piExecution({
+				stream: scripted(async (context) => {
+					if (!contextText(context).includes('What is open?')) return quiet();
+					started.resolve();
+					await release.promise;
+					return quiet();
+				}),
 			}),
 		});
 		try {
 			const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
 			const visit = await room.visit(person);
-			await exchangeClosed(room);
+			await waitForRoom(room, 'settled');
 			const handle = await visit.send({ text: 'What is open?' });
 			await started.promise;
 
@@ -159,6 +156,7 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 				owner: 'priya',
 				from: 6,
 				at,
+				activations: [],
 			});
 			expect(read?.messages.map((message) => message.seq)).toEqual([6]);
 			expect(after.position).toBe(before.position);
@@ -238,6 +236,74 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 		} finally {
 			await opened.dispose();
 		}
+	});
+
+	it('lists every activation of an exchange with its seat, attempt, purpose, and outcome', async () => {
+		const opened = await storage.open();
+		const name = roomName(`exchange-read-activations-${storage.name}`);
+		const lease = (body: object, seq = 0) => ({ kind: 'lease', body, seq, run });
+		const ended = (id: string, reason: string, extra: object = {}) =>
+			lease({ id, phase: 'ended', reason, at, readThrough: 0, ...extra });
+		const spent = { input: 3, output: 4, cacheRead: 0, cacheWrite: 0 };
+		await appendRecord(opened.journals, name, [
+			...record,
+			ended('message:4:assistant:1', 'failed', { cause: 'transient' }),
+			ended('message:4:assistant:2', 'released', { usage: spent }),
+			ended('closed:4:assistant:1', 'revoked'),
+			lease({ id: 'message:6:assistant:1', phase: 'running', expiresAt: 10, at, readThrough: 0 }),
+		]);
+		const runtime = createRuntime({
+			storage: opened.storage,
+			clock: { now: () => 0, alarm: () => () => {} },
+		});
+		try {
+			const closed = (await readExchange(name, firstFrom, { runtime }))?.exchange;
+			expect(closed?.activations).toEqual([
+				{
+					id: 'message:4:assistant:1',
+					seat: 'assistant',
+					attempt: 1,
+					purpose: 'respond',
+					outcome: { status: 'failed', cause: 'transient' },
+				},
+				{
+					id: 'message:4:assistant:2',
+					seat: 'assistant',
+					attempt: 2,
+					purpose: 'respond',
+					outcome: { status: 'released' },
+					usage: spent,
+				},
+				{
+					id: 'closed:4:assistant:1',
+					seat: 'assistant',
+					attempt: 1,
+					purpose: 'summary',
+					outcome: { status: 'revoked' },
+				},
+			]);
+			const open = (await readExchange(name, 6, { runtime }))?.exchange;
+			expect(open?.activations).toEqual([
+				expect.objectContaining({ id: 'message:6:assistant:1', outcome: { status: 'running' } }),
+			]);
+		} finally {
+			await opened.dispose();
+		}
+	});
+
+	it('marks an activation a cancellation ended', () => {
+		const lease: LeaseHold = {
+			id: 'message:4:assistant:1',
+			phase: 'ended',
+			at,
+			claimedAt: at,
+			since: 5,
+			readThrough: 0,
+			reason: 'revoked',
+			cancelled: true,
+			until: 6,
+		};
+		expect(exchangeActivation(lease).outcome).toEqual({ status: 'revoked', cancelled: true });
 	});
 
 	it('returns undefined for interior positions, missing exchanges, and missing rooms', async () => {

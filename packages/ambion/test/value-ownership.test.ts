@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
 	isSpoken,
 	type Message,
-	pi,
 	type RoomNotification,
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
-import { isClosing, quiet, scripted, speak } from '../src/testing.ts';
 import { andrei, messagesOf, participantsOf, roomName } from './support/room.ts';
+import { isClosing, quiet, scripted, speak } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const writer = defineAgent({
@@ -68,7 +68,7 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 			runtime,
 			agents: [writer],
 			seats: {},
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			const exchange = await (await room.visit(andrei)).send({ text: 'Original question.' });
@@ -110,7 +110,9 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 			agents: [writer],
 			seats: { writer: 'none' },
 			summary: writer.name,
-			stream: scripted((context) => (isClosing(context) ? speak('Original result.') : quiet())),
+			execution: piExecution({
+				stream: scripted((context) => (isClosing(context) ? speak('Original result.') : quiet())),
+			}),
 		});
 		try {
 			const exchange = await (await room.visit(andrei)).send({ text: 'Question?' });

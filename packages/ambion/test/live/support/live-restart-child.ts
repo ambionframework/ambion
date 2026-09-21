@@ -4,13 +4,13 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { sqliteJournals } from '@ambionframework/journal';
+import { pi, piExecution } from '../../../../pi/src/index.ts';
 import { inProcessTransport, type RoomProtocol, type Transport } from '../../../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	isSpoken,
-	pi,
 	type Room,
 	type RoomNotification,
 	resumeRoom,
@@ -98,6 +98,7 @@ async function start(): Promise<void> {
 	const runtime = createRuntime({
 		storage,
 		transport: startTransport(),
+		execution: piExecution(),
 		limits: { lease: { ttl: 5_000, deadline: 120_000 }, activation: { backoff: () => 0 } },
 	});
 	const room = await startRoom({ name, agents: [fast, slow], runtime });
@@ -149,6 +150,7 @@ async function resume(): Promise<void> {
 	const runtime = createRuntime({
 		storage,
 		transport: inProcessTransport(),
+		execution: piExecution(),
 		limits: { lease: { ttl: 5_000, deadline: 120_000 }, activation: { backoff: () => 0 } },
 	});
 	const room = await resumeRoom(name, { runtime, agents: [fast, slow] });

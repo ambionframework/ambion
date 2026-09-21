@@ -7,9 +7,12 @@
  *
  *   node child.ts <dir> <name> <delay-ms> <storage>
  */
+
+import { piExecution } from '../../../pi/src/index.ts';
 import { createRuntime, startRoom } from '../../src/index.ts';
-import { scripted, settled } from '../../src/testing.ts';
 import { assistant, colleague, priya, product, questions, sam, slowly, TIMING } from './cast.ts';
+import { waitForRoom } from './room.ts';
+import { scripted } from './scripted.ts';
 import { childStorage, tappedJournals } from './storage.ts';
 
 const [dir, name, delay, storage] = process.argv.slice(2);
@@ -30,20 +33,20 @@ const session = await startRoom({
 	summary: assistant.name,
 	seats: { [product.name]: 'broadcast', [colleague.name]: 'broadcast', [assistant.name]: 'none' },
 	agents: [product, colleague, assistant],
-	stream: scripted(slowly(Number(delay ?? 40))),
+	execution: piExecution({ stream: scripted(slowly(Number(delay ?? 40))) }),
 });
 
 const [first, second, third] = questions;
 if (first === undefined || second === undefined || third === undefined) throw new Error('cast');
 const hers = await session.visit(priya);
 await hers.send({ text: first.text, key: first.key });
-await settled(session);
+await waitForRoom(session);
 await hers.leave();
 const his = await session.visit(sam);
 await his.send({ text: second.text, key: second.key });
-await settled(session);
+await waitForRoom(session);
 await his.send({ text: third.text, key: third.key, to: third.to });
-await settled(session);
+await waitForRoom(session);
 process.stdout.write('done\n');
 // The process ends without a stop: what the journal holds is what a crash leaves.
 process.exit(0);

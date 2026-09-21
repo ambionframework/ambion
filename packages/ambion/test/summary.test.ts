@@ -1,8 +1,9 @@
+import { piSessions } from '@ambionframework/pi-journal';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it } from 'vitest';
+import { pi, piExecution, seatSessionId } from '../../pi/src/index.ts';
 import { renderRecord } from '../src/execution/render.ts';
-import { hostingOf, seatSessionId } from '../src/hosting.ts';
 import type { AgentDefinition } from '../src/index.ts';
 import {
 	createRuntime,
@@ -11,37 +12,39 @@ import {
 	defineTool,
 	isSpoken,
 	type Message,
-	pi,
 	type Room,
 	type RoomNotification,
 	type Runtime,
 	type SummaryMessage,
 	startRoom,
 } from '../src/index.ts';
-import {
-	byAgent,
-	fakeClock,
-	isClosing,
-	quiet,
-	type Script,
-	scripted,
-	settled,
-	speak,
-} from '../src/testing.ts';
+import { fakeClock } from '../src/testing.ts';
 import {
 	assistantEnded,
 	closedExchange,
 	collect,
 	currentExchange,
 	deferred,
-	exchangeClosed,
 	messageBefore,
 	messagesOf,
 	roomName as name,
 	participantsOf,
 	tick,
+	waitForRoom,
 } from './support/room.ts';
-import { contextText, insists, seat, summarise, toolNames } from './support/scripted.ts';
+import {
+	byAgent,
+	contextText,
+	insists,
+	isClosing,
+	quiet,
+	type Script,
+	scripted,
+	seat,
+	speak,
+	summarise,
+	toolNames,
+} from './support/scripted.ts';
 import { gatedJournals, memory } from './support/storage.ts';
 
 /** The ordinary assistant: it writes once, then ends its activation. */
@@ -128,7 +131,7 @@ async function open(options: {
 			[(options.assistant ?? assistant).name]:
 				options.seats?.[(options.assistant ?? assistant).name] ?? 'none',
 		},
-		stream: scripted(options.script),
+		execution: piExecution({ stream: scripted(options.script) }),
 		runtime: options.runtime ?? runtime,
 	});
 	started.push(session);
@@ -151,8 +154,8 @@ function nextSummary(session: Room): Promise<SummaryMessage> {
 }
 
 /** Quiet: no seat is taking an activation, and the assistant owes nobody a message. */
-async function quiescent(session: Room): Promise<void> {
-	await settled(session);
+function quiescent(session: Room): Promise<void> {
+	return waitForRoom(session);
 }
 
 const summaries = (record: Message[]) => record.filter((m) => m.kind === 'summary');
@@ -244,7 +247,7 @@ describe('closing summaries', () => {
 		// what its person owns reaches it in the roster, so an assistant holds no copy
 		expect(contexts[0]).toContain('Project manager. Owns the programme.');
 		// and it is addressed as the assistant it is, not as a seat that speaks
-		expect(prompts[0]).toContain("'assistant', an agent seated in the room");
+		expect(prompts[0]).toContain("You are 'assistant'.");
 		expect(prompts[0]).toContain('using the say tool');
 		expect(prompts[0]).not.toContain('Speaking is the say tool');
 		// it is told whom it writes for, and how that person reads
@@ -310,8 +313,8 @@ describe('closing summaries', () => {
 		expect(read).toContain('- assistant (idle, wakes for nothing said):');
 		expect(read).not.toContain('brings');
 		// a record that holds a summary tells its seats how to read a fold; one that does not, does not
-		expect(prompts[0]).not.toContain('summarised for <name> below');
-		expect(prompts.at(-1)).toContain('summarised for <name> below');
+		expect(contexts[0]).not.toContain('summarised for <name> below');
+		expect(contexts.at(-1)).toContain('summarised for <name> below');
 		// the record keeps every message, and nothing was rewritten
 		expect(said(await messagesOf(session))).toContain(
 			'Thursday is out: the inspector needs 48h notice.',
@@ -362,13 +365,13 @@ describe('closing summaries', () => {
 
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'Can I tell the client Thursday?' });
-		await exchangeClosed(session);
+		await waitForRoom(session, 'settled');
 		// the assistant has read its range and is drafting against it
 		await tick();
 
 		const written = nextSummary(session);
 		await visit.send({ text: 'And the pump?' });
-		await exchangeClosed(session);
+		await waitForRoom(session, 'settled');
 		held.resolve();
 		const summary = await written;
 		await quiescent(session);
@@ -411,7 +414,7 @@ describe('closing summaries', () => {
 
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'Can I tell the client Thursday?' });
-		await exchangeClosed(session);
+		await waitForRoom(session, 'settled');
 		await tick();
 
 		// two arrivals move the record under the assistant, and wake nobody
@@ -488,7 +491,7 @@ describe('closing summaries', () => {
 		// a failed activation leaves the summary owed; an arrival is not the backoff passing
 		const written = nextSummary(session);
 		await session.visit(sam);
-		await exchangeClosed(session);
+		await waitForRoom(session, 'settled');
 		expect(summaries(await messagesOf(session))).toHaveLength(0);
 		// the room's own alarm writes it, once the backoff has passed
 		await clock.advance(30_000);
@@ -613,11 +616,11 @@ describe('closing summaries', () => {
 		const hers = await session.visit(priya);
 		const his = await session.visit(sam);
 		await hers.send({ text: 'Can I tell the client Thursday?' });
-		await exchangeClosed(session);
+		await waitForRoom(session, 'settled');
 		await tick();
 		// the assistant is drafting for priya; sam's exchange opens, runs and closes under it
 		await his.send({ text: 'What do my crews do at seven?' });
-		await exchangeClosed(session);
+		await waitForRoom(session, 'settled');
 		held.resolve();
 		await quiescent(session);
 
@@ -656,7 +659,7 @@ describe('closing summaries', () => {
 		const seatSession = (await participantsOf(session)).find((value) => value.name === 'assistant');
 		if (seatSession?.kind !== 'agent') throw new Error('The assistant seat is absent.');
 		const entries = await (
-			await hostingOf(transcriptRuntime).transcripts.open(
+			await piSessions(transcriptRuntime.storage).open(
 				seatSessionId(session.name, seatSession.name),
 			)
 		).findEntries();
@@ -683,7 +686,7 @@ describe('closing summaries', () => {
 	it('is seated when the room starts, and an agent-only room never activates it', async () => {
 		const session = await open({ script: byAgent({ product: () => speak('working alone') }) });
 		const events = collect(session);
-		await settled(session);
+		await waitForRoom(session);
 		await quiescent(session);
 
 		const seat = (await participantsOf(session)).find((s) => s.name === 'assistant');
@@ -780,7 +783,7 @@ describe('closing summaries', () => {
 		// exchange remains durable, but its response rejects as failed.
 		await clock.advance(30_000);
 		await clock.advance(60_000);
-		await settled(session);
+		await waitForRoom(session);
 		expect(events.filter((e) => e.type === 'abandoned')).toHaveLength(1);
 		expect(summaries(await messagesOf(session))).toHaveLength(0);
 		await expect(exchange.waitForSummary()).rejects.toThrow(/interrupted/i);
@@ -801,7 +804,7 @@ describe('closing summaries', () => {
 		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
 		await drafting.promise;
 		await session.abort();
-		await settled(session);
+		await waitForRoom(session);
 		expect(summaries(await messagesOf(session))).toHaveLength(0);
 		expect(await currentExchange(session)).toBeUndefined();
 		await expect(exchange.waitForSummary()).rejects.toThrow(/interrupted/i);
@@ -832,7 +835,7 @@ describe('closing summaries', () => {
 	it('keeps the designated assistant apart from people', async () => {
 		const session = await open({ script: byAgent({}) });
 		await session.visit(priya);
-		await settled(session);
+		await waitForRoom(session);
 
 		const seats = await participantsOf(session);
 		expect(seats.find((s) => s.name === 'assistant')).toMatchObject({
@@ -1161,7 +1164,9 @@ describe('a room without a summary writer', () => {
 			name: roomName(),
 			agents: [product],
 			runtime,
-			stream: scripted(byAgent({ product: insists('Thursday is out.') })),
+			execution: piExecution({
+				stream: scripted(byAgent({ product: insists('Thursday is out.') })),
+			}),
 		});
 		const events = collect(session);
 

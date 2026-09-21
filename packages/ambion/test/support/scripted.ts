@@ -1,28 +1,28 @@
 import type { Context } from '@earendil-works/pi-ai';
-import { callTool, quiet, type Script, speak } from '../../src/testing.ts';
+import {
+	contextText,
+	quiet,
+	type Script,
+	speak,
+	toolResultTexts,
+} from '../../../pi/src/testing.ts';
+
+export {
+	byAgent,
+	callTool,
+	contextText,
+	isClosing,
+	quiet,
+	type Script,
+	scripted,
+	seat,
+	speak,
+	toolNames,
+	toolResultTexts,
+} from '../../../pi/src/testing.ts';
 
 // Closing publications use the same model tool as ordinary speech.
 export const summarise = (text: string) => speak(text);
-
-export const seat = (name: string) => callTool('seat', { name });
-
-/** Everything the model was shown below the system prompt, as one string. */
-export function contextText(context: Context): string {
-	return context.messages
-		.map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
-		.join('\n');
-}
-
-export const toolNames = (context: Context) => (context.tools ?? []).map((tool) => tool.name);
-
-/** Every tool result the model has been shown so far, as text, oldest first. */
-export function toolResultTexts(context: Context): string[] {
-	return context.messages.flatMap((message) =>
-		message.role === 'toolResult'
-			? [message.content.map((c) => (c.type === 'text' ? c.text : '')).join('')]
-			: [],
-	);
-}
 
 /**
  * A seat that answers the last question a person asked, once. A question

@@ -3,6 +3,7 @@
  * exchange by its opening message and retry a delivery by its durable key.
  */
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
@@ -10,14 +11,14 @@ import {
 	defineHuman,
 	isSpoken,
 	type Message,
-	pi,
 	type Room,
 	readRoom,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock, quiet, scripted, settled } from '../src/testing.ts';
-import { deferred, messagesOf, participantsOf, roomName } from './support/room.ts';
+import { fakeClock } from '../src/testing.ts';
+import { deferred, messagesOf, participantsOf, roomName, waitForRoom } from './support/room.ts';
+import { quiet, scripted } from './support/scripted.ts';
 import { gatedJournals, storages } from './support/storage.ts';
 
 const watcher = defineAgent({
@@ -58,7 +59,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			agents: [watcher],
 			seats: { [watcher.name]: 'none' },
 			runtime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			await first.visit(priya);
@@ -76,7 +77,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			const resumed = await resumeRoom(name, {
 				agents: [watcher],
 				runtime: createRuntime({ clock, storage: opened.storage }),
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			try {
 				expect(
@@ -126,7 +127,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			name,
 			agents: [],
 			runtime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			const visit = await first.visit(priya);
@@ -141,7 +142,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			const resumed = await resumeRoom(name, {
 				agents: [],
 				runtime: createRuntime({ clock, storage: opened.storage }),
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			try {
 				const reconnected = await resumed.visit(priya);
@@ -235,9 +236,11 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 				agents: [watcher],
 				seats: { [watcher.name]: 'broadcast' },
 				runtime: firstRuntime,
-				stream: scripted(async (_context, _agent, call) => {
-					if (call === 1) await held.promise;
-					return quiet();
+				execution: piExecution({
+					stream: scripted(async (_context, _agent, call) => {
+						if (call === 1) await held.promise;
+						return quiet();
+					}),
 				}),
 			});
 			let resumed: Room | undefined;
@@ -262,7 +265,7 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 					resumed = await resumeRoom(name, {
 						agents: [watcher],
 						runtime: secondRuntime,
-						stream: scripted(() => quiet()),
+						execution: piExecution({ stream: scripted(() => quiet()) }),
 					});
 					await expect(visit.leave()).rejects.toThrow(/superseded|stopped/i);
 				}
@@ -279,14 +282,14 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 							storage: opened.storage,
 							limits: { lease: { ttl: 60_000 }, delivery: { resend: 5_000 } },
 						}),
-						stream: scripted(() => quiet()),
+						execution: piExecution({ stream: scripted(() => quiet()) }),
 					});
 				}
 				const recovered = resumed.exchange(exchange.from);
 				expect(recovered).toBeDefined();
 				await clock.advance(60_000);
 				await clock.advance(30_000);
-				await settled(resumed);
+				await waitForRoom(resumed);
 				expect(await recovered?.waitForClose()).toEqual(expect.any(Array));
 				expect((await messagesOf(resumed)).filter(isSpoken)).toHaveLength(1);
 			} finally {

@@ -14,6 +14,7 @@ packages/
   cli/          ambion binary and project generator
   cloudflare/   Durable Object adapter
   journal/      append-only journal storage
+  pi/           Pi executor: pi(), piExecution(), and the seat transcript audit
   pi-journal/   Pi session persistence over journal storage
   workspace/    filesystem resource and tool bundles
 examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
@@ -23,16 +24,17 @@ planning/       the plan, the backlog, the rules to write, and dated evidence
 .github/        CI, live, and release workflows
 ```
 
-The seven `packages/*` entries are publishable and share a lockstep version.
+The eight `packages/*` entries are publishable and share a lockstep version.
 Examples are private. The package graph is:
 
 ```text
-ambion ──▶ journal, pi-journal
+ambion ──▶ journal
+pi ──▶ ambion, journal, pi-journal
 pi-journal ──▶ journal
 cli ──▶ ambion
-cloudflare ──▶ ambion, journal
+cloudflare ──▶ ambion, journal, pi
 workspace ──▶ ambion
-assistant ──▶ ambion
+assistant ──▶ ambion, pi
 ```
 
 Internal dependencies use `workspace:*`; pnpm rewrites them to the release
@@ -47,16 +49,20 @@ The core has four published entries:
 - `@ambionframework/ambion` for hosts.
 - `@ambionframework/ambion/hosting` for a room and seat separated by a wire.
 - `@ambionframework/ambion/conformance` for the transport suite.
-- `@ambionframework/ambion/testing` for the deterministic stream, clock, and
-  wait that a test needs.
+- `@ambionframework/ambion/testing` for the scripted executor, `settled`, and
+  `fakeClock`. It imports no model library. `@ambionframework/pi/testing`
+  holds the scripted Pi stream.
 
 The core imports no platform modules. Workspace filesystem code owns Node
 dependencies; Cloudflare code owns Durable Object integration.
 
-The core separates collaboration from execution. `room-host.ts` coordinates
-the journal and pure decisions under `room/`. `execution/` owns Pi services
-and agent runners. `room.ts` composes both behind the public facade.
-`testing/` reads the vocabulary and the public room types only.
+The core separates collaboration from execution. `room-host/` coordinates
+the journal and pure decisions under `room/`. Its `room.ts` holds the state
+and the phases. `people.ts`, `dispatch.ts`, `waits.ts`, and `control.ts` hold one
+mechanism each. `execution/` owns the agent
+runner, the executor contract, and rendering. It imports no model library:
+`@ambionframework/pi` holds Pi and depends on the core. `room.ts` composes
+both behind the public facade.
 `biome.jsonc` enforces these import boundaries.
 
 ## 2. Toolchain choices

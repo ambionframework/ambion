@@ -6,20 +6,18 @@
  * needed to resume a room; executable definitions are supplied for each run.
  */
 
-export type {
-	DefineAgentOptions,
-	DefineHumanOptions,
-	DefineToolOptions,
-	PiOptions,
-} from './define.ts';
-export { defineAgent, defineHuman, defineTool, fromPiTool, pi } from './define.ts';
+export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
+export { defineAgent, defineHuman, defineTool } from './define.ts';
 export type { AmbionErrorCode } from './errors.ts';
 export { AmbionError } from './errors.ts';
-export type { CreateRuntimeOptions, Runtime } from './host/runtime.ts';
+export { DEFAULT_GUIDANCE } from './execution/render.ts';
+export type { CreateRuntimeOptions, Execution, Runtime } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, systemClock } from './host/runtime.ts';
 export type { RoomUri } from './refs.ts';
 export { exchangeUri, parseRoomUri, roomUri } from './refs.ts';
 export type {
+	ActivationPass,
+	ActivationRead,
 	ExchangeHandle,
 	ExchangeRead,
 	ReadRoomOptions,
@@ -29,8 +27,9 @@ export type {
 	StartRoomOptions,
 	Visit,
 } from './room.ts';
-export { readExchange, readRoom, resumeRoom, startRoom } from './room.ts';
+export { readActivation, readExchange, readRoom, resumeRoom, startRoom } from './room.ts';
 export type {
+	ActivationOutcome,
 	AgentDefinition,
 	AgentExecutor,
 	AgentParticipantInfo,
@@ -38,15 +37,14 @@ export type {
 	Attention,
 	Clock,
 	ClosedExchange,
+	ExchangeActivation,
 	ExchangeRef,
 	ExchangeView,
 	ExecutionEvent,
 	HumanDefinition,
 	HumanParticipantInfo,
 	Message,
-	ModelResolver,
 	ParticipantInfo,
-	PiExecutor,
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,
@@ -61,6 +59,9 @@ export type {
 	SummaryOutcome,
 	ToolBundle,
 	ToolContext,
+	ToolExecutionMode,
+	ToolResult,
+	ToolUpdate,
 	TracePolicy,
 	TraceStep,
 	Usage,

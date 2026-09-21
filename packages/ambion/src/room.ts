@@ -1,11 +1,16 @@
 /** Public room facade that composes collaboration and execution services. */
 
-import type { StreamFn } from '@earendil-works/pi-agent-core';
-import { assertRoomName, captureAgent } from './define.ts';
+import { decodeActivationId } from './activation-id.ts';
+import { assertRoomName, captureAgent, DEFAULT_TRACE } from './define.ts';
 import { AmbionError } from './errors.ts';
-import { composeExecution } from './execution/compose.ts';
+import type { Executor } from './execution/executor.ts';
+import { inProcessTransport } from './execution/runner.ts';
+import { readTrace, traceOpener } from './execution/trace.ts';
 import {
 	defaultRuntime,
+	type Execution,
+	type ExecutionConnector,
+	executionHostOf,
 	hostingOf,
 	type Runtime,
 	registeredRoom,
@@ -18,7 +23,7 @@ import { discussionMessages } from './room/exchange.ts';
 import { foldRoom } from './room/fold.ts';
 import type { MessageSelection } from './room/read.ts';
 import { captureMessageSelection, readView } from './room/read.ts';
-import { type CompositionDraft, type Room, RoomHost } from './room-host.ts';
+import { type CompositionDraft, type Room, RoomHost } from './room-host/room.ts';
 import type {
 	AgentDefinition,
 	Attention,
@@ -27,9 +32,10 @@ import type {
 	RoomRead,
 	SeatOptions,
 	Seq,
+	TraceStep,
 } from './types.ts';
 
-export type { ExchangeHandle, Room, RoomRead, Visit } from './room-host.ts';
+export type { ExchangeHandle, Room, RoomRead, Visit } from './room-host/room.ts';
 
 export interface StartRoomOptions {
 	/** The room name shared by all runs over its journal. */
@@ -44,8 +50,8 @@ export interface StartRoomOptions {
 	summary?: string;
 	/** Public context that states what the room is for. */
 	goal?: string;
-	/** A room specific model stream override. */
-	stream?: StreamFn;
+	/** The execution for this room, such as `piExecution()`. Defaults to the runtime's. */
+	execution?: Execution;
 	/** The runtime that owns storage and lifecycle. Defaults to `defaultRuntime`. */
 	runtime?: Runtime;
 }
@@ -62,8 +68,70 @@ export interface ResumeRoomOptions {
 	agents: readonly AgentDefinition[];
 	/** The runtime that owns the room journal. */
 	runtime?: Runtime;
-	/** A room specific model stream override. */
-	stream?: StreamFn;
+	/** The execution for this room, such as `piExecution()`. Defaults to the runtime's. */
+	execution?: Execution;
+}
+
+/**
+ * The connector for one room: its own execution, else the runtime's, else
+ * one whose seats fail when the room wakes them. A room with no execution
+ * still runs its people, its record, and any transport it was given.
+ */
+function connectorFor(runtime: Runtime, own: Execution | undefined): ExecutionConnector {
+	const host = executionHostOf(runtime);
+	const execution = own ?? hostingOf(runtime).execution;
+	if (execution !== undefined) return execution.connector(host);
+	const transport = host.transport ?? inProcessTransport();
+	return {
+		connect(room, request) {
+			return transport.connect(room, {
+				clock: host.clock,
+				call: host.limits.call,
+				definition: request.definition,
+				room: request.room,
+				seat: request.seat,
+				executor: missingExecutor(request.seat),
+				emit: request.emit,
+				trace: traceOpener({
+					room: request.room,
+					agent: request.seat,
+					traces: hostingOf(runtime).traces,
+					limits: host.limits.trace,
+					policy: request.definition.trace ?? DEFAULT_TRACE,
+					emit: request.emit,
+					now: () => host.clock.now(),
+				}),
+			});
+		},
+	};
+}
+
+/** The executor of a room that has none: each activation fails at once, and a retry cannot fix it. */
+function missingExecutor(seat: string): Executor {
+	return {
+		open(activation) {
+			const error = new AmbionError(
+				'no_execution',
+				'The room has no execution. Pass `execution`, such as `piExecution()` from @ambionframework/pi, to startRoom or createRuntime.',
+			);
+			return {
+				readThrough: 0,
+				cancelled: false,
+				async pass() {
+					activation.emit({
+						type: 'error',
+						agent: seat,
+						activation: activation.id,
+						error,
+						cause: 'permanent',
+					});
+					return { failed: true, cause: 'permanent' };
+				},
+				shouldRefresh: () => false,
+				abort() {},
+			};
+		},
+	};
 }
 
 export async function startRoom(options: StartRoomOptions): Promise<Room> {
@@ -74,7 +142,7 @@ export async function startRoom(options: StartRoomOptions): Promise<Room> {
 		options.name,
 		roomRuntime(runtime, options.name),
 		composeFrom(options),
-		composeExecution(runtime, options.stream),
+		connectorFor(runtime, options.execution),
 	);
 	registerRoom(runtime, room);
 	try {
@@ -94,7 +162,7 @@ export async function resumeRoom(name: string, options: ResumeRoomOptions): Prom
 		name,
 		roomRuntime(runtime, name),
 		definitionsOf(options.agents),
-		composeExecution(runtime, options.stream),
+		connectorFor(runtime, options.execution),
 	);
 	registerRoom(runtime, room);
 	try {
@@ -153,6 +221,51 @@ export async function readExchange(
 		messages: discussionMessages(snapshot.messages, from, through),
 		watermark: snapshot.watermark,
 	};
+}
+
+/** One pass of an activation: what it read and the steps it took. */
+export interface ActivationPass {
+	readonly pass: number;
+	/** Whether the pass read the whole view or only what changed. */
+	readonly input: 'view' | 'delta';
+	/** The last seq the pass read. */
+	readonly through: Seq;
+	readonly steps: readonly TraceStep[];
+}
+
+/** What the trace journal holds of one activation. */
+export interface ActivationRead {
+	readonly activation: string;
+	readonly passes: readonly ActivationPass[];
+}
+
+/**
+ * Read the trace of one activation without starting a room and without
+ * waiting. A running activation returns the steps written so far. A
+ * malformed id returns nothing. An activation without a trace returns no
+ * passes.
+ */
+export async function readActivation(
+	name: string,
+	activation: string,
+	options: { runtime?: Runtime } = {},
+): Promise<ActivationRead | undefined> {
+	assertRoomName(name);
+	if (decodeActivationId(activation) === undefined) return undefined;
+	const runtime = options.runtime ?? defaultRuntime();
+	const steps = await readTrace(hostingOf(runtime).traces, name, activation);
+	return { activation, passes: passesOf(steps) };
+}
+
+/** Group steps, already in pass and index order, into passes. A `pass` step opens each one. */
+function passesOf(steps: readonly TraceStep[]): ActivationPass[] {
+	const passes: { pass: number; input: 'view' | 'delta'; through: Seq; steps: TraceStep[] }[] = [];
+	for (const step of steps) {
+		if (step.type === 'pass')
+			passes.push({ pass: step.pass, input: step.input, through: step.through, steps: [] });
+		passes.at(-1)?.steps.push(step);
+	}
+	return passes;
 }
 
 function assertFree(runtime: Runtime, name: string): void {

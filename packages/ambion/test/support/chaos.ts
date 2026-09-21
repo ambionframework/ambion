@@ -17,6 +17,7 @@ import { messagesOf, participantsOf } from './room.ts';
 
 import type { JournalOpener } from '@ambionframework/journal';
 import { expect } from 'vitest';
+import { piExecution } from '../../../pi/src/index.ts';
 import { hostingOf, inProcessTransport } from '../../src/hosting.ts';
 import {
 	createRuntime,
@@ -33,7 +34,7 @@ import {
 } from '../../src/index.ts';
 import type { LeaseChange } from '../../src/journal/events.ts';
 import { foldLeases, isLive } from '../../src/room/lease.ts';
-import { type FakeClock, fakeClock, scripted } from '../../src/testing.ts';
+import { type FakeClock, fakeClock } from '../../src/testing.ts';
 import {
 	agents,
 	assistant,
@@ -48,6 +49,7 @@ import {
 } from './cast.ts';
 import { invariants } from './invariants.ts';
 import { currentExchange, runningLeases, stateOf, storedOf } from './room.ts';
+import { scripted } from './scripted.ts';
 import { type FailMode, type OpenedStorage, tappedJournals } from './storage.ts';
 import { serializing } from './transport.ts';
 
@@ -216,7 +218,7 @@ export class World {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			stream: scripted(this.cast.script),
+			execution: piExecution({ stream: scripted(this.cast.script) }),
 		});
 		this.watch();
 	}
@@ -233,7 +235,7 @@ export class World {
 			this.session = await resumeRoom(this.name, {
 				runtime: this.runtime,
 				agents,
-				stream: scripted(this.cast.script),
+				execution: piExecution({ stream: scripted(this.cast.script) }),
 			});
 		} catch (error) {
 			if (!/no composition/.test(String(error))) throw error;

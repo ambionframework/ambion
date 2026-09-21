@@ -1,15 +1,8 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { type AgentPort, hostingOf, runningRoom, type Wake } from '../src/hosting.ts';
-import {
-	createRuntime,
-	defineAgent,
-	defineHuman,
-	pi,
-	resumeRoom,
-	startRoom,
-} from '../src/index.ts';
-import { isClosing, quiet, scripted, settled, speak } from '../src/testing.ts';
+import { createRuntime, defineAgent, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
 import {
 	deferred,
 	messagesOf,
@@ -17,7 +10,9 @@ import {
 	roomName,
 	stateOf,
 	storedOf,
+	waitForRoom,
 } from './support/room.ts';
+import { isClosing, quiet, scripted, speak } from './support/scripted.ts';
 import {
 	faultyJournals,
 	gatedJournals,
@@ -70,7 +65,7 @@ describe.each(storages)('stop recovery after an unread claim on $name storage', 
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			const visit = await room.visit(person);
@@ -91,7 +86,7 @@ describe.each(storages)('stop recovery after an unread claim on $name storage', 
 			const resumed = await resumeRoom(name, {
 				runtime,
 				agents: [worker],
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			try {
 				await resumed.reconcile();
@@ -176,7 +171,7 @@ it('does not retry an expired activation after an acknowledged stop and resume',
 		agents: [worker],
 		seats: { [worker.name]: 'named' },
 		runtime,
-		stream: stream,
+		execution: piExecution({ stream: stream }),
 	});
 	try {
 		const visit = await room.visit(person);
@@ -185,7 +180,11 @@ it('does not retry an expired activation after an acknowledged stop and resume',
 		time.advance(hostingOf(runtime).limits.lease.ttl + 1);
 		await room.stop();
 
-		const resumed = await resumeRoom(name, { runtime, agents: [worker], stream: stream });
+		const resumed = await resumeRoom(name, {
+			runtime,
+			agents: [worker],
+			execution: piExecution({ stream: stream }),
+		});
 		try {
 			await resumed.reconcile();
 			await new Promise<void>((resolve) => setImmediate(resolve));
@@ -236,7 +235,7 @@ describe.each(storages)('stop revocation recovery on $name storage', (storage) =
 				agents: [worker],
 				seats: { [worker.name]: 'named' },
 				runtime,
-				stream: stream,
+				execution: piExecution({ stream: stream }),
 			});
 			try {
 				const visit = await room.visit(person);
@@ -247,7 +246,11 @@ describe.each(storages)('stop revocation recovery on $name storage', (storage) =
 				faulty.fail(false);
 				await room.stop();
 
-				const resumed = await resumeRoom(name, { runtime, agents: [worker], stream: stream });
+				const resumed = await resumeRoom(name, {
+					runtime,
+					agents: [worker],
+					execution: piExecution({ stream: stream }),
+				});
 				try {
 					await resumed.reconcile();
 					await new Promise<void>((resolve) => setImmediate(resolve));
@@ -293,7 +296,7 @@ it('takes up unread steering work after a stop and resume', async () => {
 		agents: [worker],
 		seats: { [worker.name]: 'named' },
 		runtime,
-		stream: stream,
+		execution: piExecution({ stream: stream }),
 	});
 	try {
 		const visit = await room.visit(person);
@@ -310,7 +313,11 @@ it('takes up unread steering work after a stop and resume', async () => {
 		unreadable.fail(false);
 		await room.stop();
 
-		const resumed = await resumeRoom(name, { runtime, agents: [worker], stream: stream });
+		const resumed = await resumeRoom(name, {
+			runtime,
+			agents: [worker],
+			execution: piExecution({ stream: stream }),
+		});
 		try {
 			// The steering message never claimed a lease, so the resumed room wakes
 			// the seat for it. A planned stop keeps unclaimed work.
@@ -382,7 +389,7 @@ describe.each(storages)('stopped summary recovery on $name storage', (storage) =
 			agents: [worker, summary],
 			seats: { [worker.name]: 'named', [summary.name]: 'none' },
 			runtime,
-			stream: stream,
+			execution: piExecution({ stream: stream }),
 		});
 		try {
 			const visit = await room.visit(person);
@@ -394,7 +401,7 @@ describe.each(storages)('stopped summary recovery on $name storage', (storage) =
 			const resumed = await resumeRoom(name, {
 				runtime,
 				agents: [worker, summary],
-				stream: stream,
+				execution: piExecution({ stream: stream }),
 			});
 			try {
 				await resumed.reconcile();
@@ -475,9 +482,11 @@ describe.each(storages)('durable stop state on $name storage', (storage) => {
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			stream: scripted(() => {
-				started.resolve();
-				return release.promise.then(() => quiet());
+			execution: piExecution({
+				stream: scripted(() => {
+					started.resolve();
+					return release.promise.then(() => quiet());
+				}),
 			}),
 		});
 		try {
@@ -521,7 +530,7 @@ describe.each(storages)('graceful stop keeps unclaimed work on $name storage', (
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime: capturing,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		try {
 			const visit = await room.visit(person);
@@ -543,12 +552,14 @@ describe.each(storages)('graceful stop keeps unclaimed work on $name storage', (
 			const resumed = await resumeRoom(name, {
 				runtime: createRuntime({ storage: opened.storage }),
 				agents: [worker],
-				stream: scripted((_context, agent, call) =>
-					agent === worker.name && call === 1 ? speak('the answer') : quiet(),
-				),
+				execution: piExecution({
+					stream: scripted((_context, agent, call) =>
+						agent === worker.name && call === 1 ? speak('the answer') : quiet(),
+					),
+				}),
 			});
 			try {
-				await settled(resumed);
+				await waitForRoom(resumed, 'quiet');
 				const messages = await messagesOf(resumed);
 				expect(
 					messages.some(
@@ -587,13 +598,15 @@ it('fences a delayed old stop from revoking work in a newer run', async () => {
 	const newRelease = deferred();
 	const runtime = createRuntime({
 		storage,
-		stream: scripted((_context, agent) => {
-			if (agent === worker.name) {
-				oldStarted.resolve();
-				return oldRelease.promise.then(() => quiet());
-			}
-			newStarted.resolve();
-			return newRelease.promise.then(() => quiet());
+		execution: piExecution({
+			stream: scripted((_context, agent) => {
+				if (agent === worker.name) {
+					oldStarted.resolve();
+					return oldRelease.promise.then(() => quiet());
+				}
+				newStarted.resolve();
+				return newRelease.promise.then(() => quiet());
+			}),
 		}),
 		clock: noOpClock().clock,
 	});
@@ -616,12 +629,14 @@ it('fences a delayed old stop from revoking work in a newer run', async () => {
 		const newer = await resumeRoom(name, {
 			runtime,
 			agents: [worker, other],
-			stream: scripted((_context, agent) => {
-				if (agent === other.name) {
-					newStarted.resolve();
-					return newRelease.promise.then(() => quiet());
-				}
-				return quiet();
+			execution: piExecution({
+				stream: scripted((_context, agent) => {
+					if (agent === other.name) {
+						newStarted.resolve();
+						return newRelease.promise.then(() => quiet());
+					}
+					return quiet();
+				}),
 			}),
 		});
 		try {

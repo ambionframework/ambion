@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { inProcessTransport, type Steer, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	pi,
 	type Room,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { byAgent, fakeClock, quiet, scripted, settled } from '../src/testing.ts';
+import { fakeClock } from '../src/testing.ts';
 import {
 	assistant,
 	assistantEnded,
@@ -19,8 +19,9 @@ import {
 	messagesOf,
 	roomName,
 	stateOf,
+	waitForRoom,
 } from './support/room.ts';
-import { contextText, says, summarise } from './support/scripted.ts';
+import { byAgent, contextText, quiet, says, scripted, summarise } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const alpha = defineAgent({
@@ -71,18 +72,20 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			agents: [alpha, beta, assistant],
 			seats: { [assistant.name]: 'none', ...quietSeats },
 			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
-			stream: scripted(
-				byAgent({
-					alpha: async (context, _agent, call) => {
-						contexts.push(contextText(context));
-						if (call === 1) {
-							started.resolve();
-							await release.promise;
-						}
-						return quiet();
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						alpha: async (context, _agent, call) => {
+							contexts.push(contextText(context));
+							if (call === 1) {
+								started.resolve();
+								await release.promise;
+							}
+							return quiet();
+						},
+					}),
+				),
+			}),
 		});
 		const events = collect(room);
 		try {
@@ -99,7 +102,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 				[...stateOf(room).leases.values()].find((lease) => lease.phase === 'running')?.id,
 			);
 			release.resolve();
-			await settled(room);
+			await waitForRoom(room);
 			expect(contexts.slice(1).some((text) => text.includes('The requirement has changed.'))).toBe(
 				true,
 			);
@@ -132,15 +135,17 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			agents: [alpha, beta, assistant],
 			seats: { [assistant.name]: 'none', ...quietSeats },
 			runtime: firstRuntime,
-			stream: scripted(
-				byAgent({
-					alpha: async () => {
-						started.resolve();
-						await release.promise;
-						return quiet();
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						alpha: async () => {
+							started.resolve();
+							await release.promise;
+							return quiet();
+						},
+					}),
+				),
+			}),
 		});
 		let resumed: Room | undefined;
 		try {
@@ -157,20 +162,22 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			resumed = await resumeRoom(room.name, {
 				runtime: runtime(),
 				agents: [alpha, beta, assistant],
-				stream: scripted(
-					byAgent({
-						alpha: (context) => {
-							contexts.push(contextText(context));
-							return quiet();
-						},
-					}),
-				),
+				execution: piExecution({
+					stream: scripted(
+						byAgent({
+							alpha: (context) => {
+								contexts.push(contextText(context));
+								return quiet();
+							},
+						}),
+					),
+				}),
 			});
 			expect(stateOf(resumed).pending).toEqual(
 				expect.arrayContaining([expect.objectContaining({ seat: alpha.name, seq: update?.seq })]),
 			);
 			await clock.advance(1_000);
-			await settled(resumed);
+			await waitForRoom(resumed);
 			expect(contexts.some((text) => text.includes('Recover this unconsumed context.'))).toBe(true);
 			expect(stateOf(resumed).pending).toEqual([]);
 		} finally {
@@ -195,25 +202,27 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			agents: [alpha, beta, assistant],
 			seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast', [beta.name]: 'named' },
 			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
-			stream: scripted(
-				byAgent({
-					alpha: says(['First fact.', 'Second fact.']),
-					beta: async (_context, _agent, call) => {
-						if (call === 1) {
-							betaStarted.resolve();
-							await betaRelease.promise;
-						}
-						return quiet();
-					},
-					assistant: async (context, _agent, call) => {
-						contexts.push(contextText(context));
-						if (call !== 1) return quiet();
-						summaryStarted.resolve();
-						await summaryRelease.promise;
-						return summarise('First exchange result.');
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						alpha: says(['First fact.', 'Second fact.']),
+						beta: async (_context, _agent, call) => {
+							if (call === 1) {
+								betaStarted.resolve();
+								await betaRelease.promise;
+							}
+							return quiet();
+						},
+						assistant: async (context, _agent, call) => {
+							contexts.push(contextText(context));
+							if (call !== 1) return quiet();
+							summaryStarted.resolve();
+							await summaryRelease.promise;
+							return summarise('First exchange result.');
+						},
+					}),
+				),
+			}),
 		});
 		try {
 			const visit = await room.visit(priya);
@@ -236,7 +245,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 					.map((steer) => steer.seat),
 			).toEqual(['beta']);
 			betaRelease.resolve();
-			await settled(room);
+			await waitForRoom(room);
 		} finally {
 			summaryRelease.resolve();
 			betaRelease.resolve();

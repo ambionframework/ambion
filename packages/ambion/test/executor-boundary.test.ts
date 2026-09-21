@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	type AgentExecutionContext,
 	hostingOf,
@@ -7,10 +8,9 @@ import {
 	runningRoom,
 	type Transport,
 } from '../src/hosting.ts';
-import { createRuntime, defineAgent, pi, readRoom, resumeRoom, startRoom } from '../src/index.ts';
-import { isClosing, quiet, scripted, settled, speak } from '../src/testing.ts';
-import { andrei, collect, deferred, roomName, tick } from './support/room.ts';
-import { seat } from './support/scripted.ts';
+import { createRuntime, defineAgent, readRoom, resumeRoom, startRoom } from '../src/index.ts';
+import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
+import { isClosing, quiet, scripted, seat, speak } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
@@ -46,9 +46,11 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 		let defaultCalls = 0;
 		const runtime = createRuntime({
 			transport: mode === 'json' ? serializing(observed) : observed,
-			stream: scripted(() => {
-				defaultCalls += 1;
-				return quiet();
+			execution: piExecution({
+				stream: scripted(() => {
+					defaultCalls += 1;
+					return quiet();
+				}),
 			}),
 		});
 		const stream = reply('Room override.', true);
@@ -57,7 +59,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 			agents: [writer],
 			summary: writer.name,
 			runtime,
-			stream: stream,
+			execution: piExecution({ stream: stream }),
 		});
 		const events = collect(room);
 		try {
@@ -65,7 +67,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 			await expect(exchange.waitForSummary()).resolves.toMatchObject({
 				text: 'Summary: Room override.',
 			});
-			await settled(room, { timeout: 2_000 });
+			await waitForRoom(room, 'quiet', 2_000);
 			expect(defaultCalls).toBe(0);
 			expect(connections).toHaveLength(1);
 			const connection = connections[0];
@@ -147,7 +149,7 @@ describe.each(storages)('executor lifecycle on $name', (storage) => {
 			name,
 			agents: [writer],
 			runtime,
-			stream: reply('First run.'),
+			execution: piExecution({ stream: reply('First run.') }),
 		});
 		let resumed: Awaited<ReturnType<typeof resumeRoom>> | undefined;
 		try {
@@ -158,7 +160,11 @@ describe.each(storages)('executor lifecycle on $name', (storage) => {
 			await firstExchange.waitForClose();
 			hostingOf(runtime).evict(name);
 			expect(runningRoom(runtime, name)).toBeUndefined();
-			resumed = await resumeRoom(name, { agents: [writer], runtime, stream: reply('New run.') });
+			resumed = await resumeRoom(name, {
+				agents: [writer],
+				runtime,
+				execution: piExecution({ stream: reply('New run.') }),
+			});
 			const current = runningRoom(runtime, name);
 			expect(current).not.toBe(old);
 			await expect(old.view('unknown')).resolves.toEqual({ stale: 'the room is gone' });

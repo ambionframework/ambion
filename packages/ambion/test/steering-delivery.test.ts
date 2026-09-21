@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	inProcessTransport,
 	type LeaseRequest,
@@ -6,10 +7,10 @@ import {
 	type Transport,
 	type Wake,
 } from '../src/hosting.ts';
-import { createRuntime, defineAgent, defineHuman, pi, startRoom } from '../src/index.ts';
-import { byAgent, fakeClock, quiet, scripted, settled } from '../src/testing.ts';
-import { assistant, deferred, messagesOf, roomName, stateOf } from './support/room.ts';
-import { contextText } from './support/scripted.ts';
+import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
+import { fakeClock } from '../src/testing.ts';
+import { assistant, deferred, messagesOf, roomName, stateOf, waitForRoom } from './support/room.ts';
+import { byAgent, contextText, quiet, scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const alpha = defineAgent({
@@ -83,18 +84,20 @@ describe.each(storages)('messages across activation completion on $name', (stora
 				agents: [alpha, assistant],
 				seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
 				runtime: createRuntime({ storage: opened.storage, clock, transport: observed.transport }),
-				stream: scripted(
-					byAgent({
-						alpha: async (context, _agent, call) => {
-							contexts.push(contextText(context));
-							if (call === 2) {
-								nextStarted.resolve();
-								await nextRelease.promise;
-							}
-							return quiet();
-						},
-					}),
-				),
+				execution: piExecution({
+					stream: scripted(
+						byAgent({
+							alpha: async (context, _agent, call) => {
+								contexts.push(contextText(context));
+								if (call === 2) {
+									nextStarted.resolve();
+									await nextRelease.promise;
+								}
+								return quiet();
+							},
+						}),
+					),
+				}),
 			});
 			try {
 				const visit = await room.visit(priya);
@@ -117,9 +120,9 @@ describe.each(storages)('messages across activation completion on $name', (stora
 				// A delayed transport operation must not enter the later activation.
 				if (delivery === 'late') await observed.deliver[0]?.();
 				nextRelease.resolve();
-				await settled(room);
+				await waitForRoom(room);
 				if (delivery === 'late') await observed.deliver[0]?.();
-				await settled(room);
+				await waitForRoom(room);
 				expect(contexts).toHaveLength(2);
 				expect(contexts[0]).not.toContain('Keep this final correction.');
 				expect(contexts[1]?.split('Keep this final correction.')).toHaveLength(2);
@@ -147,18 +150,20 @@ describe.each(storages)('messages across activation completion on $name', (stora
 			agents: [alpha, assistant],
 			seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
 			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
-			stream: scripted(
-				byAgent({
-					alpha: async (context, _agent, call) => {
-						contexts.push(contextText(context));
-						if (call === 1) {
-							started.resolve();
-							await release.promise;
-						}
-						return quiet();
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						alpha: async (context, _agent, call) => {
+							contexts.push(contextText(context));
+							if (call === 1) {
+								started.resolve();
+								await release.promise;
+							}
+							return quiet();
+						},
+					}),
+				),
+			}),
 		});
 		try {
 			const visit = await room.visit(priya);
@@ -171,7 +176,7 @@ describe.each(storages)('messages across activation completion on $name', (stora
 			await observed.deliver[1]?.();
 			await observed.deliver[0]?.();
 			release.resolve();
-			await settled(room);
+			await waitForRoom(room);
 			expect(contexts.at(-1)).toContain('First correction.');
 			expect(contexts.at(-1)).toContain('Second correction.');
 			expect(observed.wakes).toHaveLength(1);

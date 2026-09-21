@@ -25,12 +25,15 @@
 	},
 	"dependencies": {
 		"@ambionframework/ambion": "workspace:*",
-		"@ambionframework/journal": "workspace:*"
+		"@ambionframework/journal": "workspace:*",
+		"@ambionframework/pi": "workspace:*"
 	},
 	"devDependencies": {
 		"@ambionframework/pi-journal": "workspace:*",
 		"@cloudflare/vitest-pool-workers": "^0.22.0",
 		"@cloudflare/workers-types": "^5.20260801.0",
+		"@earendil-works/pi-agent-core": "^0.85.1",
+		"@earendil-works/pi-ai": "^0.85.1",
 		"tsdown": "^0.22.14",
 		"typescript": "^7.0.2",
 		"vitest": "^4.1.11"

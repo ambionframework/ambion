@@ -74,6 +74,14 @@
 									{
 										"group": ["cloudflare:*", "node:sqlite"],
 										"message": "The core runs on any host. A platform's own modules belong to its package."
+									},
+									{
+										"group": [
+											"@earendil-works/*",
+											"@ambionframework/pi",
+											"@ambionframework/pi-journal"
+										],
+										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
 									}
 								]
 							}
@@ -91,8 +99,9 @@
 		//   room/                         every fact and every decision, pure over the journal
 		//   answers.ts                    what the room answers a seat's three calls with
 		//   tools/                        the workspace port, and the four tools over it
-		//   execution/                   the execution side of the wire and its services
-		//   testing/                     the deterministic test tools, over the vocabulary and the public room types
+		//   execution/                   the execution side of the wire: driver, contract, rendering
+		//   testing/                      the deterministic test tools, over the vocabulary and the execution contract
+		//   room-host/                    the room's state and mechanisms over the journal, split by concern
 		//   room.ts                     the room facade, which composes them all
 		//
 		// `docs/toolchain.md` §1 names the layers; each override below refuses
@@ -121,7 +130,7 @@
 											"./tools/*",
 											"./execution/*",
 											"./room.ts",
-											"./room-host.ts",
+											"./room-host/*",
 											"./index.ts",
 											"./hosting.ts"
 										],
@@ -149,9 +158,8 @@
 											"../room/*",
 											"../tools/*",
 											"../execution/runner*",
-											"../execution/compose*",
 											"../room.ts",
-											"../room-host.ts",
+											"../room-host/*",
 											"../index.ts",
 											"../hosting.ts"
 										],
@@ -181,7 +189,7 @@
 											"../tools/*",
 											"../execution/*",
 											"../room.ts",
-											"../room-host.ts",
+											"../room-host/*",
 											"../index.ts",
 											"../hosting.ts"
 										],
@@ -209,7 +217,7 @@
 											"../tools/*",
 											"../execution/*",
 											"../room.ts",
-											"../room-host.ts",
+											"../room-host/*",
 											"../index.ts",
 											"../hosting.ts",
 											"@earendil-works/pi-*",
@@ -239,7 +247,7 @@
 											"./execution/*",
 											"./host/*",
 											"./room.ts",
-											"./room-host.ts",
+											"./room-host/*",
 											"./index.ts",
 											"./hosting.ts",
 											"@earendil-works/pi-*",
@@ -269,7 +277,7 @@
 											"../room/*",
 											"../execution/*",
 											"../room.ts",
-											"../room-host.ts",
+											"../room-host/*",
 											"../index.ts",
 											"../hosting.ts"
 										],
@@ -296,7 +304,7 @@
 											"../journal/*",
 											"../room/*",
 											"../room.ts",
-											"../room-host.ts",
+											"../room-host/*",
 											"../index.ts",
 											"../hosting.ts"
 										],
@@ -326,11 +334,8 @@
 											"./room/*",
 											"./tools/*",
 											"./execution/runner*",
-											"./execution/compose*",
-											"./execution/activation*",
-											"./execution/services*",
 											"./room.ts",
-											"./room-host.ts",
+											"./room-host/*",
 											"./index.ts",
 											"./hosting.ts",
 											"@earendil-works/pi-*",
@@ -346,7 +351,8 @@
 			}
 		},
 		{
-			// The test tools read the vocabulary and the public room types.
+			// The test tools read the vocabulary, the runtime value and the execution
+			// contract. They run no room and name no model library.
 			"includes": ["packages/ambion/src/testing/**"],
 			"linter": {
 				"rules": {
@@ -359,13 +365,16 @@
 										"group": [
 											"../journal/*",
 											"../room/*",
-											"../host/*",
-											"../execution/*",
+											"../tools/*",
 											"../room.ts",
+											"../room-host/*",
 											"../index.ts",
-											"../hosting.ts"
+											"../hosting.ts",
+											"@earendil-works/*",
+											"@ambionframework/pi",
+											"@ambionframework/pi-journal"
 										],
-										"message": "The test tools read the vocabulary and the public room types, and nothing that runs a room."
+										"message": "The test tools read the vocabulary and the execution contract, run no room, and name no model library."
 									}
 								]
 							}
@@ -377,7 +386,7 @@
 		{
 			// The collaboration host uses protocol and room facts. Execution and
 			// provider services are composed by the public room facade.
-			"includes": ["packages/ambion/src/room-host.ts"],
+			"includes": ["packages/ambion/src/room-host/**"],
 			"linter": {
 				"rules": {
 					"style": {
@@ -387,10 +396,10 @@
 								"patterns": [
 									{
 										"group": [
-											"./execution/*",
-											"./room.ts",
-											"./index.ts",
-											"./hosting.ts",
+											"../execution/*",
+											"../room.ts",
+											"../index.ts",
+											"../hosting.ts",
 											"@earendil-works/pi-*",
 											"@ambionframework/pi-journal"
 										],
@@ -409,6 +418,7 @@
 			"includes": [
 				"packages/cloudflare/src/**",
 				"packages/cli/src/**",
+				"packages/pi/src/**",
 				"packages/workspace/src/**",
 				"examples/**/src/**"
 			],

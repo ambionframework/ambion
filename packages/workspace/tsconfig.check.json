@@ -13,7 +13,7 @@
 		"paths": {
 			"@ambionframework/ambion": ["../ambion/src/index.ts"],
 			"@ambionframework/ambion/hosting": ["../ambion/src/hosting.ts"],
-			"@ambionframework/ambion/testing": ["../ambion/src/testing.ts"]
+			"@ambionframework/pi": ["../pi/src/index.ts"]
 		}
 	},
 	"include": ["src", "test"]

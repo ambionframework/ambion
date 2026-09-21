@@ -4,12 +4,20 @@
  * exchange whole. An older closed exchange with no summary falls out of context.
  */
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { inProcessTransport, type RoomProtocol, type Transport } from '../src/hosting.ts';
-import { createRuntime, defineAgent, pi, startRoom } from '../src/index.ts';
-import { isClosing, quiet, type Script, scripted, settled } from '../src/testing.ts';
+import { createRuntime, defineAgent, startRoom } from '../src/index.ts';
 import { priya, sam } from './support/cast.ts';
-import { andrei, messagesOf, roomName } from './support/room.ts';
-import { answersEveryQuestion, contextText, summarise } from './support/scripted.ts';
+import { andrei, messagesOf, roomName, waitForRoom } from './support/room.ts';
+import {
+	answersEveryQuestion,
+	contextText,
+	isClosing,
+	quiet,
+	type Script,
+	scripted,
+	summarise,
+} from './support/scripted.ts';
 
 /** A page seen by the seat: the record floor it reported, and how many messages it carried. */
 interface Page {
@@ -59,13 +67,13 @@ describe('a limit windows the record', () => {
 				estimateTokens: (text) => text.length,
 			}),
 		});
-		const runtime = createRuntime({ stream: scripted(capture) });
+		const runtime = createRuntime({ execution: piExecution({ stream: scripted(capture) }) });
 		const room = await startRoom({ name: roomName('limit'), runtime, agents: [worker] });
 
 		await (await room.visit(andrei)).send({ text: 'alpha marker' });
-		await settled(room);
+		await waitForRoom(room);
 		await (await room.visit(andrei)).send({ text: 'omega marker' });
-		await settled(room);
+		await waitForRoom(room);
 
 		const answering = contexts.filter((text) => text.includes('omega marker'));
 		expect(answering.length).toBeGreaterThan(0);
@@ -91,15 +99,15 @@ describe('a limit windows the record', () => {
 			executor: pi({ instructions: 'Answer the current question.', model: 'scripted/worker' }),
 		});
 		const runtime = createRuntime({
-			stream: scripted(capture),
+			execution: piExecution({ stream: scripted(capture) }),
 			limits: { context: { messages: 1 } },
 		});
 		const room = await startRoom({ name: roomName('room-cap'), runtime, agents: [worker] });
 
 		await (await room.visit(andrei)).send({ text: 'alpha marker' });
-		await settled(room);
+		await waitForRoom(room);
 		await (await room.visit(andrei)).send({ text: 'omega marker' });
-		await settled(room);
+		await waitForRoom(room);
 
 		const answering = contexts.filter((text) => text.includes('omega marker'));
 		expect(answering.length).toBeGreaterThan(0);
@@ -124,13 +132,13 @@ describe('a limit windows the record', () => {
 		});
 		const runtime = createRuntime({
 			transport: spyTransport(pages),
-			stream: scripted(answersEveryQuestion(['andrei'])),
+			execution: piExecution({ stream: scripted(answersEveryQuestion(['andrei'])) }),
 			limits: { context: { messages: 2 } },
 		});
 		const room = await startRoom({ name: roomName('room-cap-wire'), runtime, agents: [worker] });
 		for (const text of ['one', 'two', 'three']) {
 			await (await room.visit(andrei)).send({ text });
-			await settled(room);
+			await waitForRoom(room);
 		}
 		expect(pages.length).toBeGreaterThan(0);
 		expect(pages.every((page) => page.omitted !== undefined)).toBe(true);
@@ -152,12 +160,12 @@ describe('a limit windows the record', () => {
 		});
 		const runtime = createRuntime({
 			transport: spyTransport(pages),
-			stream: scripted(answersEveryQuestion(['andrei'])),
+			execution: piExecution({ stream: scripted(answersEveryQuestion(['andrei'])) }),
 		});
 		const room = await startRoom({ name: roomName('limit-wire'), runtime, agents: [worker] });
 
 		await (await room.visit(andrei)).send({ text: 'a question' });
-		await settled(room);
+		await waitForRoom(room);
 
 		// The room served a bounded page, not the whole record: a paged response
 		// carries the record floor. Without the range reaching the room, none would.
@@ -190,11 +198,13 @@ describe('a limit windows the record', () => {
 			}),
 		});
 		const runtime = createRuntime({
-			stream: scripted((context, name, call) =>
-				name === 'scribe'
-					? scribeScript(context, name, call)
-					: answersEveryQuestion(['andrei'])(context, name, call),
-			),
+			execution: piExecution({
+				stream: scripted((context, name, call) =>
+					name === 'scribe'
+						? scribeScript(context, name, call)
+						: answersEveryQuestion(['andrei'])(context, name, call),
+				),
+			}),
 		});
 		const room = await startRoom({
 			name: roomName('limit-summary'),
@@ -206,7 +216,7 @@ describe('a limit windows the record', () => {
 
 		const exchange = await (await room.visit(andrei)).send({ text: 'opening question' });
 		await exchange.waitForClose();
-		await settled(room);
+		await waitForRoom(room);
 
 		// The closing activation reads its fixed exchange whole, so the opener line
 		// is present even though it sits past the writer's token limit. The worker
@@ -243,11 +253,13 @@ describe('a limit windows the record', () => {
 			}),
 		});
 		const runtime = createRuntime({
-			stream: scripted((context, name, call) =>
-				name === 'scribe'
-					? scribeScript(context, name, call)
-					: answersEveryQuestion(['sam', 'priya'])(context, name, call),
-			),
+			execution: piExecution({
+				stream: scripted((context, name, call) =>
+					name === 'scribe'
+						? scribeScript(context, name, call)
+						: answersEveryQuestion(['sam', 'priya'])(context, name, call),
+				),
+			}),
 		});
 		const room = await startRoom({
 			name: roomName('limit-summary-background'),
@@ -259,10 +271,10 @@ describe('a limit windows the record', () => {
 
 		const samExchange = await (await room.visit(sam)).send({ text: 'sam question' });
 		await samExchange.waitForClose();
-		await settled(room);
+		await waitForRoom(room);
 		const priyaExchange = await (await room.visit(priya)).send({ text: 'priya question' });
 		await priyaExchange.waitForClose();
-		await settled(room);
+		await waitForRoom(room);
 
 		// The pinned exchange stays whole; the earlier, unpinned one is windowed
 		// out rather than read in full alongside it.
@@ -287,7 +299,7 @@ describe('a limit windows the record', () => {
 		});
 		const runtime = createRuntime({
 			transport: spyTransport(pages),
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		// The reader starts in the reserve, so the record grows without any read.
 		const room = await startRoom({
@@ -300,13 +312,13 @@ describe('a limit windows the record', () => {
 		// More messages than one page holds (RECORD_PAGE is 64).
 		const visit = await room.visit(andrei);
 		for (let index = 0; index < 80; index += 1) await visit.send({ text: `message ${index}` });
-		await settled(room);
+		await waitForRoom(room);
 		expect(pages).toHaveLength(0);
 
 		// Seat the reader and wake it once: it reads the whole record over pages.
 		await room.seat('reader');
 		await visit.send({ text: 'wake the reader' });
-		await settled(room);
+		await waitForRoom(room);
 
 		const all = await messagesOf(room);
 		expect(all.length).toBeGreaterThan(64);

@@ -6,9 +6,10 @@
  * context tests; this file holds the one line.
  */
 import { describe, expect, it } from 'vitest';
+import { pi } from '../../pi/src/index.ts';
 import { renderActivation, renderLine, renderRecord } from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
-import { defineAgent, exchangeUri, pi, roomUri } from '../src/index.ts';
+import { defineAgent, exchangeUri, roomUri } from '../src/index.ts';
 import type { Message } from '../src/types.ts';
 
 describe('the omission line', () => {
@@ -119,8 +120,8 @@ describe('the URIs a prompt states', () => {
 			},
 		};
 		const rendered = renderActivation(view, worker);
-		expect(rendered.systemPrompt).toContain(roomUri('site'));
-		expect(rendered.systemPrompt).toContain('refs');
+		expect(rendered.context).toContain(roomUri('site'));
+		expect(rendered.agent).toContain('refs');
 		expect(rendered.context).toContain(exchangeUri('site', 4));
 	});
 
@@ -131,6 +132,8 @@ describe('the URIs a prompt states', () => {
 			context,
 		};
 		const rendered = renderActivation(view, worker);
-		expect(`${rendered.systemPrompt}${rendered.context}`).toContain(exchangeUri('site', 4));
+		expect(`${rendered.mechanism}${rendered.agent}${rendered.context}`).toContain(
+			exchangeUri('site', 4),
+		);
 	});
 });

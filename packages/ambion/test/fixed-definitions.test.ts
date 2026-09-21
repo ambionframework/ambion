@@ -1,17 +1,16 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	defineTool,
-	pi,
 	type Room,
 	readRoom,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { callTool, quiet, scripted, settled } from '../src/testing.ts';
 import {
 	crash,
 	deferred,
@@ -20,7 +19,9 @@ import {
 	roomName,
 	stateOf,
 	storedOf,
+	waitForRoom,
 } from './support/room.ts';
+import { callTool, quiet, scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const alpha = defineAgent({
@@ -52,7 +53,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 					seats: { alpha: 'broadcast' },
 					summary: 'beta',
 					runtime: createRuntime({ storage: opened.storage }),
-					stream: silent(),
+					execution: piExecution({ stream: silent() }),
 				}),
 			).rejects.toThrow(/not seated/);
 		} finally {
@@ -69,7 +70,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			seats: { alpha: 'broadcast', beta: 'none' },
 			summary: 'beta',
 			runtime,
-			stream: silent(),
+			execution: piExecution({ stream: silent() }),
 		});
 		try {
 			await room.unseat('beta');
@@ -94,13 +95,13 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			agents: [alpha, beta],
 			seats: {},
 			runtime: createRuntime({ storage: opened.storage }),
-			stream: silent(),
+			execution: piExecution({ stream: silent() }),
 		});
 		try {
 			expect(await participantsOf(room)).toEqual([]);
 			expect(stateOf(room).reserve.map((agent) => agent.name)).toEqual(['alpha', 'beta']);
 			await room.seat(beta.name, { attention: 'named' });
-			await settled(room);
+			await waitForRoom(room);
 			expect(await participantsOf(room)).toMatchObject([{ name: beta.name, attention: 'named' }]);
 			await room.seat(beta.name, { attention: 'named' });
 			expect(await participantsOf(room)).toMatchObject([{ name: beta.name, attention: 'named' }]);
@@ -123,7 +124,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			name: roomName('catalog-unknown'),
 			agents: [alpha],
 			runtime: createRuntime({ storage: opened.storage }),
-			stream: silent(),
+			execution: piExecution({ stream: silent() }),
 		});
 		try {
 			const before = await storedOf(opened.journals, room.name);
@@ -134,7 +135,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			expect(await storedOf(opened.journals, room.name)).toEqual(before);
 			const visit = await room.visit(priya);
 			await visit.send({ to: alpha.name, text: 'By name.' });
-			await settled(room);
+			await waitForRoom(room);
 			expect((await messagesOf(room)).find((message) => message.kind === 'said')).toMatchObject({
 				from: priya.name,
 				to: alpha.name,
@@ -178,9 +179,11 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			agents,
 			seats,
 			runtime: createRuntime({ storage: opened.storage }),
-			stream: scripted((context, _agent, call) => {
-				prompts.push(context.systemPrompt ?? '');
-				return call === 1 ? callTool('inspect', {}) : quiet();
+			execution: piExecution({
+				stream: scripted((context, _agent, call) => {
+					prompts.push(context.systemPrompt ?? '');
+					return call === 1 ? callTool('inspect', {}) : quiet();
+				}),
 			}),
 		});
 		try {
@@ -198,7 +201,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			person.name = 'someone-else';
 			const visit = await visiting;
 			await visit.send({ to: 'alpha', text: 'Use captured values.' });
-			await settled(room);
+			await waitForRoom(room);
 			expect(await participantsOf(room)).toEqual(
 				expect.arrayContaining([
 					expect.objectContaining({ name: 'alpha', identity: 'Original.', attention: 'named' }),
@@ -225,20 +228,20 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			agents: [alpha, beta],
 			seats: { alpha: 'named' },
 			runtime,
-			stream: silent(),
+			execution: piExecution({ stream: silent() }),
 		});
 		let resumed: Room | undefined;
 		try {
 			await room.seat(beta.name, { attention: 'none' });
-			await settled(room);
+			await waitForRoom(room);
 			await room.unseat(alpha.name);
-			await settled(room);
+			await waitForRoom(room);
 			expect(stateOf(room).reserve.map((agent) => agent.name)).toEqual(['alpha']);
 			crash(runtime, room);
 			resumed = await resumeRoom(room.name, {
 				agents: [alpha, beta, gamma],
 				runtime: createRuntime({ storage: opened.storage }),
-				stream: silent(),
+				execution: piExecution({ stream: silent() }),
 			});
 			expect(await participantsOf(resumed)).toMatchObject([{ name: 'beta', attention: 'none' }]);
 			expect(
@@ -247,7 +250,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 					.sort(),
 			).toEqual(['alpha', 'gamma']);
 			await resumed.seat('gamma', { attention: 'named' });
-			await settled(resumed);
+			await waitForRoom(resumed);
 			const read = await readRoom(room.name, {
 				runtime: createRuntime({ storage: opened.storage }),
 			});
@@ -256,7 +259,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 				resumeRoom(room.name, {
 					agents: [beta, gamma],
 					runtime: createRuntime({ storage: opened.storage }),
-					stream: silent(),
+					execution: piExecution({ stream: silent() }),
 				}),
 			).rejects.toThrow();
 			// Failed validation must not fence the current host.
@@ -277,7 +280,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			name: roomName('catalog-person-collision'),
 			agents: [alpha],
 			runtime: createRuntime({ storage: opened.storage }),
-			stream: silent(),
+			execution: piExecution({ stream: silent() }),
 		});
 		try {
 			const visit = await room.visit(priya);
@@ -286,12 +289,12 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 				resumeRoom(room.name, {
 					agents: [alpha, { ...beta, name: priya.name }],
 					runtime: createRuntime({ storage: opened.storage }),
-					stream: silent(),
+					execution: piExecution({ stream: silent() }),
 				}),
 			).rejects.toThrow(/person/);
 			expect(await storedOf(opened.journals, room.name)).toEqual(before);
 			await visit.send({ to: alpha.name, text: 'The original run still works.' });
-			await settled(room);
+			await waitForRoom(room);
 			expect((await messagesOf(room)).some((message) => message.kind === 'said')).toBe(true);
 		} finally {
 			await room.stop();
@@ -305,7 +308,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			name: roomName('catalog-competing-resume'),
 			agents: [alpha],
 			runtime: createRuntime({ storage: opened.storage }),
-			stream: silent(),
+			execution: piExecution({ stream: silent() }),
 		});
 		const entered = deferred();
 		const release = deferred();
@@ -329,13 +332,17 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 		});
 		let newer: Room | undefined;
 		try {
-			const old = resumeRoom(room.name, { agents: [alpha], runtime: delayed, stream: silent() });
+			const old = resumeRoom(room.name, {
+				agents: [alpha],
+				runtime: delayed,
+				execution: piExecution({ stream: silent() }),
+			});
 			const rejected = expect(old).rejects.toThrow(/beta/);
 			await entered.promise;
 			newer = await resumeRoom(room.name, {
 				agents: [alpha, beta],
 				runtime: createRuntime({ storage: opened.storage }),
-				stream: silent(),
+				execution: piExecution({ stream: silent() }),
 			});
 			const before = await storedOf(opened.journals, room.name);
 			release.resolve();
@@ -367,7 +374,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 						name,
 						...options,
 						runtime: createRuntime({ storage: opened.storage }),
-						stream: silent(),
+						execution: piExecution({ stream: silent() }),
 					}),
 				).rejects.toThrow();
 				expect(await storedOf(opened.journals, name)).toEqual([]);

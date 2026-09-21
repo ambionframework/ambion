@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	pi,
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
-import { scripted, settled } from '../src/testing.ts';
-import { collect, roomName } from './support/room.ts';
+import { collect, roomName, waitForRoom } from './support/room.ts';
+import { scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
 const worker = defineAgent({
@@ -37,16 +37,18 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			stream: scripted(() => {
-				calls += 1;
-				throw new Error('400 Your credit balance is too low to make this request');
+			execution: piExecution({
+				stream: scripted(() => {
+					calls += 1;
+					throw new Error('400 Your credit balance is too low to make this request');
+				}),
 			}),
 		});
 		const events = collect(room);
 		try {
 			const visit = await room.visit(person);
 			await visit.send({ to: worker.name, text: 'answer me' });
-			await settled(room);
+			await waitForRoom(room);
 			// A permanent failure does not pass on a retry, so the room runs the
 			// seat once and abandons the rest.
 			expect(calls).toBe(1);
@@ -72,17 +74,19 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			stream: scripted(() => {
-				calls += 1;
-				// The token count reads like a 400 status, but a rate limit is transient.
-				throw new Error('429 rate limit of 400,000 input tokens per minute exceeded');
+			execution: piExecution({
+				stream: scripted(() => {
+					calls += 1;
+					// The token count reads like a 400 status, but a rate limit is transient.
+					throw new Error('429 rate limit of 400,000 input tokens per minute exceeded');
+				}),
 			}),
 		});
 		const events = collect(room);
 		try {
 			const visit = await room.visit(person);
 			await visit.send({ to: worker.name, text: 'answer me' });
-			await settled(room);
+			await waitForRoom(room);
 			expect(calls).toBe(hostingOf(runtime).limits.activation.attempts);
 			expect(abandonments(events)).toEqual([
 				expect.objectContaining({ agent: worker.name, cause: 'transient' }),
@@ -105,16 +109,18 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			stream: scripted(() => {
-				calls += 1;
-				throw new Error('503 the provider is overloaded');
+			execution: piExecution({
+				stream: scripted(() => {
+					calls += 1;
+					throw new Error('503 the provider is overloaded');
+				}),
 			}),
 		});
 		const events = collect(room);
 		try {
 			const visit = await room.visit(person);
 			await visit.send({ to: worker.name, text: 'answer me' });
-			await settled(room);
+			await waitForRoom(room);
 			// A transient failure may pass, so the room retries to the cap before it
 			// gives up.
 			expect(calls).toBe(hostingOf(runtime).limits.activation.attempts);

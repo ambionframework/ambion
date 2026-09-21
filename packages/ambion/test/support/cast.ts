@@ -4,17 +4,21 @@
  * people, and three questions. No test runner is imported here, so a
  * child process runs the same scenario the tests do.
  */
+
+import { pi } from '../../../pi/src/index.ts';
 import {
 	type AgentDefinition,
 	defineAgent,
 	defineHuman,
 	type HumanDefinition,
-	pi,
 } from '../../src/index.ts';
-import { byAgent, isClosing, quiet, type Script } from '../../src/testing.ts';
 import {
 	answersEveryQuestion,
 	answersLastQuestion,
+	byAgent,
+	isClosing,
+	quiet,
+	type Script,
 	summarise,
 	toolResultTexts,
 	unanswered,

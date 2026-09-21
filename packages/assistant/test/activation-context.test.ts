@@ -1,5 +1,11 @@
-import { createRuntime, defineAgent, defineHuman, pi, startRoom } from '@ambionframework/ambion';
-import { callTool, isClosing, quiet, scripted, speak } from '@ambionframework/ambion/testing';
+import { createRuntime, defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
+import { pi, piExecution } from '@ambionframework/pi';
+import {
+	type Context,
+	createAssistantMessageEventStream,
+	fauxAssistantMessage,
+	fauxToolCall,
+} from '@earendil-works/pi-ai';
 import { expect, it } from 'vitest';
 import { defineAssistant } from '../src/index.ts';
 
@@ -21,30 +27,51 @@ interface Capture {
 async function captureActivations(attention: 'reserve' | 'named'): Promise<Capture[]> {
 	const captures: Capture[] = [];
 	let phase = 0;
-	const route = () => speak('Handle R-19 only, two sentences, no file edits.', 'writer');
-	const answer = () => speak('R-19 is unsupported email delivery. No files edited.', 'assistant');
+	const route = () =>
+		fauxToolCall('say', {
+			to: 'writer',
+			text: 'Handle R-19 only, two sentences, no file edits.',
+		});
+	const answer = () =>
+		fauxToolCall('say', {
+			to: 'assistant',
+			text: 'R-19 is unsupported email delivery. No files edited.',
+		});
 	const planned = new Map([
-		['assistant:0', attention === 'reserve' ? callTool('seat', { name: 'writer' }) : route()],
+		['assistant:0', attention === 'reserve' ? fauxToolCall('seat', { name: 'writer' }) : route()],
 		['assistant:1', route()],
 		['writer:0', answer()],
 		['writer:1', answer()],
 	]);
 	const runtime = createRuntime({
-		stream: scripted((context, agent) => {
-			const tools = context.tools?.map((tool) => tool.name) ?? [];
-			const closing = isClosing(context);
-			captures.push({
-				agent,
-				phase,
-				closing,
-				tools,
-				system: context.systemPrompt ?? '',
-				input: JSON.stringify(context.messages),
-			});
-			const key = `${agent}:${phase}`;
-			const call = closing ? speak('R-19: draft supplied; no files edited.') : planned.get(key);
-			planned.delete(key);
-			return call ?? quiet();
+		execution: piExecution({
+			stream: (model, context: Context) => {
+				const agent = model.id.endsWith('writer') ? 'writer' : 'assistant';
+				const tools = context.tools?.map((tool) => tool.name) ?? [];
+				const closing = tools.length === 1 && tools[0] === 'say';
+				captures.push({
+					agent,
+					phase,
+					closing,
+					tools,
+					system: context.systemPrompt ?? '',
+					input: JSON.stringify(context.messages),
+				});
+				const key = `${agent}:${phase}`;
+				const call = closing
+					? fauxToolCall('say', { text: 'R-19: draft supplied; no files edited.' })
+					: planned.get(key);
+				planned.delete(key);
+				const message = call
+					? fauxAssistantMessage([call], { stopReason: 'toolUse' })
+					: fauxAssistantMessage('', { stopReason: 'stop' });
+				const stream = createAssistantMessageEventStream();
+				queueMicrotask(() => {
+					stream.push({ type: 'start', partial: message });
+					stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
+				});
+				return stream;
+			},
 		}),
 	});
 	const room = await startRoom({
@@ -96,7 +123,7 @@ it.each(['reserve', 'named'] as const)(
 			expect(assistant?.tools).toEqual(expect.arrayContaining(['say', 'seat', 'unseat']));
 		}
 		for (const capture of ordinary) {
-			expect(capture.system).toContain(goal);
+			expect(capture.input).toContain(goal);
 			expect(capture.system + capture.input).not.toContain(preferences);
 		}
 		for (const capture of captures.filter((entry) => entry.agent === 'assistant')) {
@@ -114,7 +141,7 @@ it.each(['reserve', 'named'] as const)(
 		);
 		expect(renewed?.input).toContain('R-19: draft supplied; no files edited.');
 		expect(renewed?.input).toContain('An explicit later request to recheck');
-		expect(renewed?.system).toContain('summary as a recorded report');
+		expect(renewed?.input).toContain('summary as a recorded report');
 		expect(renewed?.input).toContain('Current exchange begins here');
 		expect(renewed?.input.indexOf('Current exchange begins here')).toBeGreaterThan(
 			renewed?.input.indexOf('R-19: draft supplied; no files edited.') ?? -1,

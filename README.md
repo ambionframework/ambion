@@ -74,7 +74,7 @@ the directory through the workspace tools.
 
 ```ts
 import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
-import { pi } from '@ambionframework/pi';
+import { pi, piExecution } from '@ambionframework/pi';
 import { directoryBackend, openWorkspace } from '@ambionframework/workspace';
 
 const shared = openWorkspace({ name: 'delivery', backend: directoryBackend('./shared') });
@@ -109,6 +109,7 @@ const room = await startRoom({
   agents: [inventory, scheduling],
   seats: { inventory: 'broadcast', scheduling: 'broadcast' },
   summary: 'scheduling',
+  execution: piExecution(),
 });
 
 try {
@@ -122,6 +123,10 @@ try {
   await room.stop();
 }
 ```
+
+`execution` names the executor family that runs the seats. The kernel
+imports no model library, so `piExecution()` comes from
+`@ambionframework/pi`. A room with no `execution` fails each seat it wakes.
 
 The exchange opens on the question and closes when no seat has work left.
 Both agents wake, read the directory, and speak or stay silent. A `say`
@@ -290,7 +295,7 @@ the evidence for each model.
 
 - Full history remains in storage and replay. `limits.context` bounds what
   one activation reads, and `limits.message` bounds what one message
-  carries.
+  carries. [Envelope](docs/envelope.md) lists every limit and its default.
 - Activation deadlines and retry caps impose no total exchange budget.
   Continuing contributions keep an exchange open.
 - Tools can act before a contribution commits. Applications own effect

@@ -10,25 +10,23 @@
  * `../room.test.ts` and its neighbours prove that, deterministically.
  */
 import { memoryJournals } from '@ambionframework/journal';
+import { piSessions } from '@ambionframework/pi-journal';
 import type { Usage } from '@earendil-works/pi-ai';
 import { describe } from 'vitest';
-import { hostingOf, seatSessionId } from '../../src/hosting.ts';
+import { type PiOptions, pi, piExecution, seatSessionId } from '../../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	isSpoken,
 	type Message,
-	type PiOptions,
-	pi,
 	type Room,
 	type RoomNotification,
 	type Runtime,
 	type StartRoomOptions,
 	startRoom,
 } from '../../src/index.ts';
-import { settled } from '../../src/testing.ts';
-import { collect, participantsOf, roomName } from '../support/room.ts';
+import { collect, participantsOf, roomName, waitForRoom } from '../support/room.ts';
 
 /** The model every live seat runs on. The example reads the same variable. */
 export const MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
@@ -80,7 +78,7 @@ type RoomOptions = Omit<StartRoomOptions, 'name' | 'stream' | 'runtime'>;
 
 /** A live room with explicit participants and fresh storage for its record and transcripts. */
 export async function open(prefix: string, options: RoomOptions) {
-	const runtime = createRuntime({ storage: memoryJournals() });
+	const runtime = createRuntime({ storage: memoryJournals(), execution: piExecution() });
 	const session = await startRoom({
 		...options,
 		name: roomName(prefix),
@@ -106,7 +104,7 @@ export function within<T>(promise: Promise<T>, ms: number, what: string): Promis
 export async function untilQuiet(session: Room): Promise<void> {
 	try {
 		await within(
-			settled(session, { timeout: QUIET_MS }),
+			waitForRoom(session, 'quiet', QUIET_MS),
 			QUIET_MS,
 			`'${session.name}' going quiet`,
 		);
@@ -143,7 +141,7 @@ export async function spent(runtime: Runtime, session: Room): Promise<Spent> {
 	const total: Spent = { activations: 0, tokens: 0, cost: 0 };
 	for (const info of await participantsOf(session)) {
 		if (info.kind !== 'agent') continue;
-		const seat = await hostingOf(runtime).transcripts.open(seatSessionId(session.name, info.name));
+		const seat = await piSessions(runtime.storage).open(seatSessionId(session.name, info.name));
 		for (const entry of await seat.findEntries()) add(total, entry);
 	}
 	return total;

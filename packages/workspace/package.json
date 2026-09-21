@@ -26,6 +26,10 @@
 			"types": "./dist/resource-entry.d.mts",
 			"import": "./dist/resource-entry.mjs"
 		},
+		"./sql": {
+			"types": "./dist/sql-resource.d.mts",
+			"import": "./dist/sql-resource.mjs"
+		},
 		"./package.json": "./package.json"
 	},
 	"main": "./dist/index.mjs",
@@ -49,6 +53,7 @@
 		"test:live": "vitest run --config vitest.live.config.ts"
 	},
 	"devDependencies": {
+		"@ambionframework/pi": "workspace:*",
 		"@earendil-works/pi-ai": "^0.85.1",
 		"tsdown": "^0.22.14",
 		"typebox": "^1.3.18",

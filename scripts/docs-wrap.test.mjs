@@ -20,3 +20,8 @@ test('docs/agent.md prose wraps at about 78 columns', () => {
 	const text = readFileSync(new URL('../docs/agent.md', import.meta.url), 'utf8');
 	assert.deepEqual(longProse(text), []);
 });
+
+test('docs/envelope.md prose wraps at about 78 columns', () => {
+	const text = readFileSync(new URL('../docs/envelope.md', import.meta.url), 'utf8');
+	assert.deepEqual(longProse(text), []);
+});

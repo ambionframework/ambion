@@ -8,10 +8,11 @@
  * `AMBION_CHAOS=all` widens the handover to a crash at every write.
  */
 import { describe, expect, it } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/host/runtime.ts';
 import { inProcessTransport } from '../src/hosting.ts';
 import { createRuntime, resumeRoom, startRoom } from '../src/index.ts';
-import { fakeClock, scripted, settled } from '../src/testing.ts';
+import { fakeClock } from '../src/testing.ts';
 import {
 	agents,
 	assistant,
@@ -23,7 +24,8 @@ import {
 	troubled,
 } from './support/cast.ts';
 import { World, within } from './support/chaos.ts';
-import { collect, messagesOf, roomName } from './support/room.ts';
+import { collect, messagesOf, roomName, waitForRoom } from './support/room.ts';
+import { scripted } from './support/scripted.ts';
 import { memory } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
@@ -98,25 +100,25 @@ describe('a split: two live hosts over one journal', () => {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			stream: scripted(script),
+			execution: piExecution({ stream: scripted(script) }),
 		});
 		const events = collect(room);
 		const hers = await room.visit(priya);
 		await hers.send({ text: 'First?', key: 'q1' });
-		await settled(room);
+		await waitForRoom(room);
 		// the second host takes the name while the first is alive and keeps taking questions
 		const second = host();
 		const taken = await resumeRoom(name, {
 			runtime: second,
 			agents,
-			stream: scripted(script),
+			execution: piExecution({ stream: scripted(script) }),
 		});
 		const his = await taken.visit(sam);
 		await his.send({ text: 'Second?', key: 'q2' });
-		await settled(taken);
+		await waitForRoom(taken);
 		// the first host's next write finds the fence: it is superseded, and writes nothing
 		await expect(hers.send({ text: 'Third?', key: 'q3' })).rejects.toThrow(/superseded/);
-		await settled(room);
+		await waitForRoom(room);
 		try {
 			expect(events.some((e) => e.type === 'superseded')).toBe(true);
 			expect(runningRoom(first, name)).toBeUndefined();
@@ -128,7 +130,7 @@ describe('a split: two live hosts over one journal', () => {
 			const third = await resumeRoom(name, {
 				runtime: host(),
 				agents,
-				stream: scripted(script),
+				execution: piExecution({ stream: scripted(script) }),
 			});
 			expect((await messagesOf(third)).map((m) => m.seq)).toEqual(record.map((m) => m.seq));
 			await third.stop();

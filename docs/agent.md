@@ -1,12 +1,12 @@
-# The agent
+# Definitions and tools
 
 **An agent owns its instructions, model, tools, and domain behavior.** The
 room owns the journal, membership, presence, execution authority, and exchange
 rules. `agents` supplies every executable definition for one room run.
 
-The [documentation index](README.md) links the other contracts. The
-[plan](../planning/next.md) defines the scope and records the work that
-remains.
+This page is not the entry point. Read [The room](room.md) first for the
+overview, the glossary, and the room-wide mechanisms. The
+[documentation index](README.md) links the other contracts.
 
 ## Definitions
 
@@ -37,8 +37,8 @@ model guidance. `model` names a Pi provider model. `tools` and `bundles`
 supply the agent's domain tools. `activationTokenLimit` bounds the record one
 activation reads, and `estimateTokens` counts tokens against it. Without a
 limit, an activation reads the whole record the room serves. See
-`limits.context.messages` under History and limits. The seat runs
-`estimateTokens`, so it never crosses the wire. `trace` sets what the trace
+`limits.context.messages` in [History and limits](room.md#history-and-limits).
+The seat runs `estimateTokens`, so it never crosses the wire. `trace` sets what the trace
 keeps of the agent's work; see [Steps and the trace](#steps-and-the-trace).
 
 `summary` is an optional name from `agents`. It assigns closing work to that
@@ -110,119 +110,24 @@ another absolute URI that the application chooses.
 **A refusal is typed.** The room throws `AmbionError`. Its `code` is one of
 the closed set in `errors.ts`; its message is for a person.
 
-## Rooms and membership
-
-`startRoom` writes a version 2 composition and starts the room. `seats` names
-initial members and their attention. If `seats` is omitted, every defined
-agent starts as a member with `broadcast` attention. An empty map starts all
-defined agents in the reserve.
-
-```ts
-const room = await startRoom({
-  name: 'weekly',
-  goal: 'Prepare the weekly report.',
-  agents: [researcher, editor],
-  seats: { researcher: 'broadcast', editor: 'none' },
-  summary: 'editor',
-});
-```
-
-`room.seat(name)` adds a defined agent to membership. `room.unseat(name)`
-removes a member and returns the definition to the reserve. A live activation
-may call the same operations for another agent or itself, unless the target
-seat is fixed: the summary writer's seat is fixed by default, and only the
-host can unseat it. The room refuses an unknown name and a name that belongs
-to a human visitor.
-
-See [Roster](roster.md) for membership, attention, and duplicate-operation
-semantics. Attention selects work; it does not authorize contributions. The
-room checks execution authority and consumed context at the commit boundary.
-
-## People and exchanges
-
-`defineHuman` supplies a name, identity, and optional reading preferences.
-`room.visit(human)` records arrival and returns a visit. `visit.send` records a
-question or delivery and returns an exchange handle. `visit.leave` records the
-departure.
-
-One exchange starts with a person's question and ends when the room has no
-remaining discussion work. The room records its fixed source range. Later
-messages do not change that range. `exchange.waitForClose()` returns the source
-discussion for human review. `exchange.waitForSummary()` returns the optional
-summary result. See [exchange.md](exchange.md), [presence.md](presence.md), and
-[summary.md](summary.md).
-
-## Journal authority
-
-**The journal is the authority.** A room derives membership, presence,
-activations, leases, routing, exchange boundaries, and completion by folding
-recorded entries. A host can resume the same behavior by replaying the journal.
-
-The journal records messages, membership changes, leases, exchange closes,
-composition, cancellation boundaries, and run fences. It also records the
-activation id that authorized an agent contribution. The room stamps
-provenance fields; callers cannot claim another participant's name.
-
-The room serializes accepted writes. Agents can reason concurrently. A speech
-commit carries `readThrough`, the highest message position its activation read.
-The room refuses a stale commit and returns the missed messages. Lease renewal
-extends execution time and does not acknowledge new context.
-
-An agent may finish without calling `say`. The room records the lease outcome.
-Model failure, retry exhaustion, deliberate silence, and an accepted message
-remain distinct outcomes.
-
-## Value ownership
-
-**Room reads return detached values.** Messages, participant lists, reads,
-exchange discussions, and summary responses belong to their caller. Changing
-these values cannot change the room's journal, projection, or later reads.
-Nested routing lists and summary ranges follow the same rule.
-
-**Each listener receives its own notification value.** Collaboration facts
-inside that notification are detached from the room and other listeners.
-Error notifications retain the original `Error` object, including its cause
-and provider-specific fields. Errors describe execution; they are not room facts.
-An execution event names its activation.
-
-**In-process transports have the same ownership boundary as remote calls.**
-The room captures commit and lease requests before awaiting work. Results and
-steering messages carry detached collaboration facts. A caller's later edits
-cannot change the submitted request or another executor's context.
-
-## Activation and context
-
-An activation is a bounded execution with one room grant. Its purpose is either
-to answer a message or to write a closing summary. The room derives purpose
-from the activation id and current journal state. A caller cannot construct
-authority by changing fields in a request.
-
-An ordinary activation reads the goal, participants, reserve identities, and
-the messages allowed by its context boundary. A summary activation reads
-every message through its fixed exchange, plus its recipient and that
-person's preferences. It cannot change the recipient or the exchange it
-covers.
-
-Active agents receive new eligible context between provider requests. A steer
-does not acknowledge that context. The next contribution must report what the
-activation consumed.
-
 ## Execution boundary
 
-**The host configures execution before starting the room.** A connector captures
-the model call, model resolver, transcript storage, clock, and call retry policy.
-The room supplies the captured agent definition and receives an execution port.
-It does not construct a model runner or choose execution services.
+This section moves to `executors.md` in phase 7 step 4. That page does not
+exist yet.
 
-`startRoom` and `resumeRoom` supply this composition by default. Their `stream`
-override applies to one room run. Other rooms retain their own definitions and
-model calls, including when they use the same agent names.
+**The host configures execution before starting the room.** An `Execution`
+is a value that an executor package builds, such as `piExecution()` from
+`@ambionframework/pi`. The runtime gives it the clock, the storage, the call
+retry policy, and the transport. It returns a connector. The room supplies
+the captured agent definition and receives an execution port. It does not
+construct a model runner or choose execution services.
 
-**The `/testing` entry supplies the deterministic stream.**
-`@ambionframework/ambion/testing` exports `scripted`, `byAgent`, `callTool`,
-`speak`, `quiet`, `isClosing`, `fakeClock`, and `settled`. A `Script` receives
-the context, the seat name, and the call count for that seat. `settled(room)`
-resolves when no exchange is open and every agent is idle.
+`createRuntime` takes an `execution` for every room of the runtime. `startRoom`
+and `resumeRoom` take an `execution` for one room run. Other rooms retain
+their own definitions and model calls, including when they use the same agent
+names. A room with no `execution` still runs its people and its record. Each
+seat that the room wakes fails at once with a `no_execution` error, and the
+failure is permanent.
 
 **A transport receives room calls and executor dependencies separately.**
 `Transport.connect(room, context)` receives a plain `RoomProtocol` facade with
@@ -238,10 +143,37 @@ execution dependencies where the agent runs. Only protocol data crosses RPC.
 queue, and the record window. It knows no model and no provider. For each
 activation it opens one `ExecutorSession` from `AgentExecutionContext.executor` and
 passes the windowed record to it. A session renders a prompt, runs its own
-model loop for one pass, and reports where it left off. Pi is the only
-executor Ambion ships today: `createPiExecutor` builds it from the model
-call, the model resolver, and transcript storage that `createExecutionServices`
-supplies. Both are available from `/hosting` for remote hosts.
+model loop for one pass, and reports where it left off. The first pass of an
+activation receives the whole view. Each later pass receives a `delta`: the
+fresh view and `since`, the position the session had read through.
+
+**The renderer returns three prompt parts.** `renderActivation` returns
+`mechanism`, `agent`, and `context`. Each part depends on one thing, so an
+adapter places it where it caches best.
+
+- `mechanism` depends on the kernel version only. It states how a room works.
+- `agent` depends on the definition and the purpose. It holds the name,
+  the speaking policy, the identity, and the instructions. A closing seat
+  reads its summary duties here.
+- `context` depends on the activation. It holds the clock, the room, the
+  roster, the record, and the ask line.
+
+The Pi executor sends `mechanism` and `agent` as the system prompt, and
+`context` as the first user message. `renderDelta(view, since)` renders the
+later passes: each message beyond `since` with the `[new]` prefix, or
+`undefined` when nothing is new.
+
+**A definition can replace the speaking policy.** The kernel exports
+`DEFAULT_GUIDANCE`. An executor takes a `speaking` option that replaces it.
+Tool bundle guidance stays in the `guidance` field and follows the policy.
+
+Pi is the only executor Ambion ships today. It lives in
+`@ambionframework/pi`, and the kernel imports no model library.
+`createPiExecutor` builds it from the model call, the model resolver, and the
+transcript storage that `createExecutionServices` supplies. Both are
+available from that package for remote hosts. The Pi executor builds one Pi
+`Agent` on the first pass and keeps it. A later pass prompts that agent with
+the messages that landed beyond `readThrough`.
 
 The runtime keeps lifecycle control separately. `runningRoom(runtime, name)`
 returns the same restricted room-call surface. Room decisions use the journal
@@ -255,10 +187,13 @@ their existing JSON shapes.
 Hosts use room reads and exchange handles for collaboration history.
 Executors use `ActivationView`, `CommitResult`, and `LeaseResponse`.
 `EndReason` is part of lease requests. Participant views omit `sessionId`.
-Audit consumers import `seatSessionId` from `/hosting` and supply the room
+Audit consumers import `seatSessionId` from `@ambionframework/pi` and supply the room
 and agent names.
 
 ## Steps and the trace
+
+This section moves to `executors.md` in phase 7 step 4. That page does not
+exist yet.
 
 **A step is one thing an activation did.** The step vocabulary has ten
 kinds, and every executor family shares it: `pass`, `thinking`, `text`,
@@ -309,37 +244,3 @@ merges the two by `activation`, `pass`, and `index`. In a separated host the
 trace lives in the storage of the seat, so a read across objects needs a call
 to the seat. The public read of a trace (`readActivation`) is pending release
 work and is not part of this contract yet.
-
-## History and limits
-
-Composition entries use version 2. The room rejects legacy compositions and
-does not reinterpret old assistant definitions or opening activation ids.
-Start a new journal or migrate the history outside Ambion before resuming it.
-
-The journal retains complete history. An agent that sets `activationTokenLimit`
-reads a bounded record. The seat pages the record from the tail through the seat
-call `view(activation, range)`, and it keeps the newest part that fits the
-limit, plus the open exchange whole. An older exchange falls out of context; its
-summary stands for it when one exists. An agent with no limit reads the whole
-record the room serves. The record keeps every message for human review
-either way.
-
-`limits.context.messages` caps the record at the room, for every seat and
-for every executor. The room serves the newest `messages` entries of the
-record an activation may read. The floor moves past a summarised range it
-would split. The open exchange stays whole, so a cap smaller than the open
-exchange serves the exchange in full. The view holds up to `messages` entries
-plus the open exchange. The cap counts messages; it does not count
-bytes. The default is unbounded. A seat with `activationTokenLimit`
-windows further, inside what the room serves.
-
-When a view holds less than the whole record, `context.omitted` counts the
-messages below the first one served, and the rendered record opens with one
-line: `── N earlier messages not shown ──`. The line shows for summarised and
-unsummarised history alike. The room does not record the cap. A room resumed
-under another cap serves a different view of the same record.
-
-Ambion does not promise bounded replay. The record window bounds model input,
-not the journal fold. Domain tools can act before a contribution commits; room
-freshness does not make external effects transactional. Hosts own credentials,
-process lifetime, and recovery.

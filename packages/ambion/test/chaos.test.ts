@@ -19,12 +19,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
 import { createRuntime, isPresence, type Room, resumeRoom } from '../src/index.ts';
-import { type FakeClock, fakeClock, scripted } from '../src/testing.ts';
+import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { agents, priya, type Question, questions, sam, script, TIMING } from './support/cast.ts';
 import { idle, liveLeases, outcome, World, within } from './support/chaos.ts';
 import { invariants } from './support/invariants.ts';
 import { collect, currentExchange, messagesOf, participantsOf, roomName } from './support/room.ts';
+import { scripted } from './support/scripted.ts';
 import { childJournals, childStorage, memory, type Storage, storages } from './support/storage.ts';
 
 const full = process.env.AMBION_CHAOS === 'all';
@@ -174,7 +176,7 @@ describe.each(['sqlite'])('a room killed from outside on %s', (storage) => {
 				const session = await resumeRoom(name, {
 					runtime,
 					agents,
-					stream: scripted(script),
+					execution: piExecution({ stream: scripted(script) }),
 				});
 				const events = collect(session);
 				const inheritedExchange = (await currentExchange(session)) !== undefined;

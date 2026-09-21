@@ -1,4 +1,11 @@
-import type { Room, RoomRead } from '../room-host.ts';
+import type { RoomRead } from '../types.ts';
+
+/** The part of a room `settled` reads. Every `Room` has it. */
+export interface Settleable {
+	readonly name: string;
+	read(options: { messages: false }): Promise<RoomRead>;
+	subscribe(listener: () => void): () => void;
+}
 
 export interface SettledOptions {
 	/** Real milliseconds. The default is 10 000. */
@@ -27,10 +34,7 @@ function timeoutError(room: string, read: RoomRead | undefined, timeout: number)
  * time. It never calls `reconcile()`. A test that waits on an alarm advances
  * its fake clock.
  */
-export function settled(
-	room: Pick<Room, 'name' | 'read' | 'subscribe'>,
-	options: SettledOptions = {},
-): Promise<RoomRead> {
+export function settled(room: Settleable, options: SettledOptions = {}): Promise<RoomRead> {
 	const timeout = options.timeout ?? 10_000;
 	return new Promise<RoomRead>((resolve, reject) => {
 		let last: RoomRead | undefined;

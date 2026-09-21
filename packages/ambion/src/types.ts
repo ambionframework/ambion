@@ -7,12 +7,6 @@
  */
 
 import type { Seq as RecordSeq } from '@ambionframework/journal';
-import type {
-	AgentToolResult,
-	AgentToolUpdateCallback,
-	ToolExecutionMode,
-} from '@earendil-works/pi-agent-core';
-import type { Api, Model } from '@earendil-works/pi-ai';
 import type { TSchema } from 'typebox';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
@@ -61,11 +55,44 @@ export type SummaryOutcome =
 	| { readonly status: 'silent' }
 	| { readonly status: 'failed' };
 
+/** How an activation stands: at work, or ended for a reason. */
+export type ActivationOutcome =
+	| { readonly status: 'running' }
+	| {
+			readonly status: EndReason;
+			/** Set when a cancellation ended the activation. */
+			readonly cancelled?: true;
+			/** Why the activation failed, on a failed or abandoned activation. */
+			readonly cause?: FailureCause;
+	  };
+
+/** One activation of an exchange, as the exchange read lists it. */
+export interface ExchangeActivation {
+	/** The activation id. */
+	readonly id: string;
+	readonly seat: string;
+	/** The attempt number. A retry of a wake is a new attempt. */
+	readonly attempt: number;
+	/** `respond` answers a message. `summary` writes the closing summary. */
+	readonly purpose: 'respond' | 'summary';
+	readonly outcome: ActivationOutcome;
+	/** What the activation spent, once it ended and recorded usage. */
+	readonly usage?: Usage;
+	/** The harness session of the activation. No executor records one yet. */
+	readonly session?: { readonly harness: string; readonly id: string };
+}
+
 /** A detached exchange view that can be read without starting a room. */
 export type ExchangeView =
-	| (ExchangeRef & { readonly status: 'open' })
+	| (ExchangeRef & {
+			readonly status: 'open';
+			/** Every activation since the exchange opened, in journal order. */
+			readonly activations: readonly ExchangeActivation[];
+	  })
 	| (ClosedExchange & {
 			readonly status: 'closed';
+			/** Every activation in the range, every attempt and the summary included. */
+			readonly activations: readonly ExchangeActivation[];
 			readonly summary: SummaryOutcome;
 			/** The sum of every activation in the range, the summary activation included. */
 			readonly usage?: Usage;
@@ -105,9 +132,6 @@ export interface Clock {
 	/** Arrange one call of `fire` at `at`. Returns the cancel. */
 	alarm(at: number, fire: () => void): () => void;
 }
-
-/** Resolves an agent's `provider/model-id` to the model Pi's loop runs. */
-export type ModelResolver = (id: string, agent: string) => Model<Api> | Promise<Model<Api>>;
 
 /** What a participant said. */
 export interface SpokenMessage {
@@ -449,14 +473,14 @@ export type RoomNotification = RoomEvent | ExecutionEvent;
 
 /**
  * What a tool's `execute` is handed beside its parameters: the calling agent
- * and the abort signal Pi gives the tool call.
+ * and the abort signal the executor gives the tool call.
  */
 export interface ToolContext {
 	/** Stable identity of the agent making this tool call. */
 	readonly agent: { readonly name: string; readonly identity: string };
 	readonly signal?: AbortSignal;
 	readonly callId: string;
-	readonly onUpdate?: AgentToolUpdateCallback<unknown>;
+	readonly onUpdate?: ToolUpdate;
 	/** Name of the room this call ran in. Absent for a call made outside a room. */
 	readonly room?: string;
 	/**
@@ -488,20 +512,40 @@ export interface AmbionTool {
 	readonly invoke: (
 		params: unknown,
 		ctx: ToolContext,
-	) => Promise<string | AgentToolResult<unknown>> | string | AgentToolResult<unknown>;
+	) => Promise<string | ToolResult> | string | ToolResult;
 }
 
+/** Whether an executor runs the calls of one activation in turn or together. */
+export type ToolExecutionMode = 'sequential' | 'parallel';
+
+/** What a tool hands back to the model: content it reads, and details it does not. */
+export interface ToolResult {
+	readonly content: (
+		| { readonly type: 'text'; readonly text: string }
+		| { readonly type: 'image'; readonly data: string; readonly mimeType: string }
+	)[];
+	readonly details: unknown;
+	/** Ends the activation after this result when every call of the batch sets it. */
+	readonly terminate?: boolean;
+}
+
+/** A tool's progress report while it runs. */
+export type ToolUpdate = (partial: ToolResult) => void;
+
 /**
- * An agent's Pi executor: Pi's agent loop, model, instructions, and tools.
- * Built by `pi()`. The room reads none of these fields; the Pi runner does.
+ * What an agent runs on: a family name, instructions, and tools. The room
+ * reads the fields below and no other. An executor family adds its own
+ * fields, such as a model, and reads them itself.
  */
-export interface PiExecutor {
-	readonly kind: 'pi';
+export interface AgentExecutor {
+	/** The executor family, such as `pi`. The host that composes execution resolves it. */
+	readonly kind: string;
 	readonly instructions: string;
-	readonly model: string;
 	readonly tools: readonly AmbionTool[];
 	/** Guidance composed from the agent's tool bundles. */
 	readonly guidance?: string;
+	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
+	readonly speaking?: string;
 	/**
 	 * The token limit for the record one activation reads. When set, the seat
 	 * pages the record and keeps the newest part that fits the limit, plus the
@@ -514,9 +558,6 @@ export interface PiExecutor {
 	 */
 	readonly estimateTokens?: (text: string) => number;
 }
-
-/** The executor family a definition runs on. Pi is the only one today. */
-export type AgentExecutor = PiExecutor;
 
 export interface AgentDefinition {
 	readonly name: string;

@@ -97,12 +97,14 @@ live('judgment', () => {
 		const woken = events.findIndex((e) => e.type === 'activation_start' && e.agent === 'stock');
 		expect(woken).toBeGreaterThan(asked);
 		expect(activationsOf(events.slice(0, asked), 'stock')).toBe(0);
-		expect(events).toContainEqual({
-			type: 'tool_execution_start',
-			agent: 'stock',
-			activation: expect.any(String),
-			toolName: 'stock_level',
-		});
+		expect(events).toContainEqual(
+			expect.objectContaining({
+				type: 'tool_execution_start',
+				agent: 'stock',
+				activation: expect.any(String),
+				toolName: 'stock_level',
+			}),
+		);
 		const answer = saidBy(messages, 'stock');
 		expect(answer).toHaveLength(1);
 		expect(answer[0]?.text).toContain('42');

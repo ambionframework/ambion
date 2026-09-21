@@ -1,9 +1,10 @@
-import { defineAgent, pi } from '@ambionframework/ambion';
-import { hostingOf } from '@ambionframework/ambion/hosting';
+import { defineAgent } from '@ambionframework/ambion';
 import { memoryJournals } from '@ambionframework/journal';
+import { pi } from '@ambionframework/pi';
+import { piSessions } from '@ambionframework/pi-journal';
 import { describe, expect, it } from 'vitest';
 import { configure, definitionOf, executionFor, runtimeFor } from '../src/configure.ts';
-import { stream } from './answers.ts';
+import { scripted } from './scripted.ts';
 
 const agent = (name: string) =>
 	defineAgent({
@@ -30,12 +31,13 @@ describe('configure', () => {
 	});
 
 	it('composes the configured stream and transcripts over supplied storage', async () => {
+		const stream = scripted;
 		configure({ agents: [agent('execution')], stream });
 		const storage = memoryJournals();
 		const services = executionFor({ storage });
 		const id = 'configured-execution';
 		const transcript = await services.transcripts.open(id, 'room');
-		const runtimeTranscript = await hostingOf(runtimeFor({ storage })).transcripts.open(id);
+		const runtimeTranscript = await piSessions(runtimeFor({ storage }).storage).open(id);
 
 		expect(services.stream).toBe(stream);
 		expect(await transcript.getMetadata()).toMatchObject({ id, parentSessionId: 'room' });

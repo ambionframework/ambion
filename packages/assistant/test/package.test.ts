@@ -46,10 +46,22 @@ it('keeps ordinary guidance out of closing work and preserves overrides in both'
 		instructions: 'Use the application response format.',
 	});
 	const runtime = createRuntime({
-		stream: scripted((context) => {
-			const closing = isClosing(context);
-			prompts.push({ closing, system: context.systemPrompt ?? '' });
-			return closing ? speak('Ready.') : quiet();
+		execution: piExecution({
+			stream: (_model, context) => {
+				const closing = context.tools?.length === 1;
+				prompts.push({ closing, system: context.systemPrompt ?? '' });
+				const stream = createAssistantMessageEventStream();
+				const message = closing
+					? fauxAssistantMessage([fauxToolCall('say', { text: 'Ready.' })], {
+							stopReason: 'toolUse',
+						})
+					: fauxAssistantMessage('', { stopReason: 'stop' });
+				queueMicrotask(() => {
+					stream.push({ type: 'start', partial: message });
+					stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
+				});
+				return stream;
+			},
 		}),
 	});
 	const room = await startRoom({ name: 'assistant-guidance', assistant, runtime });
@@ -69,4 +81,9 @@ it('keeps ordinary guidance out of closing work and preserves overrides in both'
 });
 
 import { createRuntime, defineHuman, startRoom } from '@ambionframework/ambion';
-import { isClosing, quiet, scripted, speak } from '@ambionframework/ambion/testing';
+import { piExecution } from '@ambionframework/pi';
+import {
+	createAssistantMessageEventStream,
+	fauxAssistantMessage,
+	fauxToolCall,
+} from '@earendil-works/pi-ai';

@@ -1,16 +1,15 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	isSpoken,
-	pi,
 	type Room,
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
-import { quiet, scripted, settled } from '../src/testing.ts';
 import { refusal } from './support/errors.ts';
 import {
 	andrei,
@@ -21,8 +20,9 @@ import {
 	messagesOf,
 	roomName as name,
 	participantsOf,
+	waitForRoom,
 } from './support/room.ts';
-import { contextText } from './support/scripted.ts';
+import { contextText, quiet, scripted } from './support/scripted.ts';
 import { type FaultyJournals, faultyJournals, memory } from './support/storage.ts';
 
 // -- a room that never speaks ------------------------------------------------
@@ -52,7 +52,7 @@ const open = (overrides: Partial<Parameters<typeof startRoom>[0]> = {}) =>
 		name: roomName(),
 		seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 		agents: [watcher, assistant],
-		stream: recording,
+		execution: piExecution({ stream: recording }),
 		...overrides,
 	});
 
@@ -83,7 +83,7 @@ const lastSystemPrompt = () => prompts.at(-1) ?? '';
 describe('presence', () => {
 	it('runs a room of agents with nobody present, and settles', async () => {
 		const session = track(await open());
-		await settled(session);
+		await waitForRoom(session);
 		expect(await messagesOf(session)).toHaveLength(0);
 		expect((await participantsOf(session)).filter((s) => s.kind === 'human')).toHaveLength(0);
 	});
@@ -92,7 +92,7 @@ describe('presence', () => {
 		const session = track(await open());
 		const seen = collect(session);
 		await session.visit(andrei);
-		await settled(session);
+		await waitForRoom(session);
 
 		expect(await kinds(session)).toEqual(['arrived']);
 		expect(seen.some((e) => e.type === 'activation_start')).toBe(false);
@@ -118,7 +118,7 @@ describe('presence', () => {
 		);
 		const seen = collect(session);
 		await session.visit(andrei);
-		await settled(session);
+		await waitForRoom(session);
 
 		const woke = seen.filter((e) => e.type === 'activation_start').map((e) => e.agent);
 		expect(woke).toEqual(['greeter']); // not watcher, not the passive seat
@@ -137,13 +137,13 @@ describe('presence', () => {
 			await held.promise;
 			return quiet();
 		});
-		const session = track(await open({ stream: holding }));
+		const session = track(await open({ execution: piExecution({ stream: holding }) }));
 		const visit = await session.visit(andrei);
 		await visit.send({ text: 'start something long' }); // watcher is now mid-activation
 		await providerStarted.promise;
 		await session.visit(mara); // arrives while it works
 		held.resolve();
-		await settled(session);
+		await waitForRoom(session);
 
 		// the arrival never woke a second activation; it landed inside the running one
 		expect(await kinds(session)).toEqual(['arrived', 'said', 'arrived']);
@@ -153,7 +153,7 @@ describe('presence', () => {
 	it('carries no text on a presence message, and stamps from the visit', async () => {
 		const session = track(await open());
 		await session.visit(andrei);
-		await settled(session);
+		await waitForRoom(session);
 
 		const arrival = (await messagesOf(session))[0];
 		expect(arrival).toMatchObject({ kind: 'arrived', from: 'andrei', subject: 'andrei' });
@@ -167,7 +167,7 @@ describe('presence', () => {
 		const two = await session.visit(mara);
 		await one.send({ text: 'from andrei' });
 		await two.send({ text: 'from mara' });
-		await settled(session);
+		await waitForRoom(session);
 
 		const said = (await messagesOf(session)).filter(isSpoken);
 		expect(said.map((m) => [m.from, m.text])).toEqual([
@@ -181,13 +181,13 @@ describe('presence', () => {
 		const seen = collect(session);
 		const terminal = await session.visit(andrei);
 		const browser = await session.visit(andrei);
-		await settled(session);
+		await waitForRoom(session);
 		expect(browser.human).toBe(terminal.human); // one person is in the room once, or not at all
 		expect(await kinds(session)).toEqual(['arrived']); // the second visit committed nothing
 		expect(await presenceOf(session, 'andrei')).toBe('present');
 
 		await terminal.leave();
-		await settled(session);
+		await waitForRoom(session);
 		expect(await presenceOf(session, 'andrei')).toBe('absent');
 		expect(await kinds(session)).toEqual(['arrived', 'left']);
 		// leaving is a message like any other, and the stream carries it
@@ -203,14 +203,14 @@ describe('presence', () => {
 			name,
 			seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [watcher, assistant],
-			stream: recording,
+			execution: piExecution({ stream: recording }),
 			runtime,
 		});
 		const visit = await first.visit(andrei);
 		await visit.send({ text: 'noting that I was here' });
-		await settled(first);
+		await waitForRoom(first);
 		await visit.leave();
-		await settled(first);
+		await waitForRoom(first);
 		expect(await presenceOf(first, 'andrei')).toBe('absent');
 		// absent, and still on the roster the agents read
 		expect(contexts.at(-1)).toContain('andrei');
@@ -221,11 +221,11 @@ describe('presence', () => {
 				name,
 				seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [watcher, assistant],
-				stream: recording,
+				execution: piExecution({ stream: recording }),
 				runtime,
 			}),
 		);
-		await settled(again); // startRoom is synchronous; the replay is awaited here
+		await waitForRoom(again); // startRoom is synchronous; the replay is awaited here
 		expect(await presenceOf(again, 'andrei')).toBe('absent');
 		expect((await participantsOf(again)).find((s) => s.name === 'andrei')?.identity).toBe(
 			andrei.identity,
@@ -248,7 +248,7 @@ describe('presence', () => {
 
 		await first.send({ text: 'before' });
 		await first.leave();
-		await settled(session);
+		await waitForRoom(session);
 		const left = (await messagesOf(session)).find((m) => m.kind === 'left');
 
 		const again = await session.visit(andrei);
@@ -257,7 +257,7 @@ describe('presence', () => {
 		expect(again.lastDeparture).toBe(left?.seq); // it does not move while they read
 
 		await again.leave();
-		await settled(session);
+		await waitForRoom(session);
 		const second = (await messagesOf(session)).filter((m) => m.kind === 'left').at(-1);
 		const back = await session.visit(andrei);
 		expect(back.lastDeparture).toBe(second?.seq); // it moves when they leave again
@@ -271,7 +271,7 @@ describe('presence', () => {
 		const left = (await messagesOf(session)).find((m) => m.kind === 'left');
 		const again = await session.visit(andrei);
 		await again.send({ text: 'two' });
-		await settled(session);
+		await waitForRoom(session);
 
 		const missed = await messagesOf(session, { since: again.lastDeparture });
 		expect(missed.map((m) => m.kind)).toEqual(['arrived', 'said']);
@@ -282,7 +282,7 @@ describe('presence', () => {
 	it('closes its visits when the run stops, without waking anybody', async () => {
 		const session = await open();
 		const visit = await session.visit(andrei);
-		await settled(session);
+		await waitForRoom(session);
 		const seen = collect(session);
 
 		await session.stop();
@@ -302,12 +302,12 @@ describe('presence', () => {
 			name,
 			seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [watcher, assistant],
-			stream: recording,
+			execution: piExecution({ stream: recording }),
 			runtime,
 		});
 		const visit = await session.visit(andrei);
 		await visit.send({ text: 'for later' });
-		await settled(session);
+		await waitForRoom(session);
 		await session.stop();
 
 		const view = await readRoom(name, { runtime });
@@ -327,15 +327,15 @@ describe('presence', () => {
 		const visit = await session.visit(andrei);
 		await visit.send({ text: 'kicking this off' });
 		await visit.leave();
-		await settled(session);
+		await waitForRoom(session);
 
 		const later = await session.visit(mara);
 		await later.send({ text: 'while andrei is away' });
-		await settled(session);
+		await waitForRoom(session);
 
 		const back = await session.visit(andrei);
 		await back.send({ text: 'what moved?' }); // quiet arrivals wake nobody
-		await settled(session);
+		await waitForRoom(session);
 		expect(back.lastDeparture).toBeDefined();
 
 		const view = contexts.at(-1) ?? '';
@@ -351,18 +351,18 @@ describe('presence', () => {
 		const withGoal = track(await open({ goal: 'Ship payments v2.' }));
 		const gv = await withGoal.visit(andrei);
 		await gv.send({ text: 'anything' }); // arrivals wake nobody, so ask
-		await settled(withGoal);
+		await waitForRoom(withGoal);
 		const prompted = lastSystemPrompt();
-		expect(prompted).toContain('This room exists to: Ship payments v2.');
+		expect(contexts.at(-1)).toContain('This room exists to: Ship payments v2.');
 		expect(prompted).toContain('Who is reading can change while you work');
 
 		prompts.length = 0;
 		const without = track(await open());
 		const wv = await without.visit(andrei);
 		await wv.send({ text: 'anything' });
-		await settled(without);
+		await waitForRoom(without);
 		const bare = lastSystemPrompt();
-		expect(bare).not.toContain('This room exists to:');
+		expect(contexts.at(-1)).not.toContain('This room exists to:');
 		// the audience paragraph is about routing, not purpose, so it needs no goal
 		expect(bare).toContain('Who is reading can change while you work');
 		expect(await kinds(without)).toEqual(['arrived', 'said']);
@@ -379,7 +379,7 @@ async function brittle(): Promise<{ session: Room; fail: FaultyJournals['fail'] 
 		name: roomName(),
 		seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 		agents: [watcher, assistant],
-		stream: recording,
+		execution: piExecution({ stream: recording }),
 		runtime,
 	});
 	return { session, fail: faulty.fail };
@@ -414,7 +414,7 @@ describe('a storage that fails', () => {
 		const { session, fail } = await brittle();
 		const events = collect(session);
 		const visit = await session.visit(andrei);
-		await settled(session);
+		await waitForRoom(session);
 		// the close is the one write that fails
 		fail(true, 'close');
 		await visit.send({ text: 'first?' });
@@ -427,7 +427,7 @@ describe('a storage that fails', () => {
 		// the storage mends, the seats work and stop again, and the close is written then
 		fail(false);
 		await visit.send({ text: 'still there?' });
-		await settled(session);
+		await waitForRoom(session);
 		expect(await currentExchange(session)).toBeUndefined();
 		const closed = events.filter((e) => e.type === 'exchange_closed');
 		expect(closed).toHaveLength(1);
@@ -450,7 +450,7 @@ describe('a storage that fails', () => {
 				name: session.name,
 				seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [watcher, assistant],
-				stream: recording,
+				execution: piExecution({ stream: recording }),
 				runtime: createRuntime(),
 			}),
 		);
@@ -472,7 +472,7 @@ describe('a storage that fails', () => {
 				name: roomName(),
 				seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [watcher, assistant],
-				stream: recording,
+				execution: piExecution({ stream: recording }),
 				runtime: createRuntime({ storage: unreachable }),
 			}),
 		).rejects.toThrow(/unreachable/);

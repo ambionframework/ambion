@@ -1,21 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { type RoomProtocol, runningRoom, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	exchangeUri,
-	pi,
 	type Room,
 	type Runtime,
 	readRoom,
 	type StartRoomOptions,
 	startRoom,
 } from '../src/index.ts';
-import { quiet, scripted, settled, speak } from '../src/testing.ts';
 import { refusal } from './support/errors.ts';
-import { collect, messagesOf, roomName, stateOf } from './support/room.ts';
-import { toolResultTexts } from './support/scripted.ts';
+import { collect, messagesOf, roomName, stateOf, waitForRoom } from './support/room.ts';
+import { quiet, scripted, speak, toolResultTexts } from './support/scripted.ts';
 import {
 	faultyJournals,
 	memory,
@@ -101,16 +100,18 @@ describe('the message byte limit', () => {
 		const results: string[][] = [];
 		const runtime = createRuntime({
 			...limits,
-			stream: scripted((context) => {
-				results.push(toolResultTexts(context));
-				return toolResultTexts(context).length === 0 ? speak(long) : quiet();
+			execution: piExecution({
+				stream: scripted((context) => {
+					results.push(toolResultTexts(context));
+					return toolResultTexts(context).length === 0 ? speak(long) : quiet();
+				}),
 			}),
 		});
 		const room = await startRoom({ name: roomName('byte-say'), runtime, agents: [worker] });
 		const events = collect(room);
 		try {
 			await (await room.visit(person)).send({ text: 'Hi.' });
-			await settled(room);
+			await waitForRoom(room);
 			expect(results.flat().some((text) => /bytes/.test(text))).toBe(true);
 			expect((await messagesOf(room)).some((m) => m.from === 'worker' && m.kind === 'said')).toBe(
 				false,

@@ -4,7 +4,7 @@
 	"workspaces": {
 		".": {
 			"entry": [
-				"scripts/{version,publish,report,report-cloudflare,cli-team-smoke,journal-smoke}.mjs"
+				"scripts/{version,publish,report,report-cloudflare,cli-team-smoke,journal-smoke,projection-envelope}.mjs"
 			],
 			"project": ["scripts/*.mjs"]
 		},
@@ -15,7 +15,7 @@
 			"project": ["src/**/*.ts"]
 		},
 		"packages/cloudflare": {
-			"entry": ["test/**/*.test.ts"],
+			"entry": ["test/worker.ts", "test/**/*.test.ts"],
 			"project": ["src/**/*.ts", "test/**/*.ts"],
 			"ignoreDependencies": ["cloudflare"]
 		}
