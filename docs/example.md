@@ -215,4 +215,3 @@ phases land.
 | ---------------------------------------------------- | --------------- |
 | An Instruments agent and a Data Analysis agent       | E1, F10         |
 | The Claude Agent SDK executor beside the Pi executor | F10, phase 4    |
-| Artifact references on messages and summaries        | E5              |
