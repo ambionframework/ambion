@@ -79,6 +79,10 @@ handles.
   from a local machine. Bring it back with an npmjs release that a trusted
   GitHub Actions workflow runs with `id-token: write`.
 
+- A generated API reference per entry, from the emitted declarations into
+  `docs/api/`, with a CI check that fails when it is stale. The docs point
+  at source files for shapes until then.
+
 ## Pull requests to close or hold
 
 Nine pull requests from 2026-09-01 to 2026-09-11 conflicted with main, and
