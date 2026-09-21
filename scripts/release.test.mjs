@@ -106,13 +106,15 @@ async function pnpmAnswer(args, state) {
 }
 
 async function npmAnswer(registry, args, state, call) {
-	if (args[0] === 'view') return npmView(registry, args);
+	if (args[0] === 'view') return npmView(registry, args, state);
 	if (args[0] === 'publish') return npmPublish(registry, args, state, call);
 	if (args[0] === 'dist-tag') return npmDistTag(registry, args);
 	return { status: 0, stdout: '' };
 }
 
-async function npmView(registry, args) {
+async function npmView(registry, args, state) {
+	// GitHub Packages answers 401 to a read with no token.
+	if (state.viewNeedsToken && !args.includes('--userconfig')) return { status: 1, stdout: '' };
 	const spec = args[1];
 	const at = spec.lastIndexOf('@');
 	const hasVersion = at > 0;
@@ -271,7 +273,7 @@ describe('release.mjs against a fake registry', () => {
 
 	it('never puts the token in an argument, a log line, or the config file', async () => {
 		await stage(context(), { otp: '123456' });
-		await verifyAndPromote();
+		await promoteWithToken();
 		const everything = JSON.stringify(runner.calls.map((c) => [c.command, c.args]));
 		assert.ok(!everything.includes(TOKEN));
 		assert.ok(!logs.join('\n').includes(TOKEN));
@@ -285,9 +287,25 @@ describe('release.mjs against a fake registry', () => {
 		}
 	});
 
-	async function verifyAndPromote() {
+	async function promoteWithToken() {
 		await promote(context(), { yes: true });
 	}
+
+	it('resumes a partial run when the registry needs a token to read', async () => {
+		state.viewNeedsToken = true;
+		state.failPublishOf = PACKAGES[1].manifest.name;
+		await assert.rejects(stage(context(), {}), /Failed to publish/);
+		state.failPublishOf = undefined;
+		const before = publishCalls().length;
+		await stage(context(), {});
+		assert.equal(publishCalls().length - before, PACKAGES.length - 1);
+		assert.ok(logs.some((line) => line.startsWith('skip')));
+	});
+
+	it('refuses a registry that is not local', async () => {
+		const { defaultContext } = await import('./release.mjs');
+		await assert.rejects(defaultContext(['--registry', 'https://evil.example']), /local registry/);
+	});
 
 	it('promote sets latest for every package and is idempotent', async () => {
 		await stage(context(), {});

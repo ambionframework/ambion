@@ -74,6 +74,11 @@ handles.
   behavior provider-neutral. Add one only if a provider-specific defect
   turns up.
 
+- Build provenance for the packages. An npm provenance statement needs an
+  OIDC token from a CI workflow, and the 0.1.0 release publishes to npmjs
+  from a local machine. Bring it back with an npmjs release that a trusted
+  GitHub Actions workflow runs with `id-token: write`.
+
 ## Pull requests to close or hold
 
 Nine pull requests from 2026-09-01 to 2026-09-11 conflicted with main, and

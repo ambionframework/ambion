@@ -243,10 +243,11 @@ stamps the version `0.1.0-dev.<run number>.g<sha7>` in the runner and commits
 nothing. The `g` prefix keeps the commit identifier from becoming a numeric
 identifier with a leading zero, which semver forbids. The job runs the gate,
 packs once, and publishes those tarballs to GitHub Packages under `dev` with
-the built-in `GITHUB_TOKEN`. It has the permissions `contents: read` and
+the built-in `GITHUB_TOKEN`. A re-run of a failed job keeps the run number, so
+it stamps the same version and skips the packages that a reader already has. It has the permissions `contents: read` and
 `packages: write`, and a concurrency group that queues runs.
 
-**Consume a dev build with one `.npmrc` line.** GitHub Packages needs a token
+**Consume a dev build with two `.npmrc` lines.** GitHub Packages needs a token
 with `read:packages`, even for a public package.
 
 ```ini
@@ -267,9 +268,9 @@ four commands. Each command is idempotent.
 | `promote` | Run `npm dist-tag add` to set `latest` on every package                                                       |
 | `status`  | Print the dist-tags of every package                                                                          |
 
-`stage` refuses when the tree is dirty, when HEAD is not the commit of the tag
-`v<version>`, when the versions disagree, or when every package is on npmjs at
-that version already. A partial earlier run is not a refusal: `stage` skips the
+`stage` refuses when the tree is dirty. It also refuses when HEAD is not the
+commit of the tag `v<version>`, when the versions disagree, or when npmjs holds
+every package at that version. A partial earlier run is not a refusal: `stage` skips the
 published packages and finishes the rest. Without `--yes` it asks on the
 terminal and names each package and version. `--dry-run` runs the guards, the
 gate, and the pack, then runs `npm publish --dry-run`. It never reaches the

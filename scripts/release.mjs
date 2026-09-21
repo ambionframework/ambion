@@ -44,6 +44,21 @@ async function askInteractive(question) {
 	}
 }
 
+/**
+ * The registry of a release command. `--registry` is for a test against a
+ * local registry. A remote host would receive the npm token, so the script
+ * refuses one.
+ */
+function registryOf(argv) {
+	const given = readFlag(argv, '--registry');
+	if (given === undefined) return channelRegistry('release');
+	const { hostname } = new URL(given);
+	if (!['127.0.0.1', 'localhost', '[::1]'].includes(hostname)) {
+		throw new Error('--registry accepts a local registry only.');
+	}
+	return given;
+}
+
 /** The shared state of one command. Tests replace `run`, `confirm`, and `log`. */
 export async function defaultContext(argv = []) {
 	return {
@@ -54,7 +69,7 @@ export async function defaultContext(argv = []) {
 		confirm: askInteractive,
 		root: ROOT,
 		outDir: join(ROOT, 'dist-release'),
-		registry: readFlag(argv, '--registry') ?? channelRegistry('release'),
+		registry: registryOf(argv),
 	};
 }
 
@@ -111,8 +126,8 @@ function requireToken(ctx, options) {
  * A dry run stops each `npm publish` before the endpoint.
  */
 export async function stage(ctx, options = {}) {
-	const version = await stageGuards(ctx);
 	requireToken(ctx, options);
+	const version = await stageGuards(ctx);
 	await requireApproval(
 		ctx,
 		options,
@@ -261,6 +276,7 @@ async function promoteOne(ctx, entry, version, options, userconfig) {
 	}
 	const args = ['dist-tag', 'add', `${name}@${version}`, PROMOTE_TAG, '--registry', ctx.registry];
 	if (userconfig) args.push('--userconfig', userconfig);
+	// npm reads the one-time code from an argument. It expires in seconds.
 	if (options.otp) args.push('--otp', options.otp);
 	ctx.log(`promote ${name}@${version} to ${PROMOTE_TAG}`);
 	const result = await ctx.run('npm', args, { stdio: 'inherit', env: ctx.env });

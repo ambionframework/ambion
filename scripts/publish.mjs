@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
  *
  * Packing and publishing are separate steps. The script packs once and
  * publishes those exact tarballs, so the bytes that land on the registry are
- * the bytes it packed and not the result of a second `npm pack`.
+ * the bytes it packed.
  *
  * A channel picks the registry. The dev channel publishes to GitHub Packages
  * and the release channel publishes to npmjs. `--registry` overrides the

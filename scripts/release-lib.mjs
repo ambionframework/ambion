@@ -34,7 +34,7 @@ export function channelRegistry(channel) {
 	return registry;
 }
 
-/** The filename `npm pack` gives a package, derived rather than globbed. */
+/** The filename `npm pack` gives a package. The script derives it from the name and version. */
 export function tarballName(name, version) {
 	return `${name.replace('@', '').replace('/', '-')}-${version}.tgz`;
 }
@@ -59,14 +59,11 @@ export async function withTokenConfig(registry, env, fn) {
 }
 
 /** True when this exact name@version is already on the registry. */
-export async function alreadyPublished(run, registry, name, version) {
-	const result = await run('npm', [
-		'view',
-		`${name}@${version}`,
-		'version',
-		'--registry',
-		registry,
-	]);
+export async function alreadyPublished(run, registry, name, version, { userconfig, env } = {}) {
+	const args = ['view', `${name}@${version}`, 'version', '--registry', registry];
+	// GitHub Packages needs a token for every read, so the check carries the same config.
+	if (userconfig) args.push('--userconfig', userconfig);
+	const result = await run('npm', args, env ? { env } : {});
 	return result.status === 0 && result.stdout.trim() === version;
 }
 
@@ -97,7 +94,7 @@ export async function packAll(run, packages, outDir, log = console.log) {
 async function publishOne(run, entry, options) {
 	const { registry, outDir, tag, dryRun, userconfig, otp, env, log = console.log } = options;
 	const { name, version } = entry.manifest;
-	if (await alreadyPublished(run, registry, name, version)) {
+	if (await alreadyPublished(run, registry, name, version, { userconfig, env })) {
 		log(`skip    ${name}@${version} (already on ${registry})`);
 		return 'skipped';
 	}
