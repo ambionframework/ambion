@@ -354,6 +354,18 @@ describe('publish.mjs channels', () => {
 		assert.equal(custom.tag, 'x');
 	});
 
+	it('refuses the latest tag on the dev channel, as the old release workflow passed it', () => {
+		assert.throws(
+			() => parseOptions(['--skip-pack', '--tag', 'latest']),
+			/cannot publish under latest/,
+		);
+		assert.throws(
+			() => parseOptions(['--channel', 'dev', '--tag', 'latest']),
+			/cannot publish under latest/,
+		);
+		assert.equal(parseOptions(['--channel', 'release', '--tag', 'latest']).tag, 'latest');
+	});
+
 	it('refuses an unknown channel', () => {
 		assert.throws(() => channelRegistry('beta'), /Unknown channel/);
 	});

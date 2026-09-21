@@ -42,10 +42,15 @@ const OUT_DIR = 'dist-release';
 export function parseOptions(argv) {
 	const channel = readFlag(argv, '--channel') ?? 'dev';
 	const registry = readFlag(argv, '--registry') ?? channelRegistry(channel);
+	const tag = readFlag(argv, '--tag') ?? DEFAULT_TAGS[channel];
+	// A dev build never takes the tag that consumers install by default.
+	if (channel === 'dev' && tag === 'latest') {
+		throw new Error('The dev channel cannot publish under latest. Use scripts/release.mjs.');
+	}
 	return {
 		channel,
 		registry,
-		tag: readFlag(argv, '--tag') ?? DEFAULT_TAGS[channel],
+		tag,
 		otp: readFlag(argv, '--otp'),
 		dryRun: argv.includes('--dry-run'),
 		yes: argv.includes('--yes'),
