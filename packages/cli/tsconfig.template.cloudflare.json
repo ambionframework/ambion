@@ -6,5 +6,5 @@
 		"incremental": false,
 		"types": ["node", "@cloudflare/workers-types/experimental"]
 	},
-	"include": ["templates/team/src"]
+	"include": ["templates/cloudflare/src"]
 }

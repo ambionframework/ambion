@@ -19,6 +19,7 @@
 			"project": ["src/**/*.ts"],
 			"ignoreDependencies": [
 				"@ambionframework/cloudflare",
+				"@ambionframework/journal",
 				"@ambionframework/pi",
 				"@cloudflare/workers-types"
 			]

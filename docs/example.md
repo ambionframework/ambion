@@ -200,8 +200,9 @@ examples/workbench/
 ```
 
 The example reads the repository brand kit from the root `brand/`
-directory. It adds no brand files of its own. A Node template for `ambion new` is planned to derive from this layout
-(item C3 in [next.md](../planning/next.md)). It does not exist yet.
+directory. It adds no brand files of its own. The Node template of
+`ambion new` derives from this layout: one room, two Pi definitions, and a
+SQLite journal, with the CLI terminal in place of the workbench interface.
 
 ## Beyond the current scope
 

@@ -1,4 +1,4 @@
-# Ambion team
+# Ambion team on Cloudflare
 
 This project runs two editable agents in one local room. The planner makes a
 plan, the reviewer checks it, and the planner may write the short closing
@@ -45,22 +45,22 @@ curl -X POST http://localhost:8787/join
 `/start` starts or resumes the room. After a restart, the room reads its
 history from `.wrangler/`. Run `/join` before sending another question.
 
-Send a question and read the record. The response from `/send` contains the
-exchange sequence in `from`.
+Send a question and read the room. The response from `/send` contains the
+message sequence of the question in `from`.
 
 ```sh
 curl -X POST http://localhost:8787/send \
   -H 'content-type: application/json' \
   -d '{"text":"What should we decide first?"}'
-curl http://localhost:8787/messages
-curl http://localhost:8787/status
-curl 'http://localhost:8787/exchange?from=SOURCE_SEQUENCE'
+curl http://localhost:8787/read
+curl 'http://localhost:8787/read?since=SOURCE_SEQUENCE'
 ```
 
-Replace `SOURCE_SEQUENCE` with the `from` value returned by `/send`. The
-exchange response identifies the exchange with its owner, source sequence,
-and timestamp. Read `/messages` for the conversation and `/status` for the
-participants and current exchange state. `/health` reports Worker readiness.
+`/read` returns the detached room read that `readRoom` returns in Node. It
+holds the messages, the participants, and every exchange with its outcome
+and its cost. `since` is an exclusive cursor: the read then holds only the
+messages after that sequence. The terminal of `ambion dev` shows this same
+read. `/health` reports Worker readiness.
 
 The two agent definitions are in `src/room.ts`. Edit their instructions and
 restart Wrangler to test a change.
