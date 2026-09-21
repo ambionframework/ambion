@@ -87,7 +87,7 @@ const spec = {
 		id: 'closed:3:worker:1',
 		seat: 'worker',
 		attempt: 1,
-		purpose: { kind: 'summarize', exchange: 3, person: 'priya', through: 3 },
+		purpose: { kind: 'summarize', exchange: 3, person: 'priya', people: ['priya'], through: 3 },
 	},
 } satisfies Record<string, ActivationSpec>;
 
@@ -248,7 +248,7 @@ describe('structured activation context', () => {
 			id: 'closed:7:worker:1',
 			seat: 'worker',
 			attempt: 1,
-			purpose: { kind: 'summarize', exchange: 7, person: 'priya', through: 7 },
+			purpose: { kind: 'summarize', exchange: 7, person: 'priya', people: ['priya'], through: 7 },
 		};
 		const view = viewOf(priyaClose, {
 			name: 'payments',

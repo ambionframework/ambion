@@ -47,12 +47,18 @@ import {
 	type RoomProjection,
 	replay,
 } from '../room/projection.ts';
-import { captureMessageSelection, type MessageSelection, readView } from '../room/read.ts';
+import {
+	captureMessageSelection,
+	type MessageSelection,
+	pendingFor,
+	readView,
+} from '../room/read.ts';
 import { liveWork } from '../room/reconcile.ts';
 import { decide, type Refusal } from '../room/transition.ts';
 import type {
 	AgentDefinition,
 	ClosedExchange,
+	ClosedExchangeView,
 	EndReason,
 	FailureCause,
 	HumanDefinition,
@@ -107,6 +113,8 @@ export interface Room {
 	readonly name: string;
 	/** Observe one detached room read without waiting for agent work. */
 	read(options?: { messages?: MessageSelection }): Promise<RoomRead>;
+	/** The closed exchanges that wait on one person. A detached read: it waits for no work. */
+	pendingFor(person: string): Promise<ClosedExchangeView[]>;
 	subscribe(listener: (event: RoomNotification) => void): () => void;
 	/** Reacquire an exchange by the source sequence of its opening question. */
 	exchange(from: Seq): waits.ExchangeHandle | undefined;
@@ -423,6 +431,10 @@ export class RoomHost implements Room, RunningRoom {
 			this.journal.lastSeq,
 			messages,
 		);
+	}
+
+	async pendingFor(person: string): Promise<ClosedExchangeView[]> {
+		return pendingFor(await this.read({ messages: false }), person);
 	}
 
 	exchange(from: Seq): waits.ExchangeHandle | undefined {

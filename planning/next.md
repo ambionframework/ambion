@@ -14,9 +14,8 @@ holds on main.
 **Ambion is a collaboration kernel for agents and humans.** The
 [README](../README.md) holds the statement, the key technical facts, and
 what is new, written for the 0.1.0 surface. Of the ten novelties it lists,
-seven exist on main. Three stay open: any framework through one executor
-contract (phase 4), the drill-down read of the trace (phase 2), and waiting
-on a person as a derived outcome (phase 3).
+eight exist on main. Two stay open: any framework through one executor
+contract (phase 4) and waiting on a person as a derived outcome (phase 3).
 
 ## The scope
 
@@ -32,7 +31,7 @@ tagged commit.** The phases below deliver them; the items explain them.
 | F5 Persistence and recovery       | Idempotent keys bound to content; conditional appends; writer fencing; leases; a graceful stop that loses no pending work; journal format 1 with golden fixtures.                                                                   |
 | F6 Tools and resources            | Neutral JSON Schema tools; three room tools on every surface; one resource contract with a filesystem binding and a SQL binding; provenance on every tool call.                                                                     |
 | F7 Observation and control        | Detached reads for room, exchange, activation, and step; live events with activation ids; typed refusals; abort and stop with documented scope.                                                                                     |
-| F8 Deployment                     | Embedded Node, persistent Node with SQLite, and Cloudflare Durable Objects, each with restart evidence; the Cloudflare object on the core read model; a Node template and a Cloudflare template from `ambion new`.                  |
+| F8 Deployment                     | Embedded Node, persistent Node with SQLite, and Cloudflare Durable Objects, each with restart evidence; a Node template and a Cloudflare template from `ambion new`.                                                                |
 | F9 Distribution and evidence      | Nine packages on npmjs with provenance; packed consumers outside the monorepo; Node 26; the workbench example scripted and live on two providers; a conformance suite for executors.                                                |
 
 **Deployment models.** The same rules serve four placements.
@@ -88,7 +87,7 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Six lanes run at once.** A lane is a chain of steps that share files.
+**Five lanes run at once.** A lane is a chain of steps that share files.
 Steps in different lanes share no files and run in parallel. A step names
 the steps it needs; a step with no "Needs" line starts now. Three
 priorities sort the work: **P0** blocks the tag; **P1** carries the release
@@ -97,22 +96,19 @@ story; **P2** is in scope and can land last.
 | Lane | Chain                                                      | Priority |
 | ---- | ---------------------------------------------------------- | -------- |
 | A    | Phase 2: 16; 17                                            | P0       |
-| B    | Phase 4: 1 then 2; 3; 4 then 5 and 6                       | P1       |
-| C    | Phase 3: 2; 3 then 4                                       | P1       |
-| D    | Phase 5: 4                                                 | P1       |
-| E    | Phase 8: 1 now; 2 and 3 as each package lands; 4 to 8 last | P0       |
-| F    | Phases 6 and 7: each item after the code it describes      | P1       |
+| B    | Phase 4: 2 then 4; 5 and 6 after 4                         | P1       |
+| C    | Phase 3: 2                                                 | P1       |
+| D    | Phase 8: 1 now; 2 and 3 as each package lands; 4 to 8 last | P0       |
+| E    | Phases 6 and 7: each item after the code it describes      | P1       |
 
-**The critical path is 16 and 6.2, then 8.** Start lane A first; when hands run short, take lane B before D and D before C:
-the adapters carry the story, the resources feed the example, and the fold
-has the least user-visible surface.
+**The critical path is 16 and 6.2, then 8.** Start lane A first; when hands
+run short, take lane B before lane C, because the adapters carry the
+release story.
 
 ### Phase 2. The public shape, then the freeze (P0)
 
 **Goal:** every journal field and every read the release needs land, then
 the freeze.
-
-Each bold label is a stable name that other steps cite.
 
 - [ ] **16.** `format: 1` on the run entry; golden journals per chaos scenario
       with expected folds, replayed in CI; the compatibility promise in
@@ -121,45 +117,27 @@ Each bold label is a stable name that other steps cite.
 - [ ] **17.** The freeze: a note at the top of this file; additive changes only
       from here to the tag. Needs 16.
 
-**Evidence:** the export snapshot passes with the final names;
-`readActivation` returns steps; golden journals replay.
+**Evidence:** the export snapshot passes with the final names; golden
+journals replay.
 
 ### Phase 4. Executors and adapters (P1)
 
 **Goal:** two executor families run in one room, proven on fakes in CI.
 
-1. [ ] `@ambionframework/ambion/testing`: `scripted`, `speak`, `quiet`,
-       `callTool`, `byAgent`, `fakeClock`, `settled`; the `stubModel` cast
-       removed; the repository's tests moved onto it (C2).
-2. [ ] The executor conformance suite on the scripted executor (D6, F10).
-       Needs 1.
-3. [ ] Three prompt parts and `renderDelta`; the default speaking policy as
-       one replaceable constant; prompt snapshots for an ordinary and a
-       closing activation (B6, F3).
-4. [ ] `@ambionframework/claude`: room tools through `createSdkMcpServer`
-       per activation; streaming input for steer with the user echo
-       advancing `readThrough`; hooks and tool messages as steps; a
-       permission request as an `approval` step; policy options passed
-       through; a fake executable in CI (F5, F6). Needs 2 and 3.
-5. [ ] `memory: 'activation' | 'seat'` on both adapters (F9). Needs 4.
-6. [ ] `examples/codex`: a thread per activation; the stdio room tools
-       server over a local socket; items as steps; `file_change` paths as
-       `refs`; a fake `codex` on `PATH` in CI (F6, F10). Needs 4.
+- [ ] **2.** The executor conformance suite on the scripted executor (D6, F10).
+- [ ] **4.** `@ambionframework/claude`: room tools through `createSdkMcpServer`
+      per activation; streaming input for steer with the user echo
+      advancing `readThrough`; hooks and tool messages as steps; a
+      permission request as an `approval` step; policy options passed
+      through; a fake executable in CI (F5, F6). Needs 2.
+- [ ] **5.** `memory: 'activation' | 'seat'` on both adapters (F9). Needs 4.
+- [ ] **6.** `examples/codex`: a thread per activation; the stdio room tools
+      server over a local socket; items as steps; `file_change` paths as
+      `refs`; a fake `codex` on `PATH` in CI (F6, F10). Needs 4.
 
 **Evidence:** both adapters pass the executor suite on fakes; a room with
-one Pi seat and one Claude seat in CI; prompt snapshots; the assistant
+one Pi seat and one Claude seat in CI; the assistant
 package's prompt shrinks to what the kernel does not enforce.
-
-### Phase 5. Resources and artifacts (P1)
-
-**Goal:** artifacts are references on the record with provenance behind
-them, and a second resource joins the workspace on the one resource
-contract.
-
-4. [ ] The instrument resource for the example, with approval on a limit.
-
-**Evidence:** two resources on one contract; "what changed during this
-exchange" answered from the change log; a summary that cites a ref.
 
 ### Phase 3. Kernel internals (P1)
 
@@ -168,13 +146,8 @@ mechanism reads in one place.
 
 2. [ ] Exchange outcomes: complete, cancelled, exhausted, `awaiting`;
        `pendingFor(person)`; a summary for each person who spoke (E7).
-3. [ ] `room-host.ts` split by mechanism with a file budget in the gate
-       (B2).
-4. [ ] The Cloudflare object on the core read model; alarms through
-       `reconcileRoom` in hosting (B9). Needs 3.
 
-**Evidence:** outcome reads after restart; the Cloudflare template on
-`read()`.
+**Evidence:** outcome reads after restart.
 
 ### Phase 6. The workbench example and the user interface (P1)
 
@@ -183,10 +156,9 @@ guide describes. The example is one terminal process with an assistant and
 three specialists ([docs/example.md](../docs/example.md)).
 
 2. [ ] The terminal shows steps per activation, the cost per exchange, and
-       `awaiting` and `approval` to the person (F8). Needs phase 3 step 2
-       and phase 5 step 4 for `approval`.
+       `awaiting` and `approval` to the person. Needs phase 3 step 2.
 3. [ ] `ambion new --template node` derived from the example; the
-       Cloudflare template on `read()` (C3). Needs 2 and phase 3 step 4.
+       Cloudflare template on `read()` (C3). Needs 2.
 
 A second provider for the two live scenarios is optional: Pi's transport
 keeps behavior provider-neutral, so add one only if a provider-specific
@@ -201,26 +173,22 @@ one provider; a restart preserves the question.
 mechanism, with no history of names they never used. Each page starts when
 the code it describes lands, so pages run beside the code.
 
-2. [ ] `durability.md`: the format promise, stop semantics, permanent
-       failure, commit retry (D3). Needs phase 2 step 16.
-3. [ ] `docs/executors.md`: the contract, the steps, the harness matrix,
-       how to write an adapter (F). Needs phase 4 step 4.
-4. [ ] `docs/resources.md`: the contract, references, provenance;
-       `workspace.md` becomes the Pi binding page (E4, E6). Needs
-       phase 5.
-5. [ ] `docs/patterns.md`: the human patterns table (E7). Needs phase 3
-       step 2.
-6. [ ] `docs/trust.md`: guarantees between owners, membership authority,
-       harness memory (D8, F9). Needs phase 4 step 5.
-7. [ ] The `README.md` example typechecked against the packed entries;
-       package READMEs; the CLI README; `CONTRIBUTING.md` with the Node
-       floors. Needs phase 6 step 3.
-8. [ ] A generated API reference per entry with a CI staleness check
-       (D10). P2. Needs 7.
-9. [ ] The 0.1.0 changelog entry. Last.
+- [ ] **2.** `durability.md`: the format promise, stop semantics, permanent
+      failure, commit retry (D3). Needs phase 2 step 16.
+- [ ] **3.** `docs/executors.md`: the contract, the steps, the harness matrix,
+      how to write an adapter (F). Needs phase 4 step 4.
+- [ ] **5.** `docs/patterns.md`: the human patterns table (E7). Needs phase 3
+      step 2.
+- [ ] **6.** `docs/trust.md`: guarantees between owners, membership authority,
+      harness memory (D8, F9). Needs phase 4 step 5.
+- [ ] **7.** The `README.md` example typechecked against the packed entries;
+      package READMEs; the CLI README; `CONTRIBUTING.md` with the Node
+      floors. Needs phase 6 step 3.
+- [ ] **8.** A generated API reference per entry with a CI staleness check
+      (D10). P2. Needs 7.
+- [ ] **9.** The 0.1.0 changelog entry. Last.
 
-**Evidence:** every page in the index has one owner section; no numbered
-rule citations remain in source; the API reference builds in CI; the
+**Evidence:** every page in the index has one owner section; the API reference builds in CI; the
 README example typechecks against the packed entry.
 
 ### Phase 8. Release evidence and sign-off (P0)
@@ -239,8 +207,7 @@ the scope has evidence on the tagged commit.
 3. [ ] One TypeBox version; ESM exports and declarations; package
        contents; lockstep versions. Needs 2.
 4. [ ] Node 26 tests and CLI; workerd tests; the historical
-       Cloudflare wake and cut races reproduced on current code. Needs
-       phase 3 step 4.
+       Cloudflare wake and cut races reproduced on current code.
 5. [ ] The chaos sweep at 200 seeds; Dafny proofs for every changed rule;
        golden journals; the live tier on one provider; results recorded
        under `planning/evidence/`. Needs phase 2 step 16 and phase 6.
@@ -260,69 +227,18 @@ commit and a run for each claim.
 
 Each item states the problem, the solution, and the impact.
 
-### B. Architecture
-
-**B2. Split the room host by mechanism.** `room-host.ts` holds 1,468 lines
-and seven mechanisms; the complexity rule bounds a function and nothing
-bounds a file. Cut it into `host/room.ts` (phases, compose, recover,
-`submit`, `hear`), `host/people.ts` (visits), `host/dispatch.ts` (ports,
-delivery state, send, steer, cut), `host/waits.ts` (exchange handles), and
-`host/control.ts` (reconcile, alarm, stop, abort, evict), each over a
-narrow view of the room, and add a file line budget to the gate.
-
-**B6. Separate mechanism text from speaking policy in prompts.**
-[`render.ts`](../packages/ambion/src/execution/render.ts) holds about 11,600
-characters of prompt text and the assistant package 7,700 more; part
-describes the mechanism and part is speaking policy that every agent gets
-and no definition can replace. Keep the mechanism text in the kernel, export
-the policy as one `DEFAULT_GUIDANCE` a definition can replace, and snapshot
-the rendered prompts.
-
-**B9. Keep the Cloudflare object on the core read model.** The room object
-still exposes `messages()`, `participants()`, and a `status()` with an
-`exchangeState` the core does not define, and takes agent names where the
-core takes definitions. Expose the core surface plus `start` and
-`ensureStart`, and move the template to `read()`.
-
 ### C. Developer experience
-
-**C2. Publish the deterministic test tools.** The scripted stream and the
-fake clock live in `test/support`; PR #153 re-implements the stream three
-times and polls `reconcile()` and `read()` to wait for a quiet room.
-Publish `@ambionframework/ambion/testing` with `scripted`, `speak`,
-`quiet`, `callTool`, `byAgent`, `fakeClock`, and `settled(room)` built on
-the public read; remove the `stubModel` cast.
 
 **C3. A Node template for `ambion new`.** The README leads with embedded
 Node and the CLI creates only a Cloudflare Worker. Add
 `--template node`, derived from the workbench with one room and two
 definitions, and make it the default.
 
-**C5. One word, one meaning.** "Seat" names membership, the `seats` map,
-the `seat()` operation, the executor dependencies, and the wire. "Exchange"
-names five types. `streamFn` and `stream` name one thing. `Visit.since` is a
-departure position with a cursor's name.
-
-| Current                     | Proposed                     |
-| --------------------------- | ---------------------------- |
-| `SeatContext`               | `AgentExecutionContext`      |
-| `SeatPort` / `SeatRoom`     | `AgentPort` / `RoomProtocol` |
-| `streamFn` (room option)    | `stream`, then into `pi({})` |
-| `Visit.since`               | `Visit.lastDeparture`        |
-| `ContextParticipant.unseen` | `messagesSinceDeparture`     |
-| `ExchangeSnapshot`          | `ExchangeRead`               |
-| "catalog" (docs)            | "definitions"                |
-
-`RoomNotification` is the exported union of `RoomEvent` and `ExecutionEvent`.
-Whether it keeps that name, once every type has its final home, is
-this item's to decide.
-
-**C6. Small sharp edges.** `startRoom` validates participant names and
-never the room name; a `summary` name no seat holds gives no summary and
-no warning; `visit.send()` returns a handle whose `owner` can be another
+**C6. Small sharp edges.** A `summary` name no seat holds gives no summary
+and no warning; `visit.send()` returns a handle whose `owner` can be another
 person; host `seat()` rejects a repeat while the agent tool returns
 `unchanged`; the `say` key and a human delivery key share one key space.
-Validate the room name, refuse the unheld summary name, add `opened` to
+Refuse the unheld summary name, add `opened` to
 the handle, make the host operation idempotent, and prefix the key kinds.
 
 ### D. Scope the release did not name
@@ -374,14 +290,6 @@ reaches a seat through `wake`, `steer`, and `cut`, in plain JSON.
 the repository mentions MCP or a headless run. Expose the three room tools
 in the hosting entry, serve them over MCP bound to one activation, and add
 the Codex example (F6, F10).
-
-**E4. A SQL resource in the example.** Add a read-only SQL resource over
-`node:sqlite` with `query` and `record` tools, on the neutral resource
-contract.
-
-**E6. A change log for resources.** Let the workspace binding keep a change
-log keyed by activation with `changes({ exchange })`. The log answers what
-changed during an exchange.
 
 **E7. The human patterns the room represents.** The table reads the
 primitives against common patterns; two gaps need a rule.
@@ -452,15 +360,8 @@ interface PassResult {
 
 The driver records `session` on the release.
 
-**F3. Three prompt parts and a delta.** The renderer returns `mechanism`
-(per kernel version), `agent` (per definition), and `context` (per pass);
-each adapter places them: the Pi system prompt, the Anthropic `system` with
-`cache_control`, the Claude Agent SDK `appendSystemPrompt`, a Codex
-preamble or `AGENTS.md`. `renderDelta(view, since)` renders a later pass.
-
-**F5. Steering by capability, correctness by freshness.** The Pi executor
-defines `session.steer` and advances `readThrough` at Pi's provider
-request. The Claude adapter advances `readThrough` on the Claude Agent
+**F5. Steering by capability, correctness by freshness.** The Claude
+adapter advances `readThrough` on the Claude Agent
 SDK's `user` echo. A Codex adapter has no `steer` and advances
 `readThrough` at the pass boundary, so the driver holds a steer for the
 next pass.
@@ -473,12 +374,6 @@ Domain tools written with `defineTool` reach harnesses through the same
 stdio server, which serves JSON Schema through the low-level MCP server
 API. Pass harness policy through adapter options; a permission request
 becomes an `approval` step the application answers.
-
-**F8. The drill-down read path.** `readExchange` gains `activations` (id,
-seat, attempt, purpose, outcome, usage, harness session) from the leases in
-its range; `readActivation` returns steps by pass from the trace journal.
-Steps order by activation, pass, and index, so a UI merges live and read the
-way it merges messages by `seq`.
 
 **F9. Harness memory across activations.** `memory: 'activation'` opens a
 session per activation; `memory: 'seat'` resumes one harness session per

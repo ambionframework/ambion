@@ -385,17 +385,18 @@ function closingCommit(
 ): RoomDecision<'message'> {
 	const intent = request.intent;
 	if (intent.kind !== 'said') return refused('This activation cannot submit that intent.');
-	if (intent.to !== undefined && intent.to !== purpose.person)
-		return refused('A closing response must address the exchange owner.');
-	if (state.messages.some((entry) => isCoveringSummary(entry, purpose)))
-		return refused('This exchange already has a summary.');
+	const recipient = intent.to ?? purpose.person;
+	if (!purpose.people.includes(recipient))
+		return refused('A closing response must address a person who spoke in the exchange.');
+	if (state.messages.some((entry) => isCoveringSummary(entry, purpose, recipient)))
+		return refused(`This exchange already has a summary for ${recipient}.`);
 	return message(
 		state,
 		{
 			kind: 'summary',
 			text: intent.text,
 			...refsField(intent.refs),
-			...stampedSummary(purpose.person, purpose.exchange, purpose.through),
+			...stampedSummary(recipient, purpose.exchange, purpose.through),
 			at: iso(now),
 			activationId: request.activation,
 			from: live.seat,
@@ -428,6 +429,7 @@ function ordinaryCommit(
 function isCoveringSummary(
 	message: Message,
 	purpose: Extract<ActivationSpec['purpose'], { kind: 'summarize' }>,
+	recipient: string,
 ): boolean {
 	return (
 		message.kind === 'summary' &&
@@ -435,7 +437,7 @@ function isCoveringSummary(
 			message.to,
 			message.covers.from,
 			message.covers.through,
-			purpose.person,
+			recipient,
 			purpose.exchange,
 			purpose.through,
 		)
