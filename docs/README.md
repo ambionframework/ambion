@@ -16,6 +16,8 @@ each page.
 | [Room](room.md)                   | Overview, glossary, and the room-wide mechanisms                       |
 | [Definitions and tools](agent.md) | Definitions and tools                                                  |
 | [Executors](executors.md)         | The executor contract, steps, the trace, and adapters                  |
+| [Pi executor](pi.md)              | The Pi package: options, sessions, audit, testing                      |
+| [Claude executor](claude.md)      | The Claude Agent SDK package: policy, trust, memory, testing           |
 | [Codex](codex.md)                 | The Codex SDK executor: install, options, trust, and testing           |
 | [Assistant](assistant.md)         | The default assistant package and the `assistant` room option          |
 | [Exchange](exchange.md)           | Human questions, completion, and durable result handles                |
@@ -45,7 +47,8 @@ shorthand, and how the workbench example evaluates it.
 
 `room.md` is the entry point for the runtime model. Read `agent.md` for
 definitions and tools. Read `executors.md` for the execution boundary, the
-steps, and how to write an adapter. Read `exchange.md` and
+steps, and how to write an adapter. Read `pi.md` or `claude.md` for what is
+specific to one adapter. Read `exchange.md` and
 `presence.md` for the two durable concepts built on the room. Read
 `trust.md` before you expose a room to untrusted agents. Read
 `durability.md` before choosing storage or recovery behavior, then
