@@ -28,7 +28,7 @@ call is work that the room does not replay.
 | Visit      | A person's speaking identity and presence lifetime                   | [presence.md](presence.md)                       |
 | Exchange   | A person's question and every activation until the room is quiet     | [exchange.md](exchange.md)                       |
 | Activation | The room waking one seat: a bounded execution with one room grant    | This page                                        |
-| Step       | One recorded unit of an activation's work                            | [agent.md](agent.md)                             |
+| Step       | One recorded unit of an activation's work                            | [executors.md](executors.md)                     |
 | Resource   | Application data that an agent's tools reach, with provenance        | [resources.md](resources.md)                     |
 | Journal    | The ordered, append-only record that the room folds into its state   | [durability.md](durability.md)                   |
 | Entry      | One item that the journal holds                                      | [durability.md](durability.md)                   |
@@ -196,7 +196,9 @@ credentials, process lifetime, and recovery.
 ## The map
 
 - [Definitions and tools](agent.md): `defineAgent`, `defineTool`, `say`, refs,
-  and the execution boundary.
+  and refs.
+- [Executors](executors.md): the execution boundary, steps, the trace, and how
+  to write an adapter.
 - [Default assistant](assistant.md): the `assistant` room option and package.
 - [Exchange](exchange.md): human questions, completion, and result handles.
 - [Presence](presence.md): visits, arrivals, departures, and catch-up.
