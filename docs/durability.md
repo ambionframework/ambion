@@ -67,6 +67,22 @@ A retry may carry a newer read position, but cannot replace the accepted content
 Presence and administrative writes retain the generic journal's kind-level
 deduplication. The record retains every token for replay and inspection.
 
+**A commit retry is safe under its key.** The commit key is the tool call id.
+A retry under that key returns the message the room already holds. The seat
+retries a lost commit first and reports `unknown` only when no attempt
+confirms it. The seat then ends the activation and never says the text again
+under a new key, which would land the message twice. `unknown` is the one
+`CommitResult` that the room does not stamp. This mechanism differs from an
+activation retry (see section 4): the seat drives it, and it spends no attempt.
+
+**A commit lands only at the end of the record.** The verified rule
+`speechFreshness` in
+[`room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)
+compares the commit's `readThrough` with the last `seq`. A position at the
+last `seq` is fresh. A position short of it is `missed`: the room returns the
+messages beyond `readThrough`, and the seat reads them and commits again. A
+position off the record is invalid.
+
 A delivery's key and an agent commit's key live in separate spaces. The same
 literal key can name a delivery and, independently, a commit, without
 colliding: each reads back through `Message.key` exactly as its own caller
@@ -108,6 +124,29 @@ the record. Transcript audit failure is reported separately as `audit_error`;
 it does not turn successful or deliberately silent collaboration into failed
 work, and no durable audit backlog is promised. The trace journal follows the
 same rule: a failed step write is a `trace_error` and changes no outcome.
+
+### Permanent and transient failure
+
+**The executor classifies a failure and the room acts on the cause.** A
+`FailureCause` is `permanent` or `transient`. A permanent cause is an
+authentication or bad-request failure that a retry cannot fix. A transient
+cause is a rate limit, a server error, or a lost connection.
+
+- **A permanent failure ends in one attempt.** The room records `abandoned`
+  at once. A permanent cause on any failed lease makes the whole activation
+  permanent.
+- **A transient failure retries to the cap.** The room retries under
+  `hostingOf(runtime).limits.activation` and records `abandoned` at
+  `attempts`. This activation retry is room-driven and spends an attempt.
+- **A room without an execution fails every activation as permanent.** The
+  error code is `no_execution`.
+- **The Pi executor reads a status only from a provider diagnostic.** It
+  treats 400, 401, 402, 403, 404, 405, and 422 as permanent, and credit or
+  authentication text as permanent. It never reads a status from free error
+  text, because a rate limit names a token count that looks like a 400.
+  Every uncertain failure is transient.
+
+Section 5 states which ends carry usage.
 
 ### Transport calls and unclaimed work
 
@@ -166,8 +205,29 @@ Completion confirms journal authority changes. Executor cuts are best effort;
 completion does not wait for a provider or tool to exit or reverse external effects.
 Hosts must await the promise before reporting cancellation as complete.
 
-**Storage compatibility:** every `run` entry carries `format: 1`, the
-journal format. The constant `JOURNAL_FORMAT` names it.
+## Stop
+
+**`room.stop()` ends a run and loses no pending work.** It settles every
+running lease, including expired leases, and every recorded pending
+activation. It also settles the unread steering that those revocations expose.
+Completion needs a confirmed journal read with no execution obligations left.
+
+- **Stop preserves an open exchange.** A resumed run closes it and assigns a
+  new summary through reconciliation. A summary that stop revoked stays failed.
+- **Concurrent calls share one operation.** After a durable failure a caller
+  may retry. Admission stays closed and the name releases even on failure.
+- **A later run's fence guards its state.** An old retry cannot change the
+  presence or work of the new run.
+
+`abort()` writes one cancellation boundary and keeps the room running.
+`hostingOf(runtime).evict(name)` drops local handles and writes no departure.
+It releases no lease. [`deployment.md`](deployment.md) holds the host steps.
+
+## Storage compatibility
+
+**Every `run` entry carries `format: 1`, the
+journal format.** The constant `JOURNAL_FORMAT` names it. The room writes it on
+both start and resume.
 
 - **A format 1 journal stays readable.** A later runtime reads it and folds
   the same state. The golden journals in
@@ -228,6 +288,8 @@ for the claims that need more than a unit test:
 | Claim                                                                                                                                                   | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Stop cleanup across expiry, storage failure, and restart                                                                                                | [`stop-work.test.ts`](../packages/ambion/test/stop-work.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| A permanent failure abandons in one attempt; a rate-limit token count is not a status; a transient failure retries to the cap                           | [`permanent-failure.test.ts`](../packages/ambion/test/permanent-failure.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| A lost commit retries under its key and speaks once; an unknown outcome ends the activation without a second say                                        | [`commit-retry.test.ts`](../packages/ambion/test/commit-retry.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Atomic cancellation, retry, and restart                                                                                                                 | [`cancellation.test.ts`](../packages/ambion/test/cancellation.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Ordered publication and recovery after submission faults                                                                                                | [`submission.test.ts`](../packages/ambion/test/submission.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Golden journals replay to the committed fold, and a newer format is refused                                                                             | [`golden.test.ts`](../packages/ambion/test/golden.test.ts), [`journal-validation.test.ts`](../packages/ambion/test/journal-validation.test.ts)                                                                                                                                                                                                                                                                                                                                                                |
