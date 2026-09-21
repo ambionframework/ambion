@@ -39,26 +39,24 @@ holds on main.
 
 **Ambion is a collaboration kernel for agents and humans.** The
 [README](../README.md) holds the statement, the key technical facts, and
-what is new, written for the 0.1.0 surface. Of the ten novelties it lists,
-nine exist on main. One stays open: any framework through one executor
-contract (phase 4).
+what is new, written for the 0.1.0 surface. Every one of the ten novelties it lists exists on main.
 
 ## The scope
 
 **Nine functional areas, each with the acceptance it must meet on the
 tagged commit.** The phases below deliver them; the items explain them.
 
-| Area                              | Acceptance                                                                                                                                                                                                                          |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1 Definitions and executors      | A definition is a value with one executor. Two executor families run in one room: the Pi loop and the Claude Agent SDK harness. A fixed definition set per run; membership changes by name; a fixed seat that agents cannot remove. |
-| F2 Rooms, participation, presence | One ordered journal per room; broadcast and directed messages; the attention scale; visits with recorded arrivals and departures; catch-up by position.                                                                             |
-| F3 Concurrent contributions       | Freshness checked at commit; steering by capability; silence as a result; failures classified as permanent or transient; duplicate speech impossible after a lost reply.                                                            |
-| F4 Exchanges and summaries        | One open exchange per room; closure by quiescence; outcomes complete, cancelled, exhausted, and awaiting a person; one summary per person who spoke; summaries compact later context; the source stays readable.                    |
-| F5 Persistence and recovery       | Idempotent keys bound to content; conditional appends; writer fencing; leases; a graceful stop that loses no pending work; journal format 1 with golden fixtures.                                                                   |
-| F6 Tools and resources            | Neutral JSON Schema tools; three room tools on every surface; one resource contract with a filesystem binding and a SQL binding; provenance on every tool call.                                                                     |
-| F7 Observation and control        | Detached reads for room, exchange, activation, and step; live events with activation ids; typed refusals; abort and stop with documented scope.                                                                                     |
-| F8 Deployment                     | Embedded Node, persistent Node with SQLite, and Cloudflare Durable Objects, each with restart evidence; a Node template and a Cloudflare template from `ambion new`.                                                                |
-| F9 Distribution and evidence      | Nine packages on npmjs with provenance; packed consumers outside the monorepo; Node 26; the workbench example scripted and live on two providers; a conformance suite for executors.                                                |
+| Area                              | Acceptance                                                                                                                                                                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1 Definitions and executors      | A definition is a value with one executor. Three executor families run: the Pi loop, the Claude Agent SDK harness, and the Codex SDK harness. A fixed definition set per run; membership changes by name; a fixed seat that agents cannot remove. |
+| F2 Rooms, participation, presence | One ordered journal per room; broadcast and directed messages; the attention scale; visits with recorded arrivals and departures; catch-up by position.                                                                                           |
+| F3 Concurrent contributions       | Freshness checked at commit; steering by capability; silence as a result; failures classified as permanent or transient; duplicate speech impossible after a lost reply.                                                                          |
+| F4 Exchanges and summaries        | One open exchange per room; closure by quiescence; outcomes complete, cancelled, exhausted, and awaiting a person; one summary per person who spoke; summaries compact later context; the source stays readable.                                  |
+| F5 Persistence and recovery       | Idempotent keys bound to content; conditional appends; writer fencing; leases; a graceful stop that loses no pending work; journal format 1 with golden fixtures.                                                                                 |
+| F6 Tools and resources            | Neutral JSON Schema tools; three room tools on every surface; one resource contract with a filesystem binding and a SQL binding; provenance on every tool call.                                                                                   |
+| F7 Observation and control        | Detached reads for room, exchange, activation, and step; live events with activation ids; typed refusals; abort and stop with documented scope.                                                                                                   |
+| F8 Deployment                     | Embedded Node, persistent Node with SQLite, and Cloudflare Durable Objects, each with restart evidence; a Node template and a Cloudflare template from `ambion new`.                                                                              |
+| F9 Distribution and evidence      | Ten packages on npmjs with provenance; packed consumers outside the monorepo; Node 26; the workbench example scripted and live on two providers; a conformance suite for executors.                                                               |
 
 **Deployment models.** The same rules serve four placements.
 
@@ -85,7 +83,7 @@ ingress are future work.
 - **Two entries.** `@ambionframework/ambion` for applications and
   `@ambionframework/ambion/hosting` for hosts and adapters.
 - **The kernel imports no model library.** The Claude Agent SDK is a second
-  executor package (F10).
+  executor package (`@ambionframework/claude`).
 - **Speech enters the record through `say` only**, on every executor.
 - **The freeze.** The freeze note at the top of this file
   states the rule.
@@ -113,54 +111,19 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Three lanes run at once.** A lane is a chain of steps that share files.
+**Two lanes run at once.** A lane is a chain of steps that share files.
 Steps in different lanes share no files and run in parallel. A step names
 the steps it needs; a step with no "Needs" line starts now. Three
 priorities sort the work: **P0** blocks the tag; **P1** carries the release
 story; **P2** is in scope and can land last.
 
-| Lane | Chain                                                      | Priority |
-| ---- | ---------------------------------------------------------- | -------- |
-| A    | Phase 4: 4; 5 and 6 after 4                                | P1       |
-| B    | Phase 8: 1 now; 2 and 3 as each package lands; 4 to 8 last | P0       |
-| C    | Phases 6 and 7: each item after the code it describes      | P1       |
+| Lane | Chain                                          | Priority |
+| ---- | ---------------------------------------------- | -------- |
+| B    | Phase 8: 1 now; 2 and 3 after it; 4 to 8 last  | P0       |
+| C    | Phase 7: 8 after the code it describes; 9 last | P1       |
 
-**The critical path is 4.4, then 8.** Start lane A first, because the
-adapters carry the release story.
-
-### Phase 4. Executors and adapters (P1)
-
-**Goal:** two executor families run in one room, proven on fakes in CI.
-
-- [ ] **4.** `@ambionframework/claude`: room tools through `createSdkMcpServer`
-      per activation; streaming input for steer with the user echo
-      advancing `readThrough`; hooks and tool messages as steps; a
-      permission request as an `approval` step; policy options passed
-      through; a fake executable in CI (F5, F6).
-- [ ] **5.** `memory: 'activation' | 'seat'` on both adapters (F9). Needs 4.
-- [ ] **6.** `examples/codex`: a thread per activation; the stdio room tools
-      server over a local socket; items as steps; `file_change` paths as
-      `refs`; a fake `codex` on `PATH` in CI (F6, F10). Needs 4.
-
-**Evidence:** both adapters pass the executor suite on fakes; a room with
-one Pi seat and one Claude seat in CI; the assistant
-package's prompt shrinks to what the kernel does not enforce.
-
-### Phase 6. The workbench example and the user interface (P1)
-
-**Goal:** one example that a new reader runs first, and that the deployment
-guide describes. The example is one terminal process with an assistant and
-three specialists ([docs/example.md](../docs/example.md)).
-
-3. [ ] `ambion new --template node` derived from the example; the
-       Cloudflare template on `read()` (C3).
-
-A second provider for the two live scenarios is optional: Pi's transport
-keeps behavior provider-neutral, so add one only if a provider-specific
-defect turns up.
-
-**Evidence:** the rooms pass scripted; the live tier runs two scenarios on
-one provider; a restart preserves the question.
+**The critical path is phase 8.** Start step 8.1 first, because every
+consumer check installs from npmjs.
 
 ### Phase 7. Documentation (P1)
 
@@ -168,19 +131,12 @@ one provider; a restart preserves the question.
 mechanism, with no history of names they never used. Each page starts when
 the code it describes lands, so pages run beside the code.
 
-- [ ] **3.** `docs/executors.md`: the contract, the steps, the harness matrix,
-      how to write an adapter (F). Needs phase 4 step 4.
-- [ ] **6.** `docs/trust.md`: guarantees between owners, membership authority,
-      harness memory (D8, F9). Needs phase 4 step 5.
-- [ ] **7.** The `README.md` example typechecked against the packed entries;
-      package READMEs; the CLI README; `CONTRIBUTING.md` with the Node
-      floors. Needs phase 6 step 3.
 - [ ] **8.** A generated API reference per entry with a CI staleness check
-      (D10). P2. Needs 7.
+      (D10). P2.
 - [ ] **9.** The 0.1.0 changelog entry. Last.
 
-**Evidence:** every page in the index has one owner section; the API reference builds in CI; the
-README example typechecks against the packed entry.
+**Evidence:** the API reference builds in CI, and the changelog names the
+0.1.0 surface.
 
 ### Phase 8. Release evidence and sign-off (P0)
 
@@ -192,7 +148,7 @@ the scope has evidence on the tagged commit.
        (D7). Needs nothing. Start now, because every consumer check below
        installs from it.
 2. [ ] Packed consumers outside the monorepo: journal alone; pi-journal
-       with journal; kernel with pi; kernel with claude; the workbench; the
+       with journal; kernel with pi; kernel with claude; kernel with codex; the workbench; the
        generated Node and Cloudflare projects; the resource-only import.
        Needs 1. Each consumer starts when its packages exist.
 3. [ ] One TypeBox version; ESM exports and declarations; package
@@ -201,10 +157,9 @@ the scope has evidence on the tagged commit.
        Cloudflare wake and cut races reproduced on current code.
 5. [ ] The chaos sweep at 200 seeds; Dafny proofs for every changed rule;
        golden journals; the live tier on one provider; results recorded
-       under `planning/evidence/`. Needs phase 6.
+       under `planning/evidence/`.
 6. [ ] Recovery evidence: duplicate wake, takeover, delayed cut, audit
-       retry, clock skew, process pause, uncooperative tool. Needs phase 4
-       step 4.
+       retry, clock skew, process pause, uncooperative tool.
 7. [ ] Summary evidence: silence, corrections, conflicting constraints,
        multiple humans, late summaries.
 8. [ ] Sign off F1 to F9 above in `planning/evidence/0.1.0.md`; tag
@@ -220,124 +175,23 @@ Each item states the problem, the solution, and the impact.
 
 ### C. Developer experience
 
-**C3. A Node template for `ambion new`.** The README leads with embedded
-Node and the CLI creates only a Cloudflare Worker. Add
-`--template node`, derived from the workbench with one room and two
-definitions, and make it the default.
-
 **C6. Small sharp edges.** A `summary` name no seat holds gives no summary
-and no warning; `visit.send()` returns a handle whose `owner` can be another
-person; host `seat()` rejects a repeat while the agent tool returns
+and no warning; host `seat()` rejects a repeat while the agent tool returns
 `unchanged`; the `say` key and a human delivery key share one key space.
-Refuse the unheld summary name, add `opened` to
-the handle, make the host operation idempotent, and prefix the key kinds.
+Refuse the unheld summary name, make the host operation idempotent, and prefix the key kinds.
 
 ### D. Scope the release did not name
 
 **D7. A public registry.** Every install path requires a GitHub token.
-Publish the nine packages to npmjs with provenance at 0.1.0.
-
-**D8. A trust statement between owners.** No document states what a
-foreign agent cannot do (speak under another name, change a summary's
-recipient, revive cancelled work), what it can do to others (unseat,
-address, steer), and what the kernel does not defend (prompt injection,
-tool effects, secrets in transcripts). Write `docs/trust.md` with one table
-of guarantees and one of non-guarantees, each linked to its test or
-verified rule.
+Publish the ten packages to npmjs with provenance at 0.1.0.
 
 **D10. An API reference.** The docs point at source files for shapes.
 Generate a reference per entry from the emitted declarations into
 `docs/api/` and fail CI when it is stale.
 
-### E. The kernel story: executors, patterns, artifacts
-
-**The kernel is the protocol, the journal, and the rules.** Everything that
-holds a model is an executor. Everything that holds data is a resource.
-[`protocol.ts`](../packages/ambion/src/protocol.ts) already honors this: a
-seat reaches the room through `view`, `commit`, and `lease`, and the room
-reaches a seat through `wake`, `steer`, and `cut`, in plain JSON.
-
-**E3. Neutral room tools and a headless adapter as the proof.** Nothing in
-the repository mentions MCP or a headless run. Expose the three room tools
-in the hosting entry, serve them over MCP bound to one activation, and add
-the Codex example (F6, F10).
-
-### F. Harness adapters and the activation trace
-
-**Four surfaces, two families.** Pi's agent core and the Anthropic SDK tool
-runner give the caller the loop. The Claude Agent SDK and the Codex SDK own
-the loop and hand back events. The matrix reads the four as their sources
-describe them on 2026-09-17.
-
-| Capability         | Pi agent core                                                              | Anthropic SDK tool runner          | Claude Agent SDK                                                                              | Codex SDK                                                                           |
-| ------------------ | -------------------------------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Loop owner         | Caller                                                                     | SDK helper, caller hosted          | Harness                                                                                       | Harness                                                                             |
-| Steer during a run | `agent.steer(message)`, after the current turn's tool calls                | Between turns                      | `prompt` as `AsyncIterable<SDKUserMessage>`                                                   | None; the next `run` on the same thread                                             |
-| Cut                | `agent.abort()`                                                            | `stream.controller.abort()`        | `query.interrupt()` or `abortController`                                                      | `TurnOptions.signal`                                                                |
-| Stream             | `message_update` with `text_delta` and `thinking_delta`                    | `content_block_delta`              | `includePartialMessages` gives `stream_event`                                                 | `item.started`, `item.updated`, `item.completed`                                    |
-| Thinking           | `ThinkingContent` blocks and deltas                                        | `thinking` blocks                  | `thinking` blocks in assistant messages                                                       | `reasoning` items                                                                   |
-| Tool calls         | `tool_execution_start`, `_update`, `_end` with `args`, `result`, `isError` | Runner hooks and `tool_use` blocks | `tool_use`, `tool_result`; `PreToolUse`, `PostToolUse`, `PostToolUseFailure` hooks            | `command_execution`, `file_change`, `mcp_tool_call`, `web_search` items with status |
-| Room tools         | `AgentTool` with TypeBox parameters                                        | `betaZodTool` or JSON Schema       | `createSdkMcpServer` with `tool()`, or a stdio MCP server                                     | A stdio MCP server through `config.mcp_servers`                                     |
-| Usage              | `AssistantMessage.usage`: tokens and cost                                  | `message.usage`                    | `usage` and `cost` on messages; a `cost` message                                              | `turn.completed.usage`: tokens, no cost                                             |
-| Failure            | `stopReason` `error` with `errorMessage`; `length`; `aborted`              | Typed errors with `status`         | `result` subtypes; the `StopFailure` hook                                                     | `turn.failed`; `error` items                                                        |
-| Resume             | Session tree in the Pi journal                                             | The caller's history array         | `resume`, `continue`, `forkSession`, `resumeSessionAt`                                        | `resumeThread(id)`                                                                  |
-| Policy             | The caller's tools                                                         | The caller's tools                 | `permissionMode`, `allowedTools`, `canUseTool`, `PermissionRequest`, `maxBudgetUsd`, `effort` | `sandboxMode`, `approvalPolicy`, `modelReasoningEffort`, `networkAccessEnabled`     |
-| Place              | None                                                                       | None                               | `cwd`, `additionalDirectories`                                                                | `workingDirectory`, `additionalDirectories`                                         |
-
-Every surface streams text, thinking, and tool activity with enough
-identity to rebuild a step list. Every surface reports usage. Two take a
-message during a run and two do not, so steering is a capability an
-adapter declares, and correctness rests on freshness alone.
-
-**F2. Tools at open and a session id on release.** A harness keeps its
-session between turns and resumes by id. The executor contract in
-`execution/executor.ts` gives a pass the view or a delta. It still needs
-the room tools at `open` and a richer result.
-
-```ts
-interface ExecutorActivation {
-  tools: readonly RoomTool[];
-}
-interface PassResult {
-  stop?: 'length' | 'aborted';
-  session?: { harness: string; id: string };
-}
-```
-
-The driver records `session` on the release.
-
-**F5. Steering by capability, correctness by freshness.** The Claude
-adapter advances `readThrough` on the Claude Agent
-SDK's `user` echo. A Codex adapter has no `steer` and advances
-`readThrough` at the pass boundary, so the driver holds a steer for the
-next pass.
-
-**F6. Room tools on every surface.** Write the three room tools once per
-adapter in its own form; three fixed schemas need no conversion. Bind each
-instance to one activation: in process for Pi, the tool runner, and the
-Claude Agent SDK; through a stdio server over a local socket for Codex.
-Domain tools written with `defineTool` reach harnesses through the same
-stdio server, which serves JSON Schema through the low-level MCP server
-API. Pass harness policy through adapter options; a permission request
-becomes an `approval` step the application answers.
-
-**F9. Harness memory across activations.** `memory: 'activation'` opens a
-session per activation; `memory: 'seat'` resumes one harness session per
-seat across activations and records the id with each release. Freshness
-governs speech in both modes; the trust page states that a seat with memory
-holds state the record does not show.
-
-**F10. Ship two adapters and test them with fakes.** `@ambionframework/pi`
-and `@ambionframework/claude` ship in 0.1.0 with `examples/codex` beside
-them. The executor conformance suite exists. The Claude adapter and the
-Codex example run it on a fake each: a fake executable through
-`pathToClaudeCodeExecutable` and a fake `codex` on `PATH`. The suite covers
-a cut during a tool call, a steer consumed and held, usage on release, and
-the trace journal's contents.
-
 ## Package decisions
 
-**Nine published packages, one private, two examples.** Each package has
+**Ten published packages, one private, one example.** Each package has
 one concern and one independent consumer.
 
 | Package                       | Concern                                                       | Depends on          |
@@ -349,11 +203,11 @@ one concern and one independent consumer.
 | `@ambionframework/claude`     | The Claude Agent SDK executor                                 | ambion              |
 | `@ambionframework/workspace`  | The resource contract and the just-bash Pi binding            | ambion, pi          |
 | `@ambionframework/assistant`  | The assistant definition                                      | ambion, pi          |
+| `@ambionframework/codex`      | The Codex SDK executor                                        | ambion              |
 | `@ambionframework/cloudflare` | Rooms and seats as Durable Objects                            | ambion, journal, pi |
 | `@ambionframework/cli`        | `ambion new` and `ambion dev`                                 | ambion              |
 | `@ambionframework/evals`      | Private until its own work-left list closes                   | ambion              |
 | `examples/workbench`          | The one example                                               | all of the above    |
-| `examples/codex`              | The Codex adapter over the stdio room tools server            | ambion              |
 
 Storage ids, binding names, and published names stay stable through the
 source moves. A `SeatObject` class rename needs Cloudflare migration
