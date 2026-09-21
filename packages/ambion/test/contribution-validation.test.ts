@@ -5,7 +5,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	exchangeUri,
+	messageUri,
 	type Room,
 	type Runtime,
 	readRoom,
@@ -519,7 +519,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 			const peer = await protocol(runtime, room.name);
 			expect(await peer.lease({ activation: owed.id, operation: 'claim' })).toHaveProperty('ok');
 			const key = 'summary-refs';
-			const refs = [exchangeUri(room.name, exchange.from)];
+			const refs = [messageUri(room.name, exchange.from)];
 			const commit = (cited: string[]) =>
 				peer.commit({
 					activation: owed.id,

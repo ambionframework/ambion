@@ -118,3 +118,10 @@ describe('suggest', () => {
 		expect(suggest('/room a\nb', choices)).toEqual([]);
 	});
 });
+
+describe('the steps command', () => {
+	it('parses with its argument and appears in the palette', () => {
+		expect(parse('/steps 2')).toEqual({ kind: 'command', name: 'steps', argument: '2' });
+		expect(suggest('/st', choices).map((row) => row.label)).toContain('/steps');
+	});
+});

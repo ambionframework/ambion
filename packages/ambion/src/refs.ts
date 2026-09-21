@@ -3,7 +3,7 @@
  *
  * A ref is one absolute URI. The room checks its grammar and never reads
  * behind it. The one scheme the room owns is `ambion`: a room URI names a
- * room or one exchange of a room.
+ * room or one message of a room.
  */
 import { assertRoomName, isName } from './define.ts';
 import type { Seq } from './types.ts';
@@ -13,16 +13,16 @@ export const REF_LIMITS = { count: 16, length: 2048 } as const;
 
 const SCHEME = /^([A-Za-z][A-Za-z0-9+.-]*):(.+)$/s;
 const FORBIDDEN = /[\s\p{Cc}]/u;
-const ROOM_URI = /^ambion:\/\/room\/([^/]+)(?:\/exchange\/([1-9][0-9]*))?$/;
+const ROOM_URI = /^ambion:\/\/room\/([^/]+)(?:\/message\/([1-9][0-9]*))?$/;
 
-/** What a room URI names. `exchange` is the seq that opened the exchange. */
+/** What a room URI names. `message` is the seq of the message it names. */
 export interface RoomUri {
 	readonly room: string;
-	readonly exchange?: Seq;
+	readonly message?: Seq;
 }
 
 /** The reason for a refusal, one sentence for every entry point. */
-const GRAMMAR = `A ref is one absolute URI with a scheme, at most ${REF_LIMITS.length} characters, at most ${REF_LIMITS.count} per message, no duplicates; an ambion: ref names a room or an exchange.`;
+const GRAMMAR = `A ref is one absolute URI with a scheme, at most ${REF_LIMITS.length} characters, at most ${REF_LIMITS.count} per message, no duplicates; an ambion: ref names a room or a message.`;
 
 /** A ref is an absolute URI. An `ambion` ref must be a canonical room URI. */
 export function isRef(value: unknown): value is string {
@@ -52,11 +52,11 @@ export function roomUri(room: string): string {
 	return `ambion://room/${room}`;
 }
 
-/** The URI of the exchange that a message at `from` opened. */
-export function exchangeUri(room: string, from: Seq): string {
-	if (!Number.isSafeInteger(from) || from < 1)
-		throw new RangeError('Exchange reference must be a positive safe integer.');
-	return `${roomUri(room)}/exchange/${from}`;
+/** The URI of the message at `seq`. */
+export function messageUri(room: string, seq: Seq): string {
+	if (!Number.isSafeInteger(seq) || seq < 1)
+		throw new RangeError('Message reference must be a positive safe integer.');
+	return `${roomUri(room)}/message/${seq}`;
 }
 
 /** Read a canonical room URI. Any other string returns undefined. */
@@ -64,8 +64,8 @@ export function parseRoomUri(uri: string): RoomUri | undefined {
 	const match = ROOM_URI.exec(uri);
 	const room = match?.[1];
 	if (room === undefined || !isName(room)) return undefined;
-	const from = match?.[2];
-	if (from === undefined) return { room };
-	const exchange = Number(from);
-	return Number.isSafeInteger(exchange) ? { room, exchange } : undefined;
+	const seq = match?.[2];
+	if (seq === undefined) return { room };
+	const message = Number(seq);
+	return Number.isSafeInteger(message) ? { room, message } : undefined;
 }

@@ -4,10 +4,10 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	exchangeUri,
 	isSpoken,
 	isSummary,
 	type Message,
+	messageUri,
 	readExchange,
 	readRoom,
 	resumeRoom,
@@ -45,7 +45,7 @@ describe.each(storages)('refs through the room on $name storage', (storage) => {
 					call === 1 ? callTool('say', { text: 'Answer.', refs: answerRefs }) : quiet(),
 				assistant: (context) =>
 					isClosing(context)
-						? callTool('say', { text: 'Summary.', refs: [exchangeUri(name, from)] })
+						? callTool('say', { text: 'Summary.', refs: [messageUri(name, from)] })
 						: quiet(),
 			}),
 		);
@@ -63,7 +63,7 @@ describe.each(storages)('refs through the room on $name storage', (storage) => {
 			const exchange = await (await room.visit(person)).send({ text: 'Question?' });
 			from = exchange.from;
 			expect(spoken(await exchange.waitForClose())).toMatchObject({ refs: answerRefs });
-			const cited = [exchangeUri(name, exchange.from)];
+			const cited = [messageUri(name, exchange.from)];
 			expect(await exchange.waitForSummary()).toMatchObject({ kind: 'summary', refs: cited });
 			const notified = events.flatMap((event) =>
 				event.type === 'message' &&

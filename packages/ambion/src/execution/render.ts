@@ -14,7 +14,7 @@
  */
 
 import type { ActivationView, ContextParticipant } from '../protocol.ts';
-import { exchangeUri, roomUri } from '../refs.ts';
+import { messageUri, roomUri } from '../refs.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
 import { isSpoken, isSummary, type Message, type Seq, type SummaryMessage } from '../types.ts';
 import { SUMMARY_DUTIES } from './summary.ts';
@@ -315,9 +315,9 @@ export function renderDelta(view: ActivationView, since: Seq): string | undefine
 /** How a room works. No definition and no pass shapes it. */
 const MECHANISM = [
 	`You are an agent seated in a room: a shared room with a record. Every participant sees`,
-	`what is said; nobody sees your tool use. A room has a URI, and an exchange has the URI`,
-	`<room URI>/exchange/<n>. The context gives the room's URI, and the ask line at its end`,
-	`gives the current exchange.`,
+	`what is said; nobody sees your tool use. A room has a URI, and a message has the URI`,
+	`<room URI>/message/<seq>. The context gives the room's URI, and the ask line at its end`,
+	`gives the message that opened the current exchange.`,
 ].join('\n');
 
 /** The seat's identity, its policy for this purpose, and its own instructions. */
@@ -402,32 +402,20 @@ function renderReserve(reserve: readonly { name: string; identity: string }[]): 
 	];
 }
 
-/**
- * The number a reader gives a message: its place in the record they read,
- * counting from one. One counter gives out every place on the journal, so a
- * journal place counts the entries the room wrote about the exchange too,
- * and it skips. A number that skips names a message the reader cannot find,
- * and reads as a gap where none is. The journal keeps its places; a
- * participant reads these.
- */
-const numbered = (record: readonly Message[], seq: Seq): number =>
-	record.filter((message) => message.seq <= seq).length;
-
 /** What this activation is for, in the last line the model reads. */
 function askOf(view: ActivationView, def: AgentDefinition): string {
 	const { context, spec } = view;
 	const purpose = spec.purpose;
 	if (purpose.kind === 'summarize') {
-		const from = numbered(context.messages, purpose.exchange);
 		return (
-			`${purpose.person}'s exchange is over: messages ${from} ` +
-			`to ${numbered(context.messages, purpose.through)}. ` +
-			`The exchange URI is ${exchangeUri(context.name, purpose.exchange)}. ${action(purpose.kind)}`
+			`${purpose.person}'s exchange is over: it holds the messages from seq ` +
+			`${purpose.exchange} to seq ${purpose.through}. The opening message's URI is ` +
+			`${messageUri(context.name, purpose.exchange)}. ${action(purpose.kind)}`
 		);
 	}
 	// A seat seated during an exchange reads which question it was seated for.
 	const open = context.exchange
-		? `${context.exchange.owner}'s exchange opened by message ${numbered(context.messages, context.exchange.from)} is active; the marked request is the current human direction. Its URI is ${exchangeUri(context.name, context.exchange.from)}. `
+		? `${context.exchange.owner}'s exchange opened by message ${context.exchange.from} is active; the marked request is the current human direction. The opening message's URI is ${messageUri(context.name, context.exchange.from)}. `
 		: '';
 	return (
 		`${open}Take your turn, ${def.name}: this is ordinary work. ` +

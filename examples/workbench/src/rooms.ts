@@ -4,6 +4,7 @@ import {
 	createRuntime,
 	type Room,
 	type RoomNotification,
+	readActivation,
 	readRoom,
 	resumeRoom,
 	startRoom,
@@ -16,6 +17,7 @@ import {
 	openWorkspace,
 	type RoomMirror,
 } from '@ambionframework/workspace';
+import { readApprovals } from './approvals.ts';
 import { team } from './definitions.ts';
 import { openInstrument } from './instrument.ts';
 import { instruments, labSchema, labWritable, scenarios, seedWorkspace } from './scenarios.ts';
@@ -258,6 +260,11 @@ export async function openRooms(
 		withWorkspace,
 		workspace,
 		lifecycle,
+		/** The trace of one activation, read from the runtime the room writes to. */
+		activation: (name: string, id: string) =>
+			withRoom(name, () => readActivation(name, id, { runtime })),
+		/** The operations of a room that wait for the owner of the exchange. */
+		approvals: (name: string) => withRoom(name, () => readApprovals(lab, name)),
 		list: () =>
 			Promise.all([...entries.values()].map((entry) => serial(entry, () => status(entry)))),
 		read: (name: string, since?: number) =>

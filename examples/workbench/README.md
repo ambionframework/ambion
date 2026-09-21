@@ -43,18 +43,19 @@ The terminal reads its colors from the repository brand kit in the root
 shows the room that receives your message. Type `/` to see the commands, or
 press Ctrl+R to pick a room.
 
-| Command                | Effect                                             |
-| ---------------------- | -------------------------------------------------- |
-| `/room <name>`         | Switch to another room                             |
-| `/new <name> [goal]`   | Create a room. Without a goal, the composer asks   |
-| `/user <person>`       | Act as another person                              |
-| `/files`               | Search the workspace files in a side panel         |
-| `/open <path>`         | Open the files panel on one file                   |
-| `/try`                 | Fill the composer with the room's suggested prompt |
-| `/abort`               | Cancel the open exchange                           |
-| `/stop`, `/resume`     | Stop the room, or start it again                   |
-| `/expand`, `/collapse` | Open or close every discussion                     |
-| `/help`, `/quit`       | Show the commands and keys, or leave               |
+| Command                | Effect                                                |
+| ---------------------- | ----------------------------------------------------- |
+| `/room <name>`         | Switch to another room                                |
+| `/new <name> [goal]`   | Create a room. Without a goal, the composer asks      |
+| `/user <person>`       | Act as another person                                 |
+| `/files`               | Search the workspace files in a side panel            |
+| `/open <path>`         | Open the files panel on one file                      |
+| `/try`                 | Fill the composer with the room's suggested prompt    |
+| `/abort`               | Cancel the open exchange                              |
+| `/stop`, `/resume`     | Stop the room, or start it again                      |
+| `/steps [n]`           | Show the steps of the newest activation of exchange n |
+| `/expand`, `/collapse` | Open or close every discussion                        |
+| `/help`, `/quit`       | Show the commands and keys, or leave                  |
 
 `/abort` runs at once. Typing the command is the confirmation. Switching
 person leaves the current room, then enters it as the new person.
@@ -65,6 +66,7 @@ person leaves the current room, then enters it as the new person.
 | Ctrl+J, Alt+Enter     | Add a line to the message                                  |
 | Tab                   | Complete a command, or browse the discussions              |
 | Up, Down, Enter, e, c | While browsing: choose, open or close, open all, close all |
+| s                     | While browsing: show the steps of the chosen exchange      |
 | Esc                   | Close the palette, clear the search, or close the panel    |
 | PageUp, PageDown      | Scroll the conversation                                    |
 | Type, Up, Down        | In the files panel: search, and choose a file to read      |
@@ -78,6 +80,20 @@ with the first 50 rows of each. The panel opens the database read-only.
 A discussion is the thread between a question and its summary, with each
 steering message in its place. It starts closed. Start a message with `//` to
 send a leading slash, as in `//library/led-5mm.md`.
+
+**The terminal shows the work behind an answer.** Each of these reads from
+the record, so a restart keeps them.
+
+- **Cost.** A discussion shows what its exchange spent: dollars when the
+  provider reports a cost, else a token count.
+- **Steps.** `/steps` or `s` on a chosen discussion shows the passes and steps
+  of the newest activation of an exchange. A running activation shows the
+  steps written so far and reads again on each change.
+- **Awaiting.** An exchange that ends on a message to a person shows
+  `Waiting on <person>`. That person also sees a note and a status line.
+- **Approval.** An operation above an instrument limit shows to the owner of
+  the exchange with its id. The owner answers in the room, and the agent
+  records the answer with `approve_operation`.
 
 ## The team
 
@@ -163,6 +179,8 @@ workspace resources.
 | `src/feed.ts`        | The room feed: one read at a time                     |
 | `src/commands.ts`    | The slash commands and their suggestions              |
 | `src/timeline.ts`    | The record grouped into questions, threads, summaries |
+| `src/steps.ts`       | The steps of an activation, and the cost of a run     |
+| `src/approvals.ts`   | The instrument operations that wait for an answer     |
 | `src/transcript.ts`  | The conversation, with open and closed threads        |
 | `src/composer.ts`    | The composer, room chip, and palette                  |
 | `src/browser.ts`     | The files panel state: search, matches, chosen file   |

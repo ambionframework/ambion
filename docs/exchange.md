@@ -26,16 +26,17 @@ activations from its opening question to its durable close.
 
 ## 2. The shape
 
-An exchange records its owner, opening time, and opening message position
-(`from`). A durable close fixes its inclusive final message position
-(`through`). Journal administration can occupy positions between messages.
+An exchange records its owner, opening time, and opening message seq
+(`from`). A durable close fixes its inclusive final message seq
+(`through`). Journal administration can occupy seqs between messages.
 `ExchangeRef` carries identity. `ExchangeView` carries recorded state.
 `ExchangeHandle` provides live waits. An `ExchangeRead` contains a view,
 its original discussion, and the observed journal watermark.
 See [the public types](../packages/ambion/src/types.ts) for the exact shapes.
 
-The exchange URI is `ambion://room/<name>/exchange/<from>`. Build it with
-`exchangeUri(name, from)`. The URI is not a stored field.
+A message URI is `ambion://room/<name>/message/<seq>`. Build the one for an
+exchange's opening message with `messageUri(name, from)`. The URI is not a
+stored field.
 
 ## 3. Three rules
 

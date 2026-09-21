@@ -1,10 +1,12 @@
-import type { ParticipantInfo } from '@ambionframework/ambion';
+import type { ActivationRead, ExchangeView, ParticipantInfo } from '@ambionframework/ambion';
+import { attentionOf, newest, pick } from './attention.ts';
 import { FileBrowser } from './browser.ts';
 import { type Choices, type Parsed, parse, type Suggestion, suggest } from './commands.ts';
 import { RoomFeed } from './feed.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
+import { activationLine, ended, stepsView } from './steps.ts';
 import { type Block, buildTimeline } from './timeline.ts';
-import type { FileEntry, Person, RoomAction, RoomView, Workbench } from './workbench.ts';
+import type { Approval, FileEntry, Person, RoomAction, RoomView, Workbench } from './workbench.ts';
 
 /** What the terminal does after a command, beyond what the session already changed. */
 export type Intent = { type: 'quit' } | { type: 'files' } | { type: 'compose'; text: string };
@@ -19,12 +21,15 @@ const HELP = [
 	'  /try              fill the composer with the room’s suggested question',
 	'  /abort            cancel the open exchange in this room',
 	'  /stop             stop the room. /resume starts it again.',
+	'  /steps [n]        show the steps of the newest activation of exchange n, oldest first.',
+	'                    Without n, the latest exchange. /steps off hides them.',
 	'  /expand           open every discussion. /collapse closes them.',
 	'  /quit             leave the terminal. The rooms stop with it.',
 	'Keys',
 	'  Enter sends. Ctrl+J, Alt+Enter, and Shift+Enter add a line.',
 	'  Tab browses the discussions. Up and Down choose, Enter opens or closes,',
-	'  e opens all, c closes all, and Esc goes back to the composer.',
+	'  e opens all, c closes all, s shows the steps of the exchange, and Esc goes back',
+	'  to the composer.',
 	'  PageUp and PageDown scroll. Start a message with // to send a leading slash.',
 ].join('\n');
 
@@ -85,6 +90,10 @@ export class Session {
 	noticeSeq = 0;
 	/** The name of a room that waits for its goal. The next submission is the goal. */
 	awaitingGoal: string | undefined;
+	/** The operations of the open room that wait for an answer. */
+	approvals: Approval[] = [];
+	/** The activation whose steps the terminal shows. It re-reads on each room change. */
+	steps: { id: string; read: ActivationRead | undefined } | undefined;
 	private readonly feed: RoomFeed<RoomView>;
 	private readonly changed: () => void;
 	private sending = false;
@@ -174,6 +183,7 @@ export class Session {
 			if (!view) return;
 			this.view = view;
 			this.offline = undefined;
+			await this.readSide(view.name);
 			this.rebuild();
 		} catch (error) {
 			this.offline = errorText(error);
@@ -189,6 +199,40 @@ export class Session {
 	async poll(): Promise<void> {
 		await this.refreshRooms();
 		if (this.view?.status !== 'running') await this.refresh();
+	}
+
+	/** Read what a room read does not hold: the operations and the open steps. A failure keeps the last answer. */
+	private async readSide(room: string): Promise<void> {
+		const steps = this.steps;
+		const [approvals, read] = await Promise.all([
+			this.host.approvals(room).catch(() => undefined),
+			steps ? this.host.activation(room, steps.id).catch(() => undefined) : undefined,
+		]);
+		if (this.room !== room) return;
+		if (approvals) this.approvals = approvals;
+		if (steps && read && this.steps?.id === steps.id) this.steps = { id: steps.id, read };
+	}
+
+	/** What the person owes the room, one line each. It is empty when nothing waits. */
+	get attention(): string[] {
+		return attentionOf(this.view, this.whoami, this.approvals);
+	}
+
+	/** The blocks that follow the closed exchanges: what waits on the person, and the open steps. */
+	private tail(view: RoomView): Block[] {
+		const blocks: Block[] = this.attention.map((text) => ({ type: 'note', text }));
+		const steps = this.steps;
+		if (!steps?.read) return blocks;
+		const activation = view.exchanges
+			.flatMap((exchange) => exchange.activations)
+			.find((candidate) => candidate.id === steps.id);
+		blocks.push({
+			type: 'steps',
+			title: activation ? activationLine(activation) : steps.id,
+			running: !ended(steps.read),
+			passes: stepsView(steps.read),
+		});
+		return blocks;
 	}
 
 	rebuild(): void {
@@ -207,6 +251,7 @@ export class Session {
 			working: workingAgents(view),
 			activity: activity ? `${activity.agent ?? 'room'}: ${activity.text}` : undefined,
 			expanded: this.expanded,
+			tail: this.tail(view),
 		});
 		this.changed();
 	}
@@ -291,6 +336,8 @@ export class Session {
 			case 'stop':
 			case 'resume':
 				return void (await this.control(name));
+			case 'steps':
+				return void (await this.stepsCommand(argument));
 			case 'expand':
 			case 'collapse':
 				return void this.setAllOpen(name === 'expand');
@@ -310,6 +357,8 @@ export class Session {
 		this.view = undefined;
 		this.blocks = [];
 		this.expanded.clear();
+		this.approvals = [];
+		this.steps = undefined;
 		this.notice = undefined;
 		this.entered = false;
 		this.wantBottom = true;
@@ -468,6 +517,39 @@ export class Session {
 		if (found) return this.openFiles(found.path);
 		this.say(`No file matches ${argument}. Type /files to search them.`);
 		return undefined;
+	}
+
+	// Steps
+
+	private async stepsCommand(argument: string): Promise<void> {
+		if (argument === 'off') {
+			this.steps = undefined;
+			return this.rebuild();
+		}
+		const exchange = pick(this.view?.exchanges ?? [], argument);
+		if (!exchange) return this.say(argument ? `No exchange ${argument}.` : 'No activation yet.');
+		return this.showExchange(exchange);
+	}
+
+	/** Show the steps of the exchange that a discussion key names. The key is the seq of its question. */
+	async showSteps(key: string): Promise<void> {
+		const exchange = this.view?.exchanges.find((candidate) => String(candidate.from) === key);
+		if (exchange) await this.showExchange(exchange);
+	}
+
+	private async showExchange(exchange: ExchangeView): Promise<void> {
+		const activation = newest(exchange);
+		if (!activation) return this.say('That exchange ran no activation.');
+		try {
+			const read = await this.host.activation(this.room, activation.id);
+			this.steps = { id: activation.id, read };
+			this.wantBottom = true;
+			this.rebuild();
+			if (!read || read.passes.length === 0)
+				this.say('The trace of that activation holds no steps.');
+		} catch (error) {
+			this.fail(error);
+		}
 	}
 
 	// Discussions
