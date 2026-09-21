@@ -43,6 +43,14 @@ export type {
 } from './resource.ts';
 export { openResource } from './resource.ts';
 export { SHARED_DATABASE } from './sql.ts';
+export type {
+	SqlProvenance,
+	SqlResource,
+	SqlResourceEnv,
+	SqlResourceOptions,
+	SqlValue,
+} from './sql-resource.ts';
+export { openSqlResource, PROVENANCE_COLUMNS } from './sql-resource.ts';
 export type { Workspace } from './workspace.ts';
 export { openWorkspace } from './workspace.ts';
 

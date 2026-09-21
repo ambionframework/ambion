@@ -26,6 +26,10 @@
 			"types": "./dist/resource-entry.d.mts",
 			"import": "./dist/resource-entry.mjs"
 		},
+		"./sql": {
+			"types": "./dist/sql-resource.d.mts",
+			"import": "./dist/sql-resource.mjs"
+		},
 		"./package.json": "./package.json"
 	},
 	"main": "./dist/index.mjs",
