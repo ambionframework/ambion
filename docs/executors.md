@@ -5,7 +5,8 @@ driver own the record, the lease, and the rules. An executor owns the model
 call, the tools it exposes, and the steps it reports. [The
 README](../README.md) holds the positioning. This page holds the contract
 between the driver and an executor, the step vocabulary, and the way to
-write an adapter.
+write an adapter. [The Pi guide](pi.md) and [the Claude guide](claude.md)
+hold what is specific to one adapter.
 
 ## The executor contract
 
@@ -112,7 +113,7 @@ zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 | `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.  |
 | `steer`       | executor    | A message landed mid-activation. `consumed` says whether the model received it.                    |
 | `approval`    | executor    | A tool call needed a decision. `decision` holds the answer. The Claude executor emits it.          |
-| `usage`       | executor    | Tokens and cost of one provider request.                                                           |
+| `usage`       | executor    | Tokens and cost. Pi writes one for each provider request; Claude writes one for each SDK result.   |
 | `end`         | driver      | The activation stops: `stopped`, `length`, or `aborted`. A failure adds its `cause` and `message`. |
 
 ## The trace journal
@@ -135,6 +136,8 @@ a `thinking` or `text` block into one step, so a block is one entry and one
 event. `limits.trace.stepsPerPass` caps the steps of one pass, and an `end`
 step is always kept. `limits.trace.toolOutputBytes` cuts a tool output that
 is larger, and the step keeps the start of it with a note of the size.
+The Pi execution applies the limits of the host. The Claude execution
+applies the defaults and ignores `limits.trace`.
 
 **A definition sets its trace policy.** `defineAgent({ trace })` takes
 `thinking` (`omit`, `summary`, or `full`) and `toolOutput` (`omit` or
@@ -145,21 +148,22 @@ is larger, and the step keeps the start of it with a note of the size.
 each step the trace writes, in the same order as the journal. A reader
 merges the two by `activation`, `pass`, and `index`. In a separated host the
 trace lives in the storage of the seat, so a read across objects needs a call
-to the seat. The public read of a trace (`readActivation`) is pending release
-work and is not part of this contract yet.
+to the seat. `readActivation` reads the trace of one activation; see
+[Exchange](exchange.md).
 
 ## The harness matrix
 
 **Two executor families ship today.** Pi and the Claude Agent SDK both
-implement the contract. The Anthropic SDK tool runner and the Codex SDK are
-anticipated families. No package or example for either exists yet.
+implement the contract. The Anthropic SDK tool runner is an anticipated
+family with no package or example. The Codex SDK has an example in
+`examples/codex` and no package.
 
 | Family                    | Package                   | Loop owner | Steer during a pass                 | Status      |
 | ------------------------- | ------------------------- | ---------- | ----------------------------------- | ----------- |
 | Pi agent core             | `@ambionframework/pi`     | Caller     | Yes, through `agent.steer`          | Shipped     |
 | Claude Agent SDK          | `@ambionframework/claude` | Harness    | Yes, on the SDK `user` echo         | Shipped     |
 | Anthropic SDK tool runner | None                      | Caller     | Between turns                       | Anticipated |
-| Codex SDK                 | None                      | Harness    | None; the next `run` takes the line | Anticipated |
+| Codex SDK                 | `examples/codex`          | Harness    | None; the next `run` takes the line | Example     |
 
 **A family that cannot steer still passes.** Its `readThrough` advances at
 the pass boundary, and the driver holds a steer for the next pass. The
@@ -228,9 +232,10 @@ executable. `can` is an `ExecutorCapabilities` value with `steer`, `usage`,
 and `permanentFailure`. The suite drops each case that a false capability
 gates.
 
-Two runs exist as evidence. The scripted executor runs the suite in
+Three runs exist as evidence. The scripted executor runs the suite in
 `packages/ambion/test/executor-conformance.test.ts`. The Claude executor
 runs it against a fake Claude Code executable in
 `packages/claude/test/executor-conformance.test.ts`, through
-`claudeExecutorHarness` from `@ambionframework/claude/testing`. Neither run
-needs a key or a network.
+`claudeExecutorHarness` from `@ambionframework/claude/testing`. The Codex
+example runs it in `examples/codex/test/executor-conformance.test.ts`. No
+run needs a key or a network. The Pi executor has no run of the suite.

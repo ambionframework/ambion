@@ -32,11 +32,12 @@ const room = await startRoom({
 
 `name` identifies the agent inside the room and on the journal. `identity` is
 public roster text. `executor` names the loop the agent runs on and its
-configuration. `pi` is the only executor today. Its `instructions` are private
-model guidance. `model` names a Pi provider model. `tools` and `bundles`
-supply the agent's domain tools. `activationTokenLimit` bounds the record one
-activation reads, and `estimateTokens` counts tokens against it. Without a
-limit, an activation reads the whole record the room serves. See
+configuration. `pi` and `claude` are the executors that ship; see
+[the Pi guide](pi.md) and [the Claude guide](claude.md). The `instructions`
+are private model guidance. `model` names a model of that family. `tools`
+and `bundles` supply the agent's domain tools. `activationTokenLimit`
+bounds the record one activation reads, and `estimateTokens` counts tokens
+against it. Without a limit, an activation reads the whole record the room serves. See
 `limits.context.messages` in [History and limits](room.md#history-and-limits).
 The seat runs `estimateTokens`, so it never crosses the wire. `trace` sets what the trace
 keeps of the agent's work; see [the step vocabulary](executors.md#the-step-vocabulary).
