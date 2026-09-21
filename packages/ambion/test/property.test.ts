@@ -143,6 +143,7 @@ class Walk {
 	private readonly storage: Awaited<ReturnType<typeof memory.open>>['storage'];
 	private readonly journals: Awaited<ReturnType<typeof memory.open>>['journals'];
 	private lastKey: string | undefined;
+	private lastFrom: string | undefined;
 	private deliveries = 0;
 
 	constructor(
@@ -231,12 +232,17 @@ class Walk {
 	}
 
 	private async send(): Promise<void> {
-		const visit = this.pick([...this.visits.values()]);
-		if (visit === undefined) return;
+		const picked = this.pick([...this.visits.values()]);
+		if (picked === undefined) return;
 		// One delivery in ten repeats the last key: the host never learned whether it landed.
-		const repeated = this.lastKey !== undefined && this.random() < 0.1;
+		// A key is bound to its content, and the sender is part of it. Only the first sender repeats it.
+		const wanted = this.random() < 0.1 && this.lastKey !== undefined;
+		const first = this.lastFrom === undefined ? undefined : this.visits.get(this.lastFrom);
+		const repeated = wanted && first !== undefined;
+		const visit = repeated ? first : picked;
 		const key = repeated ? this.lastKey : `d${++this.deliveries}`;
 		this.lastKey = key;
+		this.lastFrom = visit.human.name;
 		this.journal.push(`  ${visit.human.name} ${repeated ? 'repeats' : 'delivers'} ${key}`);
 		await visit.send({ text: `Question ${key}?`, key: key as string }).catch(expected);
 	}
