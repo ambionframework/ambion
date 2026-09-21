@@ -196,6 +196,7 @@ export class Keys {
 		if (step) this.move(step);
 		else if ((name === 'return' || name === 'space') && this.browsing) this.toggle(this.browsing);
 		else if (name === 'e' || name === 'c') this.setAllOpen(name === 'e');
+		else if (name === 's' && this.browsing) void this.session.showSteps(this.browsing);
 		else if (name === 'tab' || name === 'escape' || name === 'i') this.exitBrowse();
 	}
 

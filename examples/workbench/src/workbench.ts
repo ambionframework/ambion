@@ -1,13 +1,17 @@
 import { access, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import type { ActivationRead } from '@ambionframework/ambion';
 import type { PiExecutionOptions } from '@ambionframework/pi';
+import type { Approval } from './approvals.ts';
 import { type Person, people } from './definitions.ts';
 import { type FileContent, type FileEntry, listFiles, readFile } from './files.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
 import { fail, liveRoom, openRooms, type RoomAction, type RoomView } from './rooms.ts';
 import { scenarios } from './scenarios.ts';
 
+export type { ActivationRead } from '@ambionframework/ambion';
+export type { Approval } from './approvals.ts';
 export type { Person } from './definitions.ts';
 export type { FileContent, FileEntry, TableView } from './files.ts';
 export type { RoomAction, RoomView } from './rooms.ts';
@@ -36,6 +40,13 @@ export interface Workbench {
 	/** Send a message. The same key and text return the first exchange and add no message. */
 	send(room: string, person: string, key: string, text: string): Promise<void>;
 	control(room: string, action: RoomAction): Promise<RoomView>;
+	/**
+	 * The trace of one activation: its passes and steps. A running activation returns
+	 * the steps written so far. An id with no trace returns no passes.
+	 */
+	activation(room: string, id: string): Promise<ActivationRead | undefined>;
+	/** The operations of a room that wait for an answer from the owner of their exchange. */
+	approvals(room: string): Promise<Approval[]>;
 	create(name: string, goal: string): Promise<RoomView>;
 	files(): Promise<FileEntry[]>;
 	file(path: string): Promise<FileContent>;
@@ -129,6 +140,8 @@ function hosted(rooms: Rooms, database: DatabaseSync): Workbench {
 			});
 		},
 		control: (room, action) => rooms.lifecycle(room, action),
+		activation: (room, id) => rooms.activation(room, id),
+		approvals: (room) => rooms.approvals(room),
 		// Async, so a refusal is a rejected promise like every other failure of this interface.
 		async create(name, goal) {
 			if (!ROOM_NAME.test(name))

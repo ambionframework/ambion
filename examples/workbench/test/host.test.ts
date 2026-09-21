@@ -342,3 +342,50 @@ describe('Workbench host watch', () => {
 		await vi.waitFor(() => expect(changes).toBeGreaterThan(settled));
 	}, 20_000);
 });
+
+describe('Workbench host steps and approvals', () => {
+	it('reads the trace of an activation the room ran', async () => {
+		const workbench = await open(joinPath(await freshDirectory(), 'run'));
+		await workbench.join('bringup', 'mira');
+		await workbench.send('bringup', 'mira', 'trace-1', 'Pick the LED resistor.');
+		await untilSummary(workbench, 'bringup');
+		const view = await workbench.read('bringup', 0);
+		const activations = view.exchanges.flatMap((exchange) => exchange.activations);
+		expect(activations.length).toBeGreaterThan(0);
+		const id = activations[0]?.id ?? '';
+		const read = await workbench.activation('bringup', id);
+		expect(read?.activation).toBe(id);
+		expect(Array.isArray(read?.passes)).toBe(true);
+		expect(await workbench.activation('bringup', 'not-an-id')).toBeUndefined();
+		await expect(workbench.activation('nowhere', id)).rejects.toThrow(/Unknown room/);
+	}, 20_000);
+
+	it('lists a requested operation until an answer names it', async () => {
+		const directory = joinPath(await freshDirectory(), 'run');
+		const workbench = await open(directory);
+		expect(await workbench.approvals('bringup')).toEqual([]);
+		const lab = new DatabaseSync(joinPath(directory, 'lab.db'));
+		const insert = lab.prepare(
+			'INSERT INTO operations (instrument, setpoint, outcome, request_id, room, exchange_owner, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+		);
+		insert.run('led-current', 30, 'requested', null, 'bringup', 'mira', '2026-01-01T00:00:00Z');
+		insert.run('bench-supply', 9, 'requested', null, 'sensing', 'theo', '2026-01-01T00:00:01Z');
+		expect(await workbench.approvals('bringup')).toEqual([
+			{
+				id: 1,
+				instrument: 'led-current',
+				setpoint: 30,
+				unit: 'mA',
+				owner: 'mira',
+				at: '2026-01-01T00:00:00Z',
+			},
+		]);
+		expect((await workbench.approvals('sensing')).map((approval) => approval.owner)).toEqual([
+			'theo',
+		]);
+		insert.run('led-current', 30, 'approved', 1, 'bringup', 'mira', '2026-01-01T00:00:02Z');
+		lab.close();
+		expect(await workbench.approvals('bringup')).toEqual([]);
+		await expect(workbench.approvals('nowhere')).rejects.toThrow(/Unknown room/);
+	});
+});

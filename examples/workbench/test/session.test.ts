@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Session } from '../src/session.ts';
-import type { FileContent, FileEntry, Person, RoomView, Workbench } from '../src/workbench.ts';
+import type {
+	ActivationRead,
+	Approval,
+	FileContent,
+	FileEntry,
+	Person,
+	RoomView,
+	Workbench,
+} from '../src/workbench.ts';
 
 const person = (name: string, role: string) =>
 	({ name, role, identity: name }) as unknown as Person;
@@ -93,6 +101,16 @@ class FakeHost implements Workbench {
 		const created = view(name, { goal });
 		this.table.set(name, created);
 		return created;
+	}
+	/** The traces the host holds, by activation id. */
+	readonly traces = new Map<string, ActivationRead>();
+	pendingApprovals: Approval[] = [];
+	async activation(_room: string, id: string) {
+		this.calls.push(`activation:${id}`);
+		return this.traces.get(id);
+	}
+	async approvals() {
+		return this.pendingApprovals;
 	}
 	async files() {
 		return this.fileList;
@@ -416,5 +434,126 @@ describe('Session push updates', () => {
 		host.table.set('bringup', view('bringup'));
 		host.notify('bringup');
 		await vi.waitFor(() => expect(session.offline).toBeUndefined());
+	});
+});
+
+const AT = '2026-01-01T00:00:00Z';
+const closedExchange = (from: number, extra: Record<string, unknown> = {}) => ({
+	from,
+	through: from + 1,
+	status: 'closed',
+	owner: 'mira',
+	at: AT,
+	outcome: { kind: 'complete' },
+	summary: { status: 'silent' },
+	activations: [
+		{
+			id: `act-${from}`,
+			seat: 'design',
+			purpose: 'respond',
+			attempt: 1,
+			outcome: { status: 'released' },
+		},
+	],
+	...extra,
+});
+const trace = (id: string, withEnd: boolean): ActivationRead =>
+	({
+		activation: id,
+		passes: [
+			{
+				pass: 1,
+				input: 'view',
+				through: 4,
+				steps: [
+					{ type: 'pass', pass: 1, input: 'view', through: 4 },
+					{ type: 'tool_call', call: 'c1', name: 'read', input: { path: '/a' } },
+					...(withEnd ? [{ type: 'end', stop: 'stopped' }] : []),
+				],
+			},
+		],
+	}) as unknown as ActivationRead;
+const blockTypes = (session: Session) => session.blocks.map((block) => block.type);
+const stepsBlock = (session: Session) =>
+	session.blocks.find((candidate) => candidate.type === 'steps');
+
+describe('Session steps', () => {
+	it('opens the steps of the latest exchange, and reads them again on a room change', async () => {
+		const { host, session } = await started();
+		host.table.set('bringup', view('bringup', { exchanges: [closedExchange(4)] }));
+		host.traces.set('act-4', trace('act-4', false));
+		await session.refresh();
+		await session.submit('/steps');
+		expect(host.calls).toContain('activation:act-4');
+		expect(stepsBlock(session)).toMatchObject({
+			type: 'steps',
+			running: true,
+			title: 'design · respond · attempt 1',
+		});
+		host.traces.set('act-4', trace('act-4', true));
+		host.notify('bringup');
+		await vi.waitFor(() => expect(stepsBlock(session)).toMatchObject({ running: false }));
+		await session.submit('/steps off');
+		expect(blockTypes(session)).not.toContain('steps');
+	});
+
+	it('picks an exchange by ordinal, and refuses one that does not exist', async () => {
+		const { host, session } = await started();
+		host.table.set(
+			'bringup',
+			view('bringup', { exchanges: [closedExchange(4), closedExchange(9)] }),
+		);
+		host.traces.set('act-4', trace('act-4', true));
+		await session.refresh();
+		await session.submit('/steps 1');
+		expect(session.steps?.id).toBe('act-4');
+		await session.submit('/steps 7');
+		expect(session.notice).toBe('No exchange 7.');
+	});
+
+	it('opens the steps of the exchange a discussion key names', async () => {
+		const { host, session } = await started();
+		host.table.set('bringup', view('bringup', { exchanges: [closedExchange(4)] }));
+		host.traces.set('act-4', trace('act-4', true));
+		await session.refresh();
+		await session.showSteps('4');
+		expect(session.steps?.id).toBe('act-4');
+	});
+
+	it('says so when the activation has no trace', async () => {
+		const { host, session } = await started();
+		host.table.set('bringup', view('bringup', { exchanges: [closedExchange(4)] }));
+		await session.refresh();
+		await session.submit('/steps');
+		expect(session.notice).toMatch(/holds no steps/);
+	});
+});
+
+describe('Session awaiting and approval', () => {
+	const awaiting = closedExchange(4, { outcome: { kind: 'awaiting', person: 'mira' } });
+
+	it('shows an awaiting exchange to the person it waits on, and to nobody else', async () => {
+		const { host, session } = await started();
+		host.table.set('bringup', view('bringup', { exchanges: [awaiting] }));
+		await session.refresh();
+		expect(session.attention).toEqual(['The exchange from message 4 waits for your reply.']);
+		expect(blockTypes(session)).toContain('note');
+		await session.submit('/user theo');
+		expect(session.attention).toEqual([]);
+	});
+
+	it('shows a pending operation to the owner of the exchange only', async () => {
+		const { host, session } = await started();
+		host.pendingApprovals = [
+			{ id: 3, instrument: 'led-current', setpoint: 30, unit: 'mA', owner: 'mira', at: AT },
+		];
+		await session.refresh();
+		expect(session.attention).toHaveLength(1);
+		expect(session.attention[0]).toMatch(/Operation 3 needs your answer.*led-current to 30 mA/);
+		await session.submit('/user theo');
+		expect(session.attention).toEqual([]);
+		host.pendingApprovals = [];
+		await session.submit('/user mira');
+		expect(session.attention).toEqual([]);
 	});
 });
