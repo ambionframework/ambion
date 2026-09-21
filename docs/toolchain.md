@@ -225,7 +225,9 @@ pnpm test:live
 
 `AMBION_HARNESS` is `pi` (the default), `claude`, or `codex`. It selects the
 executor of the live seats. The live workflow runs a matrix on the three
-values. A harness whose secret is empty skips. Run one harness by hand with
+values, and each leg runs the live files of `@ambionframework/ambion` only.
+A harness whose secret is empty skips. One separate job runs the live tier of
+every other package once, with both keys. Run one harness by hand with
 `AMBION_HARNESS=codex pnpm test:live`. The `codex` harness reads
 `CODEX_API_KEY` and runs the model `gpt-5.6-luna`.
 

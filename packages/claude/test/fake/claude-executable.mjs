@@ -10,6 +10,11 @@
  * one JSON line for the arguments, the initialize request, and each
  * permission answer.
  *
+ * `rejectResume` makes a resumed start exit before it says anything.
+ * `rejectResumeResult` makes a resumed start answer as the real SDK does: a
+ * system init, then an error result that says the session is missing. It
+ * echoes no user message.
+ *
  * Actions:
  * - `{ say }`: call the room tool `say`.
  * - `{ sayUntilLanded }`: call `say`, and call it again when the room answers an error.
@@ -225,7 +230,17 @@ function result(fields) {
 	);
 }
 
+const unresumable = () => resumed !== undefined && config.rejectResumeResult === true;
+
 async function play(list) {
+	if (unresumable()) {
+		out(envelope({ type: 'system', subtype: 'init' }));
+		return result({
+			subtype: 'error_during_execution',
+			is_error: true,
+			errors: [`No conversation found with session ID: ${resumed}`],
+		});
+	}
 	for (const action of list) {
 		if (action.fail !== undefined) {
 			return result({
@@ -282,7 +297,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 	}
 	if (message.type !== 'user') return;
 	users.push(message);
-	out({ ...message, isReplay: true, session_id: session });
+	if (!unresumable()) out({ ...message, isReplay: true, session_id: session });
 	wake();
 	if (!running) void run();
 });

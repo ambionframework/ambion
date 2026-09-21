@@ -55,6 +55,17 @@ export function passResultOf(result: SDKResultMessage): PassResult {
 	return { failed: false };
 }
 
+/** The text of the error the SDK reports for a session id it cannot resume. */
+const UNRESUMABLE = /No conversation found with session ID/i;
+
+/**
+ * Whether a result reports a session that the SDK could not resume. The
+ * SDK sends this as an error result after its init message.
+ */
+export function unresumableResult(result: SDKResultMessage): boolean {
+	return (result.is_error || result.subtype !== 'success') && UNRESUMABLE.test(failureText(result));
+}
+
 /**
  * The session a `system` init or a `result` message names, or nothing. The
  * SDK generates the id, and the room records it to resume the seat later.

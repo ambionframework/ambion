@@ -88,7 +88,7 @@ async function run(
 	view: ActivationView,
 ): Promise<HarnessSession | undefined> {
 	const result = await session.pass({ kind: 'view', view });
-	expect(result.failed).toBe(false);
+	expect(result).toMatchObject({ failed: false });
 	const recorded = session.session;
 	session.close?.();
 	return recorded;
@@ -144,6 +144,53 @@ describe('seat memory', () => {
 		const [first, second] = room.argvs();
 		expect(resumeOf(first)).toBe('lost');
 		expect(resumeOf(second)).toBeUndefined();
+	});
+
+	it('starts a fresh session when the SDK answers a resume with an error result', async () => {
+		const room = seatRoom(seat({ memory: 'seat' }), {
+			...SAY,
+			rejectResumeResult: true,
+			session: 'fresh',
+		});
+		const recorded = await run(
+			room.activate('message:3:sonnet:1'),
+			viewWith(1, { harness: 'claude', id: 'lost' }),
+		);
+		expect(recorded).toEqual({ harness: 'claude', id: 'fresh' });
+		expect(room.commits).toHaveLength(1);
+		const [first, second] = room.argvs();
+		expect(resumeOf(first)).toBe('lost');
+		expect(resumeOf(second)).toBeUndefined();
+	});
+
+	it('reports a second failure after the restart and does not loop', async () => {
+		const failure = 'No conversation found with session ID: again';
+		const room = seatRoom(seat({ memory: 'seat' }), {
+			turns: [[{ fail: { status: 500, text: failure } }]],
+			rejectResumeResult: true,
+		});
+		const activation = room.activate('message:3:sonnet:1');
+		const result = await activation.pass({
+			kind: 'view',
+			view: viewWith(1, { harness: 'claude', id: 'lost' }),
+		});
+		activation.close?.();
+		expect(result).toMatchObject({ failed: true, message: failure });
+		expect(room.argvs()).toHaveLength(2);
+	});
+
+	it('does not restart a real failure of a resumed session', async () => {
+		const room = seatRoom(seat({ memory: 'seat' }), {
+			turns: [[{ fail: { status: 529, text: 'API Error: 529 overloaded_error' } }]],
+		});
+		const activation = room.activate('message:3:sonnet:1');
+		const result = await activation.pass({
+			kind: 'view',
+			view: viewWith(1, { harness: 'claude', id: 'held' }),
+		});
+		activation.close?.();
+		expect(result).toMatchObject({ failed: true, cause: 'transient' });
+		expect(room.argvs()).toHaveLength(1);
 	});
 
 	it('refuses a say against a record that moved, as activation memory does', async () => {

@@ -74,5 +74,43 @@ jobs:
           cache: pnpm
       - if: steps.key.outputs.present == 'true'
         run: pnpm install --frozen-lockfile
+      # The ambion package only. The package tiers run once, in `packages`.
       - if: steps.key.outputs.present == 'true'
-        run: pnpm run test:live
+        run: pnpm --filter @ambionframework/ambion run test:live
+
+  packages:
+    name: Live tests of the packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AMBION_MODEL: ${{ inputs.model || 'anthropic/claude-sonnet-5' }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+    steps:
+      # Every package tier skips a file whose key is empty. With both keys
+      # empty the job skips, and the run says so.
+      - name: a key is present
+        id: key
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ] || [ -n "$CODEX_API_KEY" ]; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No key for the package live tiers: both repository secrets are empty, so the job skips."
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v5
+        if: steps.key.outputs.present == 'true'
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        if: steps.key.outputs.present == 'true'
+      - uses: actions/setup-node@v5
+        if: steps.key.outputs.present == 'true'
+        with:
+          node-version: 26
+          cache: pnpm
+      - if: steps.key.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+      # `--no-bail` runs every package tier, so one failure hides no other.
+      - if: steps.key.outputs.present == 'true'
+        run: pnpm -r --no-bail --filter '!@ambionframework/ambion' run test:live

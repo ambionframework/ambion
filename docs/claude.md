@@ -305,10 +305,14 @@ starts at zero in each activation, and a say against newer record gets a
 `missed` answer.
 
 **A resume that fails starts a fresh session.** The SDK cannot resume when
-the session store is gone, such as after a move to a new disk. The query then
-fails before it says anything. The executor clears the id, restarts the query
-with no `resume`, and sends the waiting messages again. The activation does
-not fail, and the release records the new id. See
+the session store is gone, such as after a move to a new disk. The real SDK
+sends an init message, then an error result whose text says `No conversation
+found with session ID`. A query that ends before any message triggers the
+same fallback. The executor clears the id, restarts the query with no
+`resume`, and sends the waiting messages again. The restart happens once, and
+only for a resumed session. A second failure ends the pass as any failure
+does. The activation does not fail on the first, and the release records the
+new id. See
 [Durability](durability.md#storage-compatibility).
 
 ## The step mapping

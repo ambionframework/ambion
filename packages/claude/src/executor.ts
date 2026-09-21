@@ -40,7 +40,7 @@ import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/c
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps, plainName } from './claude-trace.ts';
 import { approver, type ClaudeRuntime, claudeOf, queryOptions } from './options.ts';
-import { passResultOf, sessionOf } from './services.ts';
+import { passResultOf, sessionOf, unresumableResult } from './services.ts';
 import { Echoes, Inbox, userMessage } from './steer.ts';
 import { type Binding, roomServer } from './tools.ts';
 
@@ -245,13 +245,14 @@ class Activation implements ExecutorSession {
 		if (view.spec.seat !== this.definition.name)
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
 		const { mechanism, agent } = renderActivation(view, this.definition);
-		const { server, names } = roomServer(view, this.definition, this.binding(), () =>
-			this.currentView(view),
-		);
 		const executor = claudeOf(this.definition.executor);
 		this.resuming = this.memory === undefined ? undefined : (this.memory.id ?? resumeOf(view));
-		this.begin = () =>
-			this.open({
+		this.begin = () => {
+			// Each query takes its own room server. A server serves one connection.
+			const { server, names } = roomServer(view, this.definition, this.binding(), () =>
+				this.currentView(view),
+			);
+			return this.open({
 				prompt: this.inbox,
 				options: queryOptions({
 					executor,
@@ -263,6 +264,7 @@ class Activation implements ExecutorSession {
 					...(this.resuming === undefined ? {} : { resume: this.resuming }),
 				}),
 			});
+		};
 		const stream = this.begin();
 		this.stream = stream;
 		void this.consume(stream);
@@ -270,7 +272,8 @@ class Activation implements ExecutorSession {
 
 	/**
 	 * Start the query again without the session it could not resume. The
-	 * messages that wait for an echo go to the new input.
+	 * messages that wait for an echo go to the new input. It clears
+	 * `resuming`, so the restart happens once.
 	 */
 	private restart(begin: () => Query): void {
 		this.resuming = undefined;
@@ -314,20 +317,32 @@ class Activation implements ExecutorSession {
 	private async consume(stream: Query): Promise<void> {
 		try {
 			for await (const message of stream) this.handle(message);
+			// A restart replaced this stream. Its end says nothing about the pass.
+			if (stream !== this.stream) return;
 			this.finish({
 				failed: true,
 				cause: 'transient',
 				message: 'The Claude session ended before the pass did.',
 			});
 		} catch (error) {
-			if (this.stopped) return;
-			// A resume the SDK cannot honor fails before it says anything. Begin a fresh session.
-			if (this.resuming !== undefined && !this.heard && this.begin !== undefined) {
-				this.restart(this.begin);
-				return;
-			}
-			this.finish(this.broke(error instanceof Error ? error : new Error(String(error))));
+			this.threw(stream, error);
 		}
+	}
+
+	/** The query threw. A resume the SDK cannot honor can end the stream before any message. */
+	private threw(stream: Query, error: unknown): void {
+		if (this.stopped || stream !== this.stream) return;
+		// The SDK also reports an unresumable session as an error result, which `answered` handles.
+		if (this.begin !== undefined && this.resumeFailed()) {
+			this.restart(this.begin);
+			return;
+		}
+		this.finish(this.broke(error instanceof Error ? error : new Error(String(error))));
+	}
+
+	/** Whether a resumed query threw before it said anything. */
+	private resumeFailed(): boolean {
+		return this.resuming !== undefined && !this.heard;
 	}
 
 	/** One SDK message: its steps, its echo, and, for a result, the end of the pass. */
@@ -386,6 +401,10 @@ class Activation implements ExecutorSession {
 	 */
 	private answered(message: Extract<SDKMessage, { type: 'result' }>): void {
 		if (this.stopped) return;
+		if (this.resuming !== undefined && this.begin !== undefined && unresumableResult(message)) {
+			this.restart(this.begin);
+			return;
+		}
 		const more = this.echoes.waiting > 0 || (message.queued_turn_count ?? 0) > 0;
 		if (!more) {
 			this.finish(passResultOf(message));
