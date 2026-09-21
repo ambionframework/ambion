@@ -17,7 +17,8 @@ import {
 	type RoomMirror,
 } from '@ambionframework/workspace';
 import { team } from './definitions.ts';
-import { labSchema, labWritable, scenarios, seedWorkspace } from './scenarios.ts';
+import { openInstrument } from './instrument.ts';
+import { instruments, labSchema, labWritable, scenarios, seedWorkspace } from './scenarios.ts';
 
 /** What a person can do to a room's work. Abort ends the open exchange. Stop and resume end and start a run. */
 export type RoomAction = 'abort' | 'stop' | 'resume';
@@ -96,7 +97,7 @@ export async function openRooms(
 		await workspace.dispose().catch(() => {});
 		throw error;
 	}
-	const roomTeam = team(workspace, lab);
+	const roomTeam = team(workspace, lab, openInstrument({ lab, instruments }));
 	let workspaceTail = Promise.resolve();
 	function withWorkspace<T>(operation: () => Promise<T>): Promise<T> {
 		if (closing) fail('The host is stopping.');
