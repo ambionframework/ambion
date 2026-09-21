@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 
@@ -35,6 +35,23 @@ test('every relative Markdown link with a fragment resolves to a heading', () =>
 	}
 });
 
+test('a quoted section of a docs page names a heading that the page holds', () => {
+	for (const dir of ['docs', 'planning']) {
+		for (const name of readdirSync(join(root, dir)).filter((n) => n.endsWith('.md'))) {
+			const text = readFileSync(join(root, dir, name), 'utf8').replace(/\s+/g, ' ');
+			for (const [, page, heading] of text.matchAll(/`docs\/([\w-]+\.md)` "([^"]+)"/g)) {
+				const file = join(root, 'docs', page);
+				assert.ok(existsSync(file), `${dir}/${name}: docs/${page} does not exist`);
+				const headings = readFileSync(file, 'utf8')
+					.split('\n')
+					.filter((line) => /^#{1,6} /.test(line))
+					.map((line) => line.replace(/^#+ /, '').trim());
+				assert.ok(headings.includes(heading), `${dir}/${name}: docs/${page} has no "${heading}"`);
+			}
+		}
+	}
+});
+
 test('prose lines the evidence move rewrote stay within 78 columns', () => {
 	const lines = [
 		['docs/assistant.md', 'acceptance review'],
@@ -46,4 +63,22 @@ test('prose lines the evidence move rewrote stay within 78 columns', () => {
 			assert.ok(line.length <= 78, `${page}: ${line.length} columns: ${line}`);
 		}
 	}
+});
+
+test('a docs page that cites a section "under" a heading holds that heading', () => {
+	const names = readdirSync(join(root, 'docs')).filter((n) => n.endsWith('.md'));
+	for (const name of names) {
+		const raw = readFileSync(join(root, 'docs', name), 'utf8');
+		const own = anchorsOf(raw);
+		const prose = raw.replace(/\s+/g, ' ');
+		for (const [, heading] of prose.matchAll(/ under ([A-Z][a-z]+(?: and [a-z]+)?)\./g)) {
+			assert.ok(own.has(slug(heading)), `docs/${name}: "under ${heading}" matches no heading`);
+		}
+	}
+});
+
+test('room.md documents the room-level context cap', () => {
+	const text = readFileSync(join(root, 'docs/room.md'), 'utf8');
+	assert.ok(text.includes('`limits.context.messages`'));
+	assert.ok(text.includes('earlier messages not shown'));
 });

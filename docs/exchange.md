@@ -4,7 +4,7 @@ An exchange is the room's unit of human-directed work: one person's question
 and the discussion it starts. The implementation is
 [`room/exchange.ts`](../packages/ambion/src/room/exchange.ts), with lifecycle
 coordination in [`room-host.ts`](../packages/ambion/src/room-host.ts). Read
-[`agent.md`](agent.md) for activation rules and [`summary.md`](summary.md) for
+[`room.md`](room.md) for activation rules and [`summary.md`](summary.md) for
 the optional closing message.
 
 One room has one open exchange. A close fixes the range of messages it covered;
@@ -148,6 +148,21 @@ if (recorded) {
 Cancellation closes the current discussion without assigning a new summary. It
 settles existing pending summary work as failed. See the
 [cancellation contract](durability.md#cancellation) for ordering and retry behavior.
+
+**Every exchange view lists its `activations`.** One entry holds the
+activation `id`, the `seat`, the `attempt`, the `purpose` (`respond` or
+`summary`), and the `outcome`. The outcome is `running`, or an end reason
+with `cancelled` and `cause` when they apply. An entry carries `usage` when
+the activation recorded it. Every attempt has an entry, in journal order. An
+open exchange lists the activations since its question. The `session` field
+is declared and stays empty until an executor records a session.
+
+**`readActivation(name, activation, { runtime })` reads the trace of one
+activation.** It returns `passes`, each with its `input`, its `through`, and
+its `steps` in order. It returns `undefined` for a malformed id and no
+passes for an activation without a trace. The read never waits. The trace
+write is best effort, so a running or a crashed activation can return a
+partial trace.
 
 ## 7. What reads one
 
