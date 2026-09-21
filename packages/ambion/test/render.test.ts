@@ -127,7 +127,10 @@ describe('the URIs a prompt states', () => {
 
 	it('states the covered exchange for a summary', () => {
 		const view: ActivationView = {
-			spec: { ...spec, purpose: { kind: 'summarize', exchange: 4, person: 'priya', through: 7 } },
+			spec: {
+				...spec,
+				purpose: { kind: 'summarize', exchange: 4, person: 'priya', people: ['priya'], through: 7 },
+			},
 			through: 7,
 			context,
 		};

@@ -55,6 +55,9 @@ function fakeRoom(
 				watermark: backlog.at(-1)?.seq ?? 0,
 			};
 		},
+		async pendingFor() {
+			return [];
+		},
 		subscribe(listener) {
 			listeners.add(listener);
 			return () => listeners.delete(listener);

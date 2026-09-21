@@ -111,6 +111,7 @@ export function projectState(projection: RoomProjection): RoomState {
 		exchange: projection.exchange,
 		closes: base.closes,
 		cancelledAt: base.cancelledAt,
+		cancelClosed: base.cancelClosed,
 		leases: base.leases,
 		deliveries: base.deliveries,
 		pending,
@@ -317,6 +318,7 @@ function onCancel(prev: RoomProjection, entry: CancelEntry, step: Step): RoomPro
 		...prev.base,
 		leases: new Map(prev.base.leases),
 		closes: [...prev.base.closes],
+		cancelClosed: [...prev.base.cancelClosed],
 	};
 	applyEvent(base, entry);
 	const marked = { ...prev, base, wakes: [], ...indexLeases(base.leases) };

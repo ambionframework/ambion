@@ -86,9 +86,19 @@ The closing activation receives the regular `say` tool with this shape:
 say({ text: 'Thursday delivery is limited to eight units.', to: 'priya' });
 ```
 
-The room supplies the recipient. A different recipient is refused. The room
-stamps the writer, recipient, covered range, activation id, and timestamp on
-the stored summary. The writer cannot supply or alter those fields.
+**The recipients are the people who spoke in the exchange.** The owner is
+the first. The activation lists them in `purpose.people`. A `say` without `to`
+addresses the owner. A `say` to a person who did not speak in the exchange is
+refused, and so is a second summary for the same person.
+
+The activation ends after the writer has said one message to each person.
+The owner's summary completes the close. A summary for another person
+appears in `summaries` on the closed exchange view. Only the owner's reading
+preferences reach the writer.
+
+The room stamps the writer, recipient, covered range, activation id, and
+timestamp on the stored summary. The writer cannot supply or alter those
+fields.
 
 The closing activation receives only `say`. The writer may decline by ending
 without calling it; the source range then remains available to later agent

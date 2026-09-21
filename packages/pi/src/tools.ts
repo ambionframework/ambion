@@ -106,23 +106,30 @@ function landResponse(
 }
 
 /** The tool that speaks for an ordinary activation or publishes its close. */
-function sayTool(bound: Binding, closingPerson?: string): AgentTool {
+function sayTool(bound: Binding, closing?: Closing): AgentTool {
 	return {
 		...SAY,
 		label: SAY.name,
 		description:
-			closingPerson === undefined
+			closing === undefined
 				? 'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`.'
-				: summaryToolDescription(closingPerson),
-		execute: async (toolCallId, rawParams) => say(bound, toolCallId, rawParams, closingPerson),
+				: summaryToolDescription(closing.person, closing.people),
+		execute: async (toolCallId, rawParams) => say(bound, toolCallId, rawParams, closing),
 	};
+}
+
+/** A closing activation: its owner, everyone it addresses, and how many it has answered. */
+interface Closing {
+	readonly person: string;
+	readonly people: readonly string[];
+	answered: number;
 }
 
 async function say(
 	bound: Binding,
 	toolCallId: string,
 	rawParams: unknown,
-	closingPerson?: string,
+	closing?: Closing,
 ): Promise<AgentToolResult<Record<string, never>>> {
 	const params = rawParams as { to?: string; text: string; refs?: string[] };
 	const text = params.text.trim();
@@ -137,13 +144,16 @@ async function say(
 	const response = await bound.room.commit({
 		activation: bound.activation.id,
 		key: toolCallId,
-		...(closingPerson === undefined ? { readThrough: bound.activation.readThrough } : {}),
+		...(closing === undefined ? { readThrough: bound.activation.readThrough } : {}),
 		intent,
 	});
-	if ('missed' in response) return missedSay(bound, toolCallId, response, closingPerson);
-	if (closingPerson === undefined) acknowledgeSay(bound, response);
+	if ('missed' in response) return missedSay(bound, toolCallId, response, closing);
+	if (closing === undefined) acknowledgeSay(bound, response);
 	const result = bound.landed(response);
-	return closingPerson === undefined ? result : { ...result, terminate: true };
+	if (closing === undefined) return result;
+	if ('committed' in response) closing.answered += 1;
+	// The closing activation ends after the last recipient has a message.
+	return closing.answered >= closing.people.length ? { ...result, terminate: true } : result;
 }
 
 function acknowledgeSay(bound: Binding, response: CommitResult): void {
@@ -156,9 +166,9 @@ function missedSay(
 	bound: Binding,
 	toolCallId: string,
 	response: Extract<CommitResult, { missed: readonly Message[] }>,
-	closingPerson: string | undefined,
+	closing: Closing | undefined,
 ): never {
-	if (closingPerson === undefined) {
+	if (closing === undefined) {
 		bound.activation.toolResultExpected(
 			toolCallId,
 			response.missed.at(-1)?.seq ?? bound.activation.readThrough,
@@ -220,7 +230,7 @@ export function toolsFor(
 ): AgentTool[] {
 	const { purpose } = view.spec;
 	if (purpose.kind === 'summarize') {
-		return [sayTool(held, purpose.person)];
+		return [sayTool(held, { person: purpose.person, people: purpose.people, answered: 0 })];
 	}
 	return [
 		sayTool(held),

@@ -86,7 +86,7 @@ const view: ActivationView = {
 		id: 'closed:4:assistant:1',
 		seat: 'assistant',
 		attempt: 1,
-		purpose: { kind: 'summarize', exchange: 2, person: 'priya', through: 4 },
+		purpose: { kind: 'summarize', exchange: 2, person: 'priya', people: ['priya'], through: 4 },
 	},
 	through: 4,
 	context: { name: 'site', now: Date.parse(at), participants: [], messages: [], reserve: [] },

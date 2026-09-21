@@ -15,6 +15,7 @@ export type { CreateRuntimeOptions, Execution, Runtime } from './host/runtime.ts
 export { createRuntime, defaultRuntime, systemClock } from './host/runtime.ts';
 export type { RoomUri } from './refs.ts';
 export { exchangeUri, parseRoomUri, roomUri } from './refs.ts';
+export { pendingFor } from './room/read.ts';
 export type {
 	ActivationPass,
 	ActivationRead,
@@ -37,7 +38,9 @@ export type {
 	Attention,
 	Clock,
 	ClosedExchange,
+	ClosedExchangeView,
 	ExchangeActivation,
+	ExchangeOutcome,
 	ExchangeRef,
 	ExchangeView,
 	ExecutionEvent,

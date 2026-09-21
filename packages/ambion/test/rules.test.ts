@@ -17,10 +17,16 @@ import {
 	type LeasePhase,
 	leaseExpiry,
 	mayEnd,
+	type OutcomeKind,
 	type Source,
 	wakeAnswered,
 } from '../src/room/rules.verified.ts';
-import type { EndReason, Message, FailureCause as PublicFailureCause } from '../src/types.ts';
+import type {
+	EndReason,
+	ExchangeOutcome,
+	Message,
+	FailureCause as PublicFailureCause,
+} from '../src/types.ts';
 
 type DistributiveOmit<T, K extends string> = T extends unknown ? Omit<T, K> : never;
 
@@ -43,7 +49,9 @@ describe('verified rules', () => {
 		expectTypeOf<Change>().toEqualTypeOf<DistributiveOmit<LeaseChange, 'usage'>>();
 		expectTypeOf<Source>().toEqualTypeOf<ActivationSource>();
 		expectTypeOf<ActivationFields>().toEqualTypeOf<ActivationId>();
-		expectTypeOf<GrantPurpose>().toEqualTypeOf<ActivationPurpose>();
+		// The room adds the people a closing activation addresses to the rule's grant.
+		expectTypeOf<GrantPurpose>().toEqualTypeOf<DistributiveOmit<ActivationPurpose, 'people'>>();
+		expectTypeOf<OutcomeKind>().toEqualTypeOf<ExchangeOutcome['kind']>();
 		expectTypeOf<Close>().toMatchTypeOf<CloseFact>();
 		// The room's hold is the rule's hold plus the derived `cancelled` marker.
 		expectTypeOf<Hold>().toEqualTypeOf<DistributiveOmit<LeaseHold, 'usage'>>();

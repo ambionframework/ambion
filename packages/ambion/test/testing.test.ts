@@ -291,7 +291,13 @@ describe('scriptedExecutor', () => {
 	});
 
 	it('commits a closing say without readThrough and ends the pass', async () => {
-		const closing = view(5, { kind: 'summarize', exchange: 1, person: 'andrei', through: 5 });
+		const closing = view(5, {
+			kind: 'summarize',
+			exchange: 1,
+			person: 'andrei',
+			people: ['andrei'],
+			through: 5,
+		});
 		const { activation, commits } = harness(() => said(6));
 		const session = scriptedExecutor(() => speak('summary'), agent('a')).open(activation);
 		await session.pass(input(closing));
