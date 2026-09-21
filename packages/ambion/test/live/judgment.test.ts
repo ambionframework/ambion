@@ -1,6 +1,6 @@
 /**
- * Silence is the default, and a directed say focuses the room. Rules 3, 4
- * and 6 of `docs/agent.md`: the runtime states the bar and leaves the
+ * Silence is the default, and a directed say focuses the room. Routing and
+ * the attention scale: the runtime states the bar and leaves the
  * decision to the agent. A scripted stream decides by script; only a real
  * model decides by the prompt.
  */

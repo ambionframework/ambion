@@ -170,7 +170,7 @@ export type PresenceChange = 'arrived' | 'left' | 'seated' | 'unseated';
 
 /**
  * What happened to a participant. It carries no text, because they said
- * nothing: writing words under their name is what rule 7 exists to prevent.
+ * nothing: writing words under their name is what `say` prevents: an author writes only under their own name.
  */
 export interface PresenceMessage {
 	kind: PresenceChange;

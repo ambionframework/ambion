@@ -14,7 +14,7 @@
  *
  * - **Compose.** Write the composition, admit the people, seat and unseat
  *   while it runs, and take it all down again.
- * - **Commit.** One queue, one seq at a time, for every author (rule 5).
+ * - **Commit.** One queue, one seq at a time, for every author (freshness: one commit against the record it read).
  * - **Hear.** One reaction per entry on the journal, whether this run wrote the
  *   entry or found it on a read. The room writes down and hears back up, so
  *   a message it committed and a message another run left reach a host the
