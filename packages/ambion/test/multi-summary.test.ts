@@ -10,7 +10,7 @@ import {
 	type SummaryMessage,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock } from '../src/testing.ts';
 import { deferred, messagesOf, roomName, waitForRoom } from './support/room.ts';
 import { byAgent, quiet, type Script, scripted, speak } from './support/scripted.ts';
 
