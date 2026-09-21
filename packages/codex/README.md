@@ -16,9 +16,6 @@ const planner = defineAgent({
     instructions: 'Speak when the plan lacks evidence.',
     model: 'gpt-5.6-luna',
     modelReasoningEffort: 'medium',
-    sandboxMode: 'workspace-write',
-    approvalPolicy: 'never',
-    workingDirectory: '/work/plans',
   }),
 });
 
@@ -64,10 +61,30 @@ opens one thread for each activation. `memory: 'seat'` resumes one thread
 for the seat and records its id with each release. A resume that Codex cannot
 honor starts a fresh thread.
 
-**Trust what Codex runs.** Codex runs on the host, under `sandboxMode`,
+**A seat has no native tools by default.** `nativeTools: 'none'` gives the
+seat the room tools and the tools that you pass in `tools`. Codex 0.155.1
+has a JavaScript runtime, Code Mode, that reads host files under a read-only
+sandbox. The model catalog turns it on, so no feature flag can turn it off.
+The executor patches the catalog entry of the model, turns off every feature
+and tool that the config controls, and runs the thread on a read-only
+sandbox in an empty directory. A model with no catalog entry fails as
+permanent.
+
+**Three MCP helper tools remain.** Codex adds `list_mcp_resources`,
+`list_mcp_resource_templates`, and `read_mcp_resource` when an MCP server is
+on. They reach only the room tools server, which offers no resource and
+answers `Method not found`, so they read nothing. A unit test proves it.
+
+**`nativeTools: 'codex'` opens the host.** The seat keeps the tools of the
+model, and a seat with Code Mode reads host files whatever `sandboxMode`
+says. The policy options apply only under `'codex'`: `sandboxMode`,
 `approvalPolicy`, `networkAccessEnabled`, and `workingDirectory`. The
 environment of the process, key included, reaches the binary unless you pass
 `env` to `codexExecution()`.
+
+**Pin the version, and run the exclusivity test on an upgrade.** The recipe
+belongs to `codex` 0.155.1. Trust a newer version only when
+`test/live/exclusive.test.ts` passes on it.
 
 **Test on recorded events, and run the executor suite live.** The unit tests
 read event streams that a real `codex` recorded. A real model cannot be

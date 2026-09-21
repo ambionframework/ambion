@@ -23,6 +23,7 @@ live('a message during a turn', () => {
 				seat('clerk', {
 					instructions:
 						'Do what the newest message asks. Report with one say when the record is read to its end.',
+					nativeTools: 'codex',
 					sandboxMode: 'workspace-write',
 				}),
 			],

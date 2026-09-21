@@ -16,6 +16,7 @@ live('memory seat', () => {
 			agents: [
 				seat('clerk', {
 					memory: 'seat',
+					nativeTools: 'codex',
 					sandboxMode: 'workspace-write',
 					instructions:
 						'Use the shell for arithmetic. Report with one say, and say only what was asked.',

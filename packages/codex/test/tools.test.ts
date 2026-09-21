@@ -222,3 +222,14 @@ describe('the bridge', () => {
 		expect(commits).toHaveLength(1);
 	});
 });
+
+describe('resources', () => {
+	it('offers none: a resource request gets Method not found', async () => {
+		const { client } = await on(lands);
+		await expect(client.readResource({ uri: 'file:///etc/hosts' })).rejects.toMatchObject({
+			code: -32601,
+		});
+		await expect(client.listResources()).rejects.toMatchObject({ code: -32601 });
+		await expect(client.listResourceTemplates()).rejects.toMatchObject({ code: -32601 });
+	});
+});
