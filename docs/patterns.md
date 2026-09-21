@@ -49,9 +49,12 @@ resumed room reads the same answer. Exchange owns the rule order; see
 
 ## Approve before an agent acts
 
-**The directed question is the approval request.** An agent asks the person
+**The directed question is the approval request.** An agent asks a person
 with `say({ to })` and ends its activation. The exchange closes and reads
-`awaiting`. `pendingFor` shows the request to that person.
+`awaiting`. `pendingFor` shows the request to that person. The person must
+differ from the exchange owner. A message to the owner answers the owner's
+question, so the exchange reads `complete`. See
+[exchange outcomes](exchange.md#6-the-edges-a-host-sees).
 
 **The person's reply is the approval.** A message from the person clears
 `awaiting` and lets the agent act in a later activation. The record holds the
