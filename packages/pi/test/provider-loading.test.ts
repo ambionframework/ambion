@@ -2,6 +2,9 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+/** A cold import of the Pi entry takes seconds on a loaded CI runner. */
+const processTimeout = 45_000;
+const testTimeout = processTimeout + 15_000;
 const node = process.env.AMBION_NODE ?? process.execPath;
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 const entry = pathToFileURL(`${packageRoot}/dist/index.mjs`).href;
@@ -16,7 +19,7 @@ function runFreshProcess(code: string): Promise<{ code: number | null; stderr: s
 		const timer = setTimeout(() => {
 			child.kill('SIGKILL');
 			reject(new Error('fresh import process timed out'));
-		}, 10_000);
+		}, processTimeout);
 		child.stderr.on('data', (chunk: Buffer) => {
 			stderr += chunk.toString();
 		});
@@ -31,7 +34,7 @@ function runFreshProcess(code: string): Promise<{ code: number | null; stderr: s
 	});
 }
 
-describe('provider loading', () => {
+describe('provider loading', { timeout: testTimeout }, () => {
 	it('does not load the provider catalog while importing the Pi entry and reading a room', async () => {
 		const result = await runFreshProcess(
 			`const { readRoom } = await import('@ambionframework/ambion');
