@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/pi",
-	"version": "0.1.0-alpha.1",
+	"version": "0.1.0",
 	"type": "module",
 	"description": "The Pi executor for Ambion rooms: pi() agents, piExecution(), and the seat transcript audit.",
 	"license": "Apache-2.0",

@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/codex",
-	"version": "0.1.0-alpha.1",
+	"version": "0.1.0",
 	"type": "module",
 	"description": "The Codex SDK executor for Ambion rooms: codex() agents and codexExecution().",
 	"license": "Apache-2.0",

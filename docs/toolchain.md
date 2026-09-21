@@ -299,7 +299,9 @@ published packages and finishes the rest. Without `--yes` it asks on the
 terminal and names each package and version. `--dry-run` runs the guards, the
 gate, and the pack, then runs `npm publish --dry-run`. It never reaches the
 publish endpoint and needs no token. `--otp <code>` reaches npm on `stage` and
-`promote`.
+`promote`. `--skip-gate` skips the local gate. Use it only for a commit with
+a green CI run, on a machine where a local test fails for a reason of the
+platform.
 
 **The token never leaves the environment.** The script reads `NODE_AUTH_TOKEN`
 from the environment. It writes a temporary npm user config that holds the text

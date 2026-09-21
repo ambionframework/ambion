@@ -269,6 +269,13 @@ describe('release.mjs against a fake registry', () => {
 		await assert.rejects(stage(context({ env: {} }), {}), /NODE_AUTH_TOKEN/);
 	});
 
+	it('skips the local gate only when asked', async () => {
+		await stage(context(), { skipGate: true });
+		assert.equal(state.gateRuns, 0);
+		assert.ok(logs.some((line) => line.includes('Skipping the local gate')));
+		assert.equal(publishCalls().length, PACKAGES.length);
+	});
+
 	it('a dry run needs no token and never publishes for real', async () => {
 		await stage(context({ env: {} }), { dryRun: true });
 		assert.equal(fake.store.size, 0);

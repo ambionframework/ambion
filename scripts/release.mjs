@@ -133,8 +133,12 @@ export async function stage(ctx, options = {}) {
 		options,
 		`Publish to ${ctx.registry} under ${STAGE_TAG}:\n${list(ctx.packages, version)}`,
 	);
-	const gate = await ctx.run('pnpm', ['run', 'check'], { cwd: ctx.root, stdio: 'inherit' });
-	if (gate.status !== 0) throw new Error('The gate failed. Nothing was published.');
+	if (options.skipGate) {
+		ctx.log('Skipping the local gate. Confirm that CI is green for this commit.');
+	} else {
+		const gate = await ctx.run('pnpm', ['run', 'check'], { cwd: ctx.root, stdio: 'inherit' });
+		if (gate.status !== 0) throw new Error('The gate failed. Nothing was published.');
+	}
 	await packAll(ctx.run, ctx.packages, ctx.outDir, ctx.log);
 	const counts = await withTokenConfig(ctx.registry, ctx.env, (userconfig) =>
 		publishAll(ctx.run, ctx.packages, {
@@ -305,6 +309,7 @@ async function main(argv) {
 	await action(ctx, {
 		dryRun: rest.includes('--dry-run'),
 		yes: rest.includes('--yes'),
+		skipGate: rest.includes('--skip-gate'),
 		otp: readFlag(rest, '--otp'),
 		version: readFlag(rest, '--version'),
 	});

@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/pi-journal",
-	"version": "0.1.0-alpha.1",
+	"version": "0.1.0",
 	"type": "module",
 	"description": "Pi transcript sessions over Ambion journals.",
 	"license": "Apache-2.0",
