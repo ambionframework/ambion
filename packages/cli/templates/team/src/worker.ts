@@ -1,4 +1,4 @@
-import type { ParticipantInfo, RoomRead, Seq } from '@ambionframework/ambion';
+import type { ParticipantInfo, Seq } from '@ambionframework/ambion';
 import type { Env } from '@ambionframework/cloudflare';
 import { configure, RoomObject, SeatObject } from '@ambionframework/cloudflare';
 import { AGENTS, COMPOSITION, human, ROOM_NAME } from './room.ts';
@@ -19,6 +19,7 @@ interface TeamEnv extends Env {
 }
 
 type RoomStub = DurableObjectStub<RoomObject>;
+type ReadResult = Awaited<ReturnType<RoomStub['read']>>;
 
 class RequestError extends Error {}
 
@@ -69,7 +70,7 @@ async function participants(stub: RoomStub): Promise<ParticipantInfo[]> {
 }
 
 /** The status the dev client reads, computed from the room's read model. */
-function statusOf(read: RoomRead, from: Seq | undefined) {
+function statusOf(read: ReadResult, from: Seq | undefined) {
 	const exchange =
 		from === undefined ? read.exchange : read.exchanges.find((item) => item.from === from);
 	if (from !== undefined && exchange === undefined)
