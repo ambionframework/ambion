@@ -164,8 +164,8 @@ anticipated families. No package or example for either exists yet.
 **A family that cannot steer still passes.** Its `readThrough` advances at
 the pass boundary, and the driver holds a steer for the next pass. The
 [plan](../planning/next.md) holds the surface comparison of the four
-families. What a harness remembers between activations belongs to a trust
-page that does not exist yet.
+families. What a harness remembers between activations is in
+[Trust](trust.md).
 
 ## How to write an adapter
 
