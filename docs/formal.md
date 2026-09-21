@@ -244,7 +244,7 @@ and `dafny verify` on this repository.
 contract is the claim. Read the `//@ contract` line against the design
 doc it carries:
 
-- `docs/agent.md` for the activation rules;
+- `docs/room.md` for the activation rules;
 - `docs/exchange.md` for the exchange and `docs/summary.md` for the
   verdict;
 - `docs/durability.md` for the journal, the lease, and the retry.
