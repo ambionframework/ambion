@@ -288,6 +288,12 @@ any file a peer wrote.
 the line whose `seq` field matches. An agent finds it with `bash grep`; it
 never needs to fetch or parse the URI to do it.
 
+**The mirror holds more messages than one activation's context.** A seat's
+context window can trim older messages, through `limits.context.messages`,
+or fold a closed exchange into one summary line. A message missing from
+context this activation still has its own line in `messages.jsonl`. Find
+it by `seq`.
+
 **This is a secondary, best-effort copy.** `packages/journal` remains the
 source of truth for the room. A write failure calls `onError` and the room
 keeps running; a gap is possible, and not retried.
