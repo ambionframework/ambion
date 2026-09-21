@@ -260,8 +260,9 @@ node scripts/version.mjs --check # verify agreement
 
 **Dev builds come from CI.** `.github/workflows/dev-release.yml` runs on a
 push to `main` that changes more than Markdown, `docs/`, and `planning/`. It
-stamps the version `0.1.0-dev.<run number>.g<sha7>` in the runner and commits
-nothing. The `g` prefix keeps the commit identifier from becoming a numeric
+stamps the version `0.2.0-dev.<run number>.g<sha7>` in the runner and commits
+nothing. The base `0.2.0` is the version of the next release and sits in the
+workflow file. The `g` prefix keeps the commit identifier from becoming a numeric
 identifier with a leading zero, which semver forbids. The job runs the gate,
 packs once, and publishes those tarballs to GitHub Packages under `dev` with
 the built-in `GITHUB_TOKEN`. A re-run of a failed job keeps the run number, so

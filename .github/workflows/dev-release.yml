@@ -36,11 +36,12 @@ jobs:
       # The stamp lives in the runner only. Nothing commits it.
       - name: Stamp the dev version
         env:
+          # The version of the next release. A dev build sorts below it.
+          DEV_BASE: 0.2.0
           RUN_NUMBER: ${{ github.run_number }}
           SHA: ${{ github.sha }}
         run: |
-          base="$(node -p "require('./packages/ambion/package.json').version.split('-')[0]")"
-          node scripts/version.mjs "${base}-dev.${RUN_NUMBER}.g${SHA:0:7}"
+          node scripts/version.mjs "${DEV_BASE}-dev.${RUN_NUMBER}.g${SHA:0:7}"
           node scripts/version.mjs --check
 
       - run: pnpm run check:types
