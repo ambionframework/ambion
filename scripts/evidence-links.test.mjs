@@ -178,6 +178,24 @@ test('a page that cites an item "in `next.md`" cites an item that the plan holds
 	}
 });
 
+const columnCites = (text) => {
+	const rows = text.split('\n');
+	const head = rows.findIndex((row) => /^\|.*Item in next\.md/.test(row));
+	if (head < 0) return [];
+	const column = rows[head].split('|').findIndex((cell) => /Item in next\.md/.test(cell));
+	const end = rows.findIndex((row, i) => i > head && !row.startsWith('|'));
+	return rows
+		.slice(head + 2, end < 0 ? undefined : end)
+		.flatMap((row) => (row.split('|')[column] ?? '').match(/\b[A-F]\d+\b|\bphase \d+\b/gi) ?? []);
+};
+
+test('the column check reads the cited labels of an "Item in next.md" column', () => {
+	const table =
+		'| Name | Item in next.md |\n| --- | --- |\n| a | C1, phase 4 |\n| b | D2 |\n\nE5 here';
+	assert.deepEqual(columnCites(table), ['C1', 'phase 4', 'D2']);
+	assert.deepEqual(columnCites('| Name | Other |\n| - | - |\n| a | C1 |'), []);
+});
+
 test('an "Item in next.md" column cites only items and phases that next.md holds', () => {
 	const plan = readFileSync(join(root, 'planning/next.md'), 'utf8');
 	const holds = (label) =>
@@ -185,16 +203,8 @@ test('an "Item in next.md" column cites only items and phases that next.md holds
 			? new RegExp(`^### ${label}\\.`, 'im').test(plan)
 			: new RegExp(`^\\| ${label} `, 'm').test(plan);
 	for (const name of readdirSync(join(root, 'docs')).filter((n) => n.endsWith('.md'))) {
-		const rows = readFileSync(join(root, 'docs', name), 'utf8').split('\n');
-		const head = rows.findIndex((row) => /^\|.*Item in next\.md/.test(row));
-		if (head < 0) continue;
-		const column = rows[head].split('|').findIndex((cell) => /Item in next\.md/.test(cell));
-		const end = rows.findIndex((row, i) => i > head && !row.startsWith('|'));
-		for (const row of rows.slice(head + 2, end < 0 ? undefined : end)) {
-			const cell = row.split('|')[column] ?? '';
-			for (const label of cell.match(/\b[A-F]\d+\b|\bphase \d+\b/gi) ?? []) {
-				assert.ok(holds(label), `docs/${name}: next.md holds no "${label}"`);
-			}
+		for (const label of columnCites(readFileSync(join(root, 'docs', name), 'utf8'))) {
+			assert.ok(holds(label), `docs/${name}: next.md holds no "${label}"`);
 		}
 	}
 });
