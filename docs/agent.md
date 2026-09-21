@@ -108,8 +108,8 @@ mirror writes for that message, so a reader can find the cited line in
 `/rooms/<name>/messages.jsonl` (see
 [the mirror](workspace.md#mirror-a-rooms-messages)). A workspace path is not
 a ref. Cite a file with a `file:` URI or another absolute URI that the
-application chooses. [Resources](resources.md) states how a resource
-change is cited.
+application chooses. [Resources](resources.md) states how a resource change
+is cited.
 
 **A refusal is typed.** The room throws `AmbionError`. Its `code` is one of
 the closed set in `errors.ts`; its message is for a person.
