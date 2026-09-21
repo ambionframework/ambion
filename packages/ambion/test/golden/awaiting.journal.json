@@ -1,0 +1,159 @@
+[
+	{
+		"kind": "run",
+		"body": {
+			"at": "2026-01-01T09:00:00.000Z",
+			"format": 1
+		},
+		"seq": 1,
+		"run": "run-1"
+	},
+	{
+		"kind": "composition",
+		"body": {
+			"version": 2,
+			"agents": [
+				{
+					"name": "worker",
+					"identity": "Answers the question.",
+					"attention": "broadcast"
+				}
+			],
+			"available": [],
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 2,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "arrived",
+			"from": "sam",
+			"subject": "sam",
+			"identity": "Site foreman.",
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 3,
+		"key": "key-1",
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "arrived",
+			"from": "priya",
+			"subject": "priya",
+			"identity": "Project manager.",
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 4,
+		"key": "key-2",
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "said",
+			"at": "2026-01-01T09:00:00.000Z",
+			"from": "priya",
+			"text": "Is the slab poured?",
+			"wakes": ["worker"]
+		},
+		"seq": 5,
+		"key": "key-3",
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:5:worker:1",
+			"phase": "running",
+			"expiresAt": 1767258060000,
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 0
+		},
+		"seq": 6,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "said",
+			"to": "sam",
+			"text": "Sam, can you confirm the slab?",
+			"at": "2026-01-01T09:00:00.000Z",
+			"activationId": "message:5:worker:1",
+			"from": "worker"
+		},
+		"seq": 7,
+		"key": "key-4",
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:5:worker:1",
+			"phase": "running",
+			"expiresAt": 1767258060000,
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 7
+		},
+		"seq": 8,
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:5:worker:1",
+			"phase": "ended",
+			"reason": "released",
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 7,
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			}
+		},
+		"seq": 9,
+		"run": "run-1"
+	},
+	{
+		"kind": "close",
+		"body": {
+			"owner": "priya",
+			"from": 5,
+			"through": 7,
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 10,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "left",
+			"from": "sam",
+			"subject": "sam",
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 11,
+		"key": "key-5",
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "left",
+			"from": "priya",
+			"subject": "priya",
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 12,
+		"key": "key-6",
+		"run": "run-1"
+	}
+]
