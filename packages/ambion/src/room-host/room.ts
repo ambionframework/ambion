@@ -61,6 +61,7 @@ import type {
 	ClosedExchangeView,
 	EndReason,
 	FailureCause,
+	HarnessSession,
 	HumanDefinition,
 	Message,
 	RoomNotification,
@@ -528,8 +529,9 @@ export class RoomHost implements Room, RunningRoom {
 		readThrough: Seq,
 		cause?: FailureCause,
 		usage?: Usage,
+		session?: HarnessSession,
 	): Promise<boolean | { refusal: Refusal }> {
-		return control.end(this, id, reason, readThrough, cause, usage);
+		return control.end(this, id, reason, readThrough, cause, usage, session);
 	}
 
 	// -- control ----------------------------------------------------------------

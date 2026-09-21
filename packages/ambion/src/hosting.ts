@@ -86,5 +86,6 @@ export type {
 	EndReason,
 	ExecutionEvent,
 	FailureCause,
+	HarnessSession,
 	Seq,
 } from './types.ts';

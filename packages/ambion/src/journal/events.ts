@@ -1,6 +1,6 @@
 /** The room journal event vocabulary. */
 
-import type { Attention, EndReason, FailureCause, Seq, Usage } from '../types.ts';
+import type { Attention, EndReason, FailureCause, HarnessSession, Seq, Usage } from '../types.ts';
 
 /**
  * One entry about an activation: it holds a lease, or its lease ended. A
@@ -18,6 +18,8 @@ export type LeaseChange =
 			cause?: FailureCause;
 			/** What the activation spent, on an end its driver wrote. */
 			usage?: Usage;
+			/** The harness session the activation ended with, when the harness keeps memory. */
+			session?: HarnessSession;
 	  };
 
 /**
