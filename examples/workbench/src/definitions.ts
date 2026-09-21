@@ -70,10 +70,12 @@ const specialists = [
 /** Build the team for one workspace. Every room reuses these definitions. */
 export function team(workspace: Workspace, lab: SqlResource, instrument: Instrument) {
 	const model = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
+	/** Every agent gets the same tools. Instructions set the scope of each agent. */
+	const bundles = () => [workspace.tools(), lab.tools(), instrument.tools()];
 	const assistant = defineAssistant({
 		model,
 		instructions: shared,
-		bundles: [workspace.tools(), lab.tools(), instrument.tools()],
+		bundles: bundles(),
 	});
 	const specialistDefinitions = specialists.map(({ instructions, ...definition }) =>
 		defineAgent({
@@ -81,11 +83,7 @@ export function team(workspace: Workspace, lab: SqlResource, instrument: Instrum
 			executor: pi({
 				instructions: `${shared}${instructions} Report your result to the assistant, or to the specialist who asked you. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
 				model,
-				bundles: [
-					workspace.tools(),
-					lab.tools(),
-					...(definition.name === 'design' ? [instrument.tools()] : []),
-				],
+				bundles: bundles(),
 			}),
 		}),
 	);
