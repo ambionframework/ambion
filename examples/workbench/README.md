@@ -119,11 +119,28 @@ The assistant uses `defineAssistant` from `@ambionframework/assistant`. Each
 room seats the specialists it needs. The reserve holds the rest. The header
 of the terminal shows the family beside each agent name.
 
-The design seat allows no Claude built-in tool, and the experiments seat
-runs Codex under a read-only sandbox with no network. The workspace, lab, and
-instrument tools reach both seats as tool bundles. `src/rooms.ts` composes
-the three executions with `composeExecutions` from
+The workspace, lab, and instrument tools reach every seat as tool bundles.
+`src/rooms.ts` composes the three executions with `composeExecutions` from
 `@ambionframework/ambion/hosting`.
+
+### One tool set, one filesystem, no native tool
+
+**Every agent holds the same tools and reaches the same filesystem, and no
+native tool of any harness is on.** One list of bundles serves every seat:
+the workspace, the lab, and the instrument tools, in that order. All three
+families share one workspace instance, so a file that one agent writes is
+the file that another agent reads.
+
+| Family | How it enforces the guarantee                                        |
+| ------ | -------------------------------------------------------------------- |
+| Pi     | Has no native tool. The seat holds only the tools that it receives.  |
+| Claude | Passes no built-in tool. The definition sets no `allowedTools`.      |
+| Codex  | Sets `nativeTools: 'none'` and no policy option that opens the host. |
+
+`test/tool-set.test.ts` fails when a definition drifts from this. The live
+test `test/live/tool-set.test.ts` asks each seat for its tool list, writes a
+file with one seat and reads it with another, and asks each seat for
+`/etc/hosts`.
 
 ## Tests
 

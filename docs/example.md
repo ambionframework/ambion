@@ -61,6 +61,25 @@ execution, so they need no key. The live tests skip a scenario when a family
 that it uses has no key. See the
 [Workbench README](../examples/workbench/README.md) for the commands.
 
+### One tool set, one filesystem, no native tool
+
+**Every agent holds the same tools and reaches the same filesystem, and no
+native tool of any harness is on.** One list of bundles serves every seat:
+the workspace, the lab, and the instrument tools, in that order. All three
+families share one workspace instance, so a file that one agent writes is
+the file that another agent reads.
+
+| Family | How it enforces the guarantee                                        |
+| ------ | -------------------------------------------------------------------- |
+| Pi     | Has no native tool. The seat holds only the tools that it receives.  |
+| Claude | Passes no built-in tool. The definition sets no `allowedTools`.      |
+| Codex  | Sets `nativeTools: 'none'` and no policy option that opens the host. |
+
+`test/tool-set.test.ts` fails when a definition drifts from this. The live
+test `test/live/tool-set.test.ts` asks each seat for its tool list, writes a
+file with one seat and reads it with another, and asks each seat for
+`/etc/hosts`.
+
 ### The shared workspace
 
 **Every room shares one directory workspace.** The workspace holds the

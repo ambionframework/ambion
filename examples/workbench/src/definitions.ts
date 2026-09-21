@@ -73,19 +73,13 @@ const specialists = [
 /** Build the team for one workspace. Every room reuses these definitions. */
 export function team(workspace: Workspace, lab: SqlResource, instrument: Instrument) {
 	const model = piModel();
-	const assistant = defineAssistant({
-		model,
-		instructions: shared,
-		bundles: [workspace.tools(), lab.tools(), instrument.tools()],
-	});
+	// One list of bundles serves every agent, so every seat holds the same tools over one workspace.
+	const bundles: ToolBundle[] = [workspace.tools(), lab.tools(), instrument.tools()];
+	const assistant = defineAssistant({ model, instructions: shared, bundles });
 	const specialistDefinitions = specialists.map(({ instructions, ...definition }) => {
 		const options = {
 			instructions: `${shared}${instructions} Report your result to the assistant, or to the specialist who asked you. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
-			bundles: [
-				workspace.tools(),
-				lab.tools(),
-				...(definition.name === 'design' ? [instrument.tools()] : []),
-			],
+			bundles,
 		};
 		return defineAgent({ ...definition, executor: executorFor(definition.name, options, model) });
 	});
@@ -99,9 +93,11 @@ export function team(workspace: Workspace, lab: SqlResource, instrument: Instrum
 }
 
 /**
- * The executor of a specialist, on the family that `seatFamilies` names. The
- * workspace, lab, and instrument tools arrive as bundles and serve the seat, so
- * the Claude seat allows no built-in tool and the Codex seat runs read-only.
+ * The executor of a specialist, on the family that `seatFamilies` names. Every
+ * family gets the same options, so every seat reaches the world only through
+ * the same bundles. Pi has no native tool. The Claude seat sets no
+ * `allowedTools`, so it has no built-in tool. The Codex seat sets `nativeTools`
+ * to `none` and no policy option that opens the host.
  */
 function executorFor(
 	name: string,
@@ -116,9 +112,7 @@ function executorFor(
 				...options,
 				model: CODEX_MODEL,
 				modelReasoningEffort: 'medium',
-				sandboxMode: 'read-only',
-				approvalPolicy: 'never',
-				networkAccessEnabled: false,
+				nativeTools: 'none',
 			});
 		default:
 			return pi({ ...options, model });
