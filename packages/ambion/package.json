@@ -30,6 +30,10 @@
 			"types": "./dist/conformance.d.mts",
 			"import": "./dist/conformance.mjs"
 		},
+		"./testing": {
+			"types": "./dist/testing.d.mts",
+			"import": "./dist/testing.mjs"
+		},
 		"./package.json": "./package.json"
 	},
 	"main": "./dist/index.mjs",
@@ -48,7 +52,7 @@
 		"build": "tsdown",
 		"check:types": "tsc -p tsconfig.check.json --noEmit",
 		"test": "vitest run",
-		"test:live": "pnpm --filter '@ambionframework/ambion^...' build && vitest run --config vitest.live.config.ts",
+		"test:live": "pnpm --filter '@ambionframework/ambion...' build && vitest run --config vitest.live.config.ts",
 		"test:watch": "vitest"
 	},
 	"devDependencies": {

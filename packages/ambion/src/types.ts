@@ -82,6 +82,20 @@ export interface ExchangeActivation {
 	readonly session?: { readonly harness: string; readonly id: string };
 }
 
+/**
+ * How a closed exchange ended. The room derives it from the record.
+ * `cancelled` beats `exhausted`, `exhausted` beats `awaiting`, and
+ * `awaiting` beats `complete`.
+ */
+export type ExchangeOutcome =
+	| { readonly kind: 'complete' }
+	/** A cancellation wrote the close. */
+	| { readonly kind: 'cancelled' }
+	/** The room gave up on a response activation in the range. */
+	| { readonly kind: 'exhausted' }
+	/** The last spoken message is directed at a person who has said nothing since. */
+	| { readonly kind: 'awaiting'; readonly person: string };
+
 /** A detached exchange view that can be read without starting a room. */
 export type ExchangeView =
 	| (ExchangeRef & {
@@ -94,9 +108,15 @@ export type ExchangeView =
 			/** Every activation in the range, every attempt and the summary included. */
 			readonly activations: readonly ExchangeActivation[];
 			readonly summary: SummaryOutcome;
+			readonly outcome: ExchangeOutcome;
+			/** Every published summary of the range, the owner's included, one for each recipient. */
+			readonly summaries?: readonly SummaryMessage[];
 			/** The sum of every activation in the range, the summary activation included. */
 			readonly usage?: Usage;
 	  });
+
+/** A closed exchange view: the one that carries an outcome. */
+export type ClosedExchangeView = Extract<ExchangeView, { readonly status: 'closed' }>;
 
 interface RoomReadFields {
 	readonly name: string;
@@ -170,7 +190,7 @@ export type PresenceChange = 'arrived' | 'left' | 'seated' | 'unseated';
 
 /**
  * What happened to a participant. It carries no text, because they said
- * nothing: writing words under their name is what rule 7 exists to prevent.
+ * nothing: writing words under their name is what `say` prevents: an author writes only under their own name.
  */
 export interface PresenceMessage {
 	kind: PresenceChange;
@@ -224,7 +244,7 @@ export interface SummaryMessage {
 	at: string;
 	/** The agent that wrote it. */
 	from: string;
-	/** The person whose question opened the exchange. Always present. */
+	/** The person the summary addresses: the owner, or another person who spoke in the range. */
 	to: string;
 	text: string;
 	/** The range it stands for, ending at the last message before this one. */
@@ -544,6 +564,8 @@ export interface AgentExecutor {
 	readonly tools: readonly AmbionTool[];
 	/** Guidance composed from the agent's tool bundles. */
 	readonly guidance?: string;
+	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
+	readonly speaking?: string;
 	/**
 	 * The token limit for the record one activation reads. When set, the seat
 	 * pages the record and keeps the newest part that fits the limit, plus the

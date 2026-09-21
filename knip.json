@@ -11,6 +11,14 @@
 		"packages/*": {
 			"project": ["src/**/*.ts"]
 		},
+		"packages/cli": {
+			"project": ["src/**/*.ts"],
+			"ignoreDependencies": [
+				"@ambionframework/cloudflare",
+				"@ambionframework/pi",
+				"@cloudflare/workers-types"
+			]
+		},
 		"examples/workbench": {
 			"project": ["src/**/*.ts"]
 		},

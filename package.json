@@ -12,7 +12,7 @@
 		"dev": "turbo dev",
 		"build": "turbo build",
 		"test": "pnpm run test:reports && turbo test",
-		"test:reports": "node --test scripts/report-log.test.mjs scripts/docs-wrap.test.mjs scripts/evidence-links.test.mjs",
+		"test:reports": "node --test scripts/report-log.test.mjs scripts/docs-wrap.test.mjs scripts/evidence-links.test.mjs scripts/file-budget.test.mjs scripts/rule-citations.test.mjs",
 		"test:live": "pnpm -r run test:live",
 		"chaos": "AMBION_CHAOS=all AMBION_SEEDS=200 pnpm --filter @ambionframework/ambion exec vitest run test/chaos.test.ts test/hosts.test.ts test/property.test.ts test/consistency.test.ts test/split.test.ts test/projection-equivalence.test.ts",
 		"check": "pnpm run check:format && turbo run build check:types && pnpm run check:lint && pnpm run check:lemmascript:gen && pnpm run test:reports && turbo run test",

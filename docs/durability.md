@@ -166,9 +166,23 @@ Completion confirms journal authority changes. Executor cuts are best effort;
 completion does not wait for a provider or tool to exit or reverse external effects.
 Hosts must await the promise before reporting cancellation as complete.
 
-**Storage compatibility:** cancellation adds the `cancel` journal entry kind.
-Current runtimes read existing journals. Older runtimes must not resume a journal
-that contains cancellation entries, because they do not interpret that boundary.
+**Storage compatibility:** every `run` entry carries `format: 1`, the
+journal format. The constant `JOURNAL_FORMAT` names it.
+
+- **A format 1 journal stays readable.** A later runtime reads it and folds
+  the same state. The golden journals in
+  [`test/golden`](../packages/ambion/test/golden) hold that fold.
+- **A run entry with no `format` reads as format 1.** Journals from before
+  the field share the body shape.
+- **An unknown format is refused.** A runtime that reads `format: 2` throws
+  `Unsupported journal format`. It does not skip the fence and does not
+  guess.
+- **A new format adds a reader and one named upgrade.** The upgrade turns
+  the older fold input into the newer one. No second format exists yet.
+
+Cancellation adds the `cancel` entry kind. Older runtimes must not resume a
+journal that contains cancellation entries, because they do not interpret
+that boundary.
 
 ## 5. What the room does not promise
 
@@ -216,6 +230,7 @@ for the claims that need more than a unit test:
 | Stop cleanup across expiry, storage failure, and restart                                                                                                | [`stop-work.test.ts`](../packages/ambion/test/stop-work.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Atomic cancellation, retry, and restart                                                                                                                 | [`cancellation.test.ts`](../packages/ambion/test/cancellation.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Ordered publication and recovery after submission faults                                                                                                | [`submission.test.ts`](../packages/ambion/test/submission.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Golden journals replay to the committed fold, and a newer format is refused                                                                             | [`golden.test.ts`](../packages/ambion/test/golden.test.ts), [`journal-validation.test.ts`](../packages/ambion/test/journal-validation.test.ts)                                                                                                                                                                                                                                                                                                                                                                |
 | Crash before/after every append, then same-key retry                                                                                                    | [`chaos.test.ts`](../packages/ambion/test/chaos.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Host handover and lease retry under load                                                                                                                | [`hosts.test.ts`](../packages/ambion/test/hosts.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Child-process kill and SQLite recovery                                                                                                                  | [`reconnect-process.test.ts`](../packages/ambion/test/reconnect-process.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                              |

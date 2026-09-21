@@ -145,6 +145,10 @@ export function hostingOf(runtime: Runtime): Hosting {
 export const runningRoom = (runtime: Runtime, name: string): RoomProtocol | undefined =>
 	state(runtime).running.get(name)?.calls;
 
+/** Reconcile a running room. Nothing happens when no room by that name runs. */
+export const reconcileRoom = (runtime: Runtime, name: string): Promise<void> =>
+	state(runtime).running.get(name)?.reconcile() ?? Promise.resolve();
+
 /** The host's lifecycle record, for the room facade's own live fast paths. */
 export const registeredRoom = (runtime: Runtime, name: string): RunningRoom | undefined =>
 	state(runtime).running.get(name);
@@ -189,6 +193,8 @@ export interface RunningRoom {
 	readonly calls: RoomProtocol;
 	/** Drop the room from memory. The record keeps everything. */
 	evict(): void;
+	/** Fold the journal and act on what is due. */
+	reconcile(): Promise<void>;
 }
 
 /**

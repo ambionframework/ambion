@@ -32,7 +32,8 @@ export type {
 	PassInput,
 	PassResult,
 } from './execution/executor.ts';
-export { refusal, renderActivation, renderLine } from './execution/render.ts';
+export type { RenderedPrompt } from './execution/render.ts';
+export { refusal, renderActivation, renderDelta, renderLine } from './execution/render.ts';
 export { AgentRunner, inProcessTransport } from './execution/runner.ts';
 export { summaryToolDescription } from './execution/summary.ts';
 export {
@@ -51,7 +52,7 @@ export type {
 	Limits,
 	Transport,
 } from './host/runtime.ts';
-export { callLimits, hostingOf, runningRoom } from './host/runtime.ts';
+export { callLimits, hostingOf, reconcileRoom, runningRoom } from './host/runtime.ts';
 export type {
 	ActivationPurpose,
 	ActivationSpec,

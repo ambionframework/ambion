@@ -123,7 +123,7 @@ it.each(['reserve', 'named'] as const)(
 			expect(assistant?.tools).toEqual(expect.arrayContaining(['say', 'seat', 'unseat']));
 		}
 		for (const capture of ordinary) {
-			expect(capture.system).toContain(goal);
+			expect(capture.input).toContain(goal);
 			expect(capture.system + capture.input).not.toContain(preferences);
 		}
 		for (const capture of captures.filter((entry) => entry.agent === 'assistant')) {
@@ -141,7 +141,7 @@ it.each(['reserve', 'named'] as const)(
 		);
 		expect(renewed?.input).toContain('R-19: draft supplied; no files edited.');
 		expect(renewed?.input).toContain('An explicit later request to recheck');
-		expect(renewed?.system).toContain('summary as a recorded report');
+		expect(renewed?.input).toContain('summary as a recorded report');
 		expect(renewed?.input).toContain('Current exchange begins here');
 		expect(renewed?.input.indexOf('Current exchange begins here')).toBeGreaterThan(
 			renewed?.input.indexOf('R-19: draft supplied; no files edited.') ?? -1,

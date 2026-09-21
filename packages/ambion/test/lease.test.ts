@@ -1,7 +1,7 @@
 /**
  * A wake is safe to send twice, a lost one is sent again, a lost release
  * expires, and a lost wake into a running activation is read off the
- * record. Rule 4 of the design:
+ * record. The design says:
  * every activation's id is derived from the journal, so nothing that crosses
  * the wire has to arrive exactly once.
  */
@@ -22,7 +22,7 @@ import {
 	type Visit,
 } from '../src/index.ts';
 import type { LeaseChange } from '../src/journal/events.ts';
-import { type FakeClock, fakeClock } from './support/clock.ts';
+import { type FakeClock, fakeClock } from '../src/testing.ts';
 import {
 	assistant,
 	assistantEnded,

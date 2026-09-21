@@ -2,13 +2,13 @@
  * Who wakes for a message: the room's whole routing policy, in one file and
  * pure over what it is handed.
  *
- * `routes` is rules 1, 4 and 6 of the core ([`docs/agent.md`](../../../../docs/agent.md)),
+ * `routes` is the routing and attention mechanism ([`docs/agent.md`](../../../../docs/agent.md)),
  * and `wakes` is the one comparison they read off the attention scale. The
  * room writes the answer on the message, so a message and its routing are
  * one write, and every reader of the record reads who it woke.
  *
  * A seat at work is not woken. It is steered once the write is confirmed
- * (rule 2), and the steer is not on the message.
+ * (a steer), and the steer is not on the message.
  */
 
 import type { Body } from '../journal/journal.ts';
@@ -46,7 +46,7 @@ function reachOf(message: RoutedMessage): Attention {
  * however narrowly it is seated: a directed say names the one it addresses, and
  * a seating names the seat it seats. Everybody else wakes when their attention
  * is at least as wide as the message's reach — and a directed say reaches
- * nobody else at all. Rule 1 routes, rule 6 decides who sits out, and a
+ * nobody else at all. Routing wakes a named seat, the attention scale decides who stays silent, and a
  * presence message is routed like any other.
  */
 function wakes(

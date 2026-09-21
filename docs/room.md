@@ -29,7 +29,7 @@ call is work that the room does not replay.
 | Exchange   | A person's question and every activation until the room is quiet     | [exchange.md](exchange.md)                       |
 | Activation | The room waking one seat: a bounded execution with one room grant    | This page                                        |
 | Step       | One recorded unit of an activation's work                            | [agent.md](agent.md)                             |
-| Resource   | Application data that an agent's tools reach, with provenance        | [workspace.md](workspace.md)                     |
+| Resource   | Application data that an agent's tools reach, with provenance        | [resources.md](resources.md)                     |
 | Journal    | The ordered, append-only record that the room folds into its state   | [durability.md](durability.md)                   |
 | Entry      | One item that the journal holds                                      | [durability.md](durability.md)                   |
 | Message    | Spoken text with an author, a position, routing facts, and refs      | [agent.md](agent.md), [presence.md](presence.md) |
@@ -158,6 +158,10 @@ does not reinterpret old assistant definitions or opening activation ids.
 Start a new journal, or migrate the history outside Ambion, before you resume
 it.
 
+An activation opens a fresh executor session. Passes within one activation
+share that session. Nothing carries model context across activations unless
+an adapter keeps a session for the seat; that option is not on main yet.
+
 The journal retains complete history. An agent that sets
 `activationTokenLimit` reads a bounded record. The seat pages the record from
 the tail through the call `view(activation, range)`. It keeps the newest part
@@ -181,6 +185,9 @@ line: `── N earlier messages not shown ──`. The line shows for summarise
 unsummarised history alike. The room does not record the cap. A room resumed
 under another cap serves a different view of the same record.
 
+[Envelope](envelope.md) holds the table of every limit and the measured
+cost of the fold.
+
 Ambion does not promise bounded replay. The record window bounds model input
 and not the journal fold. Domain tools can act before a contribution commits.
 Room freshness does not make external effects transactional. Hosts own
@@ -195,8 +202,10 @@ credentials, process lifetime, and recovery.
 - [Presence](presence.md): visits, arrivals, departures, and catch-up.
 - [Roster](roster.md): membership, reserve, and attention.
 - [Summaries](summary.md): closing work and context replacement.
-- [Workspace](workspace.md): shared filesystem resources.
+- [Resources](resources.md): the resource contract, references, and provenance.
+- [Workspace](workspace.md): the Pi filesystem binding.
 - [Durability](durability.md): journal guarantees, recovery, and leases.
 - [Deployment](deployment.md): host placement, storage, and reconnect.
+- [Envelope](envelope.md): configurable limits and the fold cost.
 - [Formal](formal.md): the verified rules and the proof gate.
 - [Toolchain](toolchain.md): package layout, checks, CI, and release.

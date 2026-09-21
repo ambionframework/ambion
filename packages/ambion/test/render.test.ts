@@ -120,19 +120,25 @@ describe('the URIs a prompt states', () => {
 			},
 		};
 		const rendered = renderActivation(view, worker);
-		expect(rendered.systemPrompt).toContain(roomUri('site'));
-		expect(rendered.systemPrompt).toContain('refs');
+		expect(rendered.context).toContain(roomUri('site'));
+		expect(rendered.agent).toContain('refs');
 		expect(rendered.context).toContain('opened by message 4');
 		expect(rendered.context).toContain(messageUri('site', 4));
+		expect(rendered.context).not.toContain('/exchange/');
 	});
 
 	it('states the covered exchange for a summary', () => {
 		const view: ActivationView = {
-			spec: { ...spec, purpose: { kind: 'summarize', exchange: 4, person: 'priya', through: 7 } },
+			spec: {
+				...spec,
+				purpose: { kind: 'summarize', exchange: 4, person: 'priya', people: ['priya'], through: 7 },
+			},
 			through: 7,
 			context,
 		};
 		const rendered = renderActivation(view, worker);
-		expect(`${rendered.systemPrompt}${rendered.context}`).toContain(messageUri('site', 4));
+		expect(`${rendered.mechanism}${rendered.agent}${rendered.context}`).toContain(
+			messageUri('site', 4),
+		);
 	});
 });

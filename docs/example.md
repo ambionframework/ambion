@@ -61,6 +61,29 @@ workspace resource.
 The datasheets are simplified summaries for a runnable example. They are not
 the manufacturer datasheets.
 
+### The lab database and the instruments
+
+**The lab records live in `lab.db`, apart from the journal.** The
+`projects`, `test_plans`, `runs`, `results`, and `operations` tables hold
+them. The SQL resource stamps provenance on every recorded row
+(see [Resources](resources.md)).
+
+**Two simulated instruments sit on the lab database.** `led-current` has a
+limit of 20 mA. `bench-supply` has a limit of 5 V. The Design specialist and
+the assistant call `operate`.
+
+- A setpoint at or below the limit runs. The tool appends a `done` row with
+  the reading. The reading equals the setpoint.
+- A setpoint above the limit does not run. The tool appends a `requested`
+  row and names the exchange owner as the approver.
+- The agent asks the owner. When the owner answers, the agent calls
+  `approve_operation`. The tool appends an `approved` or `denied` row with
+  the `request_id`.
+
+The table is append-only. The status of an operation is its latest row. The
+instrument checks the numeric limit only. It does not verify who approved.
+The terminal display of the approval is phase 6 work.
+
 ### The rooms
 
 **Three rooms share one kit.** Each goal shows a distinct collaboration
@@ -115,15 +138,17 @@ keeps the rooms, the visits, and the exchanges.
 table states what each test proves today. A row marked "By hand" has no
 automated test yet.
 
-| Scenario                                                        | Claim                                      | Evidence                                                                     |
-| --------------------------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
-| A resistor question is answered from `led-5mm.md` in `/library` | A specialist works from a shared file      | Scripted: an agent reads the file. Live: the summary cites `/library`        |
-| The assistant routes a question to the Design specialist        | Selection, silence, and one summary        | Scripted: one summary after routing, and a silent close when no agent speaks |
-| A specialist writes a file to the workspace                     | An artifact survives a restart             | Scripted: the file is written, and read again after a restart                |
-| The Experiments specialist plans a distance test                | A question becomes a written plan          | Live: the summary describes a test. No test checks the plan file             |
-| A person adds a constraint while an agent works                 | Steering an open exchange                  | By hand: the thread shows the message in order                               |
-| The host stops, fails to stop, and resumes                      | Resume keeps the question and the files    | Scripted: clean stop, failed stop with retry, and resume from the journal    |
-| Two people work the kit through separate rooms                  | Visits, presence, and catch-up by position | Scripted                                                                     |
+| Scenario                                                        | Claim                                      | Evidence                                                                      |
+| --------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
+| A resistor question is answered from `led-5mm.md` in `/library` | A specialist works from a shared file      | Scripted: an agent reads the file. Live: the summary cites `/library`         |
+| The assistant routes a question to the Design specialist        | Selection, silence, and one summary        | Scripted: one summary after routing, and a silent close when no agent speaks  |
+| A specialist writes a file to the workspace                     | An artifact survives a restart             | Scripted: the file is written, and read again after a restart                 |
+| The Experiments specialist plans a distance test                | A question becomes a written plan          | Live: the summary describes a test. No test checks the plan file              |
+| A person adds a constraint while an agent works                 | Steering an open exchange                  | By hand: the thread shows the message in order                                |
+| The host stops, fails to stop, and resumes                      | Resume keeps the question and the files    | Scripted: clean stop, failed stop with retry, and resume from the journal     |
+| Two people work the kit through separate rooms                  | Visits, presence, and catch-up by position | Scripted                                                                      |
+| One specialist records a run and another reads it back          | A second resource, apart from the journal  | Scripted: `record` stamps provenance, `query` reads the row from `lab.db`     |
+| The Design specialist drives an instrument above its limit      | An action that waits for a person          | Scripted: `operate` records a request, `approve_operation` records the answer |
 
 The kernel chaos tier covers a kill during work. This example does not.
 
@@ -139,7 +164,8 @@ examples/workbench/
   src/
     brand.ts           the product name and the terminal palette
     definitions.ts     the assistant, three specialists, and the people
-    scenarios.ts       the rooms, and the workspace seed
+    scenarios.ts       the rooms, the workspace seed, the lab schema, and the instruments
+    instrument.ts      the simulated instruments and their approval step
     rooms.ts           the host lifecycle and the room catalog
     workbench.ts       the host: open, read, watch, send, control, create, files
     names.ts           the room name and goal rules
@@ -179,12 +205,10 @@ families and a drill-down interface. These parts need kernel work that
 [next.md](../planning/next.md) schedules. Workbench grows into them as the
 phases land.
 
-| Deferred capability                                        | Item in next.md |
-| ---------------------------------------------------------- | --------------- |
-| A SQL resource for projects, test plans, runs, and results | E4, phase 5     |
-| A simulated instrument resource, with an approval step     | E6, F6          |
-| An Instruments agent and a Data Analysis agent             | E1, F10         |
-| The Claude Agent SDK executor beside the Pi executor       | F10, phase 4    |
-| Artifact references on messages and summaries              | E5              |
-| An exchange that reads as `awaiting` a person              | E7              |
-| Cost per exchange, and a drill-down into activation steps  | F7, F8          |
+| Deferred capability                                       | Item in next.md |
+| --------------------------------------------------------- | --------------- |
+| An Instruments agent and a Data Analysis agent            | E1, F10         |
+| The Claude Agent SDK executor beside the Pi executor      | F10, phase 4    |
+| Artifact references on messages and summaries             | E5              |
+| An exchange that reads as `awaiting` a person             | E7              |
+| Cost per exchange, and a drill-down into activation steps | F7, F8          |

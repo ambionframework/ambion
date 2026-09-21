@@ -10,7 +10,7 @@
  *   makes carries it.
  * - **What it acknowledged.** `readThrough` is the highest contiguous
  *   position in provider input. A provider request or an accepted ordinary
- *   say advances it. Rule 5 refuses a draft against a newer record.
+ *   say advances it. Freshness refuses a draft against a newer record.
  * - **What arrived while it worked.** A message that lands mid-activation is steered
  *   in. It reaches the provider after the request it lands during. PiContext
  *   records the structured range only when that later request receives it.
@@ -26,7 +26,7 @@
  * the turns inside it. An activation is wider than both: it is one or more
  * runs, because a message landing mid-activation starts another run over the
  * record as it now stands. The word for what a room does to a seat is
- * `activation` ([`agent.md`](../../../docs/agent.md) rule 1), and the record
+ * `activation` ([`agent.md`](../../../docs/agent.md), Execution boundary), and the record
  * has called it that all along: every one lands in the seat's downstream
  * session as an `ambion/activation` entry.
  */
@@ -45,7 +45,7 @@ import type {
 	Seq,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
-import { renderActivation, renderLine } from '@ambionframework/ambion/hosting';
+import { renderActivation, renderDelta } from '@ambionframework/ambion/hosting';
 import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/pi-journal';
 import type {
 	AgentEvent,
@@ -137,7 +137,7 @@ export class Activation implements ExecutorSession {
 		this.openAudit = openAudit;
 	}
 
-	/** The seq this activation may commit against: rule 5's `readThrough`. */
+	/** The seq this activation may commit against: the freshness boundary `readThrough`. */
 	get readThrough(): Seq {
 		return this.context.readThrough;
 	}
@@ -159,7 +159,7 @@ export class Activation implements ExecutorSession {
 
 	/**
 	 * A message landed while this activation was working. It reaches the model as a
-	 * steer (rule 2). PiContext records its range without parsing rendered text.
+	 * steer. PiContext records its range without parsing rendered text.
 	 */
 	steer(after: Seq, seq: Seq, line: string): void {
 		const context = { after, seq, line };
@@ -237,7 +237,7 @@ export class Activation implements ExecutorSession {
 			const context = renderActivation(input.view, this.definition).context;
 			return this.context.initial(input.view.through, context, this.now());
 		}
-		const text = deltaText(input.view, input.since);
+		const text = renderDelta(input.view, input.since);
 		if (text === undefined) return undefined;
 		return this.context.delta(input.since, input.view.through, text, this.now());
 	}
@@ -323,7 +323,8 @@ export class Activation implements ExecutorSession {
 		const def = this.definition;
 		if (view.spec.seat !== def.name)
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
-		const systemPrompt = renderActivation(view, def).systemPrompt;
+		const { mechanism, agent: seat } = renderActivation(view, def);
+		const systemPrompt = `${mechanism}\n\n${seat}`;
 		if (this.agent !== undefined) {
 			this.agent.state.systemPrompt = systemPrompt;
 			return this.agent;
@@ -372,17 +373,6 @@ export class Activation implements ExecutorSession {
 function modelOf(executor: AgentExecutor): string {
 	if ('model' in executor && typeof executor.model === 'string') return executor.model;
 	throw new Error(`The Pi executor cannot run an executor of kind '${executor.kind}'.`);
-}
-
-/**
- * What a later pass tells the model: each message that landed beyond the
- * position it read. Each line reads as a steer does. Nothing is new when no
- * message stands beyond `since`.
- */
-function deltaText(view: ActivationView, since: Seq): string | undefined {
-	const fresh = view.context.messages.filter((message) => message.seq > since);
-	if (fresh.length === 0) return undefined;
-	return fresh.map((message) => `[new] ${renderLine(message)}`).join('\n');
 }
 
 /** Whether the last model message stopped at a length limit. */

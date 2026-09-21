@@ -50,6 +50,9 @@ importers:
       '@opentui/core':
         specifier: 0.5.11
         version: 0.5.11(typescript@7.0.2)(web-tree-sitter@0.25.10)
+      typebox:
+        specifier: ^1.3.18
+        version: 1.3.18
     devDependencies:
       '@earendil-works/pi-ai':
         specifier: ^0.85.1
@@ -120,6 +123,15 @@ importers:
         specifier: 0.5.11
         version: 0.5.11(typescript@7.0.2)(web-tree-sitter@0.25.10)
     devDependencies:
+      '@ambionframework/cloudflare':
+        specifier: workspace:*
+        version: link:../cloudflare
+      '@ambionframework/pi':
+        specifier: workspace:*
+        version: link:../pi
+      '@cloudflare/workers-types':
+        specifier: 5.20260910.1
+        version: 5.20260910.1
       tsdown:
         specifier: ^0.22.14
         version: 0.22.14(oxc-resolver@11.24.2)(typescript@7.0.2)

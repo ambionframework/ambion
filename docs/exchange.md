@@ -3,7 +3,7 @@
 An exchange is the room's unit of human-directed work: one person's question
 and the discussion it starts. The implementation is
 [`room/exchange.ts`](../packages/ambion/src/room/exchange.ts), with lifecycle
-coordination in [`room-host.ts`](../packages/ambion/src/room-host.ts). Read
+coordination in [`room-host/`](../packages/ambion/src/room-host/room.ts). Read
 [`room.md`](room.md) for activation rules and [`summary.md`](summary.md) for
 the optional closing message.
 
@@ -145,6 +145,24 @@ if (recorded) {
   console.log(recorded.exchange.status, recorded.messages);
 }
 ```
+
+**A closed exchange view carries an `outcome`.** The room derives it from
+the record. It adds no entry kind and starts no timer, so a resumed room reads
+the same outcome. The first case that holds wins:
+
+| Outcome     | When it holds                                                                  |
+| ----------- | ------------------------------------------------------------------------------ |
+| `cancelled` | A cancellation wrote the close.                                                |
+| `exhausted` | The room gave up on a response activation in the range.                        |
+| `awaiting`  | The last spoken message asks a person, and that person has said nothing since. |
+| `complete`  | None of the above.                                                             |
+
+A message to the owner is the answer to the owner's question, so it never
+makes an exchange `awaiting`. `awaiting` carries the `person`. It clears when
+that person speaks. `pendingFor(read, person)` and `room.pendingFor(person)`
+return the closed exchanges that await one person. A failed summary reads
+through `summary`, not `outcome`. The verified rule `exchangeOutcome` fixes the
+order.
 
 Cancellation closes the current discussion without assigning a new summary. It
 settles existing pending summary work as failed. See the

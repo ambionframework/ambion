@@ -10,9 +10,15 @@ import {
 } from '@ambionframework/ambion';
 import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
 import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
-import { directoryBackend, openWorkspace, type RoomMirror } from '@ambionframework/workspace';
+import {
+	directoryBackend,
+	openSqlResource,
+	openWorkspace,
+	type RoomMirror,
+} from '@ambionframework/workspace';
 import { team } from './definitions.ts';
-import { scenarios, seedWorkspace } from './scenarios.ts';
+import { openInstrument } from './instrument.ts';
+import { instruments, labSchema, labWritable, scenarios, seedWorkspace } from './scenarios.ts';
 
 /** What a person can do to a room's work. Abort ends the open exchange. Stop and resume end and start a run. */
 export type RoomAction = 'abort' | 'stop' | 'resume';
@@ -78,7 +84,20 @@ export async function openRooms(
 		await workspace.dispose().catch(() => {});
 		throw error;
 	}
-	const roomTeam = team(workspace);
+	// The lab records live in their own file, apart from the journal database.
+	let lab: ReturnType<typeof openSqlResource>;
+	try {
+		lab = openSqlResource({
+			name: 'lab',
+			location: resolve(directory, 'lab.db'),
+			schema: labSchema,
+			writable: labWritable,
+		});
+	} catch (error) {
+		await workspace.dispose().catch(() => {});
+		throw error;
+	}
+	const roomTeam = team(workspace, lab, openInstrument({ lab, instruments }));
 	let workspaceTail = Promise.resolve();
 	function withWorkspace<T>(operation: () => Promise<T>): Promise<T> {
 		if (closing) fail('The host is stopping.');
@@ -229,6 +248,7 @@ export async function openRooms(
 		await closeEntries().catch(() => {});
 		await workspaceTail.catch(() => {});
 		await workspace.dispose().catch(() => {});
+		await lab.dispose().catch(() => {});
 		throw error;
 	}
 	return {
@@ -258,6 +278,7 @@ export async function openRooms(
 			await closeEntries();
 			await workspaceTail;
 			await workspace.dispose();
+			await lab.dispose();
 		},
 	};
 }

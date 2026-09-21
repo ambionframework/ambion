@@ -259,21 +259,70 @@ export function refusal(opening: string, missed: Message[], advice: string): str
 
 // -- what a participant reads ------------------------------------------------
 
-/** Render the provider prompt and context from one detached activation view. */
-export function renderActivation(
-	view: ActivationView,
-	def: AgentDefinition,
-): { systemPrompt: string; context: string } {
+/**
+ * The prompt of one activation in three parts. Each part depends on one thing,
+ * so an adapter can place it where it caches best.
+ */
+export interface RenderedPrompt {
+	/** How a room works. It depends on the kernel version only. */
+	readonly mechanism: string;
+	/** Who the seat is and how it speaks. It depends on the definition and the purpose. */
+	readonly agent: string;
+	/** What this activation reads: the room, the roster, the record, and the ask line. */
+	readonly context: string;
+}
+
+/**
+ * The default speaking policy. An agent definition replaces it with the
+ * `speaking` option of its executor.
+ */
+export const DEFAULT_GUIDANCE = [
+	`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
+	`your turn without saying anything, and no mark is left. Speak only when your reply`,
+	`adds something the record does not already hold — new information, a decision moved`,
+	`forward, or a genuinely different perspective. A point already made does not need a`,
+	`second voice; restating it in your own words is repetition, not contribution — stay`,
+	`silent instead. A directed say (to: a name) calls that agent in; use it deliberately —`,
+	`attention costs money. When a colleague holds the answer, ask them directly with one`,
+	`directed say — never announce to the room what you are about to do, and never pose a`,
+	`question undirected that only one participant can answer: a say is a message, not a`,
+	`thought. Messages arriving mid-turn are marked [new]; fold them into what you are`,
+	`doing — and if a colleague has just made your point, let it stand. A say fails if`,
+	`the room moved while you were speaking: the failure lists what you missed — read`,
+	`it, and speak again only if your reply still adds something.`,
+].join('\n');
+
+/** Render the three prompt parts from one detached activation view. */
+export function renderActivation(view: ActivationView, def: AgentDefinition): RenderedPrompt {
 	return {
-		systemPrompt: renderSystemPrompt(view, def),
+		mechanism: MECHANISM,
+		agent: renderAgent(view, def),
 		context: renderTurnContext(view, def),
 	};
 }
 
-function renderSystemPrompt(view: ActivationView, def: AgentDefinition): string {
-	const lines = [...header(view, def), ``];
-	if (view.context.goal) lines.push(`This room exists to: ${view.context.goal}`, ``);
-	lines.push(...duties(view, def), ``);
+/**
+ * What a later pass tells the model: each message that landed beyond `since`.
+ * Each line reads as a steer does. Nothing is new when no message stands
+ * beyond `since`.
+ */
+export function renderDelta(view: ActivationView, since: Seq): string | undefined {
+	const fresh = view.context.messages.filter((message) => message.seq > since);
+	if (fresh.length === 0) return undefined;
+	return fresh.map((message) => `[new] ${renderLine(message)}`).join('\n');
+}
+
+/** How a room works. No definition and no pass shapes it. */
+const MECHANISM = [
+	`You are an agent seated in a room: a shared room with a record. Every participant sees`,
+	`what is said; nobody sees your tool use. A room has a URI, and a message has the URI`,
+	`<room URI>/message/<seq>. The context gives the room's URI, and the ask line at its end`,
+	`gives the message that opened the current exchange.`,
+].join('\n');
+
+/** The seat's identity, its policy for this purpose, and its own instructions. */
+function renderAgent(view: ActivationView, def: AgentDefinition): string {
+	const lines = [`You are '${def.name}'.`, ``, ...duties(view, def), ``];
 	lines.push(
 		`Your identity, as the room knows it: ${def.identity}`,
 		``,
@@ -286,37 +335,26 @@ function renderSystemPrompt(view: ActivationView, def: AgentDefinition): string 
 
 /** What this seat is for, read off the activation purpose. */
 function duties(view: ActivationView, def: AgentDefinition): string[] {
-	const purpose = view.spec.purpose.kind;
-	if (purpose === 'summarize') {
-		const lines = [...SUMMARY_DUTIES];
-		// The background this activation now reads may hold a fold; only such a
-		// record tells its seat how to read one.
-		if (view.context.messages.some(isSummary)) lines.push(``, ...SUMMARY_PARAGRAPH);
-		return lines;
-	}
+	if (view.spec.purpose.kind === 'summarize') return [...SUMMARY_DUTIES];
 	const lines = [
-		`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
-		`your turn without saying anything, and no mark is left. Speak only when your reply`,
-		`adds something the record does not already hold — new information, a decision moved`,
-		`forward, or a genuinely different perspective. A point already made does not need a`,
-		`second voice; restating it in your own words is repetition, not contribution — stay`,
-		`silent instead. A directed say (to: a name) calls that agent in; use it deliberately —`,
-		`attention costs money. When a colleague holds the answer, ask them directly with one`,
-		`directed say — never announce to the room what you are about to do, and never pose a`,
-		`question undirected that only one participant can answer: a say is a message, not a`,
-		`thought. Messages arriving mid-turn are marked [new]; fold them into what you are`,
-		`doing — and if a colleague has just made your point, let it stand. A say fails if`,
-		`the room moved while you were speaking: the failure lists what you missed — read`,
-		`it, and speak again only if your reply still adds something.`,
+		def.executor.speaking ?? DEFAULT_GUIDANCE,
 		``,
 		...AUDIENCE_PARAGRAPH,
 		``,
 		...HANDOFF_PARAGRAPH,
 	];
 	if (def.executor.guidance) lines.push(``, def.executor.guidance);
+	return lines;
+}
+
+/** Where the activation happens: the room, its purpose, and how to read a fold. */
+function renderSetting(view: ActivationView): string[] {
+	const { context } = view;
+	const lines = [`The room is '${context.name}'. Its URI is ${roomUri(context.name)}.`, ``];
+	if (context.goal) lines.push(`This room exists to: ${context.goal}`, ``);
 	// A fold renders once the record holds a summary, so only such a record
-	// tells its seats how to read one.
-	if (view.context.messages.some(isSummary)) lines.push(``, ...SUMMARY_PARAGRAPH);
+	// tells its seat how to read one.
+	if (context.messages.some(isSummary)) lines.push(...SUMMARY_PARAGRAPH, ``);
 	return lines;
 }
 
@@ -328,6 +366,7 @@ function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
 	return [
 		renderClock(context.now),
 		``,
+		...renderSetting(view),
 		`The agents. Each is seated at one point of a scale — the widest kind of message`,
 		`that wakes it. Unmarked: anything said. "named only": a say addressed to it.`,
 		`"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":`,
@@ -419,26 +458,20 @@ const HANDOFF_PARAGRAPH = [
 ];
 
 /**
- * How a room opens the prompt it hands a seat.
- */
-function header(view: ActivationView, def: AgentDefinition): string[] {
-	return [
-		`You are '${def.name}', an agent seated in the room '${view.context.name}' — a shared`,
-		`room with a record. Every participant sees what is said; nobody sees your tool use.`,
-		`This room's URI is ${roomUri(view.context.name)}. A message's URI is`,
-		`${roomUri(view.context.name)}/message/<seq>; the ask line below gives the one that`,
-		`opened this exchange.`,
-	];
-}
-
-/**
  * Who the closing seat is writing for, and how they read. How a person reads is
  * theirs, so it reaches that seat here and no other seat reads it.
  */
 function reader(view: ActivationView): string[] {
 	if (view.spec.purpose.kind !== 'summarize') return [];
 	const person = view.spec.purpose.person;
+	const { people } = view.spec.purpose;
 	const lines = [`You are writing for ${person}.`];
+	if (people.length > 1)
+		lines.push(
+			`These people spoke in the exchange: ${people.join(', ')}. Write one message for each, and`,
+			`set \`to\` to that person. This list replaces the rule to answer no other person.`,
+			`The reading preferences below belong to ${person}. Keep the message for each other person plain.`,
+		);
 	if (view.context.preferences) lines.push(`How ${person} reads:`, view.context.preferences.trim());
 	return lines;
 }

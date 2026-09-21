@@ -45,6 +45,10 @@ technical facts, and what is new, and it describes the 0.1.0 surface. Every
 other page links to it and states nothing twice. `planning/next.md` names
 which parts of that surface are still open.
 
+The public shape is frozen until the `v0.1.0` tag. Read the freeze note at
+the top of [`planning/next.md`](planning/next.md) before you change an
+export or a journal body.
+
 Ambient means a room remains available between interactions. Native timers,
 external event subscriptions, and scheduler ingress remain future work.
 
@@ -118,7 +122,10 @@ vitest.live.config.ts test/live/<file>.test.ts`) over the whole suite. Run the
   write.
 - Cognitive complexity: max 10 in source, 15 in tests.
 - Prettier formats (tabs, single quotes, width 100, semicolons); Biome lints.
-- Tests are vitest. A scripted `stream` makes a room deterministic.
+- Tests are vitest. A scripted execution from `@ambionframework/ambion/testing`
+  makes a room deterministic; `settled(room)` waits for it. The kernel entry
+  imports no model library. A scripted Pi stream comes from
+  `@ambionframework/pi/testing`.
 
 ## Writing documentation
 

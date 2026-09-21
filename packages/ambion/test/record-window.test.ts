@@ -260,7 +260,7 @@ describe('the room caps the record', () => {
 			id: 'summary:2:writer:0',
 			seat: 'worker',
 			attempt: 0,
-			purpose: { kind: 'summarize', person: 'priya', exchange: 3, through: 5 },
+			purpose: { kind: 'summarize', person: 'priya', people: ['priya'], exchange: 3, through: 5 },
 		};
 		const view = viewOf(spec, capped(state, 1));
 		expect(seqs(view)).toEqual([3, 4, 5]);

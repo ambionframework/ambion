@@ -1,6 +1,6 @@
 /**
- * Silence is the default, and a directed say focuses the room. Rules 3, 4
- * and 6 of `docs/agent.md`: the runtime states the bar and leaves the
+ * Silence is the default, and a directed say focuses the room. Routing and
+ * the attention scale: the runtime states the bar and leaves the
  * decision to the agent. A scripted stream decides by script; only a real
  * model decides by the prompt.
  */
@@ -97,12 +97,14 @@ live('judgment', () => {
 		const woken = events.findIndex((e) => e.type === 'activation_start' && e.agent === 'stock');
 		expect(woken).toBeGreaterThan(asked);
 		expect(activationsOf(events.slice(0, asked), 'stock')).toBe(0);
-		expect(events).toContainEqual({
-			type: 'tool_execution_start',
-			agent: 'stock',
-			activation: expect.any(String),
-			toolName: 'stock_level',
-		});
+		expect(events).toContainEqual(
+			expect.objectContaining({
+				type: 'tool_execution_start',
+				agent: 'stock',
+				activation: expect.any(String),
+				toolName: 'stock_level',
+			}),
+		);
 		const answer = saidBy(messages, 'stock');
 		expect(answer).toHaveLength(1);
 		expect(answer[0]?.text).toContain('42');

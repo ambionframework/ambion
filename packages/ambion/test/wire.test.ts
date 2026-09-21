@@ -17,7 +17,7 @@ import {
 } from '../src/hosting.ts';
 import { createRuntime } from '../src/index.ts';
 import type { Close, Composition, LeaseChange } from '../src/journal/events.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock } from '../src/testing.ts';
 import { roomName, storedOf } from './support/room.ts';
 import { oneExchange } from './support/scenarios.ts';
 import { sqlite } from './support/storage.ts';
@@ -86,7 +86,7 @@ const view: ActivationView = {
 		id: 'closed:4:assistant:1',
 		seat: 'assistant',
 		attempt: 1,
-		purpose: { kind: 'summarize', exchange: 2, person: 'priya', through: 4 },
+		purpose: { kind: 'summarize', exchange: 2, person: 'priya', people: ['priya'], through: 4 },
 	},
 	through: 4,
 	context: { name: 'site', now: Date.parse(at), participants: [], messages: [], reserve: [] },

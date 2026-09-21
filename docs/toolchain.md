@@ -44,17 +44,23 @@ See [`scripts/cli-team-smoke.mjs`](../scripts/cli-team-smoke.mjs) and
 [`scripts/journal-smoke.mjs`](../scripts/journal-smoke.mjs) for detailed
 consumer checks.
 
-The core has three published entries:
+The core has four published entries:
 
 - `@ambionframework/ambion` for hosts.
 - `@ambionframework/ambion/hosting` for a room and seat separated by a wire.
-- `@ambionframework/ambion/conformance` for the transport suite.
+- `@ambionframework/ambion/conformance` for the transport suite and the
+  executor suite.
+- `@ambionframework/ambion/testing` for the scripted executor, `settled`, and
+  `fakeClock`. It imports no model library. `@ambionframework/pi/testing`
+  holds the scripted Pi stream.
 
 The core imports no platform modules. Workspace filesystem code owns Node
 dependencies; Cloudflare code owns Durable Object integration.
 
-The core separates collaboration from execution. `room-host.ts` coordinates
-the journal and pure decisions under `room/`. `execution/` owns the agent
+The core separates collaboration from execution. `room-host/` coordinates
+the journal and pure decisions under `room/`. Its `room.ts` holds the state
+and the phases. `people.ts`, `dispatch.ts`, `waits.ts`, and `control.ts` hold one
+mechanism each. `execution/` owns the agent
 runner, the executor contract, and rendering. It imports no model library:
 `@ambionframework/pi` holds Pi and depends on the core. `room.ts` composes
 both behind the public facade.
@@ -116,7 +122,7 @@ Use these commands at the repository root:
 | Command                      | Purpose                                                                |
 | ---------------------------- | ---------------------------------------------------------------------- |
 | `pnpm build`                 | Build every package through Turborepo                                  |
-| `pnpm check:types`           | Type-check packages after their builds                                 |
+| `pnpm check:types`           | Type-check packages and the CLI team template after their builds       |
 | `pnpm test`                  | Run report checks and the scripted Vitest suites                       |
 | `pnpm check:format`          | Verify Prettier formatting                                             |
 | `pnpm check:lint`            | Run Biome with warnings as errors, then Knip                           |

@@ -192,7 +192,7 @@ the same way.
 - **Artifacts by reference.** A message and a summary carry `refs`, URIs the
   kernel validates, stores, and renders, and never reads behind. Rooms and
   exchanges have URIs. Every resource change carries the activation, the
-  exchange, and the room that made it. See [Workspace](docs/workspace.md).
+  exchange, and the room that made it. See [Resources](docs/resources.md).
 - **The workspace mirrors the collaboration onto itself.** An audit log
   records every tool call the workspace served, as one JSON line: the room,
   the agent, the tool, the arguments, and the result. A room mirror copies
@@ -295,7 +295,7 @@ the evidence for each model.
 
 - Full history remains in storage and replay. `limits.context` bounds what
   one activation reads, and `limits.message` bounds what one message
-  carries.
+  carries. [Envelope](docs/envelope.md) lists every limit and its default.
 - Activation deadlines and retry caps impose no total exchange budget.
   Continuing contributions keep an exchange open.
 - Tools can act before a contribution commits. Applications own effect

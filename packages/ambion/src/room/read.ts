@@ -1,6 +1,13 @@
 /** Coherent, detached room reads built from one folded projection. */
 
-import { copyMessage, type ExchangeView, type Message, type RoomRead, type Seq } from '../types.ts';
+import {
+	type ClosedExchangeView,
+	copyMessage,
+	type ExchangeView,
+	type Message,
+	type RoomRead,
+	type Seq,
+} from '../types.ts';
 import { exchangeViews } from './exchange.ts';
 import type { RoomState } from './fold.ts';
 import { liveWork } from './reconcile.ts';
@@ -44,6 +51,7 @@ export function readView(
 		state.exchange,
 		state.leases,
 		state.cancelledAt,
+		{ people: new Set(state.people.keys()), cancelClosed: state.cancelClosed },
 	);
 	const current = exchanges.find(
 		(exchange): exchange is Extract<ExchangeView, { readonly status: 'open' }> =>
@@ -76,4 +84,18 @@ function validateSelection(selection: MessageSelection | undefined): void {
 	const since = selection === false ? undefined : selection?.since;
 	if (since !== undefined && (!Number.isSafeInteger(since) || since < 0))
 		throw new RangeError('Message cursor must be a non-negative safe integer.');
+}
+
+/**
+ * The closed exchanges that wait on one person: the last spoken message asks
+ * them and they have said nothing since. The read holds the answer, so this
+ * waits for nothing and starts nothing.
+ */
+export function pendingFor(read: RoomRead, person: string): ClosedExchangeView[] {
+	return read.exchanges.filter(
+		(exchange): exchange is ClosedExchangeView =>
+			exchange.status === 'closed' &&
+			exchange.outcome.kind === 'awaiting' &&
+			exchange.outcome.person === person,
+	);
 }

@@ -29,7 +29,7 @@ it('builds every entry the manifest names', async () => {
 	const { exports } = await manifest();
 	const config = await read('tsdown.config.ts');
 	const built = [...config.matchAll(/'(src\/[^']+)'/g)].map((m) => m[1]);
-	expect(built).toEqual(['src/index.ts', 'src/hosting.ts', 'src/conformance.ts']);
+	expect(built).toEqual(['src/index.ts', 'src/hosting.ts', 'src/conformance.ts', 'src/testing.ts']);
 	// Each subpath names a file the build writes, under the name it builds it by.
 	for (const [path, target] of Object.entries(exports)) {
 		if (path === './package.json') continue;
@@ -43,6 +43,7 @@ it('builds every entry the manifest names', async () => {
 it('exports exactly what an application needs to build a room, and nothing a host needs beyond it', () => {
 	expect(Object.keys(main).sort()).toEqual([
 		'AmbionError',
+		'DEFAULT_GUIDANCE',
 		'PACKAGE_NAME',
 		'createRuntime',
 		'defaultRuntime',
@@ -54,6 +55,7 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 		'isSummary',
 		'messageUri',
 		'parseRoomUri',
+		'pendingFor',
 		'readActivation',
 		'readExchange',
 		'readRoom',
@@ -76,8 +78,10 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'describeExecutor',
 		'hostingOf',
 		'inProcessTransport',
+		'reconcileRoom',
 		'refusal',
 		'renderActivation',
+		'renderDelta',
 		'renderLine',
 		'roundTrip',
 		'runningRoom',
@@ -91,7 +95,11 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 });
 
 it('exports exactly the conformance suite and its in-process executor', () => {
-	expect(Object.keys(conformance).sort()).toEqual(['speakOnce', 'transportConformance']);
+	expect(Object.keys(conformance).sort()).toEqual([
+		'executorConformance',
+		'speakOnce',
+		'transportConformance',
+	]);
 });
 
 it('names the ports, the reads, and the visit by their final names', () => {

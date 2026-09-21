@@ -13,7 +13,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
+import { fakeClock } from '../src/testing.ts';
 import { refusal } from './support/errors.ts';
 import {
 	closedExchange,
