@@ -165,8 +165,9 @@ const drive = openWorkspace({
 **The log is an ordinary file an agent reads.** The default path is
 `/workspace/audit.jsonl`; set `path` to change it, and `maxBytes` to change
 the 5 MiB rotation threshold. An agent reads the log with `read` or
-`bash cat`, the same as any file a peer wrote, and sees every call any agent
-made, including its own past calls.
+`bash cat`, the same as any file a peer wrote, and sees every call any
+agent in any room made, including its own past calls. `jq` filters one
+entry out of many, by `room`, `tool`, `agent`, or `activation`.
 
 **Tool guidance tells every agent the log exists.** `openWorkspace` appends
 a note naming the path and what each line holds to the bundle's guidance, so
@@ -285,8 +286,15 @@ any file a peer wrote.
 
 **Every line carries the `seq` a message ref names.** A ref of the form
 `ambion://room/<name>/message/<seq>` (see [agent.md](agent.md)) points at
-the line whose `seq` field matches. An agent finds it with `bash grep`; it
-never needs to fetch or parse the URI to do it.
+the line whose `seq` field matches. An agent finds it with
+`jq 'select(.seq == <seq>)'`; it never needs to fetch or parse the URI to
+do it. `jq` filters on `kind` or `from` the same way.
+
+**The mirror holds more messages than one activation's context.** A seat's
+context window can trim older messages, through `limits.context.messages`,
+or fold a closed exchange into one summary line. A message missing from
+context this activation still has its own line in `messages.jsonl`. Find
+it by `seq`.
 
 **This is a secondary, best-effort copy.** `packages/journal` remains the
 source of truth for the room. A write failure calls `onError` and the room
@@ -313,9 +321,10 @@ learns its `/home/<name>` convention. An agent finds the field guide above
 by reading a room's own file; the guidance only points at the path.
 
 **Directory-per-room organizes the data; it does not wall it off.** Every
-room sharing one workspace still shares its filesystem boundary (see
-[Backends and limits](#backends-and-limits)): an agent seated in one room
-can read another room's file the same way it can read another agent's home.
+room sharing one workspace shares its filesystem boundary (see
+[Backends and limits](#backends-and-limits)). An agent seated in one room
+reads another room's `messages.jsonl` the same way, with the same `seq`
+and `jq` filter it uses on its own.
 
 ## Query the shared database
 
