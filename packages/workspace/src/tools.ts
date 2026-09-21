@@ -11,7 +11,8 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import type { AuditEntry, AuditLog } from './audit.ts';
-import type { WorkspaceEnv } from './backend.ts';
+import type { WorkspaceBackend, WorkspaceEnv } from './backend.ts';
+import type { ChangeLog, WorkspaceChange } from './changes.ts';
 import type { WorkspaceResource } from './resource.ts';
 
 type HarnessTool = AgentHarnessTool<ExecutionToolContext>;
@@ -58,11 +59,42 @@ function auditEntry(
 	};
 }
 
+/** The change log and the backend's extractor, set together. */
+export interface ChangeRecording {
+	readonly log: ChangeLog;
+	readonly changedPaths: NonNullable<WorkspaceBackend['changedPaths']>;
+}
+
+/** Record the paths a successful call changed. A call that changed none leaves no entry. */
+async function recordChange(
+	recording: ChangeRecording | undefined,
+	env: WorkspaceEnv,
+	tool: string,
+	params: unknown,
+	result: unknown,
+	ctx: ToolContext,
+): Promise<void> {
+	if (recording === undefined) return;
+	const paths = recording.changedPaths(ctx.agent, tool, params, result);
+	if (paths.length === 0) return;
+	const entry: WorkspaceChange = {
+		time: new Date().toISOString(),
+		room: ctx.room ?? '',
+		agent: ctx.agent.name,
+		tool,
+		...(ctx.activation === undefined ? {} : { activation: ctx.activation }),
+		...(ctx.exchange === undefined ? {} : { exchange: ctx.exchange }),
+		paths,
+	};
+	await recording.log.record(env, entry, BACKGROUND_CONTEXT);
+}
+
 /** Bind a Pi harness tool through the owner's whole-operation queue. */
 function bindTool(
 	tool: HarnessTool,
 	use: WorkspaceResource<WorkspaceEnv>['use'],
 	audit?: AuditLog,
+	changes?: ChangeRecording,
 ): AmbionTool {
 	return defineTool({
 		name: tool.name,
@@ -95,6 +127,7 @@ function bindTool(
 							auditEntry(tool.name, params, ctx, { result }),
 							BACKGROUND_CONTEXT,
 						);
+						await recordChange(changes, env, tool.name, params, result, ctx);
 						return result;
 					} catch (error) {
 						await audit?.record(
@@ -117,9 +150,10 @@ export function bindTools(
 	use: WorkspaceResource<WorkspaceEnv>['use'],
 	guidance?: string,
 	audit?: AuditLog,
+	changes?: ChangeRecording,
 ): ToolBundle {
 	return Object.freeze({
-		tools: Object.freeze(tools.map((tool) => bindTool(tool, use, audit))),
+		tools: Object.freeze(tools.map((tool) => bindTool(tool, use, audit, changes))),
 		...(guidance === undefined ? {} : { guidance }),
 	});
 }
