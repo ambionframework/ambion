@@ -68,13 +68,18 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	// The next call builds the room again, and its constructor resumes the name.
 	const again = env.ROOM.get(env.ROOM.idFromName(NAME));
 	const said = await until(async () => {
-		const messages = await again.messages().catch(() => []);
+		const messages = await again.read().then(
+			(read) => read.messages,
+			() => [],
+		);
 		return messages.find((message) => isSpoken(message) && message.from === 'slow');
 	});
 	expect(isSpoken(said) && said.text).toBe('The slow answer stands.');
 	const conversation = await again.waitForClose(exchange.from);
 	expect(conversation[0]?.seq).toBe(exchange.from);
-	const resumedNames = (await again.participants()).map((participant) => participant.name);
+	const resumedNames = (await again.read({ messages: false })).participants.map(
+		(participant) => participant.name,
+	);
 	expect(resumedNames).toContain('slow');
 	expect(resumedNames).toContain('assistant');
 	expect(resumedNames).toContain('priya');

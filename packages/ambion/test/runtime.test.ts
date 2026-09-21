@@ -6,7 +6,7 @@
 import { readdir } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { hostingOf } from '../src/hosting.ts';
+import { hostingOf, reconcileRoom } from '../src/hosting.ts';
 import { createRuntime, isSpoken, readRoom, startRoom } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
 import { andrei, assistant, messagesOf, roomName, waitForRoom } from './support/room.ts';
@@ -141,5 +141,24 @@ describe('createRuntime', () => {
 		} finally {
 			await opened.dispose();
 		}
+	});
+});
+
+describe('reconcileRoom', () => {
+	it('reconciles a running room and ignores a name that no room runs', async () => {
+		const name = roomName('reconcile-room');
+		const opened = await memory.open();
+		const runtime = createRuntime({ storage: opened.storage, clock: fakeClock() });
+		const session = await startRoom({
+			name,
+			runtime,
+			seats: { [assistant.name]: 'none' },
+			agents: [assistant],
+			execution: piExecution({ stream: scripted(() => quiet()) }),
+		});
+		await expect(reconcileRoom(runtime, name)).resolves.toBeUndefined();
+		await expect(reconcileRoom(runtime, 'nobody')).resolves.toBeUndefined();
+		await session.stop();
+		await expect(reconcileRoom(runtime, name)).resolves.toBeUndefined();
 	});
 });

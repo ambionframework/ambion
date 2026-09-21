@@ -1,4 +1,4 @@
-import type { ParticipantInfo, Seq } from '@ambionframework/ambion';
+import type { ParticipantInfo, RoomRead, Seq } from '@ambionframework/ambion';
 import type { Env } from '@ambionframework/cloudflare';
 import { configure, RoomObject, SeatObject } from '@ambionframework/cloudflare';
 import { AGENTS, COMPOSITION, human, ROOM_NAME } from './room.ts';
@@ -64,11 +64,35 @@ function textOf(value: unknown): string {
 	return value;
 }
 
+async function participants(stub: RoomStub): Promise<ParticipantInfo[]> {
+	return [...(await stub.read({ messages: false })).participants];
+}
+
+/** The status the dev client reads, computed from the room's read model. */
+function statusOf(read: RoomRead, from: Seq | undefined) {
+	const exchange =
+		from === undefined ? read.exchange : read.exchanges.find((item) => item.from === from);
+	if (from !== undefined && exchange === undefined)
+		throw new RequestError(`Exchange '${from}' is not on the record.`);
+	const working = from === undefined ? exchange !== undefined : exchange?.status === 'open';
+	const exchangeState = working ? 'working' : from === undefined ? 'idle' : 'completed';
+	return {
+		name: read.name,
+		initialized: read.initialized,
+		...(read.goal === undefined ? {} : { goal: read.goal }),
+		participants: [...read.participants],
+		exchanges: [...read.exchanges],
+		exchange,
+		watermark: read.watermark,
+		exchangeState,
+	};
+}
+
 async function start(
 	stub: RoomStub,
 ): Promise<{ started: string; participants: ParticipantInfo[] }> {
 	await stub.ensureStart(COMPOSITION);
-	return { started: ROOM_NAME, participants: await stub.participants() };
+	return { started: ROOM_NAME, participants: await participants(stub) };
 }
 
 async function join(
@@ -80,7 +104,7 @@ async function join(
 	if (typeof name !== 'string' || name !== human.name)
 		throw new RequestError(`'${name}' is not a person in this room.`);
 	await stub.visit(person);
-	return { joined: name, participants: await stub.participants() };
+	return { joined: name, participants: await participants(stub) };
 }
 
 async function send(stub: RoomStub, request: Request): Promise<unknown> {
@@ -113,9 +137,14 @@ const routes: Record<string, Route> = {
 	'POST /start': async (stub) => start(stub),
 	'POST /join': (stub, request) => join(stub, request),
 	'POST /send': (stub, request) => send(stub, request),
-	'GET /messages': (stub, _request, url) => stub.messages(numberParam(url, 'since')),
+	'GET /messages': async (stub, _request, url) => {
+		const since = numberParam(url, 'since');
+		const read = await stub.read(since === undefined ? {} : { messages: { since } });
+		return [...read.messages];
+	},
 	'GET /exchange': (stub, _request, url) => exchange(stub, url),
-	'GET /status': (stub, _request, url) => stub.status(numberParam(url, 'from')),
+	'GET /status': async (stub, _request, url) =>
+		statusOf(await stub.read({ messages: false }), numberParam(url, 'from')),
 	'GET /health': async () => ({ ok: true, room: ROOM_NAME }),
 };
 
