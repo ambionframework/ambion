@@ -45,6 +45,10 @@ technical facts, and what is new, and it describes the 0.1.0 surface. Every
 other page links to it and states nothing twice. `planning/next.md` names
 which parts of that surface are still open.
 
+The public shape is frozen until the `v0.1.0` tag. Read the freeze note at
+the top of [`planning/next.md`](planning/next.md) before you change an
+export or a journal body.
+
 Ambient means a room remains available between interactions. Native timers,
 external event subscriptions, and scheduler ingress remain future work.
 

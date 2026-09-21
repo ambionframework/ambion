@@ -1,5 +1,31 @@
 # Next: the must-have scope for 0.1.0
 
+> **The freeze (2026-09-20, from commit 8a7f0fe).** The public shape is
+> frozen. Every change to the main entry and to the journal bodies is
+> additive until the `v0.1.0` tag.
+>
+> - **The main entry is `@ambionframework/ambion`.** Its exports are the
+>   names in `packages/ambion/test/package.test.ts`. The host entry
+>   `/hosting` and the conformance entry follow the same rule.
+> - **The journal bodies are the room event vocabulary** in
+>   `packages/ambion/src/journal/events.ts`. `journal/validate.ts` checks
+>   them and `room/fold.ts` reads them.
+> - **Additive means one of:** a new export, or a new optional body field.
+>   A new entry kind or a new member of the message union is a deliberate
+>   change. It needs a new golden journal and a review.
+> - **The freeze forbids:** to remove or rename an export, to remove or
+>   rename a body field, to change a field type or its meaning, and to
+>   remove an entry kind.
+> - **One body refuses new fields.** The `close` object inside a `cancel`
+>   entry has `additionalProperties: false`. A new field there breaks an
+>   older reader.
+> - **Three guards catch a violation:** the export snapshot
+>   (`test/package.test.ts`), the golden journals (`test/golden.test.ts`),
+>   and body validation (`test/journal-validation.test.ts`). A red diff on
+>   one of them is a violation. Do not write the snapshot again.
+> - **The storage promise** is in the "Storage compatibility" paragraph of
+>   [durability.md](../docs/durability.md).
+
 This file is the whole plan for 0.1.0: the scope, the order of the work,
 the evidence each step needs, and the reason behind each item.
 [backlog.md](backlog.md) holds everything after 0.1.0.
@@ -61,8 +87,8 @@ ingress are future work.
 - **The kernel imports no model library.** The Claude Agent SDK is a second
   executor package (F10).
 - **Speech enters the record through `say` only**, on every executor.
-- **The freeze.** After phase 2, every change to the main entry and to the
-  journal bodies is additive until the tag.
+- **The freeze.** The freeze note at the top of this file
+  states the rule.
 - **Shared summaries.** Humans and agents continue from the same recorded
   summary; the source stays in the journal
   ([summary contract](../docs/summary.md)).
@@ -114,7 +140,7 @@ the freeze.
       with expected folds, replayed in CI; the compatibility promise in
       `durability.md` (D3). Needs phase 3 step 2, because the
       goldens must hold every field and every outcome.
-- [ ] **17.** The freeze: a note at the top of this file; additive changes only
+- [x] **17.** The freeze: a note at the top of this file; additive changes only
       from here to the tag. Needs 16.
 
 **Evidence:** the export snapshot passes with the final names; golden
