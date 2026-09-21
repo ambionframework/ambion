@@ -61,7 +61,7 @@ jobs:
             echo "::warning::No key for the $AMBION_HARNESS harness: the repository secret is empty, so the job skips."
             echo 'present=false' >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         if: steps.key.outputs.present == 'true'
         with:
           persist-credentials: false
