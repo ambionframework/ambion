@@ -1,0 +1,48 @@
+{
+	"name": "golden",
+	"initialized": true,
+	"messages": [],
+	"participants": [
+		{
+			"kind": "agent",
+			"name": "worker",
+			"identity": "Answers the question.",
+			"status": "idle",
+			"attention": "broadcast"
+		},
+		{
+			"kind": "human",
+			"name": "priya",
+			"identity": "Project manager.",
+			"presence": "absent"
+		}
+	],
+	"exchanges": [
+		{
+			"owner": "priya",
+			"from": 4,
+			"through": 4,
+			"at": "2026-01-01T09:00:00.000Z",
+			"status": "closed",
+			"activations": [
+				{
+					"id": "message:4:worker:1",
+					"seat": "worker",
+					"attempt": 1,
+					"purpose": "respond",
+					"outcome": {
+						"status": "revoked",
+						"cancelled": true
+					}
+				}
+			],
+			"summary": {
+				"status": "silent"
+			},
+			"outcome": {
+				"kind": "cancelled"
+			}
+		}
+	],
+	"watermark": 7
+}

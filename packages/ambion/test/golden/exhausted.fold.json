@@ -1,0 +1,72 @@
+{
+	"name": "golden",
+	"initialized": true,
+	"messages": [],
+	"participants": [
+		{
+			"kind": "agent",
+			"name": "worker",
+			"identity": "Answers the question.",
+			"status": "idle",
+			"attention": "named"
+		},
+		{
+			"kind": "human",
+			"name": "priya",
+			"identity": "Project manager.",
+			"presence": "absent"
+		}
+	],
+	"exchanges": [
+		{
+			"owner": "priya",
+			"from": 4,
+			"through": 4,
+			"at": "2026-01-01T09:00:00.000Z",
+			"status": "closed",
+			"activations": [
+				{
+					"id": "message:4:worker:1",
+					"seat": "worker",
+					"attempt": 1,
+					"purpose": "respond",
+					"outcome": {
+						"status": "failed",
+						"cause": "permanent"
+					},
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"cost": 0
+					}
+				},
+				{
+					"id": "message:4:worker:2",
+					"seat": "worker",
+					"attempt": 2,
+					"purpose": "respond",
+					"outcome": {
+						"status": "abandoned",
+						"cause": "permanent"
+					}
+				}
+			],
+			"summary": {
+				"status": "silent"
+			},
+			"outcome": {
+				"kind": "exhausted"
+			},
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			}
+		}
+	],
+	"watermark": 9
+}

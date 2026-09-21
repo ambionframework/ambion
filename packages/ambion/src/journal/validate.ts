@@ -2,6 +2,7 @@ import { type TSchema, Type } from 'typebox';
 import { Check, Errors } from 'typebox/value';
 import { decodeActivationId } from '../activation-id.ts';
 import { refsRefusal } from '../refs.ts';
+import { JOURNAL_FORMAT } from './events.ts';
 import type { Kind } from './journal.ts';
 
 const extra = { additionalProperties: true } as const;
@@ -141,7 +142,9 @@ const schemas: Record<Kind, TSchema> = {
 		},
 		extra,
 	),
-	run: Type.Object({ at: Type.String() }, extra),
+	// The format stays permissive here. A schema literal would drop a newer
+	// fence without a word; validateRunFormat refuses it loudly.
+	run: Type.Object({ at: Type.String(), format: Type.Optional(Type.Integer()) }, extra),
 	cancel: Type.Object({ at: Type.String(), close: Type.Optional(cancelClose) }, extra),
 };
 
@@ -149,6 +152,7 @@ const schemas: Record<Kind, TSchema> = {
 export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 	if (!Object.hasOwn(schemas, kind)) return false;
 	if (kind === 'composition') validateCompositionVersion(body);
+	if (kind === 'run') validateRunFormat(body);
 	const schema = schemaFor(kind, body);
 	if (!Check(schema, body)) {
 		const error = Errors(schema, body)[0];
@@ -213,6 +217,19 @@ function validateCompositionVersion(body: unknown): void {
 	const found = version === undefined ? 'missing' : JSON.stringify(version);
 	throw new Error(
 		`Unsupported room composition version (${found}); expected version 2. Start a new journal or migrate this journal externally.`,
+	);
+}
+
+/**
+ * A run entry without a format is format 1. Any other format is a journal a
+ * newer runtime wrote. A future format adds its own reader and one named
+ * upgrade behind this check.
+ */
+function validateRunFormat(body: unknown): void {
+	const format = objectBody(body)?.format;
+	if (format === undefined || format === JOURNAL_FORMAT) return;
+	throw new Error(
+		`Unsupported journal format (${JSON.stringify(format)}); this runtime reads format ${JOURNAL_FORMAT}. Upgrade the runtime or migrate this journal externally.`,
 	);
 }
 
