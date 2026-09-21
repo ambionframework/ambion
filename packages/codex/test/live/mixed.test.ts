@@ -26,7 +26,11 @@ describe.skipIf(!process.env[KEY_VAR] || !process.env[PI_KEY])('a mixed room', (
 		});
 		try {
 			const visit = await room.visit(person);
-			await visit.send({ text: 'Each of you: say which day of the week comes after Monday.' });
+			// Two questions, so that neither answer repeats the other. Whoever speaks second is told the
+			// record moved, and still has something to add.
+			await visit.send({
+				text: 'pilot: name the day that comes after Monday. gpt: name the day that comes after Friday.',
+			});
 			await untilQuiet(room);
 			const messages = (await room.read()).messages;
 			expect(saidBy(messages, 'pilot').length).toBeGreaterThanOrEqual(1);

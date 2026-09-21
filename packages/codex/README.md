@@ -56,7 +56,7 @@ no steer: a line that lands during a run waits for the next pass.
 and `web_search` items become `tool_call` and `tool_result` steps.
 `agent_message` and `reasoning` items become `text` and `thinking` steps.
 `turn.completed` becomes a `usage` step. Codex reports no cost. The next
-ordinary say cites the paths of a completed `file_change` in `refs`.
+ordinary say cites the paths of a completed `file_change` in `refs`, as `file:` URIs.
 
 **Choose the memory of the seat.** `memory: 'activation'` is the default. It
 opens one thread for each activation. `memory: 'seat'` resumes one thread
