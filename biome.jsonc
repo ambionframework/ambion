@@ -318,9 +318,10 @@
 			}
 		},
 		{
-			// The transport suite plays the room from outside the wire. It reaches
-			// the protocol and the executor types, and nothing that runs a room.
-			"includes": ["packages/ambion/src/conformance.ts"],
+			// The conformance suites play the room from outside the wire. They reach
+			// the protocol, the executor types, and the driver, and nothing that
+			// runs a room.
+			"includes": ["packages/ambion/src/conformance*.ts"],
 			"linter": {
 				"rules": {
 					"style": {
@@ -333,7 +334,6 @@
 											"./journal/*",
 											"./room/*",
 											"./tools/*",
-											"./execution/runner*",
 											"./room.ts",
 											"./room-host/*",
 											"./index.ts",
@@ -341,7 +341,7 @@
 											"@earendil-works/pi-*",
 											"@ambionframework/pi-journal"
 										],
-										"message": "A conformance suite drives the wire from outside: no log, no fold, no seat, no model."
+										"message": "A conformance suite drives the wire from outside: no log, no fold, no room, no model."
 									}
 								]
 							}

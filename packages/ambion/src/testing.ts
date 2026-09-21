@@ -13,10 +13,12 @@ export {
 	quiet,
 	type Result,
 	type Script,
+	ScriptedFailure,
 	type Step,
 	scripted,
 	scriptedExecutor,
 	speak,
+	spend,
 	type Turn,
 } from './testing/scripted.ts';
 export { type Settleable, type SettledOptions, settled } from './testing/settled.ts';
