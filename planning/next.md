@@ -40,8 +40,8 @@ holds on main.
 **Ambion is a collaboration kernel for agents and humans.** The
 [README](../README.md) holds the statement, the key technical facts, and
 what is new, written for the 0.1.0 surface. Of the ten novelties it lists,
-eight exist on main. Two stay open: any framework through one executor
-contract (phase 4) and waiting on a person as a derived outcome (phase 3).
+nine exist on main. One stays open: any framework through one executor
+contract (phase 4).
 
 ## The scope
 
@@ -113,7 +113,7 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Five lanes run at once.** A lane is a chain of steps that share files.
+**Three lanes run at once.** A lane is a chain of steps that share files.
 Steps in different lanes share no files and run in parallel. A step names
 the steps it needs; a step with no "Needs" line starts now. Three
 priorities sort the work: **P0** blocks the tag; **P1** carries the release
@@ -121,41 +121,22 @@ story; **P2** is in scope and can land last.
 
 | Lane | Chain                                                      | Priority |
 | ---- | ---------------------------------------------------------- | -------- |
-| A    | Phase 2: 16; 17                                            | P0       |
-| B    | Phase 4: 2 then 4; 5 and 6 after 4                         | P1       |
-| C    | Phase 3: 2                                                 | P1       |
-| D    | Phase 8: 1 now; 2 and 3 as each package lands; 4 to 8 last | P0       |
-| E    | Phases 6 and 7: each item after the code it describes      | P1       |
+| A    | Phase 4: 4; 5 and 6 after 4                                | P1       |
+| B    | Phase 8: 1 now; 2 and 3 as each package lands; 4 to 8 last | P0       |
+| C    | Phases 6 and 7: each item after the code it describes      | P1       |
 
-**The critical path is 16 and 6.2, then 8.** Start lane A first; when hands
-run short, take lane B before lane C, because the adapters carry the
-release story.
-
-### Phase 2. The public shape, then the freeze (P0)
-
-**Goal:** every journal field and every read the release needs land, then
-the freeze.
-
-- [x] **16.** `format: 1` on the run entry; golden journals per chaos scenario
-      with expected folds, replayed in CI; the compatibility promise in
-      `durability.md` (D3). Needs phase 3 step 2, because the
-      goldens must hold every field and every outcome.
-- [x] **17.** The freeze: a note at the top of this file; additive changes only
-      from here to the tag. Needs 16.
-
-**Evidence:** the export snapshot passes with the final names; golden
-journals replay.
+**The critical path is 4.4, then 8.** Start lane A first, because the
+adapters carry the release story.
 
 ### Phase 4. Executors and adapters (P1)
 
 **Goal:** two executor families run in one room, proven on fakes in CI.
 
-- [ ] **2.** The executor conformance suite on the scripted executor (D6, F10).
 - [ ] **4.** `@ambionframework/claude`: room tools through `createSdkMcpServer`
       per activation; streaming input for steer with the user echo
       advancing `readThrough`; hooks and tool messages as steps; a
       permission request as an `approval` step; policy options passed
-      through; a fake executable in CI (F5, F6). Needs 2.
+      through; a fake executable in CI (F5, F6).
 - [ ] **5.** `memory: 'activation' | 'seat'` on both adapters (F9). Needs 4.
 - [ ] **6.** `examples/codex`: a thread per activation; the stdio room tools
       server over a local socket; items as steps; `file_change` paths as
@@ -165,26 +146,14 @@ journals replay.
 one Pi seat and one Claude seat in CI; the assistant
 package's prompt shrinks to what the kernel does not enforce.
 
-### Phase 3. Kernel internals (P1)
-
-**Goal:** a current operation costs what the current work costs, and each
-mechanism reads in one place.
-
-2. [ ] Exchange outcomes: complete, cancelled, exhausted, `awaiting`;
-       `pendingFor(person)`; a summary for each person who spoke (E7).
-
-**Evidence:** outcome reads after restart.
-
 ### Phase 6. The workbench example and the user interface (P1)
 
 **Goal:** one example that a new reader runs first, and that the deployment
 guide describes. The example is one terminal process with an assistant and
 three specialists ([docs/example.md](../docs/example.md)).
 
-2. [ ] The terminal shows steps per activation, the cost per exchange, and
-       `awaiting` and `approval` to the person. Needs phase 3 step 2.
 3. [ ] `ambion new --template node` derived from the example; the
-       Cloudflare template on `read()` (C3). Needs 2.
+       Cloudflare template on `read()` (C3).
 
 A second provider for the two live scenarios is optional: Pi's transport
 keeps behavior provider-neutral, so add one only if a provider-specific
@@ -199,12 +168,8 @@ one provider; a restart preserves the question.
 mechanism, with no history of names they never used. Each page starts when
 the code it describes lands, so pages run beside the code.
 
-- [ ] **2.** `durability.md`: the format promise, stop semantics, permanent
-      failure, commit retry (D3). Needs phase 2 step 16.
 - [ ] **3.** `docs/executors.md`: the contract, the steps, the harness matrix,
       how to write an adapter (F). Needs phase 4 step 4.
-- [ ] **5.** `docs/patterns.md`: the human patterns table (E7). Needs phase 3
-      step 2.
 - [ ] **6.** `docs/trust.md`: guarantees between owners, membership authority,
       harness memory (D8, F9). Needs phase 4 step 5.
 - [ ] **7.** The `README.md` example typechecked against the packed entries;
@@ -236,12 +201,12 @@ the scope has evidence on the tagged commit.
        Cloudflare wake and cut races reproduced on current code.
 5. [ ] The chaos sweep at 200 seeds; Dafny proofs for every changed rule;
        golden journals; the live tier on one provider; results recorded
-       under `planning/evidence/`. Needs phase 2 step 16 and phase 6.
+       under `planning/evidence/`. Needs phase 6.
 6. [ ] Recovery evidence: duplicate wake, takeover, delayed cut, audit
-       retry, clock skew, process pause, uncooperative tool. Needs phase 3
-       and phase 4 step 4.
+       retry, clock skew, process pause, uncooperative tool. Needs phase 4
+       step 4.
 7. [ ] Summary evidence: silence, corrections, conflicting constraints,
-       multiple humans, late summaries. Needs phase 3 step 2.
+       multiple humans, late summaries.
 8. [ ] Sign off F1 to F9 above in `planning/evidence/0.1.0.md`; tag
        `v0.1.0`. Needs every step above.
 
@@ -268,26 +233,6 @@ Refuse the unheld summary name, add `opened` to
 the handle, make the host operation idempotent, and prefix the key kinds.
 
 ### D. Scope the release did not name
-
-**D3. A journal format promise with golden fixtures.** The only version
-marker is `composition.version`; the `cancel` kind arrived this month and
-older runtimes cannot read it; no test replays a journal an earlier build
-wrote. Declare format 1, write `format: 1` on the run entry, store golden
-journals per chaos scenario with expected folds, replay them in CI, and
-state the promise: a 0.1.x runtime reads every 0.1.0 journal.
-
-**Model the format as a header field with a named upgrade path.** The Pi
-0.85.1 storage carries a `storageVersion` in its header, and it ships a named
-upgrade from format 3 to format 4 that replays the old records into the new
-state (`openLegacyV3`, `upgradeLegacyV3ToV4`). Ambion mirrors the shape.
-`format: 1` on the run entry is the header field, and the reader dispatches
-on it. A later format adds its own reader and one named upgrade, so an older
-journal loads through a known path. The golden journals hold the promise: CI
-replays a journal each shipped build wrote and checks the fold.
-
-**D6. An executor conformance suite.** Publish `executorConformance` and
-run it on every shipped executor, so a third-party executor can prove
-conformance.
 
 **D7. A public registry.** Every install path requires a GitHub token.
 Publish the nine packages to npmjs with provenance at 0.1.0.
@@ -316,31 +261,6 @@ reaches a seat through `wake`, `steer`, and `cut`, in plain JSON.
 the repository mentions MCP or a headless run. Expose the three room tools
 in the hosting entry, serve them over MCP bound to one activation, and add
 the Codex example (F6, F10).
-
-**E7. The human patterns the room represents.** The table reads the
-primitives against common patterns; two gaps need a rule.
-
-| Pattern                             | Today                                   | Gap                                       |
-| ----------------------------------- | --------------------------------------- | ----------------------------------------- |
-| Ask and get an answer               | Exchange, close, optional summary       |                                           |
-| Ongoing room over days              | Visits, presence, catch-up, resume      |                                           |
-| Broadcast, no reply owed            | A said message; seats may stay silent   |                                           |
-| Bring in a specialist               | Reserve, `seat`, directed say           |                                           |
-| Steer work in progress              | Steer between provider requests         |                                           |
-| Two people in one discussion        | Second question joins the open exchange | Summary reaches the owner only            |
-| Waiting on a person                 | The exchange closes when agents stop    | "Done" and "waiting on you" read the same |
-| Approve before an agent acts        | A directed question to a person         | The wait has no representation            |
-| Stop one agent, keep the room       | `unseat` revokes its lease              | Document it                               |
-| Consult privately                   | Every message is visible to every seat  | Another room, by reference                |
-| Delegate to a working group         | PR #151 proposes tasks                  | Backlog                                   |
-| Vote, sign off, structured decision | Application tools and artifacts         | Outside the kernel by design              |
-| Scheduled check-in                  | Backlog: timers                         |                                           |
-
-Derive `awaiting` for a closed exchange whose last spoken message is
-directed at a person who has said nothing since; add `pendingFor(person)`
-to the room read; let the closing commit address any person whose message
-lies in the exchange's range, one summary each. No new entry kind and no
-timer.
 
 ### F. Harness adapters and the activation trace
 
@@ -409,12 +329,11 @@ holds state the record does not show.
 
 **F10. Ship two adapters and test them with fakes.** `@ambionframework/pi`
 and `@ambionframework/claude` ship in 0.1.0 with `examples/codex` beside
-them. The executor conformance suite runs each on a fake: a scripted
-`streamFn`, a fake executable through `pathToClaudeCodeExecutable`, a fake
-`codex` on `PATH`. It drives a wake, a first pass, a say, a missed say, a
-delta pass, and a release; a cut during a tool call; a steer consumed and
-held; a permanent and a transient failure; usage on release; the trace
-journal's contents.
+them. The executor conformance suite exists. The Claude adapter and the
+Codex example run it on a fake each: a fake executable through
+`pathToClaudeCodeExecutable` and a fake `codex` on `PATH`. The suite covers
+a cut during a tool call, a steer consumed and held, usage on release, and
+the trace journal's contents.
 
 ## Package decisions
 

@@ -154,14 +154,25 @@ test('room.md documents the room-level context cap', () => {
 	assert.ok(text.includes('earlier messages not shown'));
 });
 
+const badNextCites = (text, itemIds) =>
+	[...text.replace(/\s+/g, ' ').matchAll(/\b([A-Z]\d+)(?:'s)? in `next\.md`/g)]
+		.filter(([, id]) => !itemIds.has(id))
+		.map(([, id]) => id);
+
+test('the next.md citation check finds a pruned item, also in the possessive', () => {
+	const ids = new Set(['C1']);
+	assert.deepEqual(badNextCites('C1 in `next.md` and D3 in\n`next.md`.', ids), ['D3']);
+	assert.deepEqual(badNextCites("Z9's in `next.md` cite.", ids), ['Z9']);
+});
+
 test('a page that cites an item "in `next.md`" cites an item that the plan holds', () => {
 	const plan = readFileSync(join(root, 'planning/next.md'), 'utf8');
 	const itemIds = new Set([...plan.matchAll(/^\*\*([A-Z]\d+)\./gm)].map((m) => m[1]));
 	for (const dir of ['docs', 'planning']) {
 		for (const name of readdirSync(join(root, dir)).filter((n) => n.endsWith('.md'))) {
-			const text = readFileSync(join(root, dir, name), 'utf8').replace(/\s+/g, ' ');
-			for (const [, id] of text.matchAll(/\b([A-Z]\d+) in `next\.md`/g)) {
-				assert.ok(itemIds.has(id), `${dir}/${name}: item ${id} is not in next.md`);
+			const text = readFileSync(join(root, dir, name), 'utf8');
+			for (const id of badNextCites(text, itemIds)) {
+				assert.fail(`${dir}/${name}: item ${id} is not in next.md`);
 			}
 		}
 	}
