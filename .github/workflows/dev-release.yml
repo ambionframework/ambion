@@ -1,0 +1,58 @@
+name: Dev release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'planning/**'
+
+# One run at a time. A later push waits, so dev versions publish in order.
+concurrency:
+  group: dev-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish a dev build to GitHub Packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The stamp lives in the runner only. Nothing commits it.
+      - name: Stamp the dev version
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+          SHA: ${{ github.sha }}
+        run: |
+          base="$(node -p "require('./packages/ambion/package.json').version.split('-')[0]")"
+          node scripts/version.mjs "${base}-dev.${RUN_NUMBER}.g${SHA:0:7}"
+          node scripts/version.mjs --check
+
+      - run: pnpm run check:types
+      - run: pnpm run check:lint
+      - run: pnpm run build
+      - run: pnpm run test
+
+      - name: Pack
+        run: node scripts/publish.mjs --channel dev --pack-only
+
+      # Only this step holds the token. It publishes the tarballs from the step above.
+      - name: Publish under the dev tag
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/publish.mjs --channel dev --tag dev --skip-pack

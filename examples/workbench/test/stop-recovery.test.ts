@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { people } from '../src/definitions.ts';
 import { liveRoom, openRooms } from '../src/rooms.ts';
 import { openWorkbench } from '../src/workbench.ts';
+import { scriptedFamilies } from './scripted-families.ts';
 
 type StopFailure = false | 'before' | 'after';
 type WrappedDatabase = {
@@ -150,7 +151,10 @@ describe('Workbench host stop recovery', () => {
 		directories.push(directory);
 		const wrapped = wrappedDatabase(`${directory}/rooms.db`);
 		const model = noModelStream();
-		const rooms = await openRooms(wrapped.database, directory, model.stream);
+		const rooms = await openRooms(wrapped.database, directory, {
+			stream: model.stream,
+			executions: scriptedFamilies(),
+		});
 		try {
 			await rooms.create('review', 'Check durable stop.');
 			await rooms.withRoom('review', async (entry) => {
@@ -189,7 +193,10 @@ describe('Workbench host stop recovery', () => {
 		let restarted: Awaited<ReturnType<typeof openRooms>> | undefined;
 		try {
 			const model = noModelStream();
-			first = await openRooms(wrapped.database, directory, model.stream);
+			first = await openRooms(wrapped.database, directory, {
+				stream: model.stream,
+				executions: scriptedFamilies(),
+			});
 			await first.create('review', 'Check durable stop.');
 			await first.withRoom('review', async (entry) => {
 				await liveRoom(entry).visit(mira);
@@ -198,7 +205,10 @@ describe('Workbench host stop recovery', () => {
 			await expect(first.lifecycle('review', 'stop')).rejects.toThrow(/write failure/);
 
 			wrapped.setFailure(false);
-			restarted = await openRooms(wrapped.database, directory, model.stream);
+			restarted = await openRooms(wrapped.database, directory, {
+				stream: model.stream,
+				executions: scriptedFamilies(),
+			});
 			expect((await restarted.list())[0]?.status).toBe('running');
 			const stopped = await restarted.lifecycle('review', 'stop');
 			expect(stopped.status).toBe('stopped');
@@ -219,7 +229,10 @@ describe('Workbench host stop recovery', () => {
 		directories.push(directory);
 		const wrapped = wrappedDatabase(`${directory}/rooms.db`);
 		const model = noModelStream();
-		const rooms = await openRooms(wrapped.database, directory, model.stream);
+		const rooms = await openRooms(wrapped.database, directory, {
+			stream: model.stream,
+			executions: scriptedFamilies(),
+		});
 		try {
 			await rooms.create('review', 'Check durable stop.');
 			await rooms.withRoom('review', async (entry) => {
@@ -260,7 +273,10 @@ describe('Workbench host stop recovery', () => {
 		let rooms: Awaited<ReturnType<typeof openRooms>> | undefined;
 		try {
 			const model = noModelStream();
-			rooms = await openRooms(wrapped.database, directory, model.stream);
+			rooms = await openRooms(wrapped.database, directory, {
+				stream: model.stream,
+				executions: scriptedFamilies(),
+			});
 			await rooms.create('review', 'Check durable stop.');
 			await rooms.withRoom('review', async (entry) => {
 				await liveRoom(entry).visit(mira);
@@ -296,7 +312,11 @@ describe('Workbench host stop recovery', () => {
 		};
 		let workbench: Awaited<ReturnType<typeof openWorkbench>> | undefined;
 		try {
-			workbench = await openWorkbench({ directory: joinPath(directory, 'run'), stream });
+			workbench = await openWorkbench({
+				directory: joinPath(directory, 'run'),
+				stream,
+				executions: scriptedFamilies(),
+			});
 			await workbench.join('bringup', 'mira');
 			await expect(workbench.control('bringup', 'stop')).rejects.toThrow(/write failure/);
 			await expect(workbench.join('bringup', 'mira')).rejects.toThrow(/Resume this room first/);

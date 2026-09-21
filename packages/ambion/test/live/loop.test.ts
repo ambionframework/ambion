@@ -1,7 +1,8 @@
 /**
  * The model, the key and the loop. `docs/agent.md` §1: without a `stream`,
  * a model resolves as `provider/model-id` from Pi's catalog, or as a Claude
- * model id under `AMBION_HARNESS=claude`, and the key comes from the
+ * model id under `AMBION_HARNESS=claude`, or `gpt-5.6-luna` under
+ * `AMBION_HARNESS=codex`, and the key comes from the
  * environment. Nothing scripted touches that path.
  */
 import { Type } from 'typebox';
@@ -16,6 +17,7 @@ import {
 	live,
 	open,
 	person,
+	REPORTS_COST,
 	report,
 	saidBy,
 	spent,
@@ -74,7 +76,8 @@ live('the model and the loop', () => {
 		const total = await spent(session);
 		expect(total.activations).toBeGreaterThanOrEqual(1);
 		expect(total.tokens).toBeGreaterThan(0);
-		expect(total.cost).toBeGreaterThan(0);
+		// Codex reports tokens and no cost.
+		if (REPORTS_COST) expect(total.cost).toBeGreaterThan(0);
 		report('the loop', total);
 		await session.stop();
 	});

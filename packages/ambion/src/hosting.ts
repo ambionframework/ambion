@@ -43,6 +43,7 @@ export {
 	traceJournals,
 	traceOpener,
 } from './execution/trace.ts';
+export { registerDefaultExecution } from './host/defaults.ts';
 export type {
 	AgentExecutionContext,
 	Execution,

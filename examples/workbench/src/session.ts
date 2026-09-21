@@ -1,70 +1,17 @@
-import type { ActivationRead, ExchangeView, ParticipantInfo } from '@ambionframework/ambion';
+import type { ActivationRead, ExchangeView } from '@ambionframework/ambion';
 import { attentionOf, newest, pick } from './attention.ts';
 import { FileBrowser } from './browser.ts';
 import { type Choices, type Parsed, parse, type Suggestion, suggest } from './commands.ts';
 import { RoomFeed } from './feed.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
+import { holderOf, type Known, labUri, type RefItem, refItems, shows, tableOfUri } from './refs.ts';
+import { DONE, errorText, HELP, refusal, workingAgents } from './session-text.ts';
 import { activationLine, ended, stepsView } from './steps.ts';
 import { type Block, buildTimeline } from './timeline.ts';
 import type { Approval, FileEntry, Person, RoomAction, RoomView, Workbench } from './workbench.ts';
 
 /** What the terminal does after a command, beyond what the session already changed. */
 export type Intent = { type: 'quit' } | { type: 'files' } | { type: 'compose'; text: string };
-
-const HELP = [
-	'Commands',
-	'  /room <name>      switch to another room. Ctrl+R lists the rooms.',
-	'  /new <name> [goal]  create a room. Without a goal, the next line is the goal.',
-	'  /user <name>      switch to another person',
-	'  /files            search the workspace files and read one in a side panel',
-	'  /open <path>      open the files panel on one file',
-	'  /try              fill the composer with the room’s suggested question',
-	'  /abort            cancel the open exchange in this room',
-	'  /stop             stop the room. /resume starts it again.',
-	'  /steps [n]        show the steps of the newest activation of exchange n, oldest first.',
-	'                    Without n, the latest exchange. /steps off hides them.',
-	'  /expand           open every discussion. /collapse closes them.',
-	'  /quit             leave the terminal. The rooms stop with it.',
-	'Keys',
-	'  Enter sends. Ctrl+J, Alt+Enter, and Shift+Enter add a line.',
-	'  Tab browses the discussions. Up and Down choose, Enter opens or closes,',
-	'  e opens all, c closes all, s shows the steps of the exchange, and Esc goes back',
-	'  to the composer.',
-	'  PageUp and PageDown scroll. Start a message with // to send a leading slash.',
-].join('\n');
-
-const DONE: Record<RoomAction, (room: string) => string> = {
-	abort: (room) => `Aborted the open exchange in ${room}.`,
-	stop: (room) => `Stopped ${room}. Use /resume to start it again.`,
-	resume: (room) => `Resumed ${room}.`,
-};
-
-const errorText = (error: unknown): string =>
-	error instanceof Error ? error.message : String(error);
-
-/** The reason an action does not apply to the room, or undefined when it does. */
-function refusal(action: RoomAction, view: RoomView | undefined): string | undefined {
-	if (!view) return 'No room is open.';
-	if (action === 'abort') {
-		if (view.status !== 'running') return `${view.name} is not running. Use /resume first.`;
-		return view.exchange ? undefined : `Nothing to abort. ${view.name} has no open exchange.`;
-	}
-	if (action === 'stop')
-		return view.status === 'stopped' ? `${view.name} is already stopped.` : undefined;
-	return view.status === 'running' ? `${view.name} is already running.` : undefined;
-}
-
-/** The agents that are at work in a room now. */
-const workingAgents = (view: RoomView | undefined): string[] =>
-	(view?.participants ?? []).flatMap((participant: ParticipantInfo) =>
-		participant.kind === 'agent' && participant.status === 'active' ? [participant.name] : [],
-	);
-
-/** What an empty room shows, with the room's suggested first question. */
-export function emptyText(view: RoomView): string {
-	const start = 'Nothing here yet. Ask a question below, or type / for commands.';
-	return view.prompt ? `${start}\nTry: ${view.prompt}  (type /try to use it)` : start;
-}
 
 /**
  * Everything the terminal does that is not drawing. It holds who the person is,
@@ -76,6 +23,10 @@ export class Session {
 	identity: Person | undefined;
 	rooms: RoomView[] = [];
 	files: FileEntry[] = [];
+	/** The tables of the lab database, for the refs that name one. */
+	tables: string[] = [];
+	/** The seq of the message that a ref jumped to. The terminal highlights it. */
+	focus: number | undefined;
 	/** The files panel. It searches `files` and loads the chosen one. */
 	readonly browser: FileBrowser;
 	room = '';
@@ -109,7 +60,10 @@ export class Session {
 		this.identity = identity;
 		this.changed = changed;
 		this.feed = new RoomFeed<RoomView>(host);
-		this.browser = new FileBrowser((path) => host.file(path), changed);
+		this.browser = new FileBrowser(
+			(path) => (tableOfUri(path) === undefined ? host.file(path) : host.labTable(path)),
+			changed,
+		);
 	}
 
 	/** True once when the conversation should scroll to its end, as after a notice. */
@@ -149,6 +103,7 @@ export class Session {
 		try {
 			this.rooms = await this.host.rooms();
 			this.files = await this.host.files();
+			this.tables = await this.host.labTables();
 			this.offline = undefined;
 		} catch (error) {
 			this.offline = errorText(error);
@@ -356,6 +311,7 @@ export class Session {
 		this.room = name;
 		this.view = undefined;
 		this.blocks = [];
+		this.focus = undefined;
 		this.expanded.clear();
 		this.approvals = [];
 		this.steps = undefined;
@@ -496,15 +452,75 @@ export class Session {
 
 	// Files
 
+	/** The entries of the files panel: the workspace files, then the tables of the lab database. */
+	private get entries(): FileEntry[] {
+		return [
+			...this.files,
+			...this.tables.map((name) => ({ path: labUri(name), size: 0, kind: 'table' as const })),
+		];
+	}
+
 	private async openFiles(path?: string): Promise<Intent | undefined> {
 		try {
 			this.files = await this.host.files();
+			this.tables = await this.host.labTables();
 		} catch (error) {
 			this.fail(error);
 			return undefined;
 		}
-		this.browser.show(this.files, path);
+		this.browser.show(this.entries, path);
 		return { type: 'files' };
+	}
+
+	// Refs
+
+	/** What a ref is checked against: the workspace files, the lab tables, and this room. */
+	private get known(): Known {
+		return {
+			room: this.room,
+			files: this.files.map((file) => file.path),
+			tables: this.tables,
+			seqs: new Set(this.feed.messages.map((message) => message.seq)),
+		};
+	}
+
+	/** The refs of the messages the conversation shows, top to bottom. */
+	get refItems(): RefItem[] {
+		return refItems(this.blocks, this.known);
+	}
+
+	/**
+	 * Open a ref. A file or a table opens in the files panel, and the terminal
+	 * shows the panel when this returns the intent. A message ref moves the focus
+	 * to that message. A ref that does not resolve opens nothing.
+	 */
+	async openRef(id: string): Promise<Intent | undefined> {
+		const target = this.refItems.find((item) => item.id === id)?.resolved.target;
+		if (!target) return undefined;
+		if (target.kind === 'message') {
+			this.jump(target.seq);
+			return undefined;
+		}
+		return this.openFiles(target.kind === 'file' ? target.path : labUri(target.name));
+	}
+
+	/** Focus one message. It opens the discussion that holds the message. */
+	jump(seq: number): void {
+		const holder = holderOf(this.blocks, seq);
+		if (holder) this.expanded.add(holder);
+		this.focus = seq;
+		this.rebuild();
+		if (!shows(this.blocks, seq)) {
+			this.focus = undefined;
+			this.say(`Message ${seq} is not in the conversation. A summary stands for it.`);
+		}
+	}
+
+	/** Drop the focus that a message ref set. */
+	clearFocus(): void {
+		if (this.focus === undefined) return;
+		this.focus = undefined;
+		this.changed();
 	}
 
 	private async openFile(argument: string): Promise<Intent | undefined> {

@@ -5,9 +5,23 @@ import type { ActivationRead } from '@ambionframework/ambion';
 import type { PiExecutionOptions } from '@ambionframework/pi';
 import type { Approval } from './approvals.ts';
 import { type Person, people } from './definitions.ts';
-import { type FileContent, type FileEntry, listFiles, readFile } from './files.ts';
+import {
+	type FileContent,
+	type FileEntry,
+	listFiles,
+	listLabTables,
+	readFile,
+	readLabTable,
+} from './files.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
-import { fail, liveRoom, openRooms, type RoomAction, type RoomView } from './rooms.ts';
+import {
+	fail,
+	liveRoom,
+	openRooms,
+	type RoomAction,
+	type RoomsOptions,
+	type RoomView,
+} from './rooms.ts';
 import { scenarios } from './scenarios.ts';
 
 export type { ActivationRead } from '@ambionframework/ambion';
@@ -50,6 +64,10 @@ export interface Workbench {
 	create(name: string, goal: string): Promise<RoomView>;
 	files(): Promise<FileEntry[]>;
 	file(path: string): Promise<FileContent>;
+	/** The names of the tables of the lab database. */
+	labTables(): Promise<string[]>;
+	/** One table of the lab database. `uri` is `lab:///<table>`. */
+	labTable(uri: string): Promise<FileContent>;
 	/** Stop every room and release the storage. The journals stay, so a later open resumes them. */
 	close(): Promise<void>;
 }
@@ -59,6 +77,10 @@ export interface OpenOptions {
 	directory: string;
 	/** A model stream, for tests. The default calls the configured provider. */
 	stream?: PiExecutionOptions['stream'];
+	/** Scripted executions for the Claude and Codex seats, for tests. */
+	executions?: RoomsOptions['executions'];
+	/** The environment that holds the keys. The default is the environment of the process. */
+	env?: RoomsOptions['env'];
 }
 
 type Rooms = Awaited<ReturnType<typeof openRooms>>;
@@ -83,14 +105,14 @@ export async function openWorkbench(options: OpenOptions): Promise<Workbench> {
 	const database = new DatabaseSync(path);
 	let rooms: Rooms | undefined;
 	try {
-		rooms = await openRooms(database, options.directory, options.stream);
+		rooms = await openRooms(database, options.directory, options);
 		if (fresh) await seedRooms(rooms);
 	} catch (error) {
 		await rooms?.close().catch(() => undefined);
 		database.close();
 		throw error;
 	}
-	return hosted(rooms, database);
+	return hosted(rooms, database, resolve(options.directory, 'lab.db'));
 }
 
 async function seedRooms(rooms: Rooms): Promise<void> {
@@ -110,7 +132,7 @@ function present(
 	);
 }
 
-function hosted(rooms: Rooms, database: DatabaseSync): Workbench {
+function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbench {
 	let closing: Promise<void> | undefined;
 	const inRoom = <T>(name: string, operation: (room: ReturnType<typeof liveRoom>) => Promise<T>) =>
 		rooms.withRoom(name, (entry) => operation(liveRoom(entry)));
@@ -153,6 +175,8 @@ function hosted(rooms: Rooms, database: DatabaseSync): Workbench {
 		},
 		files: () => rooms.withWorkspace(() => listFiles(rooms.workspace)),
 		file: (path) => rooms.withWorkspace(() => readFile(rooms.workspace, path)),
+		labTables: async () => listLabTables(labPath),
+		labTable: async (uri) => readLabTable(labPath, uri),
 		close() {
 			if (closing) return closing;
 			const attempt = shutdown(rooms, database);

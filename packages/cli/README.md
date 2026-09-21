@@ -1,26 +1,21 @@
 # @ambionframework/cli
 
 **Create a team project and test its agents locally.** `ambion new` creates
-an editable project. `ambion dev` runs its Worker through Wrangler and opens
+an editable project. `ambion dev` runs its room and opens
 an OpenTUI room with a compact team header, a full-width conversation, and
 message input.
 
 ## Requirements
 
-Use Node **26.4 or newer**, pnpm 10, and an interactive terminal.
-The launcher enables the experimental FFI that OpenTUI requires.
-The room and its agents run separately in local workerd.
+Use Node **26.4 or newer**, pnpm 10, and an interactive terminal. The
+`ambion dev` client also runs on Bun **1.3 or newer**. The launcher enables
+the experimental FFI that OpenTUI requires.
 
 ## Install the CLI
 
-The packages use GitHub Packages. Set `GITHUB_TOKEN` to a classic personal
-access token with `read:packages`. Add these lines to your user `~/.npmrc`:
-
-```ini
-@ambionframework:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
+Until the 0.1.0 release reaches npmjs, a dev build installs from GitHub
+Packages with a read token; see
+[the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
 Install the CLI:
 
 ```sh
@@ -30,20 +25,29 @@ npm install --global @ambionframework/cli
 ## Create and start a team
 
 **Use `ambion new` for every project.** It creates the template, sets the
-project name, and selects matching Ambion dependency versions.
+project name, and selects matching Ambion dependency versions. Two templates
+exist:
+
+- `--template node` is the default. The room and its agents run in the
+  Node process of `ambion dev`. Its key file is `.env`.
+- `--template cloudflare` runs the room and its agents as Durable Objects in
+  local workerd. Its key file is `.dev.vars`.
 
 ```sh
-ambion new my-team
+ambion new my-team                        # node template
+ambion new my-team --template cloudflare  # Cloudflare template
 cd my-team
 pnpm install
-cp .dev.vars.example .dev.vars
-# Edit .dev.vars and set ANTHROPIC_API_KEY.
+cp .env.example .env   # cloudflare: cp .dev.vars.example .dev.vars
+# Edit the key file and set ANTHROPIC_API_KEY.
 ambion dev
 ```
 
-The generated `.npmrc` configures GitHub Packages. It references
-`GITHUB_TOKEN` without storing a token. Keep that variable available when you
-install dependencies. No local package archives are needed.
+The generated project has no `.npmrc`. It installs from npmjs and needs no
+token. No local package archives are needed.
+
+To try a dev build from `main`, see the dev channel in
+[the toolchain](../../docs/toolchain.md).
 
 The team contains the `planner` and `reviewer` agents and the `human`
 participant. Both agents can contribute to each question. The planner is also
@@ -55,13 +59,13 @@ start or end with a dash. `new` refuses to overwrite existing files.
 
 ## Configure the model
 
-Set `ANTHROPIC_API_KEY` in the project's `.dev.vars`. The default model is
-`anthropic/claude-sonnet-5`. Set `AMBION_MODEL` to another supported
+Set `ANTHROPIC_API_KEY` in the project's key file (`.env` or `.dev.vars`).
+The default model is `anthropic/claude-sonnet-5`. Set `AMBION_MODEL` to another supported
 `provider/model-id` and supply that provider's key in the same file.
 
-The CLI reads credentials from `.dev.vars`. It does not load `~/.anthropic`
-automatically. The generated `.gitignore` excludes `.dev.vars` and local
-Wrangler state.
+The CLI reads credentials from the key file. It does not load `~/.anthropic`
+automatically. The generated `.gitignore` excludes the key file and local
+state.
 
 ## Test the team
 
@@ -75,12 +79,8 @@ Enter sends a message. Scroll the conversation with the mouse wheel.
 One status line shows when the team is working. Errors appear below the
 conversation. Ctrl-C closes the interface and stops its development server.
 
-Edit agent instructions in `src/room.ts`, then restart `dev`.
-History remains in `.wrangler/`. Stop `dev` and remove that directory to
-start with an empty room.
-
-For Worker logs and HTTP-only testing, run `pnpm dev:worker`. The generated
-README documents the `/start`, `/join`, `/send`, `/messages`, and `/status` routes.
+Edit agent instructions in `src/room.ts`, then restart `dev`. The generated
+README names where history lives and how to start with an empty room.
 
 ## Work from a repository checkout
 

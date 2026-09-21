@@ -5,7 +5,8 @@ driver own the record, the lease, and the rules. An executor owns the model
 call, the tools it exposes, and the steps it reports. [The
 README](../README.md) holds the positioning. This page holds the contract
 between the driver and an executor, the step vocabulary, and the way to
-write an adapter.
+write an adapter. [The Pi guide](pi.md) and [the Claude guide](claude.md)
+hold what is specific to one adapter.
 
 ## The executor contract
 
@@ -17,11 +18,22 @@ the captured agent definition and receives an execution port. It does not
 construct a model runner.
 
 `createRuntime` takes an `execution` for every room of the runtime.
-`startRoom` and `resumeRoom` take an `execution` for one room run. A room
-with no `execution` still runs its people and its record. Each seat that the
-room wakes fails at once with a `no_execution` error, and the failure is
-permanent. A room whose seats run on more than one family passes
-`composeExecutions`, which routes each seat on the `kind` of its executor.
+`startRoom` and `resumeRoom` take an `execution` for one room run. An
+explicit `execution` wins over every default. A room whose seats run on
+more than one family passes `composeExecutions`, which routes each seat on
+the `kind` of its executor.
+
+**A room with no `execution` uses the default of each executor kind.** An
+executor package calls `registerDefaultExecution(kind, factory)` when the
+host loads it. The registry holds functions and stays outside the journal,
+the captured definition, and the JSON protocol. The kernel imports no
+executor package. The runtime builds the default of a kind once, on the
+first seat of that kind, over its own storage, clock, limits, and
+transport. A seat of a kind with no default fails at once with a
+`no_execution` error, and the failure is permanent. A room with no default
+still runs its people and its record. A host that needs custom storage,
+transport, or limits passes an `execution`. Cloudflare and other separate
+hosts resolve their execution on the host and never read the registry.
 
 **A transport receives room calls and executor dependencies separately.**
 `Transport.connect(room, context)` receives a plain `RoomProtocol` facade
@@ -62,8 +74,8 @@ states the commit-freshness promise.
 
 **The hosting entry exports the execution protocol.** `Execution`,
 `ExecutionConnector`, `ExecutionHost`, `Transport`, `AgentRunner`,
-`inProcessTransport`, `composeExecutions`, `hostingOf`, and
-`describeExecutor` come from `@ambionframework/ambion/hosting`. The main
+`inProcessTransport`, `composeExecutions`, `registerDefaultExecution`,
+`hostingOf`, and `describeExecutor` come from `@ambionframework/ambion/hosting`. The main
 entry names none of them. Journal events and projected lease state stay
 internal. Participant views omit `sessionId`.
 
@@ -112,7 +124,7 @@ zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 | `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.  |
 | `steer`       | executor    | A message landed mid-activation. `consumed` says whether the model received it.                    |
 | `approval`    | executor    | A tool call needed a decision. `decision` holds the answer. The Claude executor emits it.          |
-| `usage`       | executor    | Tokens and cost of one provider request.                                                           |
+| `usage`       | executor    | Tokens and cost. Pi writes one for each provider request; Claude writes one for each SDK result.   |
 | `end`         | driver      | The activation stops: `stopped`, `length`, or `aborted`. A failure adds its `cause` and `message`. |
 
 ## The trace journal
@@ -135,6 +147,8 @@ a `thinking` or `text` block into one step, so a block is one entry and one
 event. `limits.trace.stepsPerPass` caps the steps of one pass, and an `end`
 step is always kept. `limits.trace.toolOutputBytes` cuts a tool output that
 is larger, and the step keeps the start of it with a note of the size.
+The Pi execution applies the limits of the host. The Claude execution
+applies the defaults and ignores `limits.trace`.
 
 **A definition sets its trace policy.** `defineAgent({ trace })` takes
 `thinking` (`omit`, `summary`, or `full`) and `toolOutput` (`omit` or
@@ -145,27 +159,29 @@ is larger, and the step keeps the start of it with a note of the size.
 each step the trace writes, in the same order as the journal. A reader
 merges the two by `activation`, `pass`, and `index`. In a separated host the
 trace lives in the storage of the seat, so a read across objects needs a call
-to the seat. The public read of a trace (`readActivation`) is pending release
-work and is not part of this contract yet.
+to the seat. `readActivation` reads the trace of one activation; see
+[Exchange](exchange.md).
 
 ## The harness matrix
 
-**Two executor families ship today.** Pi and the Claude Agent SDK both
-implement the contract. The Anthropic SDK tool runner and the Codex SDK are
-anticipated families. No package or example for either exists yet.
+**Three executor families ship today.** Pi, the Claude Agent SDK, and the
+Codex SDK implement the contract. The Anthropic SDK tool runner is an
+anticipated family. No package for it exists yet.
 
 | Family                    | Package                   | Loop owner | Steer during a pass                 | Status      |
 | ------------------------- | ------------------------- | ---------- | ----------------------------------- | ----------- |
 | Pi agent core             | `@ambionframework/pi`     | Caller     | Yes, through `agent.steer`          | Shipped     |
 | Claude Agent SDK          | `@ambionframework/claude` | Harness    | Yes, on the SDK `user` echo         | Shipped     |
+| Codex SDK                 | `@ambionframework/codex`  | Harness    | None; the next `run` takes the line | Shipped     |
 | Anthropic SDK tool runner | None                      | Caller     | Between turns                       | Anticipated |
-| Codex SDK                 | None                      | Harness    | None; the next `run` takes the line | Anticipated |
+
+The [Pi](pi.md), [Claude](claude.md), and [Codex](codex.md) guides describe the packages.
 
 **A family that cannot steer still passes.** Its `readThrough` advances at
 the pass boundary, and the driver holds a steer for the next pass. The
 [plan](../planning/next.md) holds the surface comparison of the four
-families. What a harness remembers between activations belongs to a trust
-page that does not exist yet.
+families. What a harness remembers between activations is in
+[Trust](trust.md).
 
 ## How to write an adapter
 
@@ -190,11 +206,13 @@ family. `@ambionframework/claude` is the worked example, and
    earlier. The Claude executor advances it on the SDK echo.
 6. **Wrap the executor in an `Execution`.** Export a function that defines
    the executor of an agent and a function that gives the host its
-   execution. Claude offers `claude()` and `claudeExecution()`.
+   execution. Claude offers `claude()` and `claudeExecution()`. Call
+   `registerDefaultExecution` with the kind, so a room with no `execution`
+   serves the seats of the family.
 
 ```ts
 import { defineAgent, startRoom } from '@ambionframework/ambion';
-import { claude, claudeExecution } from '@ambionframework/claude';
+import { claude } from '@ambionframework/claude';
 
 const reviewer = defineAgent({
   name: 'reviewer',
@@ -210,7 +228,6 @@ const reviewer = defineAgent({
 const room = await startRoom({
   name: 'delivery',
   agents: [reviewer],
-  execution: claudeExecution(),
 });
 ```
 
@@ -233,4 +250,10 @@ Two runs exist as evidence. The scripted executor runs the suite in
 runs it against a fake Claude Code executable in
 `packages/claude/test/executor-conformance.test.ts`, through
 `claudeExecutorHarness` from `@ambionframework/claude/testing`. Neither run
-needs a key or a network.
+needs a key or a network. The Pi executor has no run of the suite.
+
+The Codex executor does not run the suite. A real model cannot follow a
+scripted plan, and a fake `codex` proves only that the adapter agrees with
+its own guess about the SDK. The Codex package tests its mapping on events
+that a real `codex` recorded, and it runs its executor claims in a live
+tier. See [Codex](codex.md).

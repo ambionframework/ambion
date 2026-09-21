@@ -95,9 +95,7 @@ describe('ambion new', () => {
 			expect(manifest.dependencies['@ambionframework/ambion']).toBe('0.3.0');
 			expect(manifest.dependencies['@ambionframework/cloudflare']).toBe('0.3.0');
 			expect(wrangler.name).toBe('my-team');
-			expect(await readFile(join(target, '.npmrc'), 'utf8')).toBe(
-				`@ambionframework:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=$\{GITHUB_TOKEN}\n`,
-			);
+			await expect(readFile(join(target, '.npmrc'), 'utf8')).rejects.toThrow();
 			expect(await readFile(join(target, '.gitignore'), 'utf8')).toContain('.wrangler');
 		} finally {
 			await rm(root, { recursive: true, force: true });

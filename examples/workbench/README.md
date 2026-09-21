@@ -21,7 +21,8 @@ From the repository root, install and build with Node 26.4 or later:
 pnpm install
 pnpm build
 cd examples/workbench
-export ANTHROPIC_API_KEY=...
+export ANTHROPIC_API_KEY=...   # Pi and Claude seats
+export CODEX_API_KEY=...       # Codex seat
 pnpm start                  # uses ./.data
 pnpm start ./bench --as mira   # a directory, and a person
 ```
@@ -31,8 +32,14 @@ directory with no `rooms.db` gets the three sample rooms and the datasheets.
 A directory that has one resumes its rooms, including a room you created
 and a room you stopped. Set `WORKBENCH_USER` instead of `--as` to pick a
 person. Without either, the first screen asks who you are. Set
-`AMBION_MODEL` and its provider credential to change the model. The default
-is `anthropic/claude-sonnet-5`.
+`AMBION_MODEL` and its provider credential to change the model of the Pi
+seats. The default is `anthropic/claude-sonnet-5`.
+
+**A seat with no key does not run, and the others do.** At start, the
+Workbench prints one line for each seat whose family has no key. The header
+of the terminal marks that seat with `no key`. An activation of that seat
+fails at once with the name of the missing variable, and the room keeps
+running.
 
 The terminal reads its colors from the repository brand kit in the root
 [`brand/`](../../brand) directory. The example has no HTTP interface.
@@ -67,6 +74,8 @@ person leaves the current room, then enters it as the new person.
 | Tab                   | Complete a command, or browse the discussions              |
 | Up, Down, Enter, e, c | While browsing: choose, open or close, open all, close all |
 | s                     | While browsing: show the steps of the chosen exchange      |
+| r                     | While browsing: choose a ref of a shown message            |
+| Up, Down, Enter       | While choosing a ref: move, open it, or jump to it         |
 | Esc                   | Close the palette, clear the search, or close the panel    |
 | PageUp, PageDown      | Scroll the conversation                                    |
 | Type, Up, Down        | In the files panel: search, and choose a file to read      |
@@ -76,6 +85,27 @@ person leaves the current room, then enters it as the new person.
 The files panel renders Markdown files with headings, lists, and code. It
 shows a SQLite database (`.db`, `.sqlite`, `.sqlite3`, up to 8 MiB) as tables,
 with the first 50 rows of each. The panel opens the database read-only.
+
+**A message shows its refs, one line each.** A line starts with `↗` and the
+kind of the ref: `file`, `table`, or `message`. A ref that does not resolve
+starts with `✗` and ends with the reason. Press Tab, then `r`, to choose a
+ref of a shown message. Enter opens a `file` or a `table` ref in the files
+panel, the same panel that `/files` opens. Enter on a `message` ref opens its
+discussion and highlights the message. Esc goes back. `r` lists only the
+refs of shown messages, so press `e` to open every discussion first.
+
+The Workbench resolves three URI forms. The agents cite them in `refs`.
+
+| Form                                 | Names                                    |
+| ------------------------------------ | ---------------------------------------- |
+| `file:///<path>`                     | A file of the workspace, as `/library/x` |
+| `lab:///<table>`                     | A table of the lab database              |
+| `ambion://room/<room>/message/<seq>` | A message of the open room               |
+
+The terminal checks a `file:` or `lab:` ref against the list that the host
+gives for the workspace and the lab database. It reads no file of the host.
+A path with `..`, an empty part, a backslash, or a host name does not
+resolve. The files panel lists the lab tables after the files.
 
 A discussion is the thread between a question and its summary, with each
 steering message in its place. It starts closed. Start a message with `//` to
@@ -97,18 +127,58 @@ the record, so a restart keeps them.
 
 ## The team
 
-**One assistant coordinates three specialists.** The assistant answers
-ordinary messages, brings in a specialist, and writes the closing summary.
+**One assistant coordinates three specialists, and the specialists run on
+three executor families.** The assistant answers ordinary messages, brings
+in a specialist, and writes the closing summary.
 
-| Agent           | Scope                                                              |
-| --------------- | ------------------------------------------------------------------ |
-| **Assistant**   | Understands the request, seats a specialist, and returns a summary |
-| **Datasheets**  | Reads `/library` and states exact limits with their source         |
-| **Design**      | Chooses parts and values, and shows the circuit math               |
-| **Experiments** | Turns a question into a short, repeatable test plan                |
+| Agent           | Scope                                                              | Family | Model                              | Key                 |
+| --------------- | ------------------------------------------------------------------ | ------ | ---------------------------------- | ------------------- |
+| **Assistant**   | Understands the request, seats a specialist, and returns a summary | Pi     | `anthropic/claude-sonnet-5`        | `ANTHROPIC_API_KEY` |
+| **Datasheets**  | Reads `/library` and states exact limits with their source         | Pi     | `anthropic/claude-sonnet-5`        | `ANTHROPIC_API_KEY` |
+| **Design**      | Chooses parts and values, and shows the circuit math               | Claude | `claude-sonnet-5`                  | `ANTHROPIC_API_KEY` |
+| **Experiments** | Turns a question into a short, repeatable test plan                | Codex  | `gpt-5.6-luna`, reasoning `medium` | `CODEX_API_KEY`     |
 
 The assistant uses `defineAssistant` from `@ambionframework/assistant`. Each
-room seats the specialists it needs. The reserve holds the rest.
+room seats the specialists it needs. The reserve holds the rest. The header
+of the terminal shows the family beside each agent name.
+
+The workspace, lab, and instrument tools reach every seat as tool bundles.
+`src/rooms.ts` composes the three executions with `composeExecutions` from
+`@ambionframework/ambion/hosting`. It passes them because it checks keys,
+sets the environment, and lets a test script a family. A room with no such
+need takes the default execution of each family.
+
+### One tool set, one filesystem, no native tool
+
+**Every agent holds the same tools and reaches the same filesystem, and no
+native tool of any harness is on.** One list of bundles serves every seat:
+the workspace, the lab, and the instrument tools, in that order. All three
+families share one workspace instance, so a file that one agent writes is
+the file that another agent reads.
+
+| Family | How it enforces the guarantee                                        |
+| ------ | -------------------------------------------------------------------- |
+| Pi     | Has no native tool. The seat holds only the tools that it receives.  |
+| Claude | Passes no built-in tool. The definition sets no `allowedTools`.      |
+| Codex  | Sets `nativeTools: 'none'` and no policy option that opens the host. |
+
+`test/tool-set.test.ts` fails when a definition drifts from this. The live
+test `test/live/tool-set.test.ts` asks each seat for its tool list, writes a
+file with one seat and reads it with another, and asks each seat for
+`/etc/hosts`.
+
+## Tests
+
+**The scripted tier needs no key and no network.** Run it with
+`pnpm --filter @ambionframework-examples/workbench test`. The tests give the
+Pi seats a scripted model stream. They give the Claude and Codex seats a
+scripted execution from `@ambionframework/ambion/testing`.
+
+**The live tier runs each scenario on the real families.** Run it with
+`pnpm --filter @ambionframework-examples/workbench test:live`. It costs money.
+A scenario skips when a family that it uses has no key: the `bringup`
+scenario needs `ANTHROPIC_API_KEY`, and the `sensing` scenario needs
+`ANTHROPIC_API_KEY` and `CODEX_API_KEY`.
 
 ## The rooms
 
@@ -186,7 +256,10 @@ workspace resources.
 | `src/browser.ts`     | The files panel state: search, matches, chosen file   |
 | `src/files-panel.ts` | The files panel beside the conversation               |
 | `src/database.ts`    | The SQLite preview: tables and their first rows       |
+| `src/refs.ts`        | The refs of a message: parse, resolve, and one chip   |
 | `src/tui.ts`         | The terminal: layout, keys, and the run loop          |
+| `src/families.ts`    | The family, model, and key of each seat               |
+| `src/unavailable.ts` | The execution of a family that has no key             |
 | `src/main.ts`        | The entry point                                       |
 | `src/brand.ts`       | The product name and the terminal palette             |
 | `library/`           | The datasheets                                        |

@@ -1,7 +1,8 @@
 # Contributing to Ambion
 
 Repository installation requires Node **>= 26.4** and pnpm 10, the OpenTUI
-floor. Every package holds the same Node floor.
+floor. Every package holds the same Node floor. The `ambion dev` client also
+runs on Bun **>= 1.3**.
 
 Ambion is a collaboration kernel for agents and humans. Read the
 [documentation index](docs/README.md) for current contracts and
@@ -38,11 +39,20 @@ package versions.
 
 Versions move in lockstep across publishable packages.
 
+**A push to `main` publishes a dev build.** CI stamps the version
+`0.1.0-dev.<run>.g<sha7>` and publishes to GitHub Packages under `dev`.
+
+**The owner publishes an official release from a local machine.** CI holds no
+npmjs token.
+
 ```sh
 pnpm version:set 0.1.0
-git commit -am "release: 0.1.0" && git tag v0.1.0 && git push --follow-tags
+git commit -am "release: 0.1.0" && git tag v0.1.0
+node scripts/release.mjs stage --dry-run   # guards, gate, pack, npm dry run
+NODE_AUTH_TOKEN=... node scripts/release.mjs stage
+node scripts/release.mjs verify            # install from npmjs with no token
+NODE_AUTH_TOKEN=... node scripts/release.mjs promote
 ```
 
-The tag runs `.github/workflows/release.yml`, which re-runs the gate, checks the
-tag against the package version, and publishes. Publishing is idempotent —
-re-running a failed release finishes it.
+Each command is idempotent. A rerun after a failure finishes the release.
+[Toolchain section 9](docs/toolchain.md) has the guards and the token rules.

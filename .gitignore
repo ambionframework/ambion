@@ -21,8 +21,7 @@ pnpm-debug.log*
 .env.*.local
 .dev.vars
 
-# Local registry credentials. The committed root .npmrc carries only the
-# @ambionframework -> GitHub Packages scope mapping; tokens live here.
+# Local registry credentials. The committed root .npmrc holds no token.
 .npmrc.local
 
 # editors

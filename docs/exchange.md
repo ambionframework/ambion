@@ -174,7 +174,8 @@ activation `id`, the `seat`, the `attempt`, the `purpose` (`respond` or
 with `cancelled` and `cause` when they apply. An entry carries `usage` when
 the activation recorded it. Every attempt has an entry, in journal order. An
 open exchange lists the activations since its question. The `session` field
-is declared and stays empty until an executor records a session.
+holds the harness session that an activation of a `memory: 'seat'`
+executor recorded at its release. It is absent for every other activation.
 
 **`readActivation(name, activation, { runtime })` reads the trace of one
 activation.** It returns `passes`, each with its `input`, its `through`, and

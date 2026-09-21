@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { people } from '../src/definitions.ts';
 import { liveRoom, openRooms } from '../src/rooms.ts';
 import { openWorkbench } from '../src/workbench.ts';
+import { scriptedFamilies } from './scripted-families.ts';
 
 const mira = people.at(0);
 if (!mira) throw new Error('The test team has no human.');
@@ -40,6 +41,7 @@ describe('Workbench room reads and recovery', () => {
 		const workbench = await openWorkbench({
 			directory: join(directory, 'run'),
 			stream: quietStream(counter),
+			executions: scriptedFamilies(),
 		});
 		try {
 			await workbench.join('bringup', 'mira');
@@ -83,7 +85,10 @@ describe('Workbench room reads and recovery', () => {
 		let rooms: Awaited<ReturnType<typeof openRooms>> | undefined;
 		let restarted: Awaited<ReturnType<typeof openRooms>> | undefined;
 		try {
-			rooms = await openRooms(database, directory, quietStream(counter));
+			rooms = await openRooms(database, directory, {
+				stream: quietStream(counter),
+				executions: scriptedFamilies(),
+			});
 			await rooms.create('legacy', 'Recorded goal.');
 			await rooms.withRoom('legacy', async (entry) => {
 				await liveRoom(entry).unseat('design');
@@ -94,7 +99,10 @@ describe('Workbench room reads and recovery', () => {
 			database
 				.prepare('UPDATE workbench_rooms SET goal = ?, enabled = 1 WHERE name = ?')
 				.run('Provisional goal.', 'legacy');
-			restarted = await openRooms(database, directory, quietStream(counter));
+			restarted = await openRooms(database, directory, {
+				stream: quietStream(counter),
+				executions: scriptedFamilies(),
+			});
 			const status = (await restarted.list())[0];
 			expect(status).toMatchObject({
 				initialized: true,
@@ -148,10 +156,16 @@ describe('Workbench room reads and recovery', () => {
 		const counter = { calls: 0 };
 		let recovered: Awaited<ReturnType<typeof openRooms>> | undefined;
 		try {
-			await expect(openRooms(database, directory, quietStream(counter))).rejects.toThrow(
-				/injected initialization write failure/,
-			);
-			recovered = await openRooms(database, directory, quietStream(counter));
+			await expect(
+				openRooms(database, directory, {
+					stream: quietStream(counter),
+					executions: scriptedFamilies(),
+				}),
+			).rejects.toThrow(/injected initialization write failure/);
+			recovered = await openRooms(database, directory, {
+				stream: quietStream(counter),
+				executions: scriptedFamilies(),
+			});
 			expect((await recovered.list())[0]).toMatchObject({ initialized: true, status: 'running' });
 			expect(counter.calls).toBe(0);
 		} finally {

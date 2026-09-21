@@ -1,7 +1,10 @@
-import { defineAgent, defineHuman } from '@ambionframework/ambion';
+import { defineAgent, defineHuman, type ToolBundle } from '@ambionframework/ambion';
 import { defineAssistant } from '@ambionframework/assistant';
+import { claude } from '@ambionframework/claude';
+import { codex } from '@ambionframework/codex';
 import { pi } from '@ambionframework/pi';
 import type { SqlResource, Workspace } from '@ambionframework/workspace';
+import { CLAUDE_MODEL, CODEX_MODEL, piModel, seatFamilies } from './families.ts';
 import type { Instrument } from './instrument.ts';
 
 /** The people who use the Workbench. Each one reads results a different way. */
@@ -34,13 +37,14 @@ export const people = [
 export type Person = (typeof people)[number];
 
 /** The shared rules every agent follows. The kernel adds the collaboration rules. */
-const shared =
+export const shared =
 	'This is a lab workbench for a toy Arduino kit. Read /library for the datasheets and /shared/kit.md for the kit and the house rules before you act. ' +
 	'Cite the exact datasheet path when you state a specification, for example /library/led-5mm.md. ' +
 	'Do not invent a value that a datasheet does not give. If a datasheet does not cover a case, say so. ' +
 	'The example connects no real hardware, so treat every measurement as a planned value, not a reading. ' +
 	'Respect explicit human constraints; they override role defaults and survive every specialist handoff. When the person says not to edit files, do not call write or shell tools that change files; give the answer in your reply. ' +
 	'The lab database holds the projects, test_plans, runs, results, and operations tables. Read it with `query` and append with `record`. `query` cannot change data. ' +
+	'Cite what you rely on in `refs`, one URI each. A workspace file is file:///<path>, for example file:///library/led-5mm.md. A lab table is lab:///<table>, for example lab:///runs. The terminal opens a ref that names an existing file or table, and marks any other ref. ' +
 	'Report only actions your tool results support. You have local file and shell tools, and no web, email, or hardware tools. ';
 
 /** The specialists. Each one has a narrow scope and reports back once. */
@@ -69,26 +73,17 @@ const specialists = [
 
 /** Build the team for one workspace. Every room reuses these definitions. */
 export function team(workspace: Workspace, lab: SqlResource, instrument: Instrument) {
-	const model = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
-	const assistant = defineAssistant({
-		model,
-		instructions: shared,
-		bundles: [workspace.tools(), lab.tools(), instrument.tools()],
+	const model = piModel();
+	// One list of bundles serves every agent, so every seat holds the same tools over one workspace.
+	const bundles: ToolBundle[] = [workspace.tools(), lab.tools(), instrument.tools()];
+	const assistant = defineAssistant({ model, instructions: shared, bundles });
+	const specialistDefinitions = specialists.map(({ instructions, ...definition }) => {
+		const options = {
+			instructions: `${shared}${instructions} Report your result to the assistant, or to the specialist who asked you. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
+			bundles,
+		};
+		return defineAgent({ ...definition, executor: executorFor(definition.name, options, model) });
 	});
-	const specialistDefinitions = specialists.map(({ instructions, ...definition }) =>
-		defineAgent({
-			...definition,
-			executor: pi({
-				instructions: `${shared}${instructions} Report your result to the assistant, or to the specialist who asked you. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
-				model,
-				bundles: [
-					workspace.tools(),
-					lab.tools(),
-					...(definition.name === 'design' ? [instrument.tools()] : []),
-				],
-			}),
-		}),
-	);
 	return {
 		workspace,
 		lab,
@@ -96,4 +91,31 @@ export function team(workspace: Workspace, lab: SqlResource, instrument: Instrum
 		specialists: specialistDefinitions,
 		agents: [assistant, ...specialistDefinitions],
 	};
+}
+
+/**
+ * The executor of a specialist, on the family that `seatFamilies` names. Every
+ * family gets the same options, so every seat reaches the world only through
+ * the same bundles. Pi has no native tool. The Claude seat sets no
+ * `allowedTools`, so it has no built-in tool. The Codex seat sets `nativeTools`
+ * to `none` and no policy option that opens the host.
+ */
+function executorFor(
+	name: string,
+	options: { instructions: string; bundles: ToolBundle[] },
+	model: string,
+) {
+	switch (seatFamilies[name]) {
+		case 'claude':
+			return claude({ ...options, model: CLAUDE_MODEL });
+		case 'codex':
+			return codex({
+				...options,
+				model: CODEX_MODEL,
+				modelReasoningEffort: 'medium',
+				nativeTools: 'none',
+			});
+		default:
+			return pi({ ...options, model });
+	}
 }

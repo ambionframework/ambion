@@ -28,14 +28,12 @@ function help(version: string): string {
 
 const NEXT_STEPS: Record<Template, readonly string[]> = {
 	node: [
-		'      # set GITHUB_TOKEN to a GitHub Packages read:packages token',
 		'      pnpm install',
 		'      cp .env.example .env',
 		'      # set ANTHROPIC_API_KEY in .env',
 		'      pnpm exec ambion dev',
 	],
 	cloudflare: [
-		'      # set GITHUB_TOKEN to a GitHub Packages read:packages token',
 		'      pnpm install',
 		'      cp .dev.vars.example .dev.vars',
 		'      # set ANTHROPIC_API_KEY in .dev.vars',

@@ -3,8 +3,8 @@
  * a deadline on the room going quiet, and the invariants the record holds
  * whatever the model said, and what a run cost.
  *
- * `AMBION_HARNESS` picks the executor family: `pi` (the default) or `claude`.
- * Every test runs under both with the same claims.
+ * `AMBION_HARNESS` picks the executor family: `pi` (the default), `claude` or
+ * `codex`. Every test runs under each with the same claims.
  *
  * A live test proves what a scripted stream cannot: that a model id resolves
  * through the harness, that a real provider accepts the tools the room
@@ -27,9 +27,16 @@ import {
 	startRoom,
 } from '../../src/index.ts';
 import { collect, roomName, waitForRoom } from '../support/room.ts';
-import { executionFor, executorFor, HARNESS, KEY_VAR, MODEL } from './support/harness.ts';
+import {
+	executionFor,
+	executorFor,
+	HARNESS,
+	KEY_VAR,
+	MODEL,
+	REPORTS_COST,
+} from './support/harness.ts';
 
-export { executionFor, executorFor, HARNESS, KEY_VAR, MODEL };
+export { executionFor, executorFor, HARNESS, KEY_VAR, MODEL, REPORTS_COST };
 
 /** `describe` when the key is set; a skipped block when it is not. */
 export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(!process.env[KEY_VAR]);

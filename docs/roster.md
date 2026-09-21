@@ -18,7 +18,8 @@ const room = await startRoom({
 });
 ```
 
-If `seats` is omitted, every defined agent starts as a member at `broadcast`.
+**The default seating puts every defined agent at `broadcast`.** If `seats`
+is omitted, every defined agent starts as a member at `broadcast`.
 An empty map starts every defined agent in the reserve. `summary` names one
 defined agent that may receive closing work. It does not create a separate
 membership type. `summary` must name an agent in `seats`. A room start
@@ -68,7 +69,8 @@ also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
 - An unknown name or a human name is refused.
 - Agent tool commits return `unchanged` when the requested membership already holds.
 - A host `room.seat` / `room.unseat` call that repeats an already-satisfied
-  request resolves without writing a new entry.
+  request resolves without writing a new entry. A host `seat` that asks for
+  other attention or fixing than the held seat has is refused.
 - Neither path writes another membership entry for that request.
 
 ## Fixed seats

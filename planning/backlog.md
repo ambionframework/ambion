@@ -39,10 +39,6 @@ activation, exchange, and room since phase 2 step 11. A purpose field, a retry-s
 operation key derived by the kernel, and a demonstrated domain operation
 reused across rooms wait for a consumer.
 
-**A published Codex adapter.** `examples/codex` covers the surface. The
-package waits for a consumer that needs the stdio room tools server as a
-dependency.
-
 **Publishing `@ambionframework/evals`.** PR #153 adds room simulations with
 human actors, judges, and offline regrading, 4,600 lines at alpha maturity
 by its own work-left list: the failure matrix, live acceptance, judge
@@ -77,6 +73,11 @@ handles.
 - A second live-tier provider job; Pi's transport is expected to keep
   behavior provider-neutral. Add one only if a provider-specific defect
   turns up.
+
+- Build provenance for the packages. An npm provenance statement needs an
+  OIDC token from a CI workflow, and the 0.1.0 release publishes to npmjs
+  from a local machine. Bring it back with an npmjs release that a trusted
+  GitHub Actions workflow runs with `id-token: write`.
 
 ## Pull requests to close or hold
 

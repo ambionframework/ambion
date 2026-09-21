@@ -10,9 +10,6 @@ the questions.
 Use Node 26.4 or newer and pnpm 10. The CLI starts OpenTUI with the required
 native-runtime flag and hosts the room in the same process.
 
-Set `GITHUB_TOKEN` to a GitHub Packages token with `read:packages`.
-The generated `.npmrc` references this variable. It does not store the token.
-
 Install the dependencies, copy the credential example, and set a provider key.
 
 ```sh
