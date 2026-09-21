@@ -7,7 +7,14 @@ import type { Approval } from './approvals.ts';
 import { type Person, people } from './definitions.ts';
 import { type FileContent, type FileEntry, listFiles, readFile } from './files.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
-import { fail, liveRoom, openRooms, type RoomAction, type RoomView } from './rooms.ts';
+import {
+	fail,
+	liveRoom,
+	openRooms,
+	type RoomAction,
+	type RoomsOptions,
+	type RoomView,
+} from './rooms.ts';
 import { scenarios } from './scenarios.ts';
 
 export type { ActivationRead } from '@ambionframework/ambion';
@@ -59,6 +66,10 @@ export interface OpenOptions {
 	directory: string;
 	/** A model stream, for tests. The default calls the configured provider. */
 	stream?: PiExecutionOptions['stream'];
+	/** Scripted executions for the Claude and Codex seats, for tests. */
+	executions?: RoomsOptions['executions'];
+	/** The environment that holds the keys. The default is the environment of the process. */
+	env?: RoomsOptions['env'];
 }
 
 type Rooms = Awaited<ReturnType<typeof openRooms>>;
@@ -83,7 +94,7 @@ export async function openWorkbench(options: OpenOptions): Promise<Workbench> {
 	const database = new DatabaseSync(path);
 	let rooms: Rooms | undefined;
 	try {
-		rooms = await openRooms(database, options.directory, options.stream);
+		rooms = await openRooms(database, options.directory, options);
 		if (fresh) await seedRooms(rooms);
 	} catch (error) {
 		await rooms?.close().catch(() => undefined);

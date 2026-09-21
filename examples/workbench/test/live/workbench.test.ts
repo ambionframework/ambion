@@ -3,12 +3,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Message } from '@ambionframework/ambion';
 import { describe, expect, it } from 'vitest';
+import { type Family, hasKey, keyVariable, seatFamilies } from '../../src/families.ts';
 import { openWorkbench, type Workbench } from '../../src/workbench.ts';
 
-const model = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
-const provider = model.slice(0, model.indexOf('/')).toUpperCase().replace(/-/g, '_');
-const keyVariable = `${provider}_API_KEY`;
-const live = describe.skipIf(!process.env[keyVariable]);
+/**
+ * A scenario runs when every family it uses has a key: the assistant runs on
+ * Pi, and each named specialist runs on the family that `seatFamilies` gives it.
+ */
+function missingKeys(scenario: Scenario): string[] {
+	const families = new Set<Family>(['pi']);
+	for (const name of scenario.specialists) families.add(seatFamilies[name] ?? 'pi');
+	return [...families].filter((family) => !hasKey(family)).map((family) => keyVariable(family));
+}
 
 interface Scenario {
 	name: string;
@@ -53,10 +59,10 @@ async function untilSummary(workbench: Workbench, room: string): Promise<readonl
 	throw new Error(`The Workbench did not publish a summary for '${room}'.`);
 }
 
-live('Workbench assistant', () => {
-	it.each(scenarios)(
-		'$name returns a cited summary from a specialist',
-		async (scenario) => {
+/** One test per scenario. Each skips on its own when a family it uses has no key. */
+for (const scenario of scenarios) {
+	describe.skipIf(missingKeys(scenario).length > 0)(`Workbench ${scenario.name}`, () => {
+		it('returns a cited summary from a specialist on its family', async () => {
 			const directory = await mkdtemp(join(tmpdir(), `ambion-workbench-${scenario.name}-live-`));
 			const workbench = await openWorkbench({ directory: join(directory, 'run') });
 			try {
@@ -89,7 +95,6 @@ live('Workbench assistant', () => {
 				await workbench.close();
 				await rm(directory, { recursive: true, force: true });
 			}
-		},
-		180_000,
-	);
-});
+		}, 180_000);
+	});
+}

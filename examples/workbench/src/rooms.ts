@@ -9,6 +9,9 @@ import {
 	resumeRoom,
 	startRoom,
 } from '@ambionframework/ambion';
+import { composeExecutions, type Execution } from '@ambionframework/ambion/hosting';
+import { claudeExecution } from '@ambionframework/claude';
+import { codexExecution } from '@ambionframework/codex';
 import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
 import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
 import {
@@ -19,8 +22,16 @@ import {
 } from '@ambionframework/workspace';
 import { readApprovals } from './approvals.ts';
 import { team } from './definitions.ts';
+import {
+	type Environment,
+	type Family,
+	hasKey,
+	keyVariable,
+	unavailableSeats,
+} from './families.ts';
 import { openInstrument } from './instrument.ts';
 import { instruments, labSchema, labWritable, scenarios, seedWorkspace } from './scenarios.ts';
+import { unavailable } from './unavailable.ts';
 
 /** What a person can do to a room's work. Abort ends the open exchange. Stop and resume end and start a run. */
 export type RoomAction = 'abort' | 'stop' | 'resume';
@@ -53,11 +64,47 @@ interface HostedRoom extends CatalogEntry {
 	watchers: Set<() => void>;
 }
 
+/** What the rooms run on. A test passes `stream` and `executions` and needs no key. */
+export interface RoomsOptions {
+	/** A model stream for the Pi seats. */
+	stream?: PiExecutionOptions['stream'];
+	/**
+	 * Executions that replace the Claude and Codex families. A test passes a
+	 * scripted execution for each. Without them, the real family runs.
+	 */
+	executions?: { claude?: Execution; codex?: Execution };
+	/** The environment that holds the keys. The default is the environment of the process. */
+	env?: Environment;
+}
+
+/**
+ * The execution of each family. A family with a replacement or a stream runs
+ * that. A live family with no key gets an execution that fails its seats with
+ * the name of the missing variable, so the other seats keep running.
+ */
+function familyExecutions(options: RoomsOptions = {}): Execution {
+	const { stream, executions, env = process.env } = options;
+	const scripted = stream !== undefined || executions !== undefined;
+	const pick = (family: Family, live: Execution, replacement?: Execution): Execution => {
+		if (replacement) return replacement;
+		if (scripted) return unavailable(`the test gave the ${family} family no scripted execution.`);
+		if (hasKey(family, env)) return live;
+		return unavailable(
+			`${keyVariable(family, env)} is not set, and the ${family} family needs it.`,
+		);
+	};
+	return composeExecutions({
+		pi: pick('pi', piExecution({ stream }), stream && piExecution({ stream })),
+		claude: pick('claude', claudeExecution({ env }), executions?.claude),
+		codex: pick('codex', codexExecution({ env }), executions?.codex),
+	});
+}
+
 /** The catalog records hosting intent. Collaboration state stays in each room journal. */
 export async function openRooms(
 	database: DatabaseSync,
 	directory: string,
-	stream?: PiExecutionOptions['stream'],
+	options: RoomsOptions = {},
 ) {
 	const sql: Sql = {
 		run: (query, ...params) => {
@@ -65,9 +112,14 @@ export async function openRooms(
 		},
 		all: (query, ...params) => database.prepare(query).all(...params) as Record<string, SqlValue>[],
 	};
+	// A test that supplies executions runs no live family, so no seat lacks a key.
+	const missing =
+		options.stream || options.executions
+			? []
+			: unavailableSeats(options.env ?? process.env).map(({ seat }) => seat);
 	const runtime = createRuntime({
 		storage: sqliteJournals(sql),
-		execution: piExecution({ stream }),
+		execution: familyExecutions(options),
 	});
 	database.exec(
 		'CREATE TABLE IF NOT EXISTS workbench_rooms (name TEXT PRIMARY KEY, goal TEXT NOT NULL, enabled INTEGER NOT NULL)',
@@ -165,7 +217,7 @@ export async function openRooms(
 		}
 	}
 	async function status(entry: HostedRoom) {
-		return roomView(entry, await readRoom(entry.name, { runtime, messages: false }));
+		return roomView(entry, await readRoom(entry.name, { runtime, messages: false }), missing);
 	}
 	async function create(name: string, goal: string) {
 		if (closing) fail('The host is stopping.');
@@ -275,6 +327,7 @@ export async function openRooms(
 						runtime,
 						messages: since === undefined ? undefined : { since },
 					}),
+					missing,
 				),
 			),
 		async close() {
@@ -293,9 +346,15 @@ export async function openRooms(
 /** A room as the host presents it: the recorded read, plus the hosting state and the recent work. */
 export type RoomView = ReturnType<typeof roomView>;
 
-function roomView(entry: HostedRoom, snapshot: Awaited<ReturnType<typeof readRoom>>) {
+function roomView(
+	entry: HostedRoom,
+	snapshot: Awaited<ReturnType<typeof readRoom>>,
+	unavailable: readonly string[],
+) {
 	return {
 		...snapshot,
+		/** The seats that cannot run because their family has no key. */
+		unavailable,
 		goal: snapshot.initialized ? snapshot.goal : entry.goal,
 		status: entry.lifecycle.status,
 		activity: [...entry.activity],

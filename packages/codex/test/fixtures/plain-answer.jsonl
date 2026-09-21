@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"01a0c21c-ffca-7082-9772-3bac91d64bc7"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"2 plus 2 equals 4."}}
+{"type":"turn.completed","usage":{"input_tokens":12387,"cached_input_tokens":0,"cache_write_input_tokens":12384,"output_tokens":12,"reasoning_output_tokens":0}}

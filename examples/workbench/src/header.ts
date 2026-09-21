@@ -8,6 +8,7 @@ import {
 	TextRenderable,
 } from '@opentui/core';
 import { brand, tui as palette } from './brand.ts';
+import { seatFamilies } from './families.ts';
 import { fitHeader, GAP } from './header-fit.ts';
 import type { Person, RoomView } from './workbench.ts';
 
@@ -30,8 +31,15 @@ function participantColor(participant: ParticipantInfo): string {
 }
 
 /** A filled dot marks a lit participant, and an empty dot marks the others. The state then reads without color. */
-const label = (participant: ParticipantInfo): string =>
-	`${lit(participant) ? '●' : '○'} ${participant.name}`;
+const label = (participant: ParticipantInfo, unavailable: readonly string[] = []): string =>
+	`${lit(participant) ? '●' : '○'} ${participant.name}${family(participant, unavailable)}`;
+
+/** The executor family beside an agent, with a mark when the family has no key. */
+function family(participant: ParticipantInfo, unavailable: readonly string[]): string {
+	const name = participant.kind === 'agent' ? seatFamilies[participant.name] : undefined;
+	if (!name) return '';
+	return unavailable.includes(participant.name) ? ` (${name}, no key)` : ` (${name})`;
+}
 
 /** One row of the panel: text at the left edge, and text that stays at the right edge. */
 class Row {
@@ -95,12 +103,13 @@ export class Header {
 			? `as ${identity.name}, ${identity.role.toLowerCase()}`
 			: 'choose a person with /user';
 		const participants = view?.participants ?? [];
+		const unavailable = view?.unavailable ?? [];
 		const fit = fitHeader({
 			width: width - CHROME,
 			name: view?.name ?? '',
 			goal: view?.goal ?? '',
 			identity: who,
-			people: participants.map(label).join('  ').length,
+			people: participants.map((participant) => label(participant, unavailable)).join('  ').length,
 			pattern: view?.pattern ?? '',
 		});
 		this.room.set(
@@ -111,7 +120,7 @@ export class Header {
 		);
 		this.people.set(
 			participants.map((participant) =>
-				fg(participantColor(participant))(`${label(participant)}  `),
+				fg(participantColor(participant))(`${label(participant, unavailable)}  `),
 			),
 			[fg(palette.dim)(fit.pattern)],
 		);

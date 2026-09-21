@@ -184,9 +184,10 @@ the same way.
   source stays readable. See [Exchanges](docs/exchange.md) and
   [Summaries](docs/summary.md).
 - **One executor contract.** The kernel drives leases, passes, steering, and
-  freshness. A framework supplies one session with passes. Pi and the Claude
-  Agent SDK ship as adapters. A Codex example runs over the same three room
-  tools served through MCP. A conformance suite proves an adapter on fakes.
+  freshness. A framework supplies one session with passes. Pi, the Claude
+  Agent SDK, and the Codex SDK ship as adapters. Codex reaches the same
+  three room tools through an MCP server. A conformance suite proves the Pi
+  and Claude adapters on fakes. The Codex adapter runs live.
 - **Speech through `say` only; everything else into a trace.** Every
   activation writes its steps live to its own trace: thinking, text, tool
   calls, room calls, steers, approvals, and usage. `readActivation` returns
@@ -254,6 +255,7 @@ npm install @ambionframework/ambion @ambionframework/pi
 | `@ambionframework/ambion`     | The kernel: protocol, journal vocabulary, rules, room, driver; `/hosting`, `/testing` |
 | `@ambionframework/pi`         | The Pi executor                                                                       |
 | `@ambionframework/claude`     | The Claude Agent SDK executor                                                         |
+| `@ambionframework/codex`      | The Codex SDK executor                                                                |
 | `@ambionframework/workspace`  | The resource contract, a directory workspace, and a SQL resource                      |
 | `@ambionframework/assistant`  | A default assistant that guides membership and writes summaries                       |
 | `@ambionframework/journal`    | The append-only journal and its storage contract                                      |

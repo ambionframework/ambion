@@ -1,7 +1,10 @@
-import { defineAgent, defineHuman } from '@ambionframework/ambion';
+import { defineAgent, defineHuman, type ToolBundle } from '@ambionframework/ambion';
 import { defineAssistant } from '@ambionframework/assistant';
+import { claude } from '@ambionframework/claude';
+import { codex } from '@ambionframework/codex';
 import { pi } from '@ambionframework/pi';
 import type { SqlResource, Workspace } from '@ambionframework/workspace';
+import { CLAUDE_MODEL, CODEX_MODEL, piModel, seatFamilies } from './families.ts';
 import type { Instrument } from './instrument.ts';
 
 /** The people who use the Workbench. Each one reads results a different way. */
@@ -69,26 +72,17 @@ const specialists = [
 
 /** Build the team for one workspace. Every room reuses these definitions. */
 export function team(workspace: Workspace, lab: SqlResource, instrument: Instrument) {
-	const model = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
-	const assistant = defineAssistant({
-		model,
-		instructions: shared,
-		bundles: [workspace.tools(), lab.tools(), instrument.tools()],
+	const model = piModel();
+	// One list of bundles serves every agent, so every seat holds the same tools over one workspace.
+	const bundles: ToolBundle[] = [workspace.tools(), lab.tools(), instrument.tools()];
+	const assistant = defineAssistant({ model, instructions: shared, bundles });
+	const specialistDefinitions = specialists.map(({ instructions, ...definition }) => {
+		const options = {
+			instructions: `${shared}${instructions} Report your result to the assistant, or to the specialist who asked you. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
+			bundles,
+		};
+		return defineAgent({ ...definition, executor: executorFor(definition.name, options, model) });
 	});
-	const specialistDefinitions = specialists.map(({ instructions, ...definition }) =>
-		defineAgent({
-			...definition,
-			executor: pi({
-				instructions: `${shared}${instructions} Report your result to the assistant, or to the specialist who asked you. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
-				model,
-				bundles: [
-					workspace.tools(),
-					lab.tools(),
-					...(definition.name === 'design' ? [instrument.tools()] : []),
-				],
-			}),
-		}),
-	);
 	return {
 		workspace,
 		lab,
@@ -96,4 +90,31 @@ export function team(workspace: Workspace, lab: SqlResource, instrument: Instrum
 		specialists: specialistDefinitions,
 		agents: [assistant, ...specialistDefinitions],
 	};
+}
+
+/**
+ * The executor of a specialist, on the family that `seatFamilies` names. Every
+ * family gets the same options, so every seat reaches the world only through
+ * the same bundles. Pi has no native tool. The Claude seat sets no
+ * `allowedTools`, so it has no built-in tool. The Codex seat sets `nativeTools`
+ * to `none` and no policy option that opens the host.
+ */
+function executorFor(
+	name: string,
+	options: { instructions: string; bundles: ToolBundle[] },
+	model: string,
+) {
+	switch (seatFamilies[name]) {
+		case 'claude':
+			return claude({ ...options, model: CLAUDE_MODEL });
+		case 'codex':
+			return codex({
+				...options,
+				model: CODEX_MODEL,
+				modelReasoningEffort: 'medium',
+				nativeTools: 'none',
+			});
+		default:
+			return pi({ ...options, model });
+	}
 }

@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a0c21d-1836-7be1-9d10-e208f8b5dbac"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’m creating `note.txt` with the requested line."}}
+{"type":"item.started","item":{"id":"item_1","type":"file_change","changes":[{"path":"/tmp/codex-cap/file-change/note.txt","kind":"add"}],"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"file_change","changes":[{"path":"/tmp/codex-cap/file-change/note.txt","kind":"add"}],"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"done"}}
+{"type":"turn.completed","usage":{"input_tokens":24900,"cached_input_tokens":12390,"cache_write_input_tokens":12504,"output_tokens":108,"reasoning_output_tokens":32}}
