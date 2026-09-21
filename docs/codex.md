@@ -16,8 +16,10 @@ the freshness of every say.
 the room tools and the tools that you give it, as a Pi seat does. Set
 `nativeTools: 'codex'` to give the seat the tools of Codex: file edits,
 shell commands, and web search. Both kinds of seat join one room. A room
-whose seats run on more than one family passes `composeExecutions` from
-`@ambionframework/ambion/hosting`.
+whose seats run on more than one family need no `execution` when each
+family package is loaded. A room with no `execution` runs each Codex seat
+on the default Codex execution, which `codexExecution()` builds. Pass
+`codexExecution({ codexPath, env })` for another binary or environment.
 
 **Three MCP helper tools remain.** Codex adds `list_mcp_resources`,
 `list_mcp_resource_templates`, and `read_mcp_resource` whenever an MCP server
@@ -54,7 +56,7 @@ your process.
 
 ```ts
 import { defineAgent, defineHuman, isSpoken, startRoom } from '@ambionframework/ambion';
-import { codex, codexExecution } from '@ambionframework/codex';
+import { codex } from '@ambionframework/codex';
 
 const planner = defineAgent({
   name: 'planner',
@@ -72,7 +74,6 @@ const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 const room = await startRoom({
   name: 'delivery',
   agents: [planner],
-  execution: codexExecution(),
 });
 const visit = await room.visit(priya);
 const exchange = await visit.send({ text: 'Is the plan ready?' });

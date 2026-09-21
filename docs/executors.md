@@ -18,11 +18,22 @@ the captured agent definition and receives an execution port. It does not
 construct a model runner.
 
 `createRuntime` takes an `execution` for every room of the runtime.
-`startRoom` and `resumeRoom` take an `execution` for one room run. A room
-with no `execution` still runs its people and its record. Each seat that the
-room wakes fails at once with a `no_execution` error, and the failure is
-permanent. A room whose seats run on more than one family passes
-`composeExecutions`, which routes each seat on the `kind` of its executor.
+`startRoom` and `resumeRoom` take an `execution` for one room run. An
+explicit `execution` wins over every default. A room whose seats run on
+more than one family passes `composeExecutions`, which routes each seat on
+the `kind` of its executor.
+
+**A room with no `execution` uses the default of each executor kind.** An
+executor package calls `registerDefaultExecution(kind, factory)` when the
+host loads it. The registry holds functions and stays outside the journal,
+the captured definition, and the JSON protocol. The kernel imports no
+executor package. The runtime builds the default of a kind once, on the
+first seat of that kind, over its own storage, clock, limits, and
+transport. A seat of a kind with no default fails at once with a
+`no_execution` error, and the failure is permanent. A room with no default
+still runs its people and its record. A host that needs custom storage,
+transport, or limits passes an `execution`. Cloudflare and other separate
+hosts resolve their execution on the host and never read the registry.
 
 **A transport receives room calls and executor dependencies separately.**
 `Transport.connect(room, context)` receives a plain `RoomProtocol` facade
@@ -63,8 +74,8 @@ states the commit-freshness promise.
 
 **The hosting entry exports the execution protocol.** `Execution`,
 `ExecutionConnector`, `ExecutionHost`, `Transport`, `AgentRunner`,
-`inProcessTransport`, `composeExecutions`, `hostingOf`, and
-`describeExecutor` come from `@ambionframework/ambion/hosting`. The main
+`inProcessTransport`, `composeExecutions`, `registerDefaultExecution`,
+`hostingOf`, and `describeExecutor` come from `@ambionframework/ambion/hosting`. The main
 entry names none of them. Journal events and projected lease state stay
 internal. Participant views omit `sessionId`.
 
@@ -195,11 +206,13 @@ family. `@ambionframework/claude` is the worked example, and
    earlier. The Claude executor advances it on the SDK echo.
 6. **Wrap the executor in an `Execution`.** Export a function that defines
    the executor of an agent and a function that gives the host its
-   execution. Claude offers `claude()` and `claudeExecution()`.
+   execution. Claude offers `claude()` and `claudeExecution()`. Call
+   `registerDefaultExecution` with the kind, so a room with no `execution`
+   serves the seats of the family.
 
 ```ts
 import { defineAgent, startRoom } from '@ambionframework/ambion';
-import { claude, claudeExecution } from '@ambionframework/claude';
+import { claude } from '@ambionframework/claude';
 
 const reviewer = defineAgent({
   name: 'reviewer',
@@ -215,7 +228,6 @@ const reviewer = defineAgent({
 const room = await startRoom({
   name: 'delivery',
   agents: [reviewer],
-  execution: claudeExecution(),
 });
 ```
 

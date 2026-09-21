@@ -28,6 +28,7 @@ import { type TraceOpener, traceJournals } from '../execution/trace.ts';
 import type { AgentPort, RoomProtocol } from '../protocol.ts';
 import type { AgentDefinition, Clock, ExecutionEvent } from '../types.ts';
 import { systemClock } from './clock.ts';
+import { defaultExecutionFactory } from './defaults.ts';
 
 /** A key nobody outside this file can name. `createRuntime` is the one place that casts past it. */
 declare const RUNTIME: unique symbol;
@@ -146,6 +147,8 @@ export interface Hosting {
 
 interface RuntimeState extends Hosting {
 	running: Map<string, RunningRoom>;
+	/** One connector per executor kind, built on first use from the registered default. */
+	readonly defaults: Map<string, ExecutionConnector | undefined>;
 	readonly clock: Clock;
 	readonly storage: JournalOpener;
 }
@@ -200,6 +203,19 @@ export function executionHostOf(runtime: Runtime): ExecutionHost {
 		limits: found.limits,
 		...(found.transport === undefined ? {} : { transport: found.transport }),
 	};
+}
+
+/**
+ * The connector of the default execution for `kind`, built once per runtime.
+ * Nothing when no executor package registered a default for the kind.
+ */
+export function defaultConnectorOf(runtime: Runtime, kind: string): ExecutionConnector | undefined {
+	const found = state(runtime);
+	if (!found.defaults.has(kind)) {
+		const factory = defaultExecutionFactory(kind);
+		found.defaults.set(kind, factory?.().connector(executionHostOf(runtime)));
+	}
+	return found.defaults.get(kind);
 }
 
 /** The dependencies that one in-process seat needs for one captured definition. */
@@ -274,8 +290,10 @@ export interface CreateRuntimeOptions {
 	storage?: JournalOpener;
 	/**
 	 * The execution every room in this runtime uses, such as `piExecution()`
-	 * from `@ambionframework/pi`. A room may name its own. Absent, a seat
-	 * that needs an executor fails with an error event.
+	 * from `@ambionframework/pi`. A room may name its own. Absent, each seat
+	 * runs on the default execution of its executor kind, when the executor
+	 * package supplies one. A seat of a kind with no default fails with an
+	 * error event.
 	 */
 	execution?: Execution;
 	/** Any field of any group. An omitted field keeps its default. */
@@ -340,6 +358,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	const runtime = { clock, storage } as unknown as Runtime;
 	stateFor.set(runtime, {
 		running,
+		defaults: new Map(),
 		journals,
 		traces: traceJournals(storage),
 		clock,

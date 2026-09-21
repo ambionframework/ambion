@@ -10,6 +10,7 @@ import type {
 import {
 	DEFAULT_TRACE,
 	inProcessTransport,
+	registerDefaultExecution,
 	traceJournals,
 	traceOpener,
 } from '@ambionframework/ambion/hosting';
@@ -30,6 +31,12 @@ const TRACE_LIMITS = { toolOutputBytes: 65_536, stepsPerPass: 1_000 };
 export function claudeExecution(options: ClaudeExecutionOptions = {}): Execution {
 	return { connector: (host) => connectorFor(host, options) };
 }
+
+/**
+ * A room with no `execution` runs each `claude` seat on this execution.
+ * Loading the package registers it.
+ */
+registerDefaultExecution('claude', () => claudeExecution());
 
 function connectorFor(host: ExecutionHost, options: ClaudeExecutionOptions): ExecutionConnector {
 	const traces = traceJournals(host.storage);

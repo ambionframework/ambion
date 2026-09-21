@@ -95,10 +95,11 @@ try {
 }
 ```
 
-**Pass `execution` to a room or to a runtime.** A room whose seats run on
-more than one family passes `composeExecutions({ pi: piExecution(), claude: claudeExecution() })` from
-`@ambionframework/ambion/hosting`. It routes each seat on the `kind` of its
-executor.
+**A room with no `execution` runs each Claude seat on the default Claude
+execution.** A host that sets `env` or a path to the executable passes
+`claudeExecution(options)` to a room or to `createRuntime`. A room whose
+seats run on more than one family needs no `composeExecutions` when each
+family package is loaded.
 
 ## Options
 
@@ -222,7 +223,7 @@ settings sources, or a resume. The package has no live tier.
 
 ## Troubleshooting
 
-- **`no_execution`.** The room has no `execution`. Pass `claudeExecution()`.
+- **`no_execution`.** No loaded package serves the kind of the seat. Import the executor package.
 - **The model cannot see `Bash`.** `allowedTools` does not name it.
 - **Every request is denied.** `canUseTool` is absent or throws.
 - **Abandoned after one attempt with an authentication text.** Check

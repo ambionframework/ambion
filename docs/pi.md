@@ -51,7 +51,7 @@ never loads it and needs no key.
 
 ```ts
 import { defineAgent, defineHuman, defineTool, startRoom } from '@ambionframework/ambion';
-import { pi, piExecution } from '@ambionframework/pi';
+import { pi } from '@ambionframework/pi';
 import { Type } from 'typebox';
 
 const stock = defineTool({
@@ -78,7 +78,6 @@ const priya = defineHuman({ name: 'priya', identity: 'Coordinates deliveries.' }
 const room = await startRoom({
   name: 'delivery',
   agents: [inventory],
-  execution: piExecution(),
 });
 
 try {
@@ -93,10 +92,13 @@ try {
 }
 ```
 
-`startRoom` and `resumeRoom` take `execution` for one room run.
+**A room with no `execution` runs each Pi seat on the default Pi execution.**
+Importing `@ambionframework/pi` registers it. It keeps transcripts and traces
+in the storage of the runtime. A host that needs a scripted stream, custom
+storage, a transport, or limits passes `piExecution(options)` as `execution`.
 `createRuntime` takes it for every room of the runtime. A room whose seats
-run on more than one family passes `composeExecutions`; see
-[Executors](executors.md#the-executor-contract).
+run on more than one family needs no `execution` when each family package is
+loaded; see [Executors](executors.md#the-executor-contract).
 
 ## Options
 
@@ -399,7 +401,7 @@ Pi seats.
 
 | Symptom                                                             | Cause                                                                                                      |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Each seat fails at once with `no_execution`                         | The room has no `execution`. Pass `piExecution()` to the room or the runtime.                              |
+| Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `piExecution()`.       |
 | `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is transient, so the room retries it. |
 | The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY` and the credit of the account.     |
 | `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat ran under `piExecution()`. Route with `composeExecutions`.                                   |
