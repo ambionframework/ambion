@@ -8,5 +8,7 @@ review. Name a dated file `YYYY-MM-DD-<slug>.<ext>`.
 | `reports/`                           | Generated HTML reports of the retired site example. `reports/README.md` is their index. |
 | `2026-09-16-assistant-acceptance.md` | The review of the default assistant on 2026-09-16.                                      |
 
-Phase 8 records the release results here. `0.1.0.md` signs off F1 to F9.
-See [the plan](../next.md#phase-8-release-evidence-and-sign-off-p0).
+The 0.1.0 release shipped without a sign-off file. Its evidence is the
+changelog and the CI runs of commit 4026bdf. Phase 1 of the 0.2.0 plan
+records new evidence here. See
+[the plan](../next.md#phase-1-a-stable-gate-p0).

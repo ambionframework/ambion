@@ -6,7 +6,7 @@ runs on Bun **>= 1.3**.
 
 Ambion is a collaboration kernel for agents and humans. Read the
 [documentation index](docs/README.md) for current contracts and
-[the plan](planning/next.md) for the 0.1.0 scope, the work, and its
+[the plan](planning/next.md) for the 0.2.0 scope, the work, and its
 evidence. [The backlog](planning/backlog.md) holds everything after.
 
 ```sh
@@ -31,11 +31,9 @@ are the authority for exact commands.
 
 ## Releasing
 
-**Complete the release gates before tagging.** The 0.1.0 target includes
-pending API, packaging, and consumer checks in the delivery plan.
-The prerelease includes the local development CLI and Cloudflare adapter.
-Create projects with `ambion new`; the release workflow publishes matching
-package versions.
+**Complete the release gates before tagging.** The delivery plan lists the
+API, packaging, and consumer checks of the next release. Create projects with
+`ambion new`; a release publishes matching package versions.
 
 Versions move in lockstep across publishable packages.
 
@@ -46,8 +44,8 @@ Versions move in lockstep across publishable packages.
 npmjs token.
 
 ```sh
-pnpm version:set 0.1.0
-git commit -am "release: 0.1.0" && git tag v0.1.0
+pnpm version:set <version>
+git commit -am "release: <version>" && git tag v<version>
 node scripts/release.mjs stage --dry-run   # guards, gate, pack, npm dry run
 NODE_AUTH_TOKEN=... node scripts/release.mjs stage
 node scripts/release.mjs verify            # install from npmjs with no token

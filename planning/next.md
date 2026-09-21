@@ -1,8 +1,9 @@
-# Next: the must-have scope for 0.1.0
+# Next: the scope for 0.2.0
 
-> **The freeze (2026-09-20, from commit 8a7f0fe).** The public shape is
-> frozen. Every change to the main entry and to the journal bodies is
-> additive until the `v0.1.0` tag.
+> **The compatibility rule since 0.1.0.** 0.1.0 shipped on 2026-09-21 from
+> commit 4026bdf, with ten packages on npmjs. Its public shape stands until
+> the 0.2.0 tag. Every change to the main entry and to the journal bodies is
+> additive, unless an item below names a deliberate break.
 >
 > - **The main entry is `@ambionframework/ambion`.** Its exports are the
 >   names in `packages/ambion/test/package.test.ts`. The host entry
@@ -13,7 +14,7 @@
 > - **Additive means one of:** a new export, or a new optional body field.
 >   A new entry kind or a new member of the message union is a deliberate
 >   change. It needs a new golden journal and a review.
-> - **The freeze forbids:** to remove or rename an export, to remove or
+> - **The rule forbids:** to remove or rename an export, to remove or
 >   rename a body field, to change a field type or its meaning, and to
 >   remove an entry kind.
 > - **One body refuses new fields.** The `close` object inside a `cancel`
@@ -24,12 +25,13 @@
 >   and body validation (`test/journal-validation.test.ts`). A red diff on
 >   one of them is a violation. Do not write the snapshot again.
 > - **The storage promise** is in the "Storage compatibility" paragraph of
->   [durability.md](../docs/durability.md).
+>   [durability.md](../docs/durability.md). A journal that 0.1.0 wrote stays
+>   readable.
 
-This file is the whole plan for 0.1.0: the scope, the order of the work,
+This file is the whole plan for 0.2.0: the scope, the order of the work,
 the evidence each step needs, and the reason behind each item.
-[backlog.md](backlog.md) holds everything after 0.1.0.
-[docs/example.md](../docs/example.md) holds the one example.
+[backlog.md](backlog.md) holds everything after 0.2.0. The
+[changelog](../CHANGELOG.md) records what 0.1.0 shipped.
 
 **An item lands with its evidence or stays open.** Every checkbox names an
 item in [the items](#the-items). A phase closes when its evidence line
@@ -38,31 +40,40 @@ holds on main.
 ## Positioning
 
 **Ambion is a collaboration kernel for agents and humans.** The
-[README](../README.md) holds the statement, the key technical facts, and
-what is new, written for the 0.1.0 surface. All ten novelties it lists
-exist on main. The open work is the release evidence in phase 8 and the
-public registry (D7).
+[README](../README.md) holds the statement and the key technical facts.
+0.1.0 makes a room a place that agents and people use when they ask a
+question. 0.2.0 makes a room a place that stays useful between questions:
+work that starts from an event, work that other rooms take on, and a
+release that anyone can repeat.
 
 ## The scope
 
-**Nine functional areas, each with the acceptance it must meet on the
-tagged commit.** The phases below deliver them; the items explain them.
+**Four themes, each with the acceptance it must meet on the tagged
+commit.** The phases below deliver them; the items explain them. This scope
+is a proposal from the 0.1.0 backlog. The owner sets the final list.
 
-| Area                              | Acceptance                                                                                                                                                                                                                                                    |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1 Definitions and executors      | A definition is a value with one executor. Three executor families run in one room: the Pi loop, the Claude Agent SDK harness, and the Codex SDK harness. A fixed definition set per run; membership changes by name; a fixed seat that agents cannot remove. |
-| F2 Rooms, participation, presence | One ordered journal per room; broadcast and directed messages; the attention scale; visits with recorded arrivals and departures; catch-up by position.                                                                                                       |
-| F3 Concurrent contributions       | Freshness checked at commit; steering by capability; silence as a result; failures classified as permanent or transient; duplicate speech impossible after a lost reply.                                                                                      |
-| F4 Exchanges and summaries        | One open exchange per room; closure by quiescence; outcomes complete, cancelled, exhausted, and awaiting a person; one summary per person who spoke; summaries compact later context; the source stays readable.                                              |
-| F5 Persistence and recovery       | Idempotent keys bound to content; conditional appends; writer fencing; leases; a graceful stop that loses no pending work; journal format 1 with golden fixtures.                                                                                             |
-| F6 Tools and resources            | Neutral JSON Schema tools; three room tools on every surface; one resource contract with a filesystem binding and a SQL binding; provenance on every tool call.                                                                                               |
-| F7 Observation and control        | Detached reads for room, exchange, activation, and step; live events with activation ids; typed refusals; abort and stop with documented scope.                                                                                                               |
-| F8 Deployment                     | Embedded Node, persistent Node with SQLite, and Cloudflare Durable Objects, each with restart evidence; a Node template and a Cloudflare template from `ambion new`.                                                                                          |
-| F9 Distribution and evidence      | Ten packages on npmjs; packed consumers outside the monorepo; Node 26; the workbench example scripted and live on three families; a conformance suite for executors.                                                                                          |
+| Theme                     | Acceptance                                                                                                                                                                                     |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W Wake sources            | A room wakes a seat on a notice from a resource, on a timer, and on a scheduler tick, each with a durable start and restart evidence. An `awaiting` exchange expires on a stated bound.        |
+| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database. |
+| S Scale of the record     | A checkpoint entry lets a resume skip settled history. Full replay stays the reference and the two agree on every golden journal.                                                              |
+| R Release and hygiene     | A release that a trusted CI workflow runs with provenance. A dev build stamp that follows the next release. An API reference that CI keeps fresh. Green, stable gates.                         |
+
+**Carried from 0.1.0.** These items were open at the 0.1.0 tag. They stay
+in scope because a stable gate is a precondition for the themes above.
+
+- The recovery evidence and the summary evidence that phase 8 named.
+- The Workbench and dev-release tests that time out at 5 seconds on a
+  loaded runner.
+- The Codex-harness live restart case, which fails locally with "The
+  activation ran past its lease" and passes in CI.
+- Two workspace tests that fail on macOS with a Python `gilstate` fault.
+- The pull requests that wait: #151, #153, #171, #234, the Pi pair
+  (#113 and #114), and the dependency bumps.
 
 **Deployment models.** The same rules serve four placements.
 
-| Model                         | Placement                         | Persistence               | 0.1.0 support                                                         |
+| Model                         | Placement                         | Persistence               | Support                                                               |
 | ----------------------------- | --------------------------------- | ------------------------- | --------------------------------------------------------------------- |
 | Embedded Node application     | Room and executors in one process | In-memory journals        | Supported for development, tests, and ephemeral lifetimes             |
 | Persistent Node service       | An application-managed service    | SQLite journals           | Supported; the workbench example is the reference host                |
@@ -75,26 +86,26 @@ deadlines and retry caps impose no total exchange budget. Tools can repeat
 after failure; applications own effect idempotency. A crash records no
 departure. Recovery time depends on lease expiry and host topology. The
 journal is no task database, credential service, or transaction
-coordinator. Native timers, external event subscriptions, and scheduler
-ingress are future work.
+coordinator. Timers and scheduler ingress arrive with theme W and not
+before.
 
 ## Decisions taken
 
-- **One example.** The site example and Relay are replaced by the agentic
-  lab workspace in [docs/example.md](../docs/example.md).
+- **One example.** The agentic lab workspace in
+  [docs/example.md](../docs/example.md) stays the one example.
 - **Two entries.** `@ambionframework/ambion` for applications and
   `@ambionframework/ambion/hosting` for hosts and adapters.
 - **The kernel imports no model library.** The Pi, Claude, and Codex
   executors are packages.
 - **Speech enters the record through `say` only**, on every executor.
-- **The freeze.** The freeze note at the top of this file
-  states the rule.
 - **Shared summaries.** Humans and agents continue from the same recorded
   summary; the source stays in the journal
   ([summary contract](../docs/summary.md)).
-- **A public registry.** The packages publish to npmjs at 0.1.0 (D7).
-- **Delegation waits.** Tasks and working rooms return by reference after
-  0.1.0 ([backlog](backlog.md)).
+- **Two release channels.** CI publishes a dev build of `main` to GitHub
+  Packages under `dev`. The owner stages, verifies, and promotes an official
+  release on npmjs from a local machine with `scripts/release.mjs`.
+- **Delegation has no task database.** A working room is a room, and a ref
+  connects the two ([backlog](backlog.md)).
 
 ## The model to preserve
 
@@ -113,54 +124,126 @@ means two things or two names mean one.
 
 ## The order of work
 
-**One lane remains.** A step names the steps it needs; a step with no
-"Needs" line starts now. **P0** blocks the tag.
+**Three lanes run at once.** A step names the steps it needs; a step with
+no "Needs" line starts now. **P0** blocks the tag. **P1** carries the
+release story. **P2** can land last.
 
-| Lane | Chain                                   | Priority |
-| ---- | --------------------------------------- | -------- |
-| B    | Phase 8: 1 now; 2 after it; 4 to 8 last | P0       |
+| Lane | Chain                                 | Priority |
+| ---- | ------------------------------------- | -------- |
+| A    | Phase 1: 1 to 4                       | P0       |
+| B    | Phase 2: 1 to 4, then phase 3: 1 to 4 | P0       |
+| C    | Phase 4: 1 to 3 now; 4 after phase 2  | P1       |
 
-**The critical path is phase 8.**
+**Lane B starts when phase 1 closes.** The critical path is the notice, then the timer. The gate steps of
+phase 1 come first, so that every later step lands on a stable main.
 
-### Phase 8. Release evidence and sign-off (P0)
+### Phase 1. A stable gate (P0)
 
-**Goal:** the packages install from a public registry, and every claim in
-the scope has evidence on the tagged commit.
+**Goal:** a red run means a defect. No test fails on a loaded runner or on a
+platform of a contributor.
 
-- [ ] **1.** Two release channels (D7). Done: CI publishes a dev build from
-      `main` to GitHub Packages under `dev`; `scripts/release.mjs` stages
-      an official release on npmjs under `next`, verifies it outside the
-      repo, and promotes it to `latest`; no install path needs a token
-      for npmjs. Remains, and belongs to the owner: the first real
-      `stage`, `verify`, and `promote` from a local machine. CI never
-      publishes to npmjs and holds no npmjs token. Every consumer check
-      below installs from the staged version.
-- [ ] **2.** Packed consumers outside the monorepo: journal alone; pi-journal
-      with journal; kernel with pi; kernel with claude; kernel with codex;
-      the workbench; the generated Node and Cloudflare projects; the
-      resource-only import.
-      Needs 1. Each consumer starts when its packages exist.
-- [ ] **4.** Node 26 tests and CLI; workerd tests; the historical
-      Cloudflare wake and cut races reproduced on current code.
-- [ ] **6.** Recovery evidence: duplicate wake, takeover, delayed cut, audit
-      retry, clock skew, process pause, uncooperative tool.
-- [ ] **7.** Summary evidence: silence, corrections, conflicting constraints,
-      multiple humans, late summaries.
-- [ ] **8.** Sign off F1 to F9 above in `planning/evidence/0.1.0.md`; tag
-      `v0.1.0`. Needs every step above.
+- [ ] **1.** Give the Workbench and dev-release tests a time limit that a
+      loaded runner meets, or make each test faster. (R)
+- [ ] **2.** Decide the Codex-harness live restart case: fix the lease
+      assumption or skip it by harness with a stated reason. (R)
+- [ ] **3.** Decide the two macOS Python faults: report them upstream and
+      skip them by platform with a stated reason, or fix them. (R)
+- [ ] **4.** The recovery evidence and the summary evidence of 0.1.0 as
+      scripted tests: duplicate wake, takeover, delayed cut, audit retry,
+      clock skew, process pause, uncooperative tool; silence, corrections,
+      conflicting constraints, multiple humans, late summaries. (R)
 
-**Evidence:** `npm install @ambionframework/ambion` works without a token;
-every consumer above installs and typechecks; the sign-off table names a
-commit and a run for each claim.
+**Evidence:** three green runs of CI and of the live workflow on main, with
+no rerun.
+
+### Phase 2. Wake sources (P0)
+
+**Goal:** a room wakes from an event and not only from a person.
+
+- [ ] **1.** A notice from a resource: a message kind with a ref, no author,
+      and routing by attention. Needs phase 1. (W)
+- [ ] **2.** Restart semantics of a notice: a durable start, and no hidden
+      timeout. Needs 1. (W)
+- [ ] **3.** A timer in the host that expires an `awaiting` exchange and
+      wakes a seat on a clock. Needs 2. (W)
+- [ ] **4.** Scheduler ingress: a host call that delivers a notice on a
+      schedule the application owns. Needs 3. (W)
+
+**Evidence:** a scripted test and a chaos case for each step; the Cloudflare
+adapter runs a timer through its alarm.
+
+### Phase 3. Delegation by reference (P1)
+
+**Goal:** one room hands work to another and gets one answer back.
+
+- [ ] **1.** The working-room ref and the delegating message. Needs 2.1. (D)
+- [ ] **2.** The `awaiting` outcome for the origin exchange, and the return
+      message with a ref. Needs 1. (D)
+- [ ] **3.** A read of the status of the delegated work through the
+      exchange the ref opened. Needs 2. (D)
+- [ ] **4.** Retire PR #151 with a note that names the new route. (D)
+
+**Evidence:** the workbench delegates one question to a second room; a
+restart in the middle keeps the work.
+
+### Phase 4. Release and hygiene (P1)
+
+**Goal:** the next release repeats without the owner's machine.
+
+- [ ] **1.** The dev build stamp follows the next release: derive the base
+      from the tag or the plan. (R)
+- [ ] **2.** An npmjs release that a trusted CI workflow runs with
+      provenance. The 0.1.0 release ran on the owner's machine. Needs 1. (R)
+- [ ] **3.** A generated API reference per entry with a CI staleness check.
+      P2. (R)
+- [ ] **4.** The bounded projection with a checkpoint entry, behind the
+      format rule of the compatibility note. Needs phase 2. (S)
+
+**Evidence:** a release from CI installs without a token; the reference
+builds in CI; a resume from a checkpoint equals a full replay on every
+golden journal.
 
 ## The items
 
 Each item states the problem, the solution, and the impact.
 
-### D. Scope the release did not name
+### W. Wake sources
 
-**D7. A public registry.** Every install path requires a GitHub token.
-Publish the ten packages to npmjs at 0.1.0.
+**W1. A notice from a resource.** A room wakes only when a person speaks.
+Add a message kind with a ref, no author, and routing by attention, so an
+agent wakes when a brief changes or a run completes. It needs a durable
+start and restart semantics, and it must not arrive through a hidden
+timeout.
+
+**W2. Timers and scheduler ingress.** The room stays available between
+interactions, and nothing wakes it on a clock. A host timer expires an
+`awaiting` exchange and wakes a seat. The host owns the clock, and the
+journal records the start.
+
+### D. Delegation
+
+**D1. Delegation by reference.** PR #151 stored tasks in the journal and
+kept a scan of every task on each reconcile pass. Use references and the
+`awaiting` outcome instead: the delegating message carries a ref to
+`ambion://room/<working>/message/<from>`, and the working room closes with
+one message that carries a ref back. Status is a read of the exchange that
+the referenced message opened.
+
+### S. Scale
+
+**S1. A bounded projection.** The incremental fold keeps full replay as
+the reference. A checkpoint entry lets a resume skip settled history. It is
+a format change, so it needs a new golden journal and the review that the
+compatibility note names.
+
+### R. Release and hygiene
+
+**R1. A repeatable release.** The 0.1.0 release ran from one machine with a
+passkey and a token. A trusted workflow with `id-token: write` publishes
+with provenance and needs no token on a laptop.
+
+**R2. A stable gate.** Three tests time out or fail for the platform of a
+runner or a laptop. Each failure costs a rerun and hides a real one.
 
 ## Package decisions
 

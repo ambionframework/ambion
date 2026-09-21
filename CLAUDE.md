@@ -39,25 +39,25 @@ newer, the OpenTUI floor.
 | `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                                               |
 | `examples/workbench`  | Runnable example: rooms and an OpenTUI terminal in one process                                                                               |
 | `planning/evidence/`  | Dated evidence: reports of the retired site example under `reports/`, dated reviews, and the results that phase 8 records                    |
-| `planning/`           | `next.md`: the must-have scope and plan for 0.1.0; `backlog.md`: everything after; `formal.md`: the verified rules to write                  |
+| `planning/`           | `next.md`: the scope and plan for 0.2.0; `backlog.md`: everything after; `formal.md`: the verified rules to write                            |
 
 ## Positioning
 
 **`README.md` holds the positioning.** It states what Ambion is, the key
-technical facts, and what is new, and it describes the 0.1.0 surface. Every
+technical facts, and what is new, and it describes the current surface. Every
 other page links to it and states nothing twice. `planning/next.md` names
 which parts of that surface are still open.
 
-The public shape is frozen until the `v0.1.0` tag. Read the freeze note at
+The public shape follows the compatibility rule since 0.1.0. Read the note at
 the top of [`planning/next.md`](planning/next.md) before you change an
 export or a journal body.
 
 Ambient means a room remains available between interactions. Native timers,
 external event subscriptions, and scheduler ingress remain future work.
 
-[`planning/next.md`](planning/next.md) defines the 0.1.0 scope and owns the
+[`planning/next.md`](planning/next.md) defines the 0.2.0 scope and owns the
 work and its evidence. [`planning/backlog.md`](planning/backlog.md) holds
-everything after 0.1.0. `docs/` document current capabilities and label
+everything after 0.2.0. `docs/` document current capabilities and label
 pending release changes explicitly. Keep the examples in `docs/` on the
 implemented API until the corresponding change lands.
 
