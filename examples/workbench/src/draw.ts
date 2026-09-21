@@ -4,12 +4,15 @@ import type { Composer } from './composer.ts';
 import type { FilesPanel } from './files-panel.ts';
 import type { Header } from './header.ts';
 import type { Mode } from './keys.ts';
-import { emptyText, type Session } from './session.ts';
-import type { Transcript } from './transcript.ts';
+import type { RefItem } from './refs.ts';
+import type { Session } from './session.ts';
+import { emptyText } from './session-text.ts';
+import type { Marks, Transcript } from './transcript.ts';
 
 const HINTS = {
 	compose: 'Enter sends   Ctrl+J newline   / commands   Ctrl+R rooms   Tab discussions',
-	browse: 'Up/Down choose   Enter open or close   e open all   c close all   Esc back',
+	browse: 'Up/Down choose   Enter open or close   e open all   c close all   r refs   Esc back',
+	refs: 'Up/Down choose a ref   Enter opens it   Esc back',
 } as const;
 
 /** At this width or wider, the composer shows its hint line. */
@@ -56,7 +59,12 @@ export class Painter {
 
 	/** Reveal one discussion at the next draw, so opening it keeps it in view. */
 	revealNext(key: string | undefined): void {
-		this.reveal = key;
+		this.reveal = key === undefined ? undefined : `discussion-${key}`;
+	}
+
+	/** Reveal one message at the next draw, so a jump to it shows it. */
+	revealMessage(seq: number): void {
+		this.reveal = `message-${seq}`;
 	}
 
 	/** Force the next draw, after a change the signature does not show. */
@@ -65,13 +73,24 @@ export class Painter {
 	}
 
 	/** Paint everything for the current mode and browse selection. */
-	render(mode: Mode, browsing: string | undefined): void {
-		this.drawTranscript(mode, browsing);
-		this.drawChrome(mode);
+	render(mode: Mode, browsing: string | undefined, picking?: string): void {
+		this.drawTranscript(mode, browsing, picking);
+		this.drawChrome(mode, picking);
 		if (mode === 'files') this.panel.draw(this.session.browser);
 	}
 
-	private drawTranscript(mode: Mode, browsing: string | undefined): void {
+	private marks(picking: string | undefined): Marks {
+		const refs = new Map<number, RefItem[]>();
+		for (const item of this.session.refItems)
+			refs.set(item.seq, [...(refs.get(item.seq) ?? []), item]);
+		return { refs, picked: picking, focus: this.session.focus };
+	}
+
+	private drawTranscript(
+		mode: Mode,
+		browsing: string | undefined,
+		picking: string | undefined,
+	): void {
 		const session = this.session;
 		const reveal = this.reveal;
 		this.reveal = undefined;
@@ -79,13 +98,22 @@ export class Painter {
 		const selected = mode === 'browse' ? browsing : undefined;
 		const empty = session.blocks.length === 0 && !session.notice && session.view !== undefined;
 		const shown = empty && session.view ? emptyText(session.view) : session.notice;
-		const signature = JSON.stringify([session.blocks, selected, shown, session.noticeSeq]);
+		const marks = this.marks(mode === 'refs' ? picking : undefined);
+		const signature = JSON.stringify([
+			session.blocks,
+			selected,
+			shown,
+			session.noticeSeq,
+			[...marks.refs.values()],
+			marks.picked,
+			marks.focus,
+		]);
 		if (signature === this.drawn) return;
 		this.drawn = signature;
-		this.transcript.render(session.blocks, selected, shown, reveal, bottom);
+		this.transcript.render(session.blocks, selected, shown, reveal, bottom, marks);
 	}
 
-	private drawChrome(mode: Mode): void {
+	private drawChrome(mode: Mode, picking: string | undefined): void {
 		const session = this.session;
 		this.drawHeader();
 		this.composer.setChip(
@@ -93,10 +121,21 @@ export class Painter {
 			Boolean(session.view?.exchange),
 		);
 		this.composer.setPlaceholder(this.placeholder());
-		this.composer.setStatus(new StyledText(this.statusChunks(mode)));
+		this.composer.setStatus(new StyledText(this.statusChunks(mode, picking)));
 		const roomy = this.width() >= ROOMY;
 		const quiet = session.error || session.offline || !roomy || mode === 'files';
-		this.composer.setHints(quiet ? '' : HINTS[mode === 'browse' ? 'browse' : 'compose']);
+		this.composer.setHints(quiet ? '' : HINTS[mode]);
+	}
+
+	/** What the status line says about the chosen ref: why it does not open, or what Enter does. */
+	private refStatus(picking: string | undefined): string {
+		const resolved = this.session.refItems.find((item) => item.id === picking)?.resolved;
+		if (!resolved) return 'No ref is chosen.';
+		if (!resolved.target)
+			return `This ref does not open: ${resolved.problem ?? 'it does not resolve'}.`;
+		return resolved.target.kind === 'message'
+			? 'Enter jumps to this message.'
+			: 'Enter opens this ref in the files panel.';
 	}
 
 	private placeholder(): string {
@@ -110,12 +149,13 @@ export class Painter {
 		this.header.draw({ identity: this.session.identity, view: this.session.view }, this.width());
 	}
 
-	private statusChunks(mode: Mode) {
+	private statusChunks(mode: Mode, picking: string | undefined) {
 		const session = this.session;
 		if (session.error) return [fg(palette.red)(`Error: ${session.error}`)];
 		if (session.offline) return [fg(palette.red)(`Cannot read the rooms: ${session.offline}`)];
 		if (mode === 'files')
 			return [fg(palette.muted)('Browsing the workspace files. Esc closes the panel.')];
+		if (mode === 'refs') return [fg(palette.muted)(this.refStatus(picking))];
 		if (session.awaitingGoal)
 			return [
 				fg(palette.muted)(

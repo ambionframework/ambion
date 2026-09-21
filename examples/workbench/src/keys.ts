@@ -7,10 +7,11 @@ import type { Session } from './session.ts';
 import { discussionKeys } from './timeline.ts';
 import type { Transcript } from './transcript.ts';
 
-/** Which surface takes the keys: the composer, the discussions, or the files panel. */
-export type Mode = 'compose' | 'browse' | 'files';
+/** Which surface takes the keys: the composer, the discussions, the refs, or the files panel. */
+export type Mode = 'compose' | 'browse' | 'refs' | 'files';
 
 /** How far each browse key moves the selection. */
+/** How far each browse key, and each refs key, moves the selection. */
 const BROWSE_STEP: Record<string, number> = { up: -1, k: -1, down: 1, j: 1 };
 
 /** Below this width, the files panel replaces the conversation. */
@@ -36,6 +37,10 @@ export interface KeyParts {
 export class Keys {
 	mode: Mode = 'compose';
 	browsing: string | undefined;
+	/** The id of the chosen ref, in refs mode. */
+	picking: string | undefined;
+	/** The mode the files panel returns to when it closes. */
+	private origin: Mode = 'compose';
 	private readonly renderer: CliRenderer;
 	private readonly session: Session;
 	private readonly composer: Composer;
@@ -65,6 +70,9 @@ export class Keys {
 	reconcile(): void {
 		const keys = discussionKeys(this.session.blocks);
 		if (this.browsing && !keys.includes(this.browsing)) this.browsing = keys.at(-1);
+		const ids = this.session.refItems.map((item) => item.id);
+		if (this.picking && !ids.includes(this.picking)) this.picking = ids.at(-1);
+		if (this.mode === 'refs' && !this.picking) this.mode = 'browse';
 	}
 
 	// Routing
@@ -80,6 +88,7 @@ export class Keys {
 			return;
 		}
 		if (this.mode === 'browse') this.browseKey(key);
+		else if (this.mode === 'refs') this.refsKey(key);
 		else this.composeKey(key);
 	}
 
@@ -87,6 +96,7 @@ export class Keys {
 
 	/** Open the files panel. A narrow terminal gives it the whole width. */
 	openFiles(): void {
+		if (this.mode !== 'files') this.origin = this.mode;
 		this.mode = 'files';
 		this.composer.blur();
 		const roomy = this.renderer.width >= NARROW;
@@ -99,8 +109,8 @@ export class Keys {
 		this.session.browser.hide();
 		this.panel.draw(this.session.browser);
 		this.transcript.root.visible = true;
-		this.mode = 'compose';
-		this.composer.focus();
+		this.mode = this.origin;
+		if (this.mode === 'compose') this.composer.focus();
 		this.painter.invalidate();
 		this.render();
 	}
@@ -196,8 +206,63 @@ export class Keys {
 		if (step) this.move(step);
 		else if ((name === 'return' || name === 'space') && this.browsing) this.toggle(this.browsing);
 		else if (name === 'e' || name === 'c') this.setAllOpen(name === 'e');
-		else if (name === 's' && this.browsing) void this.session.showSteps(this.browsing);
+		else this.browseOther(name);
+	}
+
+	private browseOther(name: string): void {
+		if (name === 's' && this.browsing) void this.session.showSteps(this.browsing);
+		else if (name === 'r') this.enterRefs();
 		else if (name === 'tab' || name === 'escape' || name === 'i') this.exitBrowse();
+	}
+
+	// Refs
+
+	private enterRefs(): void {
+		const items = this.session.refItems;
+		if (items.length === 0) {
+			this.session.say('No shown message has a ref. Press e to open every discussion.');
+			return;
+		}
+		this.mode = 'refs';
+		this.picking =
+			this.picking && items.some((item) => item.id === this.picking)
+				? this.picking
+				: items.at(-1)?.id;
+		this.painter.invalidate();
+		this.render();
+	}
+
+	private exitRefs(): void {
+		this.mode = 'browse';
+		this.session.clearFocus();
+		this.painter.invalidate();
+		this.render();
+	}
+
+	private moveRef(step: number): void {
+		const ids = this.session.refItems.map((item) => item.id);
+		const at = this.picking ? ids.indexOf(this.picking) : -1;
+		this.picking = ids[Math.max(0, Math.min(ids.length - 1, at + step))];
+		this.session.clearFocus();
+		this.render();
+	}
+
+	/** Open the chosen ref. A message ref jumps, and a file or a table opens the panel. */
+	private async openPicked(): Promise<void> {
+		const picked = this.session.refItems.find((item) => item.id === this.picking);
+		if (picked?.resolved.target?.kind === 'message')
+			this.painter.revealMessage(picked.resolved.target.seq);
+		const intent = this.picking ? await this.session.openRef(this.picking) : undefined;
+		if (intent) this.openFiles();
+	}
+
+	private refsKey(key: KeyEvent): void {
+		key.preventDefault();
+		const name = key.name;
+		const step = BROWSE_STEP[name];
+		if (step) this.moveRef(step);
+		else if (name === 'return' || name === 'space') void this.openPicked();
+		else if (name === 'escape' || name === 'r' || name === 'tab') this.exitRefs();
 	}
 
 	// The composer

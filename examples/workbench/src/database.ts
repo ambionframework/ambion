@@ -44,6 +44,15 @@ function readTable(database: DatabaseSync, name: string): TableView {
 	return { name, columns, rows, count: Number(counted?.n ?? 0) };
 }
 
+function listNames(database: DatabaseSync): string[] {
+	return database
+		.prepare(
+			`SELECT name FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name LIMIT ${MAX_TABLES}`,
+		)
+		.all()
+		.map((table) => String(table.name));
+}
+
 /** The tables of a database, read-only, with the first rows of each. */
 export async function readTables(bytes: Uint8Array): Promise<TableView[]> {
 	const directory = await mkdtemp(join(tmpdir(), 'workbench-db-'));
@@ -52,12 +61,7 @@ export async function readTables(bytes: Uint8Array): Promise<TableView[]> {
 		await writeFile(file, bytes);
 		const database = new DatabaseSync(file, { readOnly: true });
 		try {
-			return database
-				.prepare(
-					`SELECT name FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name LIMIT ${MAX_TABLES}`,
-				)
-				.all()
-				.map((table) => readTable(database, String(table.name)));
+			return listNames(database).map((name) => readTable(database, name));
 		} finally {
 			database.close();
 		}
@@ -77,4 +81,24 @@ export function tablesText(tables: readonly TableView[]): string {
 			].join('\n'),
 		)
 		.join('\n\n');
+}
+
+/** The names of the tables of a database file, read-only. */
+export function tableNames(location: string): string[] {
+	const database = new DatabaseSync(location, { readOnly: true });
+	try {
+		return listNames(database);
+	} finally {
+		database.close();
+	}
+}
+
+/** One table of a database file, read-only. The name must be one that the database lists. */
+export function readNamedTable(location: string, name: string): TableView | undefined {
+	const database = new DatabaseSync(location, { readOnly: true });
+	try {
+		return listNames(database).includes(name) ? readTable(database, name) : undefined;
+	} finally {
+		database.close();
+	}
 }

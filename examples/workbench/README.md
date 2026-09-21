@@ -74,6 +74,8 @@ person leaves the current room, then enters it as the new person.
 | Tab                   | Complete a command, or browse the discussions              |
 | Up, Down, Enter, e, c | While browsing: choose, open or close, open all, close all |
 | s                     | While browsing: show the steps of the chosen exchange      |
+| r                     | While browsing: choose a ref of a shown message            |
+| Up, Down, Enter       | While choosing a ref: move, open it, or jump to it         |
 | Esc                   | Close the palette, clear the search, or close the panel    |
 | PageUp, PageDown      | Scroll the conversation                                    |
 | Type, Up, Down        | In the files panel: search, and choose a file to read      |
@@ -83,6 +85,27 @@ person leaves the current room, then enters it as the new person.
 The files panel renders Markdown files with headings, lists, and code. It
 shows a SQLite database (`.db`, `.sqlite`, `.sqlite3`, up to 8 MiB) as tables,
 with the first 50 rows of each. The panel opens the database read-only.
+
+**A message shows its refs, one line each.** A line starts with `↗` and the
+kind of the ref: `file`, `table`, or `message`. A ref that does not resolve
+starts with `✗` and ends with the reason. Press Tab, then `r`, to choose a
+ref of a shown message. Enter opens a `file` or a `table` ref in the files
+panel, the same panel that `/files` opens. Enter on a `message` ref opens its
+discussion and highlights the message. Esc goes back. `r` lists only the
+refs of shown messages, so press `e` to open every discussion first.
+
+The Workbench resolves three URI forms. The agents cite them in `refs`.
+
+| Form                                 | Names                                    |
+| ------------------------------------ | ---------------------------------------- |
+| `file:///<path>`                     | A file of the workspace, as `/library/x` |
+| `lab:///<table>`                     | A table of the lab database              |
+| `ambion://room/<room>/message/<seq>` | A message of the open room               |
+
+The terminal checks a `file:` or `lab:` ref against the list that the host
+gives for the workspace and the lab database. It reads no file of the host.
+A path with `..`, an empty part, a backslash, or a host name does not
+resolve. The files panel lists the lab tables after the files.
 
 A discussion is the thread between a question and its summary, with each
 steering message in its place. It starts closed. Start a message with `//` to
@@ -231,6 +254,7 @@ workspace resources.
 | `src/browser.ts`     | The files panel state: search, matches, chosen file   |
 | `src/files-panel.ts` | The files panel beside the conversation               |
 | `src/database.ts`    | The SQLite preview: tables and their first rows       |
+| `src/refs.ts`        | The refs of a message: parse, resolve, and one chip   |
 | `src/tui.ts`         | The terminal: layout, keys, and the run loop          |
 | `src/families.ts`    | The family, model, and key of each seat               |
 | `src/unavailable.ts` | The execution of a family that has no key             |
