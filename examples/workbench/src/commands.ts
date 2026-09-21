@@ -16,6 +16,7 @@ const COMMANDS: readonly Command[] = [
 	{ name: 'abort', summary: 'Cancel the open exchange' },
 	{ name: 'stop', summary: 'Stop the room' },
 	{ name: 'resume', summary: 'Resume the room' },
+	{ name: 'steps', summary: 'Show the steps of an activation: /steps [n]', argument: 'text' },
 	{ name: 'expand', summary: 'Open every discussion' },
 	{ name: 'collapse', summary: 'Close every discussion' },
 	{ name: 'help', summary: 'Show the commands and keys' },

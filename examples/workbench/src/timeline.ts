@@ -1,4 +1,5 @@
 import type { ExchangeView, Message } from '@ambionframework/ambion';
+import { formatUsage, type PassView } from './steps.ts';
 
 type ClosedView = Extract<ExchangeView, { status: 'closed' }>;
 
@@ -20,6 +21,10 @@ export interface DiscussionBlock {
 	voices: string[];
 	/** Why the exchange has no published summary, or an empty string when it has one. */
 	flag: string;
+	/** What the exchange spent, or an empty string when the record holds no usage. */
+	cost: string;
+	/** How many activations the exchange ran, for the steps view. */
+	activations: number;
 	expanded: boolean;
 	items: MessageBlock[];
 }
@@ -27,6 +32,15 @@ export interface DiscussionBlock {
 interface NoteBlock {
 	type: 'note';
 	text: string;
+}
+
+/** The trace of one activation, as `/steps` shows it. */
+export interface StepsBlock {
+	type: 'steps';
+	title: string;
+	/** True while the activation has no end step. */
+	running: boolean;
+	passes: PassView[];
 }
 
 /** The open exchange, at the end of the conversation. */
@@ -37,7 +51,7 @@ export interface LiveBlock {
 	detail?: string;
 }
 
-export type Block = MessageBlock | DiscussionBlock | NoteBlock | LiveBlock;
+export type Block = MessageBlock | DiscussionBlock | NoteBlock | StepsBlock | LiveBlock;
 
 export interface TimelineInput {
 	messages: readonly Message[];
@@ -50,6 +64,8 @@ export interface TimelineInput {
 	working: readonly string[];
 	/** The keys of the discussions the person opened. */
 	expanded: ReadonlySet<string>;
+	/** Blocks that follow the closed exchanges, before the live block. */
+	tail?: readonly Block[];
 }
 
 interface Group {
@@ -61,17 +77,29 @@ interface Group {
 
 const spoken = (message: Message): boolean => message.kind === 'said' || message.kind === 'summary';
 
-function flagFor(outcome: string | undefined): string {
-	if (outcome === 'published') return '';
-	if (outcome === 'pending') return 'Summary pending';
-	if (outcome === 'failed') return 'Summary failed';
+function waitingOn(exchange: ClosedView): string | undefined {
+	return exchange.outcome.kind === 'awaiting' ? `Waiting on ${exchange.outcome.person}` : undefined;
+}
+
+function flagFor(exchange: ClosedView): string {
+	const waiting = waitingOn(exchange);
+	if (waiting) return waiting;
+	const status = exchange.summary.status;
+	if (status === 'published') return '';
+	if (status === 'pending') return 'Summary pending';
+	if (status === 'failed') return 'Summary failed';
 	return 'No summary';
 }
 
-function noteFor(outcome: string | undefined): string {
-	if (outcome === 'pending') return 'Closed, summary pending';
-	if (outcome === 'failed') return 'Closed, summary failed';
-	return 'Closed without a summary';
+function noteFor(exchange: ClosedView): string {
+	const cost = formatUsage(exchange.usage);
+	const suffix = cost ? ` · ${cost}` : '';
+	const waiting = waitingOn(exchange);
+	if (waiting) return `${waiting}${suffix}`;
+	const status = exchange.summary.status;
+	if (status === 'pending') return `Closed, summary pending${suffix}`;
+	if (status === 'failed') return `Closed, summary failed${suffix}`;
+	return `Closed without a summary${suffix}`;
 }
 
 function groupsOf(input: TimelineInput): Group[] {
@@ -136,6 +164,7 @@ class Builder {
 	build(): Block[] {
 		for (const message of this.input.messages.filter(spoken)) this.place(message);
 		for (const group of this.groups) this.emit(group);
+		this.blocks.push(...(this.input.tail ?? []));
 		if (this.input.open)
 			this.blocks.push(liveBlock(this.input.open.owner, this.input.working, this.input.activity));
 		return this.blocks;
@@ -185,12 +214,11 @@ function groupBlocks(
 	input: TimelineInput,
 	roleOf: (message: Message, inThread: boolean) => Role,
 ): Block[] {
-	const outcome = group.exchange.summary.status;
 	const summary: Block[] = group.summary
 		? [{ type: 'message', message: group.summary, role: 'summary' }]
 		: [];
 	if (group.source.length === 0)
-		return summary.length > 0 ? summary : [{ type: 'note', text: noteFor(outcome) }];
+		return summary.length > 0 ? summary : [{ type: 'note', text: noteFor(group.exchange) }];
 	const key = String(group.exchange.from);
 	const voices = [...new Set(group.source.map((message) => message.from ?? ''))].filter(Boolean);
 	const discussion: DiscussionBlock = {
@@ -198,7 +226,9 @@ function groupBlocks(
 		key,
 		count: group.source.length,
 		voices,
-		flag: flagFor(outcome),
+		flag: flagFor(group.exchange),
+		cost: formatUsage(group.exchange.usage),
+		activations: group.exchange.activations.length,
 		expanded: input.expanded.has(key),
 		items: group.source.map((message) => ({
 			type: 'message',

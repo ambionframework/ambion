@@ -10,7 +10,14 @@ import {
 	TextRenderable,
 } from '@opentui/core';
 import { tui as palette } from './brand.ts';
-import type { Block, DiscussionBlock, LiveBlock, MessageBlock, Role } from './timeline.ts';
+import type {
+	Block,
+	DiscussionBlock,
+	LiveBlock,
+	MessageBlock,
+	Role,
+	StepsBlock,
+} from './timeline.ts';
 
 /** Wait one layout pass, so a scroll position can use the new heights. */
 const SETTLE_MS = 40;
@@ -29,6 +36,10 @@ function paint(text: string, { color = palette.text, fill, strong }: Paint = {})
 	if (fill) chunk = bg(fill)(chunk);
 	return strong ? bold(chunk) : chunk;
 }
+
+/** A label after the row title, or an empty run when the label is empty. */
+const tag = (text: string, color: string, fill: string): Chunk =>
+	paint(text ? `  ${text}` : '', { color, fill });
 
 const clock = (at: string | undefined): string => {
 	const date = at ? new Date(at) : undefined;
@@ -142,6 +153,7 @@ export class Transcript {
 		if (block.type === 'message') return this.messageNode(block);
 		if (block.type === 'discussion') return this.discussionNode(block, block.key === selected);
 		if (block.type === 'live') return this.liveNode(block);
+		if (block.type === 'steps') return this.stepsNode(block);
 		return this.text([paint(block.text, { color: palette.dim })]);
 	}
 
@@ -175,12 +187,13 @@ export class Transcript {
 			width: '100%',
 		});
 		const count = `${block.count} ${block.count === 1 ? 'message' : 'messages'}`;
-		const flag = block.flag
-			? paint(`  ${block.flag}`, { color: palette.summary, fill })
-			: paint('', { fill });
-		const hint = selected
-			? paint(`  Enter ${block.expanded ? 'closes' : 'opens'} it`, { color: palette.muted, fill })
-			: paint('', { fill });
+		const flag = tag(block.flag, palette.summary, fill);
+		const cost = tag(block.cost, palette.muted, fill);
+		const hint = tag(
+			selected ? `Enter ${block.expanded ? 'closes' : 'opens'} it, s shows the steps` : '',
+			palette.muted,
+			fill,
+		);
 		row.add(
 			this.text([
 				paint(block.expanded ? '▾ ' : '▸ ', { color: palette.accent, fill }),
@@ -191,6 +204,7 @@ export class Transcript {
 					fill,
 				}),
 				flag,
+				cost,
 				hint,
 			]),
 		);
@@ -205,6 +219,41 @@ export class Transcript {
 		for (const item of block.items) thread.add(this.messageNode(item));
 		wrapper.add(thread);
 		return wrapper;
+	}
+
+	private stepsNode(block: StepsBlock): BoxRenderable {
+		const box = new BoxRenderable(this.renderer, {
+			flexDirection: 'column',
+			border: ['left'],
+			borderColor: palette.accent,
+			paddingLeft: 1,
+		});
+		const state = block.running ? '  running, no end step yet' : '';
+		box.add(
+			this.text([
+				paint('Steps ', { color: palette.accent, strong: true }),
+				paint(block.title, { color: palette.muted }),
+				paint(state, { color: palette.coral }),
+			]),
+		);
+		for (const pass of block.passes) {
+			box.add(
+				this.text([
+					paint(`Pass ${pass.pass}`, { strong: true }),
+					paint(`  reads ${pass.input} to ${pass.through}`, { color: palette.dim }),
+				]),
+			);
+			for (const line of pass.lines) {
+				const color = line.kind === 'error' ? palette.red : palette.muted;
+				box.add(
+					this.text([
+						paint(`  ${line.kind.padEnd(9)}`, { color: palette.dim }),
+						paint(line.text, { color }),
+					]),
+				);
+			}
+		}
+		return box;
 	}
 
 	private liveNode(block: LiveBlock): TextRenderable {

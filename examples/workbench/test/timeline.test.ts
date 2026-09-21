@@ -178,3 +178,52 @@ describe('buildTimeline', () => {
 		]);
 	});
 });
+
+describe('cost and awaiting', () => {
+	const usage = { input: 9000, output: 3300, cacheRead: 0, cacheWrite: 0 };
+	const exchangeWith = (extra: Record<string, unknown>): ExchangeView =>
+		({ ...closed, ...extra }) as ExchangeView;
+
+	it('shows the cost of an exchange on its discussion', () => {
+		const blocks = build(thread, [exchangeWith({ usage: { ...usage, cost: 0.0123 } })]);
+		expect(blocks[1]).toMatchObject({ type: 'discussion', cost: '$0.0123', activations: 0 });
+	});
+
+	it('falls back to tokens when the usage has no cost, and to nothing without usage', () => {
+		expect(build(thread, [exchangeWith({ usage })])[1]).toMatchObject({ cost: '12.3k tokens' });
+		expect(build(thread, [closed])[1]).toMatchObject({ cost: '' });
+	});
+
+	it('reads an awaiting exchange as waiting on the person, and not as a plain close', () => {
+		const awaiting = exchangeWith({
+			outcome: { kind: 'awaiting', person: 'theo' },
+			summary: { status: 'silent' },
+		});
+		expect(build(thread.slice(0, 6), [awaiting])[1]).toMatchObject({ flag: 'Waiting on theo' });
+	});
+
+	it('puts the waiting and the cost in the note of an exchange with no messages', () => {
+		const awaiting = exchangeWith({
+			outcome: { kind: 'awaiting', person: 'theo' },
+			summary: { status: 'silent' },
+			usage: { ...usage, cost: 0.5 },
+		});
+		const blocks = build([said(98, 'theo')], [awaiting]);
+		expect(blocks.at(-1)).toEqual({ type: 'note', text: 'Waiting on theo · $0.5000' });
+	});
+
+	it('places the tail blocks after the closed exchanges and before the live block', () => {
+		const later: ExchangeView = {
+			from: 150,
+			status: 'open',
+			owner: 'mira',
+			at: AT,
+			activations: [],
+		};
+		const blocks = build([...thread, said(150, 'mira')], [closed, later], {
+			open: { owner: 'mira' },
+			tail: [{ type: 'note', text: 'Waiting.' }],
+		});
+		expect(shape(blocks).slice(-2)).toEqual(['note', 'live']);
+	});
+});

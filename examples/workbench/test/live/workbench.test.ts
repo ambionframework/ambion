@@ -76,6 +76,15 @@ live('Workbench assistant', () => {
 					),
 				).toBe(true);
 				scenario.summaryCheck(summary?.text ?? '');
+				// A scripted run carries no cost, so only a real provider proves it.
+				const { exchanges } = await workbench.read(scenario.name, 0);
+				const cost = exchanges.flatMap((exchange) =>
+					exchange.status === 'closed' && exchange.usage?.cost !== undefined
+						? [exchange.usage.cost]
+						: [],
+				);
+				expect(cost.length).toBeGreaterThan(0);
+				expect(Math.max(...cost)).toBeGreaterThan(0);
 			} finally {
 				await workbench.close();
 				await rm(directory, { recursive: true, force: true });
