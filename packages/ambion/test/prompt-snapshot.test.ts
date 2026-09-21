@@ -52,7 +52,7 @@ const summarize: ActivationView = {
 		id: 'b',
 		seat: 'worker',
 		attempt: 1,
-		purpose: { kind: 'summarize', exchange: 2, person: 'priya', through: 3 },
+		purpose: { kind: 'summarize', exchange: 2, person: 'priya', people: ['priya'], through: 3 },
 	},
 	through: 3,
 	context,
