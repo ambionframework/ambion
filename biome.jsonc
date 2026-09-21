@@ -100,6 +100,7 @@
 		//   answers.ts                    what the room answers a seat's three calls with
 		//   tools/                        the workspace port, and the four tools over it
 		//   execution/                   the execution side of the wire: driver, contract, rendering
+		//   room-host/                    the room's state and mechanisms over the journal, split by concern
 		//   room.ts                     the room facade, which composes them all
 		//
 		// `docs/toolchain.md` §1 names the layers; each override below refuses
@@ -128,7 +129,7 @@
 											"./tools/*",
 											"./execution/*",
 											"./room.ts",
-											"./room-host.ts",
+											"./room-host/*",
 											"./index.ts",
 											"./hosting.ts"
 										],
@@ -157,7 +158,7 @@
 											"../tools/*",
 											"../execution/runner*",
 											"../room.ts",
-											"../room-host.ts",
+											"../room-host/*",
 											"../index.ts",
 											"../hosting.ts"
 										],
@@ -187,7 +188,7 @@
 											"../tools/*",
 											"../execution/*",
 											"../room.ts",
-											"../room-host.ts",
+											"../room-host/*",
 											"../index.ts",
 											"../hosting.ts"
 										],
@@ -215,7 +216,7 @@
 											"../tools/*",
 											"../execution/*",
 											"../room.ts",
-											"../room-host.ts",
+											"../room-host/*",
 											"../index.ts",
 											"../hosting.ts",
 											"@earendil-works/pi-*",
@@ -245,7 +246,7 @@
 											"./execution/*",
 											"./host/*",
 											"./room.ts",
-											"./room-host.ts",
+											"./room-host/*",
 											"./index.ts",
 											"./hosting.ts",
 											"@earendil-works/pi-*",
@@ -275,7 +276,7 @@
 											"../room/*",
 											"../execution/*",
 											"../room.ts",
-											"../room-host.ts",
+											"../room-host/*",
 											"../index.ts",
 											"../hosting.ts"
 										],
@@ -302,7 +303,7 @@
 											"../journal/*",
 											"../room/*",
 											"../room.ts",
-											"../room-host.ts",
+											"../room-host/*",
 											"../index.ts",
 											"../hosting.ts"
 										],
@@ -333,7 +334,7 @@
 											"./tools/*",
 											"./execution/runner*",
 											"./room.ts",
-											"./room-host.ts",
+											"./room-host/*",
 											"./index.ts",
 											"./hosting.ts",
 											"@earendil-works/pi-*",
@@ -351,7 +352,7 @@
 		{
 			// The collaboration host uses protocol and room facts. Execution and
 			// provider services are composed by the public room facade.
-			"includes": ["packages/ambion/src/room-host.ts"],
+			"includes": ["packages/ambion/src/room-host/**"],
 			"linter": {
 				"rules": {
 					"style": {
@@ -361,10 +362,10 @@
 								"patterns": [
 									{
 										"group": [
-											"./execution/*",
-											"./room.ts",
-											"./index.ts",
-											"./hosting.ts",
+											"../execution/*",
+											"../room.ts",
+											"../index.ts",
+											"../hosting.ts",
 											"@earendil-works/pi-*",
 											"@ambionframework/pi-journal"
 										],
