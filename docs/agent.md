@@ -105,7 +105,8 @@ canonical forms. The room refuses an `ambion:` ref that is not canonical. The
 prompt states the room URI and the URI of the open or covered exchange. An
 agent reads numbered positions, so it cannot build the URI of an older
 exchange. A workspace path is not a ref. Cite a file with a `file:` URI or
-another absolute URI that the application chooses.
+another absolute URI that the application chooses. [Resources](resources.md)
+states how a resource change is cited.
 
 **A refusal is typed.** The room throws `AmbionError`. Its `code` is one of
 the closed set in `errors.ts`; its message is for a person.
