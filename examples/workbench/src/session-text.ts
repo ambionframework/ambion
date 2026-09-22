@@ -8,6 +8,7 @@ export const HELP = [
 	'  /user <name>      switch to another person',
 	'  /files            search the workspace files and read one in a side panel',
 	'  /open <path>      open the files panel on one file',
+	'  /attach <path>    copy a local file into the workspace and cite it in your next message',
 	'  /try              fill the composer with the room’s suggested question',
 	'  /abort            cancel the open exchange in this room',
 	'  /stop             stop the room. /resume starts it again.',

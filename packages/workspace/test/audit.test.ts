@@ -14,6 +14,11 @@ import { memoryBackend, openWorkspace } from '../src/index.ts';
 const workspaceAgent = (name: string) => ({ name, identity: `${name} identity` });
 const ctx = BACKGROUND_CONTEXT;
 
+/** The signature and the shortest valid `IHDR` header: enough for image detection to see a PNG. */
+const FAKE_PNG = new Uint8Array([
+	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+]);
+
 /** A bare `ExecutionEnv` over its own in-memory filesystem, for testing `openAuditLog` alone. */
 function bareEnv(): BashEnv {
 	const fs = new InMemoryFs();
@@ -147,6 +152,38 @@ describe('the workspace audit log', () => {
 		if (typeof result === 'string') throw new Error('read must return a structured result.');
 		const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
 		expect(text).toContain('"tool":"write"');
+		await site.destroy();
+	});
+
+	it('reads an image file as an image content part, and keeps only its byte count in the audit log', async () => {
+		const site = openWorkspace({ name: name('image-read'), backend: memoryBackend(), audit: {} });
+		const read = site.tools().tools.find((tool) => tool.name === 'read');
+		if (read === undefined) throw new Error('The read tool is missing.');
+		await site.use(workspaceAgent('scribe'), (env) =>
+			(env as BashEnv).writeFile('/home/scribe/photo.png', FAKE_PNG, ctx),
+		);
+
+		const result = await read.invoke(
+			{ path: 'photo.png' },
+			{ agent: workspaceAgent('scribe'), callId: 'call-1', room: 'lobby' },
+		);
+		if (typeof result === 'string') throw new Error('read must return a structured result.');
+		const image = result.content.find((part) => part.type === 'image');
+		if (image?.type !== 'image') throw new Error('read did not return an image part.');
+		expect(image.mimeType).toBe('image/png');
+		expect(image.data.length).toBeGreaterThan(0);
+
+		const entries = await site.use(workspaceAgent('scribe'), (env) =>
+			readLines(env as BashEnv, DEFAULT_AUDIT_LOG),
+		);
+		const entry = entries.find((one) => one.tool === 'read');
+		if (entry === undefined) throw new Error('No audit entry for the read call.');
+		const logged = entry.result as { content: { type: string; data?: string; bytes?: number }[] };
+		const loggedImage = logged.content.find((part) => part.type === 'image');
+		expect(loggedImage).toMatchObject({ type: 'image', mimeType: 'image/png' });
+		expect(loggedImage?.data).toBeUndefined();
+		expect(loggedImage?.bytes).toBeGreaterThan(0);
+		expect(JSON.stringify(entry)).not.toContain(image.data);
 		await site.destroy();
 	});
 

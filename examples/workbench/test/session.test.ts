@@ -192,6 +192,60 @@ describe('Session messages and control', () => {
 	});
 });
 
+describe('Session /attach', () => {
+	it('copies a local file into the workspace, and cites it as a ref of the next message', async () => {
+		const { host, session } = await started();
+		await session.submit('/attach ~/photos/board.png');
+		expect(host.attached).toEqual(['~/photos/board.png']);
+		expect(session.pendingRefs).toEqual([
+			{ path: '/attachments/board.png', ref: 'file:///attachments/board.png' },
+		]);
+		expect(session.notice).toMatch(/Attached \/attachments\/board\.png/);
+
+		await session.submit('Look at this.');
+		expect(host.sentRefs).toEqual([['file:///attachments/board.png']]);
+		expect(session.pendingRefs).toEqual([]);
+	});
+
+	it('asks for a path when the command takes none', async () => {
+		const { session } = await started();
+		await session.submit('/attach');
+		expect(session.notice).toMatch(/Use \/attach/);
+	});
+
+	it('shows a host error, and keeps nothing staged, when the copy fails', async () => {
+		const { host, session } = await started();
+		host.failNext = 'ENOENT: no such file';
+		await session.submit('/attach missing.png');
+		expect(session.error).toBe('ENOENT: no such file');
+		expect(session.pendingRefs).toEqual([]);
+	});
+
+	it('drops a staged attachment on a room switch', async () => {
+		const { session } = await started();
+		await session.submit('/attach board.png');
+		expect(session.pendingRefs).toHaveLength(1);
+		await session.switchRoom('power');
+		expect(session.pendingRefs).toEqual([]);
+	});
+
+	it('stages a copy that lands after a room switch into the array the session holds by then, not a stale one', async () => {
+		const { host, session } = await started();
+		const gate = Promise.withResolvers<void>();
+		host.attachGate = gate.promise;
+		const attaching = session.submit('/attach board.png');
+		await vi.waitFor(() => expect(host.calls).toContain('attach:board.png'));
+		await session.switchRoom('power');
+		const freshArray = session.pendingRefs;
+		gate.resolve();
+		await attaching;
+		expect(session.pendingRefs).toBe(freshArray);
+		expect(session.pendingRefs).toEqual([
+			{ path: '/attachments/board.png', ref: 'file:///attachments/board.png' },
+		]);
+	});
+});
+
 describe('Session files and prompts', () => {
 	it('opens the files panel on the first file, and previews it', async () => {
 		const { session } = await started();

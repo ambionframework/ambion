@@ -1,6 +1,7 @@
 import {
 	type AmbionTool,
 	defineTool,
+	loggedToolResult,
 	type ToolBundle,
 	type ToolContext,
 } from '@ambionframework/ambion';
@@ -55,7 +56,9 @@ function auditEntry(
 		...(ctx.activation === undefined ? {} : { activation: ctx.activation }),
 		...(ctx.exchange === undefined ? {} : { exchange: ctx.exchange }),
 		arguments: params,
-		...('result' in outcome ? { result: outcome.result } : { error: auditError(outcome.error) }),
+		...('result' in outcome
+			? { result: loggedToolResult(outcome.result) }
+			: { error: auditError(outcome.error) }),
 	};
 }
 

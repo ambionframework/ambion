@@ -9,7 +9,7 @@ import {
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { createExecutionServices, createPiExecutor, pi, piExecution } from '../../pi/src/index.ts';
-import { openTrace, traceOpener } from '../src/execution/trace.ts';
+import { loggedToolResult, openTrace, traceOpener } from '../src/execution/trace.ts';
 import {
 	AgentRunner,
 	type CommitResult,
@@ -161,12 +161,46 @@ describe('the trace of a room activation', () => {
 	});
 });
 
+describe('loggedToolResult', () => {
+	it("replaces an image part's data with its byte count, and keeps everything else", () => {
+		const result = {
+			content: [
+				{ type: 'text', text: 'Read image file [image/png]' },
+				{ type: 'image', data: 'QUJD', mimeType: 'image/png' },
+			],
+			details: undefined,
+		};
+		expect(loggedToolResult(result)).toEqual({
+			content: [
+				{ type: 'text', text: 'Read image file [image/png]' },
+				{ type: 'image', mimeType: 'image/png', bytes: 3 },
+			],
+			details: undefined,
+		});
+	});
+
+	it('leaves a value with no content array unchanged', () => {
+		expect(loggedToolResult('plain text')).toBe('plain text');
+		expect(loggedToolResult(null)).toBe(null);
+		expect(loggedToolResult({ details: 'x' })).toEqual({ details: 'x' });
+	});
+});
+
 describe('the trace limits and policy', () => {
 	const lookup = defineTool({
 		name: 'lookup',
 		description: 'Look something up.',
 		parameters: Type.Object({}),
 		execute: () => 'x'.repeat(100),
+	});
+	const viewer = defineTool({
+		name: 'viewer',
+		description: 'Return an image.',
+		parameters: Type.Object({}),
+		execute: () => ({
+			content: [{ type: 'image', data: 'QUJD'.repeat(200), mimeType: 'image/png' }],
+			details: undefined,
+		}),
 	});
 	const asker = (policy?: TracePolicy) =>
 		defineAgent({
@@ -235,6 +269,36 @@ describe('the trace limits and policy', () => {
 	it('drops steps past limits.trace.stepsPerPass and keeps the end', async () => {
 		const steps = await run(asker(), { limits: { trace: { stepsPerPass: 2 } } });
 		expect(sorted(steps)).toEqual(['pass', 'thinking', 'end']);
+	});
+
+	it('redacts a tool result image before it counts against toolOutputBytes', async () => {
+		const agent = defineAgent({
+			name: 'product',
+			identity: 'Answers questions.',
+			executor: pi({ instructions: 'Answer.', model: 'scripted/product', tools: [viewer] }),
+		});
+		const runtime = createRuntime({ limits: { trace: { toolOutputBytes: 10_000 } } });
+		const name = roomName('trace-image');
+		const room = await startRoom({
+			name,
+			agents: [agent],
+			runtime,
+			execution: piExecution({
+				stream: scripted((_context, _agent, call) =>
+					call === 1
+						? fauxAssistantMessage([fauxToolCall('viewer', {})], { stopReason: 'toolUse' })
+						: quiet('seen'),
+				),
+			}),
+		});
+		const events = collect(room);
+		await ask(room, 'Show me.');
+		const { steps } = await ranOnce(runtime, name, events);
+		const result = steps.find((step) => step.type === 'tool_result');
+		expect(result?.type === 'tool_result' && result.output).toMatchObject({
+			content: [{ type: 'image', mimeType: 'image/png', bytes: 600 }],
+		});
+		expect(JSON.stringify(result?.type === 'tool_result' && result.output)).not.toContain('QUJD');
 	});
 
 	it('sums usage steps, and keeps the sum when the pass cap drops steps', async () => {

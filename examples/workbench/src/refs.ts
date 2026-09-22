@@ -24,6 +24,11 @@ const TABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 /** The URI that names one table of the lab database. */
 export const labUri = (table: string): string => `${LAB_PREFIX}${table}`;
 
+/** The URI that names one workspace file, the way `/attach` cites it in a message. */
+export function fileUri(path: string): string {
+	return `file://${path.split('/').map(encodeURIComponent).join('/')}`;
+}
+
 /** The table that a lab URI names, or undefined for any other string. */
 export function tableOfUri(uri: string): string | undefined {
 	const name = uri.startsWith(LAB_PREFIX) ? uri.slice(LAB_PREFIX.length) : undefined;

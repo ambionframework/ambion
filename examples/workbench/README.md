@@ -57,6 +57,7 @@ press Ctrl+R to pick a room.
 | `/user <person>`       | Act as another person                                 |
 | `/files`               | Search the workspace files in a side panel            |
 | `/open <path>`         | Open the files panel on one file                      |
+| `/attach <local path>` | Copy a local file into the workspace, ref it next     |
 | `/try`                 | Fill the composer with the room's suggested prompt    |
 | `/abort`               | Cancel the open exchange                              |
 | `/stop`, `/resume`     | Stop the room, or start it again                      |
@@ -84,7 +85,14 @@ person leaves the current room, then enters it as the new person.
 
 The files panel renders Markdown files with headings, lists, and code. It
 shows a SQLite database (`.db`, `.sqlite`, `.sqlite3`, up to 8 MiB) as tables,
-with the first 50 rows of each. The panel opens the database read-only.
+with the first 50 rows of each. The panel opens the database read-only. It
+shows a picture (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, up to 8 MiB) with
+OpenTUI's own terminal image rendering, negotiated to the terminal's protocol.
+
+`/attach <local path>` reads a file from your own machine and copies it into
+the workspace, under `/attachments`. It cites the copy as a ref of your next
+message. A colleague opens the same file with `/open`, and an agent's `read`
+tool returns it as a picture, not text. The command takes files up to 8 MiB.
 
 **A message shows its refs, one line each.** A line starts with `↗` and the
 kind of the ref: `file`, `table`, or `message`. A ref that does not resolve
@@ -243,7 +251,7 @@ workspace resources.
 | `src/scenarios.ts`   | The rooms, and the workspace seed                     |
 | `src/rooms.ts`       | The host lifecycle and the room catalog               |
 | `src/workbench.ts`   | The host API the terminal calls in process            |
-| `src/files.ts`       | The workspace list and one file preview               |
+| `src/files.ts`       | The workspace list, one file preview, and `/attach`   |
 | `src/names.ts`       | The room name and goal rules                          |
 | `src/session.ts`     | The terminal state and commands, without OpenTUI      |
 | `src/feed.ts`        | The room feed: one read at a time                     |

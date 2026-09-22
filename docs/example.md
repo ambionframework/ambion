@@ -146,6 +146,9 @@ interface.
   or room, create a room, search workspace files in a side panel, and stop, resume, or abort. It shows
   the refs of each message and opens a file, a lab table, or a message from
   one (see the [Workbench README](../examples/workbench/README.md)).
+  `/attach` copies a local picture into the workspace and cites it as a ref
+  of the next message; the files panel renders a picture file with OpenTUI's
+  `ImageRenderable`, and every other file stays text.
   The person picks an identity on the first screen.
 - **Brand.** The terminal reads its colors from the repository brand kit in
   `brand/tokens/ambion.tokens.json`.
@@ -190,6 +193,7 @@ automated test yet.
 | The Design specialist drives an instrument above its limit      | An action that waits for a person          | Scripted: `operate` records a request, `approve_operation` records the answer |
 | The terminal shows the cost of an exchange                      | Cost per exchange is real                  | Scripted: formatting from synthetic usage. Live: `usage.cost` is positive     |
 | A message cites a file, a table, or a message                   | A ref opens as a file or a table opens     | Scripted: refs resolve, opens match the panel, a host path stays shut         |
+| A person attaches a local picture and sends it                  | `/attach` cites a workspace file as a ref  | Scripted: the file lands in the workspace, and the ref goes with the message  |
 | The terminal opens the steps of an activation                   | A drill-down into the trace                | Scripted: the host reads the trace, and the model groups passes and steps     |
 | An exchange ends on a message to a person                       | `awaiting` reads as waiting on that person | Scripted: the discussion flag, and a note for the person named                |
 | An instrument request waits for its owner                       | The terminal shows an approval             | Scripted: the host lists the request, and drops it once a later row answers   |
@@ -213,7 +217,7 @@ examples/workbench/
     rooms.ts           the host lifecycle and the room catalog
     workbench.ts       the host: open, read, watch, send, control, create, files
     names.ts           the room name and goal rules
-    files.ts           the workspace list, one file preview, and one lab table preview
+    files.ts           the workspace list, one file preview, one lab table preview, and /attach
     refs.ts            the refs of a message: parse, resolve, and one chip line
     session.ts         the terminal's state and commands, without OpenTUI
     feed.ts            the room feed: one read at a time

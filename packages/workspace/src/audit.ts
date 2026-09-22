@@ -40,7 +40,11 @@ export interface AuditEntry {
 	readonly exchange?: { readonly owner: string; readonly from: number };
 	/** The tool's full parameters. */
 	readonly arguments: unknown;
-	/** The tool's full result. Absent when the call ended in `error`. */
+	/**
+	 * The tool's result. Absent when the call ended in `error`. An image
+	 * content part keeps its shape, with its byte count in place of its data:
+	 * the log records that the tool returned a picture, not the picture.
+	 */
 	readonly result?: unknown;
 	/** Present when the call threw. */
 	readonly error?: { readonly name: string; readonly message: string };

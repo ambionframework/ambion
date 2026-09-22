@@ -88,7 +88,9 @@ export class FakeHost implements Workbench {
 	async leave(room: string, who: string) {
 		this.record(`leave:${room}:${who}`);
 	}
-	async send(room: string, who: string, _key: string, text: string) {
+	sentRefs: string[][] = [];
+	async send(room: string, who: string, _key: string, text: string, refs?: string[]) {
+		this.sentRefs.push(refs ?? []);
 		this.record(`send:${room}:${who}:${text}`);
 	}
 	async control(room: string, action: string) {
@@ -119,6 +121,17 @@ export class FakeHost implements Workbench {
 	async file(path: string): Promise<FileContent> {
 		this.reads.push(path);
 		return { path, text: `text of ${path}`, truncated: false };
+	}
+	/** Every local path the session asked the host to attach. */
+	readonly attached: string[] = [];
+	/** While set, `attach` waits for it. A test uses it to hold a copy in flight. */
+	attachGate: Promise<void> | undefined;
+	async attach(localPath: string): Promise<FileEntry> {
+		this.record(`attach:${localPath}`);
+		if (this.attachGate) await this.attachGate;
+		this.attached.push(localPath);
+		const path = `/attachments/${localPath.split('/').at(-1)}`;
+		return { path, size: 42 };
 	}
 	labNames: string[] = ['runs', 'results'];
 	async labTables() {

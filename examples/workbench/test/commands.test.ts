@@ -55,6 +55,7 @@ describe('suggest', () => {
 				'/user',
 				'/files',
 				'/open',
+				'/attach',
 				'/try',
 				'/abort',
 				'/stop',
@@ -66,7 +67,7 @@ describe('suggest', () => {
 	});
 
 	it('filters commands by prefix', () => {
-		expect(suggest('/a', choices).map((row) => row.label)).toEqual(['/abort']);
+		expect(suggest('/a', choices).map((row) => row.label)).toEqual(['/attach', '/abort']);
 	});
 
 	it('runs a command that takes no argument, and only completes one that does', () => {

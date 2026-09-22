@@ -1,4 +1,5 @@
 import type { ActivationRead, ExchangeView } from '@ambionframework/ambion';
+import { attachCommand, type StagedAttachment } from './attachments.ts';
 import { attentionOf, newest, pick } from './attention.ts';
 import { FileBrowser } from './browser.ts';
 import { type Choices, type Parsed, parse, type Suggestion, suggest } from './commands.ts';
@@ -45,6 +46,7 @@ export class Session {
 	approvals: Approval[] = [];
 	/** The activation whose steps the terminal shows. It re-reads on each room change. */
 	steps: { id: string; read: ActivationRead | undefined } | undefined;
+	pendingRefs: StagedAttachment[] = [];
 	private readonly feed: RoomFeed<RoomView>;
 	private readonly changed: () => void;
 	private sending = false;
@@ -285,6 +287,10 @@ export class Session {
 				return this.openFiles();
 			case 'open':
 				return this.openFile(argument);
+			case 'attach': {
+				const attached = await attachCommand(this.host, this, argument);
+				return void ('error' in attached ? this.fail(attached.error) : this.say(attached.notice));
+			}
 			case 'try':
 				return this.tryPrompt();
 			case 'abort':
@@ -316,6 +322,7 @@ export class Session {
 		this.approvals = [];
 		this.steps = undefined;
 		this.notice = undefined;
+		this.pendingRefs = [];
 		this.entered = false;
 		this.wantBottom = true;
 		this.feed.select(name);
@@ -415,9 +422,11 @@ export class Session {
 		if (this.view && this.view.status !== 'running')
 			return this.fail(new Error(`${this.view.name} is ${this.view.status}. Use /resume first.`));
 		this.sending = true;
+		const refs = this.pendingRefs.map((one) => one.ref);
 		try {
 			if (!this.entered) await this.join();
-			await this.host.send(this.room, this.identity.name, crypto.randomUUID(), text);
+			await this.host.send(this.room, this.identity.name, crypto.randomUUID(), text, refs);
+			this.pendingRefs = [];
 			this.wantBottom = true;
 			await this.refresh();
 		} catch (error) {
