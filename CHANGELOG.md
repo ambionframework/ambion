@@ -49,6 +49,17 @@ entry held them already; only the root re-export is gone.
 gone from the root. `mirror.ts` still exports the first two for the
 package's own tests.
 
+**A new `@ambionframework/workspace/conformance` entry holds the
+`ExecutionEnv` rules the built-in tools need.** It exports
+`workspaceConformance(harness)` and the `ConformanceBackend` and
+`ConformanceCase` types. The cases cover a rename that replaces an
+existing target, a recursive `createDir`, a forced and a recursive
+`remove`, the file error codes, `~` expansion, an abort apart from a
+timeout, the bounded output view with its spill file, and a distinct
+temporary name under `/tmp`. The memory and directory backends run the
+suite in `test/conformance.test.ts`. The adapter tests that duplicated
+these rules are gone from `test/workspace.test.ts`.
+
 ## 0.1.0 (2026-09-21)
 
 **The first release of Ambion.** Ambion is a collaboration kernel for agents and humans. A room

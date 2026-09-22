@@ -1,11 +1,13 @@
 /**
- * The package's four entries, and what each one names. `index.ts` opens a
+ * The package's five entries, and what each one names. `index.ts` opens a
  * resource and its logs, over no backend. `./resource`, `./sql`, and
- * `./just-bash` each hold one binding.
+ * `./just-bash` each hold one binding. `./conformance` holds the cases
+ * every `WorkspaceBackend` must pass.
  */
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
+import * as conformance from '../src/conformance.ts';
 import * as main from '../src/index.ts';
 import { PACKAGE_NAME } from '../src/index.ts';
 import * as justBash from '../src/just-bash-entry.ts';
@@ -27,6 +29,7 @@ const STEMS: Record<string, string> = {
 	'./resource': 'resource-entry',
 	'./sql': 'sql-resource',
 	'./just-bash': 'just-bash-entry',
+	'./conformance': 'conformance',
 };
 
 it('keeps the exported package name in step with the manifest', async () => {
@@ -42,6 +45,7 @@ it('builds every entry the manifest names', async () => {
 		'src/resource-entry.ts',
 		'src/sql-resource.ts',
 		'src/just-bash-entry.ts',
+		'src/conformance.ts',
 	]);
 	// Each subpath names a file the build writes, under the name it builds it by.
 	for (const [path, target] of Object.entries(exports)) {
@@ -54,10 +58,11 @@ it('builds every entry the manifest names', async () => {
 	}
 });
 
-it('holds exactly the four entries: the root, and one per binding', async () => {
+it('holds exactly five entries: the root, one per binding, and the conformance suite', async () => {
 	const { exports } = await manifest();
 	expect(Object.keys(exports).sort()).toEqual([
 		'.',
+		'./conformance',
 		'./just-bash',
 		'./package.json',
 		'./resource',
@@ -87,6 +92,10 @@ it('exports exactly the SQL resource from ./sql', () => {
 
 it('exports exactly the just-bash backends from ./just-bash', () => {
 	expect(Object.keys(justBash).sort()).toEqual(['directoryBackend', 'memoryBackend']);
+});
+
+it('exports exactly the conformance suite from ./conformance', () => {
+	expect(Object.keys(conformance).sort()).toEqual(['workspaceConformance']);
 });
 
 it('loads no backend at the root: no export from the just-bash, resource, or SQL files', async () => {
@@ -139,5 +148,15 @@ it('keeps just-bash and node:sqlite out of the root build, across every chunk it
 	expect(chunks.size).toBeGreaterThan(0);
 	for (const [file, specifiers] of chunks) {
 		expect({ file, banned: specifiers.filter(isBanned) }).toEqual({ file, banned: [] });
+	}
+});
+
+it('keeps just-bash and vitest out of the conformance build, across every chunk it imports', async () => {
+	const distDir = new URL('../dist/', import.meta.url);
+	const chunks = await chunksOf(distDir, 'conformance.mjs');
+	expect(chunks.size).toBeGreaterThan(0);
+	const bannedHere = (specifier: string) => isBanned(specifier) || specifier === 'vitest';
+	for (const [file, specifiers] of chunks) {
+		expect({ file, banned: specifiers.filter(bannedHere) }).toEqual({ file, banned: [] });
 	}
 });

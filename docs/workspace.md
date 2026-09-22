@@ -360,6 +360,33 @@ resource owner and binds the backend tools to its `use` method. `Workspace`
 adds `tools()` to the resource surface. Direct operations and tool calls share
 one queue and one lifecycle.
 
+## The conformance suite
+
+`@ambionframework/workspace/conformance` holds the `ExecutionEnv` rules the
+built-in tools need: a rename that replaces an existing target, a recursive
+`createDir`, a forced and a recursive `remove`, the file error codes, `~`
+expansion, an abort apart from a timeout, the bounded output view with its
+spill file, and a distinct name under `/tmp` for each temporary file or
+directory.
+
+A case is a `ConformanceCase`: a name and a `run` that throws on failure.
+The entry loads no test framework and no just-bash, so any backend runs it.
+`workspaceConformance(harness)` takes a named backend with an `open()` that
+returns a fresh `WorkspaceBackend` and a `dispose()`, and returns the cases:
+
+```ts
+import { workspaceConformance } from '@ambionframework/workspace/conformance';
+import { describe, it } from 'vitest';
+
+describe.each(backends)('$name', (harness) => {
+  for (const c of workspaceConformance(harness)) it(c.name, c.run);
+});
+```
+
+The memory and directory backends run the suite first
+(`packages/workspace/test/conformance.test.ts`). A new backend runs it
+before it takes on tool-specific tests of its own.
+
 ## Dispose of a resource
 
 ```ts

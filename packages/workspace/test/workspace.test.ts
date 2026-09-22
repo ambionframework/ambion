@@ -12,7 +12,7 @@ import {
 } from '@ambionframework/ambion';
 import { type PiOptions, pi, piExecution } from '@ambionframework/pi';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
-import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import type { Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Bash, InMemoryFs } from 'just-bash';
@@ -45,21 +45,19 @@ const ctx = BACKGROUND_CONTEXT;
 async function sh(
 	env: ExecutionEnv,
 	command: string,
-	options: { cwd?: string; timeout?: number; signal?: AbortSignal } = {},
+	options: { timeout?: number } = {},
 ): Promise<{ ok: boolean; exitCode?: number; code?: string; output: string }> {
 	let output = '';
-	const context = options.signal ? withAbortSignal(options.signal, BACKGROUND_CONTEXT) : ctx;
 	const result = await env.exec(
 		command,
 		{
-			...(options.cwd === undefined ? {} : { cwd: options.cwd }),
 			...(options.timeout === undefined ? {} : { timeout: options.timeout }),
 			capture: { limits: { maxBytes: 1_000_000, maxLines: 100_000 } },
 			onUpdate: (update) => {
 				if (update.kind === 'replace') output = update.output.text;
 			},
 		},
-		context,
+		ctx,
 	);
 	return result.ok
 		? { ok: true, exitCode: result.value.exitCode, output }
@@ -483,30 +481,6 @@ describe('the just-bash adapter', () => {
 		return { env: await backend.connect(agent(agentName)), backend };
 	}
 
-	it('roots the environment at the home, and expands ~ to it', async () => {
-		const { env: alpha } = await env();
-		expect(alpha.cwd).toBe('/home/alpha');
-		expect(await alpha.absolutePath('~', ctx)).toEqual({ ok: true, value: '/home/alpha' });
-		expect(await alpha.absolutePath('~/x', ctx)).toEqual({ ok: true, value: '/home/alpha/x' });
-		expect(await alpha.absolutePath('sub/../y', ctx)).toEqual({ ok: true, value: '/home/alpha/y' });
-		const pwd = await sh(alpha, 'cd; pwd; echo ~');
-		expect(pwd).toMatchObject({ ok: true, output: '/home/alpha\n/home/alpha\n' });
-	});
-
-	it("classifies just-bash's thrown errors into Pi's codes", async () => {
-		const { env: alpha } = await env();
-		await alpha.writeFile('f.txt', 'x', ctx);
-		const codeOf = (result: { ok: boolean; error?: { code: string } }) =>
-			result.ok ? 'ok' : result.error?.code;
-		expect(codeOf(await alpha.readTextFile('missing', ctx))).toBe('not_found');
-		expect(codeOf(await alpha.canonicalPath('missing', ctx))).toBe('not_found');
-		expect(codeOf(await alpha.readTextFile('.', ctx))).toBe('is_directory');
-		expect(codeOf(await alpha.listDir('f.txt', ctx))).toBe('not_directory');
-		expect(codeOf(await alpha.createDir('f.txt', { recursive: false }, ctx))).toBe('invalid');
-		expect(codeOf(await alpha.remove('.', undefined, ctx))).toBe('invalid');
-		expect(await alpha.exists('missing', ctx)).toEqual({ ok: true, value: false });
-	});
-
 	it('lists a directory with each entry sized, and reads lines', async () => {
 		const { env: alpha } = await env();
 		await alpha.writeFile('a.txt', 'one\ntwo\nthree', ctx);
@@ -524,29 +498,6 @@ describe('the just-bash adapter', () => {
 		expect(await alpha.readTextFile('d/b.txt', ctx)).toEqual({
 			ok: true,
 			value: 'one\ntwo\nthree',
-		});
-	});
-
-	it('hands one bounded view of combined output to onUpdate, and keeps no cd', async () => {
-		const { env: alpha } = await env();
-		const combined = await sh(alpha, 'mkdir -p sub && cd sub && pwd && echo warn >&2');
-		expect(combined).toMatchObject({ ok: true, exitCode: 0, output: '/home/alpha/sub\nwarn\n' });
-		expect(await sh(alpha, 'pwd')).toMatchObject({ ok: true, output: '/home/alpha\n' });
-		expect(await sh(alpha, 'pwd', { cwd: 'sub' })).toMatchObject({
-			ok: true,
-			output: '/home/alpha/sub\n',
-		});
-	});
-
-	it('tells an abort apart from a timeout', async () => {
-		const { env: alpha } = await env();
-		const controller = new AbortController();
-		const aborted = sh(alpha, 'sleep 5', { signal: controller.signal });
-		controller.abort();
-		expect(await aborted).toMatchObject({ ok: false, code: 'aborted' });
-		expect(await sh(alpha, 'sleep 5', { timeout: 0.05 })).toMatchObject({
-			ok: false,
-			code: 'timeout',
 		});
 	});
 
@@ -582,31 +533,6 @@ describe('the just-bash adapter', () => {
 		});
 	});
 
-	it('spills the whole output to a file when the limits cut it', async () => {
-		const { env: alpha } = await env();
-		let viewSpill: string | undefined;
-		const result = await alpha.exec(
-			'printf "%s\\n" a b c d e',
-			{
-				capture: { limits: { maxBytes: 1_000_000, maxLines: 2 }, spill: true },
-				onUpdate: (update) => {
-					if (update.kind === 'replace') viewSpill = update.output.spillPath;
-				},
-			},
-			ctx,
-		);
-		expect(result.ok && result.value.truncation.truncated).toBe(true);
-		const spillPath = result.ok ? result.value.spillPath : undefined;
-		expect(spillPath).toMatch(/^\/tmp\/shell-[0-9a-f]+\.out$/);
-		expect(viewSpill).toBe(spillPath);
-		if (spillPath !== undefined) {
-			expect(await alpha.readTextFile(spillPath, ctx)).toEqual({
-				ok: true,
-				value: 'a\nb\nc\nd\ne\n',
-			});
-		}
-	});
-
 	it('holds 128 MB in memory, and refuses the write that goes past it', async () => {
 		expect(MEMORY_LIMIT_BYTES).toBe(128 * 1024 * 1024);
 		const { env: alpha } = await env();
@@ -618,18 +544,6 @@ describe('the just-bash adapter', () => {
 		expect(!over.ok && over.error.message).toMatch(/ENOSPC/);
 		await alpha.remove('first', undefined, ctx);
 		expect(await alpha.writeFile('second', half, ctx)).toEqual({ ok: true, value: undefined });
-	});
-
-	it('creates /tmp before a temp file needs it, and appends to it', async () => {
-		const { env: alpha } = await env();
-		const file = await alpha.createTempFile({ prefix: 'bash-', suffix: '.journal' }, ctx);
-		expect(file.ok && file.value).toMatch(/^\/tmp\/bash-[0-9a-f]+\.journal$/);
-		if (!file.ok) return;
-		await alpha.appendFile(file.value, 'a', ctx);
-		await alpha.appendFile(file.value, 'b', ctx);
-		expect(await alpha.readTextFile(file.value, ctx)).toEqual({ ok: true, value: 'ab' });
-		const dir = await alpha.createTempDir(undefined, ctx);
-		expect(dir.ok && dir.value).toMatch(/^\/tmp\/tmp-/);
 	});
 
 	it('recreates a home removed out from under it, and shares files across agents', async () => {

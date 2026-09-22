@@ -1,7 +1,13 @@
 import { defineConfig } from 'tsdown';
 
 export default defineConfig({
-	entry: ['src/index.ts', 'src/resource-entry.ts', 'src/sql-resource.ts', 'src/just-bash-entry.ts'],
+	entry: [
+		'src/index.ts',
+		'src/resource-entry.ts',
+		'src/sql-resource.ts',
+		'src/just-bash-entry.ts',
+		'src/conformance.ts',
+	],
 	format: ['esm'],
 	dts: true,
 	clean: true,

@@ -1,20 +1,16 @@
 /**
  * The two backends every scenario in this package runs on. `memory` holds
  * the files for as long as the handle lives; `directory` writes them through
- * to a temporary directory, and disposes of it after.
+ * to a temporary directory, and disposes of it after. Each one is a
+ * `ConformanceBackend`, the harness type the conformance suite takes.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { WorkspaceBackend } from '../../src/backend.ts';
+import type { ConformanceBackend } from '../../src/conformance.ts';
 import { directoryBackend, memoryBackend } from '../../src/just-bash.ts';
 
-export interface Backend {
-	readonly name: 'memory' | 'directory';
-	open(): Promise<{ backend: WorkspaceBackend; dispose(): Promise<void> }>;
-}
-
-export const backends: readonly Backend[] = [
+export const backends: readonly ConformanceBackend[] = [
 	{
 		name: 'memory',
 		async open() {
