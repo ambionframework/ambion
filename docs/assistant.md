@@ -4,9 +4,7 @@
 `@ambionframework/assistant` provides `defineAssistant()`. The
 `startRoom({ assistant })` option supplies its room configuration. The
 workbench example uses both. This document defines the behavior and the
-evidence needed to evaluate it. See the
-[acceptance review](../planning/evidence/2026-09-16-assistant-acceptance.md)
-for observed results and remaining behavioral blockers.
+evidence needed to evaluate it.
 
 ## Responsibility
 

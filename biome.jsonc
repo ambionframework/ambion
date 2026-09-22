@@ -40,10 +40,6 @@
 		"enabled": true,
 		"useIgnoreFile": true
 	},
-	"files": {
-		// Generated report snapshots are captures, not source.
-		"includes": ["**", "!planning/evidence/reports"]
-	},
 	// Formatting is Prettier's job (see prettier.config.js); Biome lints only.
 	"formatter": {
 		"enabled": false
