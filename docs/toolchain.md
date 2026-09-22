@@ -204,12 +204,12 @@ repository jobs plus the LemmaScript reusable workflow:
 `test-library-floor` removes `examples/workbench` from its checkout before
 `pnpm install`. That package depends on `@opentui/core`, which needs Node
 `>=26.4.0` for its FFI bridge to native Zig. Deleting the directory keeps
-pnpm from scanning it as a workspace project, but `pnpm-lock.yaml` still
-lists it as an importer, and `--frozen-lockfile` installs every importer
-the lockfile names. The job installs with `--config.engine-strict=false`
-to get past that one check; no library dependency needs more than Node
-`22.19.0`, and the test run itself, not the install, is the real proof of
-that floor.
+pnpm from building or testing it, but `pnpm-lock.yaml` still lists it as
+an importer, so `--frozen-lockfile` still counts it in the workspace scope
+and still checks `@opentui/core`'s `engines.node` before it installs
+anything. The job installs with `--config.engine-strict=false` to get past
+that one check. No library dependency needs more than Node `22.19.0`, and
+the test run below is the real proof of that floor.
 
 The `check` job also runs `pnpm run check:packages` after the build. The check
 reads `pnpm-lock.yaml` and every publishable manifest. It fails on more than

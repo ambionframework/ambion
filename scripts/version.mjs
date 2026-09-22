@@ -2,8 +2,8 @@
 /**
  * Sets every publishable package to one version.
  *
- * Ambion releases in lockstep: the CLI and the runtime are cut from the same
- * commit and expected to match, so there is one version number and no
+ * Ambion releases in lockstep: every publishable package is cut from the
+ * same commit and expected to match, so there is one version number and no
  * per-package changelog to reconcile.
  *
  *   node scripts/version.mjs 0.1.0

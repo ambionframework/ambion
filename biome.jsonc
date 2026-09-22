@@ -29,8 +29,8 @@
 			},
 			"suspicious": {
 				"noExplicitAny": "error",
-				// The CLI and the examples are console programs; `noConsole` is
-				// re-enabled for library source in the override below.
+				// The examples are console programs; `noConsole` is re-enabled
+				// for library source in the override below.
 				"noConsole": "off"
 			}
 		}

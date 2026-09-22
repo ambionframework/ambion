@@ -339,9 +339,9 @@ first, because the rest edits the same code.
 - One private `callEnvelope` in `tools.ts` for the two copies of the
   provenance prefix.
 
-**M5. The conformance suite.** `@ambionframework/cli` is removed (see
-[Decisions taken](#decisions-taken)), so this item drops its template
-descriptor half and keeps only the conformance suite.
+**M5. The conformance suite.** `conformance.ts` and
+`conformance-executor-room.ts` each hold their own question, participants
+block, and `stale` constant.
 
 - The shared question, participants block, and `stale` constant of
   `conformance.ts` and `conformance-executor-room.ts` move to
