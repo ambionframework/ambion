@@ -126,6 +126,12 @@ export interface Limits {
 	readonly trace: { readonly toolOutputBytes: number; readonly stepsPerPass: number };
 }
 
+/** What the trace keeps of a step, and how many steps one pass keeps, by default. */
+export const DEFAULT_TRACE_LIMITS: Limits['trace'] = Object.freeze({
+	toolOutputBytes: 65_536,
+	stepsPerPass: 1_000,
+});
+
 /**
  * What a host, or the kernel's own internals, need beyond the application
  * view: the journal namespace, the transport, the limits, the default
@@ -253,16 +259,15 @@ export interface Transport {
 }
 
 /** The collaboration host's narrow request for one configured seat port. */
+export interface ConnectorRequest {
+	readonly room: string;
+	readonly seat: string;
+	readonly definition: AgentDefinition;
+	readonly emit: (event: ExecutionEvent) => void;
+}
+
 export interface ExecutionConnector {
-	connect(
-		room: RoomProtocol,
-		request: {
-			readonly room: string;
-			readonly seat: string;
-			readonly definition: AgentDefinition;
-			readonly emit: (event: ExecutionEvent) => void;
-		},
-	): AgentPort;
+	connect(room: RoomProtocol, request: ConnectorRequest): AgentPort;
 }
 
 /** Collaboration services that a room host may use. */
@@ -331,7 +336,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		call: callLimits(given.call),
 		context: { messages: Number.POSITIVE_INFINITY, ...given.context },
 		message: { bytes: Number.POSITIVE_INFINITY, ...given.message },
-		trace: { toolOutputBytes: 65_536, stepsPerPass: 1_000, ...given.trace },
+		trace: { ...DEFAULT_TRACE_LIMITS, ...given.trace },
 	};
 	// The runtime establishes these bounds here, once, for every room it runs.
 	// The pass writes an activation off at the cap, so a cap below one would

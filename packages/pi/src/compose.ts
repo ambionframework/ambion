@@ -1,18 +1,7 @@
 /** Compose Pi execution services and a transport into one room connector. */
 
-import type {
-	Execution,
-	ExecutionConnector,
-	ExecutionHost,
-	RoomProtocol,
-	Transport,
-} from '@ambionframework/ambion/hosting';
-import {
-	DEFAULT_TRACE,
-	inProcessTransport,
-	registerDefaultExecution,
-	traceOpener,
-} from '@ambionframework/ambion/hosting';
+import type { Execution } from '@ambionframework/ambion/hosting';
+import { composeConnector, registerDefaultExecution } from '@ambionframework/ambion/hosting';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createPiExecutor } from './executor.ts';
 import { createExecutionServices } from './services.ts';
@@ -32,7 +21,30 @@ export interface PiExecutionOptions {
  * clock, storage, limits and transport when it builds the connector.
  */
 export function piExecution(options: PiExecutionOptions = {}): Execution {
-	return { connector: (host) => connectorFor(host, options) };
+	return {
+		connector: (host) => {
+			const services = createExecutionServices({
+				storage: host.storage,
+				clock: host.clock,
+				call: host.limits.call,
+				trace: host.limits.trace,
+				...(options.stream === undefined ? {} : { stream: options.stream }),
+			});
+			return composeConnector({
+				host,
+				traceLimits: services.trace,
+				buildExecutor: (request) =>
+					createPiExecutor({
+						definition: request.definition,
+						model: services.model,
+						stream: services.stream,
+						transcripts: services.transcripts,
+						room: request.room,
+						now: () => host.clock.now(),
+					}),
+			});
+		},
+	};
 }
 
 /**
@@ -40,44 +52,3 @@ export function piExecution(options: PiExecutionOptions = {}): Execution {
  * Loading the package registers it.
  */
 registerDefaultExecution('pi', () => piExecution());
-
-function connectorFor(host: ExecutionHost, options: PiExecutionOptions): ExecutionConnector {
-	const services = createExecutionServices({
-		storage: host.storage,
-		clock: host.clock,
-		call: host.limits.call,
-		trace: host.limits.trace,
-		...(options.stream === undefined ? {} : { stream: options.stream }),
-	});
-	const transport: Transport = host.transport ?? inProcessTransport();
-	return {
-		connect(room: RoomProtocol, request) {
-			const executor = createPiExecutor({
-				definition: request.definition,
-				model: services.model,
-				stream: services.stream,
-				transcripts: services.transcripts,
-				room: request.room,
-				now: () => host.clock.now(),
-			});
-			return transport.connect(room, {
-				clock: host.clock,
-				call: host.limits.call,
-				definition: request.definition,
-				room: request.room,
-				seat: request.seat,
-				executor,
-				emit: request.emit,
-				trace: traceOpener({
-					room: request.room,
-					agent: request.seat,
-					traces: services.traces,
-					limits: services.trace,
-					policy: request.definition.trace ?? DEFAULT_TRACE,
-					emit: request.emit,
-					now: () => host.clock.now(),
-				}),
-			});
-		},
-	};
-}

@@ -13,6 +13,7 @@ import type {
 	RoomProtocol,
 } from '@ambionframework/ambion/hosting';
 import {
+	classifyCommit,
 	refusal,
 	SAY,
 	SEAT,
@@ -89,11 +90,12 @@ function landResponse(
 	activation: Activation,
 	response: CommitResult,
 ): AgentToolResult<Record<string, never>> {
-	if ('committed' in response) return delivered();
-	if ('unchanged' in response) return delivered();
-	if ('refused' in response) throw new Error(response.refused);
-	if ('missed' in response) throw new Error('The room moved. Read what landed, then decide again.');
-	if ('unknown' in response) {
+	const outcome = classifyCommit(response);
+	if (outcome.kind === 'delivered') return delivered();
+	if (outcome.kind === 'refused') throw new Error(outcome.why);
+	if (outcome.kind === 'missed')
+		throw new Error('The room moved. Read what landed, then decide again.');
+	if (outcome.kind === 'unknown') {
 		// The message may already be on the record, so the turn ends here. A
 		// second say under a new key would land the same message twice.
 		activation.abort();
@@ -102,7 +104,7 @@ function landResponse(
 		) as AgentToolResult<Record<string, never>>;
 	}
 	activation.abort();
-	return standDown(`Your turn ended: ${response.stale}.`) as AgentToolResult<Record<string, never>>;
+	return standDown(`Your turn ended: ${outcome.why}.`) as AgentToolResult<Record<string, never>>;
 }
 
 /** The tool that speaks for an ordinary activation or publishes its close. */
@@ -110,10 +112,9 @@ function sayTool(bound: Binding, closing?: Closing): AgentTool {
 	return {
 		...SAY,
 		label: SAY.name,
-		description:
-			closing === undefined
-				? 'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`.'
-				: summaryToolDescription(closing.person, closing.people),
+		...(closing === undefined
+			? {}
+			: { description: summaryToolDescription(closing.person, closing.people) }),
 		execute: async (toolCallId, rawParams) => say(bound, toolCallId, rawParams, closing),
 	};
 }
@@ -201,10 +202,6 @@ function membershipTool(
 	return {
 		...tool,
 		label: tool.name,
-		description:
-			kind === 'seated'
-				? 'Seat one agent from the reserve. It joins the room and reads the record.'
-				: "Remove one seated agent from the room. A fixed seat, such as the summary writer's, stays.",
 		execute: async (toolCallId, rawParams) => {
 			const name = (rawParams as { name: string }).name.trim();
 			const intent: Intent = { kind, name };

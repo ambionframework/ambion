@@ -6,7 +6,7 @@
  * `mcp_servers` config of the client.
  */
 import { fileURLToPath } from 'node:url';
-import type { AgentExecutor } from '@ambionframework/ambion/hosting';
+import { type AgentExecutor, executorOfKind } from '@ambionframework/ambion/hosting';
 import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
 import { exclusiveConfig, NODE_REPL, NODE_REPL_OFF, type Scratch } from './catalog.ts';
 import { ROOM_SERVER } from './codex-trace.ts';
@@ -22,10 +22,7 @@ export interface CodexRuntime {
 
 /** The Codex executor a definition names, or an error that names its kind. */
 export function codexOf(executor: AgentExecutor): CodexExecutor {
-	if (executor.kind === 'codex' && 'model' in executor && typeof executor.model === 'string') {
-		return executor as CodexExecutor;
-	}
-	throw new Error(`The Codex executor cannot run an executor of kind '${executor.kind}'.`);
+	return executorOfKind<CodexExecutor>(executor, 'codex');
 }
 
 /**

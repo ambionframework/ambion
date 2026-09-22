@@ -142,6 +142,12 @@ export interface Stale {
 
 export type ViewResponse = { view: ActivationView } | Stale;
 
+/** The session the room recorded for this seat, when `harness` wrote it. */
+export function sessionToResume(view: ActivationView, harness: string): string | undefined {
+	const { resume } = view.spec;
+	return resume?.harness === harness ? resume.id : undefined;
+}
+
 export type { Intent };
 
 export interface CommitRequest {
@@ -165,6 +171,28 @@ export type CommitResult =
 	| { refused: string }
 	| { unknown: string }
 	| Stale;
+
+/**
+ * What the room answered a commit with, as a harness reads it. The room
+ * stamps every case but `unknown`, and a delivered say and a delivered
+ * membership change both read as `delivered`: a harness that needs the
+ * committed message reads `response` itself.
+ */
+export type CommitOutcome =
+	| { readonly kind: 'delivered' }
+	| { readonly kind: 'missed'; readonly missed: readonly Message[] }
+	| { readonly kind: 'refused'; readonly why: string }
+	| { readonly kind: 'unknown' }
+	| { readonly kind: 'ended'; readonly why: string };
+
+/** The commit result, classified into the five outcomes a harness acts on. */
+export function classifyCommit(response: CommitResult): CommitOutcome {
+	if ('committed' in response || 'unchanged' in response) return { kind: 'delivered' };
+	if ('missed' in response) return { kind: 'missed', missed: response.missed };
+	if ('refused' in response) return { kind: 'refused', why: response.refused };
+	if ('unknown' in response) return { kind: 'unknown' };
+	return { kind: 'ended', why: response.stale };
+}
 
 export type LeaseRequest =
 	| { activation: string; operation: 'claim' }

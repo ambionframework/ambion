@@ -5,7 +5,11 @@
  * `CLAUDE.md` or settings file on disk reaches the model. The tools are the
  * room tools, the agent's own tools, and the built-in tools the policy names.
  */
-import type { AgentExecutor, TraceSink } from '@ambionframework/ambion/hosting';
+import {
+	type AgentExecutor,
+	executorOfKind,
+	type TraceSink,
+} from '@ambionframework/ambion/hosting';
 import type { CanUseTool, Options, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import { plainName, ROOM_SERVER } from './claude-trace.ts';
 import type { ClaudeExecutor } from './define.ts';
@@ -20,10 +24,7 @@ export interface ClaudeRuntime {
 
 /** The Claude executor a definition names, or an error that names its kind. */
 export function claudeOf(executor: AgentExecutor): ClaudeExecutor {
-	if (executor.kind === 'claude' && 'model' in executor && typeof executor.model === 'string') {
-		return executor as ClaudeExecutor;
-	}
-	throw new Error(`The Claude executor cannot run an executor of kind '${executor.kind}'.`);
+	return executorOfKind<ClaudeExecutor>(executor, 'claude');
 }
 
 /** The built-in tool names of an allow list: `Bash(git:*)` names `Bash`, and an `mcp__` name names none. */

@@ -1,11 +1,11 @@
 /** Public room facade that composes collaboration and execution services. */
 
 import { decodeActivationId } from './activation-id.ts';
-import { assertRoomName, captureAgent, DEFAULT_TRACE } from './define.ts';
+import { assertRoomName, captureAgent } from './define.ts';
 import { AmbionError } from './errors.ts';
+import { composeConnector } from './execution/connector.ts';
 import type { Executor } from './execution/executor.ts';
-import { inProcessTransport } from './execution/runner.ts';
-import { readTrace, traceOpener } from './execution/trace.ts';
+import { readTrace } from './execution/trace.ts';
 import {
 	defaultConnectorOf,
 	defaultRuntime,
@@ -84,7 +84,7 @@ function connectorFor(runtime: Runtime, own: Execution | undefined): ExecutionCo
 	const host = executionHostOf(runtime);
 	const execution = own ?? hostingOf(runtime).execution;
 	if (execution !== undefined) return execution.connector(host);
-	const missing = missingConnector(runtime, host);
+	const missing = missingConnector(host);
 	return {
 		connect(room, request) {
 			const kind = request.definition.executor.kind;
@@ -94,30 +94,12 @@ function connectorFor(runtime: Runtime, own: Execution | undefined): ExecutionCo
 }
 
 /** The connector for a seat whose kind has no execution: its activations fail. */
-function missingConnector(runtime: Runtime, host: ExecutionHost): ExecutionConnector {
-	const transport = host.transport ?? inProcessTransport();
-	return {
-		connect(room, request) {
-			return transport.connect(room, {
-				clock: host.clock,
-				call: host.limits.call,
-				definition: request.definition,
-				room: request.room,
-				seat: request.seat,
-				executor: missingExecutor(request.seat),
-				emit: request.emit,
-				trace: traceOpener({
-					room: request.room,
-					agent: request.seat,
-					traces: hostingOf(runtime).traces,
-					limits: host.limits.trace,
-					policy: request.definition.trace ?? DEFAULT_TRACE,
-					emit: request.emit,
-					now: () => host.clock.now(),
-				}),
-			});
-		},
-	};
+function missingConnector(host: ExecutionHost): ExecutionConnector {
+	return composeConnector({
+		host,
+		traceLimits: host.limits.trace,
+		buildExecutor: (request) => missingExecutor(request.seat),
+	});
 }
 
 /** The executor of a room that has none: each activation fails at once, and a retry cannot fix it. */

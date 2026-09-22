@@ -3,10 +3,8 @@
  * reports, its cause, and the length stop.
  */
 import type { FailureCause, HarnessSession, PassResult } from '@ambionframework/ambion/hosting';
+import { classifyCause } from '@ambionframework/ambion/hosting';
 import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
-
-/** HTTP statuses a retry cannot fix: a bad request and the billing and authentication refusals. */
-const PERMANENT_STATUS = new Set([400, 401, 402, 403, 404, 405, 422]);
 
 /** Error text that names a credit or an authentication refusal, in phrases a retry cannot clear. */
 const PERMANENT_TEXT =
@@ -18,10 +16,7 @@ const PERMANENT_TEXT =
  * other failure is transient, so an uncertain message retries.
  */
 export function causeOf(text: string, status?: number | null): FailureCause {
-	if (PERMANENT_TEXT.test(text)) return 'permanent';
-	return status !== undefined && status !== null && PERMANENT_STATUS.has(status)
-		? 'permanent'
-		: 'transient';
+	return classifyCause({ text, status, permanent: PERMANENT_TEXT });
 }
 
 /** The text a failed result gives: its error list, or its result text. */
