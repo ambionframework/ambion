@@ -1,33 +1,20 @@
 # Next: the scope for 0.2.0
 
-> **The compatibility rule since 0.1.0.** 0.1.0 shipped on 2026-09-21 from
-> commit 4026bdf, with ten packages on npmjs. Its public shape stands until
-> the 0.2.0 tag. Every change to the main entry and to the journal bodies is
-> additive, unless an item below names a deliberate change.
+> **No compatibility promise before 1.0.0.** 0.1.0 shipped on 2026-09-21
+> from commit 4026bdf, with ten packages on npmjs. Until 1.0.0, any release
+> may change any export, entry point, journal body, stored format, or
+> package API.
 >
-> - **The main entry is `@ambionframework/ambion`.** Its exports are the
->   names in `packages/ambion/test/package.test.ts`. The host entry
->   `/hosting` and the conformance entry follow the same rule.
-> - **The journal bodies are the room event vocabulary** in
->   `packages/ambion/src/journal/events.ts`. `journal/validate.ts` checks
->   them and `room/fold.ts` reads them.
-> - **Additive means one of:** a new export, or a new optional body field.
->   A new entry kind, a new member of the message union, or a new member of
->   a public outcome union is a deliberate change. It needs a new golden
->   journal and a review.
-> - **The rule forbids:** to remove or rename an export, to remove or
->   rename a body field, to change a field type or its meaning, and to
->   remove an entry kind.
-> - **One body refuses new fields.** The `close` object inside a `cancel`
->   entry has `additionalProperties: false`. A new field there breaks an
->   older reader.
-> - **Three guards catch a violation:** the export snapshot
+> - **A change carries no compatibility path.** Add no re-export, no
+>   deprecated alias, no reader for an older format, no upgrade step, and
+>   no compatibility test.
+> - **The changelog names each change** to an export, a journal body, or a
+>   stored format.
+> - **The guards pin the current surface.** The export snapshot
 >   (`test/package.test.ts`), the golden journals (`test/golden.test.ts`),
->   and body validation (`test/journal-validation.test.ts`). A red diff on
->   one of them is a violation. Do not write the snapshot again.
-> - **The storage promise** is in the "Storage compatibility" paragraph of
->   [durability.md](../docs/durability.md). A journal that 0.1.0 wrote stays
->   readable.
+>   and body validation (`test/journal-validation.test.ts`) catch a change
+>   that nobody intended. A deliberate change updates them in the same
+>   commit.
 
 This file is the whole plan for 0.2.0: the scope, the order of the work,
 the evidence each step needs, and the reason for each item.
@@ -64,10 +51,9 @@ commit.** The phases below deliver them; the items explain them.
 **The tag waits for the P0 and P1 steps.** A P2 step that is open when the
 last P1 step closes moves to the backlog. It does not hold the tag.
 
-**Four deliberate changes, one review.** The release changes the journal
-vocabulary or a stored format in four places. Each change lands with its
-own golden journal. Phase 4 step 1 reviews the four together against the
-0.1.0 journals before the tag.
+**Four format changes.** The release changes the journal vocabulary or a
+stored format in four places. Each change lands with a golden journal of
+the new shape. The changelog names each one.
 
 | Change                                             | Item | Kind                        |
 | -------------------------------------------------- | ---- | --------------------------- |
@@ -158,11 +144,11 @@ means two things or two names mean one.
 no "Needs" line starts now. **P0** blocks the tag. **P1** carries the
 release story. **P2** moves to the backlog when it is late.
 
-| Lane | Chain                                                     | Priority |
-| ---- | --------------------------------------------------------- | -------- |
-| A    | Phase 1, then phase 2, then phase 3                       | P0       |
-| B    | Phase 4: 2 and 3 now; 1 after the four deliberate changes | P1       |
-| C    | Phase 5: 1 to 3 now; 4 after 2                            | P1, P2   |
+| Lane | Chain                                                 | Priority |
+| ---- | ----------------------------------------------------- | -------- |
+| A    | Phase 1, then phase 2, then phase 3                   | P0       |
+| B    | Phase 4: 2 and 3 now; 1 after the four format changes | P1       |
+| C    | Phase 5: 1 to 3 now; 4 after 2                        | P1, P2   |
 
 **The critical path is the kernel cleanup, the notice, the timer, then the
 delegation.** Phase 1 comes first because phases 2 and 3 change the same
@@ -220,17 +206,15 @@ restart in the middle keeps the work.
 
 **Goal:** the release repeats without the owner's machine.
 
-- [ ] **1.** The review of the four deliberate changes: each golden
-      journal, a 0.1.0 journal read by the 0.2.0 fold, and the changelog
-      entry. Needs phase 2 step 4, phase 3 step 4, and phase 5 step 1. (R1)
+- [ ] **1.** The changelog entry for 0.2.0: each format change with its
+      golden journal, and each export that changed or went. Needs phase 2 step 4, phase 3 step 4, and phase 5 step 1. (R1)
 - [ ] **2.** The dev build stamp derives its base from the last tag.
       (R1)
 - [ ] **3.** An npmjs release that a trusted CI workflow runs with
       provenance. Needs 2. (R1)
 
 **Evidence:** a release from CI installs without a token; the dev stamp
-after the 0.2.0 tag sorts above 0.2.0; the golden suite reads every 0.1.0
-journal.
+after the 0.2.0 tag sorts above 0.2.0.
 
 ### Phase 5. Package hygiene (P1 and P2)
 
@@ -249,7 +233,7 @@ one copy of each mechanism.
       entry for each binding. Needs 2. P1. (M7)
 
 **Evidence:** `pnpm check`; `pnpm chaos` and the restart suite for step 1;
-a pi-journal file that 0.1.0 wrote reads as before; the memory and
+the memory and
 directory backends pass the workspace conformance entry, and
 `dist/index.mjs` of the workspace package imports neither `just-bash` nor
 `node:sqlite`.
@@ -468,11 +452,9 @@ Each entry holds one thing:
   `index.ts:39`) have no consumer. `roomMirrorPath` also fixes the
   `/rooms` path that the layout now names.
 
-**M7 removes exports from a published package.** The compatibility rule
-at the top of this page covers the kernel entries and the journal bodies.
-It does not cover `@ambionframework/workspace`. Before 1.0 its API
-changes when the design needs it. M7 adds no re-export, no deprecated
-alias, and no compatibility test.
+**M7 removes exports from a published package.** The note at the top of
+this page applies: M7 adds no re-export, no deprecated alias, and no
+compatibility test.
 
 - `destroy()` leaves the three types that hold it.
 - The change log exports go: `openChangeLog`, `DEFAULT_CHANGE_LOG`,
@@ -495,5 +477,4 @@ of the neutral layer, and it loads no just-bash.
 a passkey and a token, and `DEV_BASE` in `dev-release.yml` is a literal. A
 trusted workflow with `id-token: write` publishes with provenance and
 needs no token on a laptop. The dev stamp reads its base from the last
-tag. The review of the deliberate changes is the last gate before the
-tag.
+tag. The changelog entry is the last gate before the tag.

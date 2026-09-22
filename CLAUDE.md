@@ -47,9 +47,12 @@ technical facts, and what is new, and it describes the current surface. Every
 other page links to it and states nothing twice. `planning/next.md` names
 which parts of that surface are still open.
 
-The public shape follows the compatibility rule since 0.1.0. Read the note at
-the top of [`planning/next.md`](planning/next.md) before you change an
-export or a journal body.
+There is no compatibility promise before 1.0.0. Any release may change an
+export, a journal body, or a stored format. Add no re-export, deprecated
+alias, reader for an older format, or compatibility test. Update the export
+snapshot and the golden journals in the same commit, and name the change in
+the changelog. The note at the top of [`planning/next.md`](planning/next.md)
+holds the rule.
 
 Ambient means a room remains available between interactions. Native timers,
 external event subscriptions, and scheduler ingress remain future work.

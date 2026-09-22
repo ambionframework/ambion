@@ -263,8 +263,8 @@ fail, and the release records the new id.
 
 **Freshness still governs speech in both modes.** A kept session does not
 let a seat commit over a record it has not read.
-[Durability](durability.md#storage-compatibility) owns the journal field
-and its additive-read promise.
+[Durability](durability.md#journal-format) owns the journal field and the
+journal format.
 
 ## Failure classification
 

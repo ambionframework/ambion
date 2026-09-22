@@ -224,8 +224,8 @@ function validateCompositionVersion(body: unknown): void {
 
 /**
  * A run entry without a format is format 1. Any other format is a journal a
- * newer runtime wrote. A future format adds its own reader and one named
- * upgrade behind this check.
+ * newer runtime wrote. Before 1.0.0 a new format adds no reader for an older
+ * one.
  */
 function validateRunFormat(body: unknown): void {
 	const format = objectBody(body)?.format;

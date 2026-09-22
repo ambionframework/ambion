@@ -8,11 +8,10 @@ tag.
 
 **The checkpoint entry.** A checkpoint entry lets a resume skip settled
 history, and full replay stays the reference. It is a format change, so it
-needs a new golden journal and the review that the compatibility note in
-[next.md](next.md) names. **Condition:** the resume measurement from 0.2.0
-phase 2 step 4 comes near the default `limits.lease.ttl` of 60 seconds
-([envelope.md](../docs/envelope.md)). Past that point, replay sets the recovery
-time.
+lands with a golden journal of the new format. **Condition:** the resume
+measurement from 0.2.0 phase 2 step 4 comes near the default
+`limits.lease.ttl` of 60 seconds ([envelope.md](../docs/envelope.md)). Past
+that point, replay sets the recovery time.
 
 **Tool execution provenance beyond the activation.** `ToolContext` carries
 the activation, the exchange, and the room. A purpose field, a retry-safe

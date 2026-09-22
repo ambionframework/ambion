@@ -11,10 +11,10 @@ limits of the 0.1.0 release. The [README](../README.md) holds the positioning.
   is a replay. See [Durability](durability.md).
 - **Conditional, fenced, idempotent writes.** Storage appends only at the
   expected position. Each run writes a fence, and a later fence voids the
-  earlier run's writes. A retry under the same key lands once. Journal format
-  1 carries a compatibility promise, proven by golden journals that replay in
-  CI. Memory and SQLite storages ship, with a Cloudflare Durable Objects
-  adapter.
+  earlier run's writes. A retry under the same key lands once. Golden
+  journals of format 1 replay in CI, and before 1.0.0 the format may change
+  in any release. Memory and SQLite storages ship, with a Cloudflare Durable
+  Objects adapter.
 - **Derived activation identity.** An activation id encodes its cause, its
   journal position, its seat, and its attempt. Nothing mints an id, so a wake
   can be sent twice and the fold refuses a stale caller. Leases claim, renew,
