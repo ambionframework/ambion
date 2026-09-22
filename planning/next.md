@@ -66,12 +66,12 @@ is a proposal from the 0.1.0 backlog. The owner sets the final list.
 
 **Deployment models.** The same rules serve four placements.
 
-| Model                         | Placement                         | Persistence               | Support                                                               |
-| ----------------------------- | --------------------------------- | ------------------------- | --------------------------------------------------------------------- |
-| Embedded Node application     | Room and executors in one process | In-memory journals        | Supported for development, tests, and ephemeral lifetimes             |
-| Persistent Node service       | An application-managed service    | SQLite journals           | Supported; the workbench example is the reference host                |
-| Separate room and agent hosts | Calls cross the JSON protocol     | Each host chooses storage | Extension contract with a published conformance suite                 |
-| Cloudflare Durable Objects    | One object per room, one per seat | Each object's SQLite      | Publishable adapter used by `ambion new`; deployment commands pending |
+| Model                         | Placement                         | Persistence               | Support                                                            |
+| ----------------------------- | --------------------------------- | ------------------------- | ------------------------------------------------------------------ |
+| Embedded Node application     | Room and executors in one process | In-memory journals        | Supported for development, tests, and ephemeral lifetimes          |
+| Persistent Node service       | An application-managed service    | SQLite journals           | Supported; the workbench example is the reference host             |
+| Separate room and agent hosts | Calls cross the JSON protocol     | Each host chooses storage | Extension contract with a published conformance suite              |
+| Cloudflare Durable Objects    | One object per room, one per seat | Each object's SQLite      | Publishable adapter tested in workerd; deployment commands pending |
 
 **Limits the release states.** Full history stays in storage and replay,
 and the context window is bounded only by the configured limit. Activation
@@ -217,8 +217,12 @@ with provenance and needs no token on a laptop.
 
 ## Package decisions
 
-**Ten published packages, one private, one example.** Each package has
-one concern and one independent consumer.
+**Nine published packages, one private, one example.** Each package has
+one concern and one independent consumer. `@ambionframework/cli` (`ambion
+new` and `ambion dev`) shipped in 0.1.0 and is removed for 0.2.0: it carried
+its own Node 26.4 floor, the OpenTUI floor, onto every package regardless of
+what that package needed. Every library package now needs only Node 22.19;
+`examples/workbench` keeps the 26.4 floor for `@opentui/core`.
 
 | Package                       | Concern                                                       | Depends on          |
 | ----------------------------- | ------------------------------------------------------------- | ------------------- |
@@ -231,7 +235,6 @@ one concern and one independent consumer.
 | `@ambionframework/workspace`  | The resource contract and the just-bash Pi binding            | ambion, pi          |
 | `@ambionframework/assistant`  | The assistant definition                                      | ambion, pi          |
 | `@ambionframework/cloudflare` | Rooms and seats as Durable Objects                            | ambion, journal, pi |
-| `@ambionframework/cli`        | `ambion new` and `ambion dev`                                 | ambion              |
 | `@ambionframework/evals`      | Private until its own work-left list closes                   | ambion              |
 | `examples/workbench`          | The one example: Pi, Claude, and Codex seats                  | all of the above    |
 

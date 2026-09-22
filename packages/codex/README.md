@@ -31,7 +31,7 @@ await visit.send({ text: 'Is the plan ready?' });
 ```
 
 **Install it next to the kernel.** Run `npm install @ambionframework/ambion
-@ambionframework/codex`. The package needs Node 26.4 or newer. The Codex SDK
+@ambionframework/codex`. The package needs Node 22.19 or newer. The Codex SDK
 brings the `codex` binary. Sign in with `CODEX_API_KEY` in the environment,
 or run `codex login`.
 

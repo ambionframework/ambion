@@ -30,7 +30,7 @@ jobs:
       typecheck: false
 
   check:
-    name: Lint and types
+    name: Lint, types, and package hygiene
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -39,66 +39,18 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
-          node-version: 26
+          # The development version. It covers every library package and
+          # examples/workbench, the one package on the higher, OpenTUI floor.
+          node-version: 26.4.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run check:format
       - run: pnpm run check:types
       - run: pnpm run check:lint
-
-  test:
-    name: Test on Node 26
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 26
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run test
-
-  cli:
-    name: CLI smoke test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 26
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
       - run: pnpm run build
 
-      # The published artifact is `bin/ambion.mjs` plus `dist/`, so the smoke
-      # test drives the real bin script rather than the TypeScript sources.
-      # This checks the runtime guard and package resolution. Command tests
-      # run in the workspace suite; cli-team-smoke.mjs checks a packed consumer.
-      - name: ambion --version reports the manifest version
-        run: |
-          version="$(./packages/cli/bin/ambion.mjs --version)"
-          expected="$(node -p "require('./packages/cli/package.json').version")"
-          [ "$version" = "$expected" ] || {
-            echo "ambion --version said '$version', expected '$expected'" >&2
-            exit 1
-          }
-
-      - name: ambion --help resolves the runtime package
-        run: ./packages/cli/bin/ambion.mjs --help | grep -q '@ambionframework/ambion'
-
-      - name: an unknown command fails rather than passing quietly
-        run: |
-          if ./packages/cli/bin/ambion.mjs not-a-command >/dev/null 2>&1; then
-            echo 'Expected a non-zero exit for an unknown command.' >&2
-            exit 1
-          fi
-
+      # Every publishable package pins the same engines.node, and its pack
+      # list holds dist, the README, and the license, and no source or config.
       - name: package hygiene
         run: pnpm run check:packages
 
@@ -107,10 +59,42 @@ jobs:
           node scripts/version.mjs --check
           node scripts/publish.mjs --pack-only
 
-      # Packs every package, installs the archives through file: overrides in a
-      # project outside the repository, and runs `ambion new` for both
-      # templates. Each generated project installs, typechecks, and runs.
-      # Only third-party dependencies come from the registry. It needs no key.
-      - name: generated projects install, typecheck, and run
-        run: node scripts/cli-team-smoke.mjs
-        timeout-minutes: 10
+  test:
+    name: Test on Node 26.4.0 (library packages and examples/workbench)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26.4.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test
+
+  test-library-floor:
+    name: Test on Node 22.19.0 (library packages)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      # examples/workbench depends on @opentui/core, which needs Node
+      # >=26.4.0 for its FFI bridge to native Zig. Every library package
+      # needs only Node >=22.19.0. pnpm checks engines.node for every
+      # workspace project on install, even a filtered one, so the two floors
+      # cannot share one `pnpm install` on the lower Node version. Removing
+      # workbench from this checkout keeps this job to what the library
+      # actually promises.
+      - run: rm -rf examples/workbench
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.19.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test

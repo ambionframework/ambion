@@ -2,10 +2,13 @@
 #
 # Provision the full local toolchain for the gate.
 #
-# `pnpm check` needs Node 26.4 or newer, because `@opentui/core` sets that
-# engine floor and `.npmrc` sets `engine-strict=true`. `pnpm check:lemmascript`
-# needs Dafny and Z3, because `lsc check --backend=dafny` verifies the rules.
-# This script installs all four and installs the workspace dependencies.
+# `pnpm check` needs Node 26.4.0 or newer, because `examples/workbench`
+# depends on `@opentui/core`, which sets that engine floor, and `.npmrc` sets
+# `engine-strict=true`. Every library package needs only Node 22.19.0 or
+# newer; this script installs the higher, development version, because it
+# can run everything the lower one can. `pnpm check:lemmascript` needs Dafny
+# and Z3, because `lsc check --backend=dafny` verifies the rules. This script
+# installs all four and installs the workspace dependencies.
 #
 # The script is idempotent. It skips a tool that is already present. Run it by
 # hand for local development, or let the SessionStart hook run it on the web.
@@ -13,7 +16,7 @@
 # every later shell in the session finds Node, Dafny, and Z3.
 set -euo pipefail
 
-NODE_MAJOR="${NODE_MAJOR:-26}"
+NODE_VERSION="${NODE_VERSION:-26.4.0}"
 DOTNET_CHANNEL="${DOTNET_CHANNEL:-8.0}"
 DAFNY_VERSION="${DAFNY_VERSION:-4.11.0}"
 Z3_VERSION="${Z3_VERSION:-4.12.1.0}"
@@ -32,9 +35,9 @@ for candidate in "$NVM_DIR/nvm.sh" /opt/nvm/nvm.sh /usr/local/nvm/nvm.sh; do
 	fi
 done
 if command -v nvm >/dev/null 2>&1; then
-	nvm install "$NODE_MAJOR" >/dev/null
-	nvm use "$NODE_MAJOR" >/dev/null
-	NODE_BIN="$(dirname "$(nvm which "$NODE_MAJOR")")"
+	nvm install "$NODE_VERSION" >/dev/null
+	nvm use "$NODE_VERSION" >/dev/null
+	NODE_BIN="$(dirname "$(nvm which "$NODE_VERSION")")"
 else
 	log "nvm is absent; the current node is $(node --version 2>/dev/null || echo none)"
 	NODE_BIN="$(dirname "$(command -v node)")"

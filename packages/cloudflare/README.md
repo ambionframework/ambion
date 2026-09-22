@@ -4,16 +4,10 @@
 One Durable Object holds the room and one holds each seat. Each object uses
 its own SQLite storage for the journals it owns.
 
-This package supplies the adapter used by `ambion new` and `ambion dev`.
+This package supplies the Durable Object adapter for a Cloudflare Worker.
 It joins the lockstep release on GitHub Packages. RPC, alarms, serialization,
 and recovery tests run inside workerd. Deployment commands remain future work.
 See [Deployment and recovery](../../docs/deployment.md) for host responsibilities.
-
-Create a runnable project with the [CLI](../cli/README.md):
-
-```sh
-ambion new my-team
-```
 
 What is built:
 

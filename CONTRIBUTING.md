@@ -1,8 +1,9 @@
 # Contributing to Ambion
 
-Repository installation requires Node **>= 26.4** and pnpm 10, the OpenTUI
-floor. Every package holds the same Node floor. The `ambion dev` client also
-runs on Bun **>= 1.3**.
+Repository installation for the full gate, including `examples/workbench`,
+requires Node **>= 26.4** and pnpm 10, the OpenTUI floor.
+`examples/workbench` also runs on Bun **>= 1.3**. Every library package
+needs only Node **>= 22.19**.
 
 Ambion is a collaboration kernel for agents and humans. Read the
 [documentation index](docs/README.md) for current contracts and
@@ -16,8 +17,8 @@ pnpm format     # biome --write, then prettier --write
 ```
 
 Run `pnpm format` after edits, then `pnpm check` before pushing. CI also verifies
-the Dafny contracts, runs the suites on Node 26, and checks the packed CLI
-artifacts; local checks do not replace that coverage.
+the Dafny contracts, runs the suites on Node 22.19 and Node 26.4, and checks
+the packed package artifacts; local checks do not replace that coverage.
 
 `pnpm test:live` runs the room on a real model. It needs the key for the
 provider in `AMBION_MODEL` (`ANTHROPIC_API_KEY` by default), it costs money,
@@ -32,8 +33,8 @@ are the authority for exact commands.
 ## Releasing
 
 **Complete the release gates before tagging.** The delivery plan lists the
-API, packaging, and consumer checks of the next release. Create projects with
-`ambion new`; a release publishes matching package versions.
+API, packaging, and consumer checks of the next release. A release publishes
+matching package versions.
 
 Versions move in lockstep across publishable packages.
 

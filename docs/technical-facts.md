@@ -102,7 +102,6 @@ limits of the 0.1.0 release. The [README](../README.md) holds the positioning.
 | `@ambionframework/journal`    | The append-only journal and its storage contract                                      |
 | `@ambionframework/pi-journal` | Pi transcript sessions over journal storage                                           |
 | `@ambionframework/cloudflare` | Rooms and seats as Durable Objects                                                    |
-| `@ambionframework/cli`        | `ambion new` and `ambion dev`                                                         |
 
 ## Boundaries and limits
 

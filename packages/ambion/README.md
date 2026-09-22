@@ -12,7 +12,7 @@ exchange for its owner. Applications own domain data and tool resources.
 
 ## Install
 
-Use Node **26.4 or later** and ESM. The packages install from npmjs with no
+Use Node **22.19 or later** and ESM. The packages install from npmjs with no
 token. A dev build of `main` installs from GitHub Packages; see
 [the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
 

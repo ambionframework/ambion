@@ -121,7 +121,7 @@ More is in [Technical facts](docs/technical-facts.md).
 
 ## Install
 
-Use Node **26.4 or later**. The packages are ESM and install from npmjs with no token. A dev build
+Use Node **22.19 or later**. The packages are ESM and install from npmjs with no token. A dev build
 of `main` installs from GitHub Packages; see
 [Toolchain](docs/toolchain.md#9-release-and-publishing).
 Model execution needs credentials for the chosen provider.
@@ -131,9 +131,9 @@ npm install @ambionframework/ambion @ambionframework/pi
 ```
 
 Run the workbench for the working version of the team above: `pnpm start`
-in [`examples/workbench`](examples/workbench). `ambion new` creates a Node or
-Cloudflare project from the same layout. See [Contributing](CONTRIBUTING.md)
-to build from source.
+in [`examples/workbench`](examples/workbench). It needs Node **26.4 or
+later**, the floor `@opentui/core` sets for its terminal renderer. See
+[Contributing](CONTRIBUTING.md) to build from source.
 
 ## Boundaries
 
