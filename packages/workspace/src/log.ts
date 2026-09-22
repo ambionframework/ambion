@@ -27,7 +27,7 @@ import { posix } from 'node:path';
 import type { Context, ExecutionEnv, JsonValue } from '@earendil-works/pi-agent-core';
 
 /** Bytes a log may hold before the next append rotates it, when a caller names none. */
-export const DEFAULT_ROTATE_BYTES = 8 * 1024 * 1024;
+const DEFAULT_ROTATE_BYTES = 8 * 1024 * 1024;
 
 /** `path`, or a thrown error naming what needed it to be absolute. */
 export function checkedLogPath(path: string, of: string): string {

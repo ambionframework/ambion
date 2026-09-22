@@ -26,7 +26,8 @@ built for that agent, rooted at `/home/<agent name>`.
 ```ts
 import { defineAgent } from '@ambionframework/ambion';
 import { pi } from '@ambionframework/pi';
-import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/workspace/just-bash';
 
 const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
 
@@ -43,12 +44,13 @@ const surveyor = defineAgent({
 
 ## Use the resource directly
 
-The root entry exports `openResource` beside the just-bash backends. The
-`/resource` entry holds only the neutral contract: `openResource` and its
-types. It loads neither the Ambion runtime nor a model library.
+The root entry loads no backend. `/resource` holds only the neutral
+contract: `openResource` and its types. It loads neither the Ambion runtime
+nor a model library. `/just-bash` holds the two backends.
 
 ```ts
-import { memoryBackend, openResource } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/workspace/just-bash';
+import { openResource } from '@ambionframework/workspace/resource';
 
 const backend = memoryBackend({
   seed: async (write) => write.writeFile('notes.txt', 'Checked the plan.'),

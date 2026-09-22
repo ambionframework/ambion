@@ -2,15 +2,10 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { WorkspaceEnv } from '../src/backend.ts';
-import type { WorkspaceAgent, WorkspaceBackend } from '../src/index.ts';
-import {
-	BACKGROUND_CONTEXT,
-	directoryBackend,
-	memoryBackend,
-	openWorkspace,
-} from '../src/index.ts';
-import { openResource, type ResourceBackend } from '../src/resource.ts';
+import type { WorkspaceBackend, WorkspaceEnv } from '../src/backend.ts';
+import { BACKGROUND_CONTEXT, openWorkspace } from '../src/index.ts';
+import { directoryBackend, memoryBackend } from '../src/just-bash.ts';
+import { openResource, type ResourceBackend, type WorkspaceAgent } from '../src/resource.ts';
 
 const agent = (name: string): WorkspaceAgent => ({ name });
 

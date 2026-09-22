@@ -46,7 +46,8 @@ import { defineAgent, defineHuman, startRoom, type ToolBundle } from '@ambionfra
 import { claude } from '@ambionframework/claude';
 import { codex } from '@ambionframework/codex';
 import { pi } from '@ambionframework/pi';
-import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/workspace/just-bash';
 
 const workspace = openWorkspace({ name: 'lab', backend: memoryBackend() });
 const bundles: ToolBundle[] = [workspace.tools()];

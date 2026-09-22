@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
-import { openSqlResource } from '@ambionframework/workspace';
+import { openSqlResource } from '@ambionframework/workspace/sql';
 import { afterEach, describe, expect, it } from 'vitest';
 import { labSchema, labWritable } from '../src/scenarios.ts';
 import { openWorkbench } from '../src/workbench.ts';

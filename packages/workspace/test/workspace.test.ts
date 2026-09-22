@@ -28,14 +28,9 @@ import {
 	speak,
 } from '../../ambion/test/support/scripted.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
-import type { WorkspaceBackend } from '../src/index.ts';
-import {
-	directoryBackend,
-	memoryBackend,
-	openWorkspace,
-	ROOM_MIRROR_GUIDANCE,
-} from '../src/index.ts';
-import { MEMORY_LIMIT_BYTES } from '../src/just-bash.ts';
+import { openWorkspace, type WorkspaceBackend } from '../src/index.ts';
+import { directoryBackend, MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
+import { ROOM_MIRROR_GUIDANCE } from '../src/mirror.ts';
 
 const workspaceAgent = (name: string) => ({ name });
 

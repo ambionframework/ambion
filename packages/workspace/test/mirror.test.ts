@@ -14,13 +14,10 @@ import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-
 import { describe, expect, it } from 'vitest';
 import { enter, roomName as name } from '../../ambion/test/support/room.ts';
 import { byAgent, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
-import type { WorkspaceAgent } from '../src/index.ts';
-import {
-	memoryBackend,
-	openWorkspace,
-	ROOM_MIRROR_GUIDANCE,
-	roomMirrorPath,
-} from '../src/index.ts';
+import { openWorkspace } from '../src/index.ts';
+import { memoryBackend } from '../src/just-bash.ts';
+import { ROOM_MIRROR_GUIDANCE, roomMirrorPath } from '../src/mirror.ts';
+import type { WorkspaceAgent } from '../src/resource.ts';
 
 const reader: WorkspaceAgent = { name: 'reader' };
 

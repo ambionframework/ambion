@@ -444,13 +444,15 @@
 			}
 		},
 		{
-			// Resource ownership and backends do not load the Ambion tool adapter.
+			// Resource ownership, and the backend and env types beneath it, are
+			// independent of the Ambion tool adapter. They are also neutral: a
+			// Biome override matches by file, and replaces rather than merges an
+			// earlier override's options for the same rule, so this entry folds
+			// in the just-bash restriction below instead of losing it.
 			"includes": [
 				"packages/workspace/src/resource.ts",
 				"packages/workspace/src/resource-entry.ts",
-				"packages/workspace/src/backend.ts",
-				"packages/workspace/src/just-bash.ts",
-				"packages/workspace/src/bash-env.ts"
+				"packages/workspace/src/backend.ts"
 			],
 			"linter": {
 				"rules": {
@@ -468,6 +470,82 @@
 											"./tools.ts"
 										],
 										"message": "Resources and backends are independent of the Ambion tool adapter."
+									},
+									{
+										"group": ["just-bash", "./just-bash.ts", "./bash-env.ts", "./devices.ts"],
+										"message": "This file is neutral. Reach just-bash through the just-bash entry."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// just-bash.ts and bash-env.ts hold the just-bash backends. They are
+			// independent of the Ambion tool adapter, and they are the one place
+			// that loads just-bash itself.
+			"includes": ["packages/workspace/src/just-bash.ts", "packages/workspace/src/bash-env.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"@ambionframework/*",
+											"**/ambion/**",
+											"./index.ts",
+											"./workspace.ts",
+											"./tools.ts"
+										],
+										"message": "Resources and backends are independent of the Ambion tool adapter."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// Every other file in this package is neutral: it does not reach
+			// just-bash directly, and reaches the just-bash backends, when it
+			// needs them at all, through the just-bash entry. This entry folds
+			// in the ambion-internal-reach restriction, which a plain
+			// `packages/workspace/src/**` override would otherwise lose for
+			// these files: a later override's rule options replace an earlier
+			// one's rather than merging with it.
+			"includes": [
+				"packages/workspace/src/**",
+				"!packages/workspace/src/just-bash.ts",
+				"!packages/workspace/src/just-bash-entry.ts",
+				"!packages/workspace/src/bash-env.ts",
+				"!packages/workspace/src/devices.ts",
+				"!packages/workspace/src/resource.ts",
+				"!packages/workspace/src/resource-entry.ts",
+				"!packages/workspace/src/backend.ts"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"@ambionframework/ambion/!(hosting|conformance)",
+											"**/packages/ambion/src/*"
+										],
+										"message": "Reach the core through `@ambionframework/ambion` or its `/hosting` or `/conformance` entry, never a file inside it."
+									},
+									{
+										"group": ["just-bash", "./just-bash.ts", "./bash-env.ts", "./devices.ts"],
+										"message": "This file is neutral. Reach just-bash through the just-bash entry."
 									}
 								]
 							}

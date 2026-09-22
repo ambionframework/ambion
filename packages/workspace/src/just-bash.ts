@@ -35,7 +35,7 @@ import {
 	createWriteTool,
 	type ExecutionToolContext,
 } from '@earendil-works/pi-agent-core';
-import { Bash, type IFileSystem, InMemoryFs } from 'just-bash';
+import { Bash, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
 import type { WorkspaceBackend } from './backend.ts';
 import { BashEnv } from './bash-env.ts';
 import { DEV_DIR, withDevices } from './devices.ts';
@@ -213,15 +213,10 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
  * builds the filesystem. Disposal releases the filesystem handle and keeps
  * the root and its files. A host deletes the data it owns.
  *
- * This backend is the one part of this package that needs a real disk, and it
- * loads `ReadWriteFs` on the first connect. A bundler for a runtime without a
- * disk, such as workerd, then keeps the rest of the package: just-bash offers
- * `ReadWriteFs` in its Node build alone, and a static import of it refuses to
- * bundle for every other target.
+ * This backend is the one part of this package that needs a real disk.
  */
 export function directoryBackend(root: string): WorkspaceBackend {
 	const resource = lazyResource(async () => {
-		const { ReadWriteFs } = await import('just-bash');
 		await mkdir(root, { recursive: true });
 		class DirectoryFs extends ReadWriteFs {
 			override async lstat(path: string) {

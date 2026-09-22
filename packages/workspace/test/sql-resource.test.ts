@@ -3,9 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
 import { afterEach, describe, expect, it } from 'vitest';
-import { memoryBackend, openSqlResource, openWorkspace } from '../src/index.ts';
+import { openWorkspace } from '../src/index.ts';
+import { memoryBackend } from '../src/just-bash.ts';
 import type { WorkspaceResource } from '../src/resource.ts';
-import type { SqlResource } from '../src/sql-resource.ts';
+import { openSqlResource, type SqlResource } from '../src/sql-resource.ts';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS runs (

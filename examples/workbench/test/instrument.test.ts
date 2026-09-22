@@ -1,5 +1,5 @@
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
-import { openSqlResource, type SqlResource } from '@ambionframework/workspace';
+import { openSqlResource, type SqlResource } from '@ambionframework/workspace/sql';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type Instrument, openInstrument } from '../src/instrument.ts';
 import { instruments, labSchema, labWritable } from '../src/scenarios.ts';

@@ -30,6 +30,10 @@
 			"types": "./dist/sql-resource.d.mts",
 			"import": "./dist/sql-resource.mjs"
 		},
+		"./just-bash": {
+			"types": "./dist/just-bash-entry.d.mts",
+			"import": "./dist/just-bash-entry.mjs"
+		},
 		"./package.json": "./package.json"
 	},
 	"main": "./dist/index.mjs",

@@ -19,7 +19,8 @@ import {
 	spent,
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
-import { BACKGROUND_CONTEXT, memoryBackend, openWorkspace } from '../../src/index.ts';
+import { BACKGROUND_CONTEXT, openWorkspace } from '../../src/index.ts';
+import { memoryBackend } from '../../src/just-bash.ts';
 
 type Rgb = readonly [number, number, number];
 

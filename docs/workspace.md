@@ -10,7 +10,8 @@ SQL binding, and the rules for references and provenance.
 ## Open one resource
 
 ```ts
-import { openWorkspace, memoryBackend } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/workspace/just-bash';
 
 const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
 ```
@@ -105,12 +106,8 @@ threshold: the active file is renamed aside under a timestamped name, and a
 fresh file starts at the same path. A record is never split by a rotation.
 
 ```ts
-import {
-  BACKGROUND_CONTEXT,
-  directoryBackend,
-  openLog,
-  openWorkspace,
-} from '@ambionframework/workspace';
+import { BACKGROUND_CONTEXT, openLog, openWorkspace } from '@ambionframework/workspace';
+import { directoryBackend } from '@ambionframework/workspace/just-bash';
 
 const drive = openWorkspace({ name: 'town', backend: directoryBackend('./data') });
 const host = { name: 'host' };
@@ -213,8 +210,9 @@ remove it, the same as any other file on the workspace.
 room has started; it needs no other setup.
 
 ```ts
-import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
 import { startRoom } from '@ambionframework/ambion';
+import { openWorkspace } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/workspace/just-bash';
 
 const site = openWorkspace({ name: 'town', backend: memoryBackend() });
 const session = await startRoom({ name: 'lobby', agents: [/* ... */] });
@@ -354,9 +352,10 @@ just-bash is the default implementation, and it has these specific behaviors:
 The contract lives in [Resources](resources.md).
 
 The memory and directory backends are the Pi binding. They export from the
-root entry, with `WorkspaceEnv`, the Pi `ExecutionEnv` that has a zero-argument
-`cleanup()`. `WorkspaceBackend` extends `ResourceBackend<WorkspaceEnv>` and
-adds Pi harness tools and optional guidance. `openWorkspace` creates the
+`./just-bash` entry. The root entry names `WorkspaceEnv`, the Pi
+`ExecutionEnv` that has a zero-argument `cleanup()`. `WorkspaceBackend`
+extends `ResourceBackend<WorkspaceEnv>` and adds Pi harness tools and
+optional guidance. `openWorkspace` creates the
 resource owner and binds the backend tools to its `use` method. `Workspace`
 adds `tools()` to the resource surface. Direct operations and tool calls share
 one queue and one lifecycle.

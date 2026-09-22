@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Workspace } from '../src/index.ts';
-import { BACKGROUND_CONTEXT, memoryBackend, openWorkspace, SHARED_DATABASE } from '../src/index.ts';
+import { BACKGROUND_CONTEXT, openWorkspace, SHARED_DATABASE } from '../src/index.ts';
+import { memoryBackend } from '../src/just-bash.ts';
 
 const agent = (name: string) => ({ name, identity: `${name} identity` });
 

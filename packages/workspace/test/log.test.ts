@@ -1,8 +1,8 @@
 import { posix } from 'node:path';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
-import type { WorkspaceAgent } from '../src/index.ts';
 import { BACKGROUND_CONTEXT, openLog } from '../src/index.ts';
+import type { WorkspaceAgent } from '../src/resource.ts';
 import { backends } from './support/backends.ts';
 
 const host: WorkspaceAgent = { name: 'host' };

@@ -9,7 +9,8 @@ import { enter, roomName as name } from '../../ambion/test/support/room.ts';
 import { byAgent, callTool, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import { DEFAULT_AUDIT_LOG, openAuditLog } from '../src/audit.ts';
 import { BashEnv } from '../src/bash-env.ts';
-import { memoryBackend, openWorkspace } from '../src/index.ts';
+import { openWorkspace } from '../src/index.ts';
+import { memoryBackend } from '../src/just-bash.ts';
 
 const workspaceAgent = (name: string) => ({ name });
 /** A `ToolContext.agent`, which still carries `identity` in the core type. */

@@ -30,6 +30,25 @@ backends no longer set it.
 keys on `name` alone. `WorkspaceAgent` is now `{ name }`. The workspace's own
 host agent, for the room mirror, now carries only a name.
 
+**The root entry of `@ambionframework/workspace` loads no backend.** A new
+`./just-bash` entry exports `memoryBackend`, `directoryBackend`,
+`MemoryBackendFile`, `MemoryBackendOptions`, `MemoryWorkspaceBackend`, and
+`SeedWriter`. The root entry no longer exports them. `directoryBackend`
+imports `ReadWriteFs` from `just-bash` at the top of its module now, not
+with a lazy `import()` on first connect.
+
+**The root entry no longer exports the resource contract or the SQL
+resource.** `openResource`, `ResourceBackend`, `ResourceEnv`,
+`WorkspaceAgent`, and `WorkspaceResource` stay on `./resource`.
+`openSqlResource`, `PROVENANCE_COLUMNS`, `SqlProvenance`, `SqlResource`,
+`SqlResourceEnv`, `SqlResourceOptions`, and `SqlValue` stay on `./sql`. Each
+entry held them already; only the root re-export is gone.
+
+**The root entry no longer exports three names with no consumer.**
+`ROOM_MIRROR_GUIDANCE`, `roomMirrorPath`, and `DEFAULT_ROTATE_BYTES` are
+gone from the root. `mirror.ts` still exports the first two for the
+package's own tests.
+
 ## 0.1.0 (2026-09-21)
 
 **The first release of Ambion.** Ambion is a collaboration kernel for agents and humans. A room
