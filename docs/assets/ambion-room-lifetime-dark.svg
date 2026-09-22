@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="524" viewBox="0 0 1000 524" role="img" aria-labelledby="title desc">
+  <title id="title">The lifetime of a room</title>
+  <desc id="desc">A room over four days. Person 1 visits on Monday and asks, and Person 2 visits on Tuesday and asks. Each question opens an exchange, and each exchange closes with a summary when no seat has work left. Agents A, B, and C keep their seats the whole time and activate only inside exchanges; some activations speak and some have nothing to add. On Wednesday the host restarts and the room replays its journal, and Agent D is seated from the reserve. The workspace keeps its files and tables across the restart. On Thursday Person 1 returns, catches up, and opens exchange 3.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="#a3aba8"/>
+    </marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="#6cc4bb"/>
+    </marker>
+    <marker id="cross" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="12" markerHeight="12">
+      <path d="M2 2 10 10 M10 2 2 10" stroke="#ef8570" stroke-width="2.4" stroke-linecap="round"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+    <style>
+      .sans { font-family: Inter, "IBM Plex Sans", system-ui, sans-serif; }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+      .ink { fill: #e8e9e4; }
+      .dim { fill: #a3aba8; }
+      .teal { fill: #6cc4bb; }
+      .red { fill: #ef8570; }
+      .code { fill: #a4b6f2; }
+      .lab { font-size: 13px; font-weight: 700; letter-spacing: 1.2px; }
+      .t { font-size: 19px; font-weight: 700; }
+      .n { font-size: 16px; font-weight: 700; }
+      .b { font-size: 16px; }
+      .s { font-size: 14px; }
+      .x { font-size: 13px; }
+      .flow { fill: none; stroke: #a3aba8; stroke-width: 2; }
+      .flow-dash { fill: none; stroke: #a3aba8; stroke-width: 2; stroke-dasharray: 6 5; }
+      .flow-teal { fill: none; stroke: #6cc4bb; stroke-width: 2; stroke-dasharray: 6 5; }
+      .flow-red { fill: none; stroke: #ef8570; stroke-width: 2; stroke-dasharray: 5 4; }
+      .guide { stroke: #384143; stroke-width: 1.5; stroke-dasharray: 2 6; }
+      .rule { stroke: #384143; stroke-width: 1.5; }
+    </style>
+  </defs>
+  <rect width="1000" height="524" rx="20" fill="#171c1d"/>
+  <line x1="190" y1="16" x2="190" y2="500" class="rule"/>
+  <line x1="386.5" y1="16" x2="386.5" y2="500" class="rule"/>
+  <line x1="583" y1="16" x2="583" y2="500" class="rule"/>
+  <line x1="779.5" y1="16" x2="779.5" y2="500" class="rule"/>
+  <line x1="976" y1="16" x2="976" y2="500" class="rule"/>
+  <text x="288" y="34" text-anchor="middle" class="sans dim lab">MONDAY</text>
+  <text x="485" y="34" text-anchor="middle" class="sans dim lab">TUESDAY</text>
+  <text x="681" y="34" text-anchor="middle" class="sans dim lab">WEDNESDAY</text>
+  <text x="878" y="34" text-anchor="middle" class="sans dim lab">THURSDAY</text>
+  <text x="24" y="34" text-anchor="start" class="sans dim lab">PEOPLE</text>
+  <text x="24" y="74" text-anchor="start" class="sans ink n">Person 1</text>
+  <text x="24" y="110" text-anchor="start" class="sans ink n">Person 2</text>
+  <rect x="206" y="54" width="150" height="26" rx="13" fill="#3b2a23" stroke="#e39a78" stroke-width="1.5"/>
+  <text x="220" y="72" text-anchor="start" class="sans ink x">visit · asks</text>
+  <rect x="402" y="90" width="150" height="26" rx="13" fill="#3b2a23" stroke="#e39a78" stroke-width="1.5"/>
+  <text x="416" y="108" text-anchor="start" class="sans ink x">visit · asks</text>
+  <rect x="796" y="54" width="164" height="26" rx="13" fill="#3b2a23" stroke="#e39a78" stroke-width="1.5"/>
+  <text x="810" y="72" text-anchor="start" class="sans ink x">returns · catches up</text>
+  <line x1="640" y1="46" x2="640" y2="500" stroke="#ef8570" stroke-width="2" stroke-dasharray="6 5"/>
+  <rect x="515" y="128" width="250" height="26" rx="13" fill="#20282a" stroke="#ef8570" stroke-width="1.5"/>
+  <text x="640" y="146" text-anchor="middle" class="sans red x" font-weight="700">host restarts · the room replays</text>
+  <text x="24" y="190" text-anchor="start" class="sans ink n">Room</text>
+  <text x="24" y="210" text-anchor="start" class="sans dim s">one journal</text>
+  <g filter="url(#shadow)">
+    <rect x="190" y="170" width="786" height="54" rx="12" fill="#20282a" stroke="#e8e9e4" stroke-width="1.5"/>
+  </g>
+  <rect x="206" y="178" width="150" height="38" rx="8" fill="#2b3436" stroke="#e8e9e4" stroke-width="1.5" stroke-opacity="0.6"/>
+  <text x="218" y="194" text-anchor="start" class="sans ink x" font-weight="700">exchange 1</text>
+  <text x="218" y="210" text-anchor="start" class="sans dim x">closed · summary</text>
+  <rect x="402" y="178" width="150" height="38" rx="8" fill="#2b3436" stroke="#e8e9e4" stroke-width="1.5" stroke-opacity="0.6"/>
+  <text x="414" y="194" text-anchor="start" class="sans ink x" font-weight="700">exchange 2</text>
+  <text x="414" y="210" text-anchor="start" class="sans dim x">closed · summary</text>
+  <rect x="796" y="178" width="164" height="38" rx="8" fill="#2b3436" stroke="#e8e9e4" stroke-width="1.5" stroke-opacity="0.6"/>
+  <text x="808" y="194" text-anchor="start" class="sans ink x" font-weight="700">exchange 3</text>
+  <text x="808" y="210" text-anchor="start" class="sans dim x">open</text>
+  <text x="652" y="202" text-anchor="start" class="sans dim s">open · quiet</text>
+  <text x="24" y="256" text-anchor="start" class="sans dim lab">SEATS</text>
+  <text x="24" y="289" text-anchor="start" class="sans ink n">Agent A</text>
+  <text x="172" y="289" text-anchor="end" class="sans dim x">Pi</text>
+  <text x="24" y="325" text-anchor="start" class="sans ink n">Agent B</text>
+  <text x="172" y="325" text-anchor="end" class="sans dim x">Claude</text>
+  <text x="24" y="361" text-anchor="start" class="sans ink n">Agent C</text>
+  <text x="172" y="361" text-anchor="end" class="sans dim x">Codex</text>
+  <text x="24" y="397" text-anchor="start" class="sans ink n">Agent D</text>
+  <text x="172" y="397" text-anchor="end" class="sans dim x">Pi</text>
+  <rect x="190" y="280" width="786" height="8" rx="4" fill="#323a3b"/>
+  <rect x="190" y="316" width="786" height="8" rx="4" fill="#323a3b"/>
+  <rect x="190" y="352" width="786" height="8" rx="4" fill="#323a3b"/>
+  <rect x="660" y="388" width="316" height="8" rx="4" fill="#323a3b"/>
+  <text x="668" y="418" text-anchor="start" class="sans dim x">seated from the reserve</text>
+  <rect x="212" y="274" width="44" height="20" rx="10" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
+  <rect x="222" y="310" width="80" height="20" rx="10" fill="#243a20" stroke="#86cc70" stroke-width="1.5"/>
+  <rect x="212" y="346" width="28" height="20" rx="10" fill="#20282a" stroke="#e4b060" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <rect x="408" y="274" width="36" height="20" rx="10" fill="#20282a" stroke="#8fa8ef" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <rect x="418" y="310" width="60" height="20" rx="10" fill="#243a20" stroke="#86cc70" stroke-width="1.5"/>
+  <rect x="424" y="346" width="96" height="20" rx="10" fill="#3d321c" stroke="#e4b060" stroke-width="1.5"/>
+  <rect x="800" y="274" width="70" height="20" rx="10" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
+  <rect x="812" y="310" width="48" height="20" rx="10" fill="#20282a" stroke="#86cc70" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <rect x="832" y="346" width="110" height="20" rx="10" fill="#3d321c" stroke="#e4b060" stroke-width="1.5"/>
+  <rect x="812" y="382" width="90" height="20" rx="10" fill="#362a3e" stroke="#c7a0da" stroke-width="1.5"/>
+  <rect x="206" y="432" width="28" height="16" rx="8" fill="#243a20" stroke="#86cc70" stroke-width="1.5"/>
+  <text x="242" y="445" text-anchor="start" class="sans dim x">an activation that spoke</text>
+  <rect x="420" y="432" width="28" height="16" rx="8" fill="#20282a" stroke="#86cc70" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="456" y="445" text-anchor="start" class="sans dim x">an activation with nothing to add</text>
+  <text x="24" y="478" text-anchor="start" class="sans ink n">Workspace</text>
+  <text x="24" y="498" text-anchor="start" class="sans dim s">files and tables</text>
+  <g filter="url(#shadow)">
+    <rect x="190" y="460" width="786" height="46" rx="12" fill="#1c2e2d" stroke="#36615d"/>
+  </g>
+  <rect x="206" y="469" width="70" height="28" rx="8" fill="#20282a" stroke="#36615d" stroke-width="1.5"/>
+  <text x="241.0" y="488" text-anchor="middle" class="sans ink x">a file</text>
+  <rect x="284" y="469" width="76" height="28" rx="8" fill="#20282a" stroke="#36615d" stroke-width="1.5"/>
+  <text x="322.0" y="488" text-anchor="middle" class="sans ink x">a table</text>
+  <rect x="420" y="469" width="110" height="28" rx="8" fill="#20282a" stroke="#36615d" stroke-width="1.5"/>
+  <text x="475.0" y="488" text-anchor="middle" class="sans ink x">a second file</text>
+  <rect x="812" y="469" width="110" height="28" rx="8" fill="#20282a" stroke="#36615d" stroke-width="1.5"/>
+  <text x="867.0" y="488" text-anchor="middle" class="sans ink x">new table rows</text>
+  <text x="652" y="488" text-anchor="start" class="sans teal x">kept across the restart</text>
+</svg>

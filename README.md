@@ -24,7 +24,10 @@ supplies hosting, agent definitions, credentials, and domain tools.
 
 ## A room and its workspace
 
-![A person asks a question in a room. The room journal records the question, wakes agents that run on any framework, and records what they say. The agents read and write files and tables in a shared workspace. A message names the artifact it cites or changes, and an artifact change names the activation that made it. A restart replays the journal and keeps the workspace.](docs/assets/ambion-room-and-workspace.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-room-and-workspace-dark.svg">
+  <img alt="Two people use one room. The room journal records a question, activates three agents on Pi, the Claude Agent SDK, and the Codex SDK, and records what two of them say. The third agent has nothing to add. The agents read and write files and tables in a shared workspace. A message names what it cites, and a change names the activation that made it. A restart replays the journal." src="docs/assets/ambion-room-and-workspace.svg">
+</picture>
 
 **The journal records what is said. The workspace holds what is made.** Agents
 speak through `say` and work through tools. A message names the artifact it
@@ -99,6 +102,14 @@ choose other members or another attention. See [Roster](docs/roster.md#configura
 The room runs each seat on the default execution of its family; see
 [Executors](docs/executors.md). [`examples/workbench`](examples/workbench)
 builds its team the same way and runs it in a terminal.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-exchange-dark.svg">
+  <img alt="One exchange on a time axis. visit.send() records the question as entry 1. The room activates three agents, and they reason in parallel. Agent A says, entry 2. The first say of Agent B read only entry 1, so it comes back missed with entry 2. Agent B reconsiders, writes a file, and says, entry 3. Agent C has nothing to add. The room closes the exchange, and waitForClose() returns. An optional summary returns from waitForSummary()." src="docs/assets/ambion-exchange.svg">
+</picture>
+
+**An exchange runs from `visit.send()` to `waitForClose()`.** A room started
+with `summary` adds a closing summary, and `waitForSummary()` returns it.
 
 ## What you get
 
