@@ -361,8 +361,6 @@ configuration should follow evidence from consumers.
 ## Validation commands
 
 Run `pnpm check` for formatting, builds, types, lint, and deterministic tests.
-Run `node scripts/cli-team-smoke.mjs` to check packed exports and a consumer
-that starts and resumes a room with the assistant shorthand.
 
 The provider evaluations require credentials for `AMBION_MODEL`. They default
 to `anthropic/claude-sonnet-5` with `ANTHROPIC_API_KEY` and skip without that

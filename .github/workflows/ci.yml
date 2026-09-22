@@ -84,11 +84,14 @@ jobs:
 
       # examples/workbench depends on @opentui/core, which needs Node
       # >=26.4.0 for its FFI bridge to native Zig. Every library package
-      # needs only Node >=22.19.0. pnpm checks engines.node for every
-      # workspace project on install, even a filtered one, so the two floors
-      # cannot share one `pnpm install` on the lower Node version. Removing
-      # workbench from this checkout keeps this job to what the library
-      # actually promises.
+      # needs only Node >=22.19.0. Deleting the directory keeps pnpm from
+      # scanning it as a workspace project, but pnpm-lock.yaml still lists
+      # it as an importer, and --frozen-lockfile installs every importer
+      # the lockfile names regardless of what pnpm-workspace.yaml finds on
+      # disk. engine-strict would still fail on @opentui/core's floor, so
+      # this job turns it off for the install: no library dependency needs
+      # more than Node 22.19.0, and the test run below is the real proof of
+      # that floor, stronger than the install-time check.
       - run: rm -rf examples/workbench
 
       - uses: pnpm/action-setup@v4
@@ -96,5 +99,5 @@ jobs:
         with:
           node-version: 22.19.0
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --config.engine-strict=false
       - run: pnpm run test

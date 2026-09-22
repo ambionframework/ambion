@@ -21,7 +21,7 @@ packages/
 examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
 scripts/        package discovery, versioning, publishing, reports
 docs/           design and operational contracts
-planning/       the plan, the backlog, the rules to write, and dated evidence
+planning/       the plan for the next release and the backlog
 .github/        CI, live, and dev-release workflows
 ```
 
@@ -40,12 +40,15 @@ assistant ──▶ ambion, pi
 ```
 
 Internal dependencies use `workspace:*`; pnpm rewrites them to the release
-version while packing. The packed-consumer smoke checks exercise the built
-exports, so a broken dependency order or export map fails before release.
-`scripts/release.mjs verify` installs the packed `@ambionframework/workspace`
-outside the repository, with no token, and imports its resource entry. See
-[`scripts/journal-smoke.mjs`](../scripts/journal-smoke.mjs) for the
-journal's own packed-consumer check.
+version while packing. Two packages get a packed-consumer smoke check that
+installs the tarball outside the repository and exercises its built
+exports: `scripts/release.mjs verify` installs `@ambionframework/workspace`
+with no token and imports its resource entry, and
+[`scripts/journal-smoke.mjs`](../scripts/journal-smoke.mjs) does the same
+for the journal. The other packages rely on `pnpm run check:packages` for
+export and pack-list correctness, and on `pnpm run test` for the built
+`dist/**` that `check:types` type-checks against; neither installs a
+tarball in an external project the way the two smoke checks do.
 
 The core has four published entries:
 
@@ -200,10 +203,13 @@ repository jobs plus the LemmaScript reusable workflow:
 
 `test-library-floor` removes `examples/workbench` from its checkout before
 `pnpm install`. That package depends on `@opentui/core`, which needs Node
-`>=26.4.0` for its FFI bridge to native Zig, and pnpm checks `engines.node`
-for every workspace project on install. The two floors cannot share one
-install on the lower Node version, so the job drops the one package that
-needs the higher one and tests the rest of the workspace on its own floor.
+`>=26.4.0` for its FFI bridge to native Zig. Deleting the directory keeps
+pnpm from scanning it as a workspace project, but `pnpm-lock.yaml` still
+lists it as an importer, and `--frozen-lockfile` installs every importer
+the lockfile names. The job installs with `--config.engine-strict=false`
+to get past that one check; no library dependency needs more than Node
+`22.19.0`, and the test run itself, not the install, is the real proof of
+that floor.
 
 The `check` job also runs `pnpm run check:packages` after the build. The check
 reads `pnpm-lock.yaml` and every publishable manifest. It fails on more than
