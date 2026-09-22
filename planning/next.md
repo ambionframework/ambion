@@ -243,9 +243,9 @@ one copy of each mechanism.
       file list, one table, and one call envelope. P1. (M4)
 - [ ] **3.** One set of scripted room fixtures in the conformance suite.
       P2. (M5)
-- [ ] **4.** The workspace as an interface: a conformance entry, one
-      change record, one default tool set, one layout, one host identity,
-      and a root entry that loads no backend. Needs 2. P1. (M7)
+- [ ] **4.** The workspace as an interface: a conformance entry, no
+      change log, one default tool set, one layout, one host identity, and
+      a root entry that loads no backend. Needs 2. P1. (M7)
 
 **Evidence:** `pnpm check`; `pnpm chaos` and the restart suite for step 1;
 a pi-journal file that 0.1.0 wrote reads as before; the memory and
@@ -341,9 +341,10 @@ failure that clears on retry is written as an oversized entry. Land it
 first, because the rest edits the same code.
 
 - One best-effort record path and one `reportError` in `log.ts`, for
-  `audit.ts`, `changes.ts`, and `mirror.ts`.
-- One rotated-file list beside `rotatedName` (`log.ts:45`), for
-  `changes.ts:88` and `mirror.ts:98`.
+  `audit.ts` and `mirror.ts`. M7 removes `changes.ts`, so this item leaves
+  it as it is.
+- One rotated-file match beside `rotatedName` (`log.ts:45`), for
+  `mirror.ts:98`.
 - One import-free Markdown table module for `sql.ts:237` and
   `sql-resource.ts:283`.
 - One private `callEnvelope` in `tools.ts` for the two copies of the
@@ -387,19 +388,22 @@ both. M4 edits the same files, so M7 starts after it.
   replaces its target, a recursive create, a forced remove, the file error
   codes, `~` expansion, an abort apart from a timeout, and the bounded
   output view. The memory and directory backends run it first.
-- One change record. `recordChange` (`tools.ts:133`) resolves the path of
-  a `write` or an `edit` through `env.absolutePath`.
-  `justBashChangedPaths` (`just-bash.ts:218`) repeats the home rule of
-  `BashEnv`, and it goes. A backend supplies `changedPaths` only for a
-  tool of its own.
+- No change log. The change log records a `write` or an `edit` call
+  only. A change through `bash`, `sql`, or a script never reaches it
+  ([Record what changed](../docs/workspace.md#record-what-changed)). The
+  audit log already records every tool call with its arguments and its
+  provenance. Remove `changes.ts`, the `changes` option,
+  `workspace.changes()`, and `WorkspaceBackend.changedPaths`
+  (`just-bash.ts:218`). `workspace.md` and `resources.md` lose their
+  change log sections, and the changelog names the removed exports.
 - One default tool set. The neutral layer owns `read`, `write`, `edit`,
   `bash`, and `sql` (`justBashTools`, `just-bash.ts:127`). A backend adds
   its own tools and does not list the defaults again.
 - One layout. The backend names the folders of the shared records: the
-  audit log, the change log, the shared database, and the room mirrors
-  (`audit.ts:21`, `changes.ts:19`, `sql.ts:35`, `mirror.ts:30`). The
+  audit log, the shared database, and the room mirrors (`audit.ts:21`,
+  `sql.ts:35`, `mirror.ts:30`). The
   just-bash backends keep `/workspace` and `/rooms`, so no file moves.
-- One host identity. The mirror and `changes()` run as an agent that
+- One host identity. The mirror runs as an agent that
   `openWorkspace` builds (`workspace.ts:77`). The workspace names it, so a
   backend with real accounts can give it credentials.
 - A root entry that loads no backend. `memoryBackend` and
