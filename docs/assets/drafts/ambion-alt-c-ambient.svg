@@ -42,8 +42,8 @@
 
   <!-- people -->
   <text x="56" y="160" class="sans dim label">PEOPLE</text>
-  <text x="56" y="204" class="sans ink name">priya</text>
-  <text x="56" y="244" class="sans ink name">andrei</text>
+  <text x="56" y="204" class="sans ink name">Person 1</text>
+  <text x="56" y="244" class="sans ink name">Person 2</text>
   <rect x="300" y="188" width="170" height="24" rx="12" class="visit"/>
   <text x="316" y="205" class="sans ink tag">visit · asks</text>
   <rect x="1130" y="188" width="220" height="24" rx="12" class="visit"/>
@@ -75,13 +75,13 @@
 
   <!-- agents -->
   <text x="56" y="416" class="sans dim label">SEATS</text>
-  <text x="56" y="452" class="sans ink name">datasheets</text>
+  <text x="56" y="452" class="sans ink name">Agent A</text>
   <text x="244" y="452" text-anchor="end" class="sans dim tag">Pi</text>
-  <text x="56" y="492" class="sans ink name">design</text>
+  <text x="56" y="492" class="sans ink name">Agent B</text>
   <text x="244" y="492" text-anchor="end" class="sans dim tag">Claude</text>
-  <text x="56" y="532" class="sans ink name">experiments</text>
+  <text x="56" y="532" class="sans ink name">Agent C</text>
   <text x="244" y="532" text-anchor="end" class="sans dim tag">Codex</text>
-  <text x="56" y="572" class="sans ink name">compliance</text>
+  <text x="56" y="572" class="sans ink name">Agent D</text>
   <text x="244" y="572" text-anchor="end" class="sans dim tag">Pi</text>
 
   <rect x="260" y="444" width="1124" height="8" rx="4" class="seat"/>
@@ -117,14 +117,14 @@
     <rect x="260" y="648" width="1124" height="52" rx="12" fill="#eef5f4" stroke="#bcd9d5" stroke-width="1"/>
   </g>
   <rect x="276" y="660" width="130" height="28" rx="8" class="file"/>
-  <text x="341" y="679" text-anchor="middle" class="mono ink" font-size="12">/shared/kit.md</text>
+  <text x="341" y="679" text-anchor="middle" class="sans ink tag">a file</text>
   <rect x="420" y="660" width="110" height="28" rx="8" class="file"/>
-  <text x="475" y="679" text-anchor="middle" class="mono ink" font-size="12">parts table</text>
+  <text x="475" y="679" text-anchor="middle" class="sans ink tag">a table</text>
   <rect x="610" y="660" width="140" height="28" rx="8" class="file"/>
-  <text x="680" y="679" text-anchor="middle" class="mono ink" font-size="12">/plans/bench.md</text>
+  <text x="680" y="679" text-anchor="middle" class="sans ink tag">a second file</text>
   <text x="920" y="679" class="sans teal tag">every file stays across the restart</text>
   <rect x="1180" y="660" width="150" height="28" rx="8" class="file"/>
-  <text x="1255" y="679" text-anchor="middle" class="mono ink" font-size="12">/results/run1.csv</text>
+  <text x="1255" y="679" text-anchor="middle" class="sans ink tag">new table rows</text>
 
   <!-- bottom band -->
   <line x1="56" y1="724" x2="1384" y2="724" stroke="#e2e0d8" stroke-width="1.5"/>

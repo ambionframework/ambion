@@ -51,15 +51,15 @@
   <line x1="260" y1="576" x2="1384" y2="576" class="guide"/>
 
   <!-- participant labels -->
-  <text x="56" y="192" class="sans ink name">priya</text>
-  <text x="56" y="212" class="sans dim small">a person · owns the exchange</text>
+  <text x="56" y="192" class="sans ink name">A person</text>
+  <text x="56" y="212" class="sans dim small">owns the exchange</text>
   <text x="56" y="282" class="sans ink name">Room</text>
   <text x="56" y="302" class="sans dim small">the journal</text>
-  <text x="56" y="392" class="sans ink name">datasheets</text>
+  <text x="56" y="392" class="sans ink name">Agent A</text>
   <text x="56" y="412" class="sans dim small">Pi</text>
-  <text x="56" y="482" class="sans ink name">design</text>
+  <text x="56" y="482" class="sans ink name">Agent B</text>
   <text x="56" y="502" class="sans dim small">Claude Agent SDK</text>
-  <text x="56" y="572" class="sans ink name">experiments</text>
+  <text x="56" y="572" class="sans ink name">Agent C</text>
   <text x="56" y="592" class="sans dim small">Codex SDK</text>
   <text x="56" y="682" class="sans ink name">Workspace</text>
   <text x="56" y="702" class="sans dim small">files and tables</text>
@@ -76,16 +76,16 @@
     <circle cx="300" cy="284" r="11" class="entry"/><text x="300" y="288" text-anchor="middle" class="entry-num">1</text>
     <text x="318" y="289" class="ink small">ask</text>
     <circle cx="600" cy="284" r="11" class="entry"/><text x="600" y="288" text-anchor="middle" class="entry-num">2</text>
-    <text x="618" y="289" class="ink small">datasheets says</text>
+    <text x="618" y="289" class="ink small">agent A says</text>
     <circle cx="880" cy="284" r="11" class="entry"/><text x="880" y="288" text-anchor="middle" class="entry-num">3</text>
-    <text x="898" y="289" class="ink small">design says</text>
+    <text x="898" y="289" class="ink small">agent B says</text>
     <circle cx="1060" cy="284" r="11" class="entry"/><text x="1060" y="288" text-anchor="middle" class="entry-num">4</text>
     <text x="1078" y="289" class="ink small">close</text>
     <circle cx="1220" cy="284" r="11" class="entry"/><text x="1220" y="288" text-anchor="middle" class="entry-num">5</text>
     <text x="1238" y="289" class="ink small">summary</text>
   </g>
-  <text x="618" y="309" class="sans teal tag">ref: /shared/kit.md</text>
-  <text x="898" y="309" class="sans teal tag">ref: /parts/choice.md</text>
+  <text x="618" y="309" class="sans teal tag">ref: the file it read</text>
+  <text x="898" y="309" class="sans teal tag">ref: the file it wrote</text>
   <text x="1078" y="309" class="sans dim tag">no seat has work left</text>
   <text x="1238" y="309" class="sans dim tag">optional</text>
 
@@ -106,7 +106,7 @@
 
   <!-- activation bars -->
   <rect x="400" y="382" width="220" height="28" rx="14" fill="#e8ecfa" stroke="#8fa8ef" stroke-width="1.5"/>
-  <text x="418" y="401" class="sans ink tag">reasons on 1 · reads kit.md</text>
+  <text x="418" y="401" class="sans ink tag">reasons on 1 · reads a file</text>
 
   <rect x="400" y="472" width="500" height="28" rx="14" fill="#e8f5e2" stroke="#7fc468" stroke-width="1.5"/>
   <text x="418" y="491" class="sans ink tag">reasons on 1</text>
@@ -133,10 +133,10 @@
     <rect x="260" y="660" width="1124" height="52" rx="12" fill="#eef5f4" stroke="#bcd9d5" stroke-width="1"/>
   </g>
   <rect x="276" y="672" width="140" height="28" rx="8" fill="#fbfaf6" stroke="#bcd9d5"/>
-  <text x="346" y="691" text-anchor="middle" class="mono ink" font-size="12">/shared/kit.md</text>
-  <rect x="760" y="672" width="330" height="28" rx="8" fill="#fbfaf6" stroke="#3b8f88"/>
-  <text x="776" y="691" class="mono ink" font-size="12">/parts/choice.md</text>
-  <text x="918" y="691" class="sans teal tag">names its activation</text>
+  <text x="346" y="691" text-anchor="middle" class="sans ink tag">an existing file</text>
+  <rect x="760" y="672" width="250" height="28" rx="8" fill="#fbfaf6" stroke="#3b8f88"/>
+  <text x="776" y="691" class="sans ink tag">a new file</text>
+  <text x="850" y="691" class="sans teal tag">names its activation</text>
 
   <!-- bottom band -->
   <line x1="56" y1="760" x2="1384" y2="760" stroke="#e2e0d8" stroke-width="1.5"/>
