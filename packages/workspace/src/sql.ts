@@ -18,7 +18,8 @@
  * records. A newline outside a quoted value ends a record. A newline inside a
  * value stays in the value, and a doubled quote is an escaped quote. This one
  * scan gives the row count and the preview records, so a backend needs only
- * the `sqlite3` command.
+ * the `sqlite3` command. The tool holds the whole export in memory while it
+ * scans.
  *
  * just-bash is one implementation of this contract. Its `sqlite3` loads the
  * main database into a WebAssembly engine that has no bridge to the virtual
@@ -178,7 +179,7 @@ async function preview(
  * The tool reads the temporary file once and scans it into RFC 4180 records.
  * The row count is the number of records minus the header. The preview holds
  * the first `maxRows + 1` records, header included, so a quoted newline never
- * splits a preview row.
+ * splits a preview row. The scan holds the whole export in memory.
  */
 async function exportCsv(
 	env: ExecutionEnv,

@@ -75,7 +75,8 @@ the temporary CSV file once and scans it for RFC 4180 records: a newline
 outside a quoted value ends a record, a newline inside a value stays in the
 value, and a doubled quote is an escaped quote. The row count comes from this
 same scan, and so does the preview, so a quoted newline no longer splits a
-preview row.
+preview row. The tool holds the whole export in memory while it scans, so the
+preview keeps a quoted newline inside its record.
 
 ## 0.1.0 (2026-09-21)
 

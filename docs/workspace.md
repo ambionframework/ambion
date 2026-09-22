@@ -327,12 +327,15 @@ private file; the tool opens that file as `main`.
 **Export only for a reader outside SQL.** Set `export` when a script or another
 tool needs the rows. The tool writes the full result as CSV to that path and
 shows the file's head. A NULL value reads as `\N`, so a NULL stays apart from
-an empty string.
+an empty string. The tool holds the whole export in memory while it scans the
+file for the row count and the preview.
 
 ### just-bash as one implementation
 
 The `sql` contract holds over any backend that supplies a `sqlite3` command.
-just-bash is the default implementation, and it has these specific behaviors:
+The export path holds the whole export in memory while it scans, on every
+backend. just-bash is the default implementation, and it has these specific
+behaviors:
 
 - **It loads the main database into a WebAssembly engine and writes the file
   back after each call.** The owner's serialization keeps this write-back safe:
