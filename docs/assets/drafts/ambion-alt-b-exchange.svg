@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="860" viewBox="0 0 1440 860" role="img" aria-labelledby="title desc">
+  <title id="title">One exchange from question to quiet</title>
+  <desc id="desc">A person asks a question and the room records it as entry 1. The room activates three agents at broadcast attention. They reason in parallel. The first agent reads a file and says, entry 2. The second agent tries to say from a record that ends at entry 1, and the room refuses the say with the message it missed. The second agent reconsiders with entry 2, writes a file in the workspace, and says, entry 3. The third agent has nothing to add and writes no entry. No seat has work left, so the room closes the exchange, entry 4. An optional summary, entry 5, goes to the person.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="#6c7371"/>
+    </marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="#3b8f88"/>
+    </marker>
+    <marker id="refused" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="12" markerHeight="12">
+      <path d="M2 2 10 10 M10 2 2 10" stroke="#c4553d" stroke-width="2.4" stroke-linecap="round"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#232a2b" flood-opacity="0.08"/>
+    </filter>
+    <style>
+      .sans { font-family: Inter, "IBM Plex Sans", system-ui, sans-serif; }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+      .ink { fill: #232a2b; }
+      .dim { fill: #6c7371; }
+      .teal { fill: #3b8f88; }
+      .red { fill: #c4553d; }
+      .small { font-size: 13px; }
+      .tag { font-size: 12px; }
+      .body { font-size: 15px; }
+      .label { font-size: 12px; font-weight: 700; letter-spacing: 1.4px; }
+      .name { font-size: 16px; font-weight: 700; }
+      .guide { stroke: #e2e0d8; stroke-width: 1.5; stroke-dasharray: 2 6; }
+      .flow { fill: none; stroke: #6c7371; stroke-width: 2; }
+      .flow-red { fill: none; stroke: #c4553d; stroke-width: 2; stroke-dasharray: 5 4; }
+      .flow-teal { fill: none; stroke: #3b8f88; stroke-width: 2; stroke-dasharray: 6 5; }
+      .entry { fill: #232a2b; }
+      .entry-num { font-size: 12px; font-weight: 700; fill: #fbfaf6; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="860" rx="28" fill="#f4f3ee"/>
+  <text x="56" y="66" class="sans ink" font-size="32" font-weight="700">One exchange, from question to quiet</text>
+  <text x="56" y="98" class="sans dim" font-size="16">Agents reason in parallel. The room accepts one say at a time and refuses a say that read an old record.</text>
+
+  <!-- time axis -->
+  <text x="56" y="150" class="sans dim label">PARTICIPANT</text>
+  <path d="M260 146 H1384" class="flow" stroke="#bdbab0" marker-end="url(#arrow)"/>
+  <text x="260" y="136" class="sans dim label">TIME</text>
+
+  <!-- row guides -->
+  <line x1="260" y1="196" x2="1384" y2="196" class="guide"/>
+  <line x1="260" y1="396" x2="1384" y2="396" class="guide"/>
+  <line x1="260" y1="486" x2="1384" y2="486" class="guide"/>
+  <line x1="260" y1="576" x2="1384" y2="576" class="guide"/>
+
+  <!-- participant labels -->
+  <text x="56" y="192" class="sans ink name">priya</text>
+  <text x="56" y="212" class="sans dim small">a person · owns the exchange</text>
+  <text x="56" y="282" class="sans ink name">Room</text>
+  <text x="56" y="302" class="sans dim small">the journal</text>
+  <text x="56" y="392" class="sans ink name">datasheets</text>
+  <text x="56" y="412" class="sans dim small">Pi</text>
+  <text x="56" y="482" class="sans ink name">design</text>
+  <text x="56" y="502" class="sans dim small">Claude Agent SDK</text>
+  <text x="56" y="572" class="sans ink name">experiments</text>
+  <text x="56" y="592" class="sans dim small">Codex SDK</text>
+  <text x="56" y="682" class="sans ink name">Workspace</text>
+  <text x="56" y="702" class="sans dim small">files and tables</text>
+
+  <!-- workspace write line, drawn under the bars -->
+  <path d="M820 500 V660" class="flow-teal" marker-end="url(#arrow-teal)"/>
+  <text x="832" y="630" class="sans teal tag">writes</text>
+
+  <!-- journal -->
+  <g filter="url(#shadow)">
+    <rect x="260" y="262" width="1124" height="64" rx="12" fill="#fbfaf6" stroke="#232a2b" stroke-width="1.5"/>
+  </g>
+  <g class="sans">
+    <circle cx="300" cy="284" r="11" class="entry"/><text x="300" y="288" text-anchor="middle" class="entry-num">1</text>
+    <text x="318" y="289" class="ink small">ask</text>
+    <circle cx="600" cy="284" r="11" class="entry"/><text x="600" y="288" text-anchor="middle" class="entry-num">2</text>
+    <text x="618" y="289" class="ink small">datasheets says</text>
+    <circle cx="880" cy="284" r="11" class="entry"/><text x="880" y="288" text-anchor="middle" class="entry-num">3</text>
+    <text x="898" y="289" class="ink small">design says</text>
+    <circle cx="1060" cy="284" r="11" class="entry"/><text x="1060" y="288" text-anchor="middle" class="entry-num">4</text>
+    <text x="1078" y="289" class="ink small">close</text>
+    <circle cx="1220" cy="284" r="11" class="entry"/><text x="1220" y="288" text-anchor="middle" class="entry-num">5</text>
+    <text x="1238" y="289" class="ink small">summary</text>
+  </g>
+  <text x="618" y="309" class="sans teal tag">ref: /shared/kit.md</text>
+  <text x="898" y="309" class="sans teal tag">ref: /parts/choice.md</text>
+  <text x="1078" y="309" class="sans dim tag">no seat has work left</text>
+  <text x="1238" y="309" class="sans dim tag">optional</text>
+
+  <!-- person events -->
+  <circle cx="300" cy="196" r="7" fill="#cf8b6b"/>
+  <path d="M300 204 V260" class="flow" marker-end="url(#arrow)"/>
+  <text x="312" y="236" class="sans dim small">asks</text>
+  <circle cx="1220" cy="196" r="7" fill="#cf8b6b"/>
+  <path d="M1220 260 V206" class="flow" marker-end="url(#arrow)"/>
+  <text x="1232" y="236" class="sans dim small">reads</text>
+
+  <!-- activation fan-out -->
+  <path d="M400 326 V380" class="flow" marker-end="url(#arrow)"/>
+  <path d="M400 326 V470" class="flow" marker-end="url(#arrow)"/>
+  <path d="M400 326 V560" class="flow" marker-end="url(#arrow)"/>
+  <text x="410" y="352" class="sans dim small">activates all three</text>
+  <text x="410" y="370" class="sans dim tag">broadcast attention</text>
+
+  <!-- activation bars -->
+  <rect x="400" y="382" width="220" height="28" rx="14" fill="#e8ecfa" stroke="#8fa8ef" stroke-width="1.5"/>
+  <text x="418" y="401" class="sans ink tag">reasons on 1 · reads kit.md</text>
+
+  <rect x="400" y="472" width="500" height="28" rx="14" fill="#e8f5e2" stroke="#7fc468" stroke-width="1.5"/>
+  <text x="418" y="491" class="sans ink tag">reasons on 1</text>
+  <text x="712" y="491" class="sans ink tag">reconsiders with 2</text>
+
+  <rect x="400" y="562" width="300" height="28" rx="14" fill="#f6ecd8" stroke="#e0a94e" stroke-width="1.5"/>
+  <text x="418" y="581" class="sans ink tag">reads 1 and 2 · nothing to add</text>
+  <rect x="712" y="564" width="60" height="24" rx="12" fill="#f6ecd8"/>
+  <text x="742" y="580" text-anchor="middle" class="mono ink" font-size="11">silent</text>
+
+  <!-- says -->
+  <path d="M600 382 V328" class="flow" marker-end="url(#arrow)"/>
+  <text x="590" y="364" text-anchor="end" class="sans dim small">says</text>
+
+  <path d="M680 472 V328" class="flow-red" marker-end="url(#refused)"/>
+  <text x="692" y="400" class="sans red small" font-weight="700">refused</text>
+  <text x="692" y="418" class="sans red tag">stale · gets entry 2</text>
+
+  <path d="M880 472 V328" class="flow" marker-end="url(#arrow)"/>
+  <text x="890" y="400" class="sans dim small">says</text>
+
+  <!-- workspace band -->
+  <g filter="url(#shadow)">
+    <rect x="260" y="660" width="1124" height="52" rx="12" fill="#eef5f4" stroke="#bcd9d5" stroke-width="1"/>
+  </g>
+  <rect x="276" y="672" width="140" height="28" rx="8" fill="#fbfaf6" stroke="#bcd9d5"/>
+  <text x="346" y="691" text-anchor="middle" class="mono ink" font-size="12">/shared/kit.md</text>
+  <rect x="760" y="672" width="330" height="28" rx="8" fill="#fbfaf6" stroke="#3b8f88"/>
+  <text x="776" y="691" class="mono ink" font-size="12">/parts/choice.md</text>
+  <text x="918" y="691" class="sans teal tag">names its activation</text>
+
+  <!-- bottom band -->
+  <line x1="56" y1="760" x2="1384" y2="760" stroke="#e2e0d8" stroke-width="1.5"/>
+  <text x="56" y="796" class="sans ink body" font-weight="700">Parallel reasoning.</text>
+  <text x="56" y="820" class="sans dim small">Every activated seat reads the same record.</text>
+  <text x="520" y="796" class="sans ink body" font-weight="700">One ordered record.</text>
+  <text x="520" y="820" class="sans dim small">A say commits only if its record is still current.</text>
+  <text x="984" y="796" class="sans ink body" font-weight="700">Silence closes the exchange.</text>
+  <text x="984" y="820" class="sans dim small">A seat with nothing to add writes nothing.</text>
+</svg>
