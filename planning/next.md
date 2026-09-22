@@ -243,14 +243,16 @@ one copy of each mechanism.
       file list, one table, and one call envelope. P1. (M4)
 - [ ] **3.** One set of scripted room fixtures in the conformance suite.
       P2. (M5)
-- [ ] **4.** The workspace as an interface: a conformance entry, no
-      change log, one default tool set, one layout, one host identity, and
-      a root entry that loads no backend. Needs 2. P1. (M7)
+- [ ] **4.** The workspace as an interface: a conformance entry, a
+      contract with no `destroy()` and no change log, a neutral layer that
+      owns the tools, their guidance, and the environment helpers, and one
+      entry for each binding. Needs 2. P1. (M7)
 
 **Evidence:** `pnpm check`; `pnpm chaos` and the restart suite for step 1;
 a pi-journal file that 0.1.0 wrote reads as before; the memory and
 directory backends pass the workspace conformance entry, and
-`dist/index.mjs` of the workspace package imports no `just-bash`.
+`dist/index.mjs` of the workspace package imports neither `just-bash` nor
+`node:sqlite`.
 
 ## The items
 
@@ -378,43 +380,92 @@ the list.
 neutral layer and one implementation behind one entry. The resource
 contract, `openWorkspace`, the tool binding, the logs, the mirror, and the
 `sql` tool run over Pi's `ExecutionEnv` alone. The root entry still loads
-just-bash (`index.ts:35`), and a backend repeats rules that the neutral
-layer owns. A second backend, such as the workstation in PR #268, gets
-both. M4 edits the same files, so M7 starts after it.
+just-bash (`index.ts:35`) and `node:sqlite` (`index.ts:55`). A backend
+repeats rules that the neutral layer owns, and the contract holds two
+features that do not hold on every backend. A second backend, such as the
+workstation in PR #268, gets all of it. M4 edits the same files, so M7
+starts after it.
 
-- A conformance entry, `@ambionframework/workspace/conformance`, that any
-  backend runs. It holds the scenario matrix of `test/support/backends.ts`
-  and the `ExecutionEnv` rules that the tools need: a rename that
-  replaces its target, a recursive create, a forced remove, the file error
-  codes, `~` expansion, an abort apart from a timeout, and the bounded
-  output view. The memory and directory backends run it first.
-- No change log. The change log records a `write` or an `edit` call
+The contract gets smaller:
+
+- **A conformance entry.** `@ambionframework/workspace/conformance` holds
+  the scenario matrix of `test/support/backends.ts` and the `ExecutionEnv`
+  rules that the tools need: a rename that replaces its target, a
+  recursive create, a forced remove, the file error codes, `~` expansion,
+  an abort apart from a timeout, and the bounded output view. Any backend
+  runs it, and the memory and directory backends run it first.
+- **No `destroy()`.** Nothing outside the tests calls it. The SQL resource
+  answers it with a no-op (`sql-resource.ts:161`). On a shared server it
+  would delete the files of every account. `WorkspaceResource`,
+  `ResourceBackend`, and `SqlResource` lose it. The owner keeps three of
+  its five phases (`resource.ts:32`), and the directory walk of
+  `directoryBackend` goes (`just-bash.ts:261`). A host deletes the data
+  that it owns.
+- **No change log.** The change log records a `write` or an `edit` call
   only. A change through `bash`, `sql`, or a script never reaches it
   ([Record what changed](../docs/workspace.md#record-what-changed)). The
   audit log already records every tool call with its arguments and its
-  provenance. Remove `changes.ts`, the `changes` option,
-  `workspace.changes()`, and `WorkspaceBackend.changedPaths`
-  (`just-bash.ts:218`). `workspace.md` and `resources.md` lose their
-  change log sections, and the changelog names the removed exports.
-- One default tool set. The neutral layer owns `read`, `write`, `edit`,
-  `bash`, and `sql` (`justBashTools`, `just-bash.ts:127`). A backend adds
-  its own tools and does not list the defaults again.
-- One layout. The backend names the folders of the shared records: the
-  audit log, the shared database, and the room mirrors (`audit.ts:21`,
-  `sql.ts:35`, `mirror.ts:30`). The
-  just-bash backends keep `/workspace` and `/rooms`, so no file moves.
-- One host identity. The mirror runs as an agent that
-  `openWorkspace` builds (`workspace.ts:77`). The workspace names it, so a
-  backend with real accounts can give it credentials.
-- A root entry that loads no backend. `memoryBackend` and
-  `directoryBackend` move to `@ambionframework/workspace/just-bash`, and a
-  Biome rule keeps just-bash out of the neutral files. This removes two
-  exports from the root of a published package. The changelog names the
-  move, and the workbench imports the new entry.
+  provenance. `changes.ts`, the `changes` option, `workspace.changes()`,
+  and `WorkspaceBackend.changedPaths` (`just-bash.ts:218`) go.
+- **An optional `identity`.** No backend reads `WorkspaceAgent.identity`
+  (`resource.ts:4`), and each one keys on `name`. The field becomes
+  optional, so a caller that passes it still compiles.
 
-A new backend then implements `ExecutionEnv`, names its layout, and
-passes the suite. It repeats no rule of the neutral layer, and it loads no
-just-bash.
+The neutral layer owns what every backend needs:
+
+- **One default tool set.** The neutral layer owns `read`, `write`,
+  `edit`, `bash`, and `sql` (`justBashTools`, `just-bash.ts:127`). A
+  backend adds its own tools and does not list the defaults again.
+- **One tool guidance.** `JUST_BASH_GUIDANCE` (`just-bash.ts:106`)
+  describes the five default tools and the shared database beside the
+  just-bash shell. The neutral layer writes the part about the tools. A
+  backend states only its shell: its commands, its network, and its
+  isolation.
+- **One set of environment helpers.** `BashEnv` holds rules that every
+  `ExecutionEnv` needs. They move to the neutral layer, and the
+  conformance entry checks them once:
+  - the `~` and relative path rule (`bash-env.ts:105`)
+  - the deadline that tells an abort from a timeout (`bash-env.ts:318`)
+  - the bounded output view and its spill file (`bash-env.ts:303`,
+    `bash-env.ts:284`)
+  - the temporary names under `/tmp` (`bash-env.ts:217`)
+- **One command for the default tools.** The `sql` export counts its rows
+  with `xan` (`sql.ts:257`). The tool counts the CSV records itself, so a
+  backend needs `sqlite3` alone.
+- **One layout.** The backend names the folders of the shared records:
+  the audit log, the shared database, and the room mirrors
+  (`audit.ts:21`, `sql.ts:35`, `mirror.ts:30`). The just-bash backends
+  keep `/workspace` and `/rooms`, so no file moves.
+- **One host identity.** The mirror runs as an agent that `openWorkspace`
+  builds (`workspace.ts:77`). The workspace names it, so a backend with
+  real accounts can give it credentials.
+
+Each entry holds one thing:
+
+- **A root entry that loads no backend.** `memoryBackend` and
+  `directoryBackend` move to `@ambionframework/workspace/just-bash`, and a
+  Biome rule keeps just-bash out of the neutral files. No package bundles
+  the workspace for workerd, so `directoryBackend` imports `ReadWriteFs`
+  statically, and the lazy import (`just-bash.ts:247`) goes.
+- **One entry for each binding.** The root re-exports `./resource`
+  (`index.ts:46`) and `./sql` (`index.ts:55`). Each binding keeps its own
+  entry only, and the workbench imports `openSqlResource` from `./sql`.
+- **No internal constants at the root.** `ROOM_MIRROR_GUIDANCE`,
+  `roomMirrorPath`, and `DEFAULT_ROTATE_BYTES` (`index.ts:37`,
+  `index.ts:39`) have no consumer. `roomMirrorPath` also fixes the
+  `/rooms` path that the layout now names.
+
+**M7 removes exports from a published package.** `destroy()` leaves the
+three types that hold it. The change log exports go: `openChangeLog`,
+`DEFAULT_CHANGE_LOG`, `ChangeLog`, `ChangeLogOptions`, `ChangeQuery`,
+`WorkspaceChange`, the `changes` option, and `changedPaths`. The root
+stops exporting the backends, the resource contract, the SQL resource, and
+the three constants. The changelog names each one. `workspace.md` and
+`resources.md` lose their sections on destruction and on the change log.
+
+A new backend then implements `connect()` and an `ExecutionEnv` over the
+shared helpers, names its layout, and passes the suite. It repeats no rule
+of the neutral layer, and it loads no just-bash.
 
 ### R. Release
 
