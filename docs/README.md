@@ -29,6 +29,7 @@ each page.
 | [Summaries](summary.md)               | Optional closing work and context replacement                          |
 | [Resources](resources.md)             | The resource contract, references, and provenance                      |
 | [Workspace](workspace.md)             | The Pi filesystem binding of the resource contract                     |
+| [Workstation](workstation.md)         | A design, not built: a remote server as a workspace over SSH           |
 | [Example](example.md)                 | The one runnable example: an agentic lab workspace                     |
 | [Durability](durability.md)           | Journal guarantees, recovery, leases, and failure evidence             |
 | [Formal](formal.md)                   | The verified rules, their proofs, and how the gate runs them           |
@@ -41,7 +42,8 @@ each page.
 Read `patterns.md` to find which primitive represents a human pattern.
 
 Read `resources.md` for the resource contract and `workspace.md` for the
-filesystem binding.
+filesystem binding. `workstation.md` is the design for a workspace on a
+remote server; no package implements it yet.
 
 `assistant.md` describes the assistant package, the room configuration
 shorthand, and how the workbench example evaluates it.
