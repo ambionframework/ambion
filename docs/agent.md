@@ -75,6 +75,12 @@ from its definition. A closing activation receives only `say`. `say` accepts
 facts. `seat` and `unseat` accept an agent name. The room validates operations
 at the commit boundary.
 
+**A bundle adds tools and guidance.** `bundles: [shared.tools()]` adds the
+tools of a resource, such as the workspace. The kernel flattens bundles at
+definition time and rejects two tools with one name. The guidance of every
+bundle follows the speaking policy in the system prompt. [Resources](resources.md)
+and [Workspace](workspace.md) state how a resource builds a bundle.
+
 **A tool learns where it ran from `ctx`.** `ctx.room` names the room and
 `ctx.activation` holds the id that every event and message of the
 activation carries. `ctx.exchange` holds the `owner` and `from` of the

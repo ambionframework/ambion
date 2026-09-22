@@ -5,8 +5,8 @@ driver own the record, the lease, and the rules. An executor owns the model
 call, the tools it exposes, and the steps it reports. [The
 README](../README.md) holds the positioning. This page holds the contract
 between the driver and an executor, the step vocabulary, and the way to
-write an adapter. [The Pi guide](pi.md) and [the Claude guide](claude.md)
-hold what is specific to one adapter.
+write an adapter. [The Pi guide](pi.md), [the Claude guide](claude.md), and
+[the Codex guide](codex.md) hold what is specific to one adapter.
 
 ## The executor contract
 
@@ -101,10 +101,66 @@ refusal for the model.
 **A definition can replace the speaking policy.** The main entry exports
 `DEFAULT_GUIDANCE`. An executor takes a `speaking` option that replaces it.
 Tool bundle guidance stays in the `guidance` field and follows the policy.
+The rendering helpers stay pure and stateless.
 
-The hosting entry also exports the three room tools, `SAY`, `SEAT`, and
-`UNSEAT`, and `summaryToolDescription`. The rendering helpers and the tools
-stay pure and stateless.
+## How an activation runs
+
+**An adapter places `mechanism`, `agent`, and `context` where its family
+caches best.** [The prompt the driver renders](#the-prompt-the-driver-renders)
+states what each part holds. The adapter page names the placement.
+
+**`readThrough` advances only when the model has consumed a message.** The
+table below holds for every family. An adapter page names the signal it
+reads for the first event.
+
+| Event                                                 | What moves                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------- |
+| The model reads a prompt, a delta, or a steered line  | `readThrough` moves to the position of that message.                |
+| The room accepts an ordinary `say`                    | `readThrough` moves to the position the say confirms.               |
+| The harness reports the tool result of a `missed` say | `readThrough` moves to the last of the messages the result carries. |
+
+**`shouldRefresh` decides on another pass.** It answers yes when the record
+stands past `readThrough`.
+
+**A steered line is `consumed: true` when the model receives it.** A line
+the pass could not deliver is `consumed: false`, and the next delta carries
+it. A family that cannot steer holds every line for the next pass.
+
+**The activation token limit windows the record.** The driver pages the
+record from the tail, keeps the newest messages that fit
+`activationTokenLimit`, and keeps the open exchange whole. The limit counts
+record text through `estimateTokens`. It does not count the system prompt,
+the tool schemas, or the model output. It does not compare with the context
+window of the model. This is driver behavior, and it holds for every
+family.
+
+## The room tools
+
+**An ordinary activation receives `say`, `seat`, and `unseat`, then the
+tools of the definition.** The hosting entry exports `SAY`, `SEAT`,
+`UNSEAT`, and `summaryToolDescription`. A closing activation receives only
+`say`. [Summary](summary.md) owns that rule.
+
+**`say` commits a `said` intent.** It carries `readThrough` and takes the
+tool call id as its commit key. It accepts `text`, `to`, and `refs`.
+
+**`seat` and `unseat` commit a membership intent**, keyed on the tool call
+id.
+
+**The room answer tells the adapter what to do:**
+
+| Room answer                | What the adapter does                                                           |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| `committed` or `unchanged` | The adapter delivers the result.                                                |
+| `refused`                  | The adapter raises the room message as a tool error.                            |
+| `missed`                   | The adapter raises a tool error that lists the new messages.                    |
+| `unknown` or `stale`       | The adapter aborts the activation. The message may already stand on the record. |
+
+**`say` is the room's own event.** It raises no `tool_execution_start`
+event. The adapter reports it as a room event.
+
+**The tools run in the host process.** Each adapter page names the
+transport that carries a call from the harness to the host.
 
 ## The step vocabulary
 
@@ -123,9 +179,21 @@ zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 | `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                     |
 | `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.  |
 | `steer`       | executor    | A message landed mid-activation. `consumed` says whether the model received it.                    |
-| `approval`    | executor    | A tool call needed a decision. `decision` holds the answer. The Claude executor emits it.          |
-| `usage`       | executor    | Tokens and cost. Pi writes one for each provider request; Claude writes one for each SDK result.   |
+| `approval`    | executor    | A tool call needed a decision. `decision` holds the answer.                                        |
+| `usage`       | executor    | Tokens and cost.                                                                                   |
 | `end`         | driver      | The activation stops: `stopped`, `length`, or `aborted`. A failure adds its `cause` and `message`. |
+
+**A family page holds its own mapping table.** [Pi](pi.md#the-step-mapping),
+[Claude](claude.md#the-step-mapping), and [Codex](codex.md#step-mapping) map
+the events of their harness to these steps.
+
+**The driver sums the `usage` steps at release.** The release entry of an
+activation carries the sum, and a closed exchange read carries the sum of
+its activations. An end that the room writes (`expired`, `revoked`,
+`abandoned`) carries no usage.
+[Durability](durability.md#5-what-the-room-does-not-promise) states this.
+The trace caps do not cut the sum, because the driver adds each step
+before the cap applies.
 
 ## The trace journal
 
@@ -162,6 +230,52 @@ trace lives in the storage of the seat, so a read across objects needs a call
 to the seat. `readActivation` reads the trace of one activation; see
 [Exchange](exchange.md).
 
+## Seat memory
+
+**`memory: 'activation'` is the default.** Each activation starts a fresh
+model session. The seat remembers nothing between activations, and the
+release records no session.
+
+**`memory: 'seat'` keeps one harness session for the seat.** The release
+records `{ harness, id }` on the `ended` entry. The room folds the latest
+one for each seat into `spec.resume` and hands it back on the next
+activation. The room never reads the id. An executor uses a recorded
+session only when the harness name is its own.
+
+**A resume that the harness cannot honor starts a fresh session.** The
+fallback happens once for each resumed session. The activation does not
+fail, and the release records the new id.
+
+**Freshness still governs speech in both modes.** A kept session does not
+let a seat commit over a record it has not read.
+[Durability](durability.md#storage-compatibility) owns the journal field
+and its additive-read promise.
+
+## Failure classification
+
+**The executor sorts a failure into `permanent` and `transient`.** A
+permanent failure ends the activation in one attempt. A transient failure
+retries to the cap of the room.
+[Durability](durability.md#permanent-and-transient-failure) states what the
+room does with the cause.
+
+| Failure                                                                           | Cause       |
+| --------------------------------------------------------------------------------- | ----------- |
+| An error text that names a credit, a quota, a credential, or a permission refusal | `permanent` |
+| A status of 400, 401, 402, 403, 404, 405, or 422                                  | `permanent` |
+| An error of the executor, such as a lost room call or a lost process              | `transient` |
+| Every other failure                                                               | `transient` |
+
+**A status decides the cause when no text matches.** An uncertain failure
+is transient, so the room retries it.
+
+**A length stop is no failure.** The pass reports `stop: 'length'`.
+
+**Each family brings its own text set and its own source of a status.**
+[Pi](pi.md#failure-classification), [Claude](claude.md#failure-classification),
+and [Codex](codex.md#failures) name the text set and the status source of
+each family.
+
 ## The harness matrix
 
 **Three executor families ship today.** Pi, the Claude Agent SDK, and the
@@ -193,17 +307,19 @@ family. `@ambionframework/claude` is the worked example, and
    activation and returns a session. Keep the model loop for one activation
    inside the session.
 2. **Render with the shared helpers.** Call `renderActivation` on the first
-   pass and `renderDelta` on later passes. Place `mechanism`, `agent`, and
-   `context` where the family caches best.
+   pass and `renderDelta` on later passes. [How an activation
+   runs](#how-an-activation-runs) states where each part goes.
 3. **Expose the three room tools.** Bind `say`, `seat`, and `unseat` to one
    activation, in the form the harness needs. The tools of the definition
-   join them.
+   join them. [The room tools](#the-room-tools) states the commit key and
+   the room answers.
 4. **Write the steps you own.** Call the `TraceSink` of the activation for
    `thinking`, `text`, `tool_call`, `tool_result`, `steer`, `approval`, and
    `usage`. The driver writes `pass`, `room`, and `end`.
 5. **Declare steering and rest correctness on freshness.** Advance
    `readThrough` when the model has consumed a message, and on nothing
-   earlier. The Claude executor advances it on the SDK echo.
+   earlier. [How an activation runs](#how-an-activation-runs) states the
+   events that move it.
 6. **Wrap the executor in an `Execution`.** Export a function that defines
    the executor of an agent and a function that gives the host its
    execution. Claude offers `claude()` and `claudeExecution()`. Call
