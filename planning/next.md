@@ -54,12 +54,12 @@ one owner per mechanism.
 **Four themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
-| Theme                     | Acceptance                                                                                                                                                                                         |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                          |
-| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database.     |
-| M One owner per mechanism | Each duplication that items M1 to M6 name has one owner. The rules file carries only rules that gate a write. The journal package owns the one crash-safe append loop. Each doc fact has one home. |
-| R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release.                                                                                |
+| Theme                     | Acceptance                                                                                                                                                                                                                                                                      |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                                                                                                       |
+| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database.                                                                                  |
+| M One owner per mechanism | Each duplication that items M1 to M7 name has one owner. The rules file carries only rules that gate a write. The journal package owns the one crash-safe append loop. Each doc fact has one home. A workspace backend implements an interface that a conformance suite checks. |
+| R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release.                                                                                                                                                             |
 
 **The tag waits for the P0 and P1 steps.** A P2 step that is open when the
 last P1 step closes moves to the backlog. It does not hold the tag.
@@ -101,6 +101,11 @@ condition that brings each one back.
   carries its own list of open work.
 - **The open proofs.** The stop-loop and pass measures, unique roster
   names, `seatLive`, and `storedIdAccepted` remove no defect today.
+- **A backend profile and concurrent operations.** The workspace owner
+  runs one operation at a time for every agent (`resource.ts:87`). A
+  backend that keeps agents apart could run two at once. The same holds
+  for the identity that writes the audit log. Both change the owner, and
+  only the workstation backend (PR #268) needs them.
 
 ## Decisions taken
 
@@ -157,7 +162,7 @@ release story. **P2** moves to the backlog when it is late.
 | ---- | --------------------------------------------------------- | -------- |
 | A    | Phase 1, then phase 2, then phase 3                       | P0       |
 | B    | Phase 4: 2 and 3 now; 1 after the four deliberate changes | P1       |
-| C    | Phase 5: every step now                                   | P1, P2   |
+| C    | Phase 5: 1 to 3 now; 4 after 2                            | P1, P2   |
 
 **The critical path is the kernel cleanup, the notice, the timer, then the
 delegation.** Phase 1 comes first because phases 2 and 3 change the same
@@ -238,9 +243,14 @@ one copy of each mechanism.
       file list, one table, and one call envelope. P1. (M4)
 - [ ] **3.** One set of scripted room fixtures in the conformance suite.
       P2. (M5)
+- [ ] **4.** The workspace as an interface: a conformance entry, one
+      change record, one default tool set, one layout, one host identity,
+      and a root entry that loads no backend. Needs 2. P1. (M7)
 
 **Evidence:** `pnpm check`; `pnpm chaos` and the restart suite for step 1;
-a pi-journal file that 0.1.0 wrote reads as before.
+a pi-journal file that 0.1.0 wrote reads as before; the memory and
+directory backends pass the workspace conformance entry, and
+`dist/index.mjs` of the workspace package imports no `just-bash`.
 
 ## The items
 
@@ -362,6 +372,45 @@ block, and `stale` constant.
 
 The README keeps the headline of what is new. `technical-facts.md` keeps
 the list.
+
+**M7. The workspace as an interface.** `packages/workspace` holds a
+neutral layer and one implementation behind one entry. The resource
+contract, `openWorkspace`, the tool binding, the logs, the mirror, and the
+`sql` tool run over Pi's `ExecutionEnv` alone. The root entry still loads
+just-bash (`index.ts:35`), and a backend repeats rules that the neutral
+layer owns. A second backend, such as the workstation in PR #268, gets
+both. M4 edits the same files, so M7 starts after it.
+
+- A conformance entry, `@ambionframework/workspace/conformance`, that any
+  backend runs. It holds the scenario matrix of `test/support/backends.ts`
+  and the `ExecutionEnv` rules that the tools need: a rename that
+  replaces its target, a recursive create, a forced remove, the file error
+  codes, `~` expansion, an abort apart from a timeout, and the bounded
+  output view. The memory and directory backends run it first.
+- One change record. `recordChange` (`tools.ts:133`) resolves the path of
+  a `write` or an `edit` through `env.absolutePath`.
+  `justBashChangedPaths` (`just-bash.ts:218`) repeats the home rule of
+  `BashEnv`, and it goes. A backend supplies `changedPaths` only for a
+  tool of its own.
+- One default tool set. The neutral layer owns `read`, `write`, `edit`,
+  `bash`, and `sql` (`justBashTools`, `just-bash.ts:127`). A backend adds
+  its own tools and does not list the defaults again.
+- One layout. The backend names the folders of the shared records: the
+  audit log, the change log, the shared database, and the room mirrors
+  (`audit.ts:21`, `changes.ts:19`, `sql.ts:35`, `mirror.ts:30`). The
+  just-bash backends keep `/workspace` and `/rooms`, so no file moves.
+- One host identity. The mirror and `changes()` run as an agent that
+  `openWorkspace` builds (`workspace.ts:77`). The workspace names it, so a
+  backend with real accounts can give it credentials.
+- A root entry that loads no backend. `memoryBackend` and
+  `directoryBackend` move to `@ambionframework/workspace/just-bash`, and a
+  Biome rule keeps just-bash out of the neutral files. This removes two
+  exports from the root of a published package. The changelog names the
+  move, and the workbench imports the new entry.
+
+A new backend then implements `ExecutionEnv`, names its layout, and
+passes the suite. It repeats no rule of the neutral layer, and it loads no
+just-bash.
 
 ### R. Release
 

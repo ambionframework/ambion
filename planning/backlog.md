@@ -39,6 +39,13 @@ cannot work from the typed README examples and the export snapshot.
 **A workstation backend.** A workspace backend over SSH to one remote
 server. PR #268 holds the scope. **Condition:** the owner schedules it.
 
+**A backend profile and concurrent operations.** A backend declares its
+isolation, its network, and whether the owner may run operations from two
+agents at once. The owner then keeps one queue for each agent. The same
+design decides which identity writes the audit log. It builds on
+the workspace interface of 0.2.0 item M7. **Condition:** the workstation
+backend is scheduled.
+
 ## Proofs to write
 
 [docs/formal.md](../docs/formal.md) states the mechanism and the line a
