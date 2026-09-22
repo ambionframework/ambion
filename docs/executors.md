@@ -4,7 +4,8 @@ An executor runs one agent's model loop for one activation. The room and the
 driver own the record, the lease, and the rules. An executor owns the model
 call, the tools it exposes, and the steps it reports. [The
 README](../README.md) holds the positioning. This page holds the contract
-between the driver and an executor, the step vocabulary, and the way to
+between the driver and an executor: the activation flow, the room tools,
+seat memory, failure classification, the step vocabulary, and the way to
 write an adapter. [The Pi guide](pi.md), [the Claude guide](claude.md), and
 [the Codex guide](codex.md) hold what is specific to one adapter.
 
@@ -31,9 +32,12 @@ executor package. The runtime builds the default of a kind once, on the
 first seat of that kind, over its own storage, clock, limits, and
 transport. A seat of a kind with no default fails at once with a
 `no_execution` error, and the failure is permanent. A room with no default
-still runs its people and its record. A host that needs custom storage,
-transport, or limits passes an `execution`. Cloudflare and other separate
-hosts resolve their execution on the host and never read the registry.
+still runs its people and its record. A room whose seats run on more than
+one family needs no `composeExecutions` when each family's package is
+loaded, because each package registers its own default. A host that needs
+custom storage, transport, or limits passes an `execution`. Cloudflare and
+other separate hosts resolve their execution on the host and never read
+the registry.
 
 **A transport receives room calls and executor dependencies separately.**
 `Transport.connect(room, context)` receives a plain `RoomProtocol` facade
@@ -105,9 +109,9 @@ The rendering helpers stay pure and stateless.
 
 ## How an activation runs
 
-**An adapter places `mechanism`, `agent`, and `context` where its family
-caches best.** [The prompt the driver renders](#the-prompt-the-driver-renders)
-states what each part holds. The adapter page names the placement.
+[The prompt the driver renders](#the-prompt-the-driver-renders) states
+where `mechanism`, `agent`, and `context` land. The adapter page names the
+placement for its family.
 
 **`readThrough` advances only when the model has consumed a message.** The
 table below holds for every family. An adapter page names the signal it
@@ -119,12 +123,18 @@ reads for the first event.
 | The room accepts an ordinary `say`                    | `readThrough` moves to the position the say confirms.               |
 | The harness reports the tool result of a `missed` say | `readThrough` moves to the last of the messages the result carries. |
 
+**A steered line moves the position only when the record before it is
+already read.** A message that lands out of order does not advance
+`readThrough` until the gap closes.
+
 **`shouldRefresh` decides on another pass.** It answers yes when the record
 stands past `readThrough`.
 
-**A steered line is `consumed: true` when the model receives it.** A line
-the pass could not deliver is `consumed: false`, and the next delta carries
-it. A family that cannot steer holds every line for the next pass.
+**Every family stamps a `steer` step with `consumed`.** `consumed: true`
+marks a line the pass will deliver. `consumed: false` marks a line that the
+pass could not use before it ended, and the next delta carries it. Each
+family page states the moment its executor sets `consumed: true`, because
+the moment differs by family.
 
 **The activation token limit windows the record.** The driver pages the
 record from the tail, keeps the newest messages that fit
@@ -136,10 +146,9 @@ family.
 
 ## The room tools
 
-**An ordinary activation receives `say`, `seat`, and `unseat`, then the
-tools of the definition.** The hosting entry exports `SAY`, `SEAT`,
-`UNSEAT`, and `summaryToolDescription`. A closing activation receives only
-`say`. [Summary](summary.md) owns that rule.
+[Definitions and tools](agent.md#tools) states which tools an ordinary
+activation receives and which tools a closing activation receives. The
+hosting entry exports `SAY`, `SEAT`, `UNSEAT`, and `summaryToolDescription`.
 
 **`say` commits a `said` intent.** It carries `readThrough` and takes the
 tool call id as its commit key. It accepts `text`, `to`, and `refs`.
@@ -156,8 +165,9 @@ id.
 | `missed`                   | The adapter raises a tool error that lists the new messages.                    |
 | `unknown` or `stale`       | The adapter aborts the activation. The message may already stand on the record. |
 
-**`say` is the room's own event.** It raises no `tool_execution_start`
-event. The adapter reports it as a room event.
+**`say` is the room's own event.** It raises no `tool_execution_start` and
+no `tool_execution_end` event. The adapter reports it as a room event.
+[Codex](codex.md#step-mapping) reports `seat` and `unseat` the same way.
 
 **The tools run in the host process.** Each adapter page names the
 transport that carries a call from the harness to the host.
@@ -178,7 +188,7 @@ zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 | `tool_call`   | executor    | A tool starts, with its input.                                                                     |
 | `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                     |
 | `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.  |
-| `steer`       | executor    | A message landed mid-activation. `consumed` says whether the model received it.                    |
+| `steer`       | executor    | A message landed mid-activation. `consumed` says whether the pass delivered it.                    |
 | `approval`    | executor    | A tool call needed a decision. `decision` holds the answer.                                        |
 | `usage`       | executor    | Tokens and cost.                                                                                   |
 | `end`         | driver      | The activation stops: `stopped`, `length`, or `aborted`. A failure adds its `cause` and `message`. |
@@ -307,8 +317,8 @@ family. `@ambionframework/claude` is the worked example, and
    activation and returns a session. Keep the model loop for one activation
    inside the session.
 2. **Render with the shared helpers.** Call `renderActivation` on the first
-   pass and `renderDelta` on later passes. [How an activation
-   runs](#how-an-activation-runs) states where each part goes.
+   pass and `renderDelta` on later passes. [The prompt the driver
+   renders](#the-prompt-the-driver-renders) states where each part goes.
 3. **Expose the three room tools.** Bind `say`, `seat`, and `unseat` to one
    activation, in the form the harness needs. The tools of the definition
    join them. [The room tools](#the-room-tools) states the commit key and
@@ -320,7 +330,13 @@ family. `@ambionframework/claude` is the worked example, and
    `readThrough` when the model has consumed a message, and on nothing
    earlier. [How an activation runs](#how-an-activation-runs) states the
    events that move it.
-6. **Wrap the executor in an `Execution`.** Export a function that defines
+6. **Classify every failure.** Sort it into `permanent` and `transient`.
+   [Failure classification](#failure-classification) states the shared
+   rule; bring the family's own text set and status source.
+7. **Declare a memory mode.** Support `memory: 'activation'` at least.
+   [Seat memory](#seat-memory) states what `'seat'` adds: the recorded
+   session and the resume fallback.
+8. **Wrap the executor in an `Execution`.** Export a function that defines
    the executor of an agent and a function that gives the host its
    execution. Claude offers `claude()` and `claudeExecution()`. Call
    `registerDefaultExecution` with the kind, so a room with no `execution`

@@ -2,9 +2,10 @@
 
 `@ambionframework/codex` runs an Ambion seat on the Codex SDK. This page
 holds what is specific to the Codex adapter. [Executors](executors.md)
-holds the contract between the driver and an executor, the step
-vocabulary, and the trace. [The Pi guide](pi.md) and [the Claude
-guide](claude.md) cover the other two shipped families. [The
+holds the shared contract: the activation flow, the room tools, seat
+memory, failure classification, the step vocabulary, and the trace. [The
+Pi guide](pi.md) and [the Claude guide](claude.md) cover the other two
+shipped families. [The
 README](../README.md) holds the positioning.
 
 ## What the package is
@@ -132,7 +133,7 @@ application puts it, and that place is often no git repository.
 ## How a room tool reaches Codex
 
 [Executors](executors.md#the-room-tools) states the three tools, the commit
-key, and the room answers. A stdio server carries each call to the host.
+key, and the room answers.
 
 **Codex runs tools as MCP servers that it spawns.** The three room tools
 (`say`, `seat`, `unseat`) and the tools of the agent live in the host. A small
@@ -175,9 +176,9 @@ native tools.
 
 ## How an activation runs
 
-[Executors](executors.md#how-an-activation-runs) states the pass flow and
-the read position. Codex sends no echo of the prompt, so the executor moves
-`readThrough` on `turn.started`.
+[Executors](executors.md#the-executor-contract) states the pass flow.
+[How an activation runs](executors.md#how-an-activation-runs) states the
+read position. Codex sends no echo of the prompt.
 
 **One thread serves one activation.** The Codex SDK has no system prompt
 option, so the first prompt carries the mechanism, the agent instructions,
@@ -190,9 +191,9 @@ events for trouble that it survives, such as a reconnect. An `error` event
 ends the run only when nothing else does.
 
 **`turn.started` moves `readThrough` to the position of the view or the
-delta.** The model reads the prompt when a run starts. A missed say
-carries the missed lines to the model in the same reply, so `readThrough`
-moves to the last of them at once.
+delta.** The model reads the prompt when a run starts. A missed say also
+moves the position, to the last of the messages it carries; see
+[Executors](executors.md#how-an-activation-runs).
 
 **Codex takes no steer.** [The harness matrix](executors.md#the-harness-matrix)
 states what a family without steering does. The Codex session has no
@@ -227,7 +228,9 @@ command failed with exit code N". A failed patch gives "The patch failed".
 A failed MCP call gives the message that Codex reported.
 
 **A tool of another server shows with its server.** The step name is
-`server__tool`. A room tool shows as `say`, `seat`, or `unseat`.
+`server__tool`. A room tool shows as `say`, `seat`, or `unseat`, and the
+executor reports none of the three as a tool event; see
+[Executors](executors.md#the-room-tools).
 
 **A completed patch feeds `refs`.** The executor collects the paths of each
 completed `file_change`. The next ordinary `say` cites them in `refs`, and
@@ -267,24 +270,32 @@ runs do not show whether `output_tokens` includes them. A field that an older
 ## Failures
 
 [Executors](executors.md#failure-classification) states the shared rule.
-Codex reports a failed run as text and no status code, so the
-classification reads the text.
+
+**Codex reports a failed run as text, with no status field.** The
+`turn.failed` and `error` events carry a message only. The classification
+pulls a three-digit HTTP status out of the text when the text names one,
+such as "status 401", and applies the shared status rule to it.
+
+**The Codex text set names a quota or an authentication refusal.** The
+patterns are `insufficient_quota`, `exceeded your current quota`, `credit
+balance`, `authentication_error`, `permission_error`,
+`invalid_request_error`, an invalid API key, `unauthorized`, `permission
+denied`, `not logged in`, and `missing bearer`.
 
 **A text that names a full context window or a spent output limit reports
 a length stop.** The pass reports `stop: 'length'`. This is no failure.
 
-**A stream that ends with no terminal event is a transient failure, and
-the room tries the activation again.** A failure reaches the host as an
-`error` event before the driver sees it.
+**A stream that ends with no terminal event is a transient failure.** A
+failure reaches the host as an `error` event before the driver sees it.
 
 **A missing `codex` binary or a socket error is transient.** A bad
 `codexPath` (see [Options](#options)) or a lost connection to the room tools
-server gives a transient failure, and the room tries the activation again.
+server gives a transient failure.
 
 ## Memory
 
 [Executors](executors.md#seat-memory) states the two modes, the recorded
-session, and the resume rule. Codex resumes a thread.
+session, and the resume rule.
 
 **`memory: 'seat'` resumes one thread for the seat.**
 

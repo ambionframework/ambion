@@ -1,8 +1,9 @@
 # The Pi executor
 
 `@ambionframework/pi` runs Ambion agents on Pi. This page holds what is
-specific to the Pi adapter. [Executors](executors.md) holds the contract
-between the driver and an executor, the step vocabulary, and the trace.
+specific to the Pi adapter. [Executors](executors.md) holds the shared
+contract: the activation flow, the room tools, seat memory, failure
+classification, the step vocabulary, and the trace.
 [The Claude guide](claude.md) covers a second shipped family, and [the
 Codex guide](codex.md) a third. [The
 README](../README.md) holds the positioning.
@@ -127,8 +128,9 @@ positive integer.
 
 ## How an activation runs
 
-[Executors](executors.md#how-an-activation-runs) states the pass flow, the
-read position, and the record window. Pi adds these facts.
+[Executors](executors.md#the-executor-contract) states the pass flow.
+[How an activation runs](executors.md#how-an-activation-runs) states the
+read position and the record window. Pi adds these facts.
 
 **One Pi agent serves one activation.** The executor resolves the model,
 binds the tools, and builds the agent. The Pi transcript of the activation
@@ -158,15 +160,22 @@ A delta with no message in it starts no run. The session takes the view as
 read.
 
 **The stub model of a scripted stream reports a window of one million
-tokens.** The executor does no compaction. With `memory: 'seat'` the kept
+tokens.**
+
+**The Pi executor does no compaction.** With `memory: 'seat'` the kept
 transcript grows for as long as the process lives.
 
 ## How room tools reach the harness
 
 [Executors](executors.md#the-room-tools) states the three tools, the commit
-key, and the room answers. The room tools are Pi tools bound to the
-activation, and a closing activation receives only `say`; the room turns
-that say into the summary.
+key, and the room answers.
+
+**The room tools are Pi tools bound to the activation.** Pi calls them in
+the same process, so it needs no transport.
+
+**An `unknown` or `stale` answer ends the run.** Pi aborts the activation
+and stands the seat down. The tool result names why the turn ended, and no
+further pass follows.
 
 ### The seat transcript audit
 
@@ -213,9 +222,8 @@ definition is the whole policy: a tool that the definition omits does not
 exist for the model.
 
 **What the model sees.** The model sees the system prompt, the record, and
-the tools. An ordinary activation lists `say`, `seat`, `unseat`, and the tools
-of the definition. A closing activation lists `say` only. The model sees no
-environment variable and no key.
+the tools that [Definitions and tools](agent.md#tools) lists for the
+activation. The model sees no environment variable and no key.
 
 **What the host holds.** The registry stream reads the provider key in the
 host process, and it sends the key to the provider only. A tool that reads
@@ -229,7 +237,7 @@ the record. See [Deployment](deployment.md).
 ## Memory modes
 
 [Executors](executors.md#seat-memory) states the two modes, the recorded
-session, and the resume rule. Pi keeps a transcript.
+session, and the resume rule.
 
 **`memory: 'seat'` keeps one transcript for the seat.** The executor keeps
 the transcript of the last activation that did not fail. The next activation
@@ -238,7 +246,7 @@ record beyond the position the transcript read through. A closing activation
 reads the whole view. `readThrough` starts at the position the transcript
 read.
 
-**The id is `seatSessionId(room, seat)`, and it is fixed.** A restart
+**`seatSessionId(room, seat)` names the id, and it is fixed.** A restart
 begins a fresh transcript, and the first activation after it reads the
 whole view and appends to the same audit session.
 
@@ -271,10 +279,18 @@ price table. A provider that reports no usage gives zeros.
 ## Failure classification
 
 [Executors](executors.md#failure-classification) states the shared rule.
-**Pi reads a status only from a provider diagnostic, never from free error
-text**, because a rate limit names a token count that reads like a status.
-The last diagnostic with a status wins. An unknown model id fails on the
-first pass as `transient`, so the room retries it to the cap.
+
+**The executor reads a status only from a provider diagnostic.** A rate
+limit names a token count that reads like a status, so free text never
+gives one. The last diagnostic with a status wins.
+
+**A text that names a credit or an authentication refusal is permanent.**
+The patterns are `credit balance`, `authentication_error`,
+`permission_error`, `invalid_request_error`, an invalid API key,
+`unauthorized`, and `permission denied`.
+
+An unknown model id fails on the first pass as `transient`, so the room
+retries it to the cap.
 
 **An audit failure never changes the outcome.** It raises `audit_error`,
 and the activation still succeeds.

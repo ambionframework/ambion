@@ -2,8 +2,9 @@
 
 `@ambionframework/claude` runs Ambion agents on the Claude Agent SDK. This
 page holds what is specific to the Claude adapter. [Executors](executors.md)
-holds the contract between the driver and an executor, the step vocabulary,
-and the trace. [The Pi guide](pi.md) covers a second shipped family, and [the
+holds the shared contract: the activation flow, the room tools, seat
+memory, failure classification, the step vocabulary, and the trace. [The
+Pi guide](pi.md) covers a second shipped family, and [the
 Codex guide](codex.md) a third. [The
 README](../README.md) holds the positioning.
 
@@ -43,9 +44,8 @@ from GitHub Packages; see
 
 **The executor sets no credential.** The executable reads its credentials
 from its environment. By default that is the environment of the host
-process, so `ANTHROPIC_API_KEY` in `process.env` reaches it. The executor
-classifies a failure text with `not logged in`, `x-api-key`, or
-`authentication_error` as permanent.
+process, so `ANTHROPIC_API_KEY` in `process.env` reaches it. A sign-in
+failure is permanent; see [Failure classification](#failure-classification).
 
 **`pathToClaudeCodeExecutable` selects the binary.** Without it, the SDK
 finds the executable that it ships with.
@@ -154,14 +154,15 @@ and its `query` option replaces the SDK entry.
 
 ## How an activation runs
 
-[Executors](executors.md#how-an-activation-runs) states the pass flow, the
-read position, and the record window. The Claude executor adds these
-facts.
+[Executors](executors.md#the-executor-contract) states the pass flow.
+[How an activation runs](executors.md#how-an-activation-runs) states the
+read position and the record window. The Claude executor adds these facts.
 
 **One SDK query serves one activation.** The system prompt is `mechanism`
-and `agent` from `renderActivation`, sent as a plain string. The query
-keeps its transcript for the activation. Partial messages are on, so text
-and thinking arrive as deltas.
+and `agent` from `renderActivation`, sent as a plain string. The `context`
+part opens the streaming input as the first user message. The query keeps
+its transcript for the activation. Partial messages are on, so text and
+thinking arrive as deltas.
 
 **A pass resolves on the SDK `result`.** The executor pushes the view or the
 delta into the streaming input and waits for the `result` message that
@@ -196,20 +197,19 @@ not bound what a resumed session holds.
 ## How room tools reach the harness
 
 [Executors](executors.md#the-room-tools) states the three tools, the commit
-key, and the room answers. One in-process MCP server carries them to the
-executable.
+key, and the room answers.
 
-**The executor builds an SDK MCP server named `ambion` for each
+**The executor builds an in-process SDK MCP server named `ambion` for each
 activation.** It holds `say`, `seat`, `unseat`, and the tools of the
 definition. The model sees them as `mcp__ambion__say` and so on. Steps and
 events show the plain name.
 
-- **The tools run in the host process.** The executable calls them over the
-  SDK transport. The tool code never runs in the child process.
+- The executable calls them over the SDK transport. The tool code never
+  runs in the child process.
 - **The SDK builds each MCP tool from a Zod shape.** The executor reads the
   TypeBox schema of a tool as JSON Schema and converts each property.
-- **A refusal is a tool result with `isError`.**
-- **A tool that throws gives the model its message as an error result.**
+- **A refusal or a thrown error becomes a tool result with `isError`.** The
+  text is the room's refusal message or the error the tool threw.
 
 The approver answers for these tools. A request for a room tool gets `allow`
 with no `approval` step. The same holds for the tools of the definition,
@@ -278,7 +278,7 @@ A spent budget is a permanent failure.
 ## Memory modes
 
 [Executors](executors.md#seat-memory) states the two modes, the recorded
-session, and the resume rule. The Claude executor resumes an SDK session.
+session, and the resume rule.
 
 **`memory: 'seat'` resumes one session for the seat.** The query persists
 its session. The executor keeps the id that the SDK reports in a `system`
@@ -325,8 +325,8 @@ earlier result, and writes no step when both tokens and cost stand at zero.
 
 The known limits:
 
-- **A step covers one SDK result.** Pi records one step for each provider
-  request. The step of a pass with several requests sums them.
+- **A step covers one SDK result.** The step of a pass with several
+  results sums them.
 - **`cost` is the number that the SDK reports.** The executor does not
   compute it.
 - **A resumed session may report totals of earlier activations.** The first
@@ -336,20 +336,21 @@ The known limits:
 ## Failure classification
 
 [Executors](executors.md#failure-classification) states the shared rule.
-**The table below holds the Claude result codes.**
+**The table below holds the Claude SDK results this executor classifies.**
 
 | Result                                                | Outcome                                        |
 | ----------------------------------------------------- | ---------------------------------------------- |
 | `error_max_budget_usd`                                | `permanent`                                    |
 | `error_max_turns`, or a `stop_reason` of `max_tokens` | No failure. The pass reports `stop: 'length'`. |
-| The process ends before the pass does                 | `transient`                                    |
-| An error of the executor, such as a spawn failure     | `transient`                                    |
 
 **The executor reads a status only from `api_error_status`.** Free text
 never gives one, because a rate limit names a token count that reads like a
-status. The text patterns are `credit balance`, `authentication_error`,
-`permission_error`, `invalid_request_error`, an invalid API key, `x-api-key`,
-`unauthorized`, `permission denied`, and `not logged in`.
+status.
+
+**A failed result whose text matches one of these patterns is permanent.**
+`credit balance`, `authentication_error`, `permission_error`,
+`invalid_request_error`, an invalid API key, `x-api-key`, `unauthorized`,
+`permission denied`, and `not logged in`.
 
 ## Testing
 
