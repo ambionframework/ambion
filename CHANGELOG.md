@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**The root entry of `@ambionframework/workspace` exports the environment
+helpers.** `resolvePath`, `Deadline`, `boundedView`, `spill`, `TMP`,
+`randomName`, `tempDirPath`, `tempFilePath`, `spillPath`, and the
+`MinimalWriter` type move out of `bash-env.ts` into a neutral
+`execution-env.ts` module, which imports no `just-bash`. `bash-env.ts` keeps
+only the just-bash mapping and calls these helpers. A new `ExecutionEnv`
+backend now builds on the same helpers, from the root entry, without a
+dependency on just-bash.
+
 **`destroy()` leaves the workspace resource contract.** `WorkspaceResource`,
 `ResourceBackend`, and `SqlResource` no longer have a `destroy` member. On a
 shared server, a resource's own `destroy()` would delete the files of every

@@ -6,7 +6,9 @@
  * returns the tools and guidance that owner exposes to an agent. The root
  * entry loads no backend: `./just-bash` holds the just-bash backends,
  * `./resource` holds the neutral resource contract, and `./sql` holds the
- * SQL resource.
+ * SQL resource. The root entry exports the environment helpers from
+ * `./execution-env.ts`, so a new `ExecutionEnv` backend can build on them
+ * without a dependency on `just-bash`.
  *
  * ```ts
  * import { defineAgent } from '@ambionframework/ambion';
@@ -28,6 +30,18 @@ export { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 export type { AuditEntry, AuditLog, AuditLogOptions } from './audit.ts';
 export { DEFAULT_AUDIT_LOG, openAuditLog } from './audit.ts';
 export type { WorkspaceBackend, WorkspaceEnv } from './backend.ts';
+export type { MinimalWriter } from './execution-env.ts';
+export {
+	boundedView,
+	Deadline,
+	randomName,
+	resolvePath,
+	spill,
+	spillPath,
+	TMP,
+	tempDirPath,
+	tempFilePath,
+} from './execution-env.ts';
 export type { WorkspaceLog, WorkspaceLogOptions } from './log.ts';
 export { openLog } from './log.ts';
 export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.ts';

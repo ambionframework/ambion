@@ -70,15 +70,24 @@ it('holds exactly five entries: the root, one per binding, and the conformance s
 	]);
 });
 
-it('exports one resource and its two logs from the root, and no backend', () => {
+it('exports one resource, its two logs, and the environment helpers from the root, and no backend', () => {
 	expect(Object.keys(main).sort()).toEqual([
 		'BACKGROUND_CONTEXT',
 		'DEFAULT_AUDIT_LOG',
+		'Deadline',
 		'PACKAGE_NAME',
 		'SHARED_DATABASE',
+		'TMP',
+		'boundedView',
 		'openAuditLog',
 		'openLog',
 		'openWorkspace',
+		'randomName',
+		'resolvePath',
+		'spill',
+		'spillPath',
+		'tempDirPath',
+		'tempFilePath',
 	]);
 });
 

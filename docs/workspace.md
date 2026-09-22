@@ -360,6 +360,15 @@ resource owner and binds the backend tools to its `use` method. `Workspace`
 adds `tools()` to the resource surface. Direct operations and tool calls share
 one queue and one lifecycle.
 
+**The root entry also exports the environment helpers a new `ExecutionEnv`
+backend needs.** `resolvePath` holds the `~` and relative path rule.
+`Deadline` tells an abort apart from a timeout. `boundedView` and `spill`
+build the bounded output view and its spill file, `spill` over a minimal
+writer of one `mkdir` plus one `writeFile`. `TMP`, `randomName`,
+`tempDirPath`, `tempFilePath`, and `spillPath` name the temporary paths
+under `/tmp`. These helpers import no just-bash, so a backend over any
+filesystem builds an `ExecutionEnv` on them.
+
 ## The conformance suite
 
 `@ambionframework/workspace/conformance` holds the `ExecutionEnv` rules the

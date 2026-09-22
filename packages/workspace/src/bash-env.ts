@@ -3,19 +3,17 @@
  * members return `Result`s and never throw, over `Bash`, whose filesystem
  * throws plain `Error`s.
  *
- * Beyond the member-by-member mapping, the adapter has six jobs, and each
- * one is named where it happens: classify just-bash's thrown errors into
- * Pi's codes; bound a command's combined output and hand one view to
- * `onUpdate` before `exec` resolves; create `/tmp` before a temp file needs
- * it; expand `~` to the home `connect` gave the agent; tell an abort apart
- * from a deadline; and build `listDir` from one `readdir` plus one `lstat`
- * per entry.
+ * The adapter holds the just-bash mapping alone: classify just-bash's
+ * thrown errors into Pi's codes, build `listDir` from one `readdir` plus
+ * one `lstat` per entry, and call each `Bash.fs` member for its matching
+ * `ExecutionEnv` member. `./execution-env.ts` holds the rules every backend
+ * needs — path resolution, the deadline, the bounded output view, and the
+ * temporary names — and this adapter calls them.
  *
  * `cwd` is the agent's home for the life of the env. just-bash restores its
  * working directory after every `exec`, so a `cd` lasts for one command.
  */
 
-import { randomBytes } from 'node:crypto';
 import { posix } from 'node:path';
 import type {
 	Context,
@@ -25,18 +23,18 @@ import type {
 	Result,
 	ShellExecOptions,
 	ShellExecResult,
-	ShellOutputLimits,
-	ShellOutputView,
 } from '@earendil-works/pi-agent-core';
-import {
-	ExecutionError,
-	err,
-	FileError,
-	ok,
-	truncateHead,
-	truncateTail,
-} from '@earendil-works/pi-agent-core';
+import { ExecutionError, err, FileError, ok } from '@earendil-works/pi-agent-core';
 import type { Bash, FsStat } from 'just-bash';
+import {
+	boundedView,
+	Deadline,
+	resolvePath,
+	spill,
+	TMP,
+	tempDirPath,
+	tempFilePath,
+} from './execution-env.ts';
 
 type FileResult<T> = Promise<Result<T, FileError>>;
 
@@ -65,12 +63,8 @@ function toFileError(error: unknown, path: string): FileError {
 	return new FileError(code, message, path, error instanceof Error ? error : undefined);
 }
 
-const TMP = '/tmp';
-
 /** What a command gets when its caller names no timeout. Pi's `bash` tool names none by default. */
 export const DEFAULT_TIMEOUT_SECONDS = 30;
-
-const randomName = () => randomBytes(6).toString('hex');
 
 export class BashEnv implements ExecutionEnv {
 	readonly cwd: string;
@@ -103,9 +97,7 @@ export class BashEnv implements ExecutionEnv {
 
 	/** `~` and `~/` are the agent's home, and a relative path is under `cwd`. */
 	private resolve(path: string): string {
-		if (path === '~') return this.home;
-		const expanded = path.startsWith('~/') ? posix.join(this.home, path.slice(2)) : path;
-		return posix.resolve(this.cwd, expanded);
+		return resolvePath(this.home, this.cwd, path);
 	}
 
 	async absolutePath(path: string): FileResult<string> {
@@ -215,7 +207,7 @@ export class BashEnv implements ExecutionEnv {
 
 	/** Neither filesystem starts with `/tmp`, and a random component keeps agents sharing one apart. */
 	createTempDir(prefix: string | undefined, context: Context): FileResult<string> {
-		const dir = posix.join(TMP, `${prefix ?? 'tmp-'}${randomName()}`);
+		const dir = tempDirPath(prefix);
 		return this.attempt(dir, context.abortSignal, async () => {
 			await this.bash.fs.mkdir(dir, { recursive: true });
 			return dir;
@@ -226,7 +218,7 @@ export class BashEnv implements ExecutionEnv {
 		options: { prefix?: string; suffix?: string } | undefined,
 		context: Context,
 	): FileResult<string> {
-		const file = posix.join(TMP, `${options?.prefix ?? ''}${randomName()}${options?.suffix ?? ''}`);
+		const file = tempFilePath(options);
 		return this.attempt(file, context.abortSignal, async () => {
 			await this.bash.fs.mkdir(TMP, { recursive: true });
 			await this.bash.fs.writeFile(file, '');
@@ -264,7 +256,7 @@ export class BashEnv implements ExecutionEnv {
 			const combined = result.stdout + result.stderr;
 			const view = boundedView(combined, options?.capture?.limits);
 			if (view.truncation.truncated && options?.capture?.spill === true) {
-				view.spillPath = await this.spill(combined);
+				view.spillPath = await spill(this.bash.fs, combined);
 			}
 			options?.onUpdate?.({ kind: 'replace', output: view }, context);
 			return ok({
@@ -280,78 +272,8 @@ export class BashEnv implements ExecutionEnv {
 		}
 	}
 
-	/** Keep the whole output in a file so a reader can reach what the view cut. */
-	private async spill(content: string): Promise<string | undefined> {
-		const path = posix.join(TMP, `shell-${randomName()}.out`);
-		try {
-			await this.bash.fs.mkdir(TMP, { recursive: true });
-			await this.bash.fs.writeFile(path, content);
-			return path;
-		} catch {
-			return undefined; // Spill is best-effort; a failed write leaves the view alone.
-		}
-	}
-
 	/** just-bash exposes nothing to dispose. The collector reclaims a dropped instance. */
 	async cleanup(): Promise<void> {}
-}
-
-/**
- * Bound the combined command output to the caller's limits, tail by default.
- * Absent limits leave the output whole: the caller named no bound.
- */
-function boundedView(output: string, limits: ShellOutputLimits | undefined): ShellOutputView {
-	const options = {
-		maxLines: limits?.maxLines ?? Number.POSITIVE_INFINITY,
-		maxBytes: limits?.maxBytes ?? Number.POSITIVE_INFINITY,
-	};
-	const result =
-		limits?.retain === 'head' ? truncateHead(output, options) : truncateTail(output, options);
-	const { content, ...truncation } = result;
-	return { text: content, truncation };
-}
-
-/**
- * One signal for a command, fired by the caller's abort or by the per-call
- * timeout, and which of the two it was. just-bash answers both with exit 124.
- */
-class Deadline {
-	private readonly controller = new AbortController();
-	private readonly timer: NodeJS.Timeout | undefined;
-	private timedOut = false;
-	private readonly abort = () => this.controller.abort();
-
-	constructor(
-		private readonly caller: AbortSignal | undefined,
-		private readonly timeout: number | undefined,
-	) {
-		caller?.addEventListener('abort', this.abort, { once: true });
-		if (caller?.aborted) this.abort();
-		if (timeout !== undefined) {
-			this.timer = setTimeout(() => {
-				this.timedOut = true;
-				this.abort();
-			}, timeout * 1000);
-		}
-	}
-
-	get signal(): AbortSignal {
-		return this.controller.signal;
-	}
-
-	/** Why the command stopped early, or undefined when it ran to its end. */
-	error(): ExecutionError | undefined {
-		if (this.caller?.aborted) return new ExecutionError('aborted', 'Command aborted');
-		if (this.timedOut) {
-			return new ExecutionError('timeout', `Command timed out after ${this.timeout} seconds`);
-		}
-		return undefined;
-	}
-
-	clear(): void {
-		clearTimeout(this.timer);
-		this.caller?.removeEventListener('abort', this.abort);
-	}
 }
 
 function toFileInfo(path: string, stat: FsStat): FileInfo {
