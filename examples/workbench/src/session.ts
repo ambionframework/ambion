@@ -426,7 +426,7 @@ export class Session {
 		try {
 			if (!this.entered) await this.join();
 			await this.host.send(this.room, this.identity.name, crypto.randomUUID(), text, refs);
-			this.pendingRefs = [];
+			this.pendingRefs.splice(0, refs.length);
 			this.wantBottom = true;
 			await this.refresh();
 		} catch (error) {

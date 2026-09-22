@@ -244,6 +244,23 @@ describe('Session /attach', () => {
 			{ path: '/attachments/board.png', ref: 'file:///attachments/board.png' },
 		]);
 	});
+
+	it('keeps an attach that lands while a send is in flight, for the next message', async () => {
+		const { host, session } = await started();
+		await session.submit('/attach board.png');
+		const gate = Promise.withResolvers<void>();
+		host.sendGate = gate.promise;
+		const sending = session.submit('Look at this.');
+		await vi.waitFor(() => expect(host.calls).toContain('send:bringup:mira:Look at this.'));
+		await session.submit('/attach sensor.png');
+		gate.resolve();
+		await sending;
+
+		expect(host.sentRefs).toEqual([['file:///attachments/board.png']]);
+		expect(session.pendingRefs).toEqual([
+			{ path: '/attachments/sensor.png', ref: 'file:///attachments/sensor.png' },
+		]);
+	});
 });
 
 describe('Session files and prompts', () => {

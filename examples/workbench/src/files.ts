@@ -1,4 +1,4 @@
-import { readFile as readLocalFile } from 'node:fs/promises';
+import { readFile as readLocalFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { BACKGROUND_CONTEXT, type Workspace } from '@ambionframework/workspace';
@@ -87,22 +87,28 @@ export async function listFiles(workspace: Workspace): Promise<FileEntry[]> {
 	});
 }
 
-/**
- * Copy a local file into the workspace, so a `file:///` ref can cite it. The
- * name keeps the local file's own name, prefixed with the time it landed, so
- * two attachments of the same name never collide.
- */
-export async function attachFile(workspace: Workspace, localPath: string): Promise<FileEntry> {
-	const resolved = localPath.startsWith('~/') ? join(homedir(), localPath.slice(2)) : localPath;
-	let bytes: Uint8Array;
+/** The result of a local read, or the read error named after the path the person typed. */
+async function readLocal<T>(operation: () => Promise<T>, localPath: string): Promise<T> {
 	try {
-		bytes = await readLocalFile(resolved);
+		return await operation();
 	} catch (error) {
 		return fail(
 			`Cannot read ${localPath}: ${error instanceof Error ? error.message : String(error)}`,
 		);
 	}
-	if (bytes.length > MAX_BYTES.image) fail(SIZE_ADVICE.image);
+}
+
+/**
+ * Copy a local file into the workspace, so a `file:///` ref can cite it. The
+ * name keeps the local file's own name, prefixed with the time it landed, so
+ * two attachments of the same name never collide. Checks the size before
+ * reading the file, so an oversized file is never buffered into memory.
+ */
+export async function attachFile(workspace: Workspace, localPath: string): Promise<FileEntry> {
+	const resolved = localPath.startsWith('~/') ? join(homedir(), localPath.slice(2)) : localPath;
+	const size = (await readLocal(() => stat(resolved), localPath)).size;
+	if (size > MAX_BYTES.image) fail('/attach takes files up to 8 MiB.');
+	const bytes = await readLocal(() => readLocalFile(resolved), localPath);
 	const path = `${ATTACHMENTS_DIR}/${Date.now()}-${basename(resolved)}`;
 	await workspace.use(browser, async (env) => {
 		await env.createDir(ATTACHMENTS_DIR, { recursive: true }, BACKGROUND_CONTEXT);

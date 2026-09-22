@@ -1,10 +1,17 @@
-import { homedir } from 'node:os';
+import { mkdtemp, rm, writeFile as writeLocalFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKGROUND_CONTEXT, memoryBackend, openWorkspace } from '@ambionframework/workspace';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { attachFile, isImagePath, readFile } from '../src/files.ts';
 
 const scribe = { name: 'scribe', identity: 'scribe identity' };
+
+const directories: string[] = [];
+
+afterEach(async () => {
+	await Promise.all(directories.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
 
 /** The signature and the shortest valid `IHDR` header: enough for image detection to see a PNG. */
 const FAKE_PNG = new Uint8Array([
@@ -50,6 +57,25 @@ describe('readFile on a picture', () => {
 });
 
 describe('attachFile', () => {
+	it('copies a real local file into the workspace, under /attachments', async () => {
+		const dir = await mkdtemp(join(tmpdir(), 'ambion-attach-'));
+		directories.push(dir);
+		const localPath = join(dir, 'board.png');
+		await writeLocalFile(localPath, FAKE_PNG);
+		const site = openWorkspace({ name: 'attach-real', backend: memoryBackend() });
+
+		const entry = await attachFile(site, localPath);
+
+		expect(entry.path).toMatch(/^\/attachments\/\d+-board\.png$/);
+		expect(entry.size).toBe(FAKE_PNG.length);
+		const stored = await site.use(scribe, (env) =>
+			env.readBinaryFile(entry.path, BACKGROUND_CONTEXT),
+		);
+		if (!stored.ok) throw new Error('The attached file is missing from the workspace.');
+		expect(Array.from(stored.value)).toEqual(Array.from(FAKE_PNG));
+		await site.destroy();
+	});
+
 	it('expands a ~/ path to the real home directory before reading it', async () => {
 		const site = openWorkspace({ name: 'attach-tilde', backend: memoryBackend() });
 		const resolved = join(homedir(), 'no-such-picture.png');

@@ -89,9 +89,12 @@ export class FakeHost implements Workbench {
 		this.record(`leave:${room}:${who}`);
 	}
 	sentRefs: string[][] = [];
+	/** While set, `send` waits for it. A test uses it to hold a send in flight. */
+	sendGate: Promise<void> | undefined;
 	async send(room: string, who: string, _key: string, text: string, refs?: string[]) {
-		this.sentRefs.push(refs ?? []);
 		this.record(`send:${room}:${who}:${text}`);
+		if (this.sendGate) await this.sendGate;
+		this.sentRefs.push(refs ?? []);
 	}
 	async control(room: string, action: string) {
 		this.record(`control:${room}:${action}`);
