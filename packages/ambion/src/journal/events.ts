@@ -24,8 +24,8 @@ export type LeaseChange =
 
 /**
  * The format of the journal the room writes. Every `run` entry carries it,
- * and a reader refuses a format it does not know. `docs/durability.md` §4
- * holds the compatibility promise.
+ * and a reader refuses a format it does not know. `docs/durability.md`
+ * describes the format and its guards.
  */
 export const JOURNAL_FORMAT = 1;
 

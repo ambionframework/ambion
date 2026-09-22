@@ -216,15 +216,19 @@ Completion needs a confirmed journal read with no execution obligations left.
 
 [`deployment.md`](deployment.md) holds the host steps.
 
-## Storage compatibility
+## Journal format
 
 **Every `run` entry carries `format: 1`, the
 journal format.** The constant `JOURNAL_FORMAT` names it. The room writes it on
 both start and resume.
 
-- **A format 1 journal stays readable.** A later runtime reads it and folds
-  the same state. The golden journals in
-  [`test/golden`](../packages/ambion/test/golden) hold that fold.
+**Before 1.0.0 the format carries no promise.** A release may change it. The
+change raises `format`, adds a golden journal of the new shape, and adds no
+reader for the older format.
+
+- **The golden journals pin the fold of format 1.** The journals in
+  [`test/golden`](../packages/ambion/test/golden) replay to the committed
+  fold in CI.
 - **A key carries a space prefix.** A delivery key starts with `delivery:`
   and a commit key starts with `commit:`, so equal text in the two never
   collides. A key with no prefix, from an older journal, reads as written.
@@ -233,8 +237,6 @@ both start and resume.
 - **An unknown format is refused.** A runtime that reads `format: 2` throws
   `Unsupported journal format`. It does not skip the fence and does not
   guess.
-- **A new format adds a reader and one named upgrade.** The upgrade turns
-  the older fold input into the newer one. No second format exists yet.
 
 **A `session` on an ended lease entry is an additive field.** An executor
 that keeps memory across activations (`memory: 'seat'`) hands the driver a
