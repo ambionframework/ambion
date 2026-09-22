@@ -57,19 +57,10 @@ is a proposal from the 0.1.0 backlog. The owner sets the final list.
 | W Wake sources            | A room wakes a seat on a notice from a resource, on a timer, and on a scheduler tick, each with a durable start and restart evidence. An `awaiting` exchange expires on a stated bound.        |
 | D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database. |
 | S Scale of the record     | A checkpoint entry lets a resume skip settled history. Full replay stays the reference and the two agree on every golden journal.                                                              |
-| R Release and hygiene     | A release that a trusted CI workflow runs with provenance. A dev build stamp that follows the next release. An API reference that CI keeps fresh. Green, stable gates.                         |
+| R Release and hygiene     | A release that a trusted CI workflow runs with provenance. A dev build stamp that follows the next release. An API reference that CI keeps fresh.                                              |
 
-**Carried from 0.1.0.** These items were open at the 0.1.0 tag. They stay
-in scope because a stable gate is a precondition for the themes above.
-
-- The recovery evidence and the summary evidence that phase 8 named.
-- The Workbench and dev-release tests that time out at 5 seconds on a
-  loaded runner.
-- The Codex-harness live restart case, which fails locally with "The
-  activation ran past its lease" and passes in CI.
-- Two workspace tests that fail on macOS with a Python `gilstate` fault.
-- The pull requests that wait: #151, #153, #171, #234, the Pi pair
-  (#113 and #114), and the dependency bumps.
+**Carried from 0.1.0.** The pull requests that wait stay open: #151, #153,
+#171, #234, the Pi pair (#113 and #114), and the dependency bumps.
 
 **Deployment models.** The same rules serve four placements.
 
@@ -124,44 +115,23 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Three lanes run at once.** A step names the steps it needs; a step with
-no "Needs" line starts now. **P0** blocks the tag. **P1** carries the
-release story. **P2** can land last.
+**Two lanes run at once.** A step names the steps it needs; a step with no
+"Needs" line starts now. **P0** blocks the tag. **P1** carries the release
+story. **P2** can land last.
 
 | Lane | Chain                                 | Priority |
 | ---- | ------------------------------------- | -------- |
-| A    | Phase 1: 1 to 4                       | P0       |
-| B    | Phase 2: 1 to 4, then phase 3: 1 to 4 | P0       |
-| C    | Phase 4: 1 to 3 now; 4 after phase 2  | P1       |
+| A    | Phase 1: 1 to 4, then phase 2: 1 to 4 | P0       |
+| B    | Phase 3: 1 to 3 now; 4 after phase 1  | P1       |
 
-**Lane B starts when phase 1 closes.** The critical path is the notice, then the timer. The gate steps of
-phase 1 come first, so that every later step lands on a stable main.
+**The critical path is the notice, then the timer.**
 
-### Phase 1. A stable gate (P0)
-
-**Goal:** a red run means a defect. No test fails on a loaded runner or on a
-platform of a contributor.
-
-- [ ] **1.** Give the Workbench and dev-release tests a time limit that a
-      loaded runner meets, or make each test faster. (R)
-- [ ] **2.** Decide the Codex-harness live restart case: fix the lease
-      assumption or skip it by harness with a stated reason. (R)
-- [ ] **3.** Decide the two macOS Python faults: report them upstream and
-      skip them by platform with a stated reason, or fix them. (R)
-- [ ] **4.** The recovery evidence and the summary evidence of 0.1.0 as
-      scripted tests: duplicate wake, takeover, delayed cut, audit retry,
-      clock skew, process pause, uncooperative tool; silence, corrections,
-      conflicting constraints, multiple humans, late summaries. (R)
-
-**Evidence:** three green runs of CI and of the live workflow on main, with
-no rerun.
-
-### Phase 2. Wake sources (P0)
+### Phase 1. Wake sources (P0)
 
 **Goal:** a room wakes from an event and not only from a person.
 
 - [ ] **1.** A notice from a resource: a message kind with a ref, no author,
-      and routing by attention. Needs phase 1. (W)
+      and routing by attention. (W)
 - [ ] **2.** Restart semantics of a notice: a durable start, and no hidden
       timeout. Needs 1. (W)
 - [ ] **3.** A timer in the host that expires an `awaiting` exchange and
@@ -172,11 +142,12 @@ no rerun.
 **Evidence:** a scripted test and a chaos case for each step; the Cloudflare
 adapter runs a timer through its alarm.
 
-### Phase 3. Delegation by reference (P1)
+### Phase 2. Delegation by reference (P1)
 
 **Goal:** one room hands work to another and gets one answer back.
 
-- [ ] **1.** The working-room ref and the delegating message. Needs 2.1. (D)
+- [ ] **1.** The working-room ref and the delegating message. Needs phase 1
+      step 1. (D)
 - [ ] **2.** The `awaiting` outcome for the origin exchange, and the return
       message with a ref. Needs 1. (D)
 - [ ] **3.** A read of the status of the delegated work through the
@@ -186,7 +157,7 @@ adapter runs a timer through its alarm.
 **Evidence:** the workbench delegates one question to a second room; a
 restart in the middle keeps the work.
 
-### Phase 4. Release and hygiene (P1)
+### Phase 3. Release and hygiene (P1)
 
 **Goal:** the next release repeats without the owner's machine.
 
@@ -197,7 +168,7 @@ restart in the middle keeps the work.
 - [ ] **3.** A generated API reference per entry with a CI staleness check.
       P2. (R)
 - [ ] **4.** The bounded projection with a checkpoint entry, behind the
-      format rule of the compatibility note. Needs phase 2. (S)
+      format rule of the compatibility note. Needs phase 1. (S)
 
 **Evidence:** a release from CI installs without a token; the reference
 builds in CI; a resume from a checkpoint equals a full replay on every
@@ -241,9 +212,6 @@ compatibility note names.
 **R1. A repeatable release.** The 0.1.0 release ran from one machine with a
 passkey and a token. A trusted workflow with `id-token: write` publishes
 with provenance and needs no token on a laptop.
-
-**R2. A stable gate.** Three tests time out or fail for the platform of a
-runner or a laptop. Each failure costs a rerun and hides a real one.
 
 ## Package decisions
 

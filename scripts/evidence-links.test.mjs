@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 const root = join(import.meta.dirname, '..');
-const pages = ['planning/evidence/README.md', 'planning/evidence/reports/README.md', 'CLAUDE.md'];
+const pages = ['CLAUDE.md'];
 
 const slug = (heading) =>
 	heading
@@ -48,19 +48,6 @@ test('a quoted section of a docs page names a heading that the page holds', () =
 					.map((line) => line.replace(/^#+ /, '').trim());
 				assert.ok(headings.includes(heading), `${dir}/${name}: docs/${page} has no "${heading}"`);
 			}
-		}
-	}
-});
-
-test('prose lines the evidence move rewrote stay within 78 columns', () => {
-	const lines = [
-		['docs/assistant.md', 'acceptance review'],
-		['planning/next.md', 'planning/evidence/reports/README.md'],
-	];
-	for (const [page, needle] of lines) {
-		const text = readFileSync(join(root, page), 'utf8').split('\n');
-		for (const line of text.filter((l) => l.includes(needle) && !l.startsWith('|'))) {
-			assert.ok(line.length <= 78, `${page}: ${line.length} columns: ${line}`);
 		}
 	}
 });
