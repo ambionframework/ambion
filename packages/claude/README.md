@@ -28,7 +28,7 @@ for a provider other than Anthropic.
 npm install @ambionframework/ambion @ambionframework/claude
 ```
 
-Every package needs Node 26.4 or newer. The packages install from npmjs with no token. A dev build of `main` installs
+Every package needs Node 22.19 or newer. The packages install from npmjs with no token. A dev build of `main` installs
 from GitHub Packages; see
 [the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
 

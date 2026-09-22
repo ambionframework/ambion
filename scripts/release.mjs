@@ -201,24 +201,8 @@ export async function verify(ctx, options = {}) {
 		await writeFile(join(home, 'empty-user-npmrc'), '');
 		await writeFile(join(home, 'empty-global-npmrc'), '');
 		const env = cleanEnvironment(ctx.env, home, ctx.registry);
-		const consumer = join(home, 'consumer');
 		const resource = join(home, 'resource');
-		await mkdir(consumer, { recursive: true });
 		await mkdir(resource, { recursive: true });
-		const cli = `@ambionframework/cli@${version}`;
-		await step(
-			ctx,
-			'ambion new',
-			'npm',
-			['exec', '--yes', `--package=${cli}`, '--', 'ambion', 'new', 'team'],
-			{ cwd: consumer, env },
-		);
-		const team = join(consumer, 'team');
-		await step(ctx, 'install the project', 'pnpm', ['install', '--ignore-scripts'], {
-			cwd: team,
-			env,
-		});
-		await step(ctx, 'typecheck the project', 'pnpm', ['run', 'check:types'], { cwd: team, env });
 		await writeFile(join(resource, 'package.json'), '{"private":true,"type":"module"}\n');
 		await step(
 			ctx,

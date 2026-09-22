@@ -9,14 +9,14 @@ journal with rules for taking part. People ask questions and read results.
 Agents speak when they have something to add and stay silent when they do
 not. The kernel keeps the record and the rules. A restart loses nothing.
 
-pnpm workspace, ESM only, TypeScript. Every package needs Node 26.4 or
-newer, the OpenTUI floor.
+pnpm workspace, ESM only, TypeScript. Every library package needs Node
+22.19 or newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI
+floor.
 
 | Path                  | What                                                                                                                                         |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/ambion`     | The runtime. One file per concern, in layers Biome holds; `room.ts` composes them                                                            |
 | `packages/assistant`  | The default assistant definition: membership guidance and closing summaries over the core                                                    |
-| `packages/cli`        | Project creation and local rooms through Wrangler and OpenTUI; ships with the Cloudflare adapter                                             |
 | `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Publishable; tested in workerd                                                 |
 | `packages/journal`    | An append-only journal: one queue, fenced by run, with conditional commits                                                                   |
 | `packages/pi`         | The Pi executor: `pi()`, `piExecution()`, and the seat transcript audit; the kernel imports no model library                                 |

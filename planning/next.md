@@ -78,12 +78,12 @@ own golden journal. Phase 4 step 1 reviews the four together against the
 
 **Deployment models.** The same rules serve four placements.
 
-| Model                         | Placement                         | Persistence               | Support                                                               |
-| ----------------------------- | --------------------------------- | ------------------------- | --------------------------------------------------------------------- |
-| Embedded Node application     | Room and executors in one process | In-memory journals        | Supported for development, tests, and ephemeral lifetimes             |
-| Persistent Node service       | An application-managed service    | SQLite journals           | Supported; the workbench example is the reference host                |
-| Separate room and agent hosts | Calls cross the JSON protocol     | Each host chooses storage | Extension contract with a published conformance suite                 |
-| Cloudflare Durable Objects    | One object per room, one per seat | Each object's SQLite      | Publishable adapter used by `ambion new`; deployment commands pending |
+| Model                         | Placement                         | Persistence               | Support                                                            |
+| ----------------------------- | --------------------------------- | ------------------------- | ------------------------------------------------------------------ |
+| Embedded Node application     | Room and executors in one process | In-memory journals        | Supported for development, tests, and ephemeral lifetimes          |
+| Persistent Node service       | An application-managed service    | SQLite journals           | Supported; the workbench example is the reference host             |
+| Separate room and agent hosts | Calls cross the JSON protocol     | Each host chooses storage | Extension contract with a published conformance suite              |
+| Cloudflare Durable Objects    | One object per room, one per seat | Each object's SQLite      | Publishable adapter tested in workerd; deployment commands pending |
 
 ## Out of scope
 
@@ -124,6 +124,13 @@ condition that brings each one back.
   payload over the Durable Object RPC boundary. `speakOnce` is the minimal
   reference that a transport author needs. A removal of either adds rules
   for callers, so neither is in the release.
+- **`@ambionframework/cli` is removed.** It shipped in 0.1.0 as one of ten
+  published packages, and it provided `ambion new` and `ambion dev`. It
+  also carried its own Node floor, `>=26.4.0` for `@opentui/core`'s FFI
+  bridge, onto every other package, whether or not that package needed it.
+  Nine packages remain, each needing only Node `>=22.19.0`.
+  `examples/workbench` keeps the `>=26.4.0` floor, since it depends on
+  `@opentui/core` directly.
 
 ## The model to preserve
 
@@ -229,8 +236,8 @@ one copy of each mechanism.
       idempotency key in pi-journal. P1. (M3)
 - [ ] **2.** The workspace logs: land PR #171, then one record path, one
       file list, one table, and one call envelope. P1. (M4)
-- [ ] **3.** One template descriptor in the CLI and one set of scripted
-      room fixtures in the conformance suite. P2. (M5)
+- [ ] **3.** One set of scripted room fixtures in the conformance suite.
+      P2. (M5)
 
 **Evidence:** `pnpm check`; `pnpm chaos` and the restart suite for step 1;
 a pi-journal file that 0.1.0 wrote reads as before.
@@ -332,10 +339,10 @@ first, because the rest edits the same code.
 - One private `callEnvelope` in `tools.ts` for the two copies of the
   provenance prefix.
 
-**M5. The adapters and the conformance suite.**
+**M5. The conformance suite.** `conformance.ts` and
+`conformance-executor-room.ts` each hold their own question, participants
+block, and `stale` constant.
 
-- One `Record<Template, TemplateSpec>` in `cli/src/lib/project.ts`, read
-  by `dev.ts` and `main.ts`, for the four per-template maps.
 - The shared question, participants block, and `stale` constant of
   `conformance.ts` and `conformance-executor-room.ts` move to
   `conformance-support.ts`. `until` accepts an async predicate, and

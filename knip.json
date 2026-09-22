@@ -3,9 +3,7 @@
 	"ignoreBinaries": ["wrangler"],
 	"workspaces": {
 		".": {
-			"entry": [
-				"scripts/{version,publish,release,cli-team-smoke,journal-smoke,projection-envelope}.mjs"
-			],
+			"entry": ["scripts/{version,publish,release,journal-smoke,projection-envelope}.mjs"],
 			"project": ["scripts/*.mjs"]
 		},
 		"packages/*": {
@@ -14,15 +12,6 @@
 		"packages/claude": {
 			"project": ["src/**/*.ts"],
 			"ignoreDependencies": ["@ambionframework/journal"]
-		},
-		"packages/cli": {
-			"project": ["src/**/*.ts"],
-			"ignoreDependencies": [
-				"@ambionframework/cloudflare",
-				"@ambionframework/journal",
-				"@ambionframework/pi",
-				"@cloudflare/workers-types"
-			]
 		},
 		"examples/workbench": {
 			"project": ["src/**/*.ts"]

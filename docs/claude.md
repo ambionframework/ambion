@@ -37,7 +37,7 @@ builds its seats on Pi and does not run this executor. Use
 npm install @ambionframework/ambion @ambionframework/claude
 ```
 
-Every package needs Node 26.4 or newer. The packages install from npmjs with no token. A dev build of `main` installs
+Every package needs Node 22.19 or newer. The packages install from npmjs with no token. A dev build of `main` installs
 from GitHub Packages; see
 [Toolchain](toolchain.md#9-release-and-publishing). The package depends on
 `@anthropic-ai/claude-agent-sdk` at an exact version.

@@ -7,16 +7,16 @@ tracks the evidence still required for release.
 
 ## Deployment models
 
-| Model                         | Placement                        | Persistence                  | Current status                                                                        |
-| ----------------------------- | -------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------- |
-| Embedded Node application     | Room and runners in one process  | In-memory journals           | Implemented; storage lasts for the instance's lifetime                                |
-| Persistent Node service       | Application-managed service      | SQLite journals              | SQLite recovery tests include a fresh process after SIGKILL; see evidence below       |
-| Separate room and agent hosts | Calls cross the JSON protocol    | Each host chooses storage    | Extension contract with a published conformance suite                                 |
-| Cloudflare Durable Objects    | One object per room and per seat | Each object's SQLite storage | Publishable adapter tested in workerd; local CLI support, deployment commands pending |
+| Model                         | Placement                        | Persistence                  | Current status                                                                  |
+| ----------------------------- | -------------------------------- | ---------------------------- | ------------------------------------------------------------------------------- |
+| Embedded Node application     | Room and runners in one process  | In-memory journals           | Implemented; storage lasts for the instance's lifetime                          |
+| Persistent Node service       | Application-managed service      | SQLite journals              | SQLite recovery tests include a fresh process after SIGKILL; see evidence below |
+| Separate room and agent hosts | Calls cross the JSON protocol    | Each host chooses storage    | Extension contract with a published conformance suite                           |
+| Cloudflare Durable Objects    | One object per room and per seat | Each object's SQLite storage | Publishable adapter tested in workerd; deployment commands pending              |
 
 ## Embedded Node
 
-**The embedded model needs no remote coordination service.** Use Node 26.4
+**The embedded model needs no remote coordination service.** Use Node 22.19
 or later and ESM. Supply agent definitions, provider credentials, and domain
 tools. Keep the process alive while agents work. The default in-memory
 journals lose their contents when their storage instance is lost.
@@ -254,10 +254,9 @@ connect room and seat objects. Each object uses its own SQLite storage.
 Its workerd tests exercise serialization and recovery, including a room
 restart while remote seats continue to work.
 
-A project that `ambion new` generates (see [the CLI](../packages/cli))
-provides a local development harness through `ambion dev`. Publishing a supported deployment requires
-packaging, configuration, operations documentation, and deployment evidence.
-The Node directory workspace is not automatically available in a Durable Object.
+Publishing a supported deployment requires packaging, configuration,
+operations documentation, and deployment evidence. The Node directory
+workspace is not automatically available in a Durable Object.
 
 ## Operational boundaries
 

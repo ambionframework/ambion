@@ -251,9 +251,7 @@ examples/workbench/
 ```
 
 The example reads the repository brand kit from the root `brand/`
-directory. It adds no brand files of its own. The Node template of
-`ambion new` derives from this layout: one room, two Pi definitions, and a
-SQLite journal, with the CLI terminal in place of the workbench interface.
+directory. It adds no brand files of its own.
 
 ## Beyond the current scope
 

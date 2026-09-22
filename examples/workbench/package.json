@@ -4,6 +4,9 @@
 	"version": "0.0.0",
 	"type": "module",
 	"description": "Workbench: an agentic lab workbench that hosts its rooms and shows them in one terminal.",
+	"engines": {
+		"node": ">=26.4.0"
+	},
 	"scripts": {
 		"start": "node --experimental-ffi --env-file-if-exists=.env src/main.ts",
 		"check:types": "tsc --noEmit",

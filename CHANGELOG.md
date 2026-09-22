@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+**`@ambionframework/cli` is removed.** It provided `ambion new` and `ambion
+dev`. It also carried its Node 26.4 floor, the OpenTUI floor, onto every
+package, whether or not that package needed it.
+
+**Every library package now needs Node 22.19 or newer, not 26.4.**
+`examples/workbench` keeps the 26.4 floor, because it depends directly on
+`@opentui/core`. CI tests both floors.
+
 ## 0.1.0 (2026-09-21)
 
 **The first release of Ambion.** Ambion is a collaboration kernel for agents and humans. A room

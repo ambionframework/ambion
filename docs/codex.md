@@ -39,9 +39,9 @@ package only, pinned to exact versions.
 npm install @ambionframework/ambion @ambionframework/codex
 ```
 
-**Node 26.4 or newer.** The package needs the same Node floor as every
-Ambion package. Codex spawns the room tools server with the Node that runs
-your process.
+**Node 22.19 or newer.** The package needs the same Node floor as every
+Ambion library package. Codex spawns the room tools server with the Node
+that runs your process.
 
 **The `codex` binary comes with the SDK.** `@openai/codex-sdk` depends on
 `@openai/codex`, which installs the binary for the platform. Set
@@ -442,10 +442,10 @@ custom `config` that replaces `mcp_servers` removes it.
 
 **The server does not start.** Codex reports the startup as failed after 30
 seconds. Check that `dist/room-tools-server.mjs` exists beside `dist/index.mjs`
-and that `node` on the `PATH` of the process is Node 26.4 or newer. Run
+and that `node` on the `PATH` of the process is Node 22.19 or newer. Run
 `node dist/room-tools-server.mjs /tmp/none.sock` to see its error.
 
-**The Node version is too old.** The package needs Node 26.4 or newer, and Node
+**The Node version is too old.** The package needs Node 22.19 or newer, and Node
 strips types from `.ts` files only in the source tree. An older Node fails on
 a built package with a syntax or an engine error.
 

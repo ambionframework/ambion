@@ -65,8 +65,7 @@ today. **Condition:** a fault that one of them would have caught.
 - Exchange budgets; deadlines and caps bound activations only.
 - Agent source retrieval and pagination under the shared summary policy.
 - Browser-only execution, a managed service, arbitrary edge platforms,
-  turnkey deployment commands, CLI remote authentication, multiple
-  terminal clients, live activity transport in the CLI.
+  turnkey deployment commands, multiple terminal clients.
 - A `SeatObject` class rename in the Cloudflare adapter; it needs
   Durable Object migration evidence.
 - The lease `since` in `room/rules.verified.ts` keeps its name until a
@@ -74,8 +73,6 @@ today. **Condition:** a fault that one of them would have caught.
 - A provider-neutral plugin ecosystem beyond the executor contract.
 - A second live-tier provider job. Add one only if a provider-specific
   defect turns up.
-- One shared team definition for the two CLI templates. The generated
-  starters are code the user owns, and the CLI smoke test catches drift.
 
 ## Open pull requests
 

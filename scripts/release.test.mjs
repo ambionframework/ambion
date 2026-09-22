@@ -17,9 +17,9 @@ const VERSION = '0.1.0';
 function pkg(name, dependencies = {}) {
 	return { dir: `/x/${name}`, manifest: { name, version: VERSION, dependencies } };
 }
-// The cli needs the ambion package, so it comes second whatever the input order.
+// pi needs the ambion package, so it comes after it whatever the input order.
 const PACKAGES = dependencyOrder([
-	pkg('@ambionframework/cli', { '@ambionframework/ambion': 'workspace:*' }),
+	pkg('@ambionframework/pi', { '@ambionframework/ambion': 'workspace:*' }),
 	pkg('@ambionframework/ambion'),
 	pkg('@ambionframework/workspace'),
 ]);
@@ -205,7 +205,7 @@ describe('release.mjs against a fake registry', () => {
 
 	it('orders the packages by dependency', () => {
 		const names = PACKAGES.map((entry) => entry.manifest.name);
-		assert.ok(names.indexOf('@ambionframework/ambion') < names.indexOf('@ambionframework/cli'));
+		assert.ok(names.indexOf('@ambionframework/ambion') < names.indexOf('@ambionframework/pi'));
 	});
 
 	it('stage publishes each package under next in dependency order', async () => {
@@ -224,10 +224,10 @@ describe('release.mjs against a fake registry', () => {
 	});
 
 	it('stage skips a version already published and finishes the rest after a failure', async () => {
-		state.failPublishOf = '@ambionframework/cli';
-		await assert.rejects(stage(context(), {}), /Failed to publish @ambionframework\/cli/);
+		state.failPublishOf = '@ambionframework/pi';
+		await assert.rejects(stage(context(), {}), /Failed to publish @ambionframework\/pi/);
 		assert.ok(fake.store.has('@ambionframework/ambion'));
-		assert.ok(!fake.store.has('@ambionframework/cli'));
+		assert.ok(!fake.store.has('@ambionframework/pi'));
 		state.failPublishOf = undefined;
 		logs.length = 0;
 		await stage(context(), {});
@@ -260,7 +260,7 @@ describe('release.mjs against a fake registry', () => {
 			return false;
 		};
 		await assert.rejects(stage(context({ confirm }), {}), /Not confirmed/);
-		assert.match(asked, /@ambionframework\/cli@0\.1\.0/);
+		assert.match(asked, /@ambionframework\/pi@0\.1\.0/);
 		assert.equal(publishCalls().length, 0);
 		assert.equal(state.gateRuns, 0);
 	});
@@ -352,7 +352,7 @@ describe('release.mjs against a fake registry', () => {
 		const steps = runner.calls.filter((c) => c.options.cwd?.includes('ambion-verify-'));
 		assert.deepEqual(
 			steps.map((c) => `${c.command} ${c.args[0]}`),
-			['npm exec', 'pnpm install', 'pnpm run', 'npm install', 'node --eval'],
+			['npm install', 'node --eval'],
 		);
 		for (const call of steps) {
 			assert.equal(call.options.env.NODE_AUTH_TOKEN, undefined);
@@ -364,7 +364,6 @@ describe('release.mjs against a fake registry', () => {
 			);
 			assert.ok(!call.options.cwd.startsWith(ROOT));
 		}
-		assert.ok(steps[0].args.includes(`--package=@ambionframework/cli@${VERSION}`));
 	});
 
 	it('verify refuses a version that is not on the registry', async () => {

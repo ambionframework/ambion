@@ -12,7 +12,6 @@ packages/
   ambion/       runtime library
   assistant/    default assistant agent and behavioral guidance
   claude/       Claude Agent SDK executor: claude() and claudeExecution()
-  cli/          ambion binary and project generator
   cloudflare/   Durable Object adapter
   codex/        Codex SDK executor: codex() and codexExecution()
   journal/      append-only journal storage
@@ -26,7 +25,7 @@ planning/       the plan for the next release and the backlog
 .github/        CI, live, and dev-release workflows
 ```
 
-The ten `packages/*` entries are publishable and share a lockstep version.
+The nine `packages/*` entries are publishable and share a lockstep version.
 Examples are private. The package graph is:
 
 ```text
@@ -35,23 +34,21 @@ pi ──▶ ambion, journal, pi-journal
 pi-journal ──▶ journal
 claude ──▶ ambion
 codex ──▶ ambion
-cli ──▶ ambion
 cloudflare ──▶ ambion, journal, pi
 workspace ──▶ ambion
 assistant ──▶ ambion, pi
 ```
 
 Internal dependencies use `workspace:*`; pnpm rewrites them to the release
-version while packing. The CLI and packed-consumer smoke checks exercise the
-built exports, so a broken dependency order or export map fails before release.
-The `CLI smoke test` job runs `scripts/cli-team-smoke.mjs` on every pull
-request and on `main`. The script packs every package and installs the
-archives through `file:` overrides. It runs `ambion new` for the node and
-Cloudflare templates, then installs, typechecks, and runs each project. The
-job needs no key and stops after ten minutes.
-See [`scripts/cli-team-smoke.mjs`](../scripts/cli-team-smoke.mjs) and
-[`scripts/journal-smoke.mjs`](../scripts/journal-smoke.mjs) for detailed
-consumer checks.
+version while packing. Two packages get a packed-consumer smoke check that
+installs the tarball outside the repository and exercises its built
+exports: `scripts/release.mjs verify` installs `@ambionframework/workspace`
+with no token and imports its resource entry, and
+[`scripts/journal-smoke.mjs`](../scripts/journal-smoke.mjs) does the same
+for the journal. The other packages rely on `pnpm run check:packages` for
+export and pack-list correctness, and on `pnpm run test` for the built
+`dist/**` that `check:types` type-checks against; neither installs a
+tarball in an external project the way the two smoke checks do.
 
 The core has four published entries:
 
@@ -89,8 +86,10 @@ both behind the public facade.
 | Formatting             | Prettier 3; 100-column, tabs in code, spaces in Markdown |
 | Dead code              | Knip 6                                                   |
 
-Every package requires Node `>=26.4`, the OpenTUI floor. The `ambion dev`
-client also runs on Bun `>=1.3`. CI installs and tests on Node 26.
+Every library package requires Node `>=22.19.0`. `examples/workbench`
+requires Node `>=26.4.0`, the OpenTUI floor; it also runs on Bun `>=1.3`. CI
+tests both floors: Node `22.19.0` for the library packages, Node `26.4.0`
+for the library packages and `examples/workbench` together.
 
 ## 3. Supply chain
 
@@ -131,7 +130,7 @@ Use these commands at the repository root:
 | Command                      | Purpose                                                                |
 | ---------------------------- | ---------------------------------------------------------------------- |
 | `pnpm build`                 | Build every package through Turborepo                                  |
-| `pnpm check:types`           | Type-check packages and both CLI templates after their builds          |
+| `pnpm check:types`           | Type-check every package after its build                               |
 | `pnpm test`                  | Run report checks and the scripted Vitest suites                       |
 | `pnpm check:format`          | Verify Prettier formatting                                             |
 | `pnpm check:lint`            | Run Biome with warnings as errors, then Knip                           |
@@ -163,13 +162,16 @@ must name the `lemmascript` version in `package.json`.
 [`formal.md`](formal.md) holds the mechanism, the constructs that lower,
 and what a contributor does to change a rule.
 
-`scripts/setup.sh` provisions the full local toolchain. It installs Node 26
-through nvm, because `@opentui/core` sets that engine floor. It installs .NET 8,
-Dafny 4.11, and Z3 4.12.1, which `pnpm check:lemmascript` reads. It then
-installs the workspace dependencies. The script is idempotent, so a second run
-skips a tool that is already present. On the web, the SessionStart hook at
-`.claude/hooks/session-start.sh` runs the script, and the tool paths reach every
-later shell through `CLAUDE_ENV_FILE`.
+`scripts/setup.sh` provisions the full local toolchain. It installs Node
+26.4.0 through nvm, the development version, because `examples/workbench`
+depends on `@opentui/core`, which sets that engine floor. Every library
+package needs only Node 22.19.0; the development version covers both. The
+script also installs .NET 8, Dafny 4.11, and Z3 4.12.1, which `pnpm
+check:lemmascript` reads. It then installs the workspace dependencies. The
+script is idempotent, so a second run skips a tool that is already present.
+On the web, the SessionStart hook at `.claude/hooks/session-start.sh` runs
+the script, and the tool paths reach every later shell through
+`CLAUDE_ENV_FILE`.
 
 ## 7. Lint and format split
 
@@ -193,23 +195,31 @@ the fake clock makes lease and retry cases deterministic.
 CI runs on pushes to `main`, pull requests, and manual dispatch. It has three
 repository jobs plus the LemmaScript reusable workflow:
 
-| Job     | Checks                                                      |
-| ------- | ----------------------------------------------------------- |
-| `check` | format, types, lint, and Knip on Node 26                    |
-| `test`  | scripted tests on Node 26                                   |
-| `cli`   | build, CLI version/help/error behavior, and package packing |
+| Job                  | Checks                                                                   |
+| -------------------- | ------------------------------------------------------------------------ |
+| `check`              | format, types, lint, Knip, and package hygiene, on Node 26.4.0           |
+| `test`               | scripted tests on Node 26.4.0, library packages and `examples/workbench` |
+| `test-library-floor` | scripted tests on Node 22.19.0, library packages only                    |
 
-The CLI job drives `packages/cli/bin/ambion.mjs`, verifies versions, rejects an
-unknown command, and packs all packages. This checks the artifact users will
-run, including package resolution and `files` lists.
+`test-library-floor` removes `examples/workbench` from its checkout before
+`pnpm install`. That package depends on `@opentui/core`, which needs Node
+`>=26.4.0` for its FFI bridge to native Zig. Deleting the directory keeps
+pnpm from building or testing it, but `pnpm-lock.yaml` still lists it as
+an importer, so `--frozen-lockfile` still counts it in the workspace scope
+and still checks `@opentui/core`'s `engines.node` before it installs
+anything. The job installs with `--config.engine-strict=false` to get past
+that one check. No library dependency needs more than Node `22.19.0`, and
+the test run below is the real proof of that floor.
 
-The CLI job also runs `pnpm run check:packages` after the build. The check
+The `check` job also runs `pnpm run check:packages` after the build. The check
 reads `pnpm-lock.yaml` and every publishable manifest. It fails on more than
 one `typebox` version, a CommonJS export, a missing export or types path, a
 pack list without `dist`, the README, or the license, a pack list with
 source, test, or config files, versions out of lockstep, and a different
 `engines.node`. Each package carries a copy of the root `LICENSE`, because
-`pnpm pack` does not add the root file.
+`pnpm pack` does not add the root file. It then packs every package and
+verifies version agreement with `node scripts/version.mjs --check` and
+`node scripts/publish.mjs --pack-only`.
 
 The live workflow runs the same scenarios on a real provider. It runs after a
 change lands on `main`, on a weekly schedule, and by dispatch. It does not run
@@ -244,7 +254,7 @@ and [`durability.md`](durability.md) for the claims those tests enforce.
 
 ## 9. Release and publishing
 
-Two channels publish the ten packages under the `@ambionframework` scope.
+Two channels publish the nine packages under the `@ambionframework` scope.
 
 | Channel | Registry                     | Dist-tag         | Who publishes                 |
 | ------- | ---------------------------- | ---------------- | ----------------------------- |
@@ -283,15 +293,12 @@ Use an environment variable and never an inline token. Install with
 **Official releases stay on the owner's machine.** `scripts/release.mjs` has
 four commands. Each command is idempotent.
 
-| Command   | What it does                                                                                                  |
-| --------- | ------------------------------------------------------------------------------------------------------------- |
-| `stage`   | Run the guards and the gate, pack once, publish to npmjs under `next`                                         |
-| `verify`  | Install from npmjs outside the repo with no token, run `ambion new`, typecheck, and import the resource entry |
-| `promote` | Run `npm dist-tag add` to set `latest` on every package                                                       |
-| `status`  | Print the dist-tags of every package                                                                          |
-
-`verify` checks the node template. The packed consumer checks of the plan cover
-the Cloudflare template.
+| Command   | What it does                                                                     |
+| --------- | -------------------------------------------------------------------------------- |
+| `stage`   | Run the guards and the gate, pack once, publish to npmjs under `next`            |
+| `verify`  | Install from npmjs outside the repo with no token, and import the resource entry |
+| `promote` | Run `npm dist-tag add` to set `latest` on every package                          |
+| `status`  | Print the dist-tags of every package                                             |
 
 `stage` refuses when the tree is dirty. It also refuses when HEAD is not the
 commit of the tag `v<version>`, when the versions disagree, or when npmjs holds

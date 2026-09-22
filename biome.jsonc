@@ -29,8 +29,8 @@
 			},
 			"suspicious": {
 				"noExplicitAny": "error",
-				// The CLI and the examples are console programs; `noConsole` is
-				// re-enabled for library source in the override below.
+				// The examples are console programs; `noConsole` is re-enabled
+				// for library source in the override below.
 				"noConsole": "off"
 			}
 		}
@@ -413,7 +413,6 @@
 			// a host, a workspace backend, and an example alike.
 			"includes": [
 				"packages/cloudflare/src/**",
-				"packages/cli/src/**",
 				"packages/pi/src/**",
 				"packages/claude/src/**",
 				"packages/codex/src/**",

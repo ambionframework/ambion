@@ -9,7 +9,7 @@
 		"target": "ES2023",
 		"lib": ["ESNext"],
 		// TS 7 defaults `types` to []; keep the ambient Node globals
-		// (process, Buffer, URL, ...) that the runtime and CLI rely on.
+		// (process, Buffer, URL, ...) that the runtime relies on.
 		"types": ["node"],
 
 		// strictness
