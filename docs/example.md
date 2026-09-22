@@ -148,7 +148,9 @@ interface.
   one (see the [Workbench README](../examples/workbench/README.md)).
   `/attach` copies a local picture into the workspace and cites it as a ref
   of the next message; the files panel renders a picture file with OpenTUI's
-  `ImageRenderable`, and every other file stays text.
+  `ImageRenderable`, and every other file stays text. Pasting a bare
+  picture path into an empty composer fills `/attach` for the person,
+  through the terminal's bracketed paste.
   The person picks an identity on the first screen.
 - **Brand.** The terminal reads its colors from the repository brand kit in
   `brand/tokens/ambion.tokens.json`.
@@ -180,23 +182,24 @@ keeps the rooms, the visits, and the exchanges.
 table states what each test proves today. A row marked "By hand" has no
 automated test yet.
 
-| Scenario                                                        | Claim                                      | Evidence                                                                      |
-| --------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
-| A resistor question is answered from `led-5mm.md` in `/library` | A specialist works from a shared file      | Scripted: an agent reads the file. Live: the summary cites `/library`         |
-| The assistant routes a question to the Design specialist        | Selection, silence, and one summary        | Scripted: one summary after routing, and a silent close when no agent speaks  |
-| A specialist writes a file to the workspace                     | An artifact survives a restart             | Scripted: the file is written, and read again after a restart                 |
-| The Experiments specialist plans a distance test                | A question becomes a written plan          | Live: the summary describes a test. No test checks the plan file              |
-| A person adds a constraint while an agent works                 | Steering an open exchange                  | By hand: the thread shows the message in order                                |
-| The host stops, fails to stop, and resumes                      | Resume keeps the question and the files    | Scripted: clean stop, failed stop with retry, and resume from the journal     |
-| Two people work the kit through separate rooms                  | Visits, presence, and catch-up by position | Scripted                                                                      |
-| One specialist records a run and another reads it back          | A second resource, apart from the journal  | Scripted: `record` stamps provenance, `query` reads the row from `lab.db`     |
-| The Design specialist drives an instrument above its limit      | An action that waits for a person          | Scripted: `operate` records a request, `approve_operation` records the answer |
-| The terminal shows the cost of an exchange                      | Cost per exchange is real                  | Scripted: formatting from synthetic usage. Live: `usage.cost` is positive     |
-| A message cites a file, a table, or a message                   | A ref opens as a file or a table opens     | Scripted: refs resolve, opens match the panel, a host path stays shut         |
-| A person attaches a local picture and sends it                  | `/attach` cites a workspace file as a ref  | Scripted: the file lands in the workspace, and the ref goes with the message  |
-| The terminal opens the steps of an activation                   | A drill-down into the trace                | Scripted: the host reads the trace, and the model groups passes and steps     |
-| An exchange ends on a message to a person                       | `awaiting` reads as waiting on that person | Scripted: the discussion flag, and a note for the person named                |
-| An instrument request waits for its owner                       | The terminal shows an approval             | Scripted: the host lists the request, and drops it once a later row answers   |
+| Scenario                                                        | Claim                                      | Evidence                                                                          |
+| --------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------- |
+| A resistor question is answered from `led-5mm.md` in `/library` | A specialist works from a shared file      | Scripted: an agent reads the file. Live: the summary cites `/library`             |
+| The assistant routes a question to the Design specialist        | Selection, silence, and one summary        | Scripted: one summary after routing, and a silent close when no agent speaks      |
+| A specialist writes a file to the workspace                     | An artifact survives a restart             | Scripted: the file is written, and read again after a restart                     |
+| The Experiments specialist plans a distance test                | A question becomes a written plan          | Live: the summary describes a test. No test checks the plan file                  |
+| A person adds a constraint while an agent works                 | Steering an open exchange                  | By hand: the thread shows the message in order                                    |
+| The host stops, fails to stop, and resumes                      | Resume keeps the question and the files    | Scripted: clean stop, failed stop with retry, and resume from the journal         |
+| Two people work the kit through separate rooms                  | Visits, presence, and catch-up by position | Scripted                                                                          |
+| One specialist records a run and another reads it back          | A second resource, apart from the journal  | Scripted: `record` stamps provenance, `query` reads the row from `lab.db`         |
+| The Design specialist drives an instrument above its limit      | An action that waits for a person          | Scripted: `operate` records a request, `approve_operation` records the answer     |
+| The terminal shows the cost of an exchange                      | Cost per exchange is real                  | Scripted: formatting from synthetic usage. Live: `usage.cost` is positive         |
+| A message cites a file, a table, or a message                   | A ref opens as a file or a table opens     | Scripted: refs resolve, opens match the panel, a host path stays shut             |
+| A person attaches a local picture and sends it                  | `/attach` cites a workspace file as a ref  | Scripted: the file lands in the workspace, and the ref goes with the message      |
+| A person pastes a bare picture path into an empty composer      | The paste fills `/attach`, not the message | Scripted: a path paste names the file; a sentence or a mid-message paste does not |
+| The terminal opens the steps of an activation                   | A drill-down into the trace                | Scripted: the host reads the trace, and the model groups passes and steps         |
+| An exchange ends on a message to a person                       | `awaiting` reads as waiting on that person | Scripted: the discussion flag, and a note for the person named                    |
+| An instrument request waits for its owner                       | The terminal shows an approval             | Scripted: the host lists the request, and drops it once a later row answers       |
 
 The kernel chaos tier covers a kill during work. This example does not.
 
@@ -218,6 +221,7 @@ examples/workbench/
     workbench.ts       the host: open, read, watch, send, control, create, files
     names.ts           the room name and goal rules
     files.ts           the workspace list, one file preview, one lab table preview, and /attach
+    attachments.ts     what /attach does, and what a pasted path names
     refs.ts            the refs of a message: parse, resolve, and one chip line
     session.ts         the terminal's state and commands, without OpenTUI
     feed.ts            the room feed: one read at a time
@@ -229,7 +233,7 @@ examples/workbench/
     header-fit.ts      what the header rows show at one width
     transcript.ts      the conversation
     header.ts          the panel above the conversation: room, goal, people, pattern
-    composer.ts        the composer, room chip, and palette rows
+    composer.ts        the composer, room chip, palette rows, and paste detection
     palette.ts         the palette state: rows, the picked row, and dismissal
     browser.ts         the files panel state: search and the chosen file
     files-panel.ts     the files panel beside the conversation

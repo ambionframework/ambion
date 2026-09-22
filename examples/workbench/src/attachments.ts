@@ -1,3 +1,4 @@
+import { isImagePath } from './files.ts';
 import { fileUri } from './refs.ts';
 import type { Workbench } from './workbench.ts';
 
@@ -24,6 +25,19 @@ export type AttachResult = { readonly notice: string } | { readonly error: unkno
  */
 export interface AttachTarget {
 	pendingRefs: StagedAttachment[];
+}
+
+/**
+ * The path a paste names, when the composer can offer it to `/attach`: one
+ * line, no inner whitespace, rooted at `/` or `~/`, ending in a picture's
+ * extension. A pasted sentence, a multi-line paste, or a path to another
+ * kind of file names none.
+ */
+export function pastedImagePath(text: string): string | undefined {
+	const line = text.trim();
+	if (line === '' || /\s/.test(line)) return undefined;
+	if (!line.startsWith('/') && !line.startsWith('~/')) return undefined;
+	return isImagePath(line) ? line : undefined;
 }
 
 /** Run `/attach`: copy a local file into the workspace, and stage it as a ref. */

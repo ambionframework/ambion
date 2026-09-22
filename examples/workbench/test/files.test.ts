@@ -1,6 +1,8 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { BACKGROUND_CONTEXT, memoryBackend, openWorkspace } from '@ambionframework/workspace';
 import { describe, expect, it } from 'vitest';
-import { isImagePath, readFile } from '../src/files.ts';
+import { attachFile, isImagePath, readFile } from '../src/files.ts';
 
 const scribe = { name: 'scribe', identity: 'scribe identity' };
 
@@ -43,6 +45,18 @@ describe('readFile on a picture', () => {
 		await site.use(scribe, (env) => env.writeFile('/home/scribe/big.png', big, BACKGROUND_CONTEXT));
 
 		await expect(readFile(site, '/home/scribe/big.png')).rejects.toThrow(/8 MiB/);
+		await site.destroy();
+	});
+});
+
+describe('attachFile', () => {
+	it('expands a ~/ path to the real home directory before reading it', async () => {
+		const site = openWorkspace({ name: 'attach-tilde', backend: memoryBackend() });
+		const resolved = join(homedir(), 'no-such-picture.png');
+
+		await expect(attachFile(site, '~/no-such-picture.png')).rejects.toThrow(
+			new RegExp(resolved.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+		);
 		await site.destroy();
 	});
 });

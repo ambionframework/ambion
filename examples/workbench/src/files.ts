@@ -1,5 +1,6 @@
 import { readFile as readLocalFile } from 'node:fs/promises';
-import { basename } from 'node:path';
+import { homedir } from 'node:os';
+import { basename, join } from 'node:path';
 import { BACKGROUND_CONTEXT, type Workspace } from '@ambionframework/workspace';
 import {
 	isDatabase,
@@ -92,16 +93,17 @@ export async function listFiles(workspace: Workspace): Promise<FileEntry[]> {
  * two attachments of the same name never collide.
  */
 export async function attachFile(workspace: Workspace, localPath: string): Promise<FileEntry> {
+	const resolved = localPath.startsWith('~/') ? join(homedir(), localPath.slice(2)) : localPath;
 	let bytes: Uint8Array;
 	try {
-		bytes = await readLocalFile(localPath);
+		bytes = await readLocalFile(resolved);
 	} catch (error) {
 		return fail(
 			`Cannot read ${localPath}: ${error instanceof Error ? error.message : String(error)}`,
 		);
 	}
 	if (bytes.length > MAX_BYTES.image) fail(SIZE_ADVICE.image);
-	const path = `${ATTACHMENTS_DIR}/${Date.now()}-${basename(localPath)}`;
+	const path = `${ATTACHMENTS_DIR}/${Date.now()}-${basename(resolved)}`;
 	await workspace.use(browser, async (env) => {
 		await env.createDir(ATTACHMENTS_DIR, { recursive: true }, BACKGROUND_CONTEXT);
 		const written = await env.writeFile(path, bytes, BACKGROUND_CONTEXT);

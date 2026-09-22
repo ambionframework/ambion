@@ -93,6 +93,15 @@ OpenTUI's own terminal image rendering, negotiated to the terminal's protocol.
 the workspace, under `/attachments`. It cites the copy as a ref of your next
 message. A colleague opens the same file with `/open`, and an agent's `read`
 tool returns it as a picture, not text. The command takes files up to 8 MiB.
+`~/` in the path expands to your home directory.
+
+**Pasting a picture's path into an empty composer fills `/attach` for you.**
+The terminal reads a paste as one block, through bracketed paste, so it can
+tell a paste from typing. A paste that is one line, holds no space, starts
+with `/` or `~/`, and ends in a picture's extension becomes
+`/attach <path>` instead of landing as message text. Pasting into a message
+already underway, or a paste that does not look like one bare picture path,
+lands as typed.
 
 **A message shows its refs, one line each.** A line starts with `↗` and the
 kind of the ref: `file`, `table`, or `message`. A ref that does not resolve
@@ -260,7 +269,7 @@ workspace resources.
 | `src/steps.ts`       | The steps of an activation, and the cost of a run     |
 | `src/approvals.ts`   | The instrument operations that wait for an answer     |
 | `src/transcript.ts`  | The conversation, with open and closed threads        |
-| `src/composer.ts`    | The composer, room chip, and palette                  |
+| `src/composer.ts`    | The composer, room chip, palette, and paste detection |
 | `src/browser.ts`     | The files panel state: search, matches, chosen file   |
 | `src/files-panel.ts` | The files panel beside the conversation               |
 | `src/database.ts`    | The SQLite preview: tables and their first rows       |

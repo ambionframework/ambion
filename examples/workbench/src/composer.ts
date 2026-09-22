@@ -4,12 +4,38 @@ import {
 	bold,
 	type CliRenderer,
 	fg,
+	type PasteEvent,
 	StyledText,
+	type TextareaOptions,
 	TextareaRenderable,
 	TextRenderable,
 } from '@opentui/core';
+import { pastedImagePath } from './attachments.ts';
 import { tui as palette } from './brand.ts';
 import type { Suggestion } from './commands.ts';
+
+/**
+ * A textarea that offers a pasted picture path to `onPastedLine` before
+ * inserting it as text. Returning `true` consumes the paste: the path never
+ * lands in the message body, because the composer offered `/attach` instead.
+ */
+class PasteAwareTextarea extends TextareaRenderable {
+	private readonly onPastedLine?: (line: string) => boolean;
+
+	constructor(
+		ctx: CliRenderer,
+		options: TextareaOptions & { onPastedLine?: (line: string) => boolean },
+	) {
+		super(ctx, options);
+		this.onPastedLine = options.onPastedLine;
+	}
+
+	override handlePaste(event: PasteEvent): void {
+		const line = new TextDecoder().decode(event.bytes);
+		if (this.onPastedLine?.(line)) return;
+		super.handlePaste(event);
+	}
+}
 
 /** The palette's title, by what its rows complete to. */
 const TITLES = { command: 'Commands', room: 'Rooms', person: 'People', file: 'Files' } as const;
@@ -30,7 +56,7 @@ export interface ComposerEvents {
  */
 export class Composer {
 	readonly root: BoxRenderable;
-	readonly input: TextareaRenderable;
+	readonly input: PasteAwareTextarea;
 	private readonly chip: TextRenderable;
 	private readonly frame: BoxRenderable;
 	private readonly paletteBox: BoxRenderable;
@@ -52,7 +78,7 @@ export class Composer {
 		});
 		this.paletteBox.add(this.paletteText);
 		this.chip = new TextRenderable(renderer, { content: '', flexShrink: 0 });
-		this.input = new TextareaRenderable(renderer, {
+		this.input = new PasteAwareTextarea(renderer, {
 			flexGrow: 1,
 			height: 1,
 			placeholder: 'Message the room, or type / for commands',
@@ -73,6 +99,7 @@ export class Composer {
 				this.resize();
 				events.change();
 			},
+			onPastedLine: (line) => this.suggestAttach(line),
 		});
 		this.frame = new BoxRenderable(renderer, {
 			flexDirection: 'row',
@@ -105,6 +132,19 @@ export class Composer {
 		this.input.gotoBufferEnd();
 		this.resize();
 		this.events.change();
+	}
+
+	/**
+	 * A paste into an empty composer that names one picture, absolute or under
+	 * `~/`, fills `/attach` instead of the raw path. True consumes the paste;
+	 * false lets a paste into an already-started message land as typed.
+	 */
+	private suggestAttach(line: string): boolean {
+		if (this.text.trim() !== '') return false;
+		const path = pastedImagePath(line);
+		if (path === undefined) return false;
+		this.setText(`/attach ${path}`);
+		return true;
 	}
 
 	focus(): void {
