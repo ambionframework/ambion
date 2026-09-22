@@ -4,8 +4,8 @@
  * `codex()` builds the executor an agent definition takes. The room reads
  * none of the fields Codex adds; the Codex executor does.
  */
-import type { AgentExecutor, AmbionTool, ToolBundle } from '@ambionframework/ambion';
-import { describeExecutor } from '@ambionframework/ambion/hosting';
+import type { AgentExecutor } from '@ambionframework/ambion';
+import { type AgentExecutorBaseOptions, describeExecutor } from '@ambionframework/ambion/hosting';
 import type { ApprovalMode, ModelReasoningEffort, SandboxMode } from '@openai/codex-sdk';
 
 /** What the harness may do. The executor passes each field to the Codex SDK unchanged. */
@@ -21,21 +21,9 @@ export interface CodexPolicy {
 	readonly additionalDirectories?: readonly string[];
 }
 
-export interface CodexOptions extends CodexPolicy {
-	/** The private half: the agent's own voice, and the home of all judgment. */
-	instructions: string;
+export interface CodexOptions extends AgentExecutorBaseOptions, CodexPolicy {
 	/** A Codex model identifier. */
 	model: string;
-	/** The agent's own normalized tools. They reach Codex through the room tools server. */
-	tools?: readonly AmbionTool[];
-	/** Composable tool bundles with guidance. Bundles are flattened at definition time. */
-	bundles?: readonly ToolBundle[];
-	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
-	speaking?: string;
-	/** The token limit for the record one activation reads. Absent reads the whole record. */
-	activationTokenLimit?: number;
-	/** How the agent counts tokens against its limit. Absent uses a length estimate. */
-	estimateTokens?: (text: string) => number;
 	/**
 	 * What the agent remembers between activations. `activation` opens a
 	 * Codex thread per activation. `seat` resumes one thread per seat and

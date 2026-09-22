@@ -35,7 +35,12 @@ import type {
 	Seq,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
-import { renderActivation, renderDelta } from '@ambionframework/ambion/hosting';
+import {
+	renderActivation,
+	renderDelta,
+	resumesForSeat,
+	sessionToResume,
+} from '@ambionframework/ambion/hosting';
 import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps, plainName } from './claude-trace.ts';
@@ -59,14 +64,11 @@ interface SeatMemory {
 	id?: string;
 }
 
-/** Whether the executor resumes one session for the seat. */
-function remembers(definition: AgentDefinition): boolean {
-	return 'memory' in definition.executor && definition.executor.memory === 'seat';
-}
-
 /** The Claude executor. One instance per seat, for as long as the room runs. */
 export function createClaudeExecutor(options: ClaudeExecutorOptions): Executor {
-	const memory: SeatMemory | undefined = remembers(options.definition) ? {} : undefined;
+	const memory: SeatMemory | undefined = resumesForSeat(options.definition.executor)
+		? {}
+		: undefined;
 	return {
 		open(activation: ExecutorActivation): ExecutorSession {
 			return new Activation(activation, options, memory);
@@ -246,7 +248,8 @@ class Activation implements ExecutorSession {
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
 		const { mechanism, agent } = renderActivation(view, this.definition);
 		const executor = claudeOf(this.definition.executor);
-		this.resuming = this.memory === undefined ? undefined : (this.memory.id ?? resumeOf(view));
+		this.resuming =
+			this.memory === undefined ? undefined : (this.memory.id ?? sessionToResume(view, 'claude'));
 		this.begin = () => {
 			// Each query takes its own room server. A server serves one connection.
 			const { server, names } = roomServer(view, this.definition, this.binding(), () =>
@@ -446,10 +449,4 @@ class Activation implements ExecutorSession {
 		});
 		return { failed: true, cause: 'transient', message: error.message };
 	}
-}
-
-/** The session the room recorded for this seat, when a Claude activation ended with one. */
-function resumeOf(view: ActivationView): string | undefined {
-	const { resume } = view.spec;
-	return resume?.harness === 'claude' ? resume.id : undefined;
 }

@@ -434,7 +434,7 @@ for its tool list and for `/etc/hosts`. See [Example](example.md).
 | Symptom                                                             | Cause                                                                                                                      |
 | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `claudeExecution()`.                   |
-| `The Claude executor cannot run an executor of kind 'pi'`           | A Pi seat ran under `claudeExecution()`. Route with `composeExecutions`.                                                   |
+| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat ran under `claudeExecution()`. Route with `composeExecutions`.                                                   |
 | The model cannot see `Bash` or `Read`                               | `allowedTools` does not name it. The list gives the built-in tools, and an empty list gives none.                          |
 | Every request is denied                                             | `canUseTool` is absent, or it throws. The executor denies both. Read the `approval` steps.                                 |
 | The model ignores `CLAUDE.md` and project settings                  | `settingSources` is empty by design. Put the guidance in `instructions`.                                                   |

@@ -4,8 +4,8 @@
  * `claude()` builds the executor an agent definition takes. The room reads
  * none of the fields Claude adds; the Claude executor does.
  */
-import type { AgentExecutor, AmbionTool, ToolBundle } from '@ambionframework/ambion';
-import { describeExecutor } from '@ambionframework/ambion/hosting';
+import type { AgentExecutor } from '@ambionframework/ambion';
+import { type AgentExecutorBaseOptions, describeExecutor } from '@ambionframework/ambion/hosting';
 import type { CanUseTool, PermissionMode } from '@anthropic-ai/claude-agent-sdk';
 
 /** What the harness may do. The executor passes each field to the Claude Agent SDK unchanged. */
@@ -29,21 +29,9 @@ export interface ClaudePolicy {
 	readonly additionalDirectories?: readonly string[];
 }
 
-export interface ClaudeOptions extends ClaudePolicy {
-	/** The private half: the agent's own voice, and the home of all judgment. */
-	instructions: string;
+export interface ClaudeOptions extends AgentExecutorBaseOptions, ClaudePolicy {
 	/** A Claude model identifier, such as `claude-sonnet-4-5`. */
 	model: string;
-	/** The agent's own normalized tools. */
-	tools?: readonly AmbionTool[];
-	/** Composable tool bundles with guidance. Bundles are flattened at definition time. */
-	bundles?: readonly ToolBundle[];
-	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
-	speaking?: string;
-	/** The token limit for the record one activation reads. Absent reads the whole record. */
-	activationTokenLimit?: number;
-	/** How the agent counts tokens against its limit. Absent uses a length estimate. */
-	estimateTokens?: (text: string) => number;
 	/**
 	 * What the agent remembers between activations. `activation` opens a
 	 * Claude session per activation. `seat` resumes one session per seat and

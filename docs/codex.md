@@ -447,6 +447,9 @@ different account than the one that started the thread.
 **A run fails with a sign-in message.** The failure is permanent, so the room
 does not retry. Set `CODEX_API_KEY`, or run `codex login`.
 
+**`Cannot run an executor of kind '...': this seat needs 'codex'.`** A Pi or
+Claude seat ran under `codexExecution()`. Route with `composeExecutions`.
+
 **A native tool shows up after a Codex upgrade.** The seat lists or calls a
 tool that is not a room tool and not one of yours. A newer `codex` added a
 feature or a catalog field that the recipe does not cover. Run

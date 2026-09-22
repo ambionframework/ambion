@@ -16,11 +16,13 @@ import {
 	released,
 	until,
 } from './conformance-support.ts';
-import { DEFAULT_TRACE, defineAgent, describeExecutor } from './define.ts';
+import { defineAgent, describeExecutor } from './define.ts';
+import { seatContext } from './execution/connector.ts';
 import type { Executor } from './execution/executor.ts';
 import { inProcessTransport } from './execution/runner.ts';
-import { readTrace, traceJournals, traceOpener } from './execution/trace.ts';
+import { readTrace, traceJournals } from './execution/trace.ts';
 import { systemClock } from './host/clock.ts';
+import { DEFAULT_TRACE_LIMITS } from './host/runtime.ts';
 import type { AgentPort, CommitResult, LeaseRequest } from './protocol.ts';
 import {
 	type AgentDefinition,
@@ -403,24 +405,20 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 		try {
 			const executor = await harness.open(one.plan, definition);
 			const emit = (event: ExecutionEvent) => void events.push(event);
-			const port = inProcessTransport().connect(room.protocol, {
-				clock: systemClock(),
-				call: { attempts: 2, timeout: patience },
-				definition,
-				room: names.room,
-				seat: names.seat,
-				executor,
-				emit,
-				trace: traceOpener({
+			const port = inProcessTransport().connect(
+				room.protocol,
+				seatContext({
+					clock: systemClock(),
+					call: { attempts: 2, timeout: patience },
+					definition,
 					room: names.room,
-					agent: names.seat,
-					traces,
-					limits: { toolOutputBytes: 65_536, stepsPerPass: 1_000 },
-					policy: definition.trace ?? DEFAULT_TRACE,
+					seat: names.seat,
+					executor,
 					emit,
-					now: () => Date.now(),
+					traces,
+					limits: DEFAULT_TRACE_LIMITS,
 				}),
-			});
+			);
 			await one.body({
 				port,
 				room,

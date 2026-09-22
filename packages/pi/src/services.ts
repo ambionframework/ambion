@@ -2,7 +2,7 @@
 
 import { systemClock } from '@ambionframework/ambion';
 import type { Clock, Limits } from '@ambionframework/ambion/hosting';
-import { callLimits, traceJournals } from '@ambionframework/ambion/hosting';
+import { callLimits, DEFAULT_TRACE_LIMITS, traceJournals } from '@ambionframework/ambion/hosting';
 import type { JournalOpener } from '@ambionframework/journal';
 import { piSessions, type SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
@@ -86,7 +86,7 @@ export function createExecutionServices(options: ExecutionServicesOptions): Exec
 		call: callLimits(options.call),
 		transcripts: piSessions(options.storage),
 		traces: traceJournals(options.storage),
-		trace: { toolOutputBytes: 65_536, stepsPerPass: 1_000, ...options.trace },
+		trace: { ...DEFAULT_TRACE_LIMITS, ...options.trace },
 		stream: options.stream ?? registryStream,
 		model: custom ? stubModel : registryModel,
 	};

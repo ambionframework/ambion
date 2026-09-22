@@ -37,7 +37,12 @@ import type {
 	Seq,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
-import { renderActivation, renderDelta } from '@ambionframework/ambion/hosting';
+import {
+	renderActivation,
+	renderDelta,
+	resumesForSeat,
+	sessionToResume,
+} from '@ambionframework/ambion/hosting';
 import {
 	Codex,
 	type CodexOptions,
@@ -61,17 +66,6 @@ import type { Binding } from './tools.ts';
 /** What a seat with memory keeps between activations: the thread id Codex reported last. */
 interface SeatMemory {
 	id?: string;
-}
-
-/** Whether the executor resumes one thread for the seat. */
-function remembers(definition: AgentDefinition): boolean {
-	return 'memory' in definition.executor && definition.executor.memory === 'seat';
-}
-
-/** The thread the room recorded for this seat, when a Codex activation ended with one. */
-function resumeOf(view: ActivationView): string | undefined {
-	const { resume } = view.spec;
-	return resume?.harness === 'codex' ? resume.id : undefined;
 }
 
 /** The part of a Codex thread that a pass uses. */
@@ -108,7 +102,9 @@ export const HARNESS_NOTE =
 
 /** The Codex executor. One instance per seat, for as long as the room runs. */
 export function createCodexExecutor(options: CodexExecutorOptions): Executor {
-	const memory: SeatMemory | undefined = remembers(options.definition) ? {} : undefined;
+	const memory: SeatMemory | undefined = resumesForSeat(options.definition.executor)
+		? {}
+		: undefined;
 	return {
 		open(activation: ExecutorActivation): ExecutorSession {
 			return new Activation(activation, options, memory);
@@ -289,7 +285,8 @@ class Activation implements ExecutorSession {
 		}
 		const make = this.options.client ?? ((options: CodexOptions) => new Codex(options));
 		this.client = make(clientOptions(this.options, bridge.socketPath, scratch));
-		this.resuming = this.memory === undefined ? undefined : (this.memory.id ?? resumeOf(view));
+		this.resuming =
+			this.memory === undefined ? undefined : (this.memory.id ?? sessionToResume(view, 'codex'));
 		this.thread = this.begin(this.resuming);
 		return this.thread;
 	}

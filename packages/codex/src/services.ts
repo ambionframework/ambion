@@ -6,9 +6,7 @@
  * The text is the only evidence, so the classification reads it.
  */
 import type { FailureCause, PassResult } from '@ambionframework/ambion/hosting';
-
-/** HTTP statuses a retry cannot fix: a bad request and the billing and authentication refusals. */
-const PERMANENT_STATUS = new Set([400, 401, 402, 403, 404, 405, 422]);
+import { classifyCause } from '@ambionframework/ambion/hosting';
 
 /** Error text that names a quota or an authentication refusal, in phrases a retry cannot clear. */
 const PERMANENT_TEXT =
@@ -30,9 +28,7 @@ function statusOf(text: string): number | undefined {
  * other failure is transient, so an uncertain message retries.
  */
 export function causeOf(text: string, status?: number | null): FailureCause {
-	if (PERMANENT_TEXT.test(text)) return 'permanent';
-	const code = status ?? statusOf(text);
-	return code !== undefined && PERMANENT_STATUS.has(code) ? 'permanent' : 'transient';
+	return classifyCause({ text, status: status ?? statusOf(text), permanent: PERMANENT_TEXT });
 }
 
 /**

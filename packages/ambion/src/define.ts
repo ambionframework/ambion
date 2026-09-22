@@ -52,9 +52,8 @@ function capturePolicy(agent: string, policy: TracePolicy | undefined): TracePol
 	return Object.freeze({ thinking: policy.thinking, toolOutput: policy.toolOutput });
 }
 
-/** What `describeExecutor` reads: the fields every executor family shares. */
-export interface ExecutorOptions {
-	readonly kind: string;
+/** The neutral half of an executor, as an executor family's own options declare it. */
+export interface AgentExecutorBaseOptions {
 	/** The private half: the agent's own voice, and the home of all judgment. */
 	readonly instructions: string;
 	/** The agent's own normalized tools. */
@@ -67,6 +66,30 @@ export interface ExecutorOptions {
 	readonly activationTokenLimit?: number;
 	/** How the agent counts tokens against its limit. Absent uses a length estimate. */
 	readonly estimateTokens?: (text: string) => number;
+}
+
+/** What `describeExecutor` reads: the fields every executor family shares. */
+export interface ExecutorOptions extends AgentExecutorBaseOptions {
+	readonly kind: string;
+}
+
+/**
+ * The executor a definition names, narrowed to one family and its model.
+ * Throws when the executor's kind does not match.
+ */
+export function executorOfKind<T extends AgentExecutor & { readonly model: string }>(
+	executor: AgentExecutor,
+	kind: T['kind'],
+): T {
+	if (executor.kind === kind && 'model' in executor && typeof executor.model === 'string') {
+		return executor as T;
+	}
+	throw new Error(`Cannot run an executor of kind '${executor.kind}': this seat needs '${kind}'.`);
+}
+
+/** Whether the executor keeps one harness session for the seat. */
+export function resumesForSeat(executor: AgentExecutor): boolean {
+	return 'memory' in executor && executor.memory === 'seat';
 }
 
 /**
@@ -261,6 +284,8 @@ function copyProperties(from: object, to: object, seen: WeakMap<object, unknown>
 /** The room tool that every activation may use to speak. */
 export const SAY = {
 	name: 'say' as const,
+	description:
+		'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`.',
 	parameters: Type.Object({
 		to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
 		text: Type.String(),
@@ -277,6 +302,7 @@ export const SAY = {
 /** The room tool that seats one supplied agent. */
 export const SEAT = {
 	name: 'seat' as const,
+	description: 'Seat one agent from the reserve. It joins the room and reads the record.',
 	parameters: Type.Object({
 		name: Type.String({ description: 'An agent name from the reserve.' }),
 	}),
@@ -285,6 +311,8 @@ export const SEAT = {
 /** The room tool that removes one seated agent. */
 export const UNSEAT = {
 	name: 'unseat' as const,
+	description:
+		"Remove one seated agent from the room. A fixed seat, such as the summary writer's, stays.",
 	parameters: Type.Object({
 		name: Type.String({ description: 'A seated agent name.' }),
 	}),

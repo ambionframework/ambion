@@ -23,6 +23,7 @@ import type {
 	Seq,
 } from '@ambionframework/ambion/hosting';
 import {
+	classifyCommit,
 	refusal,
 	SAY,
 	SEAT,
@@ -70,9 +71,10 @@ function schemaOf(schema: TSchema): Record<string, unknown> {
 
 /** What the model reads for a commit the room answered. */
 function landed(binding: Binding, response: CommitResult): Result {
-	if ('committed' in response || 'unchanged' in response) return text('delivered');
-	if ('refused' in response) return text(response.refused, true);
-	if ('unknown' in response) {
+	const outcome = classifyCommit(response);
+	if (outcome.kind === 'delivered') return text('delivered');
+	if (outcome.kind === 'refused') return text(outcome.why, true);
+	if (outcome.kind === 'unknown') {
 		// The message may already be on the record, so the activation ends here. A
 		// second say under a new key would land the same message twice.
 		binding.abort();
@@ -82,7 +84,7 @@ function landed(binding: Binding, response: CommitResult): Result {
 		);
 	}
 	binding.abort();
-	const why = 'stale' in response ? response.stale : 'the room moved';
+	const why = outcome.kind === 'ended' ? outcome.why : 'the room moved';
 	return text(`Your turn ended: ${why}. This turn is over.`, true);
 }
 
@@ -172,7 +174,7 @@ function missedSay(
 function sayTool(binding: Binding, changed: Changed, closing?: Closing): RoomTool {
 	const description =
 		closing === undefined
-			? 'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`.'
+			? SAY.description
 			: summaryToolDescription(closing.person, closing.people);
 	return {
 		spec: { name: SAY.name, description, inputSchema: schemaOf(SAY.parameters) },
@@ -182,20 +184,17 @@ function sayTool(binding: Binding, changed: Changed, closing?: Closing): RoomToo
 
 /** The tool that seats or removes one agent. */
 function membershipTool(binding: Binding, kind: 'seated' | 'unseated'): RoomTool {
-	const seat = kind === 'seated';
-	const name = seat ? SEAT.name : UNSEAT.name;
+	const spec = kind === 'seated' ? SEAT : UNSEAT;
 	return {
 		spec: {
-			name,
-			description: seat
-				? 'Seat one agent from the reserve. It joins the room and reads the record.'
-				: "Remove one seated agent from the room. A fixed seat, such as the summary writer's, stays.",
-			inputSchema: schemaOf((seat ? SEAT : UNSEAT).parameters),
+			name: spec.name,
+			description: spec.description,
+			inputSchema: schemaOf(spec.parameters),
 		},
 		run: async (args) => {
 			const response = await binding.room.commit({
 				activation: binding.id,
-				key: binding.callId(name),
+				key: binding.callId(spec.name),
 				intent: { kind, name: (args as { name: string }).name.trim() },
 			});
 			return landed(binding, response);

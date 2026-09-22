@@ -55,7 +55,12 @@ import type {
 	Seq,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
-import { renderActivation, renderDelta } from '@ambionframework/ambion/hosting';
+import {
+	classifyCause,
+	renderActivation,
+	renderDelta,
+	resumesForSeat,
+} from '@ambionframework/ambion/hosting';
 import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/pi-journal';
 import type {
 	AgentEvent,
@@ -96,14 +101,11 @@ interface MemoryHolder {
 	kept?: SeatMemory;
 }
 
-/** Whether the executor keeps one transcript for the seat. */
-function remembers(executor: AgentExecutor): boolean {
-	return 'memory' in executor && executor.memory === 'seat';
-}
-
 /** The Pi executor. One instance per seat, for as long as the room runs. */
 export function createPiExecutor(options: PiExecutorOptions): Executor {
-	const memory: MemoryHolder | undefined = remembers(options.definition.executor) ? {} : undefined;
+	const memory: MemoryHolder | undefined = resumesForSeat(options.definition.executor)
+		? {}
+		: undefined;
 	let audit: Promise<PiSession> | undefined;
 	const openAudit = (): Promise<PiSession> => {
 		if (audit !== undefined) return audit;
@@ -465,9 +467,6 @@ function failureOf(agent: PiAgent): { error: Error; cause: FailureCause } | unde
 	return undefined;
 }
 
-/** HTTP statuses a retry cannot fix: a bad request, a billing refusal, and the authentication refusals. */
-const PERMANENT_STATUS = new Set([400, 401, 402, 403, 404, 405, 422]);
-
 /**
  * Whether a failed provider message is permanent or transient. A credit or an
  * authentication refusal in the text, or a permanent HTTP status a diagnostic
@@ -476,10 +475,8 @@ const PERMANENT_STATUS = new Set([400, 401, 402, 403, 404, 405, 422]);
  * question the room drops.
  */
 function providerCause(message: AgentMessage): FailureCause {
-	if (permanentText('errorMessage' in message ? message.errorMessage : undefined))
-		return 'permanent';
-	const status = statusOf(message);
-	return status !== undefined && PERMANENT_STATUS.has(status) ? 'permanent' : 'transient';
+	const text = 'errorMessage' in message ? message.errorMessage : undefined;
+	return classifyCause({ text, status: statusOf(message), permanent: PERMANENT_TEXT });
 }
 
 /** One provider diagnostic, as the classifier reads it. */
@@ -526,9 +523,5 @@ function httpStatus(value: unknown): number | undefined {
 }
 
 /** Error text that names a credit or an authentication refusal, in phrases a retry cannot clear. */
-function permanentText(text: string | undefined): boolean {
-	if (text === undefined) return false;
-	return /credit balance|authentication_error|permission_error|invalid_request_error|invalid[_\s]?api[_\s]?key|unauthorized|permission denied/i.test(
-		text,
-	);
-}
+const PERMANENT_TEXT =
+	/credit balance|authentication_error|permission_error|invalid_request_error|invalid[_\s]?api[_\s]?key|unauthorized|permission denied/i;

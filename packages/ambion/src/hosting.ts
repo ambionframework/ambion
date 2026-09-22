@@ -23,8 +23,18 @@
  * design contract for the wire.
  */
 
-export type { ExecutorOptions } from './define.ts';
-export { DEFAULT_TRACE, describeExecutor, SAY, SEAT, UNSEAT } from './define.ts';
+export type { AgentExecutorBaseOptions, ExecutorOptions } from './define.ts';
+export {
+	DEFAULT_TRACE,
+	describeExecutor,
+	executorOfKind,
+	resumesForSeat,
+	SAY,
+	SEAT,
+	UNSEAT,
+} from './define.ts';
+export type { ConnectorComposition, SeatContextInput } from './execution/connector.ts';
+export { composeConnector, seatContext } from './execution/connector.ts';
 export type {
 	Executor,
 	ExecutorActivation,
@@ -32,6 +42,7 @@ export type {
 	PassInput,
 	PassResult,
 } from './execution/executor.ts';
+export { classifyCause, PERMANENT_STATUS } from './execution/failure.ts';
 export type { RenderedPrompt } from './execution/render.ts';
 export { refusal, renderActivation, renderDelta, renderLine } from './execution/render.ts';
 export { AgentRunner, inProcessTransport } from './execution/runner.ts';
@@ -46,6 +57,7 @@ export {
 export { registerDefaultExecution } from './host/defaults.ts';
 export type {
 	AgentExecutionContext,
+	ConnectorRequest,
 	Execution,
 	ExecutionConnector,
 	ExecutionHost,
@@ -56,6 +68,7 @@ export type {
 export {
 	callLimits,
 	composeExecutions,
+	DEFAULT_TRACE_LIMITS,
 	hostingOf,
 	reconcileRoom,
 	runningRoom,
@@ -66,6 +79,7 @@ export type {
 	ActivationView,
 	AgentPort,
 	CollaborationContext,
+	CommitOutcome,
 	CommitRequest,
 	CommitResult,
 	ContextParticipant,
@@ -79,7 +93,7 @@ export type {
 	ViewResponse,
 	Wake,
 } from './protocol.ts';
-export { assertWire, roundTrip } from './protocol.ts';
+export { assertWire, classifyCommit, roundTrip, sessionToResume } from './protocol.ts';
 export type {
 	AgentDefinition,
 	AgentExecutor,

@@ -4,27 +4,15 @@
  * `pi()` builds the executor an agent definition takes. `fromPiTool` adapts
  * one native Pi tool to the tool the room normalizes.
  */
-import type { AgentExecutor, AmbionTool, ToolBundle } from '@ambionframework/ambion';
+import type { AgentExecutor, AmbionTool } from '@ambionframework/ambion';
 import { defineTool } from '@ambionframework/ambion';
-import { describeExecutor } from '@ambionframework/ambion/hosting';
+import { type AgentExecutorBaseOptions, describeExecutor } from '@ambionframework/ambion/hosting';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
 
-export interface PiOptions {
-	/** The private half: the agent's own voice, and the home of all judgment. */
-	instructions: string;
+export interface PiOptions extends AgentExecutorBaseOptions {
 	/** A Pi model identifier, `provider/model-id`. */
 	model: string;
-	/** The agent's own normalized tools. */
-	tools?: readonly AmbionTool[];
-	/** Composable tool bundles with guidance. Bundles are flattened at definition time. */
-	bundles?: readonly ToolBundle[];
-	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
-	speaking?: string;
-	/** The token limit for the record one activation reads. Absent reads the whole record. */
-	activationTokenLimit?: number;
-	/** How the agent counts tokens against its limit. Absent uses a length estimate. */
-	estimateTokens?: (text: string) => number;
 	/**
 	 * What the agent remembers between activations. `activation` starts a
 	 * session per activation. `seat` keeps one transcript for the seat and
