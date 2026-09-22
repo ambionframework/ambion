@@ -57,8 +57,8 @@ captured definitions.
 
 ## Tools
 
-`defineTool` captures a TypeBox schema and validates parameters before calling
-the typed function.
+**A tool is an `AmbionTool`.** `defineTool` captures a TypeBox schema and
+validates parameters before calling the typed function.
 
 ```ts
 const lookup = defineTool({
@@ -74,6 +74,14 @@ from its definition. A closing activation receives only `say`. `say` accepts
 `{ text, to?, refs? }`. The room stamps the author, activation, time, and routing
 facts. `seat` and `unseat` accept an agent name. The room validates operations
 at the commit boundary.
+
+**A bundle adds tools and guidance.** `bundles: [shared.tools()]` adds the
+tools of a resource, such as the workspace.
+
+**The kernel rejects two tools with one name.** [Resources](resources.md)
+and [Workspace](workspace.md) state how a resource builds a bundle and how
+the kernel flattens it. [Executors](executors.md#the-prompt-the-driver-renders)
+states how the guidance follows the speaking policy.
 
 **A tool learns where it ran from `ctx`.** `ctx.room` names the room and
 `ctx.activation` holds the id that every event and message of the

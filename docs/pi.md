@@ -1,8 +1,9 @@
 # The Pi executor
 
 `@ambionframework/pi` runs Ambion agents on Pi. This page holds what is
-specific to the Pi adapter. [Executors](executors.md) holds the contract
-between the driver and an executor, the step vocabulary, and the trace.
+specific to the Pi adapter. [Executors](executors.md) holds the shared
+contract: the activation flow, the room tools, seat memory, failure
+classification, the step vocabulary, and the trace.
 [The Claude guide](claude.md) covers a second shipped family, and [the
 Codex guide](codex.md) a third. [The
 README](../README.md) holds the positioning.
@@ -92,13 +93,11 @@ try {
 }
 ```
 
-**A room with no `execution` runs each Pi seat on the default Pi execution.**
-Importing `@ambionframework/pi` registers it. It keeps transcripts and traces
-in the storage of the runtime. A host that needs a scripted stream, custom
-storage, a transport, or limits passes `piExecution(options)` as `execution`.
-`createRuntime` takes it for every room of the runtime. A room whose seats
-run on more than one family needs no `execution` when each family package is
-loaded; see [Executors](executors.md#the-executor-contract).
+**Importing `@ambionframework/pi` registers the default Pi execution.** It
+keeps transcripts and traces in the storage of the runtime. A host that
+needs a scripted stream, custom storage, a transport, or limits passes
+`piExecution(options)` as `execution`. [Executors](executors.md#the-executor-contract)
+states how a room resolves an execution.
 
 ## Options
 
@@ -129,12 +128,14 @@ positive integer.
 
 ## How an activation runs
 
-**One Pi agent serves one activation.** The first pass renders the whole
-windowed view as one user message. The executor resolves the model, binds the
-tools, and builds the agent. A later pass prompts the same agent with the
-delta: the messages beyond what the agent has read, marked `[new]`. The Pi
-transcript of the activation stays whole. The agent runs with
-`thinkingLevel: 'off'`, and no option changes it.
+[Executors](executors.md#the-executor-contract) states the pass flow.
+[How an activation runs](executors.md#how-an-activation-runs) states the
+read position and the record window. Pi adds these facts.
+
+**One Pi agent serves one activation.** The executor resolves the model,
+binds the tools, and builds the agent. The Pi transcript of the activation
+stays whole. The agent runs with `thinkingLevel: 'off'`, and no option
+changes it.
 
 **The system prompt is the mechanism and the agent part.** The executor
 sends `mechanism` and `agent` from `renderActivation` as the system prompt.
@@ -142,57 +143,39 @@ The `context` part is the first user message. Each later pass replaces the
 system prompt with the one of the view in hand.
 
 **`readThrough` follows the provider request.** The position is the highest
-contiguous record position in provider input. It advances in three cases:
-
-- A provider request holds the initial prompt, a delta, or a steered line.
-- The room accepts an ordinary `say`. The say confirms the seat read the
-  record through that message.
-- A provider request holds the tool result of a `missed` say. The result
-  carries the missed messages.
-
-A `say` against a newer record fails as `missed`, and the tool result
-carries the messages that landed. [Durability](durability.md) states the
-freshness promise.
+contiguous record position in provider input. A provider request holds the
+initial prompt, a delta, or a steered line. The room tool answers also move
+the position; see [Executors](executors.md#how-an-activation-runs).
 
 **A steer goes to `agent.steer`.** A line that lands during a pass joins
 Pi's steering queue as a `[new]` user message. Pi delivers it with the next
 provider request. The trace records `steer` with `consumed: true` when the
 line joins the queue. `readThrough` moves only when a later provider request
 holds it. A line that lands before the first provider request waits until
-that request starts. A line held past its pass is recorded as `consumed:
-false`, and the next delta carries it.
+that request starts.
 
-**The driver decides on another pass.** `shouldRefresh` answers yes when Pi
-holds a queued message or the record stands past `readThrough`. The executor
-then clears the queues, and the driver runs a pass with the delta. A delta
-with no message in it starts no run. The session takes the view as read.
+**`shouldRefresh` also answers yes when Pi holds a queued message.** The
+executor then clears the queues, and the driver runs a pass with the delta.
+A delta with no message in it starts no run. The session takes the view as
+read.
 
-**The activation token limit windows the record.** The driver pages the
-record from the tail, keeps the newest messages that fit
-`activationTokenLimit`, and keeps the open exchange whole. The limit counts
-record text through `estimateTokens`. It does not count the system prompt,
-the tool schemas, or the model output. It does not compare with the context
-window of the model. The stub model of a scripted stream reports a window of
-one million tokens. The executor does no compaction. With `memory: 'seat'`
-the kept transcript grows for as long as the process lives.
+**The stub model of a scripted stream reports a window of one million
+tokens.**
+
+**The Pi executor does no compaction.** With `memory: 'seat'` the kept
+transcript grows for as long as the process lives.
 
 ## How room tools reach the harness
 
-**The room tools are Pi tools bound to the activation.** An ordinary
-activation receives `say`, `seat`, and `unseat`, and then the tools of the
-definition. A closing activation receives only `say`; the room turns that
-say into the summary.
+[Executors](executors.md#the-room-tools) states the three tools, the commit
+key, and the room answers.
 
-- **`say`** commits a `said` intent with `readThrough` and the tool call id
-  as its key. It accepts `text`, `to`, and `refs`.
-- **`seat` and `unseat`** commit a membership intent with the tool call id
-  as the key.
-- **A `refused` answer** raises the room's message as a tool error.
-- **A `missed` answer** raises a tool error that lists the new messages.
-- **An `unknown` or `stale` answer** aborts the activation. The tool result
-  ends the run, because the message may already stand on the record.
+**The room tools are Pi tools bound to the activation.** Pi calls them in
+the same process, so it needs no transport.
 
-`say` is the room's own event. It raises no `tool_execution_start` event.
+**An `unknown` or `stale` answer ends the run.** Pi aborts the activation
+and stands the seat down. The tool result names why the turn ended, and no
+further pass follows.
 
 ### The seat transcript audit
 
@@ -220,20 +203,16 @@ The audit is a record of what the model did. The room never reads it.
 
 ## Tools and bundles an agent can add
 
-**A tool is an `AmbionTool`.** `defineTool` builds one from a TypeBox schema.
-The executor wraps it as a Pi tool. Its context carries `agent`, `signal`,
-`callId`, `onUpdate`, `room`, `activation`, and `exchange`. A string result
-becomes text content. A thrown error becomes a Pi tool error.
+[Definitions and tools](agent.md#tools) states `AmbionTool`, `defineTool`,
+and how a bundle adds tools and guidance. Pi adds these facts.
+
+**The executor wraps a tool as a Pi tool.** Its context carries `agent`,
+`signal`, `callId`, `onUpdate`, `room`, `activation`, and `exchange`. A
+string result becomes text content. A thrown error becomes a Pi tool error.
 
 **`fromPiTool` adapts a native Pi tool.** It keeps the name, the schema,
 `prepareArguments`, and `executionMode`, and passes the call id, the signal,
 and the update callback through.
-
-**A bundle adds tools and guidance.** `bundles: [shared.tools()]` adds the
-tools of a resource, such as the workspace. The kernel flattens bundles at
-definition time and rejects two tools with one name. The guidance of every
-bundle follows the speaking policy in the system prompt. See
-[Resources](resources.md) and [Workspace](workspace.md).
 
 ## Policy and the trust boundary
 
@@ -243,9 +222,8 @@ definition is the whole policy: a tool that the definition omits does not
 exist for the model.
 
 **What the model sees.** The model sees the system prompt, the record, and
-the tools. An ordinary activation lists `say`, `seat`, `unseat`, and the tools
-of the definition. A closing activation lists `say` only. The model sees no
-environment variable and no key.
+the tools that [Definitions and tools](agent.md#tools) lists for the
+activation. The model sees no environment variable and no key.
 
 **What the host holds.** The registry stream reads the provider key in the
 host process, and it sends the key to the provider only. A tool that reads
@@ -258,28 +236,25 @@ the record. See [Deployment](deployment.md).
 
 ## Memory modes
 
-**`memory: 'activation'` is the default.** Each activation builds a fresh Pi
-agent. The seat remembers nothing between activations, and the release
-records no session.
+[Executors](executors.md#seat-memory) states the two modes, the recorded
+session, and the resume rule.
 
 **`memory: 'seat'` keeps one transcript for the seat.** The executor keeps
 the transcript of the last activation that did not fail. The next activation
 builds its agent over that transcript. Its first prompt is the delta: the
 record beyond the position the transcript read through. A closing activation
-reads the whole view. `readThrough` starts at the position the transcript read.
-Freshness still governs speech.
+reads the whole view. `readThrough` starts at the position the transcript
+read.
 
-**The release records the seat session.** The room stores
-`{ harness: 'pi', id }` on the `ended` entry. The id is `seatSessionId(room,
-seat)`. The room never reads it. The kept transcript lives in the process. A
-restart begins a fresh transcript, and the first activation after it reads
-the whole view and appends to the same audit session. See
-[Durability](durability.md#storage-compatibility).
+**`seatSessionId(room, seat)` names the id, and it is fixed.** A restart
+begins a fresh transcript, and the first activation after it reads the
+whole view and appends to the same audit session.
 
 ## The step mapping
 
-**Pi events become the shared steps.** The table lists what the Pi executor
-records. The driver writes `pass`, `room`, and `end`.
+[Executors](executors.md#the-step-vocabulary) holds the ten step kinds and
+the trace policy. The table below gives the Pi source of each step. The
+driver writes `pass`, `room`, and `end`.
 
 | Step          | Source in Pi                                                                                            |
 | ------------- | ------------------------------------------------------------------------------------------------------- |
@@ -299,37 +274,23 @@ sets how much of `thinking` and tool output the journal keeps.
 **Pi records one `usage` step for each assistant message.** The step holds
 `input`, `output`, `cacheRead`, `cacheWrite`, and `cost`. Pi computes `cost`
 from the price table of the model in the registry. A stub model has a zero
-price table.
-
-**The driver sums the steps at release.** The release entry of an activation
-carries the sum, and a closed exchange read carries the sum of its
-activations. The known limits:
-
-- An end that the room writes (`expired`, `revoked`, `abandoned`) carries no
-  usage. The sum omits what those attempts spent.
-- The trace caps do not cut the sum. The driver adds each step before the
-  cap applies.
-- A provider that reports no usage gives zeros.
+price table. A provider that reports no usage gives zeros.
 
 ## Failure classification
 
-**The executor sorts a failure into `permanent` and `transient`.** A
-permanent failure ends the activation in one attempt. A transient failure
-retries to the cap of the room. [Durability](durability.md#permanent-and-transient-failure)
-states the rule.
+[Executors](executors.md#failure-classification) states the shared rule.
 
-| Failure                                                             | Cause                                    |
-| ------------------------------------------------------------------- | ---------------------------------------- |
-| An error message with credit or authentication text                 | `permanent`                              |
-| A provider diagnostic with status 400, 401, 402, 403, 404, 405, 422 | `permanent`                              |
-| Any other error message from the provider                           | `transient`                              |
-| An error of the executor: a lost room call, an unknown model        | `transient`                              |
-| A last message that stopped at a length limit                       | None. The pass reports `stop: 'length'`. |
+**The executor reads a status only from a provider diagnostic.** A rate
+limit names a token count that reads like a status, so free text never
+gives one. The last diagnostic with a status wins.
 
-The executor reads a status only from a provider diagnostic. A rate limit
-names a token count that reads like a status, so free text never gives one.
-The last diagnostic with a status wins. An unknown model id fails on the first
-pass as `transient`, so the room retries it to the cap.
+**A text that names a credit or an authentication refusal is permanent.**
+The patterns are `credit balance`, `authentication_error`,
+`permission_error`, `invalid_request_error`, an invalid API key,
+`unauthorized`, and `permission denied`.
+
+An unknown model id fails on the first pass as `transient`, so the room
+retries it to the cap.
 
 **An audit failure never changes the outcome.** It raises `audit_error`,
 and the activation still succeeds.

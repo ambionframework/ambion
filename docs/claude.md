@@ -2,8 +2,9 @@
 
 `@ambionframework/claude` runs Ambion agents on the Claude Agent SDK. This
 page holds what is specific to the Claude adapter. [Executors](executors.md)
-holds the contract between the driver and an executor, the step vocabulary,
-and the trace. [The Pi guide](pi.md) covers a second shipped family, and [the
+holds the shared contract: the activation flow, the room tools, seat
+memory, failure classification, the step vocabulary, and the trace. [The
+Pi guide](pi.md) covers a second shipped family, and [the
 Codex guide](codex.md) a third. [The
 README](../README.md) holds the positioning.
 
@@ -43,9 +44,8 @@ from GitHub Packages; see
 
 **The executor sets no credential.** The executable reads its credentials
 from its environment. By default that is the environment of the host
-process, so `ANTHROPIC_API_KEY` in `process.env` reaches it. The executor
-classifies a failure text with `not logged in`, `x-api-key`, or
-`authentication_error` as permanent.
+process, so `ANTHROPIC_API_KEY` in `process.env` reaches it. A sign-in
+failure is permanent; see [Failure classification](#failure-classification).
 
 **`pathToClaudeCodeExecutable` selects the binary.** Without it, the SDK
 finds the executable that it ships with.
@@ -109,12 +109,10 @@ try {
 }
 ```
 
-**A room with no `execution` runs each Claude seat on the default Claude
-execution.** A host that sets `env`, or a path to the executable, passes
-`claudeExecution(options)` to a room or to `createRuntime`. A room whose
-seats run on more than one family needs no `composeExecutions` when each
-family package is loaded. See
-[Executors](executors.md#the-executor-contract).
+**A host that sets `env`, or a path to the executable, passes
+`claudeExecution(options)` to a room or to `createRuntime`.**
+[Executors](executors.md#the-executor-contract) states how a room resolves
+an execution.
 
 ## Options
 
@@ -156,12 +154,15 @@ and its `query` option replaces the SDK entry.
 
 ## How an activation runs
 
-**One SDK query serves one activation.** The first pass opens the query and
-sends the whole windowed view as one user message. The system prompt is
-`mechanism` and `agent` from `renderActivation`, sent as a plain string.
-A later pass sends the delta: the messages beyond what the model has read,
-marked `[new]`. The query keeps its transcript for the activation. Partial
-messages are on, so text and thinking arrive as deltas.
+[Executors](executors.md#the-executor-contract) states the pass flow.
+[How an activation runs](executors.md#how-an-activation-runs) states the
+read position and the record window. The Claude executor adds these facts.
+
+**One SDK query serves one activation.** The system prompt is `mechanism`
+and `agent` from `renderActivation`, sent as a plain string. The `context`
+part opens the streaming input as the first user message. The query keeps
+its transcript for the activation. Partial messages are on, so text and
+thinking arrive as deltas.
 
 **A pass resolves on the SDK `result`.** The executor pushes the view or the
 delta into the streaming input and waits for the `result` message that
@@ -173,51 +174,42 @@ period of 5 seconds.
 **`readThrough` advances on the SDK echo.** The SDK sends each user message
 back with `isReplay` set. The executor asks the SDK for that echo with the
 `replay-user-messages` argument. `readThrough` moves to the position of the
-message when its echo arrives, and on nothing earlier. Two other events move
-it:
+message when its echo arrives, and on nothing earlier. An accepted `say`
+and a missed `say` also move the position; see
+[Executors](executors.md#how-an-activation-runs).
 
-- The room accepts an ordinary `say`. The say confirms the read position.
-- The SDK reports the tool result of a `missed` say. The result carries the
-  missed messages.
-
-A steered line moves `readThrough` only when the record before it is
-already read. An echo that leaves a gap does not advance the position.
+**A steered line moves `readThrough` only when the record before it is
+already read.** An echo that leaves a gap does not advance the position.
 
 **A steer joins the streaming input.** A line that lands during a pass is
 pushed into the input as a user message. The trace records `steer` with
 `consumed: true` on its echo. A line that lands before the query starts waits
 for the first pass. The executor sends it after the view unless the view
-already holds it. A line that lands between two passes is recorded as
-`consumed: false`. The next delta carries it.
+already holds it.
 
-**The driver decides on another pass.** `shouldRefresh` answers yes when the
-record stands past `readThrough`. `abort` interrupts the query and ends the
-pass. `close` ends the input and the process. The driver calls `close` once,
-after the release.
+**`abort` interrupts the query and ends the pass.** `close` ends the input
+and the process.
 
-**The activation token limit windows the record.** The driver pages the
-record from the tail and keeps the newest messages that fit
-`activationTokenLimit`. It keeps the open exchange whole. The limit counts
-record text through `estimateTokens`. It does not count the system prompt or
-the tool schemas. It does not bound what a resumed session holds.
+**The activation token limit windows the record.**
+[Executors](executors.md#how-an-activation-runs) states the rule. It does
+not bound what a resumed session holds.
 
 ## How room tools reach the harness
 
-**One in-process MCP server serves the room tools.** The executor builds an
-SDK MCP server named `ambion` for each activation. It holds `say`, `seat`,
-`unseat`, and the tools of the definition. The model sees them as
-`mcp__ambion__say` and so on. Steps and events show the plain name. A closing
-activation receives only `say`.
+[Executors](executors.md#the-room-tools) states the three tools, the commit
+key, and the room answers.
 
-- **The tools run in the host process.** The executable calls them over the
-  SDK transport. The tool code never runs in the child process.
+**The executor builds an in-process SDK MCP server named `ambion` for each
+activation.** It holds `say`, `seat`, `unseat`, and the tools of the
+definition. The model sees them as `mcp__ambion__say` and so on. Steps and
+events show the plain name.
+
+- The executable calls them over the SDK transport. The tool code never
+  runs in the child process.
 - **The SDK builds each MCP tool from a Zod shape.** The executor reads the
   TypeBox schema of a tool as JSON Schema and converts each property.
-- **A refusal is a tool result with `isError`.** A `refused` answer returns
-  the message of the room. A `missed` answer returns the new messages.
-- **An `unknown` or `stale` answer aborts the activation.** The message may
-  already stand on the record, so the seat makes no second say.
-- **A tool that throws** gives the model its message as an error result.
+- **A refusal or a thrown error becomes a tool result with `isError`.** The
+  text is the room's refusal message or the error the tool threw.
 
 The approver answers for these tools. A request for a room tool gets `allow`
 with no `approval` step. The same holds for the tools of the definition,
@@ -225,16 +217,14 @@ because the definition grants them.
 
 ## Tools and bundles an agent can add
 
-**A tool is an `AmbionTool`.** `defineTool` builds one from a TypeBox schema.
-Its context carries `agent`, `signal`, `callId`, `room`, `activation`, and
-`exchange`. `prepareArguments` runs before the tool. A string result becomes
-text content. The executor does not pass `onUpdate`. The `signal` aborts when
-the activation is cut.
+[Definitions and tools](agent.md#tools) states `AmbionTool`, `defineTool`,
+and how a bundle adds tools and guidance. The Claude executor adds these
+facts.
 
-**A bundle adds tools and guidance.** `bundles: [shared.tools()]` adds the
-tools of a resource, such as the workspace. The guidance follows the speaking
-policy in the system prompt. See [Resources](resources.md) and
-[Workspace](workspace.md).
+**A tool context carries `agent`, `signal`, `callId`, `room`, `activation`,
+and `exchange`.** `prepareArguments` runs before the tool. A string result
+becomes text content. The executor does not pass `onUpdate`. The `signal`
+aborts when the activation is cut.
 
 **The built-in tools come from the policy.** The model sees a built-in tool
 only when `allowedTools` names it. `Bash(git status:*)` names `Bash`. Only
@@ -287,39 +277,33 @@ A spent budget is a permanent failure.
 
 ## Memory modes
 
-**`memory: 'activation'` is the default.** Each activation opens a fresh SDK
-session with `persistSession` off. Nothing persists and the release records
-no session.
+[Executors](executors.md#seat-memory) states the two modes, the recorded
+session, and the resume rule.
 
 **`memory: 'seat'` resumes one session for the seat.** The query persists
 its session. The executor keeps the id that the SDK reports in a `system`
 message or a `result`. The next activation passes it as `resume`, with
-`forkSession` off. The release records `{ harness: 'claude', id }` on the
-`ended` entry. After a restart, the room hands the recorded id back in
-`spec.resume`, and the executor uses it when the harness is `claude`.
+`forkSession` off.
 
 **The first pass of a resumed activation sends the whole view.** The Claude
 executor sends no delta on resume. The resumed session holds the earlier
-record and the view again. Freshness still governs speech: `readThrough`
-starts at zero in each activation, and a say against newer record gets a
-`missed` answer.
+record and the view again. `readThrough` starts at zero in each activation,
+and a say against newer record gets a `missed` answer.
 
 **A resume that fails starts a fresh session.** The SDK cannot resume when
 the session store is gone, such as after a move to a new disk. The real SDK
 sends an init message, then an error result whose text says `No conversation
 found with session ID`. A query that ends before any message triggers the
 same fallback. The executor clears the id, restarts the query with no
-`resume`, and sends the waiting messages again. The restart happens once, and
-only for a resumed session. A second failure ends the pass as any failure
-does. The activation does not fail on the first, and the release records the
-new id. See
-[Durability](durability.md#storage-compatibility).
+`resume`, and sends the waiting messages again. The restart happens once,
+and only for a resumed session. A second failure ends the pass as any
+failure does.
 
 ## The step mapping
 
-**SDK messages become the shared steps.** The table lists what the Claude
-executor records. The driver writes `pass`, `room`, and `end`. A message from
-a subagent (`parent_tool_use_id` set) adds no step.
+[Executors](executors.md#the-step-vocabulary) holds the ten step kinds. The
+table below gives the SDK source of each step. A message from a subagent
+(`parent_tool_use_id` set) adds no step.
 
 | Step          | Source in the SDK                                                                                       |
 | ------------- | ------------------------------------------------------------------------------------------------------- |
@@ -331,9 +315,6 @@ a subagent (`parent_tool_use_id` set) adds no step.
 | `steer`       | The echo of a steered line is `consumed: true`. A line between passes is `consumed: false`.             |
 | `usage`       | Each `result` message. The step holds what the result adds beyond the earlier total.                    |
 
-`tool_execution_start` and `tool_execution_end` events fire for each tool
-except `say`.
-
 ## Usage and cost
 
 **One `usage` step follows each SDK `result`.** The executor sums
@@ -344,37 +325,32 @@ earlier result, and writes no step when both tokens and cost stand at zero.
 
 The known limits:
 
-- **A step covers one SDK result.** Pi records one step for each provider
-  request. The step of a pass with several requests sums them.
+- **A step covers one SDK result.** The step of a pass with several
+  results sums them.
 - **`cost` is the number that the SDK reports.** The executor does not
   compute it.
 - **A resumed session may report totals of earlier activations.** The first
   result of an activation counts the whole total it carries. The tests do
   not cover what a real resumed session reports.
-- **An end that the room writes** (`expired`, `revoked`, `abandoned`)
-  carries no usage. [Durability](durability.md#5-what-the-room-does-not-promise)
-  states this.
 
 ## Failure classification
 
-**The executor reads the `result` of the SDK.** A permanent failure ends the
-activation in one attempt. A transient failure retries to the cap of the room.
+[Executors](executors.md#failure-classification) states the shared rule.
+**The table below holds the Claude SDK results this executor classifies.**
 
-| Result                                                                    | Outcome                                        |
-| ------------------------------------------------------------------------- | ---------------------------------------------- |
-| `error_max_budget_usd`                                                    | `permanent`                                    |
-| `error_max_turns`, or a `stop_reason` of `max_tokens`                     | No failure. The pass reports `stop: 'length'`. |
-| A failed result with credit or authentication text                        | `permanent`                                    |
-| A failed result with `api_error_status` 400, 401, 402, 403, 404, 405, 422 | `permanent`                                    |
-| Any other failed result                                                   | `transient`                                    |
-| The process ends before the pass does                                     | `transient`                                    |
-| An error of the executor: a spawn failure, a lost room call               | `transient`                                    |
+| Result                                                | Outcome                                        |
+| ----------------------------------------------------- | ---------------------------------------------- |
+| `error_max_budget_usd`                                | `permanent`                                    |
+| `error_max_turns`, or a `stop_reason` of `max_tokens` | No failure. The pass reports `stop: 'length'`. |
 
-The executor reads a status only from `api_error_status`. Free text never
-gives one, because a rate limit names a token count that reads like a status.
-The text patterns are `credit balance`, `authentication_error`,
-`permission_error`, `invalid_request_error`, an invalid API key, `x-api-key`,
-`unauthorized`, `permission denied`, and `not logged in`.
+**The executor reads a status only from `api_error_status`.** Free text
+never gives one, because a rate limit names a token count that reads like a
+status.
+
+**A failed result whose text matches one of these patterns is permanent.**
+`credit balance`, `authentication_error`, `permission_error`,
+`invalid_request_error`, an invalid API key, `x-api-key`, `unauthorized`,
+`permission denied`, and `not logged in`.
 
 ## Testing
 
