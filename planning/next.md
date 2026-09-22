@@ -383,8 +383,8 @@ contract, `openWorkspace`, the tool binding, the logs, the mirror, and the
 just-bash (`index.ts:35`) and `node:sqlite` (`index.ts:55`). A backend
 repeats rules that the neutral layer owns, and the contract holds two
 features that do not hold on every backend. A second backend, such as the
-workstation in PR #268, gets all of it. M4 edits the same files, so M7
-starts after it.
+workstation in PR #268, repeats those rules and implements those features
+again. M4 edits the same files, so M7 starts after it.
 
 The contract gets smaller:
 
@@ -407,9 +407,11 @@ The contract gets smaller:
   audit log already records every tool call with its arguments and its
   provenance. `changes.ts`, the `changes` option, `workspace.changes()`,
   and `WorkspaceBackend.changedPaths` (`just-bash.ts:218`) go.
-- **An optional `identity`.** No backend reads `WorkspaceAgent.identity`
-  (`resource.ts:4`), and each one keys on `name`. The field becomes
-  optional, so a caller that passes it still compiles.
+- **No `identity`.** No backend reads `WorkspaceAgent.identity`
+  (`resource.ts:4`), and each one keys on `name`. `WorkspaceAgent` keeps
+  `name` alone. The tool context still passes its agent. The host agent
+  (`workspace.ts:77`), the tests, and the examples in `workspace.md` and
+  `resources.md` stop setting the field.
 
 The neutral layer owns what every backend needs:
 
@@ -430,8 +432,12 @@ The neutral layer owns what every backend needs:
     `bash-env.ts:284`)
   - the temporary names under `/tmp` (`bash-env.ts:217`)
 - **One command for the default tools.** The `sql` export counts its rows
-  with `xan` (`sql.ts:257`). The tool counts the CSV records itself, so a
-  backend needs `sqlite3` alone.
+  with `xan` (`sql.ts:257`), which reads RFC 4180 quoting. The tool reads
+  the export once and scans it: a newline outside quotes ends a record,
+  and a newline inside quotes stays in the value. The same scan takes the
+  preview records, so a quoted newline no longer splits a preview row
+  (`sql.ts:188`). A backend then needs `sqlite3` alone. The scan holds one
+  export in memory.
 - **One layout.** The backend names the folders of the shared records:
   the audit log, the shared database, and the room mirrors
   (`audit.ts:21`, `sql.ts:35`, `mirror.ts:30`). The just-bash backends
@@ -449,19 +455,35 @@ Each entry holds one thing:
   statically, and the lazy import (`just-bash.ts:247`) goes.
 - **One entry for each binding.** The root re-exports `./resource`
   (`index.ts:46`) and `./sql` (`index.ts:55`). Each binding keeps its own
-  entry only, and the workbench imports `openSqlResource` from `./sql`.
+  entry only.
+- **The workbench follows the entries.** It imports the root today for
+  every name below:
+  - `directoryBackend` (`rooms.ts:18`) and `memoryBackend` (three tests)
+    move to `./just-bash`
+  - `openSqlResource` (`rooms.ts:19` and four tests) moves to `./sql`
+  - the `SqlResource`, `SqlProvenance`, and `SqlResourceEnv` types
+    (`definitions.ts`, `instrument.ts`, `approvals.ts`) move to `./sql`
 - **No internal constants at the root.** `ROOM_MIRROR_GUIDANCE`,
   `roomMirrorPath`, and `DEFAULT_ROTATE_BYTES` (`index.ts:37`,
   `index.ts:39`) have no consumer. `roomMirrorPath` also fixes the
   `/rooms` path that the layout now names.
 
-**M7 removes exports from a published package.** `destroy()` leaves the
-three types that hold it. The change log exports go: `openChangeLog`,
-`DEFAULT_CHANGE_LOG`, `ChangeLog`, `ChangeLogOptions`, `ChangeQuery`,
-`WorkspaceChange`, the `changes` option, and `changedPaths`. The root
-stops exporting the backends, the resource contract, the SQL resource, and
-the three constants. The changelog names each one. `workspace.md` and
-`resources.md` lose their sections on destruction and on the change log.
+**M7 removes exports from a published package.** The compatibility rule
+at the top of this page covers the kernel entries and the journal bodies.
+It does not cover `@ambionframework/workspace`. Before 1.0 its API
+changes when the design needs it. M7 adds no re-export, no deprecated
+alias, and no compatibility test.
+
+- `destroy()` leaves the three types that hold it.
+- The change log exports go: `openChangeLog`, `DEFAULT_CHANGE_LOG`,
+  `ChangeLog`, `ChangeLogOptions`, `ChangeQuery`, `WorkspaceChange`, the
+  `changes` option, and `changedPaths`.
+- `WorkspaceAgent` loses `identity`.
+- The root stops exporting the backends, the resource contract, the SQL
+  resource, and the three constants.
+
+The changelog names each one. `workspace.md` and `resources.md` lose
+their text on destruction and on the change log.
 
 A new backend then implements `connect()` and an `ExecutionEnv` over the
 shared helpers, names its layout, and passes the suite. It repeats no rule
