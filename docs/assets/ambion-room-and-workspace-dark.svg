@@ -3,58 +3,58 @@
   <desc id="desc">Two people use one room. Person 1 is present, asks a question, and reads the result. Person 2 is away and catches up later. The room is an append-only journal. It records the question, activates three agents that run on Pi, the Claude Agent SDK, and the Codex SDK, and records what two of them say. The third agent has nothing to add and writes no entry. The exchange closes when no seat has work left, and a summary goes to Person 1. The agents read and write files and tables in a shared workspace, and an audit log holds one line per tool call. A message names what it cites, and a change names the activation that made it. A restart replays the journal entries.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 10 5 0 10Z" fill="#666d6b"/>
+      <path d="M0 0 10 5 0 10Z" fill="#a3aba8"/>
     </marker>
     <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 10 5 0 10Z" fill="#2f817a"/>
+      <path d="M0 0 10 5 0 10Z" fill="#6cc4bb"/>
     </marker>
     <marker id="cross" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="12" markerHeight="12">
-      <path d="M2 2 10 10 M10 2 2 10" stroke="#c0503a" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M2 2 10 10 M10 2 2 10" stroke="#ef8570" stroke-width="2.4" stroke-linecap="round"/>
     </marker>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#232a2b" flood-opacity="0.08"/>
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.35"/>
     </filter>
     <style>
       .sans { font-family: Inter, "IBM Plex Sans", system-ui, sans-serif; }
       .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
-      .ink { fill: #232a2b; }
-      .dim { fill: #666d6b; }
-      .teal { fill: #2f817a; }
-      .red { fill: #c0503a; }
-      .code { fill: #3f5bb5; }
+      .ink { fill: #e8e9e4; }
+      .dim { fill: #a3aba8; }
+      .teal { fill: #6cc4bb; }
+      .red { fill: #ef8570; }
+      .code { fill: #a4b6f2; }
       .lab { font-size: 13px; font-weight: 700; letter-spacing: 1.2px; }
       .t { font-size: 19px; font-weight: 700; }
       .n { font-size: 16px; font-weight: 700; }
       .b { font-size: 16px; }
       .s { font-size: 14px; }
       .x { font-size: 13px; }
-      .flow { fill: none; stroke: #666d6b; stroke-width: 2; }
-      .flow-dash { fill: none; stroke: #666d6b; stroke-width: 2; stroke-dasharray: 6 5; }
-      .flow-teal { fill: none; stroke: #2f817a; stroke-width: 2; stroke-dasharray: 6 5; }
-      .flow-red { fill: none; stroke: #c0503a; stroke-width: 2; stroke-dasharray: 5 4; }
-      .guide { stroke: #e2e0d8; stroke-width: 1.5; stroke-dasharray: 2 6; }
-      .rule { stroke: #e2e0d8; stroke-width: 1.5; }
+      .flow { fill: none; stroke: #a3aba8; stroke-width: 2; }
+      .flow-dash { fill: none; stroke: #a3aba8; stroke-width: 2; stroke-dasharray: 6 5; }
+      .flow-teal { fill: none; stroke: #6cc4bb; stroke-width: 2; stroke-dasharray: 6 5; }
+      .flow-red { fill: none; stroke: #ef8570; stroke-width: 2; stroke-dasharray: 5 4; }
+      .guide { stroke: #384143; stroke-width: 1.5; stroke-dasharray: 2 6; }
+      .rule { stroke: #384143; stroke-width: 1.5; }
     </style>
   </defs>
-  <rect width="1000" height="556" rx="20" fill="#f4f3ee"/>
+  <rect width="1000" height="556" rx="20" fill="#171c1d"/>
   <text x="24" y="34" text-anchor="start" class="sans dim lab">PEOPLE</text>
   <text x="220" y="34" text-anchor="start" class="sans dim lab">ROOM</text>
   <text x="548" y="34" text-anchor="start" class="sans dim lab">AGENTS</text>
   <text x="784" y="34" text-anchor="start" class="sans dim lab">WORKSPACE</text>
   <g filter="url(#shadow)">
-    <rect x="24" y="98" width="144" height="120" rx="14" fill="#fbfaf6" stroke="#cf8b6b" stroke-width="2"/>
-    <rect x="24" y="318" width="144" height="120" rx="14" fill="#fbfaf6" stroke="#cf8b6b" stroke-width="2" stroke-dasharray="6 5" stroke-opacity="0.6"/>
+    <rect x="24" y="98" width="144" height="120" rx="14" fill="#20282a" stroke="#e39a78" stroke-width="2"/>
+    <rect x="24" y="318" width="144" height="120" rx="14" fill="#20282a" stroke="#e39a78" stroke-width="2" stroke-dasharray="6 5" stroke-opacity="0.6"/>
   </g>
   <text x="42" y="132" text-anchor="start" class="sans ink t">Person 1</text>
   <text x="42" y="156" text-anchor="start" class="sans dim s">asks and reads</text>
-  <rect x="42" y="172" width="76" height="24" rx="12" fill="#f7e6dd"/>
+  <rect x="42" y="172" width="76" height="24" rx="12" fill="#3b2a23"/>
   <text x="80" y="189" text-anchor="middle" class="mono ink x">present</text>
   <text x="42" y="352" text-anchor="start" class="sans ink t">Person 2</text>
   <text x="42" y="376" text-anchor="start" class="sans dim s">catches up</text>
-  <rect x="42" y="392" width="56" height="24" rx="12" fill="#ecebe5"/>
+  <rect x="42" y="392" width="56" height="24" rx="12" fill="#303839"/>
   <text x="70" y="409" text-anchor="middle" class="mono ink x">away</text>
   <g filter="url(#shadow)">
-    <rect x="220" y="52" width="260" height="448" rx="16" fill="#fbfaf6" stroke="#232a2b" stroke-width="1.5"/>
+    <rect x="220" y="52" width="260" height="448" rx="16" fill="#20282a" stroke="#e8e9e4" stroke-width="1.5"/>
   </g>
   <text x="240" y="86" text-anchor="start" class="sans ink t">Room</text>
   <text x="240" y="108" text-anchor="start" class="sans dim lab">APPEND-ONLY JOURNAL</text>
@@ -77,35 +77,35 @@
   <line x1="220" y1="444" x2="480" y2="444" class="rule"/>
   <text x="240" y="474" text-anchor="start" class="sans dim s">A restart replays the entries.</text>
   <g filter="url(#shadow)">
-    <rect x="548" y="64" width="180" height="120" rx="14" fill="#fbfaf6" stroke="#8fa8ef" stroke-width="2"/>
-    <rect x="548" y="214" width="180" height="120" rx="14" fill="#fbfaf6" stroke="#7fc468" stroke-width="2"/>
-    <rect x="548" y="364" width="180" height="120" rx="14" fill="#fbfaf6" stroke="#e0a94e" stroke-width="2"/>
+    <rect x="548" y="64" width="180" height="120" rx="14" fill="#20282a" stroke="#8fa8ef" stroke-width="2"/>
+    <rect x="548" y="214" width="180" height="120" rx="14" fill="#20282a" stroke="#86cc70" stroke-width="2"/>
+    <rect x="548" y="364" width="180" height="120" rx="14" fill="#20282a" stroke="#e4b060" stroke-width="2"/>
   </g>
   <text x="566" y="100" text-anchor="start" class="sans ink t">Agent A</text>
   <text x="566" y="124" text-anchor="start" class="sans dim s">Pi</text>
-  <rect x="566" y="140" width="64" height="24" rx="12" fill="#e8ecfa"/>
+  <rect x="566" y="140" width="64" height="24" rx="12" fill="#25304f"/>
   <text x="598" y="157" text-anchor="middle" class="mono ink x">spoke</text>
   <text x="566" y="250" text-anchor="start" class="sans ink t">Agent B</text>
   <text x="566" y="274" text-anchor="start" class="sans dim s">Claude Agent SDK</text>
-  <rect x="566" y="290" width="64" height="24" rx="12" fill="#e8f5e2"/>
+  <rect x="566" y="290" width="64" height="24" rx="12" fill="#243a20"/>
   <text x="598" y="307" text-anchor="middle" class="mono ink x">spoke</text>
   <text x="566" y="400" text-anchor="start" class="sans ink t">Agent C</text>
   <text x="566" y="424" text-anchor="start" class="sans dim s">Codex SDK</text>
-  <rect x="566" y="440" width="64" height="24" rx="12" fill="#f6ecd8"/>
+  <rect x="566" y="440" width="64" height="24" rx="12" fill="#3d321c"/>
   <text x="598" y="457" text-anchor="middle" class="mono ink x">silent</text>
   <g filter="url(#shadow)">
-    <rect x="784" y="52" width="192" height="448" rx="16" fill="#fbfaf6" stroke="#2f817a" stroke-width="1.5"/>
+    <rect x="784" y="52" width="192" height="448" rx="16" fill="#20282a" stroke="#6cc4bb" stroke-width="1.5"/>
   </g>
   <text x="804" y="86" text-anchor="start" class="sans ink t">Workspace</text>
   <text x="804" y="108" text-anchor="start" class="sans dim lab">FILES · TABLES</text>
   <line x1="784" y1="124" x2="976" y2="124" class="rule"/>
-  <rect x="800" y="144" width="160" height="100" rx="10" fill="#eef5f4" stroke="#bcd9d5"/>
+  <rect x="800" y="144" width="160" height="100" rx="10" fill="#1c2e2d" stroke="#36615d"/>
   <text x="816" y="178" text-anchor="start" class="sans ink n">Files</text>
   <text x="816" y="202" text-anchor="start" class="sans dim s">tools change them</text>
-  <rect x="800" y="260" width="160" height="100" rx="10" fill="#eef5f4" stroke="#bcd9d5"/>
+  <rect x="800" y="260" width="160" height="100" rx="10" fill="#1c2e2d" stroke="#36615d"/>
   <text x="816" y="294" text-anchor="start" class="sans ink n">Tables</text>
   <text x="816" y="318" text-anchor="start" class="sans dim s">rows agents share</text>
-  <rect x="800" y="376" width="160" height="100" rx="10" fill="#eef5f4" stroke="#bcd9d5"/>
+  <rect x="800" y="376" width="160" height="100" rx="10" fill="#1c2e2d" stroke="#36615d"/>
   <text x="816" y="410" text-anchor="start" class="sans ink n">Audit log</text>
   <text x="816" y="434" text-anchor="start" class="sans dim s">one per tool call</text>
   <path d="M168 146 H220" class="flow" marker-end="url(#arrow)"/>

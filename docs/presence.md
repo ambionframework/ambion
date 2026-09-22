@@ -24,6 +24,11 @@ The room can continue between visits. An agent can address a known absent person
 the message remains on the record for their return. Native timers, external
 subscriptions, and scheduler ingress are host concerns.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/ambion-room-lifetime-dark.svg">
+  <img alt="A room over four days. Two people visit and leave at different times. Each visit opens an exchange, and each exchange closes. Three agents keep their seats the whole time and activate only inside exchanges. On Wednesday the host restarts and the room replays its journal, and a fourth agent takes a seat from the reserve. The workspace keeps its files and tables across the restart. On Thursday a person returns and catches up." src="assets/ambion-room-lifetime.svg">
+</picture>
+
 ## 2. The goal a room is started with
 
 `goal` is public context for every agent: what the room is trying to accomplish.

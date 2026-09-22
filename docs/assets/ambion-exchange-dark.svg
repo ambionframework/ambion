@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" role="img" aria-labelledby="title desc">
+  <title id="title">One exchange</title>
+  <desc id="desc">One exchange on a time axis. Person 1 asks with visit.send(), and the room records the question as entry 1. The room activates Agents A, B, and C at broadcast attention, and they reason in parallel. Agent A reads a file and says, entry 2. Agent B tries to say from a record that ends at entry 1. The say comes back missed, with entry 2. Agent B reconsiders with entry 2, writes a new file that names its activation, and says, entry 3. Agent C has nothing to add and writes no entry. No seat has work left, so the room closes the exchange, entry 4, and waitForClose() returns. An optional summary, entry 5, returns from waitForSummary().</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="#a3aba8"/>
+    </marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="#6cc4bb"/>
+    </marker>
+    <marker id="cross" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="12" markerHeight="12">
+      <path d="M2 2 10 10 M10 2 2 10" stroke="#ef8570" stroke-width="2.4" stroke-linecap="round"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+    <style>
+      .sans { font-family: Inter, "IBM Plex Sans", system-ui, sans-serif; }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+      .ink { fill: #e8e9e4; }
+      .dim { fill: #a3aba8; }
+      .teal { fill: #6cc4bb; }
+      .red { fill: #ef8570; }
+      .code { fill: #a4b6f2; }
+      .lab { font-size: 13px; font-weight: 700; letter-spacing: 1.2px; }
+      .t { font-size: 19px; font-weight: 700; }
+      .n { font-size: 16px; font-weight: 700; }
+      .b { font-size: 16px; }
+      .s { font-size: 14px; }
+      .x { font-size: 13px; }
+      .flow { fill: none; stroke: #a3aba8; stroke-width: 2; }
+      .flow-dash { fill: none; stroke: #a3aba8; stroke-width: 2; stroke-dasharray: 6 5; }
+      .flow-teal { fill: none; stroke: #6cc4bb; stroke-width: 2; stroke-dasharray: 6 5; }
+      .flow-red { fill: none; stroke: #ef8570; stroke-width: 2; stroke-dasharray: 5 4; }
+      .guide { stroke: #384143; stroke-width: 1.5; stroke-dasharray: 2 6; }
+      .rule { stroke: #384143; stroke-width: 1.5; }
+    </style>
+  </defs>
+  <rect width="1000" height="560" rx="20" fill="#171c1d"/>
+  <text x="24" y="68" text-anchor="start" class="sans ink n">Person 1</text>
+  <text x="24" y="88" text-anchor="start" class="sans dim s">owns the exchange</text>
+  <text x="24" y="140" text-anchor="start" class="sans ink n">Room</text>
+  <text x="24" y="160" text-anchor="start" class="sans dim s">the journal</text>
+  <text x="24" y="238" text-anchor="start" class="sans ink n">Agent A</text>
+  <text x="24" y="258" text-anchor="start" class="sans dim s">Pi</text>
+  <text x="24" y="318" text-anchor="start" class="sans ink n">Agent B</text>
+  <text x="24" y="338" text-anchor="start" class="sans dim s">Claude Agent SDK</text>
+  <text x="24" y="398" text-anchor="start" class="sans ink n">Agent C</text>
+  <text x="24" y="418" text-anchor="start" class="sans dim s">Codex SDK</text>
+  <text x="24" y="474" text-anchor="start" class="sans ink n">Workspace</text>
+  <text x="24" y="494" text-anchor="start" class="sans dim s">files and tables</text>
+  <line x1="190" y1="70" x2="976" y2="70" class="guide"/>
+  <line x1="190" y1="240" x2="976" y2="240" class="guide"/>
+  <line x1="190" y1="320" x2="976" y2="320" class="guide"/>
+  <line x1="190" y1="400" x2="976" y2="400" class="guide"/>
+  <path d="M600 334 V450" class="flow-teal" marker-end="url(#arrow-teal)"/>
+  <text x="612" y="432" text-anchor="start" class="sans teal s">writes</text>
+  <g filter="url(#shadow)">
+    <rect x="190" y="110" width="786" height="64" rx="12" fill="#20282a" stroke="#e8e9e4" stroke-width="1.5"/>
+  </g>
+  <circle cx="214" cy="134" r="11" fill="#e8e9e4"/>
+  <text x="214" y="138" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">1</text>
+  <text x="232" y="139" text-anchor="start" class="sans ink s">ask</text>
+  <circle cx="420" cy="134" r="11" fill="#e8e9e4"/>
+  <text x="420" y="138" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">2</text>
+  <text x="438" y="139" text-anchor="start" class="sans ink s">A says</text>
+  <text x="438" y="162" text-anchor="start" class="sans teal s">ref: a file</text>
+  <circle cx="630" cy="134" r="11" fill="#e8e9e4"/>
+  <text x="630" y="138" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">3</text>
+  <text x="648" y="139" text-anchor="start" class="sans ink s">B says</text>
+  <text x="648" y="162" text-anchor="start" class="sans teal s">ref: a new file</text>
+  <circle cx="750" cy="134" r="11" fill="#e8e9e4"/>
+  <text x="750" y="138" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">4</text>
+  <text x="768" y="139" text-anchor="start" class="sans ink s">close</text>
+  <text x="768" y="162" text-anchor="start" class="sans dim s">no work left</text>
+  <circle cx="880" cy="134" r="11" fill="#e8e9e4"/>
+  <text x="880" y="138" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">5</text>
+  <text x="898" y="139" text-anchor="start" class="sans ink s">summary</text>
+  <text x="898" y="162" text-anchor="start" class="sans dim s">optional</text>
+  <circle cx="214" cy="70" r="7" fill="#e39a78"/>
+  <text x="214" y="46" text-anchor="middle" class="mono code x">visit.send()</text>
+  <circle cx="750" cy="70" r="7" fill="#e39a78"/>
+  <text x="750" y="46" text-anchor="middle" class="mono code x">waitForClose()</text>
+  <circle cx="880" cy="70" r="7" fill="#e39a78"/>
+  <text x="880" y="46" text-anchor="middle" class="mono code x">waitForSummary()</text>
+  <path d="M214 78 V108" class="flow" marker-end="url(#arrow)"/>
+  <text x="226" y="98" text-anchor="start" class="sans dim s">asks</text>
+  <path d="M750 110 V80" class="flow" marker-end="url(#arrow)"/>
+  <path d="M880 110 V80" class="flow" marker-end="url(#arrow)"/>
+  <path d="M280 174 V224" class="flow" marker-end="url(#arrow)"/>
+  <path d="M280 174 V304" class="flow" marker-end="url(#arrow)"/>
+  <path d="M280 174 V384" class="flow" marker-end="url(#arrow)"/>
+  <text x="290" y="200" text-anchor="start" class="sans dim s">activates</text>
+  <text x="290" y="218" text-anchor="start" class="sans dim s">broadcast</text>
+  <rect x="280" y="226" width="160" height="28" rx="14" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
+  <text x="296" y="245" text-anchor="start" class="sans ink s">reads a file</text>
+  <rect x="280" y="306" width="370" height="28" rx="14" fill="#243a20" stroke="#86cc70" stroke-width="1.5"/>
+  <text x="296" y="325" text-anchor="start" class="sans ink s">reasons on 1</text>
+  <text x="502" y="325" text-anchor="start" class="sans ink s">reconsiders with 2</text>
+  <rect x="280" y="386" width="240" height="28" rx="14" fill="#3d321c" stroke="#e4b060" stroke-width="1.5"/>
+  <text x="296" y="405" text-anchor="start" class="sans ink s">nothing to add</text>
+  <rect x="530" y="388" width="60" height="24" rx="12" fill="#3d321c"/>
+  <text x="560" y="405" text-anchor="middle" class="mono ink x">silent</text>
+  <path d="M420 226 V178" class="flow" marker-end="url(#arrow)"/>
+  <text x="430" y="206" text-anchor="start" class="sans dim s">says</text>
+  <path d="M490 306 V178" class="flow-red" marker-end="url(#cross)"/>
+  <text x="502" y="236" text-anchor="start" class="sans red s" font-weight="700">missed</text>
+  <text x="502" y="256" text-anchor="start" class="sans red s">returns entry 2</text>
+  <path d="M630 306 V178" class="flow" marker-end="url(#arrow)"/>
+  <text x="640" y="236" text-anchor="start" class="sans dim s">says</text>
+  <g filter="url(#shadow)">
+    <rect x="190" y="452" width="786" height="48" rx="12" fill="#1c2e2d" stroke="#36615d"/>
+  </g>
+  <rect x="206" y="462" width="130" height="28" rx="8" fill="#20282a" stroke="#36615d"/>
+  <text x="271" y="481" text-anchor="middle" class="sans ink s">an existing file</text>
+  <rect x="560" y="462" width="256" height="28" rx="8" fill="#20282a" stroke="#6cc4bb"/>
+  <text x="576" y="481" text-anchor="start" class="sans ink s">a new file</text>
+  <text x="660" y="481" text-anchor="start" class="sans teal s">names its activation</text>
+  <path d="M190 528 H976" class="flow" stroke-opacity="0.5" marker-end="url(#arrow)"/>
+  <text x="976" y="548" text-anchor="end" class="sans dim s">time</text>
+</svg>

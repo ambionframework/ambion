@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="536" viewBox="0 0 1000 536" role="img" aria-labelledby="title desc">
+  <title id="title">The trace of one activation</title>
+  <desc id="desc">Agent B activates on entry 1 of the room journal and claims a lease. Each thing the activation does is one step in a trace journal for that activation alone: a pass, thinking, tool calls and their results, and the room answers. Its first say comes back missed, with entry 2. The agent reconsiders, writes a file, and its second say commits as entry 3. A usage step holds tokens and cost, and an end step stops the activation. The driver writes the pass, room, and end steps, and the executor writes the rest. The release entry in the record carries the usage sum. The trace is not the record.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="#a3aba8"/>
+    </marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="#6cc4bb"/>
+    </marker>
+    <marker id="cross" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="12" markerHeight="12">
+      <path d="M2 2 10 10 M10 2 2 10" stroke="#ef8570" stroke-width="2.4" stroke-linecap="round"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+    <style>
+      .sans { font-family: Inter, "IBM Plex Sans", system-ui, sans-serif; }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+      .ink { fill: #e8e9e4; }
+      .dim { fill: #a3aba8; }
+      .teal { fill: #6cc4bb; }
+      .red { fill: #ef8570; }
+      .code { fill: #a4b6f2; }
+      .lab { font-size: 13px; font-weight: 700; letter-spacing: 1.2px; }
+      .t { font-size: 19px; font-weight: 700; }
+      .n { font-size: 16px; font-weight: 700; }
+      .b { font-size: 16px; }
+      .s { font-size: 14px; }
+      .x { font-size: 13px; }
+      .flow { fill: none; stroke: #a3aba8; stroke-width: 2; }
+      .flow-dash { fill: none; stroke: #a3aba8; stroke-width: 2; stroke-dasharray: 6 5; }
+      .flow-teal { fill: none; stroke: #6cc4bb; stroke-width: 2; stroke-dasharray: 6 5; }
+      .flow-red { fill: none; stroke: #ef8570; stroke-width: 2; stroke-dasharray: 5 4; }
+      .guide { stroke: #384143; stroke-width: 1.5; stroke-dasharray: 2 6; }
+      .rule { stroke: #384143; stroke-width: 1.5; }
+    </style>
+  </defs>
+  <rect width="1000" height="536" rx="20" fill="#171c1d"/>
+  <text x="24" y="34" text-anchor="start" class="sans dim lab">RECORD</text>
+  <text x="336" y="34" text-anchor="start" class="sans dim lab">ACTIVATION</text>
+  <text x="612" y="34" text-anchor="start" class="sans dim lab">TRACE</text>
+  <g filter="url(#shadow)">
+    <rect x="24" y="52" width="240" height="404" rx="16" fill="#20282a" stroke="#e8e9e4" stroke-width="1.5"/>
+    <rect x="336" y="52" width="212" height="278" rx="16" fill="#20282a" stroke="#86cc70" stroke-width="2"/>
+    <rect x="612" y="52" width="364" height="436" rx="16" fill="#20282a" stroke="#6cc4bb" stroke-width="1.5"/>
+  </g>
+  <text x="44" y="86" text-anchor="start" class="sans ink t">Room</text>
+  <text x="44" y="108" text-anchor="start" class="sans dim lab">THE RECORD</text>
+  <line x1="24" y1="124" x2="264" y2="124" class="rule"/>
+  <rect x="34" y="228" width="220" height="52" rx="8" fill="#243a20"/>
+  <rect x="34" y="288" width="220" height="52" rx="8" fill="#243a20"/>
+  <text x="46" y="150" text-anchor="start" class="mono dim s">1</text>
+  <text x="68" y="150" text-anchor="start" class="sans ink b">Person 1 asks</text>
+  <text x="46" y="196" text-anchor="start" class="mono dim s">2</text>
+  <text x="68" y="196" text-anchor="start" class="sans ink b">Agent A says</text>
+  <text x="46" y="250" text-anchor="start" class="mono dim s">3</text>
+  <text x="68" y="250" text-anchor="start" class="sans ink b">Agent B says</text>
+  <text x="68" y="270" text-anchor="start" class="sans dim s">ref: a new file</text>
+  <text x="46" y="310" text-anchor="start" class="mono dim s">·</text>
+  <text x="68" y="310" text-anchor="start" class="sans ink b">Agent B releases</text>
+  <text x="68" y="330" text-anchor="start" class="sans dim s">carries the usage sum</text>
+  <text x="46" y="374" text-anchor="start" class="mono dim s">4</text>
+  <text x="68" y="374" text-anchor="start" class="sans ink b">close</text>
+  <text x="68" y="394" text-anchor="start" class="sans dim s">no work left</text>
+  <text x="46" y="434" text-anchor="start" class="mono dim s">5</text>
+  <text x="68" y="434" text-anchor="start" class="sans ink b">summary</text>
+  <text x="354" y="86" text-anchor="start" class="sans ink t">Agent B</text>
+  <text x="354" y="108" text-anchor="start" class="sans dim s">Claude Agent SDK</text>
+  <line x1="336" y1="124" x2="548" y2="124" class="rule"/>
+  <text x="354" y="156" text-anchor="start" class="sans ink s">claims a lease</text>
+  <text x="354" y="188" text-anchor="start" class="sans ink s">reads entry 1</text>
+  <text x="354" y="220" text-anchor="start" class="sans ink s">say: missed, gets 2</text>
+  <text x="354" y="252" text-anchor="start" class="sans ink s">say: committed as 3</text>
+  <text x="354" y="284" text-anchor="start" class="sans ink s">releases with usage</text>
+  <path d="M264 150 H336" class="flow" marker-end="url(#arrow)"/>
+  <text x="300" y="140" text-anchor="middle" class="sans dim s">activates</text>
+  <path d="M336 250 H264" class="flow" marker-end="url(#arrow)"/>
+  <text x="300" y="240" text-anchor="middle" class="sans dim s">says</text>
+  <path d="M336 310 H264" class="flow" marker-end="url(#arrow)"/>
+  <text x="300" y="300" text-anchor="middle" class="sans dim s">releases</text>
+  <path d="M548 150 H612" class="flow" marker-end="url(#arrow)"/>
+  <text x="580" y="140" text-anchor="middle" class="sans dim s">writes</text>
+  <text x="580" y="172" text-anchor="middle" class="sans dim s">steps</text>
+  <text x="632" y="86" text-anchor="start" class="sans ink t">Trace journal</text>
+  <text x="632" y="108" text-anchor="start" class="sans dim lab">ONE ACTIVATION · NOT THE RECORD</text>
+  <line x1="612" y1="124" x2="976" y2="124" class="rule"/>
+  <text x="652" y="152" text-anchor="end" class="mono dim x">0</text>
+  <text x="666" y="152" text-anchor="start" class="mono ink x">pass</text>
+  <text x="782" y="152" text-anchor="start" class="sans dim s">view · entry 1</text>
+  <circle cx="954" cy="148" r="5" fill="#6cc4bb" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="652" y="178" text-anchor="end" class="mono dim x">1</text>
+  <text x="666" y="178" text-anchor="start" class="mono ink x">thinking</text>
+  <text x="782" y="178" text-anchor="start" class="sans dim s">a summary</text>
+  <circle cx="954" cy="174" r="5" fill="#20282a" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="652" y="204" text-anchor="end" class="mono dim x">2</text>
+  <text x="666" y="204" text-anchor="start" class="mono ink x">tool_call</text>
+  <text x="782" y="204" text-anchor="start" class="sans dim s">read a file</text>
+  <circle cx="954" cy="200" r="5" fill="#20282a" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="652" y="230" text-anchor="end" class="mono dim x">3</text>
+  <text x="666" y="230" text-anchor="start" class="mono ink x">tool_result</text>
+  <text x="782" y="230" text-anchor="start" class="sans dim s">the file</text>
+  <circle cx="954" cy="226" r="5" fill="#20282a" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="652" y="256" text-anchor="end" class="mono dim x">4</text>
+  <text x="666" y="256" text-anchor="start" class="mono ink x">tool_call</text>
+  <text x="782" y="256" text-anchor="start" class="sans dim s">say</text>
+  <circle cx="954" cy="252" r="5" fill="#20282a" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="652" y="282" text-anchor="end" class="mono dim x">5</text>
+  <text x="666" y="282" text-anchor="start" class="mono ink x">room</text>
+  <text x="782" y="282" text-anchor="start" class="sans red s">missed · entry 2</text>
+  <circle cx="954" cy="278" r="5" fill="#6cc4bb" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="652" y="308" text-anchor="end" class="mono dim x">6</text>
+  <text x="666" y="308" text-anchor="start" class="mono ink x">thinking</text>
+  <text x="782" y="308" text-anchor="start" class="sans dim s">reconsiders</text>
+  <circle cx="954" cy="304" r="5" fill="#20282a" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="652" y="334" text-anchor="end" class="mono dim x">7</text>
+  <text x="666" y="334" text-anchor="start" class="mono ink x">tool_call</text>
+  <text x="782" y="334" text-anchor="start" class="sans dim s">write a file</text>
+  <circle cx="954" cy="330" r="5" fill="#20282a" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="652" y="360" text-anchor="end" class="mono dim x">8</text>
+  <text x="666" y="360" text-anchor="start" class="mono ink x">tool_result</text>
+  <text x="782" y="360" text-anchor="start" class="sans dim s">ok</text>
+  <circle cx="954" cy="356" r="5" fill="#20282a" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="652" y="386" text-anchor="end" class="mono dim x">9</text>
+  <text x="666" y="386" text-anchor="start" class="mono ink x">tool_call</text>
+  <text x="782" y="386" text-anchor="start" class="sans dim s">say</text>
+  <circle cx="954" cy="382" r="5" fill="#20282a" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="652" y="412" text-anchor="end" class="mono dim x">10</text>
+  <text x="666" y="412" text-anchor="start" class="mono ink x">room</text>
+  <text x="782" y="412" text-anchor="start" class="sans dim s">committed · entry 3</text>
+  <circle cx="954" cy="408" r="5" fill="#6cc4bb" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="652" y="438" text-anchor="end" class="mono dim x">11</text>
+  <text x="666" y="438" text-anchor="start" class="mono ink x">usage</text>
+  <text x="782" y="438" text-anchor="start" class="sans dim s">tokens and cost</text>
+  <circle cx="954" cy="434" r="5" fill="#20282a" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="652" y="464" text-anchor="end" class="mono dim x">12</text>
+  <text x="666" y="464" text-anchor="start" class="mono ink x">end</text>
+  <text x="782" y="464" text-anchor="start" class="sans dim s">stopped</text>
+  <circle cx="954" cy="460" r="5" fill="#6cc4bb" stroke="#6cc4bb" stroke-width="1.5"/>
+  <circle cx="632" cy="510" r="5" fill="#6cc4bb" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="644" y="515" text-anchor="start" class="sans dim x">the driver writes</text>
+  <circle cx="792" cy="510" r="5" fill="#20282a" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="804" y="515" text-anchor="start" class="sans dim x">the executor writes</text>
+</svg>

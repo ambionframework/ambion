@@ -214,6 +214,11 @@ namespace of the host storage. A trace that takes no step opens no journal.
 Each step has the key `pass:index`, so a repeated activation writes each
 step once. The record and the trace never share an entry.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/ambion-activation-trace-dark.svg">
+  <img alt="Agent B activates on entry 1 of the room journal. Each thing the activation does is one step in its trace journal: a pass, thinking, tool calls and results, and the room answers. The first say comes back missed with entry 2, and the second say commits as entry 3. A usage step holds tokens and cost, and an end step stops the activation. The driver writes the pass, room, and end steps. The release entry in the record carries the usage sum." src="assets/ambion-activation-trace.svg">
+</picture>
+
 **The trace never gates the activation.** The trace is a second journal that
 the room does not read. A failed trace write raises a `trace_error` event.
 The activation outcome and the lease do not change. The driver closes the
