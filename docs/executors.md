@@ -302,10 +302,8 @@ anticipated family. No package for it exists yet.
 The [Pi](pi.md), [Claude](claude.md), and [Codex](codex.md) guides describe the packages.
 
 **A family that cannot steer still passes.** Its `readThrough` advances at
-the pass boundary, and the driver holds a steer for the next pass. The
-[plan](../planning/next.md) holds the surface comparison of the four
-families. What a harness remembers between activations is in
-[Trust](trust.md).
+the pass boundary, and the driver holds a steer for the next pass. What a
+harness remembers between activations is in [Trust](trust.md).
 
 ## How to write an adapter
 
