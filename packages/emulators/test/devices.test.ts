@@ -1,9 +1,10 @@
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { openWorkspace } from '@ambionframework/workspace';
 import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
-import { directoryBackend, memoryBackend, openWorkspace } from '../src/index.ts';
+import { directoryBackend, memoryBackend } from '../src/index.ts';
 import { backends } from './support/backends.ts';
 
 const ctx = BACKGROUND_CONTEXT;

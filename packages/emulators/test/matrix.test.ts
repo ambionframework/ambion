@@ -10,6 +10,7 @@
 
 import { isSpoken, startRoom } from '@ambionframework/ambion';
 import { piExecution } from '@ambionframework/pi';
+import { openWorkspace } from '@ambionframework/workspace';
 import { describe, expect, it } from 'vitest';
 import { collect, deferred } from '../../ambion/test/support/room.ts';
 import {
@@ -29,7 +30,6 @@ import {
 	toolResultTexts,
 } from '../../ambion/test/support/scripted.ts';
 import { storages } from '../../ambion/test/support/storage.ts';
-import { openWorkspace } from '../src/index.ts';
 import { backends } from './support/backends.ts';
 
 const twoWorkspaces: Scenario = {

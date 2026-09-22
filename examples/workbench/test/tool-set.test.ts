@@ -10,7 +10,8 @@ import {
 	settled,
 	speak,
 } from '@ambionframework/ambion/testing';
-import { memoryBackend, openSqlResource, openWorkspace } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/emulators';
+import { openSqlResource, openWorkspace } from '@ambionframework/workspace';
 import { afterEach, describe, expect, it } from 'vitest';
 import { people, team } from '../src/definitions.ts';
 import { openInstrument } from '../src/instrument.ts';

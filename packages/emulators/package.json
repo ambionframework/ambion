@@ -1,33 +1,27 @@
 {
-	"name": "@ambionframework/workspace",
+	"name": "@ambionframework/emulators",
 	"version": "0.1.0",
 	"type": "module",
-	"description": "The workspace resource contract for Ambion: the neutral resource contract, the filesystem-shaped backend contract, and the generic tooling over it.",
+	"description": "In-process, pure-TypeScript reimplementations of real tools, bound as Ambion workspace backends. just-bash today.",
 	"license": "Apache-2.0",
 	"homepage": "https://ambionframework.com",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/ambionframework/ambion.git",
-		"directory": "packages/workspace"
+		"directory": "packages/emulators"
 	},
 	"keywords": [
 		"agents",
 		"ambion",
-		"resource",
+		"emulator",
+		"filesystem",
+		"sandbox",
 		"workspace"
 	],
 	"exports": {
 		".": {
 			"types": "./dist/index.d.mts",
 			"import": "./dist/index.mjs"
-		},
-		"./resource": {
-			"types": "./dist/resource-entry.d.mts",
-			"import": "./dist/resource-entry.mjs"
-		},
-		"./sql": {
-			"types": "./dist/sql-resource.d.mts",
-			"import": "./dist/sql-resource.mjs"
 		},
 		"./package.json": "./package.json"
 	},
@@ -47,16 +41,21 @@
 		"build": "tsdown",
 		"check:types": "tsc -p tsconfig.check.json --noEmit",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"test:live": "vitest run --config vitest.live.config.ts"
 	},
 	"devDependencies": {
+		"@ambionframework/ambion": "workspace:*",
+		"@ambionframework/pi": "workspace:*",
+		"@earendil-works/pi-ai": "^0.85.1",
 		"tsdown": "^0.22.14",
 		"typescript": "^7.0.2",
 		"vitest": "^4.1.11"
 	},
 	"dependencies": {
-		"@ambionframework/ambion": "workspace:*",
+		"@ambionframework/workspace": "workspace:*",
 		"@earendil-works/pi-agent-core": "^0.85.1",
+		"just-bash": "^3.4.2",
 		"typebox": "^1.3.18"
 	}
 }

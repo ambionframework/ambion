@@ -23,7 +23,8 @@ newer, the OpenTUI floor.
 | `packages/claude`     | The Claude Agent SDK executor: `claude()` and `claudeExecution()`, tested on a fake executable                                               |
 | `packages/codex`      | The Codex SDK executor: `codex()` and `codexExecution()`, over a stdio room tools server; live-tested, no fake                               |
 | `packages/pi-journal` | Full Pi transcript sessions over the generic journal storage contract                                                                        |
-| `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem                                                                |
+| `packages/workspace`  | The workspace resource contract and its generic tools, over any backend that implements it                                                   |
+| `packages/emulators`  | just-bash as a workspace backend: an in-memory or directory filesystem                                                                       |
 | `docs/trust.md`       | Design contract for what one owner guarantees another, and what the kernel does not defend — read before exposing a room to untrusted agents |
 | `docs/agent.md`       | Design contract for the core — read before changing the runtime                                                                              |
 | `docs/assistant.md`   | Design contract for the default assistant package and the `assistant` room option — read with `agent.md`                                     |
@@ -31,6 +32,7 @@ newer, the OpenTUI floor.
 | `docs/presence.md`    | Design contract for presence and visits — read with `agent.md`                                                                               |
 | `docs/summary.md`     | Design contract for optional summaries of closed exchanges                                                                                   |
 | `docs/workspace.md`   | Design contract for the workspace an agent's tools reach into — read with `agent.md`                                                         |
+| `docs/emulators.md`   | The just-bash implementation of the workspace backend contract — read with `docs/workspace.md`                                               |
 | `docs/example.md`     | The one runnable example, an agentic lab workspace, and what it must show                                                                    |
 | `docs/roster.md`      | Design contract for a roster that changes while the room runs — read with `agent.md`                                                         |
 | `docs/durability.md`  | What the record promises under failure, and how the tiers prove it — read with `agent.md`                                                    |

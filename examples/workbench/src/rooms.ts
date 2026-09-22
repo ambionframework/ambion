@@ -12,14 +12,10 @@ import {
 import { composeExecutions, type Execution } from '@ambionframework/ambion/hosting';
 import { claudeExecution } from '@ambionframework/claude';
 import { codexExecution } from '@ambionframework/codex';
+import { directoryBackend } from '@ambionframework/emulators';
 import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
 import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
-import {
-	directoryBackend,
-	openSqlResource,
-	openWorkspace,
-	type RoomMirror,
-} from '@ambionframework/workspace';
+import { openSqlResource, openWorkspace, type RoomMirror } from '@ambionframework/workspace';
 import { readApprovals } from './approvals.ts';
 import { team } from './definitions.ts';
 import {

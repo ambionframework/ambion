@@ -1,6 +1,6 @@
+import { BACKGROUND_CONTEXT, openWorkspace, type Workspace } from '@ambionframework/workspace';
 import { describe, expect, it } from 'vitest';
-import type { Workspace } from '../src/index.ts';
-import { BACKGROUND_CONTEXT, memoryBackend, openWorkspace, SHARED_DATABASE } from '../src/index.ts';
+import { memoryBackend, SHARED_DATABASE } from '../src/index.ts';
 
 const agent = (name: string) => ({ name, identity: `${name} identity` });
 

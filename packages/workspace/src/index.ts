@@ -1,19 +1,26 @@
 /**
- * A workspace backend for Ambion: a virtual Unix filesystem and a shell.
+ * The workspace resource contract for Ambion: the neutral `ResourceBackend`
+ * contract, the filesystem-shaped `WorkspaceBackend` contract over it, and
+ * the generic machinery — audit, change tracking, a room mirror, an
+ * append-only log — that runs over any backend that satisfies it.
  *
- * This package owns the workspace resource, its built-in tools, and two
- * filesystem backends. `openWorkspace` creates one owner; `workspace.tools()`
- * returns the tools and guidance that owner exposes to an agent.
+ * This package holds no backend of its own. `@ambionframework/emulators`
+ * implements `WorkspaceBackend` over just-bash; a host picks an
+ * implementation and passes it to `openWorkspace`, which creates one owner.
+ * `workspace.tools()` returns the tools and guidance that owner exposes to
+ * an agent.
  *
  * ```ts
  * import { defineAgent } from '@ambionframework/ambion';
- * import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
+ * import { openWorkspace } from '@ambionframework/workspace';
+ * import { memoryBackend } from '@ambionframework/emulators';
  *
  * const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
  * const agent = defineAgent({ ..., bundles: [drive.tools()] });
  * ```
  *
- * The design contract is `docs/workspace.md`.
+ * The design contract is `docs/workspace.md`; the backend contract's
+ * implementations are `docs/emulators.md`.
  */
 
 /**
@@ -26,13 +33,6 @@ export { DEFAULT_AUDIT_LOG, openAuditLog } from './audit.ts';
 export type { WorkspaceBackend, WorkspaceEnv } from './backend.ts';
 export type { ChangeLog, ChangeLogOptions, ChangeQuery, WorkspaceChange } from './changes.ts';
 export { DEFAULT_CHANGE_LOG, openChangeLog } from './changes.ts';
-export type {
-	MemoryBackendFile,
-	MemoryBackendOptions,
-	MemoryWorkspaceBackend,
-	SeedWriter,
-} from './just-bash.ts';
-export { directoryBackend, memoryBackend } from './just-bash.ts';
 export type { WorkspaceLog, WorkspaceLogOptions } from './log.ts';
 export { DEFAULT_ROTATE_BYTES, openLog } from './log.ts';
 export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.ts';
@@ -44,7 +44,6 @@ export type {
 	WorkspaceResource,
 } from './resource.ts';
 export { openResource } from './resource.ts';
-export { SHARED_DATABASE } from './sql.ts';
 export type {
 	SqlProvenance,
 	SqlResource,

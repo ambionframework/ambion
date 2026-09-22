@@ -53,6 +53,7 @@ async function packFixture(destination) {
 		'codex',
 		'assistant',
 		'workspace',
+		'emulators',
 		'cloudflare',
 		'cli',
 	]) {
@@ -256,8 +257,9 @@ try {
 async function workspaceFixture(destination) {
 	await writeFile(
 		join(destination, 'src', 'workspace.ts'),
-		`import { openWorkspace, memoryBackend, type Workspace, type WorkspaceBackend } from '@ambionframework/workspace';
+		`import { openWorkspace, type Workspace, type WorkspaceBackend } from '@ambionframework/workspace';
 import { openResource, type ResourceBackend, type WorkspaceResource } from '@ambionframework/workspace/resource';
+import { memoryBackend } from '@ambionframework/emulators';
 import type { ToolBundle } from '@ambionframework/ambion';
 
 const backend: WorkspaceBackend = memoryBackend();
@@ -292,7 +294,8 @@ const hooks = registerHooks({
 await assert.rejects(import('@ambionframework/ambion'), /Resource loaded/);
 const { openResource } = await import('@ambionframework/workspace/resource');
 hooks.deregister();
-const { openWorkspace, memoryBackend, directoryBackend } = await import('@ambionframework/workspace');
+const { openWorkspace } = await import('@ambionframework/workspace');
+const { memoryBackend, directoryBackend } = await import('@ambionframework/emulators');
 const agent = { name: 'writer', identity: 'Writes files' };
 const memory = openResource({ name: 'memory', backend: memoryBackend() });
 assert.equal('tools' in memory, false);

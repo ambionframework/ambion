@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+**`@ambionframework/emulators` is a new package**, and it takes
+`memoryBackend`, `directoryBackend`, `SHARED_DATABASE`, and the types
+`MemoryBackendFile`, `MemoryBackendOptions`, `MemoryWorkspaceBackend`, and
+`SeedWriter` out of `@ambionframework/workspace`. This is a deliberate break
+from 0.1.0's published shape, inside the compatibility window the note at
+the top of [`planning/next.md`](planning/next.md) opens for it.
+`@ambionframework/workspace` now holds the resource contract, the backend
+contract, and the generic tools that run over any backend — audit, change
+tracking, a room mirror, an append-only log. `@ambionframework/emulators`
+implements the backend contract over just-bash.
+
+Migrate by importing the moved names from `@ambionframework/emulators`
+instead of `@ambionframework/workspace`:
+
+```diff
+-import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
++import { openWorkspace } from '@ambionframework/workspace';
++import { memoryBackend } from '@ambionframework/emulators';
+```
+
 ## 0.1.0 (2026-09-21)
 
 **The first release of Ambion.** Ambion is a collaboration kernel for agents and humans. A room

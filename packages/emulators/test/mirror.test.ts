@@ -10,17 +10,17 @@ import type {
 } from '@ambionframework/ambion';
 import { defineAgent, startRoom } from '@ambionframework/ambion';
 import { pi, piExecution } from '@ambionframework/pi';
+import {
+	openWorkspace,
+	ROOM_MIRROR_GUIDANCE,
+	roomMirrorPath,
+	type WorkspaceAgent,
+} from '@ambionframework/workspace';
 import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { enter, roomName as name } from '../../ambion/test/support/room.ts';
 import { byAgent, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
-import type { WorkspaceAgent } from '../src/index.ts';
-import {
-	memoryBackend,
-	openWorkspace,
-	ROOM_MIRROR_GUIDANCE,
-	roomMirrorPath,
-} from '../src/index.ts';
+import { memoryBackend } from '../src/index.ts';
 
 const reader: WorkspaceAgent = { name: 'reader', identity: 'Reads the mirrored file back.' };
 

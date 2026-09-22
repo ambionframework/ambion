@@ -418,6 +418,7 @@
 				"packages/claude/src/**",
 				"packages/codex/src/**",
 				"packages/workspace/src/**",
+				"packages/emulators/src/**",
 				"examples/**/src/**"
 			],
 			"linter": {
@@ -445,13 +446,12 @@
 			}
 		},
 		{
-			// Resource ownership and backends do not load the Ambion tool adapter.
+			// The neutral contract and the backend contract do not load the
+			// Ambion tool adapter.
 			"includes": [
 				"packages/workspace/src/resource.ts",
 				"packages/workspace/src/resource-entry.ts",
-				"packages/workspace/src/backend.ts",
-				"packages/workspace/src/just-bash.ts",
-				"packages/workspace/src/bash-env.ts"
+				"packages/workspace/src/backend.ts"
 			],
 			"linter": {
 				"rules": {
@@ -478,12 +478,13 @@
 			}
 		},
 		{
-			// The workspace package's tests reach the core's test support by
-			// relative path: it is not published, so no specifier names it. The
-			// core's own source is a different matter — `vitest.config.ts` and
-			// `tsconfig.check.json` alias the package name to it, so a test reads
-			// one module and not two.
-			"includes": ["packages/workspace/test/**"],
+			// The workspace and emulators packages' tests reach the core's test
+			// support by relative path: it is not published, so no specifier names
+			// it. The core's own source is a different matter — `vitest.config.ts`
+			// and `tsconfig.check.json` alias the package name to it, so a test
+			// reads one module and not two. Emulators' tests alias the workspace
+			// package's source the same way, for the same reason.
+			"includes": ["packages/workspace/test/**", "packages/emulators/test/**"],
 			"linter": {
 				"rules": {
 					"style": {
@@ -492,8 +493,8 @@
 							"options": {
 								"patterns": [
 									{
-										"group": ["**/ambion/src/**"],
-										"message": "Reach the core through `@ambionframework/ambion`; the config aliases it to the source."
+										"group": ["**/ambion/src/**", "**/workspace/src/**"],
+										"message": "Reach the core through `@ambionframework/ambion` and the contract through `@ambionframework/workspace`; the config aliases each to its source."
 									}
 								]
 							}

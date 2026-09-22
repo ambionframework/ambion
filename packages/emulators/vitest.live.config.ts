@@ -1,9 +1,9 @@
 import { defineConfig } from 'vitest/config';
-import { core, hosting, journal, pi, piJournal } from './vitest.config.ts';
+import { core, hosting, journal, pi, piJournal, workspace } from './vitest.config.ts';
 
 /**
  * The live tier: a room on a real model, with a real key, reaching a real
- * workspace. It holds the backends to the one claim a scripted stream cannot
+ * emulator. It holds the backends to the one claim a scripted stream cannot
  * prove — that a model picks up the four built-in tools and uses them against
  * a filesystem it has never seen.
  *
@@ -18,6 +18,7 @@ export default defineConfig({
 			{ find: '@ambionframework/pi-journal', replacement: piJournal },
 			{ find: '@ambionframework/pi', replacement: pi },
 			{ find: '@ambionframework/journal', replacement: journal },
+			{ find: '@ambionframework/workspace', replacement: workspace },
 		],
 	},
 	test: {

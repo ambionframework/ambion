@@ -1,16 +1,18 @@
 # The workspace
 
-**The workspace is the just-bash and Pi binding of the resource
-contract.** The optional `@ambionframework/workspace` package provides a
-workspace resource and its filesystem. Agents receive access through
-ordinary tool bundles. Workspace files remain separate from the
-collaboration journal. [Resources](resources.md) states the contract, the
-SQL binding, and the rules for references and provenance.
+**The workspace is the filesystem-shaped binding of the resource contract.**
+The optional `@ambionframework/workspace` package provides the contract and
+a workspace resource over it. Agents receive access through ordinary tool
+bundles. Workspace files remain separate from the collaboration journal.
+[Resources](resources.md) states the contract, the SQL binding, and the
+rules for references and provenance. [Emulators](emulators.md) documents
+`@ambionframework/emulators`, the just-bash implementation.
 
 ## Open one resource
 
 ```ts
-import { openWorkspace, memoryBackend } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/emulators';
 
 const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
 ```
@@ -105,12 +107,8 @@ threshold: the active file is renamed aside under a timestamped name, and a
 fresh file starts at the same path. A record is never split by a rotation.
 
 ```ts
-import {
-  BACKGROUND_CONTEXT,
-  directoryBackend,
-  openLog,
-  openWorkspace,
-} from '@ambionframework/workspace';
+import { BACKGROUND_CONTEXT, openLog, openWorkspace } from '@ambionframework/workspace';
+import { directoryBackend } from '@ambionframework/emulators';
 
 const drive = openWorkspace({ name: 'town', backend: directoryBackend('./data') });
 const host = { name: 'host', identity: 'Writes the room record.' };
@@ -199,9 +197,9 @@ log, so it never reaches the tool call's own outcome.
 the guidance the log describes speaks to the model alone.
 
 **The log shares the workspace's boundary.** just-bash gives no wall between
-one agent's home and another's (see [Backends and limits](#backends-and-limits)),
-and the log is no exception: any agent's `bash` or `write` call can alter or
-remove it, the same as any other file on the workspace.
+one agent's home and another's (see [Backends](#backends)), and the log is
+no exception: any agent's `bash` or `write` call can alter or remove it, the
+same as any other file on the workspace.
 
 ## Record what changed
 
@@ -247,7 +245,8 @@ call. The room's journal stays the record.
 room has started; it needs no other setup.
 
 ```ts
-import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/emulators';
 import { startRoom } from '@ambionframework/ambion';
 
 const site = openWorkspace({ name: 'town', backend: memoryBackend() });
@@ -322,9 +321,9 @@ by reading a room's own file; the guidance only points at the path.
 
 **Directory-per-room organizes the data; it does not wall it off.** Every
 room sharing one workspace shares its filesystem boundary (see
-[Backends and limits](#backends-and-limits)). An agent seated in one room
-reads another room's `messages.jsonl` the same way, with the same `seq`
-and `jq` filter it uses on its own.
+[Backends](#backends)). An agent seated in one room reads another room's
+`messages.jsonl` the same way, with the same `seq` and `jq` filter it uses
+on its own.
 
 ## Query the shared database
 
@@ -365,35 +364,21 @@ tool needs the rows. The tool writes the full result as CSV to that path and
 shows the file's head. A NULL value reads as `\N`, so a NULL stays apart from
 an empty string.
 
-### just-bash as one implementation
-
-The `sql` contract holds over any backend that supplies a `sqlite3` command.
-just-bash is the default implementation, and it has these specific behaviors:
-
-- **It loads the main database into a WebAssembly engine and writes the file
-  back after each call.** The owner's serialization keeps this write-back safe:
-  two calls never overlap, so no call loses another's write.
-- **`ATTACH` opens `:memory:` only.** The engine has no bridge to the virtual
-  filesystem, so `ATTACH` of a second file fails to open it. A cross-file join
-  is not available; a cross-database join uses a `:memory:` scratch database.
-- **CSV is the bridge to `python3`.** The just-bash `python3` has no `sqlite3`
-  module, so a Python script reads an exported CSV file.
-- **The tool passes command-line flags.** just-bash `sqlite3` reads flags such
-  as `-json` and `-csv`. It does not read dot-commands such as `.mode`.
-- **The dialect is SQLite.** Dates are functions, `||` joins text, and a column
-  type is an affinity.
+just-bash is one implementation of this contract, over
+`@ambionframework/emulators`; see [Emulators](emulators.md#just-bash-as-one-implementation-of-the-sql-tool)
+for its specific behaviors.
 
 ## The resource contract
 
 The contract lives in [Resources](resources.md).
 
-The memory and directory backends are the Pi binding. They export from the
-root entry, with `WorkspaceEnv`, the Pi `ExecutionEnv` that has a zero-argument
-`cleanup()`. `WorkspaceBackend` extends `ResourceBackend<WorkspaceEnv>` and
-adds Pi harness tools and optional guidance. `openWorkspace` creates the
-resource owner and binds the backend tools to its `use` method. `Workspace`
-adds `tools()` to the resource surface. Direct operations and tool calls share
-one queue and one lifecycle.
+`WorkspaceEnv` is the Pi `ExecutionEnv` that has a zero-argument `cleanup()`.
+`WorkspaceBackend` extends `ResourceBackend<WorkspaceEnv>` and adds Pi harness
+tools and optional guidance. This page and `@ambionframework/workspace` define
+that contract; they hold no implementation of it. `openWorkspace` creates the
+resource owner over an implementation and binds its tools to its `use`
+method. `Workspace` adds `tools()` to the resource surface. Direct operations
+and tool calls share one queue and one lifecycle.
 
 ## Destroy a resource
 
@@ -416,35 +401,11 @@ A `use` callback must not await another `use`, `dispose`, or `destroy` call
 on the same owner. The owner serializes those operations, so such nesting
 would wait for the callback that is already running.
 
-## Backends and limits
+## Backends
 
-`memoryBackend()` keeps files in process. Its optional seed writes files
-before the first use, and `readFiles()` supports host inspection. Disposal
-releases its cached filesystem, so a disposed resource does not recreate a
-seeded filesystem.
-
-`directoryBackend(root)` operates on a real directory. It creates the root
-when a backend operation needs it. `destroy()` deletes its contents and
-keeps the root directory.
-
-Both backends use just-bash. They provide a virtual Unix filesystem and shell
-for tools, with JavaScript and Python execution available. Network commands
-are absent. just-bash is single-user: agents sharing one resource can read
-each other's homes. The default workspace does not provide operating-system isolation between
-agents or distributed ownership of a shared directory. Hosts own credentials
-and authorization for external services.
-
-Backends perform raw filesystem I/O below the owner. They do not maintain a
-second destruction mark or a second operation queue.
-
-### The null device
-
-**`/dev/null` discards writes and reads empty on both backends.** A
-redirect to it, and a `write` tool call on it, change nothing. The device
-lives in a layer above the filesystem, so the directory backend writes no
-`dev` entry under its root and the memory backend holds no `/dev` file.
-
-**The standard devices are present on both backends.** `/dev/zero`,
-`/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd` exist and read
-empty. `/dev/zero` does not stream bytes. `ls /dev` lists the same names on
-each backend.
+A backend implements `WorkspaceBackend`: `connect`, `destroy`, the tools it
+gives an agent, and optional guidance. This page specifies the contract only.
+[Emulators](emulators.md) documents `@ambionframework/emulators`'s two
+backends, `memoryBackend()` and `directoryBackend(root)`, and their limits —
+no network, no operating-system isolation between agents, and the null
+device.

@@ -47,6 +47,9 @@ importers:
       '@ambionframework/codex':
         specifier: workspace:*
         version: link:../../packages/codex
+      '@ambionframework/emulators':
+        specifier: workspace:*
+        version: link:../../packages/emulators
       '@ambionframework/journal':
         specifier: workspace:*
         version: link:../../packages/journal
@@ -253,6 +256,40 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.2.0)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/emulators:
+    dependencies:
+      '@ambionframework/workspace':
+        specifier: workspace:*
+        version: link:../workspace
+      '@earendil-works/pi-agent-core':
+        specifier: ^0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      just-bash:
+        specifier: ^3.4.2
+        version: 3.4.2
+      typebox:
+        specifier: ^1.3.18
+        version: 1.3.18
+    devDependencies:
+      '@ambionframework/ambion':
+        specifier: workspace:*
+        version: link:../ambion
+      '@ambionframework/pi':
+        specifier: workspace:*
+        version: link:../pi
+      '@earendil-works/pi-ai':
+        specifier: ^0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      tsdown:
+        specifier: ^0.22.14
+        version: 0.22.14(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@26.2.0)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/journal:
     devDependencies:
       tsdown:
@@ -323,22 +360,13 @@ importers:
       '@earendil-works/pi-agent-core':
         specifier: ^0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
-      just-bash:
-        specifier: ^3.4.2
-        version: 3.4.2
-    devDependencies:
-      '@ambionframework/pi':
-        specifier: workspace:*
-        version: link:../pi
-      '@earendil-works/pi-ai':
-        specifier: ^0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
-      tsdown:
-        specifier: ^0.22.14
-        version: 0.22.14(oxc-resolver@11.24.2)(typescript@7.0.2)
       typebox:
         specifier: ^1.3.18
         version: 1.3.18
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.14
+        version: 0.22.14(oxc-resolver@11.24.2)(typescript@7.0.2)
       typescript:
         specifier: ^7.0.2
         version: 7.0.2

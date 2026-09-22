@@ -215,24 +215,36 @@ with provenance and needs no token on a laptop.
 
 ## Package decisions
 
-**Ten published packages, one private, one example.** Each package has
+**Eleven published packages, one private, one example.** Each package has
 one concern and one independent consumer.
 
-| Package                       | Concern                                                       | Depends on          |
-| ----------------------------- | ------------------------------------------------------------- | ------------------- |
-| `@ambionframework/journal`    | The append-only journal and its storage contract              |                     |
-| `@ambionframework/pi-journal` | Pi transcript sessions over journal storage                   | journal             |
-| `@ambionframework/ambion`     | The kernel: protocol, journal vocabulary, rules, room, driver | journal             |
-| `@ambionframework/pi`         | The Pi executor                                               | ambion, pi-journal  |
-| `@ambionframework/claude`     | The Claude Agent SDK executor                                 | ambion              |
-| `@ambionframework/codex`      | The Codex SDK executor over a stdio room tools server         | ambion              |
-| `@ambionframework/workspace`  | The resource contract and the just-bash Pi binding            | ambion, pi          |
-| `@ambionframework/assistant`  | The assistant definition                                      | ambion, pi          |
-| `@ambionframework/cloudflare` | Rooms and seats as Durable Objects                            | ambion, journal, pi |
-| `@ambionframework/cli`        | `ambion new` and `ambion dev`                                 | ambion              |
-| `@ambionframework/evals`      | Private until its own work-left list closes                   | ambion              |
-| `examples/workbench`          | The one example: Pi, Claude, and Codex seats                  | all of the above    |
+| Package                       | Concern                                                                | Depends on            |
+| ----------------------------- | ---------------------------------------------------------------------- | --------------------- |
+| `@ambionframework/journal`    | The append-only journal and its storage contract                       |                       |
+| `@ambionframework/pi-journal` | Pi transcript sessions over journal storage                            | journal               |
+| `@ambionframework/ambion`     | The kernel: protocol, journal vocabulary, rules, room, driver          | journal               |
+| `@ambionframework/pi`         | The Pi executor                                                        | ambion, pi-journal    |
+| `@ambionframework/claude`     | The Claude Agent SDK executor                                          | ambion                |
+| `@ambionframework/codex`      | The Codex SDK executor over a stdio room tools server                  | ambion                |
+| `@ambionframework/workspace`  | The resource contract, the backend contract, and generic tools over it | ambion                |
+| `@ambionframework/emulators`  | just-bash as a workspace backend, in memory or over a directory        | ambion, pi, workspace |
+| `@ambionframework/assistant`  | The assistant definition                                               | ambion, pi            |
+| `@ambionframework/cloudflare` | Rooms and seats as Durable Objects                                     | ambion, journal, pi   |
+| `@ambionframework/cli`        | `ambion new` and `ambion dev`                                          | ambion                |
+| `@ambionframework/evals`      | Private until its own work-left list closes                            | ambion                |
+| `examples/workbench`          | The one example: Pi, Claude, and Codex seats                           | all of the above      |
 
 Storage ids, binding names, and published names stay stable through the
 source moves. A `SeatObject` class rename needs Cloudflare migration
 evidence and is not part of this plan.
+
+**`@ambionframework/emulators` is a deliberate break from 0.1.0's published
+shape**, named here under the compatibility rule at the top of this file.
+`memoryBackend`, `directoryBackend`, `SHARED_DATABASE`, and the types
+`MemoryBackendFile`, `MemoryBackendOptions`, `MemoryWorkspaceBackend`, and
+`SeedWriter` leave `@ambionframework/workspace` and move to this new
+package. No 0.1.0 guard catches this: the three guards the compatibility
+note names all live in `packages/ambion`, and this break is in
+`@ambionframework/workspace` alone. A consumer migrates by importing those
+names from `@ambionframework/emulators` instead. This lands before the
+0.2.0 tag, inside the window the compatibility rule opens for it.

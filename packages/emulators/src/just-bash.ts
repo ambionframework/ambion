@@ -27,6 +27,7 @@
 
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join, posix } from 'node:path';
+import type { WorkspaceAgent, WorkspaceBackend } from '@ambionframework/workspace';
 import {
 	type AgentHarnessTool,
 	createBashTool,
@@ -36,10 +37,8 @@ import {
 	type ExecutionToolContext,
 } from '@earendil-works/pi-agent-core';
 import { Bash, type IFileSystem, InMemoryFs } from 'just-bash';
-import type { WorkspaceBackend } from './backend.ts';
 import { BashEnv } from './bash-env.ts';
 import { DEV_DIR, withDevices } from './devices.ts';
-import type { WorkspaceAgent } from './resource.ts';
 import { createSqlTool, SHARED_DATABASE } from './sql.ts';
 
 /** Build one agent's environment over the workspace's filesystem. */

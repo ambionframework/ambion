@@ -1,5 +1,12 @@
 import { defineAgent, startRoom } from '@ambionframework/ambion';
 import { pi, piExecution } from '@ambionframework/pi';
+import {
+	DEFAULT_CHANGE_LOG,
+	openChangeLog,
+	openWorkspace,
+	type WorkspaceBackend,
+	type WorkspaceChange,
+} from '@ambionframework/workspace';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { Bash, InMemoryFs } from 'just-bash';
@@ -7,8 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { enter, roomName as name } from '../../ambion/test/support/room.ts';
 import { byAgent, callTool, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import { BashEnv } from '../src/bash-env.ts';
-import { DEFAULT_CHANGE_LOG, openChangeLog, select, type WorkspaceChange } from '../src/changes.ts';
-import { memoryBackend, openWorkspace, type WorkspaceBackend } from '../src/index.ts';
+import { memoryBackend } from '../src/index.ts';
 import { justBashChangedPaths } from '../src/just-bash.ts';
 import { type Backend, backends } from './support/backends.ts';
 
@@ -63,19 +69,6 @@ describe('justBashChangedPaths', () => {
 		}
 		expect(justBashChangedPaths(scribe, 'write', {})).toEqual([]);
 		expect(justBashChangedPaths(scribe, 'write', null)).toEqual([]);
-	});
-});
-
-describe('select', () => {
-	it('keeps entries of the exchange and drops entries with none', () => {
-		const entries = [
-			changeFor('a', { owner: 'andrei', from: 1 }),
-			changeFor('b', { owner: 'andrei', from: 5 }),
-			changeFor('c', { owner: 'priya', from: 1 }),
-			changeFor('d'),
-		];
-		const chosen = select(entries, { exchange: { owner: 'andrei', from: 1 } });
-		expect(chosen.map((entry) => entry.paths[0])).toEqual(['/home/scribe/a.txt']);
 	});
 });
 

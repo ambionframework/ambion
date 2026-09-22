@@ -11,6 +11,11 @@ import {
 	type ToolContext,
 } from '@ambionframework/ambion';
 import { type PiOptions, pi, piExecution } from '@ambionframework/pi';
+import {
+	openWorkspace,
+	ROOM_MIRROR_GUIDANCE,
+	type WorkspaceBackend,
+} from '@ambionframework/workspace';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import type { Context } from '@earendil-works/pi-ai';
@@ -28,13 +33,7 @@ import {
 	speak,
 } from '../../ambion/test/support/scripted.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
-import type { WorkspaceBackend } from '../src/index.ts';
-import {
-	directoryBackend,
-	memoryBackend,
-	openWorkspace,
-	ROOM_MIRROR_GUIDANCE,
-} from '../src/index.ts';
+import { directoryBackend, memoryBackend } from '../src/index.ts';
 import { MEMORY_LIMIT_BYTES } from '../src/just-bash.ts';
 
 const workspaceAgent = (name: string) => ({ name, identity: `${name} identity` });

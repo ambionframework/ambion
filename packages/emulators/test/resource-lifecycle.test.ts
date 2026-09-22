@@ -1,16 +1,17 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import type { WorkspaceEnv } from '../src/backend.ts';
-import type { WorkspaceAgent, WorkspaceBackend } from '../src/index.ts';
 import {
 	BACKGROUND_CONTEXT,
-	directoryBackend,
-	memoryBackend,
+	openResource,
 	openWorkspace,
-} from '../src/index.ts';
-import { openResource, type ResourceBackend } from '../src/resource.ts';
+	type ResourceBackend,
+	type WorkspaceAgent,
+	type WorkspaceBackend,
+	type WorkspaceEnv,
+} from '@ambionframework/workspace';
+import { describe, expect, it } from 'vitest';
+import { directoryBackend, memoryBackend } from '../src/index.ts';
 
 const agent = (name: string): WorkspaceAgent => ({ name, identity: `${name}-identity` });
 

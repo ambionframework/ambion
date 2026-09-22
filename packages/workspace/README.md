@@ -1,17 +1,22 @@
 # @ambionframework/workspace
 
-Optional filesystem resources and tools for the
-[Ambion collaboration kernel](https://ambionframework.com). Applications own
-these resources and choose which agents share them. Workspace files remain
+The workspace resource contract for the
+[Ambion collaboration kernel](https://ambionframework.com): the neutral
+resource contract, the filesystem-shaped backend contract over it, and the
+generic tooling — audit, change tracking, a room mirror, an append-only log —
+that runs over any backend that satisfies it. Applications own these
+resources and choose which agents share them. Workspace files remain
 separate from the collaboration journal.
 
-This package owns workspace resources and two backends over
-[just-bash](https://github.com/vercel-labs/just-bash).
+This package holds no backend of its own.
+[`@ambionframework/emulators`](https://www.npmjs.com/package/@ambionframework/emulators)
+implements the backend contract over just-bash, in memory or over a real
+directory.
 
 ## Install
 
 ```sh
-pnpm add @ambionframework/ambion @ambionframework/workspace
+pnpm add @ambionframework/ambion @ambionframework/workspace @ambionframework/emulators
 ```
 
 The packages install from npmjs with no token. A dev build of `main` installs
@@ -21,12 +26,13 @@ from GitHub Packages; see [the toolchain guide](https://github.com/ambionframewo
 
 `drive.tools()` returns the tools and optional guidance that the backend
 supplies. Pass it in `bundles`; each tool reaches the environment the backend
-built for that agent, rooted at `/home/<agent name>`.
+built for that agent.
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';
 import { pi } from '@ambionframework/pi';
-import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/emulators';
 
 const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
 
@@ -43,19 +49,24 @@ const surveyor = defineAgent({
 
 ## Use the resource directly
 
-The root entry exports `openResource` beside the just-bash backends. The
-`/resource` entry holds only the neutral contract: `openResource` and its
-types. It loads neither the Ambion runtime nor a model library.
+The root entry exports `openResource` beside `openWorkspace`. The `/resource`
+entry holds only the neutral contract: `openResource` and its types. It loads
+neither the Ambion runtime nor a model library.
 
 ```ts
-import { memoryBackend, openResource } from '@ambionframework/workspace';
+import { openResource, type ResourceBackend, type ResourceEnv } from '@ambionframework/workspace';
 
-const backend = memoryBackend({
-  seed: async (write) => write.writeFile('notes.txt', 'Checked the plan.'),
-});
-const drive = openResource({ name: 'team-site', backend });
+interface NoteEnv extends ResourceEnv {
+  readonly notes: string[];
+}
+
+const backend: ResourceBackend<NoteEnv> = {
+  connect: async () => ({ notes: [], cleanup: async () => {} }),
+  destroy: async () => {},
+};
+
+const drive = openResource({ name: 'team-notes', backend });
 // `drive.use(agent, operation)` runs one operation with an agent's environment.
-console.log(await backend.readFiles());
 await drive.dispose();
 ```
 
@@ -63,33 +74,22 @@ This handle has `use`, `dispose`, and `destroy`. The root `openWorkspace`
 function adds the Ambion tool bundle over the same resource implementation.
 Both paths use the lifecycle contract below.
 
-## The two backends
+## Pick a backend
 
-**`memoryBackend(options)` keeps the files in memory**, for as long as the
-handle lives. `options.seed` writes files before any agent connects, and
-`readFiles()` reads every file back out without an agent. A host reaches the
-workspace's files with no tool call, which is what a real directory gives for
-free.
-
-**`directoryBackend(root)` writes through to a real directory.** It creates
-the root when an operation needs it. `drive.destroy()` deletes its contents
-and keeps the root.
-
-Agents connected to one workspace share every file. just-bash is single-user,
-so one agent can read another agent's home. The default workspace provides no
-operating-system isolation between agents or distributed ownership of a shared
-directory. Hosts own credentials and authorization for external services.
-
-Every instance runs with `javascript: true` and `python: true`, so `bash`
-runs a script with `js-exec` or `python3` beside just-bash's coreutils, `jq`,
-`yq`, `xan` and `sqlite3`. No instance takes a `network` option, so `curl`
-and every other network command stay absent.
+`WorkspaceBackend` is the contract `openWorkspace` needs: `connect`, `destroy`,
+the tools it gives an agent, and optional guidance. This package defines the
+contract only. [`@ambionframework/emulators`](https://www.npmjs.com/package/@ambionframework/emulators)
+implements it over just-bash, a pure-TypeScript, in-process Unix filesystem
+and shell with no key and no network — `memoryBackend()` for a filesystem
+that lives as long as the handle, `directoryBackend(root)` for one that
+writes through to a real directory.
 
 ## The contract
 
 [`docs/workspace.md`](https://github.com/ambionframework/ambion/blob/main/docs/workspace.md)
-is the design contract. It specifies the resource, its lifecycle, backend
-tools and both backends.
+and [`docs/resources.md`](https://github.com/ambionframework/ambion/blob/main/docs/resources.md)
+are the design contract. [`docs/emulators.md`](https://github.com/ambionframework/ambion/blob/main/docs/emulators.md)
+documents the just-bash implementation.
 
 ## License
 

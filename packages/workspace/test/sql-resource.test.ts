@@ -3,8 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
 import { afterEach, describe, expect, it } from 'vitest';
-import { memoryBackend, openSqlResource, openWorkspace } from '../src/index.ts';
-import type { WorkspaceResource } from '../src/resource.ts';
+import { openSqlResource } from '../src/index.ts';
 import type { SqlResource } from '../src/sql-resource.ts';
 
 const SCHEMA = `
@@ -216,15 +215,5 @@ describe('the SQL resource', () => {
 		const second = open({ location });
 		const rows = await second.use(context.agent, (env) => env.query('SELECT label FROM runs'));
 		expect(rows).toEqual([{ label: 'kept' }]);
-	});
-
-	it('is a second resource on the one contract beside a workspace', async () => {
-		const drive = openWorkspace({ name: 'drive', backend: memoryBackend() });
-		const sql = open();
-		const resources: WorkspaceResource[] = [drive, sql];
-		expect(resources.map((resource) => resource.name)).toEqual(['drive', 'lab']);
-		expect(sql.tools().tools.map((tool) => tool.name)).toEqual(['query', 'record']);
-		expect(drive.tools().tools.map((tool) => tool.name)).not.toContain('query');
-		await drive.dispose();
 	});
 });

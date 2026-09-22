@@ -5,6 +5,7 @@
  * the file tools and use them against a filesystem it has never seen.
  */
 
+import { BACKGROUND_CONTEXT, openWorkspace } from '@ambionframework/workspace';
 import { expect, it } from 'vitest';
 import {
 	agent,
@@ -17,7 +18,7 @@ import {
 	spent,
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
-import { BACKGROUND_CONTEXT, memoryBackend, openWorkspace } from '../../src/index.ts';
+import { memoryBackend } from '../../src/index.ts';
 
 live('the workspace', () => {
 	it('a seat reads a file it was told about, writes one back, and answers from what it read', async () => {
