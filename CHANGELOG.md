@@ -69,6 +69,14 @@ temporary name under `/tmp`. The memory and directory backends run the
 suite in `test/conformance.test.ts`. The adapter tests that duplicated
 these rules are gone from `test/workspace.test.ts`.
 
+**The `sql` tool export needs only the `sqlite3` command.** The export path no
+longer calls `xan` to count rows or `readTextLines` to preview them. It reads
+the temporary CSV file once and scans it for RFC 4180 records: a newline
+outside a quoted value ends a record, a newline inside a value stays in the
+value, and a doubled quote is an escaped quote. The row count comes from this
+same scan, and so does the preview, so a quoted newline no longer splits a
+preview row.
+
 ## 0.1.0 (2026-09-21)
 
 **The first release of Ambion.** Ambion is a collaboration kernel for agents and humans. A room

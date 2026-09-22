@@ -14,6 +14,12 @@
  * A failed query leaves the export path unchanged. Each path runs the query
  * once, so the preview and the stored result agree.
  *
+ * The export path reads the temporary CSV file once and scans it for RFC 4180
+ * records. A newline outside a quoted value ends a record. A newline inside a
+ * value stays in the value, and a doubled quote is an escaped quote. This one
+ * scan gives the row count and the preview records, so a backend needs only
+ * the `sqlite3` command.
+ *
  * just-bash is one implementation of this contract. Its `sqlite3` loads the
  * main database into a WebAssembly engine that has no bridge to the virtual
  * filesystem, so `ATTACH` of a second file cannot open it. `ATTACH ':memory:'`
@@ -168,6 +174,11 @@ async function preview(
  * Run the query, write the full result as CSV to a temporary file, then move
  * it to the export path. The export path changes only after the query passes,
  * so a failed query leaves an existing file unchanged.
+ *
+ * The tool reads the temporary file once and scans it into RFC 4180 records.
+ * The row count is the number of records minus the header. The preview holds
+ * the first `maxRows + 1` records, header included, so a quoted newline never
+ * splits a preview row.
  */
 async function exportCsv(
 	env: ExecutionEnv,
@@ -185,17 +196,62 @@ async function exportCsv(
 	try {
 		const result = await runSqlite(env, flags, database, scriptPath, tempOut, options, context);
 		if (result.exitCode !== 0) return failed(database, result.output);
-		const head = await env.readTextLines(tempOut, { maxLines: maxRows + 1 }, context);
-		const lines = head.ok ? head.value.filter((line) => line !== '') : [];
-		const rows = await countRows(env, tempOut, context);
+		const text = await env.readTextFile(tempOut, context);
+		const records = text.ok ? scanCsvRecords(text.value) : [];
+		const rows = records.length === 0 ? 0 : records.length - 1;
+		const previewRecords = records.slice(0, maxRows + 1);
 		const moved = await env.renameFile(tempOut, exportPath, context);
 		if (!moved.ok) throw moved.error;
-		const block = lines.length === 0 ? '(no rows)' : `\`\`\`csv\n${lines.join('\n')}\n\`\`\``;
+		const block =
+			previewRecords.length === 0 ? '(no rows)' : `\`\`\`csv\n${previewRecords.join('\n')}\n\`\`\``;
 		const footer = `\n\nWrote ${rows} ${plural(rows)} to ${exportPath}. A NULL value reads as ${NULL_SENTINEL}.`;
 		return report(`${block}${footer}`, { database, rows, export: exportPath });
 	} finally {
 		await env.remove(tempOut, { force: true }, context);
 	}
+}
+
+/**
+ * Split CSV text into records per RFC 4180. A newline outside a quoted value
+ * ends a record. A newline inside a quoted value stays in the value. A
+ * doubled quote inside a quoted value is one escaped quote, and stays
+ * inside the value.
+ */
+function scanCsvRecords(text: string): string[] {
+	const records: string[] = [];
+	let start = 0;
+	let inQuotes = false;
+	let index = 0;
+	while (index < text.length) {
+		const char = text[index];
+		if (char === '"') {
+			const step = quoteStep(text, index, inQuotes);
+			inQuotes = step.inQuotes;
+			index = step.index;
+			continue;
+		}
+		if (char === '\n' && !inQuotes) {
+			records.push(text.slice(start, index));
+			start = index + 1;
+		}
+		index += 1;
+	}
+	if (start < text.length) records.push(text.slice(start));
+	return records;
+}
+
+/**
+ * Advance past one double quote in a CSV scan. A doubled quote inside a
+ * quoted value is an escaped quote, and stays inside the value. A single
+ * quote toggles whether the scan is inside a value.
+ */
+function quoteStep(
+	text: string,
+	index: number,
+	inQuotes: boolean,
+): { inQuotes: boolean; index: number } {
+	if (inQuotes && text[index + 1] === '"') return { inQuotes, index: index + 2 };
+	return { inQuotes: !inQuotes, index: index + 1 };
 }
 
 /** Build one `sqlite3` command that reads the script and, when asked, redirects to a file. */
@@ -251,23 +307,6 @@ function table(rows: Record<string, unknown>[], maxRows: number): string {
 function cell(value: unknown): string {
 	if (value === null || value === undefined) return 'NULL';
 	return String(value).replace(/\|/g, '\\|').replace(/\n/g, ' ');
-}
-
-/** Count the CSV data rows with xan, which reads RFC 4180 quoting and skips the header. */
-async function countRows(env: ExecutionEnv, path: string, context: Context): Promise<number> {
-	let output = '';
-	const result = await env.exec(
-		`xan count ${quote(path)}`,
-		{
-			onUpdate: (update) => {
-				if (update.kind === 'replace') output = update.output.text;
-			},
-		},
-		context,
-	);
-	if (!result.ok) return 0;
-	const rows = Number.parseInt(output.trim(), 10);
-	return Number.isFinite(rows) ? rows : 0;
 }
 
 async function resolvePath(env: ExecutionEnv, path: string, context: Context): Promise<string> {

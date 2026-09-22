@@ -182,7 +182,7 @@ INSERT INTO big SELECT id FROM seq;`,
 		await site.dispose();
 	});
 
-	it('counts exported rows with xan, so an embedded newline does not inflate the count', async () => {
+	it('scans the export for RFC 4180 records, so an embedded newline does not inflate the count', async () => {
 		const site = openWorkspace({ name: 'count', backend: memoryBackend() });
 		await sql(site, 'alpha', {
 			sql: "CREATE TABLE m(id INTEGER, note TEXT); INSERT INTO m VALUES (1,'line one\nline two'),(2,'plain');",
@@ -193,6 +193,34 @@ INSERT INTO big SELECT id FROM seq;`,
 		});
 		expect(result.details.rows).toBe(2);
 		expect(result.text).toContain('Wrote 2 rows');
+		await site.dispose();
+	});
+
+	it('keeps a quoted newline inside its preview record and its row count exact', async () => {
+		const site = openWorkspace({ name: 'quoted-newline', backend: memoryBackend() });
+		await sql(site, 'alpha', {
+			sql: "CREATE TABLE m(id INTEGER, note TEXT); INSERT INTO m VALUES (1,'line one\nline two'),(2,'plain');",
+		});
+		const result = await sql(site, 'alpha', {
+			sql: 'SELECT * FROM m ORDER BY id;',
+			export: '~/m.csv',
+		});
+		expect(result.text).toContain('```csv\nid,note\n1,"line one\nline two"\n2,plain\n```');
+		expect(result.details.rows).toBe(2);
+		await site.dispose();
+	});
+
+	it('keeps an escaped double quote inside a preview value', async () => {
+		const site = openWorkspace({ name: 'escaped-quote', backend: memoryBackend() });
+		await sql(site, 'alpha', {
+			sql: `CREATE TABLE m(id INTEGER, note TEXT); INSERT INTO m VALUES (1,'a"b'),(2,'plain');`,
+		});
+		const result = await sql(site, 'alpha', {
+			sql: 'SELECT * FROM m ORDER BY id;',
+			export: '~/m.csv',
+		});
+		expect(result.text).toContain('```csv\nid,note\n1,"a""b"\n2,plain\n```');
+		expect(result.details.rows).toBe(2);
 		await site.dispose();
 	});
 
