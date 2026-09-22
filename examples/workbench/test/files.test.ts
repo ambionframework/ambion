@@ -5,7 +5,7 @@ import { BACKGROUND_CONTEXT, memoryBackend, openWorkspace } from '@ambionframewo
 import { afterEach, describe, expect, it } from 'vitest';
 import { attachFile, isImagePath, readFile } from '../src/files.ts';
 
-const scribe = { name: 'scribe', identity: 'scribe identity' };
+const scribe = { name: 'scribe' };
 
 const directories: string[] = [];
 

@@ -16,6 +16,20 @@ package, whether or not that package needed it.
 `examples/workbench` keeps the 26.4 floor, because it depends directly on
 `@opentui/core`. CI tests both floors.
 
+**The workspace change log is removed.** It recorded a `write` or an `edit`
+call only. A change through `bash`, `sql`, or a script never reached it, and
+the audit log already records every tool call with its arguments and its
+provenance. `changes.ts` is gone. `@ambionframework/workspace` no longer
+exports `openChangeLog`, `DEFAULT_CHANGE_LOG`, `ChangeLog`,
+`ChangeLogOptions`, `ChangeQuery`, or `WorkspaceChange`. `openWorkspace` no
+longer takes a `changes` option, and `Workspace` no longer has a `changes()`
+method. `WorkspaceBackend` no longer has `changedPaths`, and the just-bash
+backends no longer set it.
+
+**`WorkspaceAgent` loses `identity`.** No backend read the field; each one
+keys on `name` alone. `WorkspaceAgent` is now `{ name }`. The workspace's own
+host agent, for the room mirror, now carries only a name.
+
 ## 0.1.0 (2026-09-21)
 
 **The first release of Ambion.** Ambion is a collaboration kernel for agents and humans. A room

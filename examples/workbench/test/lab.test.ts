@@ -71,7 +71,7 @@ describe('the lab SQL resource', () => {
 			schema: labSchema,
 			writable: labWritable,
 		});
-		const rows = await lab.use({ name: 'test', identity: 'test' }, (env) =>
+		const rows = await lab.use({ name: 'test' }, (env) =>
 			env.query('SELECT name FROM projects ORDER BY name'),
 		);
 		expect(rows.map((row) => row.name)).toEqual(['bringup', 'power', 'sensing']);

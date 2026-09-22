@@ -11,7 +11,9 @@ import { DEFAULT_AUDIT_LOG, openAuditLog } from '../src/audit.ts';
 import { BashEnv } from '../src/bash-env.ts';
 import { memoryBackend, openWorkspace } from '../src/index.ts';
 
-const workspaceAgent = (name: string) => ({ name, identity: `${name} identity` });
+const workspaceAgent = (name: string) => ({ name });
+/** A `ToolContext.agent`, which still carries `identity` in the core type. */
+const ctxAgent = (name: string) => ({ name, identity: `${name} identity` });
 const ctx = BACKGROUND_CONTEXT;
 
 /** The signature and the shortest valid `IHDR` header: enough for image detection to see a PNG. */
@@ -108,7 +110,7 @@ describe('the workspace audit log', () => {
 		await write.invoke(
 			{ path: 'notes.txt', content: 'hello\n' },
 			{
-				agent: workspaceAgent('scribe'),
+				agent: ctxAgent('scribe'),
 				callId: 'call-1',
 				room: 'lobby',
 				activation: 'message:4:scribe:1',
@@ -143,11 +145,11 @@ describe('the workspace audit log', () => {
 
 		await write.invoke(
 			{ path: 'notes.txt', content: 'hello\n' },
-			{ agent: workspaceAgent('scribe'), callId: 'call-1', room: 'lobby' },
+			{ agent: ctxAgent('scribe'), callId: 'call-1', room: 'lobby' },
 		);
 		const result = await read.invoke(
 			{ path: DEFAULT_AUDIT_LOG },
-			{ agent: workspaceAgent('auditor'), callId: 'call-2', room: 'lobby' },
+			{ agent: ctxAgent('auditor'), callId: 'call-2', room: 'lobby' },
 		);
 		if (typeof result === 'string') throw new Error('read must return a structured result.');
 		const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
@@ -165,7 +167,7 @@ describe('the workspace audit log', () => {
 
 		const result = await read.invoke(
 			{ path: 'photo.png' },
-			{ agent: workspaceAgent('scribe'), callId: 'call-1', room: 'lobby' },
+			{ agent: ctxAgent('scribe'), callId: 'call-1', room: 'lobby' },
 		);
 		if (typeof result === 'string') throw new Error('read must return a structured result.');
 		const image = result.content.find((part) => part.type === 'image');
@@ -209,7 +211,7 @@ describe('the workspace audit log', () => {
 
 		await write.invoke(
 			{ path: 'notes.txt', content: 'hi\n' },
-			{ agent: workspaceAgent('scribe'), callId: 'call-1' },
+			{ agent: ctxAgent('scribe'), callId: 'call-1' },
 		);
 
 		const entries = await site.use(workspaceAgent('scribe'), (env) =>
@@ -235,14 +237,14 @@ describe('the workspace audit log', () => {
 					},
 				},
 			],
-			connect: (agent: { name: string; identity: string }) => inner.connect(agent),
+			connect: (agent: { name: string }) => inner.connect(agent),
 		};
 		const site = openWorkspace({ name: name('audited-error'), backend: failing, audit: {} });
 		const tool = site.tools().tools[0];
 		if (tool === undefined) throw new Error('The custom tool is missing.');
 
 		await expect(
-			tool.invoke({}, { agent: workspaceAgent('scribe'), callId: 'call-2', room: 'lobby' }),
+			tool.invoke({}, { agent: ctxAgent('scribe'), callId: 'call-2', room: 'lobby' }),
 		).rejects.toThrow('kaboom');
 
 		const entries = await site.use(workspaceAgent('scribe'), (env) =>
@@ -417,7 +419,7 @@ describe('recording under an aborted signal', () => {
 					},
 				},
 			],
-			connect: (agent: { name: string; identity: string }) => inner.connect(agent),
+			connect: (agent: { name: string }) => inner.connect(agent),
 		};
 		const site = openWorkspace({ name: name('cut-mid-flight'), backend: slow, audit: {} });
 		const tool = site.tools().tools[0];
@@ -427,7 +429,7 @@ describe('recording under an aborted signal', () => {
 		const call = tool.invoke(
 			{},
 			{
-				agent: workspaceAgent('scribe'),
+				agent: ctxAgent('scribe'),
 				callId: 'call-cut',
 				room: 'lobby',
 				signal: controller.signal,

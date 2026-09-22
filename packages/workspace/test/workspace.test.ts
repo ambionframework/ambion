@@ -37,7 +37,7 @@ import {
 } from '../src/index.ts';
 import { MEMORY_LIMIT_BYTES } from '../src/just-bash.ts';
 
-const workspaceAgent = (name: string) => ({ name, identity: `${name} identity` });
+const workspaceAgent = (name: string) => ({ name });
 
 /** A context for a direct filesystem or shell call that has no other one. */
 const ctx = BACKGROUND_CONTEXT;
@@ -275,7 +275,7 @@ describe('the workspace resource owner', () => {
 		const result = await tool.invoke(
 			{},
 			{
-				agent: workspaceAgent('alpha'),
+				agent: { name: 'alpha', identity: 'alpha' },
 				callId: 'custom-call',
 			},
 		);
@@ -314,7 +314,10 @@ describe('the workspace resource owner', () => {
 		await started.promise;
 		const bound = workspace.tools().tools[0];
 		if (bound === undefined) throw new Error('The bound tool is missing.');
-		const queued = bound.invoke({}, { agent: workspaceAgent('beta'), callId: 'queued' });
+		const queued = bound.invoke(
+			{},
+			{ agent: { name: 'beta', identity: 'beta' }, callId: 'queued' },
+		);
 		const disposing = workspace.dispose();
 		expect(toolCalls).toBe(0);
 		release.resolve();
@@ -352,7 +355,7 @@ describe('the workspace resource owner', () => {
 		const inner = memoryBackend();
 		const backend = {
 			tools: [],
-			connect: async (agent: { name: string; identity: string }) => {
+			connect: async (agent: { name: string }) => {
 				started.resolve();
 				await release.promise;
 				const env = await inner.connect(agent);

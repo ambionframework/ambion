@@ -204,26 +204,7 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
 		readFiles: async () => listFiles(await resource.get()),
 		tools: justBashTools(),
 		guidance: JUST_BASH_GUIDANCE,
-		changedPaths: justBashChangedPaths,
 	};
-}
-
-/**
- * The paths a `write` or `edit` call changed, resolved against the agent's
- * home. Every other tool, `bash` included, leaves no change record.
- */
-export function justBashChangedPaths(
-	agent: WorkspaceAgent,
-	tool: string,
-	params: unknown,
-): readonly string[] {
-	if (tool !== 'write' && tool !== 'edit') return [];
-	const path = (params as { path?: unknown } | null)?.path;
-	if (typeof path !== 'string' || path === '') return [];
-	const home = `/home/${agent.name}`;
-	if (path === '~') return [home];
-	const expanded = path.startsWith('~/') ? posix.join(home, path.slice(2)) : path;
-	return [posix.resolve(home, expanded)];
 }
 
 /**
@@ -257,6 +238,5 @@ export function directoryBackend(root: string): WorkspaceBackend {
 		dispose: async () => resource.clear(),
 		tools: justBashTools(),
 		guidance: JUST_BASH_GUIDANCE,
-		changedPaths: justBashChangedPaths,
 	};
 }

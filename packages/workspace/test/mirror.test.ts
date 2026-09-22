@@ -22,7 +22,7 @@ import {
 	roomMirrorPath,
 } from '../src/index.ts';
 
-const reader: WorkspaceAgent = { name: 'reader', identity: 'Reads the mirrored file back.' };
+const reader: WorkspaceAgent = { name: 'reader' };
 
 function said(seq: Seq, text: string, from = 'priya'): Message {
 	return { kind: 'said', seq, at: new Date(seq).toISOString(), from, text };

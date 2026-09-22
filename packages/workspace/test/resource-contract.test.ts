@@ -13,7 +13,7 @@ interface FakeEnv extends ResourceEnv {
 	readonly note: string;
 }
 
-const agent: WorkspaceAgent = { name: 'alpha', identity: 'alpha' };
+const agent: WorkspaceAgent = { name: 'alpha' };
 
 function fakeBackend(events: string[]): ResourceBackend<FakeEnv> {
 	return {

@@ -14,7 +14,7 @@
  * misses a message nor writes one twice.
  *
  * `Workspace.mirror()`, in `workspace.ts`, is the public entry point: it
- * supplies the workspace's own resource and a write identity it owns, so a
+ * supplies the workspace's own resource and a write agent it owns, so a
  * caller names only the room.
  */
 

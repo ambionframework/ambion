@@ -83,7 +83,7 @@ live('a workspace picture', () => {
 	it('a seat reads an image file and describes what it actually shows', async () => {
 		const backend = memoryBackend();
 		const store = openWorkspace({ name: roomName('live-image'), backend });
-		await store.use({ name: 'seed', identity: 'Seeds the gallery.' }, async (env) => {
+		await store.use({ name: 'seed' }, async (env) => {
 			await env.writeFile(
 				'/home/curator/gallery/swatch.png',
 				twoBandPng(64, MAGENTA, CYAN),

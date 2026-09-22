@@ -113,7 +113,7 @@ import {
 } from '@ambionframework/workspace';
 
 const drive = openWorkspace({ name: 'town', backend: directoryBackend('./data') });
-const host = { name: 'host', identity: 'Writes the room record.' };
+const host = { name: 'host' };
 const journal = openLog({ path: '/var/log/room/journal.jsonl' });
 
 await drive.use(host, (env) =>
@@ -205,43 +205,6 @@ the guidance the log describes speaks to the model alone.
 one agent's home and another's (see [Backends and limits](#backends-and-limits)),
 and the log is no exception: any agent's `bash` or `write` call can alter or
 remove it, the same as any other file on the workspace.
-
-## Record what changed
-
-**`openWorkspace` can keep a change log, and `workspace.changes` answers
-what changed during one exchange.** Set `changes`. Each successful `write`
-or `edit` call through `workspace.tools()` appends one line to
-`/workspace/changes.jsonl`: the paths, the agent, the tool, the activation,
-and the exchange. `path` and `maxBytes` work as they do for `audit`.
-
-```ts
-const drive = openWorkspace({ name: 'team-site', backend: memoryBackend(), changes: {} });
-const changes = await drive.changes({ exchange: { owner: 'andrei', from: 4 } });
-```
-
-**`changes` returns the entries of one exchange, oldest first.** An entry
-matches when its `exchange.owner` and `exchange.from` equal the query. A call
-made outside an exchange never matches. `changes` returns `[]` when the
-workspace has no `changes` option. The read includes rotated files.
-
-**The backend names the changed paths.** A `WorkspaceBackend` may supply
-`changedPaths`. The just-bash backends name the resolved path of a `write` or
-an `edit` call. The neutral resource contract has no part in it.
-
-**Only `write` and `edit` leave a change.** A `bash` call changes files
-through a shell the workspace cannot inspect, including `js-exec`,
-`python3`, redirects, `mv`, and `rm`. A `sql` call changes rows. None of
-them appears in the change log in 0.1.0.
-
-**A failed call leaves no change.** The audit log records the failure. The
-change log records the call only after it succeeds. A cut activation still
-leaves the change of a call that finished, because the record runs over its
-own unconditional context.
-
-**The change log is best-effort.** It is not a journal transaction. A crash
-between the filesystem change and the log append drops the entry, so the log
-can lag the files. A write failure calls `onError` and does not fail the tool
-call. The room's journal stays the record.
 
 ## Mirror a room's messages
 

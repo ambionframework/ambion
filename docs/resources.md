@@ -22,7 +22,7 @@ and no model library.
 | `WorkspaceResource` | `name`, `use(agent, op, signal?)`, `dispose()`           |
 | `ResourceBackend`   | `connect(agent, signal?)`, optional `dispose()`          |
 | `ResourceEnv`       | The smallest environment: one `cleanup()` method         |
-| `WorkspaceAgent`    | `{ name, identity }`                                     |
+| `WorkspaceAgent`    | `{ name }`                                               |
 
 ```ts
 import { openResource, type ResourceBackend } from '@ambionframework/workspace/resource';
@@ -37,7 +37,7 @@ const backend: ResourceBackend<NoteEnv> = {
 };
 
 const resource = openResource({ name: 'team-notes', backend });
-await resource.use({ name: 'surveyor', identity: 'Quantity surveyor.' }, (env) => {
+await resource.use({ name: 'surveyor' }, (env) => {
   env.notes.push('Checked the plan.');
 });
 await resource.dispose();
@@ -122,7 +122,7 @@ data allows.
 | Binding    | Where provenance lands                                              |
 | ---------- | ------------------------------------------------------------------- |
 | SQL        | The `PROVENANCE_COLUMNS` on a recorded row, when the table has them |
-| Filesystem | The audit log, and the change log when `changes` is set             |
+| Filesystem | The audit log                                                       |
 
 The `PROVENANCE_COLUMNS` are `agent`, `room`, `activation`, `exchange_owner`,
 `exchange_from`, and `at`. `record` fills each column that the table has and
@@ -130,12 +130,6 @@ that the context supplies.
 
 **Provenance grants no authority.** A tool does not check it to allow or
 refuse a call. A tool that needs current state reads the room.
-
-**The change log answers what changed during an exchange.**
-`workspace.changes({ exchange: { owner, from } })` returns the entries of
-that exchange, oldest first. The log is best-effort and is not a journal
-transaction. A crash can drop an entry. See
-[Record what changed](workspace.md#record-what-changed).
 
 **One contract, two bindings, provenance on every tool call.** The audit log
 and the room mirror belong to the filesystem binding. They stay on the

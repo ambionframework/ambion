@@ -7,7 +7,7 @@ describe.each(backends)('$name root traversal', (fixture) => {
 		const { backend, dispose } = await fixture.open();
 		const ctx = BACKGROUND_CONTEXT;
 		try {
-			const env = await backend.connect({ name: 'reviewer', identity: 'Reviewer' });
+			const env = await backend.connect({ name: 'reviewer' });
 			expect((await env.createDir('/shared', undefined, ctx)).ok).toBe(true);
 			expect((await env.writeFile('/shared/prototype.html', '<h1>Relay</h1>', ctx)).ok).toBe(true);
 			expect(await env.fileInfo('/', ctx)).toMatchObject({

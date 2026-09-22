@@ -19,7 +19,7 @@ export type { TableView };
 /** Where an attached local file lands in the workspace. */
 const ATTACHMENTS_DIR = '/attachments';
 
-const browser = { name: 'assistant', identity: 'Workspace browser' };
+const browser = { name: 'assistant' };
 
 /** The extensions the panel previews as a picture, and the type each names. */
 const IMAGE_TYPES: Record<string, string> = {

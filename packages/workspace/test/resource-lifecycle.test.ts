@@ -12,7 +12,7 @@ import {
 } from '../src/index.ts';
 import { openResource, type ResourceBackend } from '../src/resource.ts';
 
-const agent = (name: string): WorkspaceAgent => ({ name, identity: `${name}-identity` });
+const agent = (name: string): WorkspaceAgent => ({ name });
 
 describe('workspace lifecycle', () => {
 	it('drains active work before disposal, then stays terminal', async () => {

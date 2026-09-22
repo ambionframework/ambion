@@ -1,7 +1,6 @@
-/** The stable identity a backend uses for one calling agent. */
+/** The stable name a backend uses for one calling agent. */
 export interface WorkspaceAgent {
 	readonly name: string;
-	readonly identity: string;
 }
 
 /** The minimal environment the resource owner can clean up. Every binding's env extends it. */

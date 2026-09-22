@@ -7,7 +7,7 @@ import { directoryBackend, memoryBackend, openWorkspace } from '../src/index.ts'
 import { backends } from './support/backends.ts';
 
 const ctx = BACKGROUND_CONTEXT;
-const agent = { name: 'ada', identity: 'ada identity' };
+const agent = { name: 'ada' };
 
 /** Run one command and return its combined output and exit code. */
 async function sh(env: ExecutionEnv, command: string): Promise<{ output: string; code: number }> {
