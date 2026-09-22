@@ -3,6 +3,7 @@ import {
 	bg,
 	type CliRenderer,
 	fg,
+	ImageRenderable,
 	MarkdownRenderable,
 	ScrollBoxRenderable,
 	StyledText,
@@ -11,12 +12,14 @@ import {
 } from '@opentui/core';
 import { tui as palette } from './brand.ts';
 import type { FileBrowser } from './browser.ts';
-import type { FileContent, TableView } from './workbench.ts';
+import type { FileContent, ImageContent, TableView } from './workbench.ts';
 
 const LIST_ROWS = 8;
 const HINT = 'Type to search   Up/Down choose   PgUp/PgDn scroll   Ctrl+Y copy   Esc close';
 const TABLE_HINT = 'Left/Right table   ';
 const MAX_COLUMN = 40;
+/** Terminal rows the picture preview takes. A cell is roughly twice as tall as wide. */
+const IMAGE_ROWS = 24;
 
 /** How markdown looks on the panel: headings in the accent, code in the summary color. */
 function markdownStyle(): SyntaxStyle {
@@ -41,6 +44,7 @@ function markdownStyle(): SyntaxStyle {
 /** The size and shape of one file, for the title. */
 function describe(file: FileContent): string {
 	if (file.tables) return `${file.tables.length} ${file.tables.length === 1 ? 'table' : 'tables'}`;
+	if (file.image) return `${bytes(file.image.data.length)}, ${file.image.mimeType}`;
 	const lines = file.text.split('\n').length;
 	const size = bytes(new TextEncoder().encode(file.text).length);
 	return `${size}, ${lines} ${lines === 1 ? 'line' : 'lines'}${file.truncated ? ', truncated' : ''}`;
@@ -94,6 +98,7 @@ export class FilesPanel {
 	private readonly title: TextRenderable;
 	private readonly body: TextRenderable;
 	private readonly markdown: MarkdownRenderable;
+	private readonly image: ImageRenderable;
 	private readonly tabs: TextRenderable;
 	private readonly scroll: ScrollBoxRenderable;
 	private readonly hint: TextRenderable;
@@ -132,6 +137,13 @@ export class FilesPanel {
 			width: '100%',
 			visible: false,
 		});
+		this.image = new ImageRenderable(renderer, {
+			fit: 'fit',
+			width: '100%',
+			height: IMAGE_ROWS,
+			visible: false,
+			onError: () => this.flash('Cannot decode this picture.'),
+		});
 		this.tabs = new TextRenderable(renderer, {
 			content: '',
 			flexShrink: 0,
@@ -150,6 +162,7 @@ export class FilesPanel {
 		const padded = new BoxRenderable(renderer, { paddingRight: 2, width: '100%' });
 		padded.add(this.body);
 		padded.add(this.markdown);
+		padded.add(this.image);
 		this.scroll.add(padded);
 		this.hint = new TextRenderable(renderer, { content: '', flexShrink: 0, wrapMode: 'word' });
 		for (const part of [this.search, this.list, this.title, this.tabs, this.scroll, this.hint])
@@ -210,32 +223,51 @@ export class FilesPanel {
 			fg(palette.accent)(file.path),
 			fg(palette.dim)(`   ${describe(file)}`),
 		]);
-		const table = file.tables?.[browser.table];
-		if (file.tables && table) {
-			this.tabs.visible = true;
-			this.tabs.content = tabsText(file.tables, browser.table);
-			this.body.content = tableText(table);
-			this.body.wrapMode = 'none';
-			this.markdown.visible = false;
-			this.body.visible = true;
-		} else if (/\.md$/i.test(file.path)) this.showMarkdown(file.text);
-		else this.showBody(file.text);
+		this.showFile(file, browser.table);
 		const key = `${file.path}:${browser.table}`;
 		if (this.shown !== key) this.scroll.scrollTop = 0;
 		this.shown = key;
+	}
+
+	/** The one view a file takes: a picture, a table, markdown, or plain text. */
+	private showFile(file: FileContent, at: number): void {
+		const table = file.tables?.[at];
+		if (file.image) this.showImage(file.image);
+		else if (file.tables && table) this.showTable(file.tables, table, at);
+		else if (/\.md$/i.test(file.path)) this.showMarkdown(file.text);
+		else this.showBody(file.text);
+	}
+
+	private showTable(tables: readonly TableView[], table: TableView, at: number): void {
+		this.tabs.visible = true;
+		this.tabs.content = tabsText(tables, at);
+		this.body.content = tableText(table);
+		this.body.wrapMode = 'none';
+		this.markdown.visible = false;
+		this.image.visible = false;
+		this.body.visible = true;
 	}
 
 	private showBody(text: string): void {
 		this.body.content = new StyledText([fg(palette.text)(text)]);
 		this.body.wrapMode = 'word';
 		this.markdown.visible = false;
+		this.image.visible = false;
 		this.body.visible = true;
 	}
 
 	private showMarkdown(text: string): void {
 		if (this.markdown.content !== text) this.markdown.content = text;
 		this.body.visible = false;
+		this.image.visible = false;
 		this.markdown.visible = true;
+	}
+
+	private showImage(image: ImageContent): void {
+		this.body.visible = false;
+		this.markdown.visible = false;
+		this.image.source = image.data;
+		this.image.visible = true;
 	}
 
 	private hintText(): string {

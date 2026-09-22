@@ -130,6 +130,34 @@ function bounded(output: unknown, limit: number): unknown {
 	return `${decoder.decode(bytes.slice(0, limit))}\n[truncated: ${bytes.length} bytes]`;
 }
 
+/** The bytes a base64 string decodes to, from its length alone. */
+function base64Bytes(base64: string): number {
+	const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+	return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
+/**
+ * A tool result's image content, with each image's data replaced by its byte
+ * count. A record that does not hold a `content` array passes through
+ * unchanged, and so does every other content part.
+ *
+ * A tool result can carry an image inline as base64
+ * (`ToolResult.content`, `types.ts`). Writing that image whole into the trace
+ * or an audit log bloats the record for no reader: nothing here decodes an
+ * image back into a picture. This keeps the shape and the size, and drops
+ * the bytes.
+ */
+export function loggedToolResult(value: unknown): unknown {
+	if (!isRecord(value) || !Array.isArray(value.content)) return value;
+	return { ...value, content: value.content.map(loggedContentPart) };
+}
+
+function loggedContentPart(part: unknown): unknown {
+	if (!isRecord(part) || part.type !== 'image' || typeof part.data !== 'string') return part;
+	const { data, ...rest } = part;
+	return { ...rest, bytes: base64Bytes(data) };
+}
+
 class Trace implements TraceSink {
 	private readonly options: TraceOptions & { readonly activation: string };
 	private pass = 0;
@@ -201,7 +229,7 @@ class Trace implements TraceSink {
 				const output =
 					this.options.policy.toolOutput === 'omit'
 						? null
-						: bounded(plain(step.output), this.options.limits.toolOutputBytes);
+						: bounded(loggedToolResult(plain(step.output)), this.options.limits.toolOutputBytes);
 				return { ...step, output };
 			}
 			default:

@@ -152,7 +152,10 @@ holding `env` directly serializes its own calls.
 on the workspace's own filesystem, built on `openLog`.** Set `audit`, and
 every call through `workspace.tools()` appends one line: the room, the
 agent, the tool, the activation and the exchange it ran in, the full
-arguments, and the full result or error.
+arguments, and the full result or error. An image the result carries keeps
+its shape, with its byte count in place of its data: the log records that
+the call returned a picture, not the picture (`loggedToolResult`, from
+`@ambionframework/ambion`).
 
 ```ts
 const drive = openWorkspace({

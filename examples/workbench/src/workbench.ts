@@ -6,6 +6,7 @@ import type { PiExecutionOptions } from '@ambionframework/pi';
 import type { Approval } from './approvals.ts';
 import { type Person, people } from './definitions.ts';
 import {
+	attachFile,
 	type FileContent,
 	type FileEntry,
 	listFiles,
@@ -27,7 +28,7 @@ import { scenarios } from './scenarios.ts';
 export type { ActivationRead } from '@ambionframework/ambion';
 export type { Approval } from './approvals.ts';
 export type { Person } from './definitions.ts';
-export type { FileContent, FileEntry, TableView } from './files.ts';
+export type { FileContent, FileEntry, ImageContent, TableView } from './files.ts';
 export type { RoomAction, RoomView } from './rooms.ts';
 
 /**
@@ -52,7 +53,7 @@ export interface Workbench {
 	/** Leave a room. A person who is not present has nothing to leave. */
 	leave(room: string, person: string): Promise<void>;
 	/** Send a message. The same key and text return the first exchange and add no message. */
-	send(room: string, person: string, key: string, text: string): Promise<void>;
+	send(room: string, person: string, key: string, text: string, refs?: string[]): Promise<void>;
 	control(room: string, action: RoomAction): Promise<RoomView>;
 	/**
 	 * The trace of one activation: its passes and steps. A running activation returns
@@ -64,6 +65,8 @@ export interface Workbench {
 	create(name: string, goal: string): Promise<RoomView>;
 	files(): Promise<FileEntry[]>;
 	file(path: string): Promise<FileContent>;
+	/** Copy a local file into the workspace, so it can go with a message as a `file:///` ref. */
+	attach(localPath: string): Promise<FileEntry>;
 	/** The names of the tables of the lab database. */
 	labTables(): Promise<string[]>;
 	/** One table of the lab database. `uri` is `lab:///<table>`. */
@@ -152,13 +155,13 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 				if (present(snapshot, who.name)) await (await live.visit(who)).leave();
 			});
 		},
-		async send(room, person, key, text) {
+		async send(room, person, key, text, refs) {
 			const who = personNamed(person);
 			if (!key || !text.trim()) fail('Supply a nonempty key and message.');
 			await inRoom(room, async (live) => {
 				const snapshot = await live.read({ messages: false });
 				if (!present(snapshot, who.name)) fail('Enter this room before sending.');
-				await (await live.visit(who)).send({ key, text });
+				await (await live.visit(who)).send({ key, text, ...(refs?.length ? { refs } : {}) });
 			});
 		},
 		control: (room, action) => rooms.lifecycle(room, action),
@@ -175,6 +178,7 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 		},
 		files: () => rooms.withWorkspace(() => listFiles(rooms.workspace)),
 		file: (path) => rooms.withWorkspace(() => readFile(rooms.workspace, path)),
+		attach: (localPath) => rooms.withWorkspace(() => attachFile(rooms.workspace, localPath)),
 		labTables: async () => listLabTables(labPath),
 		labTable: async (uri) => readLabTable(labPath, uri),
 		close() {
