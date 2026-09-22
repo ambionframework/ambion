@@ -107,7 +107,7 @@ async function readLocal<T>(operation: () => Promise<T>, localPath: string): Pro
 export async function attachFile(workspace: Workspace, localPath: string): Promise<FileEntry> {
 	const resolved = localPath.startsWith('~/') ? join(homedir(), localPath.slice(2)) : localPath;
 	const size = (await readLocal(() => stat(resolved), localPath)).size;
-	if (size > MAX_BYTES.image) fail('/attach takes files up to 8 MiB.');
+	if (size > MAX_BYTES.image) fail(`/attach takes files up to ${MAX_BYTES.image / 1_048_576} MiB.`);
 	const bytes = await readLocal(() => readLocalFile(resolved), localPath);
 	const path = `${ATTACHMENTS_DIR}/${Date.now()}-${basename(resolved)}`;
 	await workspace.use(browser, async (env) => {
