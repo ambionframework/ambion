@@ -35,8 +35,55 @@ process.
 that fails when it is stale. **Condition:** an adapter or host author who
 cannot work from the typed README examples and the export snapshot.
 
-**A workstation backend.** A workspace backend over SSH to one remote
-server. PR #268 holds the scope. **Condition:** the owner schedules it.
+**A workstation backend.** A workstation is one remote server with one
+Unix account for each agent. A workspace connects to it over SSH, and each
+agent logs in with its own credentials. The operating system of the server
+keeps one agent's files apart from another's. The just-bash backends have
+no such boundary ([workspace.md](../docs/workspace.md#backends-and-limits)).
+
+- **The name is the concept, and SSH is the v1 protocol.**
+  `packages/workstation` exports `workstationBackend(options)`, a
+  `WorkspaceBackend` that `openWorkspace` takes like `directoryBackend()`.
+  A later protocol joins the same package under the same name.
+- **The host owns every credential.** The options hold the server address,
+  the port, and `credentialFor(agent)`. The resolver returns a user name
+  and a private key. The host provisions each account and each key before
+  the first connection. The backend stores, issues, and rotates no
+  credential.
+- **One server serves one workspace.** The address is fixed at
+  construction, and only the account changes from agent to agent.
+- **The account's home is the working directory.** `connect()` reads
+  `$HOME` from the login and creates no directory. `changedPaths` resolves
+  a path against the same home.
+- **`SshEnv` implements Pi's `ExecutionEnv`, as `BashEnv` does.** A file
+  call goes over SFTP, and each `exec` opens one channel. `read` with its
+  images, `write`, `edit`, `bash`, `sql`, the audit log, the change log,
+  and the room mirror run with no change.
+- **The backend keeps one SSH client for each agent.** The owner calls
+  `connect()` and `cleanup()` once for each operation (`resource.ts`), and
+  a handshake each time adds network round trips to every tool call.
+  `connect()` opens a channel on the cached client, and `cleanup()` closes
+  that channel. `dispose()` and `destroy()` close every client.
+- **`sql` needs `sqlite3` on the server's `PATH`.** `sql.ts` runs
+  `sqlite3` through `exec`, so the tool needs no new code. `ATTACH` of a
+  second file works, because the server's `sqlite3` reads the real
+  filesystem. With no `xan` on the server, the export row count reads
+  zero.
+- **The guidance states what every workstation has:** a real shell, open
+  network access, and one account for each agent. The application names
+  the tools that its server installs.
+- **`docs/trust.md` gets a new row before the backend ships.** An agent on
+  a workstation has a real shell and network access. The account
+  permissions on the server contain it. The live test that a seat cannot
+  read `/etc/hosts` covers the just-bash backends only.
+- **V1 leaves out** Postgres or MySQL on the server, which needs another
+  command, another dialect, and a database credential apart from the SSH
+  login. It also leaves out credential issuance and rotation, and a
+  workspace across two or more servers.
+- **Two questions stay open:** where the host configures the known host
+  key of the server, and when the backend closes an idle client.
+
+**Condition:** the owner schedules it.
 
 **A SQL backend over a database server.** `backend.sql` takes any
 `SqlBackend` ([Workspace](../docs/workspace.md#query-the-shared-database)),
@@ -94,4 +141,3 @@ today. **Condition:** a fault that one of them would have caught.
 | #151 | Exchange-scoped tasks and Relay background work | Close in 0.2.0 phase 3; delegation by reference replaces it |
 | #153 | Room simulation evals (draft)                   | Hold; see the evals package above                           |
 | #171 | Workspace log regression and path checks        | Land in 0.2.0 phase 5 step 2, before the log cleanup        |
-| #268 | Scope a workstation backend                     | Merge into this file as the workstation entry               |
