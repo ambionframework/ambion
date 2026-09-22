@@ -120,6 +120,6 @@ live('a workspace picture', () => {
 		await invariants(session, events);
 		report('a workspace picture', await spent(session));
 		await session.stop();
-		await store.destroy();
+		await store.dispose();
 	});
 });

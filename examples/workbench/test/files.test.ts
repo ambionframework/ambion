@@ -42,7 +42,7 @@ describe('readFile on a picture', () => {
 		expect(file.image).toEqual({ data: FAKE_PNG, mimeType: 'image/png' });
 		expect(file.text).toBe('');
 		expect(file.tables).toBeUndefined();
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('refuses a picture past the preview size limit', async () => {
@@ -52,7 +52,7 @@ describe('readFile on a picture', () => {
 		await site.use(scribe, (env) => env.writeFile('/home/scribe/big.png', big, BACKGROUND_CONTEXT));
 
 		await expect(readFile(site, '/home/scribe/big.png')).rejects.toThrow(/8 MiB/);
-		await site.destroy();
+		await site.dispose();
 	});
 });
 
@@ -73,7 +73,7 @@ describe('attachFile', () => {
 		);
 		if (!stored.ok) throw new Error('The attached file is missing from the workspace.');
 		expect(Array.from(stored.value)).toEqual(Array.from(FAKE_PNG));
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('expands a ~/ path to the real home directory before reading it', async () => {
@@ -83,6 +83,6 @@ describe('attachFile', () => {
 		await expect(attachFile(site, '~/no-such-picture.png')).rejects.toThrow(
 			new RegExp(resolved.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
 		);
-		await site.destroy();
+		await site.dispose();
 	});
 });

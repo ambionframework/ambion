@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**`destroy()` leaves the workspace resource contract.** `WorkspaceResource`,
+`ResourceBackend`, and `SqlResource` no longer have a `destroy` member. On a
+shared server, a resource's own `destroy()` would delete the files of every
+account. `dispose()` releases local handles and keeps the persisted data. A
+host deletes the data that it owns.
+
 **`@ambionframework/cli` is removed.** It provided `ambion new` and `ambion
 dev`. It also carried its Node 26.4 floor, the OpenTUI floor, onto every
 package, whether or not that package needed it.

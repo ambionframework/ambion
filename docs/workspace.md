@@ -35,7 +35,7 @@ await drive.use(
 ```
 
 The resource checks revocation before it connects. A queued operation that
-starts after destruction is refused.
+starts after disposal is refused.
 
 ## Give the resource to an agent
 
@@ -398,26 +398,24 @@ resource owner and binds the backend tools to its `use` method. `Workspace`
 adds `tools()` to the resource surface. Direct operations and tool calls share
 one queue and one lifecycle.
 
-## Destroy a resource
+## Dispose of a resource
 
 ```ts
-await drive.destroy();
+await drive.dispose();
 ```
 
-Destruction immediately revokes new and queued work. It waits for an active
-operation and its cleanup, then asks the backend to delete its data once.
-Concurrent calls join that deletion. A successful deletion is terminal. A
-failed deletion leaves the resource active and retryable, though the backend
-can have deleted some data before it reports failure.
+Disposal immediately revokes new and queued work. It waits for an active
+operation and its cleanup, then asks the backend to release its local
+handles once. Concurrent calls join that release. A successful disposal is
+terminal. A failed disposal leaves the resource active and retryable.
 
-`dispose()` releases local resources and terminally closes the handle. A
-directory resource keeps its files when it is disposed. `destroy()` during
-disposal, or after disposal, is refused. `dispose()` during destruction joins
-the destruction. A failed release or deletion leaves its operation retryable.
+Disposal keeps the persisted workspace. A directory resource keeps its
+files, and an in-memory resource releases its cached filesystem. A host
+deletes the data that it owns.
 
-A `use` callback must not await another `use`, `dispose`, or `destroy` call
-on the same owner. The owner serializes those operations, so such nesting
-would wait for the callback that is already running.
+A `use` callback must not await another `use` or `dispose` call on the same
+owner. The owner serializes those operations, so such nesting would wait
+for the callback that is already running.
 
 ## Backends and limits
 
@@ -427,8 +425,8 @@ releases its cached filesystem, so a disposed resource does not recreate a
 seeded filesystem.
 
 `directoryBackend(root)` operates on a real directory. It creates the root
-when a backend operation needs it. `destroy()` deletes its contents and
-keeps the root directory.
+when a backend operation needs it. Disposal releases the filesystem handle
+and keeps the root directory and its files.
 
 Both backends use just-bash. They provide a virtual Unix filesystem and shell
 for tools, with JavaScript and Python execution available. Network commands

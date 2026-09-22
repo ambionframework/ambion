@@ -25,8 +25,8 @@
  * between an agent's commands and the machine.
  */
 
-import { mkdir, readdir, rm } from 'node:fs/promises';
-import { join, posix } from 'node:path';
+import { mkdir } from 'node:fs/promises';
+import { posix } from 'node:path';
 import {
 	type AgentHarnessTool,
 	createBashTool,
@@ -181,9 +181,9 @@ function lazyResource<T>(build: () => Promise<T>): {
  * An in-memory filesystem that lives as long as the backend resource.
  * Building it is async when there is a `seed` to run, so `connect` and
  * `readFiles` both await one lazily-built, memoised filesystem rather than
- * the handle building it up front. `destroy` can only ever fail to release
- * memory. Destroying the owning workspace clears the cache, releasing the
- * filesystem; the owner prevents any later connection through the handle.
+ * the handle building it up front. Disposing the owning workspace clears
+ * the cache, releasing the filesystem; the owner prevents any later
+ * connection through the handle. A host deletes the data it owns.
  */
 export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspaceBackend {
 	const resource = lazyResource(async () => {
@@ -200,9 +200,6 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
 	});
 	return {
 		connect: async (agent) => connectOver(await resource.get(), agent),
-		async destroy() {
-			resource.clear(inMemory());
-		},
 		dispose: async () => resource.clear(inMemory()),
 		readFiles: async () => listFiles(await resource.get()),
 		tools: justBashTools(),
@@ -232,9 +229,8 @@ export function justBashChangedPaths(
 /**
  * A workspace over a real directory. `ReadWriteFs` writes through to disk
  * and needs its root to exist, so the first `connect` creates the root and
- * builds the filesystem; `destroy` removes the root's contents and leaves the
- * root. Deletion errors are propagated so the owning `Workspace` remains live
- * and retryable; lifecycle state belongs only to that owner.
+ * builds the filesystem. Disposal releases the filesystem handle and keeps
+ * the root and its files. A host deletes the data it owns.
  *
  * This backend is the one part of this package that needs a real disk, and it
  * loads `ReadWriteFs` on the first connect. A bundler for a runtime without a
@@ -258,26 +254,6 @@ export function directoryBackend(root: string): WorkspaceBackend {
 	});
 	return {
 		connect: async (agent) => connectOver(await resource.get(), agent),
-		async destroy() {
-			let entries: string[];
-			try {
-				entries = await readdir(root);
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-					resource.clear();
-					return;
-				}
-				throw error;
-			}
-			const removals = await Promise.allSettled(
-				entries.map((entry) => rm(join(root, entry), { recursive: true, force: true })),
-			);
-			const failure = removals.find(
-				(result): result is PromiseRejectedResult => result.status === 'rejected',
-			);
-			if (failure) throw failure.reason;
-			resource.clear();
-		},
 		dispose: async () => resource.clear(),
 		tools: justBashTools(),
 		guidance: JUST_BASH_GUIDANCE,

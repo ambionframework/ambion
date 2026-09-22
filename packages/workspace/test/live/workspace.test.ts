@@ -62,7 +62,7 @@ live('the workspace', () => {
 		await invariants(session, events);
 		report('the workspace', await spent(session));
 		await session.stop();
-		await store.destroy();
+		await store.dispose();
 	});
 
 	it('a seat queries the shared database with the sql tool, and answers from the result', async () => {
@@ -103,6 +103,6 @@ live('the workspace', () => {
 		await invariants(session, events);
 		report('the workspace', await spent(session));
 		await session.stop();
-		await store.destroy();
+		await store.dispose();
 	});
 });

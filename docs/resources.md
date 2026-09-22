@@ -16,13 +16,13 @@ The [workspace page](workspace.md) covers the filesystem binding.
 `WorkspaceAgent`, and `WorkspaceResource`. This entry loads no Ambion runtime
 and no model library.
 
-| Name                | Shape                                                        |
-| ------------------- | ------------------------------------------------------------ |
-| `openResource`      | `({ name, backend })` returns a `WorkspaceResource<Env>`     |
-| `WorkspaceResource` | `name`, `use(agent, op, signal?)`, `dispose()`, `destroy()`  |
-| `ResourceBackend`   | `connect(agent, signal?)`, `destroy()`, optional `dispose()` |
-| `ResourceEnv`       | The smallest environment: one `cleanup()` method             |
-| `WorkspaceAgent`    | `{ name, identity }`                                         |
+| Name                | Shape                                                    |
+| ------------------- | -------------------------------------------------------- |
+| `openResource`      | `({ name, backend })` returns a `WorkspaceResource<Env>` |
+| `WorkspaceResource` | `name`, `use(agent, op, signal?)`, `dispose()`           |
+| `ResourceBackend`   | `connect(agent, signal?)`, optional `dispose()`          |
+| `ResourceEnv`       | The smallest environment: one `cleanup()` method         |
+| `WorkspaceAgent`    | `{ name, identity }`                                     |
 
 ```ts
 import { openResource, type ResourceBackend } from '@ambionframework/workspace/resource';
@@ -34,7 +34,6 @@ interface NoteEnv {
 
 const backend: ResourceBackend<NoteEnv> = {
   connect: async () => ({ notes: [], cleanup: async () => {} }),
-  destroy: async () => {},
 };
 
 const resource = openResource({ name: 'team-notes', backend });
@@ -44,17 +43,18 @@ await resource.use({ name: 'surveyor', identity: 'Quantity surveyor.' }, (env) =
 await resource.dispose();
 ```
 
-**One queue serializes every operation.** `use`, `dispose`, and `destroy`
-run one at a time. The owner calls `cleanup()` on the environment after each
-operation. A `use` callback must not await another `use`, `dispose`, or
-`destroy` call on the same owner. The owner would wait for the callback that
-is already running.
+**One queue serializes every operation.** `use` and `dispose` run one at a
+time. The owner calls `cleanup()` on the environment after each operation. A
+`use` callback must not await another `use` or `dispose` call on the same
+owner. The owner would wait for the callback that is already running.
 
-**Destruction revokes work.** `destroy()` refuses new and queued work at
-once. It waits for the active operation and its cleanup, then asks the
-backend to delete its data once. `dispose()` releases local handles and
-closes the owner. The [workspace page](workspace.md#destroy-a-resource)
-states the full lifecycle.
+**Disposal revokes work.** `dispose()` refuses new and queued work at once.
+It waits for the active operation and its cleanup, then asks the backend to
+release its local handles once. Concurrent calls join that release. A
+directory resource keeps its files, and an in-memory resource releases its
+cached filesystem. A host deletes the data that it owns. The
+[workspace page](workspace.md#dispose-of-a-resource) states the full
+lifecycle.
 
 **A binding picks its own `Env`.** The environment extends `ResourceEnv`.
 The filesystem binding uses `WorkspaceEnv`, a Pi `ExecutionEnv`. The SQL

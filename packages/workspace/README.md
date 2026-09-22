@@ -59,9 +59,9 @@ console.log(await backend.readFiles());
 await drive.dispose();
 ```
 
-This handle has `use`, `dispose`, and `destroy`. The root `openWorkspace`
-function adds the Ambion tool bundle over the same resource implementation.
-Both paths use the lifecycle contract below.
+This handle has `use` and `dispose`. The root `openWorkspace` function adds
+the Ambion tool bundle over the same resource implementation. Both paths use
+the lifecycle contract below.
 
 ## The two backends
 
@@ -72,8 +72,8 @@ workspace's files with no tool call, which is what a real directory gives for
 free.
 
 **`directoryBackend(root)` writes through to a real directory.** It creates
-the root when an operation needs it. `drive.destroy()` deletes its contents
-and keeps the root.
+the root when an operation needs it. `drive.dispose()` releases the handle
+and keeps the root and its files. A host deletes the data it owns.
 
 Agents connected to one workspace share every file. just-bash is single-user,
 so one agent can read another agent's home. The default workspace provides no

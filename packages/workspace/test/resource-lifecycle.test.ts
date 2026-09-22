@@ -15,50 +15,42 @@ import { openResource, type ResourceBackend } from '../src/resource.ts';
 const agent = (name: string): WorkspaceAgent => ({ name, identity: `${name}-identity` });
 
 describe('workspace lifecycle', () => {
-	it('joins concurrent destroys, drains active work, and stays terminal', async () => {
+	it('drains active work before disposal, then stays terminal', async () => {
 		const started = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();
-		let destroys = 0;
 		let disposes = 0;
 		const inner = memoryBackend();
 		const backend: WorkspaceBackend = {
 			tools: [],
 			connect: (caller, signal) => inner.connect(caller, signal),
-			destroy: async () => {
-				destroys += 1;
-			},
 			dispose: async () => {
 				disposes += 1;
 			},
 		};
-		const workspace = openWorkspace({ name: 'lifecycle-destroy', backend });
+		const workspace = openWorkspace({ name: 'lifecycle-dispose-drain', backend });
 
 		const active = workspace.use(agent('alpha'), async () => {
 			started.resolve();
 			await release.promise;
 		});
 		await started.promise;
-		const firstDestroy = workspace.destroy();
-		const secondDestroy = workspace.destroy();
 		const disposing = workspace.dispose();
 
 		await expect(workspace.use(agent('beta'), () => 'late')).rejects.toThrow(
 			/no longer available/i,
 		);
-		expect(destroys).toBe(0);
-		release.resolve();
-		await Promise.all([active, firstDestroy, secondDestroy, disposing]);
-
-		expect(destroys).toBe(1);
 		expect(disposes).toBe(0);
+		release.resolve();
+		await Promise.all([active, disposing]);
+
+		expect(disposes).toBe(1);
 		await expect(workspace.use(agent('alpha'), () => 'resurrected')).rejects.toThrow(
 			/no longer available/i,
 		);
-		await expect(workspace.destroy()).resolves.toBeUndefined();
 		await expect(workspace.dispose()).resolves.toBeUndefined();
 	});
 
-	it('makes disposal terminal and rejects destroy while disposal is in progress', async () => {
+	it('joins concurrent dispose calls and disposes once', async () => {
 		const disposeStarted = Promise.withResolvers<void>();
 		const releaseDispose = Promise.withResolvers<void>();
 		let disposes = 0;
@@ -66,19 +58,17 @@ describe('workspace lifecycle', () => {
 		const backend: WorkspaceBackend = {
 			tools: [],
 			connect: (caller, signal) => inner.connect(caller, signal),
-			destroy: async () => {},
 			dispose: async () => {
 				disposes += 1;
 				disposeStarted.resolve();
 				await releaseDispose.promise;
 			},
 		};
-		const workspace = openWorkspace({ name: 'lifecycle-dispose', backend });
+		const workspace = openWorkspace({ name: 'lifecycle-dispose-join', backend });
 
 		const firstDispose = workspace.dispose();
 		await disposeStarted.promise;
 		const secondDispose = workspace.dispose();
-		await expect(workspace.destroy()).rejects.toThrow(/disposal is in progress/i);
 
 		releaseDispose.resolve();
 		await Promise.all([firstDispose, secondDispose]);
@@ -105,11 +95,6 @@ describe('workspace lifecycle', () => {
 			expect(await readFile(join(root, 'home', 'writer', 'persisted.txt'), 'utf8')).toBe(
 				'keep me\n',
 			);
-			// Disposal releases the owner; destruction is a separate terminal action.
-			await expect(workspace.destroy()).rejects.toThrow(/has been disposed/i);
-			expect(await readFile(join(root, 'home', 'writer', 'persisted.txt'), 'utf8')).toBe(
-				'keep me\n',
-			);
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
@@ -118,12 +103,11 @@ describe('workspace lifecycle', () => {
 		const inner = memoryBackend();
 		const backend: ResourceBackend<WorkspaceEnv> = {
 			connect: (agent, signal) => inner.connect(agent, signal),
-			destroy: async () => {},
 		};
 		const resource = openResource({ name: 'resource-only', backend });
 
 		expect(resource).not.toHaveProperty('tools');
 		await expect(resource.use(agent('alpha'), (env) => env.cwd)).resolves.toBe('/home/alpha');
-		await resource.destroy();
+		await resource.dispose();
 	});
 });

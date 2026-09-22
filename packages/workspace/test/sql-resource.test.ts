@@ -182,10 +182,9 @@ describe('the SQL resource', () => {
 		).rejects.toThrow(/no longer available/);
 	});
 
-	it('closes the handles once on destroy and refuses a later use', async () => {
+	it('closes the handles once on dispose and refuses a later use', async () => {
 		const resource = open();
-		await resource.destroy();
-		await resource.destroy();
+		await resource.dispose();
 		await resource.dispose();
 		await expect(resource.use(context.agent, (env) => env.query('SELECT 1'))).rejects.toThrow(
 			/no longer available/,

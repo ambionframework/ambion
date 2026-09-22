@@ -155,7 +155,7 @@ describe('workspace.changes', () => {
 			exchange,
 			paths: ['/home/scribe/a.txt'],
 		});
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('returns nothing when the workspace keeps no change log', async () => {
@@ -165,7 +165,7 @@ describe('workspace.changes', () => {
 			{ agent: agentOf('scribe'), callId: 'c1', exchange: { owner: 'andrei', from: 4 } },
 		);
 		expect(await site.changes({ exchange: { owner: 'andrei', from: 4 } })).toEqual([]);
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('records no change for a call that fails, while audit still records it', async () => {
@@ -198,7 +198,7 @@ describe('workspace.changes', () => {
 			),
 		).rejects.toThrow('ENOSPC');
 		expect(await site.changes({ exchange })).toEqual([]);
-		await site.destroy();
+		await site.dispose();
 	});
 
 	function invokeOfFirst(site: ReturnType<typeof openWorkspace>) {
@@ -265,7 +265,7 @@ describe.each(backends)('changes through a running room on the $name backend', (
 			'/home/worker/second-1.txt',
 			'/home/worker/second-2.txt',
 		]);
-		await site.destroy();
+		await site.dispose();
 		await dispose();
 	});
 
@@ -277,7 +277,7 @@ describe.each(backends)('changes through a running room on the $name backend', (
 		await session.stop();
 		const other = await site.changes({ exchange: { owner: 'priya', from: first.from } });
 		expect(other).toEqual([]);
-		await site.destroy();
+		await site.dispose();
 		await dispose();
 	});
 });

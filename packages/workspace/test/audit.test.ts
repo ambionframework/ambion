@@ -131,7 +131,7 @@ describe('the workspace audit log', () => {
 		});
 		expect(entries[0]).toHaveProperty('result');
 		expect(entries[0]).not.toHaveProperty('error');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('is readable through the ordinary read tool, the same as any other file', async () => {
@@ -152,7 +152,7 @@ describe('the workspace audit log', () => {
 		if (typeof result === 'string') throw new Error('read must return a structured result.');
 		const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
 		expect(text).toContain('"tool":"write"');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('reads an image file as an image content part, and keeps only its byte count in the audit log', async () => {
@@ -184,7 +184,7 @@ describe('the workspace audit log', () => {
 		expect(loggedImage?.data).toBeUndefined();
 		expect(loggedImage?.bytes).toBeGreaterThan(0);
 		expect(JSON.stringify(entry)).not.toContain(image.data);
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('tells the calling agent the log exists, in the workspace guidance', () => {
@@ -218,7 +218,7 @@ describe('the workspace audit log', () => {
 		expect(entries[0]).toMatchObject({ room: '' });
 		expect(entries[0]).not.toHaveProperty('activation');
 		expect(entries[0]).not.toHaveProperty('exchange');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('records an error, and still throws it to the caller, when the call fails', async () => {
@@ -236,7 +236,6 @@ describe('the workspace audit log', () => {
 				},
 			],
 			connect: (agent: { name: string; identity: string }) => inner.connect(agent),
-			destroy: async () => {},
 		};
 		const site = openWorkspace({ name: name('audited-error'), backend: failing, audit: {} });
 		const tool = site.tools().tools[0];
@@ -257,7 +256,7 @@ describe('the workspace audit log', () => {
 			error: { name: 'Error', message: 'kaboom' },
 		});
 		expect(entries[0]).not.toHaveProperty('result');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('names the real room, through a running room, on every tool call it makes', async () => {
@@ -293,7 +292,7 @@ describe('the workspace audit log', () => {
 		);
 		expect(entries).toHaveLength(1);
 		expect(entries[0]).toMatchObject({ room: roomId, agent: 'worker', tool: 'write' });
-		await site.destroy();
+		await site.dispose();
 	});
 });
 
@@ -419,7 +418,6 @@ describe('recording under an aborted signal', () => {
 				},
 			],
 			connect: (agent: { name: string; identity: string }) => inner.connect(agent),
-			destroy: async () => {},
 		};
 		const site = openWorkspace({ name: name('cut-mid-flight'), backend: slow, audit: {} });
 		const tool = site.tools().tools[0];
@@ -449,6 +447,6 @@ describe('recording under an aborted signal', () => {
 			tool: 'slow',
 			error: { message: 'cut mid-flight' },
 		});
-		await site.destroy();
+		await site.dispose();
 	});
 });

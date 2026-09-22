@@ -52,7 +52,7 @@ SELECT * FROM pour ORDER BY id;`,
 			sql: "SELECT sql FROM sqlite_master WHERE name='light';",
 		});
 		expect(provenance.text).toContain('CREATE VIEW light AS SELECT id, grade FROM pour');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('renders a NULL value as NULL in the preview', async () => {
@@ -62,7 +62,7 @@ SELECT * FROM pour ORDER BY id;`,
 		});
 		expect(result.text).toContain('| 1 | NULL |');
 		expect(result.text).toContain('| 2 | set |');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('joins the shared database with a private in-memory scratch in one statement', async () => {
@@ -79,7 +79,7 @@ SELECT p.id, p.name FROM part p JOIN scratch.pick USING(id) ORDER BY p.id;`,
 		expect(joined.text).toContain('| 1 | a |');
 		expect(joined.text).toContain('| 3 | c |');
 		expect(joined.text).not.toContain('| 2 | b |');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('reports no rows for a query that returns none', async () => {
@@ -88,7 +88,7 @@ SELECT p.id, p.name FROM part p JOIN scratch.pick USING(id) ORDER BY p.id;`,
 		const result = await sql(site, 'alpha', { sql: 'SELECT * FROM t WHERE id > 99;' });
 		expect(result.text).toContain('No rows');
 		expect(result.details.rows).toBe(0);
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('returns a SQL error as content, so the agent can correct it', async () => {
@@ -96,7 +96,7 @@ SELECT p.id, p.name FROM part p JOIN scratch.pick USING(id) ORDER BY p.id;`,
 		const result = await sql(site, 'alpha', { sql: 'SELECT * FROM missing_table;' });
 		expect(result.text).toContain('SQL error');
 		expect(result.text).toContain('missing_table');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('writes the full result as CSV when export is set, and shows the head', async () => {
@@ -135,7 +135,7 @@ PY`,
 			);
 			expect(py.ok && output.trim()).toBe('3 \\N');
 		});
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('opens a private database file when the caller names one', async () => {
@@ -155,7 +155,7 @@ PY`,
 			database: '~/private.db',
 		});
 		expect(own.text).toContain('| 7 |');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('caps the preview and points at export for a large result', async () => {
@@ -168,7 +168,7 @@ INSERT INTO big SELECT id FROM seq;`,
 		const result = await sql(site, 'alpha', { sql: 'SELECT * FROM big ORDER BY id;', maxRows: 5 });
 		expect(result.text).toContain('Shows 5 of 200 rows');
 		expect(result.details.rows).toBe(200);
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('previews the last query when the script has several', async () => {
@@ -178,7 +178,7 @@ INSERT INTO big SELECT id FROM seq;`,
 		expect(result.text).toContain('| 2 | 3 |');
 		expect(result.text).not.toContain('| a |');
 		expect(result.details.rows).toBe(1);
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('counts exported rows with xan, so an embedded newline does not inflate the count', async () => {
@@ -192,7 +192,7 @@ INSERT INTO big SELECT id FROM seq;`,
 		});
 		expect(result.details.rows).toBe(2);
 		expect(result.text).toContain('Wrote 2 rows');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('leaves an existing export file unchanged when the query fails', async () => {
@@ -207,6 +207,6 @@ INSERT INTO big SELECT id FROM seq;`,
 			const csv = await env.readTextFile('/home/alpha/keep.csv', BACKGROUND_CONTEXT);
 			expect(csv.ok && csv.value).toContain('1');
 		});
-		await site.destroy();
+		await site.dispose();
 	});
 });
