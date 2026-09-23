@@ -1,9 +1,12 @@
-/** Every committed event has the same meaning during live operation and replay. */
+/**
+ * The fold's event rules write no earlier state and no committed entry, and
+ * each step equals `foldRoom`.
+ */
 import { expect, it } from 'vitest';
 import type { Close, Composition } from '../src/journal/events.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
-import { evolve } from '../src/room/transition.ts';
+import { evolve } from './support/evolve.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);

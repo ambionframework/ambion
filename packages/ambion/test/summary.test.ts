@@ -1137,6 +1137,11 @@ describe('a summary for each person who spoke', () => {
 		if (exchange?.status !== 'closed') throw new Error('Expected a closed exchange.');
 		expect(exchange.summary).toMatchObject({ status: 'published', summary: { to: 'priya' } });
 		expect(exchange.summaries?.map((s) => s.to)).toEqual(['priya', 'sam']);
+		// A live read shares no value with the room, so a change to one read reaches no later read.
+		const [changed] = (await session.read()).exchanges;
+		if (changed?.status === 'closed' && changed.summary.status === 'published')
+			(changed.summary.summary as { text: string }).text = 'changed';
+		expect((await session.read()).exchanges).toEqual(before.exchanges);
 		const pending = await session.pendingFor('sam');
 		expect(pending).toHaveLength(1);
 		expect(pending[0]?.outcome).toEqual({ kind: 'awaiting', person: 'sam' });

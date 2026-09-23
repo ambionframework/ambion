@@ -28,8 +28,7 @@ import type {
 	ToolResult,
 	ToolUpdate,
 } from '../types.ts';
-import { refusal } from './render.ts';
-import { summaryToolDescription } from './summary.ts';
+import { refusal, summaryToolDescription } from './render.ts';
 
 /** One part of what a tool hands back to the model. */
 export type RoomToolContent =

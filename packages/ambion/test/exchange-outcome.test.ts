@@ -11,8 +11,8 @@ import { summaryCompletion } from '../src/room/exchange.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import { pendingFor, readView } from '../src/room/read.ts';
-import { evolve } from '../src/room/transition.ts';
 import type { ExchangeView, Message, RoomRead, SummaryMessage } from '../src/types.ts';
+import { evolve } from './support/evolve.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const cancelledAt = '2026-01-01T09:01:00.000Z';

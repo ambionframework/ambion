@@ -22,7 +22,7 @@ import {
 	messageKeyConflict,
 	type RoomBase,
 	requireSubmission,
-	sameRefs,
+	saidContentMatches,
 	submit,
 } from './core.ts';
 import type { ExchangeHandle } from './waits.ts';
@@ -71,9 +71,7 @@ function deliveryMatches(
 		message.kind === 'said' &&
 		message.activationId === undefined &&
 		message.from === command.from &&
-		message.to === command.to &&
-		message.text === command.text &&
-		sameRefs(message.refs, command.refs)
+		saidContentMatches(message, command)
 	);
 }
 

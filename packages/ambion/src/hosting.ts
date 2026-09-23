@@ -44,7 +44,13 @@ export type {
 } from './execution/executor.ts';
 export { classifyCause, PERMANENT_STATUS } from './execution/failure.ts';
 export type { RenderedPrompt } from './execution/render.ts';
-export { refusal, renderActivation, renderDelta, renderLine } from './execution/render.ts';
+export {
+	refusal,
+	renderActivation,
+	renderDelta,
+	renderLine,
+	summaryToolDescription,
+} from './execution/render.ts';
 export type {
 	RoomTool,
 	RoomToolBinding,
@@ -54,7 +60,6 @@ export type {
 } from './execution/room-tools.ts';
 export { agentTools, roomTools, toolContext } from './execution/room-tools.ts';
 export { AgentRunner, inProcessTransport } from './execution/runner.ts';
-export { summaryToolDescription } from './execution/summary.ts';
 export {
 	type TraceOpener,
 	type TraceOptions,
