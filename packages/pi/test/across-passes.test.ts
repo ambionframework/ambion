@@ -8,7 +8,6 @@ import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { tick } from '../../ambion/test/support/room.ts';
 import { contextText, quiet, scripted } from '../../ambion/test/support/scripted.ts';
-import { seatSessionId } from '../src/index.ts';
 import { playSeat, worker } from './support/runner.ts';
 
 const said = (seq: number, text: string): Message => ({
@@ -67,17 +66,15 @@ const texts = (context: Context) =>
 	context.messages.map((message) => contextText({ ...context, messages: [message] }));
 
 describe('the Pi executor across the passes of one activation', () => {
-	it('keeps one agent, prompts a later pass with the delta alone, audits every turn once, and advances readThrough', async () => {
-		const { renewals, seen, services } = await play(
-			[first, [...first, said(2, 'And the pump?')]],
-			[1, 2, 2],
-		);
+	it('keeps one agent, prompts a later pass with the delta alone, and advances readThrough', async () => {
+		const { renewals, seen } = await play([first, [...first, said(2, 'And the pump?')]], [1, 2, 2]);
 
 		expect(seen).toHaveLength(2);
 		const [before, after] = seen;
 		expect(before?.messages).toHaveLength(1);
-		// The second request carries the first pass whole, then only what is new.
-		expect(after?.messages.length).toBeGreaterThan(2);
+		// The second request carries the first pass whole, then only what is new:
+		// two prompts and one answer, and nothing from the first pass repeats.
+		expect(after?.messages).toHaveLength(3);
 		const prompts = texts(after as Context).filter((text) => text.length > 0);
 		expect(prompts[0]).toContain("The record of 'passes' so far:");
 		const last = prompts.at(-1) ?? '';
@@ -86,14 +83,6 @@ describe('the Pi executor across the passes of one activation', () => {
 		expect(last).not.toContain('The record of');
 		expect(last).not.toContain('Can we ship?');
 
-		const audit = await services.transcripts.open(seatSessionId('passes', worker.name));
-		const entries = await audit.findEntries({ order: 'oldestFirst' });
-		const markers = entries.filter(
-			(entry) => entry.type === 'custom' && entry.customType === 'ambion/activation',
-		);
-		expect(markers).toHaveLength(1);
-		// Two prompts and two answers: nothing from the first pass repeats.
-		expect(entries.filter((entry) => entry.type === 'message')).toHaveLength(4);
 		// The renewals name what the seat had read: the first pass, then the delta.
 		expect(renewals.at(-1)).toMatchObject({ readThrough: 2 });
 	});

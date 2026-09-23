@@ -13,12 +13,6 @@ import type { TSchema } from 'typebox';
 export interface PiOptions extends AgentExecutorBaseOptions {
 	/** A Pi model identifier, `provider/model-id`. */
 	model: string;
-	/**
-	 * What the agent remembers between activations. `activation` starts a
-	 * session per activation. `seat` keeps one transcript for the seat and
-	 * records its session with each release. Absent means `activation`.
-	 */
-	memory?: 'activation' | 'seat';
 }
 
 /**
@@ -29,7 +23,6 @@ export interface PiOptions extends AgentExecutorBaseOptions {
 export interface PiExecutor extends AgentExecutor {
 	readonly kind: 'pi';
 	readonly model: string;
-	readonly memory?: 'activation' | 'seat';
 }
 
 /** The Pi executor: Pi's agent loop, model, instructions, and tools. */
@@ -38,7 +31,6 @@ export function pi(options: PiOptions): PiExecutor {
 		...describeExecutor({ ...options, kind: 'pi' }),
 		kind: 'pi' as const,
 		model: options.model,
-		...(options.memory === undefined ? {} : { memory: options.memory }),
 	});
 }
 

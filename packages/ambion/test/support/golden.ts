@@ -17,7 +17,17 @@ import {
 } from '../../src/index.ts';
 import { fakeClock } from '../../src/testing.ts';
 import { roomName, storedOf, tick, waitForRoom } from './room.ts';
-import { byAgent, isClosing, quiet, says, scripted, summarise } from './scripted.ts';
+import {
+	byAgent,
+	contextText,
+	isClosing,
+	quiet,
+	type Script,
+	says,
+	scripted,
+	speak,
+	summarise,
+} from './scripted.ts';
 import { memory } from './storage.ts';
 
 const worker = defineAgent({
@@ -25,14 +35,10 @@ const worker = defineAgent({
 	identity: 'Answers the question.',
 	executor: pi({ instructions: 'answer the question', model: 'scripted/worker' }),
 });
-const keeper = defineAgent({
-	name: 'worker',
-	identity: 'Answers the question.',
-	executor: pi({
-		instructions: 'answer the question',
-		model: 'scripted/worker',
-		memory: 'seat',
-	}),
+const checker = defineAgent({
+	name: 'checker',
+	identity: 'Checks the crew.',
+	executor: pi({ instructions: 'check the crew', model: 'scripted/checker' }),
 });
 const assistant = defineAgent({
 	name: 'assistant',
@@ -94,20 +100,51 @@ const complete = (): Promise<readonly JournalEntry[]> =>
 		},
 	});
 
-/** A seat with `seat` memory answers two questions. Each ended activation records the session. */
-const session = (): Promise<readonly JournalEntry[]> =>
-	record({
-		agents: [keeper],
-		seats: { worker: 'broadcast' },
-		stream: byAgent({ worker: says(['Thursday works.']) }),
+/**
+ * The worker asks the checker, and answers when the checker replies. A
+ * delivered say ends the pass.
+ */
+const asksTheChecker: Script = (context) => {
+	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
+	if (contextText(context).includes('[checker → worker]')) return speak('Thursday works.');
+	return speak('Is the crew free on Thursday?', 'checker');
+};
+
+/**
+ * Two exchanges. In the first, the checker replies after the worker's first
+ * activation ends. The reply wakes the worker again, and the second activation
+ * continues the worker's session. The second exchange begins a fresh one.
+ * Each ended activation records its session.
+ */
+function session(): Promise<readonly JournalEntry[]> {
+	let ended = () => {};
+	const workerEnded = new Promise<void>((resolve) => {
+		ended = resolve;
+	});
+	const reply = says(['The crew is free on Thursday.'], 'worker');
+	return record({
+		agents: [worker, checker],
+		seats: { worker: 'named', checker: 'named' },
+		stream: byAgent({
+			worker: asksTheChecker,
+			checker: async (context, name, call) => {
+				await workerEnded;
+				await tick();
+				return reply(context, name, call);
+			},
+		}),
 		async drive(room) {
+			room.subscribe((event) => {
+				if (event.type === 'activation_end' && event.agent === worker.name) ended();
+			});
 			const person = await room.visit(priya);
-			await person.send({ text: 'Can I tell the client Thursday?' });
+			await person.send({ to: worker.name, text: 'Can I tell the client Thursday?' });
 			await waitForRoom(room);
-			await person.send({ text: 'And Friday?' });
+			await person.send({ to: worker.name, text: 'And Friday?' });
 			await waitForRoom(room);
 		},
 	});
+}
 
 const awaiting = (): Promise<readonly JournalEntry[]> =>
 	record({

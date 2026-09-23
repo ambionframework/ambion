@@ -54,7 +54,6 @@ const CASES = [
 	// The journal sits below everything.
 	['packages/journal/src', '@ambionframework/ambion', true],
 	['packages/journal/src', '../../ambion/src/room.ts', true],
-	['packages/pi-journal/src', '@ambionframework/ambion/hosting', true],
 	// The core names no model library and no platform module.
 	['packages/ambion/src', '@earendil-works/pi-agent-core', true],
 	['packages/ambion/src', 'node:sqlite', true],

@@ -7,9 +7,6 @@ import { executorConformance } from '../../ambion/src/conformance.ts';
 import { claudeExecutorHarness } from '../src/testing.ts';
 import { executable } from './support.ts';
 
-for (const memory of ['activation', 'seat'] as const) {
-	describe(`claude executor with ${memory} memory`, () => {
-		for (const c of executorConformance(claudeExecutorHarness({ executable, memory })))
-			it(c.name, c.run);
-	});
-}
+describe('claude executor', () => {
+	for (const c of executorConformance(claudeExecutorHarness({ executable }))) it(c.name, c.run);
+});

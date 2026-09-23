@@ -6,9 +6,13 @@
  */
 
 import { runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
-import type { LeaseResponse, RoomProtocol, Steer } from '@ambionframework/ambion/hosting';
+import {
+	type LeaseResponse,
+	type RoomProtocol,
+	type Steer,
+	traceJournals,
+} from '@ambionframework/ambion/hosting';
 import { namespaced } from '@ambionframework/journal';
-import { piSessions } from '@ambionframework/pi-journal';
 import { expect, it, onTestFinished } from 'vitest';
 import { configure, type SeatEvent } from '../src/configure.ts';
 import { seatMetadata, sqlStorage } from '../src/storage.ts';
@@ -63,15 +67,14 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	);
 	expect(leases.map((lease) => lease?.phase)).toEqual(['running', 'running', 'ended']);
 	expect(leases.at(-1)).toMatchObject({ id: 'message:4:product:1', reason: 'released' });
-	// the seat's audit session holds the activation's turns, in the seat's own storage
-	const audited = await runInDurableObject(seat, async (_instance, state) => {
-		const piSession = await piSessions(sqlStorage(state)).open(
-			JSON.stringify(['ambion/seat-session', 'seat-test', 'product']),
+	// the trace holds the activation's steps, in the seat's own storage
+	const traced = await runInDurableObject(seat, async (_instance, state) => {
+		const journal = await traceJournals(sqlStorage(state)).open(
+			JSON.stringify(['seat-test', 'message:4:product:1']),
 		);
-		return (await piSession.findEntries({ order: 'oldestFirst' })).map((entry) => entry.type);
+		return (await journal.read(0)).entries.length;
 	});
-	expect(audited[0]).toBe('custom');
-	expect(audited.filter((type) => type === 'message').length).toBeGreaterThanOrEqual(3);
+	expect(traced).toBeGreaterThanOrEqual(3);
 
 	// a seat on hold keeps the next wake and runs nothing: the room's alarm sends it again
 	await seat.hold(true);

@@ -6,7 +6,6 @@ import type {
 	CommitResult,
 	RoomProtocol,
 } from '@ambionframework/ambion/hosting';
-import type { AuditSession, SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { noTrace } from '../../../ambion/test/support/trace.ts';
 import { Activation } from '../../src/executor.ts';
@@ -42,7 +41,6 @@ export function activationFor(
 	definition: AgentDefinition,
 	options: {
 		stream?: StreamFn;
-		openAudit?: () => Promise<AuditSession>;
 		emit?: (event: RoomNotification) => void;
 	} = {},
 ): Activation {
@@ -52,11 +50,8 @@ export function activationFor(
 			definition,
 			model: stubModel,
 			stream: options.stream ?? unused,
-			transcripts: { open: async () => unused() } as SessionOpener,
-			room: 'room',
 			now: () => 0,
 		},
-		options.openAudit ?? unused,
 	);
 }
 

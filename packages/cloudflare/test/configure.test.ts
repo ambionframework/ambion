@@ -1,7 +1,7 @@
 import { defineAgent } from '@ambionframework/ambion';
+import { traceJournals } from '@ambionframework/ambion/hosting';
 import { memoryJournals } from '@ambionframework/journal';
 import { pi } from '@ambionframework/pi';
-import { piSessions } from '@ambionframework/pi-journal';
 import { describe, expect, it } from 'vitest';
 import { configure, definitionOf, executionFor, runtimeFor } from '../src/configure.ts';
 import { scripted } from './scripted.ts';
@@ -30,17 +30,18 @@ describe('configure', () => {
 		expect(() => configure({ agents: [first, second] })).toThrow(/repeat agent 'duplicate'/);
 	});
 
-	it('composes the configured stream and transcripts over supplied storage', async () => {
+	it('composes the configured stream and traces over supplied storage', async () => {
 		const stream = scripted;
 		configure({ agents: [agent('execution')], stream });
 		const storage = memoryJournals();
 		const services = executionFor({ storage });
-		const id = 'configured-execution';
-		const transcript = await services.transcripts.open(id, 'room');
-		const runtimeTranscript = await piSessions(runtimeFor({ storage }).storage).open(id);
+		const journal = await services.traces.open('configured-execution');
+		await journal.append({ step: 1 }, 0);
+		const runtimeTraces = traceJournals(runtimeFor({ storage }).storage);
 
 		expect(services.stream).toBe(stream);
-		expect(await transcript.getMetadata()).toMatchObject({ id, parentSessionId: 'room' });
-		expect(await runtimeTranscript.getMetadata()).toMatchObject({ id, parentSessionId: 'room' });
+		expect((await (await runtimeTraces.open('configured-execution')).read(0)).entries).toHaveLength(
+			1,
+		);
 	});
 });

@@ -383,8 +383,6 @@ export type ExecutionEvent =
 			operation: 'wake' | 'steer' | 'cut' | 'view' | 'commit' | 'claim' | 'renew' | 'release';
 			error: Error;
 	  }
-	/** Transcript persistence failed independently of the execution outcome. */
-	| { type: 'audit_error'; agent: string; activation: string; error: Error }
 	/** The trace journal failed to take a step. The activation and its lease are unaffected. */
 	| { type: 'trace_error'; agent: string; activation: string; error: Error }
 	/**

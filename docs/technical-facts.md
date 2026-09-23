@@ -100,7 +100,6 @@ limits of the 0.1.0 release. The [README](../README.md) holds the positioning.
 | `@ambionframework/workspace`  | The resource contract, a directory workspace, and a SQL resource                      |
 | `@ambionframework/assistant`  | A default assistant that guides membership and writes summaries                       |
 | `@ambionframework/journal`    | The append-only journal and its storage contract                                      |
-| `@ambionframework/pi-journal` | Pi transcript sessions over journal storage                                           |
 | `@ambionframework/cloudflare` | Rooms and seats as Durable Objects                                                    |
 
 ## Boundaries and limits

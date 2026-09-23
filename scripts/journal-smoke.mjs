@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Check journal packages in consumers outside the workspace. Build first. */
+/** Check the journal package in a consumer outside the workspace. Build first. */
 import { spawnSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -55,12 +55,11 @@ async function consumer(directory, dependencies, source, skipLibCheck) {
 async function smoke() {
 	const packages = await publishablePackages();
 	sharedVersion(packages);
-	if (!packages.some((entry) => entry.manifest.name === '@ambionframework/pi-journal'))
-		throw new Error('Release discovery omitted pi-journal.');
+	if (!packages.some((entry) => entry.manifest.name === '@ambionframework/journal'))
+		throw new Error('Release discovery omitted journal.');
 	const directory = await mkdtemp(join(tmpdir(), 'ambion-journal-smoke-'));
 	try {
 		const journal = await pack('journal', directory);
-		const piJournal = await pack('pi-journal', directory);
 		await consumer(
 			join(directory, 'generic'),
 			{ '@ambionframework/journal': journal },
@@ -74,35 +73,14 @@ const journal = new Journal(memoryJournals().open('test'), vocabulary);
 const result = await journal.append('note', { decide: () => ({ body: { text: 'hello' } }) });
 assert.ok('entry' in result);
 assert.equal(result.entry.kind, 'note');
-for (const name of ['@earendil-works/pi-agent-core', '@ambionframework/pi-journal', '@ambionframework/ambion']) {
+for (const name of ['@earendil-works/pi-agent-core', '@ambionframework/ambion']) {
   assert.throws(() => import.meta.resolve(name), { code: 'ERR_MODULE_NOT_FOUND' });
 }
 await assert.rejects(import('@ambionframework/journal/' + 'pi'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
 `,
 			false,
 		);
-		await consumer(
-			join(directory, 'pi'),
-			{ '@ambionframework/journal': journal, '@ambionframework/pi-journal': piJournal },
-			`import assert from 'node:assert/strict';
-import { memoryJournals } from '@ambionframework/journal';
-import { piSessions, type SessionOpener } from '@ambionframework/pi-journal';
-const journals = memoryJournals();
-const sessions: SessionOpener = piSessions(journals);
-const session = await sessions.open('review', 'parent');
-const entry = await session.appendEntry({ id: 'note', type: 'custom', customType: 'audit', data: { text: 'hello' } }, 'main');
-await session.createLane('branch', entry.id);
-await session.setLabel(entry.id, 'keep');
-const reopened = await piSessions(journals).open('review');
-assert.equal((await reopened.getMetadata()).parentSessionId, 'parent');
-assert.equal(await reopened.getLabel(entry.id), 'keep');
-assert.equal((await reopened.findEntries({ order: 'oldestFirst' })).length, 1);
-assert.deepEqual(await reopened.getLanes(), [{ lane: 'main', leafId: entry.id }, { lane: 'branch', leafId: entry.id }]);
-assert.throws(() => import.meta.resolve('@ambionframework/ambion'), { code: 'ERR_MODULE_NOT_FOUND' });
-`,
-			true,
-		);
-		console.log('Packed journal consumers passed.');
+		console.log('The packed journal consumer passed.');
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}

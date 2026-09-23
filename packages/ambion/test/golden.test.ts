@@ -3,7 +3,6 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
-import { lastSession } from '../src/room/lease.ts';
 import { readView } from '../src/room/read.ts';
 import type { ExchangeView, RoomRead } from '../src/types.ts';
 import { goldenScenarios } from './support/golden.ts';
@@ -107,16 +106,21 @@ if (process.env.GOLDEN === 'write') {
 			for (const fence of fences) expect(fence.body).toMatchObject({ format: 1 });
 		});
 
-		it('records the seat session on each ended activation, and folds the last one', async () => {
+		it('records a session on each ended activation, and keeps it inside one exchange', async () => {
 			const entries = await load<Entry[]>('session.journal.json');
 			const ended = entries.flatMap((entry) =>
 				entry.kind === 'lease' && entry.body.phase === 'ended' ? [entry.body] : [],
 			);
-			expect(ended.length).toBeGreaterThanOrEqual(2);
 			for (const change of ended) expect(change.session?.harness).toBe('pi');
-			const state = foldRoom(entries, { backoff });
-			expect(lastSession(state.leases, 'worker')).toEqual(ended.at(-1)?.session);
-			expect(lastSession(state.leases, 'nobody')).toBeUndefined();
+			const [first = [], second = []] = foldOf(entries).exchanges.map((exchange) =>
+				exchange.activations.flatMap((activation) =>
+					activation.seat === 'worker' ? [activation.session?.id] : [],
+				),
+			);
+			expect(first.length).toBeGreaterThanOrEqual(2);
+			expect(new Set(first).size).toBe(1);
+			expect(second).toHaveLength(1);
+			expect(second).not.toContain(first[0]);
 		});
 
 		it('reads a journal whose fence has no format as format 1', async () => {

@@ -8,7 +8,14 @@
 			"name": "worker",
 			"identity": "Answers the question.",
 			"status": "idle",
-			"attention": "broadcast"
+			"attention": "named"
+		},
+		{
+			"kind": "agent",
+			"name": "checker",
+			"identity": "Checks the crew.",
+			"status": "idle",
+			"attention": "named"
 		},
 		{
 			"kind": "human",
@@ -21,7 +28,7 @@
 		{
 			"owner": "priya",
 			"from": 4,
-			"through": 6,
+			"through": 12,
 			"at": "2026-01-01T09:00:00.000Z",
 			"status": "closed",
 			"activations": [
@@ -42,7 +49,47 @@
 					},
 					"session": {
 						"harness": "pi",
-						"id": "[\"ambion/seat-session\",\"golden-6\",\"worker\"]"
+						"id": "message:4:worker:1"
+					}
+				},
+				{
+					"id": "message:6:checker:1",
+					"seat": "checker",
+					"attempt": 1,
+					"purpose": "respond",
+					"outcome": {
+						"status": "released"
+					},
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"cost": 0
+					},
+					"session": {
+						"harness": "pi",
+						"id": "message:6:checker:1"
+					}
+				},
+				{
+					"id": "message:10:worker:1",
+					"seat": "worker",
+					"attempt": 1,
+					"purpose": "respond",
+					"outcome": {
+						"status": "released"
+					},
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"cost": 0
+					},
+					"session": {
+						"harness": "pi",
+						"id": "message:4:worker:1"
 					}
 				}
 			],
@@ -62,13 +109,13 @@
 		},
 		{
 			"owner": "priya",
-			"from": 10,
-			"through": 10,
+			"from": 18,
+			"through": 20,
 			"at": "2026-01-01T09:00:00.000Z",
 			"status": "closed",
 			"activations": [
 				{
-					"id": "message:10:worker:1",
+					"id": "message:18:worker:1",
 					"seat": "worker",
 					"attempt": 1,
 					"purpose": "respond",
@@ -84,7 +131,7 @@
 					},
 					"session": {
 						"harness": "pi",
-						"id": "[\"ambion/seat-session\",\"golden-6\",\"worker\"]"
+						"id": "message:18:worker:1"
 					}
 				}
 			],
@@ -103,5 +150,5 @@
 			}
 		}
 	],
-	"watermark": 15
+	"watermark": 24
 }

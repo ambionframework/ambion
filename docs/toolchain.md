@@ -16,8 +16,7 @@ packages/
   codex/        Codex SDK executor: codex() and codexExecution()
   journal/      append-only journal storage
   just-bash/    workspace bash backends over just-bash, in memory or over a directory
-  pi/           Pi executor: pi(), piExecution(), and the seat transcript audit
-  pi-journal/   Pi session persistence over journal storage
+  pi/           Pi executor: pi() and piExecution()
   workspace/    workspace resource, tool bundles, and backend helpers
   workstation/  workspace bash backend over SSH, one account for each agent
 examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
@@ -27,13 +26,12 @@ planning/       the plan for the next release and the backlog
 .github/        CI, live, and dev-release workflows
 ```
 
-The eleven `packages/*` entries are publishable and share a lockstep version.
+The ten `packages/*` entries are publishable and share a lockstep version.
 Examples are private. The package graph is:
 
 ```text
 ambion ──▶ journal
-pi ──▶ ambion, journal, pi-journal
-pi-journal ──▶ journal
+pi ──▶ ambion, journal
 claude ──▶ ambion
 codex ──▶ ambion
 cloudflare ──▶ ambion, journal, pi

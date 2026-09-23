@@ -168,8 +168,6 @@ export class SeatObject extends DurableObject<Env> {
 			definition,
 			model: execution.model,
 			stream: execution.stream,
-			transcripts: execution.transcripts,
-			room,
 			now: () => execution.clock.now(),
 		});
 		// The trace journal holds each step. The log line stays for the coarse events.

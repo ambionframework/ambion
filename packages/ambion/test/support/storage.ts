@@ -1,8 +1,8 @@
 /**
  * The storages every scenario runs on.
  *
- * Every storage gives room journals and Pi transcripts their own namespace.
- * Memory keeps both in process. SQLite keeps both in one database. A second
+ * Every storage gives room journals and traces their own namespace. Memory
+ * keeps both in process. SQLite keeps both in one database. A second
  * runtime reads either record.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -17,12 +17,10 @@ import {
 	type SqlValue,
 	sqliteJournals,
 } from '@ambionframework/journal';
-import { piSessions, type SessionOpener } from '@ambionframework/pi-journal';
 
 export interface OpenedStorage {
 	readonly storage: JournalOpener;
 	readonly journals: JournalOpener;
-	readonly transcripts: SessionOpener;
 	readonly dir?: string;
 	dispose(): Promise<void>;
 }
@@ -39,7 +37,6 @@ export const memory: Storage = {
 		return {
 			storage,
 			journals: namespaced(storage, 'ambion/room'),
-			transcripts: piSessions(storage),
 			dispose: async () => {},
 		};
 	},
@@ -68,7 +65,6 @@ export const sqlite: Storage = {
 		return {
 			storage,
 			journals: namespaced(storage, 'ambion/room'),
-			transcripts: piSessions(storage),
 			dir,
 			async dispose() {
 				database.close();

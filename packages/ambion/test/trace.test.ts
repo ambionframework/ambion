@@ -371,8 +371,6 @@ function play(stream: StreamFn, storage?: JournalOpener) {
 		definition: product,
 		model: services.model,
 		stream: services.stream,
-		transcripts: services.transcripts,
-		room: 'played',
 		now: () => clock.now(),
 	});
 	const actor = new AgentRunner(room, {

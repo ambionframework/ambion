@@ -120,10 +120,9 @@ holds the lease for `limits.lease.ttl`. No renewal reaches past
 
 Steering carries explicit consumed ranges, so reordered or duplicated context
 cannot acknowledge a gap. A fresh activation reconstructs missed context from
-the record. Transcript audit failure is reported separately as `audit_error`;
-it does not turn successful or deliberately silent collaboration into failed
-work, and no durable audit backlog is promised. The trace journal follows the
-same rule: a failed step write is a `trace_error` and changes no outcome.
+the record. A failed trace step write is a `trace_error`. It does not turn
+successful or deliberately silent collaboration into failed work, and no
+durable trace backlog is promised.
 
 ### Permanent and transient failure
 
@@ -238,20 +237,23 @@ reader for the older format.
   `Unsupported journal format`. It does not skip the fence and does not
   guess.
 
-**A `session` on an ended lease entry is an additive field.** An executor
-that keeps memory across activations (`memory: 'seat'`) hands the driver a
-harness session at release. The room writes it as `session: { harness, id }`
-on the `ended` entry and folds the latest one per seat into `spec.resume`
-for the next activation. The room never reads the id. A reader that
-predates the field ignores it, and an entry without it folds as before.
+**A `session` on an ended lease entry names a harness session.** An
+executor hands the driver a harness session at release. The room writes it
+as `session: { harness, id }` on the `ended` entry. It hands the latest one
+of the seat in the same exchange to the next activation as `spec.resume`.
+The room never reads the id.
 
-- **The Pi id is fixed.** It names the seat session that `pi-journal` keeps
-  in the same storage. The kept transcript lives in the process. After a
-  restart the seat reads the whole view and appends to the same session.
-- **The Claude id comes from the SDK.** A restart on the same disk resumes
-  it. A host that loses the SDK session store, such as a Cloudflare
-  Durable Object, cannot resume. The executor then starts a fresh session,
-  and the next release records the new id. The activation does not fail.
+**The room promises nothing about the session itself.** The harness keeps
+it on the local disk or in the process, as a cache of the work of one
+exchange. A restart, a new disk, or a host with no disk loses it. The next
+activation then starts fresh from the record, and its release records the
+new id. The activation does not fail.
+
+- **The Pi id names the activation that began the transcript.** The
+  transcript lives in the process, so a restart loses it.
+- **The Claude and Codex ids come from the SDK.** The SDK stores the
+  session on the local disk. A restart on the same disk resumes it. A
+  Cloudflare Durable Object has no such store and starts fresh.
 
 Cancellation adds the `cancel` entry kind. Older runtimes must not resume a
 journal that contains cancellation entries, because they do not interpret

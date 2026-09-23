@@ -72,11 +72,7 @@
 										"message": "The core runs on any host. A platform's own modules belong to its package."
 									},
 									{
-										"group": [
-											"@earendil-works/*",
-											"@ambionframework/pi",
-											"@ambionframework/pi-journal"
-										],
+										"group": ["@earendil-works/*", "@ambionframework/pi"],
 										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
 									}
 								]
@@ -216,8 +212,7 @@
 											"../room-host/*",
 											"../index.ts",
 											"../hosting.ts",
-											"@earendil-works/pi-*",
-											"@ambionframework/pi-journal"
+											"@earendil-works/pi-*"
 										],
 										"message": "The room's facts and decisions are pure over the log: no host, no tool, no seat."
 									}
@@ -246,8 +241,7 @@
 											"./room-host/*",
 											"./index.ts",
 											"./hosting.ts",
-											"@earendil-works/pi-*",
-											"@ambionframework/pi-journal"
+											"@earendil-works/pi-*"
 										],
 										"message": "An answer reads the room: no workspace, no seat, and never the session."
 									}
@@ -334,8 +328,7 @@
 											"./room-host/*",
 											"./index.ts",
 											"./hosting.ts",
-											"@earendil-works/pi-*",
-											"@ambionframework/pi-journal"
+											"@earendil-works/pi-*"
 										],
 										"message": "A conformance suite drives the wire from outside: no log, no fold, no room, no model."
 									}
@@ -367,8 +360,7 @@
 											"../index.ts",
 											"../hosting.ts",
 											"@earendil-works/*",
-											"@ambionframework/pi",
-											"@ambionframework/pi-journal"
+											"@ambionframework/pi"
 										],
 										"message": "The test tools read the vocabulary and the execution contract, run no room, and name no model library."
 									}
@@ -396,8 +388,7 @@
 											"../room.ts",
 											"../index.ts",
 											"../hosting.ts",
-											"@earendil-works/pi-*",
-											"@ambionframework/pi-journal"
+											"@earendil-works/pi-*"
 										],
 										"message": "The room host owns collaboration state; execution services belong to the facade."
 									}
@@ -642,33 +633,6 @@
 									{
 										"group": ["@ambionframework/*", "@earendil-works/pi-*", "**/ambion/**"],
 										"message": "The record knows no room. Nothing in this repository sits below it."
-									}
-								]
-							}
-						}
-					}
-				}
-			}
-		},
-		{
-			// Pi transcript storage depends on the generic journal and Pi. It does
-			// not depend on the collaboration runtime.
-			"includes": ["packages/pi-journal/src/**"],
-			"linter": {
-				"rules": {
-					"style": {
-						"noRestrictedImports": {
-							"level": "error",
-							"options": {
-								"patterns": [
-									{
-										"group": [
-											"@ambionframework/ambion",
-											"@ambionframework/ambion/**",
-											"**/packages/ambion/**",
-											"**/ambion/**"
-										],
-										"message": "Pi transcript storage knows the journal and Pi, not the room."
 									}
 								]
 							}

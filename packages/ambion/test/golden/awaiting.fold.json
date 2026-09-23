@@ -45,6 +45,10 @@
 						"cacheRead": 0,
 						"cacheWrite": 0,
 						"cost": 0
+					},
+					"session": {
+						"harness": "pi",
+						"id": "message:5:worker:1"
 					}
 				}
 			],

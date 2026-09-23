@@ -1,8 +1,7 @@
-import { piSessions } from '@ambionframework/pi-journal';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { pi, piExecution, seatSessionId } from '../../pi/src/index.ts';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { renderRecord } from '../src/execution/render.ts';
 import type { AgentDefinition } from '../src/index.ts';
 import {
@@ -229,14 +228,6 @@ describe('closing summaries', () => {
 		expect(summary.covers.through).toBe(messageBefore(record, summary.seq));
 		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
 		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said', 'said', 'said', 'summary']);
-		// the assistant keeps its turns in a downstream session of its own, like any seat
-		const transcript = await piSessions(runtime.storage).open(
-			seatSessionId(session.name, 'assistant'),
-		);
-		expect(await transcript.findEntries()).toContainEqual(
-			expect.objectContaining({ type: 'custom', customType: 'ambion/activation' }),
-		);
-
 		// what an assistant is given: the range it covers, and one tool that reaches the record
 		expect(tools).toEqual(['say']);
 		expect(contexts[0]).toContain('Can I tell the client Thursday');

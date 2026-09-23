@@ -14,11 +14,11 @@
  *   turn starts, so `readThrough` moves to the view's position on
  *   `turn.started`. A say that the room answers `missed` moves it to the
  *   last missed line, which the model reads in the same tool result.
- * - **Memory.** With `memory: 'seat'` the executor keeps the thread id
- *   that `thread.started` reports. The next activation resumes that
- *   thread. After a restart the id comes from `spec.resume`, which the room
- *   read off the journal. A resume that Codex cannot honor fails before
- *   `thread.started`, and the activation starts a fresh thread instead.
+ * - **Exchange continuity.** Codex keeps its threads on the local disk, and
+ *   the release records the id that `thread.started` reports. The
+ *   activation resumes the thread that `spec.resume` names, which the room
+ *   hands back inside one exchange. A resume that Codex cannot honor fails
+ *   before `thread.started`, and the activation starts a fresh thread.
  * - **Steer.** The session has no `steer`. Codex takes no message into a
  *   turn that runs. The driver holds the line, and the next pass reads it.
  * - **Cut.** `abort` signals the turn. `close` stops the socket and the
@@ -37,12 +37,7 @@ import type {
 	Seq,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
-import {
-	renderActivation,
-	renderDelta,
-	resumesForSeat,
-	sessionToResume,
-} from '@ambionframework/ambion/hosting';
+import { renderActivation, renderDelta, sessionToResume } from '@ambionframework/ambion/hosting';
 import {
 	Codex,
 	type CodexOptions,
@@ -62,11 +57,6 @@ import { CodexSteps, changedPaths, isRoomTool } from './codex-trace.ts';
 import { type CodexRuntime, clientOptions, codexOf, threadOptions } from './options.ts';
 import { passResultOf } from './services.ts';
 import type { Binding } from './tools.ts';
-
-/** What a seat with memory keeps between activations: the thread id Codex reported last. */
-interface SeatMemory {
-	id?: string;
-}
 
 /** The part of a Codex thread that a pass uses. */
 interface CodexThreadLike {
@@ -102,12 +92,9 @@ export const HARNESS_NOTE =
 
 /** The Codex executor. One instance per seat, for as long as the room runs. */
 export function createCodexExecutor(options: CodexExecutorOptions): Executor {
-	const memory: SeatMemory | undefined = resumesForSeat(options.definition.executor)
-		? {}
-		: undefined;
 	return {
 		open(activation: ExecutorActivation): ExecutorSession {
-			return new Activation(activation, options, memory);
+			return new Activation(activation, options);
 		},
 	};
 }
@@ -145,8 +132,8 @@ class Activation implements ExecutorSession {
 	private readonly trace: TraceSink;
 	private readonly definition: AgentDefinition;
 	private readonly options: CodexExecutorOptions;
-	/** The seat's memory across activations. Absent when the seat keeps none. */
-	private readonly memory: SeatMemory | undefined;
+	/** The thread Codex reported last. */
+	private reported: string | undefined;
 	/** The thread this activation asked Codex to resume. Cleared when the resume fails. */
 	private resuming: string | undefined;
 	/** Whether Codex reported `thread.started` for the thread in use. */
@@ -170,19 +157,18 @@ class Activation implements ExecutorSession {
 	private serial = 0;
 	private stopped = false;
 
-	constructor(activation: ExecutorActivation, options: CodexExecutorOptions, memory?: SeatMemory) {
+	constructor(activation: ExecutorActivation, options: CodexExecutorOptions) {
 		this.id = activation.id;
 		this.room = activation.room;
 		this.emit = activation.emit;
 		this.trace = activation.trace;
 		this.definition = options.definition;
 		this.options = options;
-		this.memory = memory;
 	}
 
-	/** The Codex thread to record with the release. Absent until Codex reports one, and when the seat keeps no memory. */
+	/** The Codex thread to record with the release. Absent until Codex reports one. */
 	get session(): HarnessSession | undefined {
-		const id = this.memory?.id;
+		const id = this.reported;
 		return id === undefined ? undefined : { harness: 'codex', id };
 	}
 
@@ -242,7 +228,7 @@ class Activation implements ExecutorSession {
 		const result = await this.settle(thread, prompt);
 		if (!result.failed || this.resuming === undefined || this.heard || this.stopped) return result;
 		this.resuming = undefined;
-		if (this.memory !== undefined) this.memory.id = undefined;
+		this.reported = undefined;
 		const fresh = this.begin(undefined);
 		this.thread = fresh;
 		return this.settle(fresh, prompt);
@@ -285,8 +271,7 @@ class Activation implements ExecutorSession {
 		}
 		const make = this.options.client ?? ((options: CodexOptions) => new Codex(options));
 		this.client = make(clientOptions(this.options, bridge.socketPath, scratch));
-		this.resuming =
-			this.memory === undefined ? undefined : (this.memory.id ?? sessionToResume(view, 'codex'));
+		this.resuming = sessionToResume(view, 'codex');
 		this.thread = this.begin(this.resuming);
 		return this.thread;
 	}
@@ -365,7 +350,7 @@ class Activation implements ExecutorSession {
 	private handle(event: ThreadEvent): void {
 		if (event.type === 'thread.started') {
 			this.heard = true;
-			if (this.memory !== undefined) this.memory.id = event.thread_id;
+			this.reported = event.thread_id;
 		}
 		if (event.type === 'turn.started') this.advance(this.reading);
 		this.bridge?.note(changedPaths(event));

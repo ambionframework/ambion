@@ -6,10 +6,9 @@
  * Stub executions stand in for a family, because the kernel imports no
  * executor package.
  */
-import { piSessions } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, vi } from 'vitest';
-import { pi, piExecution, seatSessionId } from '../../pi/src/index.ts';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	composeExecutions,
 	describeExecutor,
@@ -196,9 +195,6 @@ describe('execution composition', () => {
 		expect(defaultCalls).toBe(0);
 		const [first, second] = rooms;
 		if (first === undefined || second === undefined) throw new Error('Two rooms expected.');
-		expect(seatSessionId(first.room.name, 'writer')).not.toBe(
-			seatSessionId(second.room.name, 'writer'),
-		);
 		for (const [own, other] of [
 			[first, second],
 			[second, first],
@@ -207,12 +203,6 @@ describe('execution composition', () => {
 				`${own.label} question?`,
 				`${own.label} answer.`,
 			]);
-			const id = seatSessionId(own.room.name, 'writer');
-			const transcript = await piSessions(runtime.storage).open(id);
-			expect(await transcript.getMetadata()).toMatchObject({
-				id,
-				parentSessionId: own.room.name,
-			});
 			const prompts = own.calls.map((call) => call.systemPrompt);
 			expect(prompts.some((prompt) => prompt.includes(own.writer.identity))).toBe(true);
 			expect(prompts.every((prompt) => prompt.includes(own.writer.executor.instructions))).toBe(

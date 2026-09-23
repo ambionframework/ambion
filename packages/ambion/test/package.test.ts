@@ -93,7 +93,6 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'renderActivation',
 		'renderDelta',
 		'renderLine',
-		'resumesForSeat',
 		'roomTools',
 		'roundTrip',
 		'runningRoom',
@@ -149,16 +148,14 @@ it('names no model library: the manifest lists none, and no source file imports 
 		optionalDependencies = {},
 	} = JSON.parse(await read('package.json')) as Record<string, Record<string, string> | undefined>;
 	const declared = Object.keys({ ...dependencies, ...peerDependencies, ...optionalDependencies });
-	expect(declared.filter((name) => /^@earendil-works\/|pi-journal$|\/pi$/.test(name))).toEqual([]);
+	expect(declared.filter((name) => /^@earendil-works\/|\/pi$/.test(name))).toEqual([]);
 	const root = fileURLToPath(new URL('../src', import.meta.url));
 	const files = (await readdir(root, { recursive: true })).filter((file) => file.endsWith('.ts'));
 	expect(files.length).toBeGreaterThan(20);
 	for (const file of files) {
 		const imported = importsOf(await read(`src/${file}`));
 		// A relative path into the Pi package counts: `/testing` must import none.
-		const models = imported.filter((name) =>
-			/^@earendil-works\/|pi-journal$|\/pi(\/|$)/.test(name),
-		);
+		const models = imported.filter((name) => /^@earendil-works\/|\/pi(\/|$)/.test(name));
 		expect({ file, models }).toEqual({ file, models: [] });
 	}
 });

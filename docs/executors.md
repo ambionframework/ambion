@@ -5,7 +5,7 @@ driver own the record, the lease, and the rules. An executor owns the model
 call, the tools it exposes, and the steps it reports. [The
 README](../README.md) holds the positioning. This page holds the contract
 between the driver and an executor: the activation flow, the room tools,
-seat memory, failure classification, the step vocabulary, and the way to
+exchange continuity, failure classification, the step vocabulary, and the way to
 write an adapter. [The Pi guide](pi.md), [the Claude guide](claude.md), and
 [the Codex guide](codex.md) hold what is specific to one adapter.
 
@@ -266,23 +266,35 @@ trace lives in the storage of the seat, so a read across objects needs a call
 to the seat. `readActivation` reads the trace of one activation; see
 [Exchange](exchange.md).
 
-## Seat memory
+## Exchange continuity
 
-**`memory: 'activation'` is the default.** Each activation starts a fresh
-model session. The seat remembers nothing between activations, and the
-release records no session.
+**A seat keeps its harness session for the length of one exchange.** A
+seat often works in more than one activation of an exchange: it speaks,
+its lease ends, another participant answers, and the room wakes it again.
+The second activation continues the session of the first. It keeps the
+reasoning, the tool calls and the tool results that the record does not
+hold. The first activation of a seat in each exchange starts fresh.
 
-**`memory: 'seat'` keeps one harness session for the seat.** The release
-records `{ harness, id }` on the `ended` entry. The room folds the latest
-one for each seat into `spec.resume` and hands it back on the next
-activation. The room never reads the id. An executor uses a recorded
-session only when the harness name is its own.
+**The release records the session, and the room hands it back.** The
+release records `{ harness, id }` on the `ended` entry. The room gives
+the next activation of the same seat in the same exchange the latest such
+session as `spec.resume`. A closing activation gets the session of the
+exchange it summarizes. The room never reads the id. There is no option:
+every executor works this way.
 
-**A resume that the harness cannot honor starts a fresh session.** The
-fallback happens once for each resumed session. The activation does not
-fail, and the release records the new id.
+**An executor resumes only the session that `spec.resume` names.** It
+uses the session only when the harness name is its own. With no
+`spec.resume` it starts a fresh session and drops any session it holds.
 
-**Freshness still governs speech in both modes.** A kept session does not
+**The session is a cache, and its persistence is best effort.** The
+harness keeps the session where it keeps it: Claude and Codex keep it in
+their stores on the local disk, and Pi keeps it in the process. A restart,
+a new disk or a host with no disk loses it. The next activation then
+starts fresh from the room record. The activation does not fail, and the
+release records the new id. The record is the only state the room
+promises to keep.
+
+**Freshness governs speech in a kept session.** A kept session does not
 let a seat commit over a record it has not read.
 [Durability](durability.md#journal-format) owns the journal field and the
 journal format.
@@ -357,9 +369,9 @@ family. `@ambionframework/claude` is the worked example, and
 6. **Classify every failure.** Sort it into `permanent` and `transient`.
    [Failure classification](#failure-classification) states the shared
    rule; bring the family's own text set and status source.
-7. **Declare a memory mode.** Support `memory: 'activation'` at least.
-   [Seat memory](#seat-memory) states what `'seat'` adds: the recorded
-   session and the resume fallback.
+7. **Record a session, and resume only the one the view names.**
+   [Exchange continuity](#exchange-continuity) states the recorded session
+   and the fresh start. A harness with no session records none.
 8. **Wrap the executor in an `Execution`.** Export a function that defines
    the executor of an agent and a function that gives the host its
    execution. Claude offers `claude()` and `claudeExecution()`. Call

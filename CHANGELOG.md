@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+**A seat keeps its harness session for one exchange, and the `memory`
+option is gone.** `pi()`, `claude()` and `codex()` take no `memory`. Every
+executor records its session on the `ended` lease entry. The room hands it
+to the next activation of the same seat in the same exchange as
+`spec.resume`. The first activation of a seat in each exchange starts
+fresh. The session is a cache with best-effort persistence: Claude and
+Codex keep it in their stores on the local disk, and Pi keeps it in the
+process. A lost session starts fresh from the record. Remove `memory` from
+each executor definition. `resumesForSeat` is gone from
+`@ambionframework/ambion/hosting`. The golden journals changed.
+
+**`@ambionframework/pi-journal` and the Pi transcript audit are gone.** The
+activation trace is the record of what a seat did. `seatSessionId`, the
+`transcripts` and `room` options of `createPiExecutor`, the `transcripts`
+service of `createExecutionServices`, and the `audit_error` event are gone.
+Storage keeps no `ambion/pi-session` journals. Read the trace with
+`readActivation`.
+
+**The executor conformance suite has a case for the fresh start.** An
+executor that declares `memory` starts a fresh session when the view names
+none. The Claude harness takes no `memory` option.
+
 **A second seat alarm returns while a run is live.** `SeatObject.alarm()`
 returns at once while a run is live in the object. Before, a second call
 treated the live run as one that an eviction lost. It released the lease

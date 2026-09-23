@@ -38,8 +38,6 @@ export function piExecution(options: PiExecutionOptions = {}): Execution {
 						definition: request.definition,
 						model: services.model,
 						stream: services.stream,
-						transcripts: services.transcripts,
-						room: request.room,
 						now: () => host.clock.now(),
 					}),
 			});

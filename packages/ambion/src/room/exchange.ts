@@ -36,6 +36,7 @@ import {
 	type ExchangeOutcome,
 	type ExchangeRef,
 	type ExchangeView,
+	type HarnessSession,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -382,6 +383,73 @@ export function openExchange(
 	people: readonly string[],
 ): ExchangeRef | undefined {
 	return exchangeAfter(messages, people, lastOf(closes.map((close) => close.through)));
+}
+
+/**
+ * The `from` of the exchange an activation serves, or nothing. A closing
+ * activation serves the exchange its close ended. A response activation
+ * serves the exchange whose range holds the message that caused it. A
+ * message outside every exchange, such as agent speech in a quiet room,
+ * serves none.
+ */
+function servedExchange(
+	source: ActivationSource,
+	position: Seq,
+	closes: readonly Close[],
+	open: ExchangeRef | undefined,
+): Seq | undefined {
+	if (source === 'closed') return closes.find((close) => close.through === position)?.from;
+	if (open !== undefined && position >= open.from) return open.from;
+	return closes.find((close) => close.from <= position && position <= close.through)?.from;
+}
+
+/**
+ * The harness session an activation resumes: the one that the latest ended
+ * activation of the same seat in the same exchange recorded. The latest is
+ * the one whose end entry stands highest on the journal. A harness session
+ * never crosses an exchange, so the first activation of a seat in each
+ * exchange starts fresh.
+ */
+export function exchangeSession(
+	id: string,
+	closes: readonly Close[],
+	open: ExchangeRef | undefined,
+	leases: ReadonlyMap<string, LeaseHold>,
+): HarnessSession | undefined {
+	const activation = seatAndExchange(id, closes, open);
+	if (activation?.exchange === undefined) return undefined;
+	let latest: { until: Seq; session: HarnessSession } | undefined;
+	for (const lease of withSession(leases)) {
+		if (latest !== undefined && lease.until <= latest.until) continue;
+		const ended = seatAndExchange(lease.id, closes, open);
+		if (ended?.seat === activation.seat && ended.exchange === activation.exchange) latest = lease;
+	}
+	return latest?.session;
+}
+
+/** The ended leases that recorded a harness session. */
+function withSession(
+	leases: ReadonlyMap<string, LeaseHold>,
+): { id: string; until: Seq; session: HarnessSession }[] {
+	return [...leases.values()].flatMap((lease) =>
+		lease.phase === 'ended' && lease.session !== undefined
+			? [{ id: lease.id, until: lease.until, session: lease.session }]
+			: [],
+	);
+}
+
+/** The seat of an activation id and the `from` of the exchange it serves, or nothing for a malformed id. */
+function seatAndExchange(
+	id: string,
+	closes: readonly Close[],
+	open: ExchangeRef | undefined,
+): { seat: string; exchange: Seq | undefined } | undefined {
+	const decoded = decodeActivationId(id);
+	if (decoded === undefined) return undefined;
+	return {
+		seat: decoded.seat,
+		exchange: servedExchange(decoded.source, decoded.position, closes, open),
+	};
 }
 
 /** The open exchange over the messages after a boundary, for a projection that keeps only those. */

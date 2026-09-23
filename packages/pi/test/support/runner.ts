@@ -15,7 +15,6 @@ import {
 	type ViewResponse,
 } from '@ambionframework/ambion/hosting';
 import { fakeClock } from '@ambionframework/ambion/testing';
-import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { scriptedAgent, tick } from '../../../ambion/test/support/room.ts';
@@ -111,8 +110,6 @@ export interface SeatOptions {
 	readonly model?: ModelResolver;
 	readonly call?: { attempts?: number; timeout?: number };
 	readonly emit?: AgentExecutionContext['emit'];
-	/** Wraps the transcript opener that the services give. */
-	readonly transcripts?: (base: SessionOpener) => SessionOpener;
 }
 
 /**
@@ -129,7 +126,6 @@ export function seatHost(options: SeatOptions = {}) {
 		clock,
 		stream: options.stream ?? scripted(() => quiet()),
 	});
-	const transcripts = options.transcripts?.(services.transcripts) ?? services.transcripts;
 	const start = (room: RoomProtocol) =>
 		new AgentRunner(room, {
 			clock,
@@ -141,8 +137,6 @@ export function seatHost(options: SeatOptions = {}) {
 				definition,
 				model: options.model ?? services.model,
 				stream: services.stream,
-				transcripts,
-				room: name,
 				now: () => clock.now(),
 			}),
 			emit: options.emit,

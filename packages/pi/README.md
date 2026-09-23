@@ -3,7 +3,7 @@
 **Run Ambion agents on Pi.** `pi()` defines the executor of an agent.
 `piExecution()` gives a runtime or a room the services that run it. The
 kernel, `@ambionframework/ambion`, imports no model library. This package holds
-Pi, the model registry, and the audit of each seat's transcript. The
+Pi and the model registry. The
 [guide](https://github.com/ambionframework/ambion/blob/main/docs/pi.md) holds
 every detail. [Ambion](https://ambionframework.com) is a collaboration kernel
 for agents and humans.
@@ -57,7 +57,6 @@ const inventory = defineAgent({
     model: 'anthropic/claude-sonnet-5',
     tools: [stock],
     activationTokenLimit: 60_000,
-    memory: 'seat',
   }),
 });
 
@@ -95,7 +94,6 @@ scripted stream, custom storage, a transport, or limits passes
 | `speaking`             | `DEFAULT_GUIDANCE`           | The speaking policy. It replaces the default.          |
 | `activationTokenLimit` | The whole record             | The token limit of the record one activation reads.    |
 | `estimateTokens`       | `Math.ceil(text.length / 4)` | Counts tokens against the limit. It needs the limit.   |
-| `memory`               | `'activation'`               | `'activation'` or `'seat'`.                            |
 
 `piExecution({ stream })` takes one option. Without a `stream`, the Pi
 registry answers. A scripted `stream` makes a room deterministic, and the
@@ -122,18 +120,15 @@ and `unseat`, and then the tools of the agent. A closing activation receives
 The definition is the whole policy. The model sees no environment variable and
 no key. The registry stream reads the key in the host process.
 
-## Memory
+## Exchange continuity
 
-**`memory: 'activation'` builds a fresh agent for each activation.**
-**`memory: 'seat'` keeps the transcript of the last activation that did not
-fail,** and the next activation prompts it with the delta. The release records
-`{ harness: 'pi', id }`. The kept transcript lives in the process, so a
-restart reads the whole view once.
+**The seat keeps the transcript of the last activation that did not fail,**
+and the next activation of the seat in the same exchange prompts it with the
+delta. The first activation in a new exchange builds a fresh agent. The
+release records `{ harness: 'pi', id }`. The kept transcript lives in the
+process, so a restart reads the whole view once.
 
-## Audit, steps, usage, and failures
-
-**Each seat keeps a Pi session as its audit.** `seatSessionId(room, seat)`
-names it. The audit failure raises `audit_error` and changes no outcome.
+## Steps, usage, and failures
 
 **Steps.** The executor records `thinking`, `text`, `tool_call`,
 `tool_result`, `steer`, and `usage`. It records no `approval`.
@@ -195,7 +190,6 @@ registry, the price tables, or a real model. The live scenarios of
 | `fromPiTool(tool)`                            | Adapt a native Pi tool to an Ambion tool                  |
 | `piExecution({ stream })`                     | The `execution` value for `startRoom` and `createRuntime` |
 | `createPiExecutor`, `createExecutionServices` | The parts for a host that runs seats apart from the room  |
-| `seatSessionId(room, seat)`                   | The id of the audit session of one seat                   |
 | `stubModel`                                   | The model that a custom stream receives                   |
 
 ## Troubleshooting
@@ -206,7 +200,6 @@ registry, the price tables, or a real model. The live scenarios of
   retries it to the cap.
 - **Abandoned after one attempt.** A permanent failure. Check
   `<PROVIDER>_API_KEY` and the credit of the account.
-- **`audit_error`.** The audit write failed twice. Check the storage.
 
 The [guide](https://github.com/ambionframework/ambion/blob/main/docs/pi.md#troubleshooting)
 lists more causes.

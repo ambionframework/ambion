@@ -2,8 +2,8 @@
 
 `@ambionframework/codex` runs an Ambion seat on the Codex SDK. This page
 holds what is specific to the Codex adapter. [Executors](executors.md)
-holds the shared contract: the activation flow, the room tools, seat
-memory, failure classification, the step vocabulary, and the trace. [The
+holds the shared contract: the activation flow, the room tools, exchange
+continuity, failure classification, the step vocabulary, and the trace. [The
 Pi guide](pi.md) and [the Claude guide](claude.md) cover the other two
 shipped families. [The
 README](../README.md) holds the positioning.
@@ -66,7 +66,6 @@ const planner = defineAgent({
     instructions: 'Speak when the plan lacks evidence.',
     model: 'gpt-5.6-luna',
     modelReasoningEffort: 'medium',
-    memory: 'seat',
   }),
 });
 
@@ -100,7 +99,6 @@ The executor passes each policy field to the Codex SDK unchanged.
 | `speaking`              | `DEFAULT_GUIDANCE` | The speaking policy that replaces the default                |
 | `activationTokenLimit`  | The whole record   | The token limit for the record one activation reads          |
 | `estimateTokens`        | Length estimate    | How the agent counts tokens against its limit                |
-| `memory`                | `'activation'`     | `'seat'` resumes one thread for the seat                     |
 | `nativeTools`           | `'none'`           | `'none'` turns off every native tool; `'codex'` keeps them   |
 | `sandboxMode`           | Codex default      | `read-only`, `workspace-write`, or `danger-full-access`      |
 | `approvalPolicy`        | Codex default      | `never`, `on-request`, `on-failure`, or `untrusted`          |
@@ -292,15 +290,16 @@ failure reaches the host as an `error` event before the driver sees it.
 `codexPath` (see [Options](#options)) or a lost connection to the room tools
 server gives a transient failure.
 
-## Memory
+## Exchange continuity
 
-[Executors](executors.md#seat-memory) states the two modes, the recorded
-session, and the resume rule.
+[Executors](executors.md#exchange-continuity) states the rule, the recorded
+session, and the fresh start.
 
-**`memory: 'seat'` resumes one thread for the seat.**
+**An activation resumes the thread that `spec.resume` names.**
 
-- The executor keeps the thread id from the `thread.started` event.
-- The next activation calls `resumeThread(id)`.
+- The release records the thread id from the `thread.started` event.
+- An activation whose `spec.resume` names a Codex thread calls
+  `resumeThread(id)`. Every other activation starts a fresh thread.
 
 **A resume that Codex cannot honor starts a fresh thread.** Such a resume fails
 before `thread.started`. The executor then starts a fresh thread, runs the
@@ -399,7 +398,7 @@ streams that a real `codex` 0.155.1 produced through the SDK 0.155.1, on the
 model `gpt-5.6-luna`. The tests map them to steps, count usage, and report
 the changed paths. Pure parts have their own tests: the wire framing, the
 room tools, the options, and the failure classification. A replay client
-runs the executor on the recorded events to test the memory modes.
+runs the executor on the recorded events to test exchange continuity.
 
 **The live tier proves the claims that recorded events cannot.** Each file
 holds the smallest room that proves one claim.
@@ -410,7 +409,7 @@ holds the smallest room that proves one claim.
 | `test/live/tools.test.ts`     | A command and a file change become steps; the next say cites the path                                               |
 | `test/live/exclusive.test.ts` | The default seat has exactly the room tools and its own; it reads no host file; `'codex'` restores the native tools |
 | `test/live/steer.test.ts`     | A line sent during a run is held, and the next pass reads it                                                        |
-| `test/live/memory.test.ts`    | A resumed thread answers from the first activation; a bogus id falls back                                           |
+| `test/live/memory.test.ts`    | Each exchange starts a fresh thread and records it; a bogus id falls back                                           |
 | `test/live/mixed.test.ts`     | A Pi seat and a Codex seat both speak                                                                               |
 
 **Run the live tier with a key.** Every definition sets the model

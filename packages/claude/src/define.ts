@@ -32,19 +32,12 @@ export interface ClaudePolicy {
 export interface ClaudeOptions extends AgentExecutorBaseOptions, ClaudePolicy {
 	/** A Claude model identifier, such as `claude-sonnet-4-5`. */
 	model: string;
-	/**
-	 * What the agent remembers between activations. `activation` opens a
-	 * Claude session per activation. `seat` resumes one session per seat and
-	 * records its id with each release. Absent means `activation`.
-	 */
-	memory?: 'activation' | 'seat';
 }
 
 /** An agent's Claude executor: the Claude Agent SDK loop, model, instructions, tools and policy. */
 export interface ClaudeExecutor extends AgentExecutor, ClaudePolicy {
 	readonly kind: 'claude';
 	readonly model: string;
-	readonly memory?: 'activation' | 'seat';
 }
 
 const POLICY = [
@@ -72,6 +65,5 @@ export function claude(options: ClaudeOptions): ClaudeExecutor {
 		...policyOf(options),
 		kind: 'claude' as const,
 		model: options.model,
-		...(options.memory === undefined ? {} : { memory: options.memory }),
 	});
 }

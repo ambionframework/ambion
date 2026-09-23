@@ -87,11 +87,6 @@ export function executorOfKind<T extends AgentExecutor & { readonly model: strin
 	throw new Error(`Cannot run an executor of kind '${executor.kind}': this seat needs '${kind}'.`);
 }
 
-/** Whether the executor keeps one harness session for the seat. */
-export function resumesForSeat(executor: AgentExecutor): boolean {
-	return 'memory' in executor && executor.memory === 'seat';
-}
-
 /**
  * The neutral half of an executor: validated, flattened, and frozen. An
  * executor family adds its own fields to the value this returns.

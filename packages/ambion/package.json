@@ -55,7 +55,6 @@
 		"test:watch": "vitest"
 	},
 	"devDependencies": {
-		"@ambionframework/pi-journal": "workspace:*",
 		"@earendil-works/pi-agent-core": "^0.85.1",
 		"@earendil-works/pi-ai": "^0.85.1",
 		"tsdown": "^0.22.14",

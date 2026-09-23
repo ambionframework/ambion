@@ -4,9 +4,9 @@
  * holding its writes, and in a process of its own with SIGSTOP), while a
  * second host resumes the name. The fence of the second host voids the
  * first: conditional appends refuse every later write of the first host,
- * and the record holds every seq once. A child that uses JSONL for its
- * transcripts keeps the record in the durable journal, and cannot corrupt
- * the record when it continues after the stop.
+ * and the record holds every seq once. A child keeps the record in the
+ * durable journal, and cannot corrupt the record when it continues after
+ * the stop.
  */
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';

@@ -45,7 +45,6 @@ it('passes the policy options to the SDK, reads no settings source, and names th
 		'--add-dir',
 		'--setting-sources=',
 		'--strict-mcp-config',
-		'--no-session-persistence',
 		'--replay-user-messages',
 		'--include-partial-messages',
 	])

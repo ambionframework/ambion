@@ -81,23 +81,6 @@ export function applyLease(
 	});
 }
 
-/**
- * The session the seat's latest ended activation recorded, or nothing. The
- * latest is the one whose end entry stands highest on the journal.
- */
-export function lastSession(
-	leases: ReadonlyMap<string, LeaseHold>,
-	seat: string,
-): HarnessSession | undefined {
-	let latest: LeaseHold | undefined;
-	for (const lease of leases.values()) {
-		if (lease.phase !== 'ended' || lease.session === undefined) continue;
-		if (seatOf(lease.id) !== seat) continue;
-		if (latest?.phase !== 'ended' || lease.until > latest.until) latest = lease;
-	}
-	return latest?.session;
-}
-
 export const isExpired = (lease: LeaseHold, now: number): boolean =>
 	isExpiredRule(lease.phase, lease.phase === 'running' ? lease.expiresAt : 0, now);
 

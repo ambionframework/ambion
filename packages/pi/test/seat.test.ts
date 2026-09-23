@@ -14,7 +14,6 @@ import {
 	type Wake,
 } from '@ambionframework/ambion/hosting';
 import { fakeClock } from '@ambionframework/ambion/testing';
-import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import {
 	type Api,
@@ -146,22 +145,6 @@ describe('a seat actor', () => {
 		expect(room.claims).toEqual([first]);
 		expect(room.releases).toEqual([first]);
 		expect(room.mostHeld).toBe(1);
-	});
-
-	it('reopens the audit session after its first open fails', async () => {
-		let opens = 0;
-		const { room, actor } = playSeat({
-			transcripts: (base): SessionOpener => ({
-				async open(id, parent) {
-					opens += 1;
-					if (opens === 1) throw new Error('audit open failed');
-					return base.open(id, parent);
-				},
-			}),
-		});
-		await actor.run(first);
-		expect(opens).toBe(2);
-		expect(room.releases).toEqual([first]);
 	});
 
 	it('steers a recorded message into its running activation without starting work', async () => {

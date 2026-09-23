@@ -30,6 +30,7 @@ import {
 	type ExecutionEvent,
 	type FailureCause,
 	type HarnessSession,
+	type Message,
 	type TraceStep,
 	type Usage,
 } from './types.ts';
@@ -60,8 +61,9 @@ export interface ExecutorCapabilities {
 	/** The executor can end an activation as a permanent failure. */
 	readonly permanentFailure: boolean;
 	/**
-	 * The harness opens executors that keep memory across activations, and
-	 * the executor records a harness session with each release. Absent means false.
+	 * The executor records a harness session with each release, resumes the
+	 * session that `spec.resume` names, and starts fresh when the view names
+	 * none. Absent means false.
 	 */
 	readonly memory?: boolean;
 }
@@ -316,8 +318,34 @@ const usageCase: ExecutorCase = {
 };
 
 /**
- * Two activations of one seat. Each release records a session, the room
- * hands the recorded session to the next activation as `spec.resume`, and
+ * Two activations of one seat: the first releases, and the room wakes the
+ * second on a new message. It answers the session each release recorded, and
+ * the `spec.resume` the second view carried.
+ */
+async function twoActivations(run: Run): Promise<{
+	first: HarnessSession | undefined;
+	second: HarnessSession | undefined;
+	resume: HarnessSession | undefined;
+	line: Message;
+}> {
+	await run.wake();
+	await run.waitFor(() => releasesOf(run).length === 1, 'the first release');
+	const first = releasesOf(run)[0]?.session;
+	check(first !== undefined && first.id !== '', 'the first release records no session');
+	const line = run.room.append('And the pump?');
+	const next = `message:${line.seq}:${run.names.seat}:1`;
+	await run.wake(next);
+	await run.waitFor(() => releasesOf(run).length === 2, 'the second release');
+	const view = operations(run.room, 'view').find(
+		(call) => (call.request as { id?: string }).id === next,
+	);
+	const answer = view?.response as { view?: { spec?: { resume?: HarnessSession } } } | undefined;
+	return { first, second: releasesOf(run)[1]?.session, resume: answer?.view?.spec?.resume, line };
+}
+
+/**
+ * Two activations of one seat in one exchange. The room hands the session
+ * the first release recorded to the second activation as `spec.resume`, and
  * the executor ends the second activation with the same session.
  */
 const memoryCase: ExecutorCase = {
@@ -325,27 +353,14 @@ const memoryCase: ExecutorCase = {
 	plan: { kind: 'sayOnce', text: TEXT },
 	room: {},
 	body: async (run) => {
-		await run.wake();
-		await run.waitFor(() => releasesOf(run).length === 1, 'the first release');
-		const first = releasesOf(run)[0]?.session;
-		check(first !== undefined && first.id !== '', 'the first release records no session');
-		const line = run.room.append('And the pump?');
-		const next = `message:${line.seq}:${run.names.seat}:1`;
-		await run.wake(next);
-		await run.waitFor(() => releasesOf(run).length === 2, 'the second release');
-		const resumed = operations(run.room, 'view').find(
-			(call) => (call.request as { id?: string }).id === next,
-		);
-		const answer = resumed?.response as
-			{ view?: { spec?: { resume?: HarnessSession } } } | undefined;
-		const spec = answer?.view?.spec;
+		const { first, second: session, resume, line } = await twoActivations(run);
 		check(
-			JSON.stringify(spec?.resume) === JSON.stringify(first),
+			JSON.stringify(resume) === JSON.stringify(first),
 			'the second view does not carry the recorded session',
 		);
 		const second = releasesOf(run)[1];
 		check(
-			JSON.stringify(second?.session) === JSON.stringify(first),
+			JSON.stringify(session) === JSON.stringify(first),
 			'the second release records another session than the one it resumed',
 		);
 		check(run.room.landed().length === 2, `${run.room.landed().length} says landed, expected 2`);
@@ -353,6 +368,23 @@ const memoryCase: ExecutorCase = {
 			(second?.readThrough ?? 0) >= line.seq,
 			'the second release reads through less than the new message',
 		);
+	},
+};
+
+/**
+ * Two activations of one seat in two exchanges. The second view names no
+ * session, so the executor starts a fresh one and records it.
+ */
+const freshCase: ExecutorCase = {
+	name: 'starts a fresh session when the view names none',
+	plan: { kind: 'sayOnce', text: TEXT },
+	room: { forgets: true },
+	body: async (run) => {
+		const { first, second, resume } = await twoActivations(run);
+		check(resume === undefined, 'the second view carries a session');
+		check(second !== undefined && second.id !== '', 'the second release records no session');
+		check(second?.id !== first?.id, 'the second release records the session it was not handed');
+		check(run.room.landed().length === 2, `${run.room.landed().length} says landed, expected 2`);
 	},
 };
 
@@ -386,7 +418,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 		can.steer ? liveSteer : heldSteer,
 		...(can.permanentFailure ? [permanentFailure] : []),
 		...(can.usage ? [usageCase] : []),
-		...(can.memory === true ? [memoryCase] : []),
+		...(can.memory === true ? [memoryCase, freshCase] : []),
 		orderCase,
 	];
 	let count = 0;

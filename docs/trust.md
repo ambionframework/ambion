@@ -80,14 +80,16 @@ contract that all three meet.
 
 ## Harness memory
 
-**A seat with `memory: 'seat'` holds state the record does not show.** It
-resumes one harness session across activations. With `memory: 'activation'`
-the harness opens a fresh session each time. The default is `activation`.
+**A seat holds state the record does not show, for one exchange.** It
+resumes its harness session across the activations of an exchange, so a
+tool result it read in one activation shapes the next. The first activation
+of a seat in each exchange starts fresh. No session crosses an exchange.
+[Exchange continuity](executors.md#exchange-continuity) states the rule.
 
-**Freshness governs speech in both modes.** The room never reads the
-option. The driver records the resumed session on the `ended` lease entry,
-and the exchange view lists it as `ExchangeActivation.session`.
-[Durability](durability.md) owns the entry format.
+**Freshness governs speech in a kept session.** The driver records the
+session on the `ended` lease entry, and the exchange view lists it as
+`ExchangeActivation.session`. [Durability](durability.md) owns the entry
+format.
 
 Evidence: [`pi/test/memory.test.ts`](../packages/pi/test/memory.test.ts),
 [`claude/test/memory.test.ts`](../packages/claude/test/memory.test.ts), and

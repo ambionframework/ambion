@@ -56,10 +56,10 @@ and `web_search` items become `tool_call` and `tool_result` steps.
 ordinary say cites the paths of a completed `file_change` in `refs`, as
 `file:` URIs.
 
-**Choose the memory of the seat.** `memory: 'activation'` is the default. It
-opens one thread for each activation. `memory: 'seat'` resumes one thread
-for the seat and records its id with each release. A resume that Codex cannot
-honor starts a fresh thread.
+**A seat keeps its thread for one exchange.** Each release records the
+thread id. The next activation of the seat in the same exchange resumes
+that thread, and the first activation in a new exchange starts a fresh
+one. A resume that Codex cannot honor starts a fresh thread.
 
 **A seat has no native tools by default.** `nativeTools: 'none'` gives the
 seat the room tools and the tools that you pass in `tools`. Codex 0.155.1

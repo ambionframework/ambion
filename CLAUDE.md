@@ -19,10 +19,9 @@ floor.
 | `packages/assistant`   | The default assistant definition: membership guidance and closing summaries over the core                                                    |
 | `packages/cloudflare`  | A room as Durable Objects: one object per room, one per seat. Publishable; tested in workerd                                                 |
 | `packages/journal`     | An append-only journal: one queue, fenced by run, with conditional commits                                                                   |
-| `packages/pi`          | The Pi executor: `pi()`, `piExecution()`, and the seat transcript audit; the kernel imports no model library                                 |
+| `packages/pi`          | The Pi executor: `pi()` and `piExecution()`; the kernel imports no model library                                                             |
 | `packages/claude`      | The Claude Agent SDK executor: `claude()` and `claudeExecution()`, tested on a fake executable                                               |
 | `packages/codex`       | The Codex SDK executor: `codex()` and `codexExecution()`, over a stdio room tools server; live-tested, no fake                               |
-| `packages/pi-journal`  | Full Pi transcript sessions over the generic journal storage contract                                                                        |
 | `packages/workspace`   | A workspace resource and its tools, the helpers a bash backend builds on, and the interface of an optional SQL backend                       |
 | `packages/just-bash`   | The just-bash workspace backends: `memoryBackend` and `directoryBackend`, a virtual or directory filesystem and shell in process             |
 | `packages/workstation` | A workspace bash backend over SSH: one remote server, one Unix account for each agent. Tested on an in-process server and on OpenSSH in CI   |
@@ -108,9 +107,8 @@ vitest.live.config.ts test/live/<file>.test.ts`) over the whole suite. Run the
   helpers a bash backend builds on. `packages/just-bash` owns the just-bash
   filesystem and shell. The core composes ordinary tools.
   `packages/journal` owns the journal: the queue, the fence and the envelope
-  every entry shares. `packages/pi-journal` owns Pi session persistence over
-  that storage contract. Ambion owns only participants-as-values and
-  the room. A third concern is a
+  every entry shares. A harness keeps its own session, best effort, for one
+  exchange. Ambion owns only participants-as-values and the room. A third concern is a
   design failure: push it into a dependency or drop it. `execution/render.ts` formats
   structured collaboration context for Pi. Summary guidance belongs with the
   seat executor; the room owns summary assignment and provenance.

@@ -22,7 +22,6 @@ export const journal = fileURLToPath(new URL('../journal/src/index.ts', import.m
 export const journalConformance = fileURLToPath(
 	new URL('../journal/src/conformance.ts', import.meta.url),
 );
-export const piJournal = fileURLToPath(new URL('../pi-journal/src/index.ts', import.meta.url));
 /**
  * The core's tests build rooms with the Pi executor, so they read its source
  * by relative path. The Pi source names the core by its package name, and
@@ -38,7 +37,6 @@ export default defineConfig({
 		alias: [
 			{ find: '@ambionframework/ambion/hosting', replacement: hosting },
 			{ find: '@ambionframework/ambion', replacement: core },
-			{ find: '@ambionframework/pi-journal', replacement: piJournal },
 			{ find: '@ambionframework/journal/conformance', replacement: journalConformance },
 			{ find: '@ambionframework/journal', replacement: journal },
 		],

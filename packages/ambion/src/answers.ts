@@ -10,8 +10,9 @@ import type {
 	ViewResponse,
 } from './protocol.ts';
 import { activationSpec } from './room/activation.ts';
+import { exchangeSession } from './room/exchange.ts';
 import type { RoomState } from './room/fold.ts';
-import { isLive, lastSession, seatOf } from './room/lease.ts';
+import { isLive, seatOf } from './room/lease.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
 import {
@@ -78,7 +79,7 @@ export async function answerView(
 	if (seat === undefined) return stale('the lease ended');
 	const spec = activationSpec(id, state);
 	if (spec === undefined || spec.seat !== seat) return stale('the activation has no current grant');
-	const resume = lastSession(state.leases, seat);
+	const resume = exchangeSession(id, state.closes, state.exchange, state.leases);
 	const granted = resume === undefined ? spec : { ...spec, resume };
 	return { view: viewOf(granted, facts(room, state), range) };
 }
