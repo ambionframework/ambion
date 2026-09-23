@@ -39,23 +39,24 @@ between questions ([backlog](backlog.md#030-the-room-works-between-questions)).
 
 ## The scope
 
-**Four items already landed on main.** The changelog names the export
+**Five items already landed on main.** The changelog names the export
 changes of each one.
 
-| Item                                                | PR         | What it gives 0.2.0                                                                                                                     |
-| --------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| M7. The workspace as an interface                   | #276, #277 | A neutral root entry, a conformance entry, one entry for each binding, and backends by kind: bash and an optional SQL                   |
-| S1. The workstation, `@ambionframework/workstation` | #280       | A bash backend over SSH with one Unix account for each agent, tested on an in-process server and on OpenSSH                             |
-| The removal of `@ambionframework/cli`               | #273       | Every library package needs only Node `>=22.19.0`                                                                                       |
-| M1. Kernel decision layers                          | #286       | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts` |
+| Item                                                | PR         | What it gives 0.2.0                                                                                                                                        |
+| --------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M7. The workspace as an interface                   | #276, #277 | A neutral root entry, a conformance entry, one entry for each binding, and backends by kind: bash and an optional SQL                                      |
+| S1. The workstation, `@ambionframework/workstation` | #280       | A bash backend over SSH with one Unix account for each agent, tested on an in-process server and on OpenSSH                                                |
+| The removal of `@ambionframework/cli`               | #273       | Every library package needs only Node `>=22.19.0`                                                                                                          |
+| M1. Kernel decision layers                          | #286       | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts`                    |
+| M2. The rules sweep                                 | #291       | Every exported room rule but `exchangeOutcome` gates a write, and `draftsClose` counts a summary draft by the writer's seat in the fold and in the verdict |
 
 **Two themes stay open, each with the acceptance it must meet on the
 tagged commit.** The phases below deliver them; the items explain them.
 
-| Theme                     | Acceptance                                                                                                                                                                                         |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M One owner per mechanism | Each duplication that items M2 to M6 name has one owner. The rules file carries only rules that gate a write. The journal package owns the one crash-safe append loop. Each doc fact has one home. |
-| R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release.                                                                                |
+| Theme                     | Acceptance                                                                                                                                                                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M One owner per mechanism | Each duplication that items M3 to M6 name has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2. The journal package owns the one crash-safe append loop. Each doc fact has one home. |
+| R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release.                                                                                                                |
 
 **The tag waits for the P0 and P1 steps.** A P2 step that is open when the
 last P1 step closes moves to the backlog. It does not hold the tag.
@@ -154,17 +155,14 @@ and conformance files.
 
 ### Phase 1. Consolidate the kernel (P0)
 
-**Goal:** each kernel rule has one owner, and the rules file carries only
-rules that gate a write.
+**Goal:** each doc fact has one home. M1 and M2 landed the kernel half:
+each kernel rule has one owner, and every rule in the rules file but
+`exchangeOutcome` gates a write ([formal.md §8](../docs/formal.md#8-why-each-room-rule-is-a-rule)).
 
-- [ ] **1.** The rules sweep: a keep-or-withdraw list for every exported
-      rule except `exchangeOutcome`, and one `draftsClose` rule for both
-      draft counts. (M2)
-- [ ] **2.** Each doc fact has one home. (M6)
+- [ ] **1.** Each doc fact has one home. (M6)
 
-**Evidence:** `pnpm check`; `pnpm rule:check` on the rules file and
-`pnpm check:lemmascript`; the keep-or-withdraw list in
-[docs/formal.md](../docs/formal.md).
+**Evidence:** `pnpm check`; each fact in the M6 table appears on its home
+page only.
 
 ### Phase 2. Package hygiene (P0, P1, and P2)
 
@@ -202,16 +200,6 @@ Each item states the problem, the solution, and the impact. The file and
 line references are from `main` at `d86e803`.
 
 ### M. One owner per mechanism
-
-**M2. The rules sweep.** A proof pays for itself on a rule whose fault
-loses or duplicates the record ([docs/formal.md](../docs/formal.md)).
-Classify each exported rule in `room/rules.verified.ts` by that test, and
-withdraw the rules that only shape a read view. `exchangeOutcome`
-(`rules.verified.ts:403`) stays out of the sweep. Add
-`draftsClose(id, through, writer)`: `fold.ts` `draftedOver` counts a draft
-for any seat, and `exchange.ts` counts only the named writer's. A journal
-from another writer folds two answers today. Record the list in
-[docs/formal.md](../docs/formal.md).
 
 **M3. One crash-safe append loop.** The `Journal` class,
 `JournalAuditSession` (`pi-journal/src/index.ts`), and `MetadataJournal`

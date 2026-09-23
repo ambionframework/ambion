@@ -247,6 +247,14 @@ room renders the summary duties into every closing activation. The
 assistant's summary defaults now add only evidence, artifact paths,
 constraints, unfinished work, and the verification rules.
 
+**A failed draft from another seat no longer counts against the summary
+writer.** The fold counted every closing lease at a close's boundary as an
+attempt of the writer, whatever its seat. A journal that held another seat's
+failed draft moved the writer's next id and could abandon the summary before
+the writer tried. The kernel writes no such journal itself. The new verified
+rule `draftsClose` decides which leases draft a close, for the attempt count
+and for the summary verdict.
+
 ## 0.1.0 (2026-09-21)
 
 **The first release of Ambion.** Ambion is a collaboration kernel for agents and humans. A room

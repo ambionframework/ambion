@@ -48,6 +48,7 @@ import { type LeaseHold, removedAfter } from './lease.ts';
 import {
 	coversExchange,
 	type Draft,
+	draftsClose,
 	exchangeOutcome,
 	lastOf,
 	openingQuestion,
@@ -93,17 +94,23 @@ export function summaryCompletion(
 	return { status: verdict.status === 'silent' ? 'silent' : 'failed' };
 }
 
-/** The drafts of one close's summary: every lease of the writer's closing activations at the close. */
+/**
+ * The drafts of one close's summary: every lease of the writer's closing
+ * activations at the close. The validator holds `through >= 1`. A close
+ * with no writer has no drafts, and `decodeActivationId` always names a
+ * seat.
+ */
 function draftsOf(
 	leases: ReadonlyMap<string, LeaseHold>,
 	through: Seq,
 	writer: string | undefined,
 ): Draft[] {
+	if (writer === undefined) return [];
 	return [...leases.values()]
 		.filter((lease) => {
 			const parsed = decodeActivationId(lease.id);
 			// A terminal lease from another seat cannot settle this close.
-			return parsed?.source === 'closed' && parsed.position === through && parsed.seat === writer;
+			return parsed !== undefined && draftsClose(parsed, through, writer);
 		})
 		.map((lease) =>
 			lease.phase === 'running'

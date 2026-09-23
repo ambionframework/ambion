@@ -25,7 +25,7 @@ import {
 	pendingWakes,
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
-import { cancelHold, lastOf, survivesCancellation } from './rules.verified.ts';
+import { cancelHold, draftsClose, lastOf, survivesCancellation } from './rules.verified.ts';
 
 /** A summary one person is owed, and how the room has tried to write it. */
 export interface Owed extends PendingActivation {
@@ -261,16 +261,22 @@ export function withAttempts(
 	leases: ReadonlyMap<string, LeaseHold>,
 	context: FoldOptions,
 ): Owed {
-	const failed = [...leases.values()].filter((lease) => draftedOver(lease, owed.through));
+	const failed = [...leases.values()].filter((lease) =>
+		draftedOver(lease, owed.through, owed.writer),
+	);
 	return {
 		...owed,
 		...pendingActivation('closed', owed.through, owed.writer, failed, context),
 	};
 }
 
-/** A draft over this close that came to nothing. */
-function draftedOver(lease: LeaseHold, through: Seq): boolean {
+/**
+ * A draft of the writer's over this close that came to nothing. Another
+ * seat's lease is no attempt of the writer's. The validator holds
+ * `through >= 1`. `decodeActivationId` always names a seat, so a writer
+ * with no name drafts nothing.
+ */
+function draftedOver(lease: LeaseHold, through: Seq, writer: string): boolean {
 	const parsed = decodeActivationId(lease.id);
-	if (parsed?.source !== 'closed' || parsed.position !== through) return false;
-	return cameToNothing(lease);
+	return parsed !== undefined && draftsClose(parsed, through, writer) && cameToNothing(lease);
 }

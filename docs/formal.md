@@ -10,7 +10,7 @@ stale. Two files hold every rule:
 | File                                                                                          | Concern                                                                                            | Obligations                   |
 | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------- |
 | [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)         | The fence, the key, the seq counter, the cursor                                                    | 12, and 23 in its proofs file |
-| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | 74, and 36 in its proofs file |
+| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | 77, and 36 in its proofs file |
 
 **Everything else is ordinary TypeScript under the scripted and chaos
 suites.** Routing, presence, the roster, addressing, membership changes,
@@ -108,7 +108,9 @@ holds for its id, and asks `applyChange` for the lease after it.
 `cancelLeases` in `fold.ts` asks `cancelHold` for each lease a
 cancellation reaches. `openExchange` in `exchange.ts` maps the closes to
 their `through` seqs, asks `lastOf` for the last, and asks
-`openingQuestion` for the question after it. A comment at such a site
+`openingQuestion` for the question after it. `withAttempts` in
+`fold.ts` and `draftsOf` in `exchange.ts` decode each lease id and ask
+`draftsClose` whether the lease drafts the close. A comment at such a site
 says "the rule decides" where a second check remains to narrow a
 TypeScript type.
 
@@ -271,3 +273,44 @@ doc it carries:
 does not prove the projection at the call site is the right one. The
 scripted suites and the chaos sweeps hold the projections, as they did
 before the rules existed.
+
+## 8. Why each room rule is a rule
+
+**Every exported room rule but `exchangeOutcome` gates a write.** A rule stays in
+`room/rules.verified.ts` when a fault in it loses or duplicates the
+record: it decides an entry, an admission, or the `due` list that
+`admitsLease` reads. A rule that only shapes a read leaves the file, and
+it lives beside its caller with an ordinary test. The sweep for 0.2.0
+found no such rule. `exchangeOutcome` waits for the `awaiting` expiry in
+0.3.0, which decides whether it gates a write.
+
+| Rule                   | The write it gates                                             |
+| ---------------------- | -------------------------------------------------------------- |
+| `applyChange`          | The lease that the fold holds after each lease entry           |
+| `cancelHold`           | The lease that the fold holds after a cancellation             |
+| `mayEnd`               | An end entry for a lease                                       |
+| `leaseExpiry`          | The expiry that a claim entry or a renewal entry stores        |
+| `acknowledged`         | The read position that a lease entry stores                    |
+| `onRecord`             | The read position that a claim, a renewal, or an end may carry |
+| `admitsLease`          | A claim entry or a renewal entry                               |
+| `isExpired`            | An expiry entry that a pass writes                             |
+| `isLive`               | A commit, a claim, and the seats that a pass routes to         |
+| `endingOf`             | A revocation entry or an expiry entry that a pass writes       |
+| `wellFormed`           | The ids that a claim and a commit may carry                    |
+| `nextActivationId`     | The id that each claim carries                                 |
+| `coversAttempt`        | The leases that answer a wake, so the wakes that the room owes |
+| `wakeAnswered`         | The wakes that the room owes                                   |
+| `countsAgainst`        | The attempt number in the next id, and the attempt limit       |
+| `draftsClose`          | The attempt number of a summary draft, and the summary verdict |
+| `survivesCancellation` | The wakes and the grants that a cancellation leaves            |
+| `closeFor`             | The grant of a closing activation                              |
+| `activationGrant`      | A claim entry and a commit entry                               |
+| `speechFreshness`      | A message entry that an activation writes                      |
+| `stampedSummary`       | The recipient and the range of a summary entry                 |
+| `coversExchange`       | A second summary entry, and the summaries that the room owes   |
+| `summaryVerdict`       | The summaries that the room owes                               |
+| `lastOf`               | The last seq, which a close entry and a commit of speech read  |
+| `openingQuestion`      | The open exchange that a close entry closes                    |
+| `exchangeLive`         | A close entry                                                  |
+| `admitsClose`          | A close entry                                                  |
+| `exchangeOutcome`      | None today; the `awaiting` expiry in 0.3.0 decides it          |
