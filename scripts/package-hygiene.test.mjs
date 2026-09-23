@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+	checkDist,
 	checkEngines,
 	checkEsm,
 	checkExports,
@@ -103,5 +104,43 @@ describe('engines', () => {
 	it('finds a difference', () => {
 		const other = { ...good, engines: { node: '>=24' } };
 		assert.deepEqual(rules(checkEngines([good, other])), ['engines']);
+	});
+});
+
+describe('dist', () => {
+	const manifest = {
+		...good,
+		dependencies: { b: '1' },
+		peerDependencies: { '@x/c': '1' },
+		devDependencies: { d: '1' },
+	};
+	const file = (text) => [{ path: 'dist/index.mjs', text }];
+	it('accepts itself, declared packages, relative paths and schemes', () => {
+		const text = [
+			'import { a } from "@x/a/testing";',
+			'import {',
+			'\tb1,',
+			'\tb2',
+			'} from "b/sub";',
+			'import "@x/c";',
+			'export * from "./chunk.mjs";',
+			'const e = await import("node:fs");',
+			'import { f } from "cloudflare:workers";',
+			"type P = Pick<Ref, 'owner' | 'from'>;",
+		].join('\n');
+		assert.deepEqual(checkDist(manifest, file(text)), []);
+	});
+	it('finds a devDependency and an undeclared package, once each', () => {
+		const text = 'import { d } from "d";\nimport("e/x");\nimport { d2 } from "d";';
+		const found = checkDist(manifest, file(text));
+		assert.deepEqual(rules(found), ['dist', 'dist']);
+		assert.match(found[0].message, /imports d,/);
+		assert.match(found[1].message, /imports e,/);
+	});
+	it('finds code inlined from node_modules', () => {
+		const text = '//#region ../../node_modules/.pnpm/d@1.3.18/node_modules/d/build/a.mjs\n';
+		const found = checkDist(manifest, file(text));
+		assert.deepEqual(rules(found), ['dist']);
+		assert.match(found[0].message, /inlines d from node_modules/);
 	});
 });

@@ -9,7 +9,7 @@
  */
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
@@ -159,6 +159,66 @@ export function checkEngines(manifests) {
 	return [finding('engines', '(all)', `engines.node differs: ${list.join(', ')}.`)];
 }
 
+/** The package name of a bare import specifier, or undefined for a relative path or a scheme. */
+function packageOf(specifier) {
+	if (/^[./]/.test(specifier) || /^[a-z][a-z0-9+.-]*:/.test(specifier)) return undefined;
+	const parts = specifier.split('/');
+	return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
+}
+
+/** A static import or export statement, a side-effect import, or a dynamic import. */
+const SPECIFIER =
+	/(?:^\s*(?:import|export)\b[^'"]*?\bfrom\s*|^\s*import\s*|\bimport\s*\(\s*)["']([^"']+)["']/gm;
+const INLINED =
+	/^\/\/#region .*node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?((?:@[^/]+\/)?[^/]+)\//gm;
+
+/**
+ * (g) A built file imports only the package itself and what the manifest
+ * declares in dependencies, peerDependencies, or optionalDependencies. A
+ * built file inlines no code from node_modules. The bundler inlines a
+ * devDependency, so an undeclared runtime import shows as one of the two.
+ */
+export function checkDist(manifest, files) {
+	const declared = new Set([
+		manifest.name,
+		...Object.keys(manifest.dependencies ?? {}),
+		...Object.keys(manifest.peerDependencies ?? {}),
+		...Object.keys(manifest.optionalDependencies ?? {}),
+	]);
+	const found = new Map();
+	for (const { path, text } of files) {
+		for (const dependency of undeclaredImports(text, declared)) {
+			found.set(
+				`import ${dependency}`,
+				`${path} imports ${dependency}, which is not a dependency.`,
+			);
+		}
+		for (const [, dependency] of text.matchAll(INLINED)) {
+			found.set(`inline ${dependency}`, `${path} inlines ${dependency} from node_modules.`);
+		}
+	}
+	return [...found.values()].map((message) => finding('dist', manifest.name, message));
+}
+
+/** The packages a built file imports that are not in `declared`. */
+function undeclaredImports(text, declared) {
+	return [...text.matchAll(SPECIFIER)]
+		.map(([, specifier]) => packageOf(specifier))
+		.filter((dependency) => dependency !== undefined && !declared.has(dependency));
+}
+
+/** Every JavaScript and declaration file of a built dist, with its text. */
+async function distFiles(dir) {
+	const root = join(dir, 'dist');
+	const names = (await readdir(root)).filter((file) => /\.d?\.?m?[jt]s$/.test(file));
+	return Promise.all(
+		names.map(async (file) => ({
+			path: `dist/${file}`,
+			text: await readFile(join(root, file), 'utf8'),
+		})),
+	);
+}
+
 /** The files `npm pack` would put in the tarball, without writing one. */
 async function packList(dir) {
 	const { stdout } = await run('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
@@ -181,6 +241,7 @@ export async function checkTree() {
 			...checkEsm(manifest),
 			...checkExports(manifest, (path) => existsSync(join(dir, path))),
 			...checkPack(manifest.name, await packList(dir)),
+			...checkDist(manifest, await distFiles(dir)),
 		]),
 	);
 	return [...found, ...perPackage.flat()];

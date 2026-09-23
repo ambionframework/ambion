@@ -226,7 +226,11 @@ reads `pnpm-lock.yaml` and every publishable manifest. It fails on more than
 one `typebox` version, a CommonJS export, a missing export or types path, a
 pack list without `dist`, the README, or the license, a pack list with
 source, test, or config files, versions out of lockstep, and a different
-`engines.node`. Each package carries a copy of the root `LICENSE`, because
+`engines.node`. It also reads every built file in `dist`. It fails on an
+import of a package that the manifest does not declare in `dependencies`,
+`peerDependencies`, or `optionalDependencies`, and on code that the bundler
+inlined from `node_modules`. tsdown inlines a `devDependencies` package, so a
+runtime import with the wrong declaration shows as one of the two. Each package carries a copy of the root `LICENSE`, because
 `pnpm pack` does not add the root file. It then packs every package and
 verifies version agreement with `node scripts/version.mjs --check` and
 `node scripts/publish.mjs --pack-only`.
