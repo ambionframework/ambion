@@ -31,16 +31,15 @@ import { DEFAULT_AUDIT_LOG } from '../src/audit.ts';
 import type { WorkspaceLayout } from '../src/backend.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
 import { defaultToolGuidance } from '../src/default-tools.ts';
-import { type BashBackend, openWorkspace, SHARED_DATABASE } from '../src/index.ts';
+import { type BashBackend, openWorkspace } from '../src/index.ts';
 import { directoryBackend, MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
 import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
 
 const workspaceAgent = (name: string) => ({ name });
 
-/** The just-bash backends' own layout: `/workspace/audit.jsonl`, `/workspace/shared.db`, `/rooms`. */
+/** The just-bash backends' own layout: `/workspace/audit.jsonl` and `/rooms`. */
 const layout: WorkspaceLayout = {
 	audit: DEFAULT_AUDIT_LOG,
-	database: SHARED_DATABASE,
 	rooms: '/rooms',
 };
 const ROOM_MIRROR_GUIDANCE = roomMirrorGuidance(layout.rooms);
@@ -233,7 +232,7 @@ describe('the built-in tools', () => {
 });
 
 describe('the workspace resource owner', () => {
-	it('gives a backend with no tools of its own the five defaults', async () => {
+	it('gives a backend with no tools of its own the four file tools, and no sql with no SQL backend', async () => {
 		const inner = memoryBackend();
 		const workspace = openWorkspace({
 			name: name('empty-tools'),
@@ -245,13 +244,10 @@ describe('the workspace resource owner', () => {
 			'write',
 			'edit',
 			'bash',
-			'sql',
 		]);
 		// The /rooms guidance is unconditional: it names no room, so a
 		// workspace states it even with no other guidance to add.
-		expect(workspace.tools().guidance).toBe(
-			`${defaultToolGuidance(layout.database)}\n\n${ROOM_MIRROR_GUIDANCE}`,
-		);
+		expect(workspace.tools().guidance).toBe(`${defaultToolGuidance()}\n\n${ROOM_MIRROR_GUIDANCE}`);
 		await workspace.dispose();
 	});
 
@@ -285,14 +281,13 @@ describe('the workspace resource owner', () => {
 		});
 		const bundle = workspace.tools();
 		expect(bundle.guidance).toBe(
-			`${defaultToolGuidance(layout.database)}\n\nCustom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`,
+			`${defaultToolGuidance()}\n\nCustom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`,
 		);
 		expect(bundle.tools.map((tool) => tool.name)).toEqual([
 			'read',
 			'write',
 			'edit',
 			'bash',
-			'sql',
 			'inspect',
 		]);
 		const tool = bundle.tools.find((t) => t.name === 'inspect');
@@ -516,10 +511,9 @@ describe('ToolContext', () => {
 // -- a backend's own layout ---------------------------------------------------
 
 describe("a backend's layout", () => {
-	it('sends the audit log, the sql default database, and the mirror to the named paths, and states them in guidance', async () => {
+	it('sends the audit log and the mirror to the named paths, and states them in guidance', async () => {
 		const own: WorkspaceLayout = {
 			audit: '/audit/calls.jsonl',
-			database: '/data/main.db',
 			rooms: '/mirror',
 		};
 		const inner = memoryBackend();
@@ -534,21 +528,12 @@ describe("a backend's layout", () => {
 		expect(guidance).toContain(own.audit);
 		expect(guidance).toContain(own.rooms);
 
-		// A call that names no database opens the one the layout names.
-		const sqlTool = site.tools().tools.find((tool) => tool.name === 'sql');
-		if (sqlTool === undefined) throw new Error('The sql tool is missing.');
-		const sqlResult = await sqlTool.invoke(
-			{ sql: 'CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1);' },
-			{ agent: { name: 'alpha', identity: 'alpha' }, callId: 'sql-call', room: 'lobby' },
-		);
-		if (typeof sqlResult === 'string')
-			throw new Error('The sql tool must return a structured result.');
-		expect((sqlResult.details as { database: string }).database).toBe(own.database);
-		expect(await site.use(workspaceAgent('alpha'), (env) => env.exists(own.database, ctx))).toEqual(
-			{
-				ok: true,
-				value: true,
-			},
+		// One tool call writes the first audit entry.
+		const writeTool = site.tools().tools.find((tool) => tool.name === 'write');
+		if (writeTool === undefined) throw new Error('The write tool is missing.');
+		await writeTool.invoke(
+			{ path: '/tmp/note.txt', content: 'x' },
+			{ agent: { name: 'alpha', identity: 'alpha' }, callId: 'write-call', room: 'lobby' },
 		);
 
 		// The audit log lands at the named path.

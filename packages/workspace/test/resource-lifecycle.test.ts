@@ -4,16 +4,15 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_AUDIT_LOG } from '../src/audit.ts';
 import type { BashBackend, WorkspaceEnv, WorkspaceLayout } from '../src/backend.ts';
-import { BACKGROUND_CONTEXT, openWorkspace, SHARED_DATABASE } from '../src/index.ts';
+import { BACKGROUND_CONTEXT, openWorkspace } from '../src/index.ts';
 import { directoryBackend, memoryBackend } from '../src/just-bash.ts';
 import { openResource, type ResourceBackend, type WorkspaceAgent } from '../src/resource.ts';
 
 const agent = (name: string): WorkspaceAgent => ({ name });
 
-/** The just-bash backends' own layout: `/workspace/audit.jsonl`, `/workspace/shared.db`, `/rooms`. */
+/** The just-bash backends' own layout: `/workspace/audit.jsonl` and `/rooms`. */
 const layout: WorkspaceLayout = {
 	audit: DEFAULT_AUDIT_LOG,
-	database: SHARED_DATABASE,
 	rooms: '/rooms',
 };
 

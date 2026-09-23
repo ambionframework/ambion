@@ -216,6 +216,8 @@ the team's artifacts.
 ```text
 .data/
   rooms.db          Room journals, Pi audits, and the host room catalog
+  shared.db         The workspace's shared database, for the sql tool
+  lab.db            The lab records: projects, plans, runs, and results
   workspace/
     library/        The datasheets, copied from examples/workbench/library
     shared/         kit.md and notes.md, the team's artifacts

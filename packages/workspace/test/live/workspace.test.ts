@@ -19,6 +19,7 @@ import {
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
 import { BACKGROUND_CONTEXT, openWorkspace } from '../../src/index.ts';
 import { memoryBackend } from '../../src/just-bash.ts';
+import { sqliteBackend } from '../../src/sqlite-entry.ts';
 
 live('the workspace', () => {
 	it('a seat reads a file it was told about, writes one back, and answers from what it read', async () => {
@@ -67,18 +68,19 @@ live('the workspace', () => {
 	});
 
 	it('a seat queries the shared database with the sql tool, and answers from the result', async () => {
-		const backend = memoryBackend();
-		const store = openWorkspace({ name: roomName('live-sql'), backend: { bash: backend } });
-		// Seed the shared database before the room opens.
-		await store.use({ name: 'seed' }, async (env) => {
-			const result = await env.exec(
-				'sqlite3 /workspace/shared.db "CREATE TABLE pour(id INTEGER, grade TEXT, tonnes REAL);' +
-					" INSERT INTO pour VALUES (1,'C30',10),(2,'C40',5),(3,'C30',15),(4,'C40',20)\"",
-				undefined,
-				BACKGROUND_CONTEXT,
-			);
-			if (!result.ok || result.value.exitCode !== 0) throw new Error('seed failed');
+		const store = openWorkspace({
+			name: roomName('live-sql'),
+			backend: { bash: memoryBackend(), sql: sqliteBackend(':memory:') },
 		});
+		// Seed the shared database before the room opens.
+		const seeded = await store.sql?.use({ name: 'seed' }, (env) =>
+			env.run(
+				'CREATE TABLE pour(id INTEGER, grade TEXT, tonnes REAL);' +
+					" INSERT INTO pour VALUES (1,'C30',10),(2,'C40',5),(3,'C30',15),(4,'C40',20)",
+				BACKGROUND_CONTEXT,
+			),
+		);
+		if (seeded?.ok !== true) throw new Error('seed failed');
 		const analyst = agent('analyst', {
 			identity: 'Reads the pour data.',
 			instructions: `

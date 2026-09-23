@@ -33,15 +33,13 @@ import type { BashBackend, WorkspaceLayout } from './backend.ts';
 import { BashEnv } from './bash-env.ts';
 import { DEV_DIR, withDevices } from './devices.ts';
 import type { WorkspaceAgent } from './resource.ts';
-import { SHARED_DATABASE } from './sql.ts';
 
 /**
- * Where the just-bash backends keep the audit log, the shared database, and
- * the room mirrors. Both backends name the same layout, so no file moves.
+ * Where the just-bash backends keep the audit log and the room mirrors.
+ * Both backends name the same layout, so no file moves.
  */
 const JUST_BASH_LAYOUT: WorkspaceLayout = {
 	audit: DEFAULT_AUDIT_LOG,
-	database: SHARED_DATABASE,
 	rooms: '/rooms',
 };
 

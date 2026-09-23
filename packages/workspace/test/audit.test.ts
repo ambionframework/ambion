@@ -10,15 +10,14 @@ import { byAgent, callTool, quiet, scripted, speak } from '../../ambion/test/sup
 import { DEFAULT_AUDIT_LOG, openAuditLog } from '../src/audit.ts';
 import type { WorkspaceLayout } from '../src/backend.ts';
 import { BashEnv } from '../src/bash-env.ts';
-import { openWorkspace, SHARED_DATABASE } from '../src/index.ts';
+import { openWorkspace } from '../src/index.ts';
 import { memoryBackend } from '../src/just-bash.ts';
 
 const workspaceAgent = (name: string) => ({ name });
 
-/** The just-bash backends' own layout: `/workspace/audit.jsonl`, `/workspace/shared.db`, `/rooms`. */
+/** The just-bash backends' own layout: `/workspace/audit.jsonl` and `/rooms`. */
 const layout: WorkspaceLayout = {
 	audit: DEFAULT_AUDIT_LOG,
-	database: SHARED_DATABASE,
 	rooms: '/rooms',
 };
 /** A `ToolContext.agent`, which still carries `identity` in the core type. */

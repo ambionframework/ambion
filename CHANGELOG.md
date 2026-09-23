@@ -2,20 +2,28 @@
 
 ## Unreleased
 
-**`openWorkspace` takes its backends by kind, and a workspace can take a
-SQL backend.** The `backend` option is now `WorkspaceBackends`:
-`{ bash, sql? }`. Write `backend: { bash: memoryBackend() }` where you
-wrote `backend: memoryBackend()`. `WorkspaceBackend` is renamed
-`BashBackend`, and `MemoryWorkspaceBackend` is renamed `MemoryBashBackend`.
-`backend.sql` is an optional `SqlBackend`: a shared database that need not
-live on the shell's filesystem. The root entry exports the
-`WorkspaceBackends`, `SqlBackend`, `SqlEnv`, `SqlOutcome`, `SqlRow`, and
-`SqlValue` types. With a SQL backend, the `sql` tool runs its statements
-on that backend under an owner of its own, and takes `sql`, `export`, and
-`maxRows`. `export` writes the CSV file on the shell. `Workspace.sql`
-exposes the SQL owner, and `dispose()` disposes both owners. With no SQL
-backend, the workspace works as before. The package ships no
-`SqlBackend`.
+**`openWorkspace` takes its backends by kind.** The `backend` option is
+now `WorkspaceBackends`: `{ bash, sql? }`. Write
+`backend: { bash: memoryBackend() }` where you wrote
+`backend: memoryBackend()`. `WorkspaceBackend` is renamed `BashBackend`,
+and `MemoryWorkspaceBackend` is renamed `MemoryBashBackend`. The root entry
+exports the `WorkspaceBackends`, `SqlBackend`, `SqlEnv`, `SqlOutcome`,
+`SqlRow`, and `SqlValue` types.
+
+**The `sql` tool runs on a SQL backend, and a workspace with no SQL
+backend has no `sql` tool.** `backend.sql` takes a `SqlBackend`: a shared
+database that need not live on the shell's filesystem. The new
+`@ambionframework/workspace/sqlite` entry exports `sqliteBackend(location)`,
+the default SQL backend over `node:sqlite`. The SQL backend runs under an
+owner of its own. The `sql` tool takes `sql`, `export`, and `maxRows`, and
+`export` writes the CSV file on the shell. `Workspace.sql` exposes the SQL
+owner, and `dispose()` disposes both owners.
+
+**The `sql` tool no longer runs `sqlite3` through the shell.** The tool
+loses its `database` and `timeout` parameters. `WorkspaceLayout` loses
+`database`, and the root entry no longer exports `SHARED_DATABASE`. The
+just-bash backends hold no shared database at `/workspace/shared.db`. To
+keep a shared database, set `backend.sql` to `sqliteBackend(path)`.
 
 **`./conformance` exports `sqlConformance`,** the cases every
 `SqlBackend` passes.
@@ -23,9 +31,9 @@ backend, the workspace works as before. The package ships no
 **`SqlValue` moves from `./sql` to the root entry.** `./sql` no longer
 exports the type.
 
-**The default tool guidance states the file tools and the `sql` tool in
-two paragraphs.** The first paragraph no longer says that `sql` works over
-the shared files.
+**The default tool guidance names four tools with no SQL backend, and five
+with one.** The `sql` paragraph names the backend's `database` and adds the
+backend's own guidance.
 
 **A `WorkspaceBackend` now names its own layout.** A new `WorkspaceLayout`
 type, exported from the root, holds three paths: `audit`, the audit log a

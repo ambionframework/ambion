@@ -13,6 +13,7 @@ import {
 import { openWorkspace } from '@ambionframework/workspace';
 import { memoryBackend } from '@ambionframework/workspace/just-bash';
 import { openSqlResource } from '@ambionframework/workspace/sql';
+import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { people, team } from '../src/definitions.ts';
 import { openInstrument } from '../src/instrument.ts';
@@ -26,7 +27,10 @@ afterEach(async () => {
 
 async function build() {
 	const directory = await mkdtemp(join(tmpdir(), 'ambion-workbench-toolset-'));
-	const workspace = openWorkspace({ name: 'workbench', backend: { bash: memoryBackend() } });
+	const workspace = openWorkspace({
+		name: 'workbench',
+		backend: { bash: memoryBackend(), sql: sqliteBackend(':memory:') },
+	});
 	const lab = openSqlResource({
 		name: 'lab',
 		location: join(directory, 'lab.db'),

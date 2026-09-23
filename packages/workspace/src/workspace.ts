@@ -1,12 +1,7 @@
 import type { Room, ToolBundle } from '@ambionframework/ambion';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
-import {
-	createDefaultTools,
-	createFileTools,
-	defaultToolGuidance,
-	fileToolGuidance,
-} from './default-tools.ts';
+import { createFileTools, defaultToolGuidance } from './default-tools.ts';
 import {
 	mirrorRoom,
 	type RoomMirror,
@@ -15,7 +10,7 @@ import {
 } from './mirror.ts';
 import { openResource, type WorkspaceAgent, type WorkspaceResource } from './resource.ts';
 import type { SqlBackend, SqlEnv } from './sql-backend.ts';
-import { createBackendSqlTool, sqlToolGuidance } from './sql-tool.ts';
+import { createSqlTool, sqlToolGuidance } from './sql-tool.ts';
 import { bindTools } from './tools.ts';
 
 /** A workspace resource with an ordinary Ambion tool bundle. */
@@ -53,11 +48,10 @@ interface SqlBinding {
 }
 
 /**
- * Bind the five default tools and the bash backend's own tools. With no
- * SQL backend, `sql` is the shell tool over `layout.database`. With one,
- * `sql` runs on the SQL owner. The guidance names the tools, the SQL
- * backend's note, the bash backend's note, the audit note when one is
- * set, and the rooms note, in that order.
+ * Bind the four file tools, `sql` when the workspace has a SQL backend, and
+ * the bash backend's own tools. The guidance names the tools, the SQL
+ * backend's note, the bash backend's note, the audit note when one is set,
+ * and the rooms note, in that order.
  */
 function workspaceTools(
 	bash: BashBackend,
@@ -66,19 +60,28 @@ function workspaceTools(
 	audit: AuditLog | undefined,
 ): ToolBundle {
 	const { layout, tools: own = [], guidance } = bash;
-	const tail = [guidance, audit && auditGuidance(audit), roomMirrorGuidance(layout.rooms)];
-	if (sql === undefined) {
-		const tools = [...createDefaultTools(layout.database), ...own];
-		const notes = [defaultToolGuidance(layout.database), ...tail];
-		return bindTools(tools, shell.use, joinNotes(notes), audit);
-	}
-	const database = sql.backend.database;
-	const sqlTool = createBackendSqlTool({ sql: sql.owner.use, shell: shell.use, database, audit });
 	const files = bindTools(createFileTools(), shell.use, undefined, audit).tools;
 	const extra = bindTools(own, shell.use, undefined, audit).tools;
-	const notes = [fileToolGuidance(sqlToolGuidance(database)), sql.backend.guidance, ...tail];
+	const sqlTools =
+		sql === undefined
+			? []
+			: [
+					createSqlTool({
+						sql: sql.owner.use,
+						shell: shell.use,
+						database: sql.backend.database,
+						audit,
+					}),
+				];
+	const notes = [
+		defaultToolGuidance(sql && sqlToolGuidance(sql.backend.database)),
+		sql?.backend.guidance,
+		guidance,
+		audit && auditGuidance(audit),
+		roomMirrorGuidance(layout.rooms),
+	];
 	return Object.freeze({
-		tools: Object.freeze([...files, sqlTool, ...extra]),
+		tools: Object.freeze([...files, ...sqlTools, ...extra]),
 		guidance: joinNotes(notes),
 	});
 }
@@ -95,8 +98,8 @@ async function disposeAll(owners: readonly { dispose(): Promise<void> }[]): Prom
  * `backend.sql` is optional. Each backend gets its own resource owner, so
  * a long shell command does not delay a query. `use` and `mirror()` reach
  * the bash owner, and `sql` exposes the SQL owner. The bash backend's
- * `layout` names where the audit log and the room mirrors live, and the
- * shared database when the workspace has no SQL backend. Set `audit.path`
+ * `layout` names where the audit log and the room mirrors live. A
+ * workspace with no SQL backend has no `sql` tool. Set `audit.path`
  * to record every bound tool call at a path of your own; the default is
  * `layout.audit`. Tool guidance then tells every agent the log exists and
  * where to read it, and always names the room mirror convention at

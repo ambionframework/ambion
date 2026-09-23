@@ -72,7 +72,7 @@ resource. A tool that needs the current state of the room reads the room.
 database through `node:sqlite`. It needs no model library. The database is a
 file of its own. It shares no connection and no transaction with the
 journal. The `sql` tool on the workspace page is a different database: the
-shell's own file, or the workspace's SQL backend.
+workspace's SQL backend.
 
 ```ts
 import { openSqlResource } from '@ambionframework/workspace/sql';

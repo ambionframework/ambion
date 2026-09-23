@@ -4,7 +4,7 @@
 contract.** The optional `@ambionframework/workspace` package provides a
 workspace resource and its filesystem. A workspace has one bash backend
 and can have one SQL backend
-([Give the workspace a SQL backend](#give-the-workspace-a-sql-backend)). Agents receive access through
+([Query the shared database](#query-the-shared-database)). Agents receive access through
 ordinary tool bundles. Workspace files remain separate from the
 collaboration journal. [Resources](resources.md) states the contract, the
 SQL binding, and the rules for references and provenance.
@@ -42,22 +42,18 @@ starts after disposal is refused.
 
 ## The layout and the host identity
 
-**A `BashBackend` names a `layout`: where it keeps the audit log, the
-shared database, and the room mirrors.** `WorkspaceLayout` holds three
-paths:
+**A `BashBackend` names a `layout`: where it keeps the audit log and the
+room mirrors.** `WorkspaceLayout` holds two paths:
 
-| Field      | Names the default for                                    |
-| ---------- | -------------------------------------------------------- |
-| `audit`    | `openWorkspace`'s `audit` option, when it sets no `path` |
-| `database` | A `sql` call, when it sets no `database`                 |
-| `rooms`    | `mirror()`, the root every room's record writes under    |
+| Field   | Names the default for                                    |
+| ------- | -------------------------------------------------------- |
+| `audit` | `openWorkspace`'s `audit` option, when it sets no `path` |
+| `rooms` | `mirror()`, the root every room's record writes under    |
 
-A caller's own path always wins: `audit.path` on `openWorkspace`, and
-`database` on a `sql` call, each override the layout's default for that one
-call. `memoryBackend` and `directoryBackend` name the same layout:
-`/workspace/audit.jsonl`, `/workspace/shared.db`, and `/rooms`. A new
-backend states its own layout; nothing in the neutral layer fixes a path of
-its own.
+A caller's own `audit.path` on `openWorkspace` wins over the layout's
+default. `memoryBackend` and `directoryBackend` name the same layout:
+`/workspace/audit.jsonl` and `/rooms`. A new backend states its own layout;
+nothing in the neutral layer fixes a path of its own.
 
 **`openWorkspace` builds one host agent, `<name>-host`, and `mirror()`
 writes as it.** `Workspace.host` exposes this identity. A backend with real
@@ -71,9 +67,11 @@ console.log(drive.host); // { name: 'town-host' }
 ## Give the resource to an agent
 
 `workspace.tools()` returns an ordinary Ambion `ToolBundle`. The neutral layer
-binds five default tools first: `read`, `write`, `edit`, `bash`, and `sql`.
-A backend then adds its own tools, and its own guidance about its own shell,
-if it has any. The bundle binds every tool through the resource owner and
+binds four file tools first: `read`, `write`, `edit`, and `bash`. A workspace
+with a SQL backend adds `sql`
+([Query the shared database](#query-the-shared-database)). A workspace with
+no SQL backend has no `sql` tool. The bash backend then adds its own tools,
+and its own guidance about its own shell, if it has any. The bundle binds every tool through the resource owner and
 keeps one stable identity. Pass the bundle in an agent's `bundles` field.
 
 ```ts
@@ -326,23 +324,45 @@ and `jq` filter it uses on its own.
 
 ## Query the shared database
 
-**With no SQL backend, the `sql` tool runs SQLite statements on one shared
-database in the shell's filesystem.** A call that names no `database` opens the backend's `layout.database`; the
-just-bash backends name it `/workspace/shared.db`. Every agent queries this
-one file, so a table or a view one agent creates is data another agent reads
-at once. The tool takes these parameters:
+**A workspace has one bash backend, and it can have one SQL backend.**
+The `backend` option holds the backends by kind, as `WorkspaceBackends`.
+`backend.bash` is a `BashBackend`, and every workspace has one.
+`backend.sql` is an optional `SqlBackend`: a shared database that need not
+live on the shell's filesystem. A later kind of backend gets its own key.
+With no SQL backend, the workspace has no `sql` tool.
 
-| Parameter  | Meaning                                                                    |
-| ---------- | -------------------------------------------------------------------------- |
-| `sql`      | One or more SQLite statements. The last query gives the preview.           |
-| `database` | The file opened as `main`. The default is the backend's `layout.database`. |
-| `export`   | A path for the full result as CSV. Omit it to write no file.               |
-| `maxRows`  | How many rows the preview shows. The default is 50.                        |
-| `timeout`  | Seconds before the query stops.                                            |
+**`sqliteBackend` from `@ambionframework/workspace/sqlite` is the default
+SQL backend.** It opens one SQLite database through `node:sqlite`, at a
+host path or at `:memory:`. The file lives beside the bash backend's
+filesystem, so the shell does not reach it. The first call creates the
+file and its directory. `dispose()` closes the database and keeps the file.
+
+```ts
+import { openWorkspace } from '@ambionframework/workspace';
+import { directoryBackend } from '@ambionframework/workspace/just-bash';
+import { sqliteBackend } from '@ambionframework/workspace/sqlite';
+
+const lab = openWorkspace({
+  name: 'lab',
+  backend: { bash: directoryBackend('./data/lab'), sql: sqliteBackend('./data/lab.db') },
+});
+```
+
+**The `sql` tool runs statements on the shared database.** Every agent
+queries this one database, so a table or a view one agent creates is data
+another agent reads at once. The tool takes these parameters:
+
+| Parameter | Meaning                                                   |
+| --------- | --------------------------------------------------------- |
+| `sql`     | One or more statements. The last query gives the preview. |
+| `export`  | A path in the workspace for the full result as CSV.       |
+| `maxRows` | How many rows the preview shows. The default is 50.       |
 
 **The preview stays in context and writes nothing to disk.** The tool shows
-the last query's result as a Markdown table, capped at `maxRows`. It keeps the
-data in the database. An agent reads the result and continues.
+the last query's result as a Markdown table, capped at `maxRows`. It keeps
+the data in the database. An agent reads the result and continues. A
+statement that the database refuses comes back as text that names the
+database, so the agent can correct it.
 
 **Share through a table or a view.** The data stays in the shared database, so
 no agent copies a file. A view holds its own query and reflects the current
@@ -350,60 +370,34 @@ tables. `sqlite_master` holds each view's definition, so an agent reads how a
 shared view was built before the agent trusts its data. Prefer a view or a
 table for every hand-off between agents.
 
-**The resource owner serializes every write.** The owner runs one operation at
-a time (see the queue above), so writes to the shared database take a total
-order and one write never overwrites another.
+**`export` writes the result into the shell's filesystem.** Set it when a
+script or another tool needs the rows. The tool runs the query on the SQL
+owner and holds the rows in memory. It then releases the SQL owner and
+writes the CSV file on the bash owner, through a temporary file and a
+rename. A failed query leaves an existing file unchanged. A NULL value
+reads as `\N`, and a blob reads as hex.
 
-**Attach a private scratch database with `ATTACH ':memory:'`.** The scratch
-database lives for one call. A single statement joins the shared tables with
-the scratch tables. For data an agent keeps across calls, set `database` to a
-private file; the tool opens that file as `main`.
+### The SQLite backend
 
-**Export only for a reader outside SQL.** Set `export` when a script or another
-tool needs the rows. The tool writes the full result as CSV to that path and
-shows the file's head. A NULL value reads as `\N`, so a NULL stays apart from
-an empty string. The tool holds the whole export in memory while it scans the
-file for the row count and the preview.
+- **The dialect is SQLite.** Dates are functions, `||` joins text, and a
+  column type is an affinity. The backend's guidance states this.
+- **`ATTACH` opens `:memory:` alone.** A private scratch database lives for
+  one call, and one statement joins it with the shared tables.
+- **No statement opens another host file.** The backend refuses an
+  `ATTACH` of a file and a `VACUUM INTO`, and runs no later statement of
+  the call. A check of each statement's text holds on every supported Node.
+  A Node whose `node:sqlite` has `setAuthorizer` also refuses them in the
+  engine. `node:sqlite` loads no extension.
+- **A statement runs to its end.** `node:sqlite` is synchronous, so an abort
+  takes effect before the next statement of the call.
+- **Every agent shares one handle.** The SQL owner runs one operation at a
+  time, so writes take a total order.
 
-### just-bash as one implementation
+### The SqlBackend interface
 
-The `sql` contract holds over any backend that supplies a `sqlite3` command.
-The export path holds the whole export in memory while it scans, on every
-backend. just-bash is the default implementation, and it has these specific
-behaviors:
-
-- **It loads the main database into a WebAssembly engine and writes the file
-  back after each call.** The owner's serialization keeps this write-back safe:
-  two calls never overlap, so no call loses another's write.
-- **`ATTACH` opens `:memory:` only.** The engine has no bridge to the virtual
-  filesystem, so `ATTACH` of a second file fails to open it. A cross-file join
-  is not available; a cross-database join uses a `:memory:` scratch database.
-- **CSV is the bridge to `python3`.** The just-bash `python3` has no `sqlite3`
-  module, so a Python script reads an exported CSV file.
-- **The tool passes command-line flags.** just-bash `sqlite3` reads flags such
-  as `-json` and `-csv`. It does not read dot-commands such as `.mode`.
-- **The dialect is SQLite.** Dates are functions, `||` joins text, and a column
-  type is an affinity.
-
-## Give the workspace a SQL backend
-
-**A workspace has one bash backend, and it can have one SQL backend.**
-The `backend` option holds the backends by kind, as `WorkspaceBackends`.
-`backend.bash` is a `BashBackend`, and every workspace has one.
-`backend.sql` is an optional `SqlBackend`: a shared database that need not
-live on the shell's filesystem. The package ships no `SqlBackend` yet. The
-interface is for a future backend, such as a database server with one
-account for each agent. A later kind of backend gets its own key.
-
-```ts
-import { openWorkspace, type SqlBackend } from '@ambionframework/workspace';
-import { memoryBackend } from '@ambionframework/workspace/just-bash';
-
-declare const database: SqlBackend;
-const lab = openWorkspace({ name: 'lab', backend: { bash: memoryBackend(), sql: database } });
-```
-
-**`SqlBackend` holds four members, and `SqlEnv` holds two.**
+**`SqlBackend` holds four members, and `SqlEnv` holds two.** A new SQL
+backend, such as a database server with one account for each agent,
+implements them.
 
 | Member                     | Meaning                                                                |
 | -------------------------- | ---------------------------------------------------------------------- |
@@ -420,7 +414,7 @@ stops at that statement. A fault of the connection rejects. An aborted
 `context.abortSignal` rejects before the first statement runs.
 
 **Each backend gets its own resource owner.** A long `bash` command does
-not delay a query. `workspace.use` and `mirror()` reach the shell owner.
+not delay a query. `workspace.use` and `mirror()` reach the bash owner.
 `workspace.sql` is the SQL owner, for host code. Do not await one owner's
 `use` inside a callback of the other. `dispose()` disposes both owners.
 
@@ -428,24 +422,11 @@ not delay a query. `workspace.use` and `mirror()` reach the shell owner.
 its own operations. A `bash` call and a `sql` call from two agents can
 finish in either order.
 
-**The `sql` tool runs its statements on the SQL backend.** It takes `sql`,
-`export`, and `maxRows`. It has no `database` parameter, because the
-backend names the database. The preview and the error text are the same as
-the shell `sql` tool.
-
-**`export` writes the result into the shell's filesystem.** The tool runs
-the query on the SQL owner and holds the rows in memory. It then releases
-the SQL owner and writes the CSV file on the shell owner, through a
-temporary file and a rename. A NULL value reads as `\N`, and a blob reads
-as hex.
-
 **The audit log stays on the shell's filesystem.** The entry of a `sql`
-call is one more shell operation after the call ends. It runs over its own
-unconditional context, so a cut call still leaves its entry. Another
-operation on the shell owner can run between the call and its entry.
-
-**The guidance follows the backend.** It names the backend's `database`
-and adds the backend's `guidance`. It does not name `layout.database`.
+call is one more operation on the bash owner after the call ends. It runs
+over its own unconditional context, so a cut call still leaves its entry.
+Another operation on the bash owner can run between the call and its
+entry.
 
 **A new SQL backend passes `sqlConformance`** (see
 [The conformance suite](#the-conformance-suite)).
@@ -458,18 +439,17 @@ The memory and directory backends are the Pi binding. They export from the
 `./just-bash` entry. The root entry names `WorkspaceEnv`, the Pi
 `ExecutionEnv` that has a zero-argument `cleanup()`. `BashBackend`
 extends `ResourceBackend<WorkspaceEnv>` and adds optional Pi harness tools
-beyond the five defaults, optional guidance about the backend's own shell,
+beyond the four file tools, optional guidance about the backend's own shell,
 and a required `layout` (see
 [The layout and the host identity](#the-layout-and-the-host-identity)).
-`openWorkspace` creates the resource owner, builds the five default tools
-over `layout.database`, and binds them, and any tool the backend adds, to
-its `use` method. `Workspace` adds `tools()`, `host`, and `mirror()` to the
+`openWorkspace` creates the resource owner, builds the four file tools, and
+binds them, and any tool the backend adds, to its `use` method. `Workspace` adds `tools()`, `host`, and `mirror()` to the
 resource surface. Direct operations and tool calls share one queue and one
 lifecycle.
 
 **A new backend implements `connect()` and an `ExecutionEnv`, over the
 shared helpers below, and names its own `layout`.** It adds only the tools
-and the guidance beyond the five defaults, passes
+and the guidance beyond the four file tools, passes
 `@ambionframework/workspace/conformance`, and loads no just-bash.
 
 **The root entry also exports the environment helpers a new `ExecutionEnv`
@@ -559,7 +539,7 @@ second operation queue.
 **A new backend follows one recipe.** It implements `connect()` and an
 `ExecutionEnv` over the shared helpers (see [The resource
 contract](#the-resource-contract)), names its own `layout`, and adds only
-the tools and the shell guidance beyond the five defaults every workspace
+the tools and the shell guidance beyond the four file tools every workspace
 already has. It passes `@ambionframework/workspace/conformance` and loads
 no just-bash.
 

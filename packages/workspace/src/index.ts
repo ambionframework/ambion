@@ -1,23 +1,26 @@
 /**
- * A workspace backend for Ambion: a virtual Unix filesystem and a shell.
+ * A workspace for Ambion: a bash backend, an optional SQL backend, and the
+ * tools an agent uses on them.
  *
- * This package owns the workspace resource, its built-in tools, and two
- * filesystem backends. `openWorkspace` opens a workspace over one shell
- * backend and, when the caller sets one, one SQL backend (`SqlBackend`).
- * `workspace.tools()` returns the tools and guidance the workspace exposes
- * to an agent. The root
- * entry loads no backend: `./just-bash` holds the just-bash backends,
- * `./resource` holds the neutral resource contract, and `./sql` holds the
- * SQL resource. The root entry exports the environment helpers from
- * `./execution-env.ts`, so a new `ExecutionEnv` backend can build on them
- * without a dependency on `just-bash`.
+ * `openWorkspace` opens a workspace over its backends by kind:
+ * `backend: { bash, sql? }`. `workspace.tools()` returns the tools and
+ * guidance the workspace exposes to an agent. The root entry loads no
+ * backend: `./just-bash` holds the just-bash bash backends, `./sqlite`
+ * holds the SQLite SQL backend, `./resource` holds the neutral resource
+ * contract, and `./sql` holds the SQL resource. The root entry exports the
+ * environment helpers from `./execution-env.ts`, so a new `ExecutionEnv`
+ * backend can build on them without a dependency on `just-bash`.
  *
  * ```ts
  * import { defineAgent } from '@ambionframework/ambion';
  * import { openWorkspace } from '@ambionframework/workspace';
  * import { memoryBackend } from '@ambionframework/workspace/just-bash';
+ * import { sqliteBackend } from '@ambionframework/workspace/sqlite';
  *
- * const drive = openWorkspace({ name: 'team-site', backend: { bash: memoryBackend() } });
+ * const drive = openWorkspace({
+ * 	name: 'team-site',
+ * 	backend: { bash: memoryBackend(), sql: sqliteBackend('./team-site.db') },
+ * });
  * const agent = defineAgent({ ..., bundles: [drive.tools()] });
  * ```
  *
@@ -47,7 +50,6 @@ export {
 export type { WorkspaceLog, WorkspaceLogOptions } from './log.ts';
 export { openLog } from './log.ts';
 export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.ts';
-export { SHARED_DATABASE } from './sql.ts';
 export type { SqlBackend, SqlEnv, SqlOutcome, SqlRow, SqlValue } from './sql-backend.ts';
 export type { Workspace } from './workspace.ts';
 export { openWorkspace } from './workspace.ts';

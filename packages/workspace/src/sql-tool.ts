@@ -1,9 +1,9 @@
 /**
  * The `sql` tool over a SQL backend.
  *
- * A workspace with a SQL backend gives its agents this tool in place of the
- * shell `sql` tool of `./sql.ts`. The statements run on the SQL owner. The
- * database need not live on the shell's filesystem.
+ * A workspace with a SQL backend gives its agents this tool. A workspace
+ * with no SQL backend has no `sql` tool. The statements run on the SQL
+ * owner. The database need not live on the shell's filesystem.
  *
  * `export` crosses the two backends. The tool runs the query on the SQL
  * owner and holds the rows in memory. It then releases the SQL owner and
@@ -15,8 +15,10 @@
  * its entry.
  */
 
+import { posix } from 'node:path';
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
 import {
+	type AgentToolResult,
 	BACKGROUND_CONTEXT,
 	type Context,
 	type ExecutionEnv,
@@ -26,18 +28,23 @@ import { type Static, Type } from 'typebox';
 import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
 import type { WorkspaceResource } from './resource.ts';
-import {
-	absolutePath,
-	ensureParent,
-	exported,
-	failed,
-	NULL_SENTINEL,
-	PREVIEW_ROWS,
-	previewed,
-	type SqlResult,
-} from './sql.ts';
 import type { SqlEnv, SqlRow, SqlValue } from './sql-backend.ts';
 import { auditEntry } from './tools.ts';
+
+/** How many rows the preview shows when the caller names no limit. */
+const PREVIEW_ROWS = 50;
+
+/** The CSV text for a NULL value, so a NULL reads apart from an empty string. */
+const NULL_SENTINEL = '\\N';
+
+/** What the tool reports beside its text, for logs and UI. */
+interface SqlDetails {
+	database: string;
+	rows: number;
+	export?: string;
+}
+
+type SqlResult = AgentToolResult<SqlDetails>;
 
 const sqlSchema = Type.Object({
 	sql: Type.String({
@@ -76,7 +83,7 @@ export function sqlToolGuidance(database: string): string {
 }
 
 /** Build the `sql` tool that runs on the SQL owner and exports through the shell owner. */
-export function createBackendSqlTool(options: SqlToolOptions): AmbionTool {
+export function createSqlTool(options: SqlToolOptions): AmbionTool {
 	const record = async (params: SqlParams, ctx: ToolContext, outcome: Outcome): Promise<void> => {
 		if (options.audit === undefined) return;
 		const audit = options.audit;
@@ -175,4 +182,73 @@ function csvField(value: SqlValue | undefined): string {
 
 function csvText(text: string): string {
 	return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+/** The report of one preview: a Markdown table of the rows, capped at `maxRows`. */
+function previewed(database: string, rows: readonly SqlRow[], maxRows: number): SqlResult {
+	if (rows.length === 0) return report(`Ran on ${database}. No rows.`, { database, rows: 0 });
+	return report(table(rows, maxRows), { database, rows: rows.length });
+}
+
+/**
+ * The report of one export: the head of the file as a CSV block, and the
+ * row count. `previewRecords` holds the header and the first rows.
+ */
+function exported(
+	database: string,
+	previewRecords: readonly string[],
+	rows: number,
+	exportPath: string,
+): SqlResult {
+	const block =
+		previewRecords.length === 0 ? '(no rows)' : `\`\`\`csv\n${previewRecords.join('\n')}\n\`\`\``;
+	const footer = `\n\nWrote ${rows} ${plural(rows)} to ${exportPath}. A NULL value reads as ${NULL_SENTINEL}.`;
+	return report(`${block}${footer}`, { database, rows, export: exportPath });
+}
+
+/** Render rows as a GitHub Markdown table, capped at `maxRows`, with a footer. */
+function table(rows: readonly SqlRow[], maxRows: number): string {
+	const columns = Object.keys(rows[0] ?? {});
+	const shown = rows.slice(0, maxRows);
+	const header = `| ${columns.map(cell).join(' | ')} |`;
+	const rule = `| ${columns.map(() => '---').join(' | ')} |`;
+	const body = shown.map((row) => `| ${columns.map((name) => cell(row[name])).join(' | ')} |`);
+	const footer =
+		rows.length > shown.length
+			? `\n\nShows ${shown.length} of ${rows.length} rows. Add a LIMIT, or set export for the full result.`
+			: `\n\n${rows.length} ${plural(rows.length)}.`;
+	return `${[header, rule, ...body].join('\n')}${footer}`;
+}
+
+/** One table cell: NULL for a missing value, a byte count for a blob, and pipes and newlines made safe. */
+function cell(value: SqlValue | undefined): string {
+	if (value === null || value === undefined) return 'NULL';
+	if (value instanceof Uint8Array) return `(${value.length} bytes)`;
+	return String(value).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+}
+
+/** `path` as an absolute path on `env`. */
+async function absolutePath(env: ExecutionEnv, path: string, context: Context): Promise<string> {
+	const resolved = await env.absolutePath(path, context);
+	if (!resolved.ok) throw resolved.error;
+	return resolved.value;
+}
+
+/** Create the parent directory of `path` on `env`, with every missing parent. */
+async function ensureParent(env: ExecutionEnv, path: string, context: Context): Promise<void> {
+	const made = await env.createDir(posix.dirname(path), { recursive: true }, context);
+	if (!made.ok) throw made.error;
+}
+
+function plural(count: number): string {
+	return count === 1 ? 'row' : 'rows';
+}
+
+function failed(database: string, message: string): SqlResult {
+	const text = message.trim() === '' ? 'The query failed.' : message.trim();
+	return report(`SQL error on ${database}:\n${text}`, { database, rows: 0 });
+}
+
+function report(text: string, details: SqlDetails): SqlResult {
+	return { content: [{ type: 'text', text }], details };
 }
