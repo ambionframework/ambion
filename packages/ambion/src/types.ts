@@ -151,7 +151,7 @@ export interface Clock {
 	alarm(at: number, fire: () => void): () => void;
 }
 
-/** What the room stamps on every message when it lands on the record. */
+/** What every message carries once it lands on the record. */
 interface Landed {
 	/** The place it took on the record. The journal gives it; a draft has none. */
 	seq: Seq;

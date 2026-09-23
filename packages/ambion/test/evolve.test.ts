@@ -1,4 +1,7 @@
-/** The fold applies each entry to a copy, so no earlier state and no committed entry changes. */
+/**
+ * The fold's event rules write no earlier state and no committed entry, and
+ * each step equals `foldRoom`.
+ */
 import { expect, it } from 'vitest';
 import type { Close, Composition } from '../src/journal/events.ts';
 import type { Entry } from '../src/journal/journal.ts';
