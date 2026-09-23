@@ -270,7 +270,12 @@ export function withAttempts(
 	};
 }
 
-/** A draft of the writer's over this close that came to nothing. Another seat's lease is no attempt of the writer's. */
+/**
+ * A draft of the writer's over this close that came to nothing. Another
+ * seat's lease is no attempt of the writer's. The validator holds
+ * `through >= 1`. A decoded id always names a seat, so a writer with no
+ * name drafts nothing.
+ */
 function draftedOver(lease: LeaseHold, through: Seq, writer: string): boolean {
 	const parsed = decodeActivationId(lease.id);
 	return parsed !== undefined && draftsClose(parsed, through, writer) && cameToNothing(lease);

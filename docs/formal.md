@@ -276,13 +276,13 @@ before the rules existed.
 
 ## 8. Why each room rule is a rule
 
-**Every exported room rule gates a write.** A rule stays in
+**Every exported room rule but `exchangeOutcome` gates a write.** A rule stays in
 `room/rules.verified.ts` when a fault in it loses or duplicates the
 record: it decides an entry, an admission, or the `due` list that
 `admitsLease` reads. A rule that only shapes a read leaves the file, and
 it lives beside its caller with an ordinary test. The sweep for 0.2.0
 found no such rule. `exchangeOutcome` waits for the `awaiting` expiry in
-0.3.0, which decides if it gates a write.
+0.3.0, which decides whether it gates a write.
 
 | Rule                   | The write it gates                                             |
 | ---------------------- | -------------------------------------------------------------- |
