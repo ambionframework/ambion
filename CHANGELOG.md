@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+**`@ambionframework/workspace` imports `typebox` and bundles no copy of it.**
+The SQL tools use `typebox` at runtime, and the manifest declared it only for
+development. tsdown then inlined `typebox` 1.3.18 into `dist`, 143 KB of the
+296 KB. `typebox` is now a dependency of the package.
+
+**`@ambionframework/pi-journal` takes `@earendil-works/pi-agent-core` as a
+peer dependency.** The package uses only its types. The host that stores Pi
+sessions supplies the one copy that the host and the package share.
+
+**`@ambionframework/claude` and `@ambionframework/codex` no longer install
+`typebox`.** Each package uses only its types, and no built file imports it.
+
+**Package hygiene reads the built files.** `pnpm run check:packages` fails on
+an import in `dist` of a package that the manifest does not declare as a
+runtime or peer dependency. It also fails on bundled code from outside the
+package's own `src`.
+
 **New package: `@ambionframework/workstation`.** `workstationBackend(options)`
 returns a `BashBackend` over SSH to one remote server, with one Unix account
 for each agent. File calls go over SFTP, and each command runs in its own

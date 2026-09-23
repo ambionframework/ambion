@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+	checkDist,
 	checkEngines,
 	checkEsm,
 	checkExports,
@@ -104,4 +105,57 @@ describe('engines', () => {
 		const other = { ...good, engines: { node: '>=24' } };
 		assert.deepEqual(rules(checkEngines([good, other])), ['engines']);
 	});
+});
+
+describe('dist', () => {
+	const manifest = {
+		...good,
+		dependencies: { b: '1' },
+		peerDependencies: { '@x/c': '1' },
+		devDependencies: { d: '1', '@x/e': 'workspace:*' },
+	};
+	const file = (text) => [{ path: 'dist/index.mjs', text }];
+	const accepted = [
+		['the package itself', 'import { a } from "@x/a/testing";'],
+		['a multi-line import', 'import {\n\tb1,\n\tb2\n} from "b/sub";'],
+		['a side-effect import of a peer', 'import "@x/c";'],
+		['a relative export', 'export * from "./chunk.mjs";'],
+		['a node: scheme', 'const e = await import("node:fs");'],
+		['a cloudflare: scheme', 'import { f } from "cloudflare:workers";'],
+		['a # import', 'import "#internal/x";'],
+		['a string that holds from', "type P = Pick<Ref, 'owner' | 'from'>;"],
+		['a comment that holds from', "export function read() {\n\t// reads from 'disk'\n}"],
+		['a template that holds from', `export const a = 1;\nconst m = \`read from "\${f}"\`;`],
+		['a commented import', '/** see import("e") */\n// import { d } from "d";'],
+		['a region of its own source', '//#region src/index.ts\n'],
+	];
+	for (const [label, text] of accepted) {
+		it(`accepts ${label}`, () => assert.deepEqual(checkDist(manifest, file(text)), []));
+	}
+	it('finds a devDependency and an undeclared package, once each', () => {
+		const text = 'import { d } from "d";\nimport("e/x");\nimport { d2 } from "d";';
+		const found = checkDist(manifest, file(text));
+		assert.deepEqual(rules(found), ['dist', 'dist']);
+		assert.match(found[0].message, /imports d,/);
+		assert.match(found[1].message, /imports e,/);
+	});
+	const inlined = [
+		[
+			'a node_modules package',
+			'//#region ../../node_modules/.pnpm/d@1.3.18/node_modules/d/build/a.mjs',
+			/inlines d from node_modules\.$/,
+		],
+		[
+			'a workspace package',
+			'//#region ../e/dist/index.mjs',
+			/inlines \.\.\/e\/dist\/index\.mjs\.$/,
+		],
+	];
+	for (const [label, text, message] of inlined) {
+		it(`finds code inlined from ${label}`, () => {
+			const found = checkDist(manifest, file(`${text}\n`));
+			assert.deepEqual(rules(found), ['dist']);
+			assert.match(found[0].message, message);
+		});
+	}
 });
