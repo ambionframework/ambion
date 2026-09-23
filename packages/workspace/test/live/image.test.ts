@@ -83,7 +83,7 @@ const CYAN: Rgb = [0, 255, 255];
 live('a workspace picture', () => {
 	it('a seat reads an image file and describes what it actually shows', async () => {
 		const backend = memoryBackend();
-		const store = openWorkspace({ name: roomName('live-image'), backend });
+		const store = openWorkspace({ name: roomName('live-image'), backend: { bash: backend } });
 		await store.use({ name: 'seed' }, async (env) => {
 			await env.writeFile(
 				'/home/curator/gallery/swatch.png',

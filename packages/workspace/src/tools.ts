@@ -40,7 +40,7 @@ function auditError(error: unknown): { name: string; message: string } {
 }
 
 /** One audit entry for a finished call, successful or not. */
-function auditEntry(
+export function auditEntry(
 	tool: string,
 	params: unknown,
 	ctx: ToolContext,

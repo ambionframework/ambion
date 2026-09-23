@@ -2,7 +2,7 @@
 	"name": "@ambionframework/workspace",
 	"version": "0.1.0",
 	"type": "module",
-	"description": "A workspace backend for Ambion: a virtual Unix filesystem and shell, in memory or over a directory.",
+	"description": "A workspace for Ambion: a virtual Unix filesystem and shell, in memory or over a directory, and an optional SQLite database.",
 	"license": "Apache-2.0",
 	"homepage": "https://ambionframework.com",
 	"repository": {
@@ -29,6 +29,10 @@
 		"./sql": {
 			"types": "./dist/sql-resource.d.mts",
 			"import": "./dist/sql-resource.mjs"
+		},
+		"./sqlite": {
+			"types": "./dist/sqlite-entry.d.mts",
+			"import": "./dist/sqlite-entry.mjs"
 		},
 		"./just-bash": {
 			"types": "./dist/just-bash-entry.d.mts",

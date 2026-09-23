@@ -219,7 +219,7 @@ describe('the SQL resource', () => {
 	});
 
 	it('is a second resource on the one contract beside a workspace', async () => {
-		const drive = openWorkspace({ name: 'drive', backend: memoryBackend() });
+		const drive = openWorkspace({ name: 'drive', backend: { bash: memoryBackend() } });
 		const sql = open();
 		const resources: WorkspaceResource[] = [drive, sql];
 		expect(resources.map((resource) => resource.name)).toEqual(['drive', 'lab']);

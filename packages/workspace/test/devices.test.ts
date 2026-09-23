@@ -30,7 +30,7 @@ async function sh(env: ExecutionEnv, command: string): Promise<{ output: string;
 describe.each(backends)('the null device on $name', (backend) => {
 	async function withEnv(run: (env: ExecutionEnv) => Promise<void>) {
 		const handle = await backend.open();
-		const workspace = openWorkspace({ name: 'devices', backend: handle.backend });
+		const workspace = openWorkspace({ name: 'devices', backend: { bash: handle.backend } });
 		try {
 			await workspace.use(agent, run);
 		} finally {
@@ -90,7 +90,7 @@ describe.each(backends)('the null device on $name', (backend) => {
 describe('the null device leaves no trace', () => {
 	it('adds no file to the memory backend', async () => {
 		const backend = memoryBackend();
-		const workspace = openWorkspace({ name: 'devices', backend });
+		const workspace = openWorkspace({ name: 'devices', backend: { bash: backend } });
 		let before: Awaited<ReturnType<typeof backend.readFiles>> = [];
 		await workspace.use(agent, async (env) => {
 			await sh(env, 'true');
@@ -105,7 +105,7 @@ describe('the null device leaves no trace', () => {
 
 	it('adds no dev directory to the root of the directory backend', async () => {
 		const root = await mkdtemp(join(tmpdir(), 'ambion-devices-'));
-		const workspace = openWorkspace({ name: 'devices', backend: directoryBackend(root) });
+		const workspace = openWorkspace({ name: 'devices', backend: { bash: directoryBackend(root) } });
 		try {
 			await workspace.use(agent, async (env) => {
 				await sh(env, 'echo leak > /dev/null; echo more >> /dev/null');

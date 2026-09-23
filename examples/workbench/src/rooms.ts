@@ -17,6 +17,7 @@ import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
 import { openWorkspace, type RoomMirror } from '@ambionframework/workspace';
 import { directoryBackend } from '@ambionframework/workspace/just-bash';
 import { openSqlResource } from '@ambionframework/workspace/sql';
+import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { readApprovals } from './approvals.ts';
 import { team } from './definitions.ts';
 import {
@@ -126,7 +127,10 @@ export async function openRooms(
 	const workspacePath = resolve(directory, 'workspace');
 	const workspace = openWorkspace({
 		name: 'workbench',
-		backend: directoryBackend(workspacePath),
+		backend: {
+			bash: directoryBackend(workspacePath),
+			sql: sqliteBackend(resolve(directory, 'shared.db')),
+		},
 		audit: {},
 	});
 	try {

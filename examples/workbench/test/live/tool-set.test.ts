@@ -31,6 +31,7 @@ import { piExecution } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
 import { memoryBackend } from '@ambionframework/workspace/just-bash';
 import { openSqlResource } from '@ambionframework/workspace/sql';
+import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { describe, expect, it } from 'vitest';
 import { people, team } from '../../src/definitions.ts';
 import { type Family, hasKey, seatFamilies } from '../../src/families.ts';
@@ -85,7 +86,10 @@ function asker() {
 
 async function openRoom(seats: readonly string[]) {
 	const directory = await mkdtemp(join(tmpdir(), 'ambion-workbench-toolset-live-'));
-	const workspace = openWorkspace({ name: 'workbench', backend: memoryBackend() });
+	const workspace = openWorkspace({
+		name: 'workbench',
+		backend: { bash: memoryBackend(), sql: sqliteBackend(':memory:') },
+	});
 	const lab = openSqlResource({
 		name: 'lab',
 		location: join(directory, 'lab.db'),

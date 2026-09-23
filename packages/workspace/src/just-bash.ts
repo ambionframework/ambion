@@ -29,19 +29,17 @@ import { mkdir } from 'node:fs/promises';
 import { posix } from 'node:path';
 import { Bash, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
 import { DEFAULT_AUDIT_LOG } from './audit.ts';
-import type { WorkspaceBackend, WorkspaceLayout } from './backend.ts';
+import type { BashBackend, WorkspaceLayout } from './backend.ts';
 import { BashEnv } from './bash-env.ts';
 import { DEV_DIR, withDevices } from './devices.ts';
 import type { WorkspaceAgent } from './resource.ts';
-import { SHARED_DATABASE } from './sql.ts';
 
 /**
- * Where the just-bash backends keep the audit log, the shared database, and
- * the room mirrors. Both backends name the same layout, so no file moves.
+ * Where the just-bash backends keep the audit log and the room mirrors.
+ * Both backends name the same layout, so no file moves.
  */
 const JUST_BASH_LAYOUT: WorkspaceLayout = {
 	audit: DEFAULT_AUDIT_LOG,
-	database: SHARED_DATABASE,
 	rooms: '/rooms',
 };
 
@@ -94,13 +92,13 @@ export interface MemoryBackendOptions {
 }
 
 /**
- * The in-memory backend's own handle: a `WorkspaceBackend`, plus the two
+ * The in-memory backend's own handle: a `BashBackend`, plus the two
  * things a real directory gives a host for free and an in-memory filesystem
  * does not — seeding it before any agent connects (`seed`, above) and reading
- * it back without one (`readFiles`, below). Assignable to `WorkspaceBackend`
+ * it back without one (`readFiles`, below). Assignable to `BashBackend`
  * wherever that is all a caller needs.
  */
-export interface MemoryWorkspaceBackend extends WorkspaceBackend {
+export interface MemoryBashBackend extends BashBackend {
 	/** Every file currently on the backend's filesystem, path and text, sorted by path. */
 	readFiles(): Promise<MemoryBackendFile[]>;
 }
@@ -172,7 +170,7 @@ function lazyResource<T>(build: () => Promise<T>): {
  * the cache, releasing the filesystem; the owner prevents any later
  * connection through the handle. A host deletes the data it owns.
  */
-export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspaceBackend {
+export function memoryBackend(options: MemoryBackendOptions = {}): MemoryBashBackend {
 	const resource = lazyResource(async () => {
 		const fs = inMemory();
 		if (options.seed) {
@@ -202,7 +200,7 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
  *
  * This backend is the one part of this package that needs a real disk.
  */
-export function directoryBackend(root: string): WorkspaceBackend {
+export function directoryBackend(root: string): BashBackend {
 	const resource = lazyResource(async () => {
 		await mkdir(root, { recursive: true });
 		class DirectoryFs extends ReadWriteFs {

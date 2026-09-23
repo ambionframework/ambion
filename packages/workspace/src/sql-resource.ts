@@ -26,9 +26,7 @@ import {
 	type ResourceEnv,
 	type WorkspaceResource,
 } from './resource.ts';
-
-/** A value that SQLite stores. */
-export type SqlValue = string | number | bigint | Uint8Array | null;
+import type { SqlValue } from './sql-backend.ts';
 
 /** The columns `record` fills from the tool context, when the table declares them. */
 export const PROVENANCE_COLUMNS = [

@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+**`openWorkspace` takes its backends by kind.** The `backend` option is
+now `WorkspaceBackends`: `{ bash, sql? }`. Write
+`backend: { bash: memoryBackend() }` where you wrote
+`backend: memoryBackend()`. `WorkspaceBackend` is renamed `BashBackend`,
+and `MemoryWorkspaceBackend` is renamed `MemoryBashBackend`. The root entry
+exports the `WorkspaceBackends`, `SqlBackend`, `SqlEnv`, `SqlOutcome`,
+`SqlRow`, `SqlRunOptions`, `SqlValue`, and `WorkspaceFiles` types.
+
+**The `sql` tool runs on a SQL backend, and a workspace with no SQL
+backend has no `sql` tool.** `backend.sql` takes a `SqlBackend`: a shared
+database that need not live on the shell's filesystem. The new
+`@ambionframework/workspace/sqlite` entry exports `sqliteBackend(location)`,
+the default SQL backend over `node:sqlite`. It refuses a statement that
+opens a host file, rolls back a transaction that a call leaves open,
+detaches every database a call attached,
+refuses a result with two columns of one name, and stops a call after
+`timeout` seconds, 30 by default. The SQL backend runs under an
+owner of its own. `connect(agent, files)` gives it the calling agent's
+`WorkspaceFiles` on the bash backend. `run(sql, { maxRows, export? })`
+gives the last statement's columns, its first `maxRows` rows, and its row
+count, and writes an export as CSV through `files`. The root entry exports
+`sqlResult`, which does the preview, the count, and the streamed export
+for a backend. The `sql` tool takes `sql`, `export`, and `maxRows`, an integer up to 1000.
+`Workspace.sql` exposes the SQL owner, and `dispose()` disposes the SQL
+owner and then the bash owner.
+
+**The `sql` tool no longer runs `sqlite3` through the shell.** The tool
+loses its `database` and `timeout` parameters. `WorkspaceLayout` loses
+`database`, and the root entry no longer exports `SHARED_DATABASE`. The
+just-bash backends hold no shared database at `/workspace/shared.db`. To
+keep a shared database, set `backend.sql` to `sqliteBackend(path)`.
+
+**`./conformance` exports `sqlConformance`,** the cases every
+`SqlBackend` passes.
+
+**`SqlValue` moves from `./sql` to the root entry.** `./sql` no longer
+exports the type.
+
+**The default tool guidance names four tools with no SQL backend, and five
+with one.** The `sql` paragraph names the backend's `database` and adds the
+backend's own guidance.
+
 **A `WorkspaceBackend` now names its own layout.** A new `WorkspaceLayout`
 type, exported from the root, holds three paths: `audit`, the audit log a
 caller sets no `path` for; `database`, the database a `sql` call names none

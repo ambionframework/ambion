@@ -5,6 +5,7 @@ export default defineConfig({
 		'src/index.ts',
 		'src/resource-entry.ts',
 		'src/sql-resource.ts',
+		'src/sqlite-entry.ts',
 		'src/just-bash-entry.ts',
 		'src/conformance.ts',
 	],

@@ -1,8 +1,8 @@
 /**
- * The package's five entries, and what each one names. `index.ts` opens a
- * resource and its logs, over no backend. `./resource`, `./sql`, and
- * `./just-bash` each hold one binding. `./conformance` holds the cases
- * every `WorkspaceBackend` must pass.
+ * The package's six entries, and what each one names. `index.ts` opens a
+ * resource and its logs, over no backend. `./resource`, `./sql`,
+ * `./sqlite`, and `./just-bash` each hold one binding. `./conformance`
+ * holds the cases every `BashBackend` and every `SqlBackend` must pass.
  */
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ import { PACKAGE_NAME } from '../src/index.ts';
 import * as justBash from '../src/just-bash-entry.ts';
 import * as resource from '../src/resource-entry.ts';
 import * as sql from '../src/sql-resource.ts';
+import * as sqlite from '../src/sqlite-entry.ts';
 
 const read = async (name: string) =>
 	readFile(fileURLToPath(new URL(`../${name}`, import.meta.url)), 'utf8');
@@ -28,6 +29,7 @@ const STEMS: Record<string, string> = {
 	'.': 'index',
 	'./resource': 'resource-entry',
 	'./sql': 'sql-resource',
+	'./sqlite': 'sqlite-entry',
 	'./just-bash': 'just-bash-entry',
 	'./conformance': 'conformance',
 };
@@ -44,6 +46,7 @@ it('builds every entry the manifest names', async () => {
 		'src/index.ts',
 		'src/resource-entry.ts',
 		'src/sql-resource.ts',
+		'src/sqlite-entry.ts',
 		'src/just-bash-entry.ts',
 		'src/conformance.ts',
 	]);
@@ -58,7 +61,7 @@ it('builds every entry the manifest names', async () => {
 	}
 });
 
-it('holds exactly five entries: the root, one per binding, and the conformance suite', async () => {
+it('holds exactly six entries: the root, one per binding, and the conformance suite', async () => {
 	const { exports } = await manifest();
 	expect(Object.keys(exports).sort()).toEqual([
 		'.',
@@ -67,16 +70,16 @@ it('holds exactly five entries: the root, one per binding, and the conformance s
 		'./package.json',
 		'./resource',
 		'./sql',
+		'./sqlite',
 	]);
 });
 
-it('exports one resource, its two logs, and the environment helpers from the root, and no backend', () => {
+it('exports one resource, its two logs, the environment helpers, and sqlResult from the root, and no backend', () => {
 	expect(Object.keys(main).sort()).toEqual([
 		'BACKGROUND_CONTEXT',
 		'DEFAULT_AUDIT_LOG',
 		'Deadline',
 		'PACKAGE_NAME',
-		'SHARED_DATABASE',
 		'TMP',
 		'boundedView',
 		'openAuditLog',
@@ -86,6 +89,7 @@ it('exports one resource, its two logs, and the environment helpers from the roo
 		'resolvePath',
 		'spill',
 		'spillPath',
+		'sqlResult',
 		'tempDirPath',
 		'tempFilePath',
 	]);
@@ -99,12 +103,16 @@ it('exports exactly the SQL resource from ./sql', () => {
 	expect(Object.keys(sql).sort()).toEqual(['PROVENANCE_COLUMNS', 'openSqlResource']);
 });
 
+it('exports exactly the SQLite backend from ./sqlite', () => {
+	expect(Object.keys(sqlite).sort()).toEqual(['sqliteBackend']);
+});
+
 it('exports exactly the just-bash backends from ./just-bash', () => {
 	expect(Object.keys(justBash).sort()).toEqual(['directoryBackend', 'memoryBackend']);
 });
 
-it('exports exactly the conformance suite from ./conformance', () => {
-	expect(Object.keys(conformance).sort()).toEqual(['workspaceConformance']);
+it('exports exactly the two conformance suites from ./conformance', () => {
+	expect(Object.keys(conformance).sort()).toEqual(['sqlConformance', 'workspaceConformance']);
 });
 
 it('loads no backend at the root: no export from the just-bash, resource, or SQL files', async () => {
@@ -112,6 +120,7 @@ it('loads no backend at the root: no export from the just-bash, resource, or SQL
 	expect(index).not.toMatch(/from '\.\/just-bash\.ts'/);
 	expect(index).not.toMatch(/from '\.\/resource\.ts'/);
 	expect(index).not.toMatch(/from '\.\/sql-resource\.ts'/);
+	expect(index).not.toMatch(/from '\.\/sqlite(-entry)?\.ts'/);
 	expect(index).not.toMatch(/ROOM_MIRROR_GUIDANCE|roomMirrorPath|DEFAULT_ROTATE_BYTES/);
 });
 

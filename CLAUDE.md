@@ -23,7 +23,7 @@ floor.
 | `packages/claude`     | The Claude Agent SDK executor: `claude()` and `claudeExecution()`, tested on a fake executable                                               |
 | `packages/codex`      | The Codex SDK executor: `codex()` and `codexExecution()`, over a stdio room tools server; live-tested, no fake                               |
 | `packages/pi-journal` | Full Pi transcript sessions over the generic journal storage contract                                                                        |
-| `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem                                                                |
+| `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem, and the interface of an optional SQL backend                  |
 | `docs/trust.md`       | Design contract for what one owner guarantees another, and what the kernel does not defend — read before exposing a room to untrusted agents |
 | `docs/agent.md`       | Design contract for the core — read before changing the runtime                                                                              |
 | `docs/assistant.md`   | Design contract for the default assistant package and the `assistant` room option — read with `agent.md`                                     |

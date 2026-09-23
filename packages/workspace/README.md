@@ -19,18 +19,23 @@ from GitHub Packages; see [the toolchain guide](https://github.com/ambionframewo
 
 ## Use
 
-`drive.tools()` returns five default tools — `read`, `write`, `edit`, `bash`,
-and `sql` — plus any tool a backend adds of its own, and their guidance. Pass
-it in `bundles`; each tool reaches the environment the backend built for that
-agent, rooted at `/home/<agent name>`.
+`drive.tools()` returns four file tools — `read`, `write`, `edit`, and
+`bash` — plus `sql` when the workspace has a SQL backend, plus any tool the
+bash backend adds of its own, and their guidance. Pass it in `bundles`; each
+file tool reaches the environment the backend built for that agent, rooted
+at `/home/<agent name>`.
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';
 import { pi } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
 import { memoryBackend } from '@ambionframework/workspace/just-bash';
+import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 
-const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
+const drive = openWorkspace({
+  name: 'team-site',
+  backend: { bash: memoryBackend(), sql: sqliteBackend('./team-site.db') },
+});
 
 const surveyor = defineAgent({
   name: 'surveyor',
@@ -47,11 +52,18 @@ const surveyor = defineAgent({
 
 The root entry loads no backend. `./resource` holds only the neutral
 contract: `openResource` and its types. It loads neither the Ambion runtime
-nor a model library. `./just-bash` holds the two backends,
-`memoryBackend` and `directoryBackend`. `./sql` holds `openSqlResource`, a
+nor a model library. `./just-bash` holds the two bash backends,
+`memoryBackend` and `directoryBackend`. `./sqlite` holds `sqliteBackend`,
+the SQL backend over one SQLite database. `./sql` holds `openSqlResource`, a
 resource over its own SQLite database, with its `SqlProvenance` and
 `SqlResourceEnv` types. `./conformance` holds `workspaceConformance`, the
-scenario matrix a new backend runs to prove it meets the resource contract.
+scenario matrix a new backend runs to prove it meets the resource contract,
+and `sqlConformance`, the cases a `SqlBackend` runs.
+
+`openWorkspace` takes its backends by kind: `backend: { bash, sql }`.
+`bash` is required. `sql` is an optional `SqlBackend`, and the `sql` tool
+then runs on that database. With no SQL backend, the workspace has no `sql`
+tool. The root entry exports the `SqlBackend` interface.
 
 ```ts
 import { memoryBackend } from '@ambionframework/workspace/just-bash';

@@ -95,6 +95,9 @@ workspace resource.
 - `/rooms/<room name>/messages.jsonl`: one line per message, mirrored from
   each room's own journal.
 
+**The workspace's `sql` tool opens `shared.db`.** The SQLite backend keeps
+this file beside the workspace directory, and the shell does not reach it.
+
 The datasheets are simplified summaries for a runnable example. They are not
 the manufacturer datasheets.
 
