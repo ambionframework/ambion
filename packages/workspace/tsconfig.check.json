@@ -10,7 +10,14 @@
 		// that followed it would emit the core's declarations into the core's own
 		// source tree. The build resolves the core as what it is — a dependency,
 		// through its published surface.
+		//
+		// The tests reach the just-bash source by relative path, and that source
+		// names this package. Its own specifiers map to its source for the same
+		// reason: one workspace, one set of types.
 		"paths": {
+			"@ambionframework/workspace": ["./src/index.ts"],
+			"@ambionframework/workspace/resource": ["./src/resource-entry.ts"],
+			"@ambionframework/workspace/conformance": ["./src/conformance.ts"],
 			"@ambionframework/ambion": ["../ambion/src/index.ts"],
 			"@ambionframework/ambion/hosting": ["../ambion/src/hosting.ts"],
 			"@ambionframework/pi": ["../pi/src/index.ts"]

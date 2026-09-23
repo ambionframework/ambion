@@ -7,8 +7,8 @@ import {
 	settled,
 	speak,
 } from '@ambionframework/ambion/testing';
+import { memoryBackend } from '@ambionframework/just-bash';
 import { openWorkspace } from '@ambionframework/workspace';
-import { memoryBackend } from '@ambionframework/workspace/just-bash';
 import { openSqlResource } from '@ambionframework/workspace/sql';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { describe, expect, it, onTestFinished } from 'vitest';

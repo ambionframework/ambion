@@ -5,8 +5,8 @@
  */
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { memoryBackend } from '../../just-bash/src/index.ts';
 import { openWorkspace } from '../src/index.ts';
-import { memoryBackend } from '../src/just-bash.ts';
 import { openResource, type ResourceBackend, type ResourceEnv } from '../src/resource.ts';
 import { wrapped } from './support/backends.ts';
 

@@ -47,7 +47,8 @@ the server has an account and a key of that name too.
 
 **The package reaches the workspace through its root entry.** That entry
 holds the interface and the environment helpers, and it loads no just-bash
-and no `node:sqlite`. The tests also import
+and no `node:sqlite`. The workstation does not depend on
+`@ambionframework/just-bash`, so it installs no just-bash. The tests also import
 `@ambionframework/workspace/conformance`.
 
 ## What the backend supplies
@@ -230,7 +231,7 @@ and the package's own tests check the rest.
 operation on a directory gives `is_directory`. A directory operation on a
 path that is not a directory gives `not_directory`. A path that does not
 exist gives `not_found`. Any other case, such as `rmdir` on a folder that
-holds files, gives `invalid` or `unknown`, as `BashEnv` does. The `lstat`
+holds files, gives `invalid` or `unknown`, as the just-bash backends do. The `lstat`
 runs after the failed call. A change between the two can pick the wrong
 code, and it changes no file.
 
@@ -314,8 +315,9 @@ tells an abort apart from a timeout, and a command with no timeout gets
 30 seconds. `SshEnv` supplies the group kill for both.
 
 **`SshEnv` hands one view to `onUpdate`.** The conformance suite expects
-one update for each command, the same as `BashEnv` gives. `SshEnv` builds
-the view when the command ends.
+one update for each command, the same as the just-bash backends give.
+`SshEnv` builds the view when the command ends, and hands it on through the
+workspace's `deliverView`.
 
 **The Ambion host holds a bounded window of the output.** A command can
 write gigabytes, and every agent's workspace runs in the host's process.

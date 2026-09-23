@@ -1,43 +1,24 @@
 /**
- * The backends and helpers the tests in this package share. `backends` are
- * the two bash backends every scenario runs on: `memory` holds the files for
- * as long as the handle lives, and `directory` writes them through to a
- * temporary directory and disposes of it after. `sqlBackends` are the two
- * SQLite harnesses. Each one is the harness type its conformance suite takes.
+ * The helpers the tests in this package share. `sqlBackends` are the two
+ * SQLite harnesses, the harness type `sqlConformance` takes.
+ *
+ * The bash backends are the just-bash backends. This package's tests reach
+ * their source and their test support by relative path, the way the core's
+ * tests reach the Pi source: a package dependency on `@ambionframework/just-bash`
+ * would close a cycle, since that package depends on this one.
+ * `vitest.config.ts` and `tsconfig.check.json` send the
+ * `@ambionframework/workspace` specifiers in that source to this package's
+ * own source, so a test reads one workspace module.
  */
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
-import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
+import { type MemoryBashBackend, memoryBackend } from '../../../just-bash/src/index.ts';
+import { tempDir } from '../../../just-bash/test/support/backends.ts';
 import { DEFAULT_AUDIT_LOG } from '../../src/audit.ts';
 import type { BashBackend } from '../../src/backend.ts';
-import type { ConformanceBackend, SqlConformanceBackend } from '../../src/conformance.ts';
+import type { SqlConformanceBackend } from '../../src/conformance.ts';
 import type { Workspace } from '../../src/index.ts';
-import { directoryBackend, type MemoryBashBackend, memoryBackend } from '../../src/just-bash.ts';
 import { sqliteBackend } from '../../src/sqlite-entry.ts';
-
-/** A temporary directory, and a function that removes it. */
-async function tempDir(prefix: string) {
-	const dir = await mkdtemp(join(tmpdir(), prefix));
-	return { dir, dispose: () => rm(dir, { recursive: true, force: true }) };
-}
-
-export const backends: readonly ConformanceBackend[] = [
-	{
-		name: 'memory',
-		async open() {
-			return { backend: memoryBackend(), dispose: async () => {} };
-		},
-	},
-	{
-		name: 'directory',
-		async open() {
-			const { dir, dispose } = await tempDir('ambion-drive-');
-			return { backend: directoryBackend(dir), dispose };
-		},
-	},
-];
 
 export const sqlBackends: readonly SqlConformanceBackend[] = [
 	{
@@ -67,29 +48,6 @@ export function wrapped(
 		layout: { audit: DEFAULT_AUDIT_LOG, rooms: '/rooms' },
 		...make(inner),
 	};
-}
-
-/** Run one command and return its exit code or error code, and its combined output. */
-export async function sh(
-	env: ExecutionEnv,
-	command: string,
-	options: { cwd?: string; timeout?: number } = {},
-): Promise<{ ok: boolean; exitCode?: number; code?: string; output: string }> {
-	let output = '';
-	const result = await env.exec(
-		command,
-		{
-			...options,
-			capture: { limits: { maxBytes: 1_000_000, maxLines: 100_000 } },
-			onUpdate: (update) => {
-				if (update.kind === 'replace') output = update.output.text;
-			},
-		},
-		BACKGROUND_CONTEXT,
-	);
-	return result.ok
-		? { ok: true, exitCode: result.value.exitCode, output }
-		: { ok: false, code: result.error.code, output };
 }
 
 /** The tool `name` in the workspace bundle. */

@@ -23,7 +23,8 @@ floor.
 | `packages/claude`      | The Claude Agent SDK executor: `claude()` and `claudeExecution()`, tested on a fake executable                                               |
 | `packages/codex`       | The Codex SDK executor: `codex()` and `codexExecution()`, over a stdio room tools server; live-tested, no fake                               |
 | `packages/pi-journal`  | Full Pi transcript sessions over the generic journal storage contract                                                                        |
-| `packages/workspace`   | A workspace resource and its tools, over an in-memory or directory filesystem, and the interface of an optional SQL backend                  |
+| `packages/workspace`   | A workspace resource and its tools, the helpers a bash backend builds on, and the interface of an optional SQL backend                       |
+| `packages/just-bash`   | The just-bash workspace backends: `memoryBackend` and `directoryBackend`, a virtual or directory filesystem and shell in process             |
 | `packages/workstation` | A workspace bash backend over SSH: one remote server, one Unix account for each agent. Tested on an in-process server and on OpenSSH in CI   |
 | `docs/trust.md`        | Design contract for what one owner guarantees another, and what the kernel does not defend — read before exposing a room to untrusted agents |
 | `docs/agent.md`        | Design contract for the core — read before changing the runtime                                                                              |
@@ -104,7 +105,8 @@ vitest.live.config.ts test/live/<file>.test.ts`) over the whole suite. Run the
 
 - Pi (`@earendil-works/pi-agent-core`) owns the model loop, tools, transcript.
   `packages/workspace` owns the workspace port, resource, tools, and the
-  just-bash filesystem and shell behind them. The core composes ordinary tools.
+  helpers a bash backend builds on. `packages/just-bash` owns the just-bash
+  filesystem and shell. The core composes ordinary tools.
   `packages/journal` owns the journal: the queue, the fence and the envelope
   every entry shares. `packages/pi-journal` owns Pi session persistence over
   that storage contract. Ambion owns only participants-as-values and

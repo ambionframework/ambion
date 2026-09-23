@@ -42,8 +42,9 @@ each page.
 Read `patterns.md` to find which primitive represents a human pattern.
 
 Read `resources.md` for the resource contract and `workspace.md` for the
-filesystem binding. `workstation.md` is the bash backend for a workspace
-on a remote server over SSH.
+filesystem binding and the just-bash backends of
+`@ambionframework/just-bash`. `workstation.md` is the bash backend for a
+workspace on a remote server over SSH.
 
 `assistant.md` describes the assistant package, the room configuration
 shorthand, and how the workbench example evaluates it.

@@ -29,8 +29,8 @@ import {
 	toolResultTexts,
 } from '../../ambion/test/support/scripted.ts';
 import { storages } from '../../ambion/test/support/storage.ts';
+import { backends } from '../../just-bash/test/support/backends.ts';
 import { openWorkspace } from '../src/index.ts';
-import { backends } from './support/backends.ts';
 
 const twoWorkspaces: Scenario = {
 	name: 'two workspaces on two backends, and one disposed mid-activation',

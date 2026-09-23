@@ -6,35 +6,39 @@
  * The adapter holds the just-bash mapping alone: classify just-bash's
  * thrown errors into Pi's codes, build `listDir` from one `readdir` plus
  * one `lstat` per entry, and call each `Bash.fs` member for its matching
- * `ExecutionEnv` member. `./execution-env.ts` holds the rules every backend
- * needs — path resolution, the deadline, the bounded output view, and the
- * temporary names — and this adapter calls them.
+ * `ExecutionEnv` member. `@ambionframework/workspace` holds the rules every
+ * backend needs — path resolution and the members that follow from it, the
+ * deadline, the bounded output view, and the temporary names — and this
+ * adapter calls them.
  *
  * `cwd` is the agent's home for the life of the env. just-bash restores its
  * working directory after every `exec`, so a `cd` lasts for one command.
  */
 
 import { posix } from 'node:path';
+import {
+	boundedView,
+	DEFAULT_TIMEOUT_SECONDS,
+	deliverView,
+	HomeEnv,
+	spill,
+	TMP,
+	tempDirPath,
+	tempFilePath,
+	withDeadline,
+} from '@ambionframework/workspace';
 import type {
 	Context,
 	ExecutionEnv,
+	ExecutionError,
 	FileErrorCode,
 	FileInfo,
 	Result,
 	ShellExecOptions,
 	ShellExecResult,
 } from '@earendil-works/pi-agent-core';
-import { ExecutionError, err, FileError, ok } from '@earendil-works/pi-agent-core';
+import { err, FileError, ok } from '@earendil-works/pi-agent-core';
 import type { Bash, FsStat } from 'just-bash';
-import {
-	boundedView,
-	Deadline,
-	resolvePath,
-	spill,
-	TMP,
-	tempDirPath,
-	tempFilePath,
-} from './execution-env.ts';
 
 type FileResult<T> = Promise<Result<T, FileError>>;
 
@@ -63,21 +67,16 @@ function toFileError(error: unknown, path: string): FileError {
 	return new FileError(code, message, path, error instanceof Error ? error : undefined);
 }
 
-/** What a command gets when its caller names no timeout. Pi's `bash` tool names none by default. */
-export const DEFAULT_TIMEOUT_SECONDS = 30;
-
-export class BashEnv implements ExecutionEnv {
-	readonly cwd: string;
-
+export class BashEnv extends HomeEnv implements ExecutionEnv {
 	/** The timeout, in seconds, for a command whose caller names none. */
 	private readonly timeout: number;
 
 	constructor(
 		private readonly bash: Bash,
-		private readonly home: string,
+		home: string,
 		options: { timeout?: number } = {},
 	) {
-		this.cwd = home;
+		super(home);
 		this.timeout = options.timeout ?? DEFAULT_TIMEOUT_SECONDS;
 	}
 
@@ -95,33 +94,9 @@ export class BashEnv implements ExecutionEnv {
 		}
 	}
 
-	/** `~` and `~/` are the agent's home, and a relative path is under `cwd`. */
-	private resolve(path: string): string {
-		return resolvePath(this.home, this.cwd, path);
-	}
-
-	async absolutePath(path: string): FileResult<string> {
-		return ok(this.resolve(path));
-	}
-
-	async joinPath(parts: string[]): FileResult<string> {
-		return ok(posix.join(...parts));
-	}
-
 	readTextFile(path: string, context: Context): FileResult<string> {
 		const resolved = this.resolve(path);
 		return this.attempt(resolved, context.abortSignal, () => this.bash.fs.readFile(resolved));
-	}
-
-	async readTextLines(
-		path: string,
-		options: { maxLines?: number } | undefined,
-		context: Context,
-	): FileResult<string[]> {
-		const text = await this.readTextFile(path, context);
-		if (!text.ok) return text;
-		const lines = text.value.split('\n');
-		return ok(options?.maxLines === undefined ? lines : lines.slice(0, options.maxLines));
 	}
 
 	readBinaryFile(path: string, context: Context): FileResult<Uint8Array> {
@@ -193,7 +168,7 @@ export class BashEnv implements ExecutionEnv {
 
 	remove(
 		path: string,
-		options: { recursive?: boolean; force?: boolean } | undefined,
+		options: Parameters<ExecutionEnv['remove']>[1],
 		context: Context,
 	): FileResult<void> {
 		const resolved = this.resolve(path);
@@ -239,13 +214,13 @@ export class BashEnv implements ExecutionEnv {
 	 * errors. A call that names no timeout gets the adapter's default, so a
 	 * command that never ends cannot hold an activation open.
 	 */
-	async exec(
+	exec(
 		command: string,
 		options: ShellExecOptions | undefined,
 		context: Context,
 	): Promise<Result<ShellExecResult, ExecutionError>> {
-		const deadline = new Deadline(context.abortSignal, options?.timeout ?? this.timeout);
-		try {
+		const timeout = options?.timeout ?? this.timeout;
+		return withDeadline(context.abortSignal, timeout, async (deadline) => {
 			const result = await this.bash.exec(command, {
 				cwd: options?.cwd === undefined ? undefined : this.resolve(options.cwd),
 				env: options?.env,
@@ -258,18 +233,8 @@ export class BashEnv implements ExecutionEnv {
 			if (view.truncation.truncated && options?.capture?.spill === true) {
 				view.spillPath = await spill(this.bash.fs, combined);
 			}
-			options?.onUpdate?.({ kind: 'replace', output: view }, context);
-			return ok({
-				exitCode: result.exitCode,
-				truncation: view.truncation,
-				...(view.spillPath === undefined ? {} : { spillPath: view.spillPath }),
-			});
-		} catch (error) {
-			const cause = error instanceof Error ? error : new Error(String(error));
-			return err(new ExecutionError('unknown', cause.message, cause));
-		} finally {
-			deadline.clear();
-		}
+			return ok(deliverView(view, result.exitCode, options, context));
+		});
 	}
 
 	/** just-bash exposes nothing to dispose. The collector reclaims a dropped instance. */

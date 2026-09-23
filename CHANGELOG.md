@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+**New package: `@ambionframework/just-bash`.** It holds `memoryBackend`,
+`directoryBackend`, and their `MemoryBackendFile`, `MemoryBackendOptions`,
+`MemoryBashBackend`, and `SeedWriter` types. The `./just-bash` entry of
+`@ambionframework/workspace` is gone, and the workspace no longer depends
+on `just-bash`. A host that uses the workstation installs no just-bash.
+Import from `@ambionframework/just-bash` where you imported from
+`@ambionframework/workspace/just-bash`.
+
+**The workspace root entry exports four more environment helpers.**
+`HomeEnv` is a base class for an `ExecutionEnv` with `cwd`,
+`absolutePath`, `joinPath`, and `readTextLines`. `withDeadline` runs a
+command under a `Deadline` and turns a thrown error into `unknown`.
+`deliverView` hands the output view to `onUpdate` and returns the result.
+`DEFAULT_TIMEOUT_SECONDS` is 30. The just-bash backends and the
+workstation both build on them.
+
 **The hosting entry holds the room tools once.** `roomTools(view, binding,
 options?)` returns `say`, `seat`, and `unseat` for one activation, or `say`
 alone for a closing activation. `agentTools(view, agent, signal, current)`

@@ -1,8 +1,8 @@
 /**
  * `SshEnv`: Pi's `ExecutionEnv` for one agent, over that agent's SSH
  * session. A file call goes over SFTP, and `exec` opens one channel for each
- * command (`exec.ts`). The workspace's helpers supply the path rule and the
- * temporary names.
+ * command (`exec.ts`). The workspace's helpers supply the path rule, the
+ * members that follow from it, and the temporary names.
  *
  * SFTP needs six adjustments:
  *
@@ -27,7 +27,7 @@
 
 import { posix } from 'node:path';
 import type { WorkspaceEnv } from '@ambionframework/workspace';
-import { resolvePath, tempDirPath, tempFilePath } from '@ambionframework/workspace';
+import { HomeEnv, tempDirPath, tempFilePath } from '@ambionframework/workspace';
 import {
 	type Context,
 	type ExecutionError,
@@ -73,8 +73,7 @@ function toFileInfo(path: string, stats: Stats): FileInfo {
 	};
 }
 
-export class SshEnv implements WorkspaceEnv {
-	readonly cwd: string;
+export class SshEnv extends HomeEnv implements WorkspaceEnv {
 	private readonly channels = new Set<ClientChannel>();
 	private readonly host: CommandHost;
 
@@ -82,7 +81,7 @@ export class SshEnv implements WorkspaceEnv {
 		private readonly session: Session,
 		private readonly release: () => void,
 	) {
-		this.cwd = session.home;
+		super(session.home);
 		this.host = {
 			open: (command) => this.open(command),
 			isDirectory: (path) => this.isDirectory(path),
@@ -129,18 +128,6 @@ export class SshEnv implements WorkspaceEnv {
 		}
 	}
 
-	private resolve(path: string): string {
-		return resolvePath(this.session.home, this.cwd, path);
-	}
-
-	async absolutePath(path: string): FileResult<string> {
-		return ok(this.resolve(path));
-	}
-
-	async joinPath(parts: string[]): FileResult<string> {
-		return ok(posix.join(...parts));
-	}
-
 	private readBuffer(path: string): Promise<Buffer> {
 		return call<Buffer>((done) => this.sftp.readFile(path, done));
 	}
@@ -150,17 +137,6 @@ export class SshEnv implements WorkspaceEnv {
 		return this.attempt(resolved, 'file', context, async () =>
 			(await this.readBuffer(resolved)).toString('utf8'),
 		);
-	}
-
-	async readTextLines(
-		path: string,
-		options: { maxLines?: number } | undefined,
-		context: Context,
-	): FileResult<string[]> {
-		const text = await this.readTextFile(path, context);
-		if (!text.ok) return text;
-		const lines = text.value.split('\n');
-		return ok(options?.maxLines === undefined ? lines : lines.slice(0, options.maxLines));
 	}
 
 	readBinaryFile(path: string, context: Context): FileResult<Uint8Array> {
@@ -346,7 +322,7 @@ export class SshEnv implements WorkspaceEnv {
 
 	remove(
 		path: string,
-		options: { recursive?: boolean; force?: boolean } | undefined,
+		options: Parameters<WorkspaceEnv['remove']>[1],
 		context: Context,
 	): FileResult<void> {
 		const resolved = this.resolve(path);

@@ -5,8 +5,8 @@
 
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
+import { memoryBackend } from '../../just-bash/src/index.ts';
 import { workspaceFiles } from '../src/files.ts';
-import { memoryBackend } from '../src/just-bash.ts';
 import { openResource } from '../src/resource.ts';
 
 const agent = { name: 'alpha' };

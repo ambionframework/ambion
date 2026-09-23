@@ -53,6 +53,9 @@ importers:
       '@ambionframework/journal':
         specifier: workspace:*
         version: link:../../packages/journal
+      '@ambionframework/just-bash':
+        specifier: workspace:*
+        version: link:../../packages/just-bash
       '@ambionframework/pi':
         specifier: workspace:*
         version: link:../../packages/pi
@@ -237,6 +240,28 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/just-bash:
+    dependencies:
+      '@ambionframework/workspace':
+        specifier: workspace:*
+        version: link:../workspace
+      '@earendil-works/pi-agent-core':
+        specifier: ^0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      just-bash:
+        specifier: ^3.4.2
+        version: 3.4.2
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.14
+        version: 0.22.14(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/pi:
     dependencies:
       '@ambionframework/ambion':
@@ -295,9 +320,6 @@ importers:
       '@earendil-works/pi-agent-core':
         specifier: ^0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
-      just-bash:
-        specifier: ^3.4.2
-        version: 3.4.2
       typebox:
         specifier: ^1.3.18
         version: 1.3.18

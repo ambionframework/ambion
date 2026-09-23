@@ -476,8 +476,8 @@
 										"message": "Resources and backends are independent of the Ambion tool adapter."
 									},
 									{
-										"group": ["just-bash", "./just-bash.ts", "./bash-env.ts", "./devices.ts"],
-										"message": "This file is neutral. Reach just-bash through the just-bash entry."
+										"group": ["just-bash", "@ambionframework/just-bash", "**/just-bash/**"],
+										"message": "The workspace is neutral. The just-bash backends are the package @ambionframework/just-bash, which depends on this one."
 									}
 								]
 							}
@@ -487,48 +487,14 @@
 			}
 		},
 		{
-			// just-bash.ts and bash-env.ts hold the just-bash backends. They are
-			// independent of the Ambion tool adapter, and they are the one place
-			// that loads just-bash itself.
-			"includes": ["packages/workspace/src/just-bash.ts", "packages/workspace/src/bash-env.ts"],
-			"linter": {
-				"rules": {
-					"style": {
-						"noRestrictedImports": {
-							"level": "error",
-							"options": {
-								"patterns": [
-									{
-										"group": [
-											"@ambionframework/*",
-											"**/ambion/**",
-											"./index.ts",
-											"./workspace.ts",
-											"./tools.ts"
-										],
-										"message": "Resources and backends are independent of the Ambion tool adapter."
-									}
-								]
-							}
-						}
-					}
-				}
-			}
-		},
-		{
-			// Every other file in this package is neutral: it does not reach
-			// just-bash directly, and reaches the just-bash backends, when it
-			// needs them at all, through the just-bash entry. This entry folds
-			// in the ambion-internal-reach restriction, which a plain
+			// Every other file in this package is neutral too: it loads no
+			// just-bash and no just-bash backend. This entry folds in the
+			// ambion-internal-reach restriction, which a plain
 			// `packages/workspace/src/**` override would otherwise lose for
 			// these files: a later override's rule options replace an earlier
 			// one's rather than merging with it.
 			"includes": [
 				"packages/workspace/src/**",
-				"!packages/workspace/src/just-bash.ts",
-				"!packages/workspace/src/just-bash-entry.ts",
-				"!packages/workspace/src/bash-env.ts",
-				"!packages/workspace/src/devices.ts",
 				"!packages/workspace/src/resource.ts",
 				"!packages/workspace/src/resource-entry.ts",
 				"!packages/workspace/src/backend.ts"
@@ -550,8 +516,8 @@
 										"message": "Reach the core through `@ambionframework/ambion` or its `/hosting` or `/conformance` entry, never a file inside it."
 									},
 									{
-										"group": ["just-bash", "./just-bash.ts", "./bash-env.ts", "./devices.ts"],
-										"message": "This file is neutral. Reach just-bash through the just-bash entry."
+										"group": ["just-bash", "@ambionframework/just-bash", "**/just-bash/**"],
+										"message": "The workspace is neutral. The just-bash backends are the package @ambionframework/just-bash, which depends on this one."
 									}
 								]
 							}
@@ -612,9 +578,48 @@
 											"!@ambionframework/workspace/resource",
 											"**/packages/workspace/**",
 											"just-bash",
+											"@ambionframework/just-bash",
 											"node:sqlite"
 										],
 										"message": "Reach the workspace through its root entry or `/resource`. A bash backend loads no just-bash and no SQLite."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// The just-bash backends are a bash backend too. They reach the
+			// workspace through the root entry and `/resource`, the same as the
+			// workstation, and they are the one package that loads just-bash
+			// itself. They load no `node:sqlite` and no part of the core.
+			"includes": ["packages/just-bash/src/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"@ambionframework/ambion",
+											"@ambionframework/ambion/**",
+											"**/ambion/**"
+										],
+										"message": "A workspace backend knows the workspace interface, not the room."
+									},
+									{
+										"group": [
+											"@ambionframework/workspace/*",
+											"!@ambionframework/workspace/resource",
+											"**/packages/workspace/**",
+											"**/workspace/src/**",
+											"node:sqlite"
+										],
+										"message": "Reach the workspace through its root entry or `/resource`. A bash backend loads no SQLite."
 									}
 								]
 							}

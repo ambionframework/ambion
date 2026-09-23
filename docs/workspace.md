@@ -1,8 +1,9 @@
 # The workspace
 
-**The workspace is the just-bash and Pi binding of the resource
-contract.** The optional `@ambionframework/workspace` package provides a
-workspace resource and its filesystem. A workspace has one bash backend
+**The workspace is the Pi binding of the resource contract.** The optional
+`@ambionframework/workspace` package provides a workspace resource and its
+tools. The package `@ambionframework/just-bash` provides the memory and
+directory backends over just-bash. A workspace has one bash backend
 and can have one SQL backend
 ([Query the shared database](#query-the-shared-database)). Agents receive access through
 ordinary tool bundles. Workspace files remain separate from the
@@ -13,7 +14,7 @@ SQL binding, and the rules for references and provenance.
 
 ```ts
 import { openWorkspace } from '@ambionframework/workspace';
-import { memoryBackend } from '@ambionframework/workspace/just-bash';
+import { memoryBackend } from '@ambionframework/just-bash';
 
 const drive = openWorkspace({ name: 'team-site', backend: { bash: memoryBackend() } });
 ```
@@ -136,7 +137,7 @@ fresh file starts at the same path. A record is never split by a rotation.
 
 ```ts
 import { BACKGROUND_CONTEXT, openLog, openWorkspace } from '@ambionframework/workspace';
-import { directoryBackend } from '@ambionframework/workspace/just-bash';
+import { directoryBackend } from '@ambionframework/just-bash';
 
 const drive = openWorkspace({ name: 'town', backend: { bash: directoryBackend('./data') } });
 const host = { name: 'host' };
@@ -242,7 +243,7 @@ started; it needs no other setup.
 ```ts
 import { startRoom } from '@ambionframework/ambion';
 import { openWorkspace } from '@ambionframework/workspace';
-import { memoryBackend } from '@ambionframework/workspace/just-bash';
+import { memoryBackend } from '@ambionframework/just-bash';
 
 const site = openWorkspace({ name: 'town', backend: { bash: memoryBackend() } });
 const session = await startRoom({ name: 'lobby', agents: [/* ... */] });
@@ -339,7 +340,7 @@ file and its directory. `dispose()` closes the database and keeps the file.
 
 ```ts
 import { openWorkspace } from '@ambionframework/workspace';
-import { directoryBackend } from '@ambionframework/workspace/just-bash';
+import { directoryBackend } from '@ambionframework/just-bash';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 
 const lab = openWorkspace({
@@ -480,7 +481,8 @@ entry.
 The contract lives in [Resources](resources.md).
 
 The memory and directory backends are the Pi binding. They export from the
-`./just-bash` entry. The root entry names `WorkspaceEnv`, the Pi
+package `@ambionframework/just-bash`, which depends on the workspace. The
+root entry names `WorkspaceEnv`, the Pi
 `ExecutionEnv` that has a zero-argument `cleanup()`. `BashBackend`
 extends `ResourceBackend<WorkspaceEnv>` and adds optional Pi harness tools
 beyond the four file tools, optional guidance about the backend's own shell,
@@ -497,13 +499,21 @@ and the guidance beyond the four file tools, passes
 `@ambionframework/workspace/conformance`, and loads no just-bash.
 
 **The root entry also exports the environment helpers a new `ExecutionEnv`
-backend needs.** `resolvePath` holds the `~` and relative path rule.
-`Deadline` tells an abort apart from a timeout. `boundedView` and `spill`
-build the bounded output view and its spill file, `spill` over a minimal
-writer of one `mkdir` plus one `writeFile`. `TMP`, `randomName`,
-`tempDirPath`, `tempFilePath`, and `spillPath` name the temporary paths
-under `/tmp`. These helpers import no just-bash, so a backend over any
-filesystem builds an `ExecutionEnv` on them.
+backend needs.** The just-bash backends and the workstation both build on
+them.
+
+| Helper                                                          | What it does                                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `resolvePath`                                                   | Holds the `~` and relative path rule                                           |
+| `HomeEnv`                                                       | A base class: `cwd`, `absolutePath`, `joinPath`, and `readTextLines`           |
+| `Deadline`, `withDeadline`                                      | Tell an abort apart from a timeout; turn a thrown error into `unknown`         |
+| `DEFAULT_TIMEOUT_SECONDS`                                       | The 30 seconds a command gets when its caller names no timeout                 |
+| `boundedView`, `deliverView`                                    | Build the bounded output view, and hand it to `onUpdate` with the result       |
+| `spill`                                                         | Writes the spill file over a minimal writer of one `mkdir` and one `writeFile` |
+| `TMP`, `randomName`, `tempDirPath`, `tempFilePath`, `spillPath` | Name the temporary paths under `/tmp`                                          |
+
+These helpers import no just-bash, so a backend over any filesystem builds
+an `ExecutionEnv` on them.
 
 ## The conformance suite
 
@@ -529,8 +539,10 @@ describe.each(backends)('$name', (harness) => {
 ```
 
 The memory and directory backends run the suite first
-(`packages/workspace/test/conformance.test.ts`). A new backend runs it
-before it takes on tool-specific tests of its own.
+(`packages/just-bash/test/conformance.test.ts`). A new backend runs it
+before it takes on tool-specific tests of its own. The workspace package
+runs the suite on the memory backend to test the suite itself
+(`packages/workspace/test/conformance.test.ts`).
 
 **`sqlConformance(harness)` holds the cases of a `SqlBackend`.** The
 harness has the same shape, with an `open()` that returns a fresh
@@ -570,7 +582,10 @@ seeded filesystem.
 when a backend operation needs it. Disposal releases the filesystem handle
 and keeps the root directory and its files.
 
-Both backends use just-bash. They provide a virtual Unix filesystem and shell
+Both backends use just-bash, and the package `@ambionframework/just-bash`
+holds them. The workspace package does not depend on just-bash, so a host
+that uses another backend installs no just-bash. The backends provide a
+virtual Unix filesystem and shell
 for tools, with JavaScript and Python execution available. Network commands
 are absent. just-bash is single-user: agents sharing one resource can read
 each other's homes. The default workspace does not provide operating-system isolation between
