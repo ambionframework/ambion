@@ -35,20 +35,6 @@ process.
 that fails when it is stale. **Condition:** an adapter or host author who
 cannot work from the typed README examples and the export snapshot.
 
-**A workstation backend.** A workspace backend over SSH to one remote
-server, with one Unix account for each agent.
-[docs/workstation.md](../docs/workstation.md) holds the design.
-**Condition:** the owner schedules it.
-
-**`WorkspaceFiles` writes its temporary file beside the target.**
-`writeThrough` (`packages/workspace/src/files.ts:50`) writes a `sql` export
-to a temporary file under `/tmp` and renames it onto the target. Many
-servers mount `/tmp` as a filesystem of its own, and a rename across two
-filesystems fails. A name beside the target, such as
-`<target>.<random>.part`, keeps the rename on one filesystem. The
-just-bash backends have one filesystem, so they see no change.
-**Condition:** the workstation backend is scheduled.
-
 **A SQL backend over a database server.** `backend.sql` takes any
 `SqlBackend` ([Workspace](../docs/workspace.md#query-the-shared-database)),
 and the package ships `sqliteBackend`. A backend over a database server
@@ -60,8 +46,8 @@ one database server, is scheduled.
 isolation, its network, and whether the owner may run operations from two
 agents at once. The owner then keeps one queue for each agent. The same
 design decides which identity writes the audit log. It builds on
-the workspace interface of 0.2.0 item M7. **Condition:** the workstation
-backend is scheduled.
+the workspace interface of 0.2.0 item M7. **Condition:** a workstation
+run where one agent's command delays another agent's file tool.
 
 ## Proofs to write
 

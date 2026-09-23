@@ -1,0 +1,58 @@
+{
+	"name": "@ambionframework/workstation",
+	"version": "0.1.0",
+	"type": "module",
+	"description": "A workspace bash backend for Ambion over SSH: one remote server, one Unix account for each agent.",
+	"license": "Apache-2.0",
+	"homepage": "https://ambionframework.com",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/ambionframework/ambion.git",
+		"directory": "packages/workstation"
+	},
+	"keywords": [
+		"agents",
+		"ambion",
+		"ssh",
+		"sftp",
+		"workspace"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"main": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"build": "tsdown",
+		"check:types": "tsc -p tsconfig.check.json --noEmit",
+		"test": "vitest run",
+		"test:sshd": "pnpm --filter '@ambionframework/workstation...' build && vitest run --config vitest.sshd.config.ts",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@ambionframework/workspace": "workspace:*",
+		"@earendil-works/pi-agent-core": "^0.85.1",
+		"ssh2": "^1.17.0"
+	},
+	"devDependencies": {
+		"@ambionframework/ambion": "workspace:*",
+		"@types/ssh2": "^1.15.6",
+		"tsdown": "^0.22.14",
+		"typescript": "^7.0.2",
+		"vitest": "^4.1.11"
+	}
+}

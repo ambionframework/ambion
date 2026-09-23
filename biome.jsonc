@@ -580,6 +580,44 @@
 			}
 		},
 		{
+			// The workstation is a bash backend. It reaches the workspace through
+			// the root entry, which holds the interface and the environment
+			// helpers, and through `/resource` for `WorkspaceAgent`. It loads no
+			// just-bash, no `node:sqlite`, and no part of the core.
+			"includes": ["packages/workstation/src/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"@ambionframework/ambion",
+											"@ambionframework/ambion/*",
+											"**/packages/ambion/**"
+										],
+										"message": "A workspace backend knows the workspace interface, not the room."
+									},
+									{
+										"group": [
+											"@ambionframework/workspace/*",
+											"!@ambionframework/workspace/resource",
+											"**/packages/workspace/**",
+											"just-bash",
+											"node:sqlite"
+										],
+										"message": "Reach the workspace through its root entry or `/resource`. A bash backend loads no just-bash and no SQLite."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
 			// The record sits below the core: it holds a journal and knows no
 			// room, no seat and no agent.
 			"includes": ["packages/journal/src/**"],

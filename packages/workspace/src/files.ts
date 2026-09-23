@@ -7,13 +7,17 @@
  * wait on the bash owner through this facade. A bash operation never waits
  * on the SQL owner, so the two owners never wait on each other.
  *
- * `writeFile` appends the chunks to a temporary file, then renames it onto
- * the target. The target changes only after every chunk lands.
+ * `writeFile` appends the chunks to a temporary file beside the target,
+ * then renames it onto the target. The target changes only after every
+ * chunk lands. The temporary file shares the target's folder, so the rename
+ * stays on one filesystem: a server can mount `/tmp` as a filesystem of its
+ * own, and a rename across two filesystems fails.
  */
 
 import { posix } from 'node:path';
 import { BACKGROUND_CONTEXT, type Context, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
+import { randomName } from './execution-env.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 import type { WorkspaceFiles } from './sql-backend.ts';
 
@@ -37,7 +41,7 @@ async function appendAll(
 	}
 }
 
-/** Write `chunks` to a temporary file, and rename it onto `path`. */
+/** Write `chunks` to a temporary file beside `path`, and rename it onto `path`. */
 async function writeThrough(
 	env: ExecutionEnv,
 	path: string,
@@ -47,15 +51,16 @@ async function writeThrough(
 	const target = await absolutePath(env, path, context);
 	const made = await env.createDir(posix.dirname(target), { recursive: true }, context);
 	if (!made.ok) throw made.error;
-	const temp = await env.createTempFile({ suffix: '.part' }, context);
-	if (!temp.ok) throw temp.error;
+	const temp = `${target}.${randomName()}.part`;
 	try {
-		await appendAll(env, temp.value, chunks, context);
-		const moved = await env.renameFile(temp.value, target, context);
+		const started = await env.writeFile(temp, '', context);
+		if (!started.ok) throw started.error;
+		await appendAll(env, temp, chunks, context);
+		const moved = await env.renameFile(temp, target, context);
 		if (!moved.ok) throw moved.error;
 	} finally {
 		// The cleanup runs over its own context: an aborted call still removes its temporary file.
-		await env.remove(temp.value, { force: true }, BACKGROUND_CONTEXT);
+		await env.remove(temp, { force: true }, BACKGROUND_CONTEXT);
 	}
 	return target;
 }

@@ -100,3 +100,27 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --config.engine-strict=false
       - run: pnpm run test
+
+  workstation:
+    name: Workstation against OpenSSH
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26.4.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Only root adds the accounts, and only an sshd that runs as root logs
+      # in as more than one user. The runner is disposable, so the setup
+      # script runs on it directly.
+      - name: provision the workstation
+        run: sudo bash packages/workstation/test/sshd/setup.sh "$RUNNER_TEMP/ambion-sshd"
+      - name: integration tier
+        run: pnpm --filter @ambionframework/workstation run test:sshd
+        env:
+          AMBION_WORKSTATION_SSHD: ${{ runner.temp }}/ambion-sshd/workstation.json

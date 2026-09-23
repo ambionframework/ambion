@@ -18,6 +18,7 @@ packages/
   pi/           Pi executor: pi(), piExecution(), and the seat transcript audit
   pi-journal/   Pi session persistence over journal storage
   workspace/    filesystem resource and tool bundles
+  workstation/  workspace bash backend over SSH, one account for each agent
 examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
 scripts/        package discovery, versioning, publishing, reports
 docs/           design and operational contracts
@@ -25,7 +26,7 @@ planning/       the plan for the next release and the backlog
 .github/        CI, live, and dev-release workflows
 ```
 
-The nine `packages/*` entries are publishable and share a lockstep version.
+The ten `packages/*` entries are publishable and share a lockstep version.
 Examples are private. The package graph is:
 
 ```text
@@ -36,6 +37,7 @@ claude ──▶ ambion
 codex ──▶ ambion
 cloudflare ──▶ ambion, journal, pi
 workspace ──▶ ambion
+workstation ──▶ workspace
 assistant ──▶ ambion, pi
 ```
 
@@ -193,14 +195,15 @@ the fake clock makes lease and retry cases deterministic.
 
 ## 8. Continuous integration (`.github/workflows/ci.yml`)
 
-CI runs on pushes to `main`, pull requests, and manual dispatch. It has three
+CI runs on pushes to `main`, pull requests, and manual dispatch. It has four
 repository jobs plus the LemmaScript reusable workflow:
 
-| Job                  | Checks                                                                   |
-| -------------------- | ------------------------------------------------------------------------ |
-| `check`              | format, types, lint, Knip, and package hygiene, on Node 26.4.0           |
-| `test`               | scripted tests on Node 26.4.0, library packages and `examples/workbench` |
-| `test-library-floor` | scripted tests on Node 22.19.0, library packages only                    |
+| Job                  | Checks                                                                    |
+| -------------------- | ------------------------------------------------------------------------- |
+| `check`              | format, types, lint, Knip, and package hygiene, on Node 26.4.0            |
+| `test`               | scripted tests on Node 26.4.0, library packages and `examples/workbench`  |
+| `test-library-floor` | scripted tests on Node 22.19.0, library packages only                     |
+| `workstation`        | the workstation integration tier against OpenSSH, with root on the runner |
 
 `test-library-floor` removes `examples/workbench` from its checkout before
 `pnpm install`. That package depends on `@opentui/core`, which needs Node
@@ -255,7 +258,7 @@ and [`durability.md`](durability.md) for the claims those tests enforce.
 
 ## 9. Release and publishing
 
-Two channels publish the nine packages under the `@ambionframework` scope.
+Two channels publish the ten packages under the `@ambionframework` scope.
 
 | Channel | Registry                     | Dist-tag         | Who publishes                 |
 | ------- | ---------------------------- | ---------------- | ----------------------------- |
