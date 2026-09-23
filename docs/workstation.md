@@ -21,6 +21,7 @@ returns a `BashBackend`, the one backend kind that every workspace has. A
 later protocol joins the same package under the same name.
 
 ```ts
+import { readFile } from 'node:fs/promises';
 import { openWorkspace } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { workstationBackend } from '@ambionframework/workstation';
@@ -30,14 +31,21 @@ const lab = openWorkspace({
   backend: {
     bash: workstationBackend({
       host: 'lab.internal',
-      hostKey: secrets.labHostKey,
+      hostKey: 'SHA256:<the fingerprint that ssh-keygen -lf prints>',
       layout: { audit: '/srv/ambion/lab/audit/audit.jsonl', rooms: '/srv/ambion/lab/rooms' },
-      credentialFor: (agent) => secrets.sshLogin(agent.name),
+      credentialFor: async (agent) => ({
+        username: agent.name,
+        privateKey: await readFile(`/etc/ambion/keys/${agent.name}`, 'utf8'),
+      }),
     }),
     sql: sqliteBackend('./data/lab.db'),
   },
 });
 ```
+
+**The example names each account after its agent.** It reads each
+private key from a file on the Ambion host. `lab.host.name` is `lab-host`, so
+the server has an account and a key of that name too.
 
 **The package reaches the workspace through its root entry.** That entry
 holds the interface and the environment helpers, and it loads no just-bash
@@ -114,7 +122,7 @@ interface WorkstationOptions {
   /** The server's host key fingerprint, as `ssh-keygen -lf` prints it. */
   readonly hostKey: string;
   readonly layout: WorkspaceLayout;
-  credentialFor(agent: WorkspaceAgent): WorkstationCredential;
+  credentialFor(agent: WorkspaceAgent): WorkstationCredential | Promise<WorkstationCredential>;
 }
 ```
 
@@ -127,7 +135,8 @@ The host gives it an account and a key, the same as an agent.
 **The host provisions each account and each key before the first
 connection.** The resolver reads them from the store the application
 already uses: a secrets manager, an environment variable, or a file. The
-backend stores, issues, and rotates no credential.
+backend awaits the resolver each time it builds a client for an agent. It
+stores, issues, and rotates no credential.
 
 **The backend refuses to start without a host key.** `ssh2` accepts every
 host key when its `hostVerifier` option is unset. The backend always sets
@@ -315,7 +324,36 @@ identity writes the audit log.
 
 **Both tiers run `workspaceConformance`.** A `ConformanceBackend` harness
 opens a fresh `workstationBackend` and disposes of it. The cases check the
-`ExecutionEnv` rules that the four file tools need.
+`ExecutionEnv` rules that the four file tools need. `startSshServer` is a
+proposed test helper: the scripted tier starts an `ssh2` server, and the
+integration tier starts `sshd`.
+
+```ts
+import type { ConformanceBackend } from '@ambionframework/workspace/conformance';
+import { workspaceConformance } from '@ambionframework/workspace/conformance';
+import { workstationBackend } from '@ambionframework/workstation';
+import { describe, it } from 'vitest';
+import { startSshServer } from './support/ssh.ts';
+
+const harness: ConformanceBackend = {
+  name: 'workstation',
+  async open() {
+    const server = await startSshServer(['surveyor', 'planner', 'lab-host']);
+    const backend = workstationBackend(server.options);
+    return {
+      backend,
+      dispose: async () => {
+        await backend.dispose?.();
+        await server.stop();
+      },
+    };
+  },
+};
+
+describe(harness.name, () => {
+  for (const c of workspaceConformance(harness)) it(c.name, c.run);
+});
+```
 
 **The scripted tier runs an SSH server in the test process.** `ssh2`
 ships a `Server` class, and its SFTP server mode answers file requests.
