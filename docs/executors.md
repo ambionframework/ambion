@@ -150,6 +150,27 @@ family.
 activation receives and which tools a closing activation receives. The
 hosting entry exports `SAY`, `SEAT`, `UNSEAT`, and `summaryToolDescription`.
 
+**The hosting entry holds the room tools once, in a form that names no
+harness.** Each family adapts them to its own tool shape.
+
+- **`roomTools(view, binding, options?)`** returns the room tools that the
+  purpose of the activation grants. Each `RoomTool` has a `name`, a
+  `description`, TypeBox `parameters`, and `run(args, call)`. `call` is the
+  id of the tool call, and the commit takes it as its key.
+- **`RoomToolBinding`** is what the tools reach: the activation id, the
+  room, `readThrough`, `acknowledgeThrough`, `resultExpected`, and `abort`.
+- **`RoomToolOptions`** adds to a say: `refs` changes the refs it cites,
+  and `spoke` runs when the room takes an ordinary say.
+- **`agentTools(view, agent, signal, current)`** returns the tools of the
+  definition in the same form. A closing activation gets none.
+- **`toolContext(agent, view, call, signal, onUpdate?)`** builds the
+  `ToolContext` of one call of a definition tool.
+
+**A `RoomToolResult` holds the content that the model reads.** `isError`
+marks an error result. `terminate` marks an activation that has nothing more
+to do: an `unknown` or `stale` answer, or the last answer of a closing
+activation.
+
 **`say` commits a `said` intent.** It carries `readThrough` and takes the
 tool call id as its commit key. It accepts `text`, `to`, and `refs`.
 
@@ -322,10 +343,10 @@ family. `@ambionframework/claude` is the worked example, and
 2. **Render with the shared helpers.** Call `renderActivation` on the first
    pass and `renderDelta` on later passes. [The prompt the driver
    renders](#the-prompt-the-driver-renders) states where each part goes.
-3. **Expose the three room tools.** Bind `say`, `seat`, and `unseat` to one
-   activation, in the form the harness needs. The tools of the definition
-   join them. [The room tools](#the-room-tools) states the commit key and
-   the room answers.
+3. **Expose the three room tools.** Call `roomTools` and `agentTools` for
+   one activation, and adapt each result to the form the harness needs.
+   [The room tools](#the-room-tools) states the commit key and the room
+   answers.
 4. **Write the steps you own.** Call the `TraceSink` of the activation for
    `thinking`, `text`, `tool_call`, `tool_result`, `steer`, `approval`, and
    `usage`. The driver writes `pass`, `room`, and `end`.
