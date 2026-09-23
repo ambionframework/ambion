@@ -9,9 +9,10 @@ import { backends } from '../../just-bash/test/support/backends.ts';
 import { sqlConformance, workspaceConformance } from '../src/conformance.ts';
 import { sqlBackends } from './support/backends.ts';
 
-const memory = backends.filter((harness) => harness.name === 'memory');
+const memory = backends.find((harness) => harness.name === 'memory');
+if (memory === undefined) throw new Error('The just-bash harnesses have no memory backend.');
 
-describe.each(memory)('$name', (harness) => {
+describe.each([memory])('$name', (harness) => {
 	for (const c of workspaceConformance(harness)) it(c.name, c.run);
 });
 

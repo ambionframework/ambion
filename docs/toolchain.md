@@ -43,11 +43,11 @@ workstation ──▶ workspace
 assistant ──▶ ambion, pi
 ```
 
-**A test reaches a package that depends on its own by relative path.** The
-core's tests read the Pi source. The workspace's tests read the just-bash
-source and its test support. A manifest dependency would close a cycle in
-the graph above. The test config sends the package's own specifiers to its
-source, so a test reads one module.
+**A test reaches a package that depends on the tested package by relative
+path.** The core's tests read the Pi source. The workspace's tests read the
+just-bash source and its test support. A manifest dependency would close a
+cycle in the graph above. The test config sends the package's own specifiers
+to its source, so a test reads one module.
 
 Internal dependencies use `workspace:*`; pnpm rewrites them to the release
 version while packing. Two packages get a packed-consumer smoke check that
