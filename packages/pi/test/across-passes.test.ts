@@ -3,28 +3,13 @@
  * model the whole view. A later pass hands it the delta: the messages that
  * landed beyond `readThrough`. The transcript and the audit stay whole.
  */
-import { type Clock, createRuntime, defineAgent, type Message } from '@ambionframework/ambion';
-import {
-	AgentRunner,
-	type CommitResult,
-	type LeaseRequest,
-	type LeaseResponse,
-	type RoomProtocol,
-	type ViewResponse,
-} from '@ambionframework/ambion/hosting';
-import { fakeClock } from '@ambionframework/ambion/testing';
+import type { Message } from '@ambionframework/ambion';
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { tick } from '../../ambion/test/support/room.ts';
 import { contextText, quiet, scripted } from '../../ambion/test/support/scripted.ts';
-import { noTraces } from '../../ambion/test/support/trace.ts';
-import { createExecutionServices, createPiExecutor, pi, seatSessionId } from '../src/index.ts';
-
-const product = defineAgent({
-	name: 'product',
-	identity: 'The one product.',
-	executor: pi({ instructions: 'answer', model: 'scripted/product' }),
-});
+import { seatSessionId } from '../src/index.ts';
+import { playSeat, worker } from './support/runner.ts';
 
 const said = (seq: number, text: string): Message => ({
 	kind: 'said',
@@ -34,98 +19,59 @@ const said = (seq: number, text: string): Message => ({
 	text,
 });
 
-/** A room that serves one view per call to `view`, and reports the newest position on each renewal. */
-class MovingRoom implements RoomProtocol {
-	readonly views: number[] = [];
-	readonly renewals: number[] = [];
-
-	constructor(
-		private readonly clock: Clock,
-		/** The record each successive view holds. The last one repeats. */
-		private readonly records: readonly (readonly Message[])[],
-		/** The room position each renewal reports, one per renewal. The last repeats. */
-		private readonly positions: readonly number[],
-	) {}
-
-	async view(activation: string): Promise<ViewResponse> {
-		const record = this.records[Math.min(this.views.length, this.records.length - 1)] ?? [];
-		this.views.push(record.length);
-		return {
-			view: {
-				spec: {
-					id: activation,
-					seat: 'product',
-					attempt: 1,
-					purpose: { kind: 'respond', message: 1 },
-				},
-				through: this.positions[Math.min(this.views.length - 1, this.positions.length - 1)] ?? 1,
-				context: {
-					name: 'passes',
-					now: 0,
-					participants: [],
-					messages: [...record],
-					reserve: [],
-				},
-			},
-		};
-	}
-
-	async commit(): Promise<CommitResult> {
-		return { refused: 'nothing lands here' };
-	}
-
-	async lease(lease: LeaseRequest): Promise<LeaseResponse> {
-		const expiresAt = this.clock.now() + 60_000;
-		if (lease.operation !== 'renew') return { ok: { expiresAt, lastSeq: 1 } };
-		const index = Math.min(this.renewals.length, this.positions.length - 1);
-		this.renewals.push(lease.readThrough ?? 0);
-		return { ok: { expiresAt, lastSeq: this.positions[index + 1] ?? this.positions.at(-1) ?? 1 } };
-	}
-}
-
-function play(room: MovingRoom, seen: Context[]) {
-	const clock = fakeClock();
-	const runtime = createRuntime({ clock });
-	const services = createExecutionServices({
-		storage: runtime.storage,
-		clock,
+/**
+ * Run one activation. Each successive view holds the next of `records`, and
+ * each renewal reports the next of `positions`. The last of each repeats.
+ */
+async function play(records: readonly (readonly Message[])[], positions: readonly number[]) {
+	const seen: Context[] = [];
+	const nth = <T>(items: readonly T[], index: number) => items[Math.min(index, items.length - 1)];
+	let views = 0;
+	let renewals = 0;
+	const { room, actor, services } = playSeat({
+		name: 'passes',
 		stream: scripted((context) => {
 			seen.push({ ...context, messages: [...context.messages] });
 			return quiet();
 		}),
+		view: async (id) => {
+			views += 1;
+			return {
+				view: {
+					spec: { id, seat: worker.name, attempt: 1, purpose: { kind: 'respond', message: 1 } },
+					through: nth(positions, views - 1) ?? 1,
+					context: {
+						name: 'passes',
+						now: 0,
+						participants: [],
+						messages: [...(nth(records, views - 1) ?? [])],
+						reserve: [],
+					},
+				},
+			};
+		},
+		lease: (request) => {
+			if (request.operation !== 'renew') return undefined;
+			renewals += 1;
+			return { ok: { expiresAt: Number.MAX_SAFE_INTEGER, lastSeq: nth(positions, renewals) ?? 1 } };
+		},
 	});
-	const executor = createPiExecutor({
-		definition: product,
-		model: services.model,
-		stream: services.stream,
-		transcripts: services.transcripts,
-		room: 'passes',
-		now: () => clock.now(),
-	});
-	const actor = new AgentRunner(room, {
-		clock,
-		call: services.call,
-		definition: product,
-		room: 'passes',
-		seat: 'product',
-		executor,
-		trace: noTraces,
-	});
-	return { actor, services };
+	await actor.run('message:1:worker:1');
+	await tick();
+	return { renewals: room.of('renew'), seen, services };
 }
+
+const first = [said(1, 'Can we ship?')];
 
 const texts = (context: Context) =>
 	context.messages.map((message) => contextText({ ...context, messages: [message] }));
 
 describe('the Pi executor across the passes of one activation', () => {
-	it('keeps one agent, and prompts a later pass with the delta alone', async () => {
-		const first = [said(1, 'Can we ship?')];
-		const later = [...first, said(2, 'And the pump?')];
-		const room = new MovingRoom(fakeClock(), [first, later], [1, 2, 2]);
-		const seen: Context[] = [];
-		const { actor } = play(room, seen);
-		await actor.run('message:1:product:1');
-		await tick();
+	it('keeps one agent, prompts a later pass with the delta alone, audits every turn once, and advances readThrough', async () => {
+		const { renewals, seen, services } = await play(
+			[first, [...first, said(2, 'And the pump?')]],
+			[1, 2, 2],
+		);
 
 		expect(seen).toHaveLength(2);
 		const [before, after] = seen;
@@ -139,49 +85,23 @@ describe('the Pi executor across the passes of one activation', () => {
 		expect(last).toContain('And the pump?');
 		expect(last).not.toContain('The record of');
 		expect(last).not.toContain('Can we ship?');
-	});
 
-	it('writes one activation entry and every turn once to the audit', async () => {
-		const first = [said(1, 'Can we ship?')];
-		const later = [...first, said(2, 'And the pump?')];
-		const room = new MovingRoom(fakeClock(), [first, later], [1, 2, 2]);
-		const { actor, services } = play(room, []);
-		await actor.run('message:1:product:1');
-		await tick();
-
-		const audit = await services.transcripts.open(seatSessionId('passes', 'product'));
+		const audit = await services.transcripts.open(seatSessionId('passes', worker.name));
 		const entries = await audit.findEntries({ order: 'oldestFirst' });
 		const markers = entries.filter(
 			(entry) => entry.type === 'custom' && entry.customType === 'ambion/activation',
 		);
-		const turns = entries.filter((entry) => entry.type === 'message');
 		expect(markers).toHaveLength(1);
 		// Two prompts and two answers: nothing from the first pass repeats.
-		expect(turns).toHaveLength(4);
-	});
-
-	it('advances readThrough at the provider request for the delta', async () => {
-		const first = [said(1, 'Can we ship?')];
-		const later = [...first, said(2, 'And the pump?')];
-		const room = new MovingRoom(fakeClock(), [first, later], [1, 2, 2]);
-		const { actor } = play(room, []);
-		await actor.run('message:1:product:1');
-		await tick();
-
+		expect(entries.filter((entry) => entry.type === 'message')).toHaveLength(4);
 		// The renewals name what the seat had read: the first pass, then the delta.
-		expect(room.renewals.at(-1)).toBe(2);
+		expect(renewals.at(-1)).toMatchObject({ readThrough: 2 });
 	});
 
 	it('starts no run when the record moved and no message came with it', async () => {
-		const only = [said(1, 'Can we ship?')];
 		// The room position moves to 2 with no message: an entry a model does not read.
-		const room = new MovingRoom(fakeClock(), [only], [1, 2, 2]);
-		const seen: Context[] = [];
-		const { actor } = play(room, seen);
-		await actor.run('message:1:product:1');
-		await tick();
-
+		const { renewals, seen } = await play([first], [1, 2, 2]);
 		expect(seen).toHaveLength(1);
-		expect(room.renewals.at(-1)).toBe(2);
+		expect(renewals.at(-1)).toMatchObject({ readThrough: 2 });
 	});
 });

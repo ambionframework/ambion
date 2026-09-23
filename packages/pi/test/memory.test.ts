@@ -3,24 +3,22 @@
  * `seat` builds the next agent over the transcript the seat kept, prompts
  * it with the delta, and records the seat session on every release.
  */
-import { createRuntime, defineAgent, type Message } from '@ambionframework/ambion';
-import {
-	AgentRunner,
-	type CommitRequest,
-	type CommitResult,
-	type HarnessSession,
-	type LeaseRequest,
-	type LeaseResponse,
-	type RoomProtocol,
-	type ViewResponse,
+import type { Message } from '@ambionframework/ambion';
+import type {
+	CommitRequest,
+	CommitResult,
+	HarnessSession,
+	LeaseRequest,
+	LeaseResponse,
+	RoomProtocol,
+	ViewResponse,
 } from '@ambionframework/ambion/hosting';
-import { fakeClock } from '@ambionframework/ambion/testing';
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { tick } from '../../ambion/test/support/room.ts';
+import { scriptedAgent, tick } from '../../ambion/test/support/room.ts';
 import { contextText, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
-import { noTraces } from '../../ambion/test/support/trace.ts';
-import { createExecutionServices, createPiExecutor, pi, seatSessionId } from '../src/index.ts';
+import { pi, seatSessionId } from '../src/index.ts';
+import { seatHost } from './support/runner.ts';
 
 const said = (seq: number, text: string): Message => ({
 	kind: 'said',
@@ -85,53 +83,21 @@ class TwoQuestions implements RoomProtocol {
 	}
 }
 
-function seatWith(memory: 'activation' | 'seat' | undefined) {
-	return defineAgent({
-		name: 'product',
-		identity: 'The one product.',
-		executor: pi({
-			instructions: 'answer',
-			model: 'scripted/product',
-			...(memory === undefined ? {} : { memory }),
-		}),
-	});
-}
-
-/** One storage for the run. Each call builds a fresh executor, a restart of the seat, over it. */
+/** One storage for the run. Each `start` builds a fresh executor, a restart of the seat, over it. */
 function harness(
 	memory: 'activation' | 'seat' | undefined,
 	script: (context: Context, call: number) => ReturnType<typeof quiet>,
 ) {
-	const clock = fakeClock();
-	const runtime = createRuntime({ clock });
 	const seen: Context[] = [];
-	const services = createExecutionServices({
-		storage: runtime.storage,
-		clock,
+	const host = seatHost({
+		name: 'memory',
+		definition: scriptedAgent('product', undefined, memory === undefined ? {} : { memory }),
 		stream: scripted((context, _agent, call) => {
 			seen.push({ ...context, messages: [...context.messages] });
 			return script(context, call);
 		}),
 	});
-	const definition = seatWith(memory);
-	const start = (room: TwoQuestions) =>
-		new AgentRunner(room, {
-			clock,
-			call: services.call,
-			definition,
-			room: 'memory',
-			seat: 'product',
-			executor: createPiExecutor({
-				definition,
-				model: services.model,
-				stream: services.stream,
-				transcripts: services.transcripts,
-				room: 'memory',
-				now: () => clock.now(),
-			}),
-			trace: noTraces,
-		});
-	return { seen, services, start };
+	return { seen, ...host };
 }
 
 const texts = (context: Context) =>
@@ -139,18 +105,25 @@ const texts = (context: Context) =>
 
 const SESSION = { harness: 'pi', id: seatSessionId('memory', 'product') };
 
+/** Run both questions on one seat. Return the prompts of the last model request. */
+async function askBoth(
+	memory: 'activation' | 'seat' | undefined,
+	room = new TwoQuestions(),
+	script: Parameters<typeof harness>[1] = () => quiet(),
+) {
+	const { seen, services, start } = harness(memory, script);
+	const actor = start(room);
+	for (const activation of ['message:1:product:1', 'message:2:product:1']) {
+		await actor.run(activation);
+		await tick();
+	}
+	return { prompts: texts(seen.at(-1) as Context).filter((text) => text.length > 0), services };
+}
+
 describe('seat memory', () => {
 	it('keeps the transcript, prompts the delta, and records the seat session', async () => {
 		const room = new TwoQuestions();
-		const { seen, services, start } = harness('seat', () => quiet());
-		const actor = start(room);
-		await actor.run('message:1:product:1');
-		await tick();
-		await actor.run('message:2:product:1');
-		await tick();
-
-		const second = seen.at(-1) as Context;
-		const prompts = texts(second).filter((text) => text.length > 0);
+		const { prompts, services } = await askBoth('seat', room);
 		// The first activation stays in the transcript. The second adds the delta alone.
 		expect(prompts[0]).toContain("The record of 'memory' so far:");
 		const last = prompts.at(-1) ?? '';
@@ -160,7 +133,7 @@ describe('seat memory', () => {
 		expect(room.releases.map((release) => release.session)).toEqual([SESSION, SESSION]);
 		expect(room.releases.at(-1)?.readThrough).toBe(2);
 
-		const audit = await services.transcripts.open(seatSessionId('memory', 'product'));
+		const audit = await services.transcripts.open(SESSION.id);
 		const turns = (await audit.findEntries({ order: 'oldestFirst' })).filter(
 			(entry) => entry.type === 'message',
 		);
@@ -170,8 +143,7 @@ describe('seat memory', () => {
 
 	it('reads the whole view again after a restart, and records the same session', async () => {
 		const { seen, start } = harness('seat', () => quiet());
-		const before = new TwoQuestions();
-		await start(before).run('message:1:product:1');
+		await start(new TwoQuestions()).run('message:1:product:1');
 		await tick();
 		const after = new TwoQuestions(2, SESSION);
 		await start(after).run('message:2:product:1');
@@ -185,13 +157,7 @@ describe('seat memory', () => {
 
 	it('refuses a say against a record that moved, as activation memory does', async () => {
 		const room = new TwoQuestions(3);
-		const { start } = harness('seat', (_context, call) => (call === 2 ? speak('Yes.') : quiet()));
-		const actor = start(room);
-		await actor.run('message:1:product:1');
-		await tick();
-		await actor.run('message:2:product:1');
-		await tick();
-
+		await askBoth('seat', room, (_context, call) => (call === 2 ? speak('Yes.') : quiet()));
 		// The resumed seat read through 2. The record stands at 3, so the room answers missed.
 		expect(room.commits.at(-1)?.readThrough).toBe(2);
 		expect(room.answers.at(-1)).toBe('missed');
@@ -199,22 +165,16 @@ describe('seat memory', () => {
 });
 
 describe('activation memory', () => {
-	for (const memory of [undefined, 'activation'] as const) {
-		it(`builds a fresh agent per activation and records no session (${memory ?? 'default'})`, async () => {
+	it.each([undefined, 'activation'] as const)(
+		'builds a fresh agent per activation and records no session (%s)',
+		async (memory) => {
 			const room = new TwoQuestions();
-			const { seen, start } = harness(memory, () => quiet());
-			const actor = start(room);
-			await actor.run('message:1:product:1');
-			await tick();
-			await actor.run('message:2:product:1');
-			await tick();
-
-			const prompts = texts(seen.at(-1) as Context).filter((text) => text.length > 0);
+			const { prompts } = await askBoth(memory, room);
 			expect(prompts).toHaveLength(1);
 			expect(prompts[0]).toContain("The record of 'memory' so far:");
 			expect(room.releases.map((release) => release.session)).toEqual([undefined, undefined]);
-		});
-	}
+		},
+	);
 
 	it('mirrors the option onto the executor', () => {
 		expect(pi({ instructions: '', model: 'm' }).memory).toBeUndefined();

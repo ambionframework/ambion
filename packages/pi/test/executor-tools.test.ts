@@ -1,21 +1,16 @@
-import {
-	type AgentDefinition,
-	defineAgent,
-	defineTool,
-	type ToolContext,
-} from '@ambionframework/ambion';
+/**
+ * The tools that the Pi executor binds to one activation: which tools each
+ * purpose gets, what a say or a membership tool commits, and what a domain
+ * tool receives.
+ */
+import { defineAgent, defineTool, type ToolContext } from '@ambionframework/ambion';
 import type {
 	ActivationSpec,
 	ActivationView,
 	CommitRequest,
 	CommitResult,
 	Intent,
-	LeaseRequest,
-	LeaseResponse,
-	RoomProtocol,
-	ViewResponse,
 } from '@ambionframework/ambion/hosting';
-import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
@@ -23,10 +18,12 @@ import type { Entry } from '../../ambion/src/journal/journal.ts';
 import { activationSpec } from '../../ambion/src/room/activation.ts';
 import { foldRoom } from '../../ambion/src/room/fold.ts';
 import { viewOf } from '../../ambion/src/room/view.ts';
-import { noTrace } from '../../ambion/test/support/trace.ts';
-import { Activation, type PiExecutorOptions } from '../src/executor.ts';
 import { pi } from '../src/index.ts';
 import { binding, toolsFor } from '../src/tools.ts';
+import { activationFor, roomThatCommits, unusedRoom, viewFor } from './support/activation.ts';
+
+/** What the domain tool received, one context per call. */
+const seen: ToolContext[] = [];
 
 const worker = defineAgent({
 	name: 'worker',
@@ -39,7 +36,10 @@ const worker = defineAgent({
 				name: 'record_decision',
 				description: 'Record a private decision.',
 				parameters: Type.Object({}),
-				execute: () => 'recorded',
+				execute: (_params, context) => {
+					seen.push(context);
+					return 'recorded';
+				},
 			}),
 		],
 	}),
@@ -59,134 +59,108 @@ const oldAuthority: ActivationSpec = {
 };
 void oldAuthority;
 
-const unusedRoom: RoomProtocol = {
-	view: async (): Promise<ViewResponse> => ({ stale: 'unused' }),
-	commit: async (): Promise<CommitResult> => ({ stale: 'unused' }),
-	lease: async (): Promise<LeaseResponse> => ({ stale: 'unused' }),
+type Purpose = ActivationView['spec']['purpose'];
+const respond: Purpose = { kind: 'respond', message: 4 };
+const summarize: Purpose = {
+	kind: 'summarize',
+	exchange: 4,
+	person: 'priya',
+	people: ['priya'],
+	through: 7,
 };
 
-function executorOptions(definition: AgentDefinition): PiExecutorOptions {
-	return {
-		definition,
-		model: async () => {
-			throw new Error('unused');
-		},
-		stream: () => {
-			throw new Error('unused');
-		},
-		transcripts: {
-			open: async () => {
-				throw new Error('unused');
-			},
-		} as SessionOpener,
-		room: 'room',
-		now: () => 0,
-	};
-}
+const at = '2026-01-01T00:00:00.000Z';
+const blank = 'The message is empty. Say something, or end your turn instead.';
+const said = (seq: number, text: string): CommitResult => ({
+	committed: { kind: 'said', seq, at, from: 'worker', text },
+});
 
-function activationFor(id: string, definition: AgentDefinition): Activation {
-	return new Activation(
-		{ id, room: unusedRoom, emit: () => {}, trace: noTrace },
-		executorOptions(definition),
-		() => {
-			throw new Error('unused');
-		},
-	);
-}
-
-function view(purpose: ActivationView['spec']['purpose']): ActivationView {
-	return {
-		spec: { id: 'activation', seat: 'worker', attempt: 1, purpose },
-		through: purpose.kind === 'summarize' ? purpose.through : 4,
-		context: { name: 'room', now: 0, participants: [], messages: [], reserve: [] },
+/**
+ * The tools of one activation over a room that records each commit. The room
+ * answers each commit with the next of `answers`, and the last one repeats.
+ */
+function bound(id: string, purpose: Purpose, ...answers: CommitResult[]) {
+	const commits: CommitRequest[] = [];
+	const activation = activationFor(id, worker);
+	let next = 0;
+	const room = roomThatCommits(commits, () => {
+		const answer = answers[Math.min(next, answers.length - 1)] ?? said(5, 'x');
+		next += 1;
+		return answer;
+	});
+	const tools = toolsFor(viewFor(purpose), worker, binding(activation, room));
+	const tool = (index: number): AgentTool => {
+		const found = tools[index];
+		if (found === undefined) throw new Error(`The purpose has no tool at ${index}.`);
+		return found;
 	};
-}
-
-function roomThatCommits(commits: CommitRequest[]): RoomProtocol {
-	return {
-		view: async () => ({ stale: 'unused' }),
-		commit: async (request): Promise<CommitResult> => {
-			commits.push(request);
-			return {
-				committed: {
-					kind: 'said',
-					seq: 5,
-					at: '2026-01-01T00:00:00.000Z',
-					from: 'worker',
-					text: 'The room stamped this.',
-				},
-			};
-		},
-		lease: async (_request: LeaseRequest): Promise<LeaseResponse> => ({
-			stale: 'unused',
-		}),
-	};
+	return { activation, commits, tools, say: tool(0), tool };
 }
 
 const names = (tools: readonly AgentTool[]) => tools.map((tool) => tool.name);
 
 describe('executor tool authority', () => {
 	it('binds only the tool named by each activation purpose', () => {
-		const activation = activationFor('activation', worker);
-		const room = roomThatCommits([]);
-		const held = binding(activation, room);
-
-		expect(names(toolsFor(view({ kind: 'respond', message: 4 }), worker, held))).toEqual([
+		expect(names(bound('activation', respond).tools)).toEqual([
 			'say',
 			'seat',
 			'unseat',
 			'record_decision',
 		]);
-		expect(
-			names(
-				toolsFor(
-					view({ kind: 'summarize', exchange: 4, person: 'priya', people: ['priya'], through: 7 }),
-					worker,
-					held,
-				),
-			),
-		).toEqual(['say']);
+		expect(names(bound('activation', summarize).tools)).toEqual(['say']);
 	});
 
-	it('sends summary text only and lets the room stamp recipient and range', async () => {
-		const commits: CommitRequest[] = [];
-		const activation = activationFor('closed:4:worker:1', worker);
-		const tools = toolsFor(
-			view({ kind: 'summarize', exchange: 4, person: 'priya', people: ['priya'], through: 7 }),
-			worker,
-			binding(activation, roomThatCommits(commits)),
+	it('keeps a refused blank open, then accepts a corrected retry under the same key', async () => {
+		const { activation, commits, say } = bound(
+			'message:0:worker:1',
+			{ kind: 'respond', message: 0 },
+			{ refused: blank },
+			said(1, 'A useful answer.'),
 		);
-		const summary = tools[0];
-		if (summary === undefined) throw new Error('The summarize purpose has no tool.');
-		const result = await summary.execute('summary-call', {
-			to: 'priya',
-			text: '  A short result.  ',
+		await expect(say.execute('same-key', { text: '   ' })).rejects.toThrow(blank);
+		expect(activation.readThrough).toBe(0);
+		await expect(say.execute('same-key', { text: '  A useful answer.  ' })).resolves.toMatchObject({
+			content: [{ text: 'delivered' }],
 		});
-
-		expect(result.content).toEqual([{ type: 'text', text: 'delivered' }]);
-		expect(commits).toEqual([
-			{
-				activation: 'closed:4:worker:1',
-				key: 'summary-call',
-				intent: { kind: 'said', to: 'priya', text: 'A short result.' },
-			},
+		expect(activation.cancelled).toBe(false);
+		expect(activation.readThrough).toBe(1);
+		expect(commits.map(({ key, intent }) => ({ key, intent }))).toEqual([
+			{ key: 'same-key', intent: { kind: 'said', text: '' } },
+			{ key: 'same-key', intent: { kind: 'said', text: 'A useful answer.' } },
 		]);
+	});
+
+	it('sends summary text only, lets the room stamp recipient and range, and terminates once it lands', async () => {
+		const { activation, commits, say } = bound(
+			'closed:4:worker:1',
+			summarize,
+			{ refused: blank },
+			said(5, 'The room stamped this.'),
+		);
+		await expect(say.execute('closing-key', { to: 'priya', text: ' \t' })).rejects.toThrow(blank);
+		const result = await say.execute('closing-key', {
+			to: ' priya ',
+			text: '  The exchange is complete.  ',
+		});
+		expect(result.content).toEqual([{ type: 'text', text: 'delivered' }]);
+		expect(result.terminate).toBe(true);
+		const request = (text: string) => ({
+			activation: 'closed:4:worker:1',
+			key: 'closing-key',
+			intent: { kind: 'said', to: 'priya', text },
+		});
+		expect(commits).toEqual([request(''), request('The exchange is complete.')]);
+		expect(activation.cancelled).toBe(false);
 		expect(activation.readThrough).toBe(0);
 	});
 
-	it('passes trimmed refs from the say tool into the intent', async () => {
-		for (const closing of [false, true]) {
-			const commits: CommitRequest[] = [];
-			const activation = activationFor(
-				closing ? 'closed:4:worker:1' : 'message:4:worker:1',
-				worker,
-			);
-			const purpose: ActivationView['spec']['purpose'] = closing
-				? { kind: 'summarize', exchange: 4, person: 'priya', people: ['priya'], through: 7 }
-				: { kind: 'respond', message: 4 };
-			const held = binding(activation, roomThatCommits(commits));
-			const say = toolsFor(view(purpose), worker, held)[0];
-			if (say === undefined) throw new Error('The purpose has no say tool.');
+	it.each([
+		['respond', 'message:4:worker:1', respond],
+		['summarize', 'closed:4:worker:1', summarize],
+	] as const)(
+		'passes trimmed refs from the %s say tool into the intent',
+		async (_kind, id, purpose) => {
+			const { commits, say } = bound(id, purpose, said(5, 'x'));
 			await say.execute('c1', { text: 'x', refs: [' https://x/a ', '', 'https://x/b'] });
 			await say.execute('c2', { text: 'x', refs: [] });
 			await say.execute('c3', { text: 'x', refs: ['  '] });
@@ -195,28 +169,14 @@ describe('executor tool authority', () => {
 				{ kind: 'said', text: 'x' },
 				{ kind: 'said', text: 'x' },
 			]);
-		}
-	});
+		},
+	);
 
 	it('does not mark context consumed for membership or an unchanged membership result', async () => {
-		const activation = activationFor('message:4:worker:1', worker);
-		const commits: CommitRequest[] = [];
-		const room: RoomProtocol = {
-			view: async () => ({ stale: 'unused' }),
-			commit: async (request) => {
-				commits.push(request);
-				return { unchanged: { kind: 'seated', name: 'surveyor' } };
-			},
-			lease: async () => ({ stale: 'unused' }),
-		};
-		const seat = toolsFor(
-			view({ kind: 'respond', message: 4 }),
-			worker,
-			binding(activation, room),
-		)[1];
-		if (seat === undefined) throw new Error('The response tools have no seat tool.');
-
-		await expect(seat.execute('seat-call', { name: 'surveyor' })).resolves.toMatchObject({
+		const { activation, commits, tool } = bound('message:4:worker:1', respond, {
+			unchanged: { kind: 'seated', name: 'surveyor' },
+		});
+		await expect(tool(1).execute('seat-call', { name: 'surveyor' })).resolves.toMatchObject({
 			content: [{ text: 'delivered' }],
 		});
 		expect(commits).toEqual([
@@ -298,35 +258,15 @@ describe('executor tool authority', () => {
 	});
 
 	it('hands a domain tool the room, the activation, and the exchange from the view', async () => {
-		const seen: ToolContext[] = [];
-		const capturing = defineAgent({
-			name: 'worker',
-			identity: 'Works on room decisions.',
-			executor: pi({
-				instructions: 'Use the tool that the room gives you.',
-				model: 'scripted/assistant',
-				tools: [
-					defineTool({
-						name: 'record_decision',
-						description: 'Record a private decision.',
-						parameters: Type.Object({}),
-						execute: (_params, ctx) => {
-							seen.push(ctx);
-							return 'recorded';
-						},
-					}),
-				],
-			}),
-		});
-		const base = view({ kind: 'respond', message: 4 });
+		const base = viewFor(respond, 4);
 		const open: ActivationView = {
 			...base,
 			spec: { ...base.spec, id: 'message:4:worker:1' },
 			context: { ...base.context, exchange: { owner: 'priya', from: 4 } },
 		};
-		const held = binding(activationFor('message:4:worker:1', capturing), unusedRoom);
-		await toolsFor(open, capturing, held)[3]?.execute('call-1', {});
-		await toolsFor({ ...open, context: { ...base.context } }, capturing, held)[3]?.execute(
+		const held = binding(activationFor('message:4:worker:1', worker), unusedRoom);
+		await toolsFor(open, worker, held)[3]?.execute('call-1', {});
+		await toolsFor({ ...open, context: { ...base.context } }, worker, held)[3]?.execute(
 			'call-2',
 			{},
 		);
