@@ -4,8 +4,9 @@ import type { Seating } from '../src/journal/events.ts';
 import type { Entry, Kind } from '../src/journal/journal.ts';
 import { activationSpec } from '../src/room/activation.ts';
 import { foldRoom, type RoomState } from '../src/room/fold.ts';
-import { decide, evolve, type RoomDecision } from '../src/room/transition.ts';
+import { decide, type RoomDecision } from '../src/room/transition.ts';
 import { viewOf } from '../src/room/view.ts';
+import { evolve } from './support/evolve.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);

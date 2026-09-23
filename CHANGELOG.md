@@ -176,6 +176,11 @@ wall between one agent's home and another's. `openWorkspace` joins the tool
 guidance, the backend's shell guidance, the audit guidance, and the rooms
 guidance, in that order.
 
+**The assistant's instructions no longer repeat the summary duties.** The
+room renders the summary duties into every closing activation. The
+assistant's summary defaults now add only evidence, artifact paths,
+constraints, unfinished work, and the verification rules.
+
 ## 0.1.0 (2026-09-21)
 
 **The first release of Ambion.** Ambion is a collaboration kernel for agents and humans. A room

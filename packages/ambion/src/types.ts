@@ -151,9 +151,8 @@ export interface Clock {
 	alarm(at: number, fire: () => void): () => void;
 }
 
-/** What a participant said. */
-export interface SpokenMessage {
-	kind: 'said';
+/** What every message carries once it lands on the record. */
+interface Landed {
 	/** The place it took on the record. The journal gives it; a draft has none. */
 	seq: Seq;
 	/**
@@ -162,17 +161,22 @@ export interface SpokenMessage {
 	 * the same token, and the token lands once (`docs/durability.md` §2).
 	 */
 	key?: string;
-	/** The activation that wrote it. Absent on a person's delivery. */
+	/** The activation that wrote it. Absent when a person or the host wrote it. */
 	activationId?: string;
+	/** The seats the room decided to wake for it, written with the message. */
+	wakes?: string[];
+	/** ISO timestamp, stamped by the runtime at the moment it landed. */
+	at: string;
+}
+
+/** What a participant said. */
+export interface SpokenMessage extends Landed {
+	kind: 'said';
 	/**
 	 * URIs the message cites. The room validates and stores them and never reads
 	 * behind one. Absent when the author cited nothing.
 	 */
 	refs?: string[];
-	/** The seats the room decided to wake for it, written with the message. */
-	wakes?: string[];
-	/** ISO timestamp, stamped by the runtime at the moment it landed. */
-	at: string;
 	/** A participant's name — stamped by the runtime, never claimed. */
 	from: string;
 	/** Present when the delivery or say was directed. */
@@ -190,14 +194,8 @@ export type PresenceChange = 'arrived' | 'left' | 'seated' | 'unseated';
  * What happened to a participant. It carries no text, because they said
  * nothing: writing words under their name is what `say` prevents: an author writes only under their own name.
  */
-export interface PresenceMessage {
+export interface PresenceMessage extends Landed {
 	kind: PresenceChange;
-	seq: Seq;
-	key?: string;
-	/** The activation that wrote this change, when an agent wrote it. */
-	activationId?: string;
-	wakes?: string[];
-	at: string;
 	/**
 	 * Who wrote it, the way every other kind reads `from`. A person writes
 	 * their own arrival and their own departure. An agent writes a
@@ -233,13 +231,8 @@ export interface PresenceMessage {
  * The assigned writer's closing contribution for one exchange. The room records
  * its `say` as a summary with a fixed recipient and source range.
  */
-export interface SummaryMessage {
+export interface SummaryMessage extends Landed {
 	kind: 'summary';
-	seq: Seq;
-	key?: string;
-	activationId?: string;
-	wakes?: string[];
-	at: string;
 	/** The agent that wrote it. */
 	from: string;
 	/** The person the summary addresses: the owner, or another person who spoke in the range. */

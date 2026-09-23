@@ -3,7 +3,7 @@
 import { decodeActivationId } from '../activation-id.ts';
 import type { AmbionErrorCode } from '../errors.ts';
 import { type Close, type Composition, JOURNAL_FORMAT, type Seating } from '../journal/events.ts';
-import type { Bodies, Body, Entry, Kind } from '../journal/journal.ts';
+import type { Bodies, Body, Kind } from '../journal/journal.ts';
 import type { ActivationSpec, CommitRequest } from '../protocol.ts';
 import { refsRefusal } from '../refs.ts';
 import type {
@@ -15,9 +15,8 @@ import type {
 	Usage,
 } from '../types.ts';
 import { activationSpec } from './activation.ts';
-import { applyEvent, baseOf, type FoldOptions, isFixed, project, type RoomState } from './fold.ts';
+import { isFixed, type RoomState } from './fold.ts';
 import { isExpired, isLive } from './lease.ts';
-import { evolveState } from './projection.ts';
 import {
 	liveWork,
 	planReconciliation,
@@ -97,15 +96,6 @@ export type ReconcileDecision = {
 	events: ProposedEvent<'lease' | 'close'>[];
 	effects: Omit<Reconciliation, 'expired' | 'abandoned' | 'close'>;
 };
-
-/** Live application and replay use the same event rules. */
-export function evolve(state: RoomState, event: Entry, options: FoldOptions): RoomState {
-	const evolved = evolveState(state, event, options);
-	if (evolved !== undefined) return evolved;
-	const base = baseOf(state);
-	applyEvent(base, event);
-	return project(base, options);
-}
 
 export function decide(
 	state: RoomState,

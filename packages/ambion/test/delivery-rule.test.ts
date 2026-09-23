@@ -10,9 +10,9 @@ import type { Body, Entry } from '../src/journal/journal.ts';
 import { messageDelivery } from '../src/room/delivery.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
-import { evolve } from '../src/room/transition.ts';
 import type { EndReason, Message } from '../src/types.ts';
 import { freeze } from './support/core-failure.ts';
+import { evolve } from './support/evolve.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 

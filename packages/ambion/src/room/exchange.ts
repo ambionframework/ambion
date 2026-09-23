@@ -225,13 +225,19 @@ function closedExchangeView(close: Close, pass: Pass): Extract<ExchangeView, { s
 	const { usage, exhausted } = workOf(close.from, close.through, pass.leases);
 	const range = rangeOf(pass.messages, close.from, close.through);
 	const summaries = summariesOf(close, range, pass);
+	const summary = summaryCompletion(close, pass.messages, pass.leases, pass.cancelledAt);
 	return {
 		...closedExchange(close, pass.messages),
 		status: 'closed',
 		activations: activationsInRange(pass.leases, close.from, close.through).map(({ lease }) =>
 			exchangeActivation(lease),
 		),
-		summary: summaryOutcome(close, pass.messages, pass.leases, pass.cancelledAt),
+		// The view copies a published summary, as it copies `summaries`, so it
+		// shares nothing with the fold.
+		summary:
+			summary.status === 'published'
+				? { status: 'published', summary: copyMessage(summary.summary) }
+				: summary,
 		outcome: exchangeOutcomeOf(close, range, pass, exhausted),
 		...(summaries.length === 0 ? {} : { summaries }),
 		...(usage === undefined ? {} : { usage }),
@@ -357,22 +363,6 @@ export function exchangeViews(
 		.filter((lease) => (decodeActivationId(lease.id)?.position ?? 0) >= open.from)
 		.map(exchangeActivation);
 	return [...closed, { status: 'open', ...open, activations }];
-}
-
-function summaryOutcome(
-	close: Close,
-	messages: readonly Message[],
-	leases: ReadonlyMap<string, LeaseHold>,
-	cancelledAt?: number,
-): SummaryOutcome {
-	const completion = summaryCompletion(close, messages, leases, cancelledAt);
-	if (completion.status === 'published')
-		return { status: 'published', summary: copyMessage(completion.summary) };
-	if (completion.status === 'pending')
-		return completion.writer === undefined
-			? { status: 'pending' }
-			: { status: 'pending', writer: completion.writer };
-	return { status: completion.status };
 }
 
 /**
