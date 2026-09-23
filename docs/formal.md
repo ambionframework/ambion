@@ -282,7 +282,7 @@ record: it decides an entry, an admission, or the `due` list that
 `admitsLease` reads. A rule that only shapes a read leaves the file, and
 it lives beside its caller with an ordinary test. The sweep for 0.2.0
 found no such rule. `exchangeOutcome` waits for the `awaiting` expiry in
-0.3.0, which decides whether it gates a write.
+0.4.0, which decides whether it gates a write.
 
 | Rule                   | The write it gates                                             |
 | ---------------------- | -------------------------------------------------------------- |
@@ -313,4 +313,4 @@ found no such rule. `exchangeOutcome` waits for the `awaiting` expiry in
 | `openingQuestion`      | The open exchange that a close entry closes                    |
 | `exchangeLive`         | A close entry                                                  |
 | `admitsClose`          | A close entry                                                  |
-| `exchangeOutcome`      | None today; the `awaiting` expiry in 0.3.0 decides it          |
+| `exchangeOutcome`      | None today; the `awaiting` expiry in 0.4.0 decides it          |

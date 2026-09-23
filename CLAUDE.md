@@ -30,6 +30,7 @@ floor.
 | `docs/agent.md`        | Design contract for the core — read before changing the runtime                                                                              |
 | `docs/assistant.md`    | Design contract for the default assistant package and the `assistant` room option — read with `agent.md`                                     |
 | `docs/exchange.md`     | Design contract for the exchange, the room's unit of work — read with `agent.md`                                                             |
+| `docs/job.md`          | Design contract for jobs: asynchronous Code Mode in a workspace backend, and exchange guards — pending for 0.3.0, not implemented            |
 | `docs/presence.md`     | Design contract for presence and visits — read with `agent.md`                                                                               |
 | `docs/summary.md`      | Design contract for optional summaries of closed exchanges                                                                                   |
 | `docs/workspace.md`    | Design contract for the workspace an agent's tools reach into — read with `agent.md`                                                         |

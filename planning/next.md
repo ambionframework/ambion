@@ -10,7 +10,7 @@
 >   no compatibility test.
 > - **The changelog names each change** to an export, a journal body, or a
 >   stored format.
-> - **The guards pin the current surface.** The export snapshot
+> - **Three tests pin the current surface.** The export snapshot
 >   (`test/package.test.ts`), the golden journals (`test/golden.test.ts`),
 >   and body validation (`test/journal-validation.test.ts`) catch a change
 >   that nobody intended. A deliberate change updates them in the same
@@ -19,8 +19,8 @@
 This file holds the open work for 0.2.0: the scope, the order of the work,
 the evidence each step needs, and the reason for each item. What landed
 leaves this file, and the [changelog](../CHANGELOG.md) records it.
-[backlog.md](backlog.md) holds everything after 0.2.0, and its first
-section holds the scope for 0.3.0.
+[backlog.md](backlog.md) holds everything after 0.2.0. Its first two
+sections hold the scope for 0.3.0 and 0.4.0.
 
 **An item lands with its evidence or stays open.** Every checkbox names an
 item in [the items](#the-items). A phase closes when its evidence line
@@ -34,8 +34,10 @@ holds on main.
 is new. 0.1.0 makes a room a place that agents and people use when a
 person asks a question. 0.2.0 makes the kernel cheaper to change, and it
 gives each agent a workspace on a real server, where the operating system
-keeps one agent's files apart from another's. 0.3.0 makes a room useful
-between questions ([backlog](backlog.md#030-the-room-works-between-questions)).
+keeps one agent's files apart from another's. 0.3.0 lets an exchange carry
+work that outlasts an activation
+([backlog](backlog.md#030-jobs-and-guards)). 0.4.0 makes a room useful
+between questions.
 
 ## The scope
 
@@ -82,10 +84,13 @@ changelog names it.
 **These wait in the [backlog](backlog.md).** The backlog states the
 condition that brings each one back.
 
+- **Jobs and guards.** They are the scope of 0.3.0
+  ([docs/job.md](../docs/job.md)).
 - **The wake sources and the delegation.** The notice (W1), the timer
-  (W2), and delegation by reference (D1) are the scope of 0.3.0.
+  (W2), and delegation by reference (D1) are the scope of 0.4.0.
   [Decisions taken](#decisions-taken) states the reason.
-- **The checkpoint entry.** The W2 resume measurement decides it.
+- **The checkpoint entry.** The resume measurement of 0.3.0 item G4
+  decides it.
 - **A generated API reference.** It adds a build step and a CI check, and
   the typed README examples already hold the surface.
 - **The evals package.** PR #153 is a draft, conflicts with main, and
@@ -101,12 +106,12 @@ condition that brings each one back.
 
 ## Decisions taken
 
-- **0.2.0 carries no wake source and no delegation.** Phase 1 changes the
-  files that W1, W2, and D1 change. A tag between the two lets 0.3.0 start
-  on a stable kernel, and 0.2.0 keeps one format change.
-- **`exchangeOutcome` stays a verified rule until W2.** The M2 sweep
-  classifies every other exported rule. The `awaiting` expiry decides this
-  one.
+- **0.2.0 carries no guard, no job, no wake source, and no delegation.**
+  Phase 1 changes the files that the guards change. A tag between the two
+  lets 0.3.0 start on a stable kernel, and 0.2.0 keeps one format change.
+- **`exchangeOutcome` stays a verified rule.** The M2 sweep classifies
+  every other exported rule. 0.3.0 adds `unmet` to its order, and the
+  `awaiting` expiry of 0.4.0 W2 decides whether it gates a write.
 - **One example.** The agentic lab workspace in
   [docs/example.md](../docs/example.md) stays the one example.
 - **Two entries.** `@ambionframework/ambion` for applications and
