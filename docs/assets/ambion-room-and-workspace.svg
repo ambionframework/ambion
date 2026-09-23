@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="556" viewBox="0 0 1000 556" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1110" height="556" viewBox="0 0 1110 556" role="img" aria-labelledby="title desc">
   <title id="title">A room and its workspace</title>
-  <desc id="desc">Two people use one room. Person 1 is present, asks a question, and reads the result. Person 2 is away and catches up later. The room is an append-only journal. It records the question, activates three agents that run on Pi, the Claude Agent SDK, and the Codex SDK, and records what two of them say. The third agent has nothing to add and writes no entry. The exchange closes when no seat has work left, and a summary goes to Person 1. The agents read and write files and tables in a shared workspace, and an audit log holds one line per tool call. A message names what it cites, and a change names the activation that made it. A restart replays the journal entries.</desc>
+  <desc id="desc">Two people use one room. Person 1 is present, asks a question, and reads the result. Person 2 is away and catches up later. The room is an append-only journal. It records the question, activates three agents that run on Pi, the Claude Agent SDK, and the Codex SDK, and records what two of them say. The third agent has nothing to add and writes no entry. The exchange closes when no seat has work left, and a summary goes to Person 1. The agents call the tools of a shared workspace. The workspace has a required bash backend and an optional SQL backend. The read, write, edit, and bash tools run on the bash backend, which holds the files, the audit log, and the room mirrors. The sql tool runs on the SQL backend, which holds the tables and writes a CSV export through the bash backend. A message names what it cites, and a change names the activation that made it. A restart replays the journal entries.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0 0 10 5 0 10Z" fill="#666d6b"/>
@@ -34,9 +34,10 @@
       .flow-red { fill: none; stroke: #c0503a; stroke-width: 2; stroke-dasharray: 5 4; }
       .guide { stroke: #e2e0d8; stroke-width: 1.5; stroke-dasharray: 2 6; }
       .rule { stroke: #e2e0d8; stroke-width: 1.5; }
+      .inner-rule { stroke: #bcd9d5; stroke-width: 1.5; }
     </style>
   </defs>
-  <rect width="1000" height="556" rx="20" fill="#f4f3ee"/>
+  <rect width="1110" height="556" rx="20" fill="#f4f3ee"/>
   <text x="24" y="34" text-anchor="start" class="sans dim lab">PEOPLE</text>
   <text x="220" y="34" text-anchor="start" class="sans dim lab">ROOM</text>
   <text x="548" y="34" text-anchor="start" class="sans dim lab">AGENTS</text>
@@ -94,20 +95,43 @@
   <rect x="566" y="440" width="64" height="24" rx="12" fill="#f6ecd8"/>
   <text x="598" y="457" text-anchor="middle" class="mono ink x">silent</text>
   <g filter="url(#shadow)">
-    <rect x="784" y="52" width="192" height="448" rx="16" fill="#fbfaf6" stroke="#2f817a" stroke-width="1.5"/>
+    <rect x="784" y="52" width="302" height="448" rx="16" fill="#fbfaf6" stroke="#2f817a" stroke-width="1.5"/>
   </g>
   <text x="804" y="86" text-anchor="start" class="sans ink t">Workspace</text>
-  <text x="804" y="108" text-anchor="start" class="sans dim lab">FILES · TABLES</text>
-  <line x1="784" y1="124" x2="976" y2="124" class="rule"/>
-  <rect x="800" y="144" width="160" height="100" rx="10" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="816" y="178" text-anchor="start" class="sans ink n">Files</text>
-  <text x="816" y="202" text-anchor="start" class="sans dim s">tools change them</text>
-  <rect x="800" y="260" width="160" height="100" rx="10" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="816" y="294" text-anchor="start" class="sans ink n">Tables</text>
-  <text x="816" y="318" text-anchor="start" class="sans dim s">rows agents share</text>
-  <rect x="800" y="376" width="160" height="100" rx="10" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="816" y="410" text-anchor="start" class="sans ink n">Audit log</text>
-  <text x="816" y="434" text-anchor="start" class="sans dim s">one per tool call</text>
+  <text x="804" y="108" text-anchor="start" class="sans dim lab">TOOLS · BACKENDS</text>
+  <line x1="784" y1="124" x2="1086" y2="124" class="rule"/>
+  <rect x="800" y="140" width="64" height="344" rx="10" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="832" y="162" text-anchor="middle" class="sans dim lab">TOOLS</text>
+  <rect x="806" y="178" width="52" height="24" rx="12" fill="#fbfaf6" stroke="#bcd9d5"/>
+  <text x="832" y="195" text-anchor="middle" class="mono ink x">read</text>
+  <rect x="806" y="214" width="52" height="24" rx="12" fill="#fbfaf6" stroke="#bcd9d5"/>
+  <text x="832" y="231" text-anchor="middle" class="mono ink x">write</text>
+  <rect x="806" y="250" width="52" height="24" rx="12" fill="#fbfaf6" stroke="#bcd9d5"/>
+  <text x="832" y="267" text-anchor="middle" class="mono ink x">edit</text>
+  <rect x="806" y="286" width="52" height="24" rx="12" fill="#fbfaf6" stroke="#bcd9d5"/>
+  <text x="832" y="303" text-anchor="middle" class="mono ink x">bash</text>
+  <rect x="806" y="416" width="52" height="24" rx="12" fill="#fbfaf6" stroke="#bcd9d5" stroke-dasharray="4 3"/>
+  <text x="832" y="433" text-anchor="middle" class="mono ink x">sql</text>
+  <rect x="884" y="140" width="186" height="200" rx="10" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="900" y="166" text-anchor="start" class="sans ink n">Bash backend</text>
+  <rect x="900" y="178" width="76" height="22" rx="11" fill="#fbfaf6"/>
+  <text x="938" y="194" text-anchor="middle" class="mono teal x">required</text>
+  <text x="900" y="222" text-anchor="start" class="sans dim s">memory · directory</text>
+  <text x="900" y="242" text-anchor="start" class="sans dim s">workstation: design</text>
+  <line x1="884" y1="256" x2="1070" y2="256" class="inner-rule"/>
+  <text x="900" y="280" text-anchor="start" class="sans ink s">Files, agent homes</text>
+  <text x="900" y="302" text-anchor="start" class="sans ink s">Audit log</text>
+  <text x="900" y="324" text-anchor="start" class="sans ink s">Room mirrors</text>
+  <rect x="884" y="372" width="186" height="112" rx="10" fill="#eef5f4" stroke="#bcd9d5" stroke-dasharray="6 5"/>
+  <text x="900" y="398" text-anchor="start" class="sans ink n">SQL backend</text>
+  <rect x="900" y="410" width="76" height="22" rx="11" fill="#fbfaf6"/>
+  <text x="938" y="426" text-anchor="middle" class="mono teal x">optional</text>
+  <text x="900" y="454" text-anchor="start" class="sans dim s">SQLite by default</text>
+  <text x="900" y="474" text-anchor="start" class="sans ink s">Tables</text>
+  <path d="M864 240 H884" class="flow" marker-end="url(#arrow)"/>
+  <path d="M864 428 H884" class="flow" marker-end="url(#arrow)"/>
+  <path d="M1040 372 V340" class="flow" marker-end="url(#arrow)"/>
+  <text x="1032" y="361" text-anchor="end" class="sans dim s">CSV exports</text>
   <path d="M168 146 H220" class="flow" marker-end="url(#arrow)"/>
   <text x="194" y="136" text-anchor="middle" class="sans dim s">asks</text>
   <path d="M220 176 H168" class="flow" marker-end="url(#arrow)"/>
@@ -124,12 +148,12 @@
   <path d="M480 406 H548" class="flow" marker-end="url(#arrow)"/>
   <text x="514" y="396" text-anchor="middle" class="sans dim s">activates</text>
   <text x="514" y="436" text-anchor="middle" class="sans dim s">no entry</text>
-  <path d="M728 124 H784" class="flow" marker-end="url(#arrow)"/>
-  <text x="756" y="114" text-anchor="middle" class="sans dim s">reads</text>
-  <path d="M728 274 H784" class="flow" marker-end="url(#arrow)"/>
-  <text x="756" y="264" text-anchor="middle" class="sans dim s">writes</text>
-  <path d="M728 424 H784" class="flow" marker-end="url(#arrow)"/>
-  <text x="756" y="414" text-anchor="middle" class="sans dim s">reads</text>
-  <path d="M350 500 V532 H880 V500" class="flow-teal" marker-start="url(#arrow-teal)" marker-end="url(#arrow-teal)"/>
-  <text x="615" y="524" text-anchor="middle" class="sans teal s">a message names what it cites · a change names its activation</text>
+  <path d="M728 170 H800" class="flow" marker-end="url(#arrow)"/>
+  <text x="764" y="160" text-anchor="middle" class="sans dim s">reads</text>
+  <path d="M728 300 H800" class="flow" marker-end="url(#arrow)"/>
+  <text x="764" y="290" text-anchor="middle" class="sans dim s">writes</text>
+  <path d="M728 440 H800" class="flow" marker-end="url(#arrow)"/>
+  <text x="764" y="430" text-anchor="middle" class="sans dim s">reads</text>
+  <path d="M350 500 V532 H935 V500" class="flow-teal" marker-start="url(#arrow-teal)" marker-end="url(#arrow-teal)"/>
+  <text x="642" y="524" text-anchor="middle" class="sans teal s">a message names what it cites · a change names its activation</text>
 </svg>

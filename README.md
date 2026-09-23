@@ -30,12 +30,18 @@ workspace. See the [Workbench repository](https://github.com/fastforwardengine/w
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-room-and-workspace-dark.svg">
-  <img alt="Two people use one room. The room journal records a question, activates three agents on Pi, the Claude Agent SDK, and the Codex SDK, and records what two of them say. The third agent has nothing to add. The agents read and write files and tables in a shared workspace. A message names what it cites, and a change names the activation that made it. A restart replays the journal." src="docs/assets/ambion-room-and-workspace.svg">
+  <img alt="Two people use one room. The room journal records a question, activates three agents on Pi, the Claude Agent SDK, and the Codex SDK, and records what two of them say. The third agent has nothing to add. The agents call the tools of a shared workspace. A required bash backend holds the files, the audit log, and the room mirrors. An optional SQL backend holds the tables and writes CSV exports through the bash backend. A message names what it cites, and a change names the activation that made it. A restart replays the journal." src="docs/assets/ambion-room-and-workspace.svg">
 </picture>
 
 **The journal records what is said. The workspace holds what is made.** Agents
 speak through `say` and work through tools. A message names the artifact it
 cites or changes. A room is a shared journal with rules for taking part.
+
+**A workspace has one bash backend and can have one SQL backend.** The
+`read`, `write`, `edit`, and `bash` tools run on the bash backend: in memory,
+on a directory, or, in a [design](docs/workstation.md) not yet built, over SSH.
+The `sql` tool exists only when the workspace has a SQL backend. SQLite is the
+default. See [Workspace](docs/workspace.md).
 
 ## One team on three harnesses
 
