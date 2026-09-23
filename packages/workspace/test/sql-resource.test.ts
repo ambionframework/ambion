@@ -56,91 +56,28 @@ afterEach(async () => {
 	await Promise.all(directories.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
+/** Invoke the tool `name` on `resource`, with a synchronous throw turned into a rejection. */
+const invoke = async (
+	resource: SqlResource,
+	name: string,
+	params: unknown,
+	toolContext = context,
+) => toolOf(resource, name).invoke(params, toolContext);
+
 describe('the SQL resource', () => {
-	it('records a row and reads it back as a Markdown table', async () => {
+	it('records a row with provenance from the tool context, and reads it back as a Markdown table', async () => {
 		const resource = open();
-		const recorded = await toolOf(resource, 'record').invoke(
-			{ table: 'runs', values: { label: 'first' } },
-			context,
+		expect(await invoke(resource, 'record', { table: 'runs', values: { label: 'first' } })).toBe(
+			'Recorded row 1 in runs.',
 		);
-		expect(recorded).toBe('Recorded row 1 in runs.');
-		const shown = await toolOf(resource, 'query').invoke(
-			{ sql: 'SELECT id, label FROM runs' },
-			context,
-		);
+		const shown = await invoke(resource, 'query', { sql: 'SELECT id, label FROM runs' });
 		expect(shown).toContain('| id | label |');
 		expect(shown).toContain('| 1 | first |');
 		expect(shown).toContain('1 row.');
-	});
-
-	it('refuses a write sent through query', async () => {
-		const resource = open();
-		const query = toolOf(resource, 'query');
-		for (const sql of [
-			"INSERT INTO runs (label) VALUES ('x')",
-			"UPDATE runs SET label = 'y'",
-			'CREATE TABLE extra (a)',
-			'DROP TABLE notes',
-		]) {
-			await expect(Promise.resolve().then(() => query.invoke({ sql }, context))).rejects.toThrow();
-		}
-		await expect(
-			resource.use(context.agent, (env) => env.query('SELECT * FROM runs')),
-		).resolves.toEqual([]);
-	});
-
-	it('keeps query read-only after a PRAGMA tries to lift the guard', async () => {
-		const resource = open();
-		const query = toolOf(resource, 'query');
-		await Promise.resolve(query.invoke({ sql: 'PRAGMA query_only = OFF' }, context)).catch(
-			() => undefined,
-		);
-		await expect(
-			Promise.resolve().then(() =>
-				query.invoke({ sql: "INSERT INTO runs (label) VALUES ('x')" }, context),
-			),
-		).rejects.toThrow();
-	});
-
-	it('refuses a record outside the writable tables', async () => {
-		const resource = open();
-		await expect(
-			Promise.resolve().then(() =>
-				toolOf(resource, 'record').invoke({ table: 'notes', values: { body: 'x' } }, context),
-			),
-		).rejects.toThrow(/does not accept records/);
-		await expect(
-			Promise.resolve().then(() =>
-				toolOf(resource, 'record').invoke(
-					{ table: 'sqlite_master', values: { name: 'x' } },
-					context,
-				),
-			),
-		).rejects.toThrow(/does not accept records/);
-	});
-
-	it('refuses an unknown column and a forged provenance column', async () => {
-		const resource = open();
-		const record = toolOf(resource, 'record');
-		await expect(
-			Promise.resolve().then(() =>
-				record.invoke({ table: 'runs', values: { label: 'x', nope: 1 } }, context),
-			),
-		).rejects.toThrow(/no column 'nope'/);
-		await expect(
-			Promise.resolve().then(() =>
-				record.invoke({ table: 'runs', values: { label: 'x', agent: 'someone' } }, context),
-			),
-		).rejects.toThrow(/reserved for provenance/);
-	});
-
-	it('stamps provenance from the tool context', async () => {
-		const resource = open();
-		await toolOf(resource, 'record').invoke({ table: 'runs', values: { label: 'a' } }, context);
 		const rows = await resource.use(context.agent, (env) => env.query('SELECT * FROM runs'));
 		expect(rows).toHaveLength(1);
 		expect(rows[0]).toMatchObject({
-			label: 'a',
+			label: 'first',
 			agent: 'design',
 			room: 'bringup',
 			activation: 'act-7',
@@ -150,25 +87,45 @@ describe('the SQL resource', () => {
 		expect(Date.parse(String(rows[0]?.at))).not.toBeNaN();
 	});
 
+	it('refuses a write sent through query, also after a PRAGMA tries to lift the guard', async () => {
+		const resource = open();
+		await invoke(resource, 'query', { sql: 'PRAGMA query_only = OFF' }).catch(() => undefined);
+		for (const sql of [
+			"INSERT INTO runs (label) VALUES ('x')",
+			"UPDATE runs SET label = 'y'",
+			'CREATE TABLE extra (a)',
+			'DROP TABLE notes',
+		]) {
+			await expect(invoke(resource, 'query', { sql }), sql).rejects.toThrow();
+		}
+		await expect(
+			resource.use(context.agent, (env) => env.query('SELECT * FROM runs')),
+		).resolves.toEqual([]);
+	});
+
+	it.each([
+		['notes', { body: 'x' }, /does not accept records/],
+		['sqlite_master', { name: 'x' }, /does not accept records/],
+		['runs', { label: 'x', nope: 1 }, /no column 'nope'/],
+		['runs', { label: 'x', agent: 'someone' }, /reserved for provenance/],
+	])('refuses a record into %s of %j', async (table, values, error) => {
+		await expect(invoke(open(), 'record', { table, values })).rejects.toThrow(error);
+	});
+
 	it('shows a truncation footer past the row cap', async () => {
 		const resource = open({ maxRows: 2 });
-		const record = toolOf(resource, 'record');
 		for (const label of ['a', 'b', 'c']) {
-			await record.invoke({ table: 'runs', values: { label } }, context);
+			await invoke(resource, 'record', { table: 'runs', values: { label } });
 		}
-		const shown = await toolOf(resource, 'query').invoke(
-			{ sql: 'SELECT label FROM runs' },
-			context,
-		);
+		const shown = await invoke(resource, 'query', { sql: 'SELECT label FROM runs' });
 		expect(shown).toContain('Shows 2 of 3 rows.');
 		expect(String(shown)).not.toContain('| c |');
 	});
 
-	it('serializes calls through the owner and refuses a late call', async () => {
+	it('serializes calls through the owner, closes once on dispose, and refuses a late call', async () => {
 		const resource = open();
-		const record = toolOf(resource, 'record');
 		const calls = ['a', 'b', 'c'].map((label) =>
-			record.invoke({ table: 'runs', values: { label } }, context),
+			invoke(resource, 'record', { table: 'runs', values: { label } }),
 		);
 		await expect(Promise.all(calls)).resolves.toEqual([
 			'Recorded row 1 in runs.',
@@ -176,33 +133,20 @@ describe('the SQL resource', () => {
 			'Recorded row 3 in runs.',
 		]);
 		await resource.dispose();
+		await resource.dispose();
 		await expect(
-			Promise.resolve().then(() =>
-				record.invoke({ table: 'runs', values: { label: 'late' } }, context),
-			),
+			invoke(resource, 'record', { table: 'runs', values: { label: 'late' } }),
 		).rejects.toThrow(/no longer available/);
-	});
-
-	it('closes the handles once on dispose and refuses a later use', async () => {
-		const resource = open();
-		await resource.dispose();
-		await resource.dispose();
 		await expect(resource.use(context.agent, (env) => env.query('SELECT 1'))).rejects.toThrow(
 			/no longer available/,
 		);
 	});
 
 	it('honors an abort signal before it queries', async () => {
-		const resource = open();
 		const controller = new AbortController();
 		controller.abort(new Error('cut'));
 		await expect(
-			Promise.resolve().then(() =>
-				toolOf(resource, 'query').invoke(
-					{ sql: 'SELECT 1' },
-					{ ...context, signal: controller.signal },
-				),
-			),
+			invoke(open(), 'query', { sql: 'SELECT 1' }, { ...context, signal: controller.signal }),
 		).rejects.toThrow('cut');
 	});
 
@@ -211,7 +155,7 @@ describe('the SQL resource', () => {
 		directories.push(dir);
 		const location = join(dir, 'lab.db');
 		const first = open({ location });
-		await toolOf(first, 'record').invoke({ table: 'runs', values: { label: 'kept' } }, context);
+		await invoke(first, 'record', { table: 'runs', values: { label: 'kept' } });
 		await first.dispose();
 		const second = open({ location });
 		const rows = await second.use(context.agent, (env) => env.query('SELECT label FROM runs'));

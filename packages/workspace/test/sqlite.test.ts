@@ -81,7 +81,7 @@ const engines = [
 ];
 
 describe.each(engines)('no statement opens a host file, $name', ({ wrap }) => {
-	it('refuses every ATTACH of a file and every VACUUM INTO, and runs no later statement', () =>
+	it("refuses every ATTACH of a file and every VACUUM INTO, runs no later statement, and still attaches ':memory:'", () =>
 		wrap(async () => {
 			const dir = await tempDir();
 			const target = join(dir, 'escape.db');
@@ -106,30 +106,30 @@ describe.each(engines)('no statement opens a host file, $name', ({ wrap }) => {
 			expect(after.ok && after.rows[0]?.n).toBe(0);
 			expect(existsSync(target)).toBe(false);
 			expect(existsSync(upper)).toBe(false);
-		}));
-
-	it("still attaches ':memory:' for a scratch database", () =>
-		wrap(async () => {
-			const site = workspace();
-			const outcome = await run(
+			const scratch = await run(
 				site,
 				"ATTACH ':memory:' AS scratch; CREATE TABLE scratch.t(x); INSERT INTO scratch.t VALUES (1); SELECT x FROM scratch.t",
 			);
-			expect(outcome).toMatchObject({ ok: true, rowCount: 1 });
+			expect(scratch).toMatchObject({ ok: true, rowCount: 1 });
 		}));
 });
 
 describe('the SQLite backend', () => {
-	it('rolls back a transaction a call leaves open, so no later write lands inside it', async () => {
+	it('keeps a transaction the call commits, and rolls back one a call leaves open', async () => {
 		const location = join(await tempDir(), 'lab.db');
 		const first = workspace(location);
+		const committed = await run(
+			first,
+			'BEGIN; CREATE TABLE t(a); INSERT INTO t VALUES (1); COMMIT;',
+		);
+		expect(committed.ok).toBe(true);
 		const failed = await run(
 			first,
-			'BEGIN; CREATE TABLE t(a); INSERT INTO t VALUES (1); SELECT * FROM missing_table;',
+			'BEGIN; CREATE TABLE u(a); INSERT INTO u VALUES (1); SELECT * FROM missing_table;',
 		);
 		expect(messageOf(failed)).toContain('missing_table');
 		expect(messageOf(failed)).toContain('rolled it back');
-		const open = await run(first, 'BEGIN; CREATE TABLE u(a); INSERT INTO u VALUES (1)');
+		const open = await run(first, 'BEGIN; CREATE TABLE w(a); INSERT INTO w VALUES (1)');
 		expect(messageOf(open)).toContain('rolled it back');
 		const kept = await run(first, 'CREATE TABLE v(a); INSERT INTO v VALUES (2)', { agent: 'beta' });
 		expect(kept.ok).toBe(true);
@@ -137,27 +137,33 @@ describe('the SQLite backend', () => {
 
 		const second = workspace(location);
 		const tables = await run(second, "SELECT name FROM sqlite_master WHERE type = 'table'");
-		expect(tables.ok && tables.rows.map((row) => row.name)).toEqual(['v']);
-	});
-
-	it('keeps a transaction that the call commits', async () => {
-		const site = workspace();
-		const outcome = await run(site, 'BEGIN; CREATE TABLE t(a); INSERT INTO t VALUES (1); COMMIT;');
-		expect(outcome.ok).toBe(true);
-		const count = await run(site, 'SELECT count(*) AS n FROM t');
+		expect(tables.ok && tables.rows.map((row) => row.name)).toEqual(['t', 'v']);
+		const count = await run(second, 'SELECT count(*) AS n FROM t');
 		expect(count.ok && count.rows[0]?.n).toBe(1);
 	});
 
-	it('refuses a result with two columns of one name', async () => {
-		const site = workspace();
-		const outcome = await run(site, 'SELECT 1 AS a, 2 AS a');
-		expect(messageOf(outcome)).toContain("two columns named 'a'");
-	});
-
-	it('runs a stray ; after the last statement as nothing', async () => {
-		const site = workspace();
-		const outcome = await run(site, 'CREATE TABLE t(x); INSERT INTO t VALUES (1); ;');
-		expect(outcome).toMatchObject({ ok: true, rowCount: 0 });
+	it.each([
+		[
+			'refuses a result with two columns of one name',
+			'SELECT 1 AS a, 2 AS a',
+			"two columns named 'a'",
+		],
+		[
+			'runs a stray ; after the last statement as nothing',
+			'CREATE TABLE t(x); INSERT INTO t VALUES (1); ;',
+			{ rowCount: 0 },
+		],
+		[
+			'runs an unterminated comment after a statement as nothing',
+			'SELECT 1 AS x; /* open',
+			{ rowCount: 1 },
+		],
+		['runs an unterminated comment alone as nothing', '/* open', { rowCount: 0 }],
+		['refuses a NUL character', 'SELECT 1;\0 SELECT 2', 'NUL'],
+	])('%s', async (_name, sql, expected) => {
+		const outcome = await run(workspace(), sql);
+		if (typeof expected === 'string') expect(messageOf(outcome)).toContain(expected);
+		else expect(outcome).toMatchObject({ ok: true, ...expected });
 	});
 
 	it('rounds maxRows down, and keeps no row for a negative one', async () => {
@@ -183,15 +189,6 @@ describe('the SQLite backend', () => {
 		expect(Date.now() - started).toBeLessThan(5_000);
 		const after = await run(site, 'SELECT 1 AS one');
 		expect(after.ok).toBe(true);
-	});
-
-	it('stops a long result past its time limit, as an ok: false outcome', async () => {
-		const site = workspace(':memory:', 0.05);
-		const outcome = await run(
-			site,
-			'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT x FROM c',
-		);
-		expect(messageOf(outcome)).toContain('ran past 0.05 seconds');
 	});
 
 	it('streams an export to a directory workspace on disk, as the calling agent', async () => {
@@ -228,14 +225,12 @@ describe('the SQLite backend', () => {
 		}
 	});
 
-	it('removes the temporary file of an export that runs past its time limit', async () => {
+	it('stops a long result past its time limit, as an ok: false outcome, and removes the temporary file of its export', async () => {
 		const site = workspace(':memory:', 0.05);
-		const outcome = await run(
-			site,
-			'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT x FROM c',
-			{ export: '~/big.csv' },
-		);
-		expect(messageOf(outcome)).toContain('ran past');
+		const endless =
+			'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT x FROM c';
+		expect(messageOf(await run(site, endless))).toContain('ran past 0.05 seconds');
+		expect(messageOf(await run(site, endless, { export: '~/big.csv' }))).toContain('ran past');
 		const left = await site.use({ name: 'alpha' }, async (env) => {
 			const listed = await env.listDir('/tmp', BACKGROUND_CONTEXT);
 			const exists = await env.exists('/home/alpha/big.csv', BACKGROUND_CONTEXT);
@@ -245,13 +240,6 @@ describe('the SQLite backend', () => {
 			};
 		});
 		expect(left).toEqual({ parts: [], target: false });
-	});
-
-	it('runs an unterminated comment as nothing, and refuses a NUL character', async () => {
-		const site = workspace();
-		expect(await run(site, 'SELECT 1 AS x; /* open')).toMatchObject({ ok: true, rowCount: 1 });
-		expect(await run(site, '/* open')).toMatchObject({ ok: true, rowCount: 0 });
-		expect(messageOf(await run(site, 'SELECT 1;\0 SELECT 2'))).toContain('NUL');
 	});
 
 	it('refuses a time limit that is not more than 0, or that no timer holds', () => {

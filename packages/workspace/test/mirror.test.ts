@@ -1,3 +1,8 @@
+/**
+ * The room mirror over a `Room` double that a test drives by hand: the
+ * backfill, the resume, live messages, and each failure path. A mirror of a
+ * running room is in `workspace.test.ts`.
+ */
 import type {
 	ExchangeHandle,
 	HumanDefinition,
@@ -8,21 +13,14 @@ import type {
 	Seq,
 	Visit,
 } from '@ambionframework/ambion';
-import { defineAgent, startRoom } from '@ambionframework/ambion';
-import { pi, piExecution } from '@ambionframework/pi';
 import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
-import { enter, roomName as name } from '../../ambion/test/support/room.ts';
-import { byAgent, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
+import { roomName as name } from '../../ambion/test/support/room.ts';
 import { openWorkspace } from '../src/index.ts';
 import { memoryBackend } from '../src/just-bash.ts';
-import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
 import type { WorkspaceAgent } from '../src/resource.ts';
 
 const reader: WorkspaceAgent = { name: 'reader' };
-/** The just-bash backends name `/rooms` in their layout. */
-const ROOMS_ROOT = '/rooms';
-const ROOM_MIRROR_GUIDANCE = roomMirrorGuidance(ROOMS_ROOT);
 
 function said(seq: Seq, text: string, from = 'priya'): Message {
 	return { kind: 'said', seq, at: new Date(seq).toISOString(), from, text };
@@ -87,72 +85,45 @@ async function readLines(env: ExecutionEnv, path: string): Promise<Record<string
 }
 
 describe('Workspace.mirror', () => {
-	it('names the path under /rooms/<room name>/messages.jsonl', () => {
-		expect(roomMirrorPath(ROOMS_ROOT, 'lobby')).toBe('/rooms/lobby/messages.jsonl');
-	});
-
-	it('always includes the /rooms guidance in tools(), with no option to set', () => {
-		const site = openWorkspace({ name: name('guidance'), backend: { bash: memoryBackend() } });
-		expect(site.tools().guidance).toContain(ROOM_MIRROR_GUIDANCE);
-	});
-
-	it('backfills the full backlog, in order, on a fresh log', async () => {
+	it('backfills the full backlog in order on a fresh log, and resumes from the highest seq on disk', async () => {
 		const site = openWorkspace({ name: name('fresh'), backend: { bash: memoryBackend() } });
-		const room = fakeRoom('lobby', [said(1, 'one'), said(2, 'two'), said(3, 'three')]);
-
-		const mirror = await site.mirror(room);
-		expect(mirror.path).toBe('/rooms/lobby/messages.jsonl');
-		await mirror.stop();
-
-		const lines = await site.use(reader, (env) => readLines(env, mirror.path));
-		expect(lines.map((line) => line.text)).toEqual(['one', 'two', 'three']);
-		expect(lines.every((line) => line.room === 'lobby')).toBe(true);
-		await site.dispose();
-	});
-
-	it('resumes from the highest seq already on disk, writing nothing twice', async () => {
-		const site = openWorkspace({ name: name('resume'), backend: { bash: memoryBackend() } });
 		const backlog = [said(1, 'one'), said(2, 'two'), said(3, 'three')];
 
 		const first = await site.mirror(fakeRoom('lobby', backlog));
+		expect(first.path).toBe('/rooms/lobby/messages.jsonl');
 		await first.stop();
-
+		const texts = async () =>
+			(await site.use(reader, (env) => readLines(env, first.path))).map((line) => line.text);
+		expect(await texts()).toEqual(['one', 'two', 'three']);
 		// A fresh call, as a restarted host would make: no in-memory state survives.
 		const second = await site.mirror(fakeRoom('lobby', backlog));
 		await second.stop();
 
 		const lines = await site.use(reader, (env) => readLines(env, second.path));
-		expect(lines.map((line) => line.seq)).toEqual([1, 2, 3]);
+		expect(lines.map((line) => [line.seq, line.text])).toEqual([
+			[1, 'one'],
+			[2, 'two'],
+			[3, 'three'],
+		]);
+		expect(lines.every((line) => line.room === 'lobby')).toBe(true);
 		await site.dispose();
 	});
 
-	it('appends a live message as it arrives, after the backfill', async () => {
+	it('appends a live message after the backfill, drops one already written, and ignores one once stopped', async () => {
 		const site = openWorkspace({ name: name('live'), backend: { bash: memoryBackend() } });
-		const room = fakeRoom('lobby', [said(1, 'one')]);
-
-		const mirror = await site.mirror(room);
-		room.emit({ type: 'message', message: said(2, 'two') });
-		await mirror.stop();
-
-		const lines = await site.use(reader, (env) => readLines(env, mirror.path));
-		expect(lines.map((line) => line.text)).toEqual(['one', 'two']);
-		await site.dispose();
-	});
-
-	it('drops a message already accounted for, from either source', async () => {
-		const site = openWorkspace({ name: name('dedup'), backend: { bash: memoryBackend() } });
 		const room = fakeRoom('lobby', [said(1, 'one'), said(2, 'two')]);
 
 		const mirror = await site.mirror(room);
-		// A duplicate delivery of a message the backfill already wrote.
 		room.emit({ type: 'message', message: said(2, 'two') });
+		room.emit({ type: 'message', message: said(3, 'three') });
+		await mirror.stop();
+		room.emit({ type: 'message', message: said(4, 'four') });
 		await mirror.stop();
 
 		const lines = await site.use(reader, (env) => readLines(env, mirror.path));
-		expect(lines).toHaveLength(2);
+		expect(lines.map((line) => line.text)).toEqual(['one', 'two', 'three']);
 		await site.dispose();
 	});
-
 	it('does not drop a message published while the backfill read is still in flight', async () => {
 		// A room settles its read only once every queued append has landed, so
 		// it can publish a message to a brand-new subscriber before that same
@@ -176,20 +147,6 @@ describe('Workspace.mirror', () => {
 
 		const lines = await site.use(reader, (env) => readLines(env, mirror.path));
 		expect(lines.map((line) => line.text)).toEqual(['one', 'two', 'three']);
-		await site.dispose();
-	});
-
-	it('ignores a live event once stopped', async () => {
-		const site = openWorkspace({ name: name('stopped'), backend: { bash: memoryBackend() } });
-		const room = fakeRoom('lobby', [said(1, 'one')]);
-
-		const mirror = await site.mirror(room);
-		await mirror.stop();
-		room.emit({ type: 'message', message: said(2, 'two') });
-		await mirror.stop();
-
-		const lines = await site.use(reader, (env) => readLines(env, mirror.path));
-		expect(lines).toHaveLength(1);
 		await site.dispose();
 	});
 
@@ -237,53 +194,6 @@ describe('Workspace.mirror', () => {
 
 		await expect(site.mirror(room)).rejects.toThrow(/storage unavailable/);
 		expect(subscribed).toBe(0);
-		await site.dispose();
-	});
-
-	it('names the real room, through a running room, over its own message record', async () => {
-		const roomId = name('through-room');
-		const site = openWorkspace({ name: name('site'), backend: { bash: memoryBackend() } });
-		const worker = defineAgent({
-			name: 'worker',
-			identity: 'Says two things.',
-			executor: pi({
-				instructions: 'speak',
-				model: 'scripted/worker',
-				bundles: [],
-			}),
-		});
-		const session = await startRoom({
-			name: roomId,
-			agents: [worker],
-			execution: piExecution({
-				stream: scripted(
-					byAgent({
-						worker: (_context, _who, call) => {
-							if (call === 1) return speak('first');
-							if (call === 2) return speak('second');
-							return quiet();
-						},
-					}),
-				),
-			}),
-		});
-		const mirror = await site.mirror(session);
-		const visit = await enter(session);
-		const exchange = await visit.send({ text: 'go' });
-		await exchange.waitForClose();
-		// Stop the room, and its shutdown-triggered "left", before stopping
-		// the mirror itself: a mirror that stopped first must not see what
-		// came after.
-		await session.stop();
-		await mirror.stop();
-
-		const lines = await site.use(reader, (env) => readLines(env, mirror.path));
-		const spoken = lines.filter((line) => line.kind === 'said' && line.from === 'worker');
-		expect(spoken.map((line) => line.text)).toEqual(['first', 'second']);
-		expect(lines.every((line) => line.room === roomId)).toBe(true);
-
-		const read = await session.read();
-		expect(lines).toHaveLength(read.messages.length);
 		await site.dispose();
 	});
 });

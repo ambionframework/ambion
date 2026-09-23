@@ -34,12 +34,18 @@ const STEMS: Record<string, string> = {
 	'./conformance': 'conformance',
 };
 
-it('keeps the exported package name in step with the manifest', async () => {
-	expect(PACKAGE_NAME).toBe((await manifest()).name);
-});
-
-it('builds every entry the manifest names', async () => {
-	const { exports } = await manifest();
+it('holds exactly six entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
+	const { name, exports } = await manifest();
+	expect(PACKAGE_NAME).toBe(name);
+	expect(Object.keys(exports).sort()).toEqual([
+		'.',
+		'./conformance',
+		'./just-bash',
+		'./package.json',
+		'./resource',
+		'./sql',
+		'./sqlite',
+	]);
 	const config = await read('tsdown.config.ts');
 	const built = [...config.matchAll(/'(src\/[^']+)'/g)].map((m) => m[1]);
 	expect(built).toEqual([
@@ -50,28 +56,13 @@ it('builds every entry the manifest names', async () => {
 		'src/just-bash-entry.ts',
 		'src/conformance.ts',
 	]);
-	// Each subpath names a file the build writes, under the name it builds it by.
 	for (const [path, target] of Object.entries(exports)) {
 		if (path === './package.json') continue;
-		const file = typeof target === 'string' ? target : target.import;
 		const stem = STEMS[path];
 		expect(stem).toBeDefined();
-		expect(file).toBe(`./dist/${stem}.mjs`);
+		expect(typeof target === 'string' ? target : target.import).toBe(`./dist/${stem}.mjs`);
 		expect(built).toContain(`src/${stem}.ts`);
 	}
-});
-
-it('holds exactly six entries: the root, one per binding, and the conformance suite', async () => {
-	const { exports } = await manifest();
-	expect(Object.keys(exports).sort()).toEqual([
-		'.',
-		'./conformance',
-		'./just-bash',
-		'./package.json',
-		'./resource',
-		'./sql',
-		'./sqlite',
-	]);
 });
 
 it('exports one resource, its two logs, the environment helpers, and sqlResult from the root, and no backend', () => {
@@ -95,24 +86,14 @@ it('exports one resource, its two logs, the environment helpers, and sqlResult f
 	]);
 });
 
-it('exports exactly the neutral resource contract from ./resource', () => {
-	expect(Object.keys(resource).sort()).toEqual(['openResource']);
-});
-
-it('exports exactly the SQL resource from ./sql', () => {
-	expect(Object.keys(sql).sort()).toEqual(['PROVENANCE_COLUMNS', 'openSqlResource']);
-});
-
-it('exports exactly the SQLite backend from ./sqlite', () => {
-	expect(Object.keys(sqlite).sort()).toEqual(['sqliteBackend']);
-});
-
-it('exports exactly the just-bash backends from ./just-bash', () => {
-	expect(Object.keys(justBash).sort()).toEqual(['directoryBackend', 'memoryBackend']);
-});
-
-it('exports exactly the two conformance suites from ./conformance', () => {
-	expect(Object.keys(conformance).sort()).toEqual(['sqlConformance', 'workspaceConformance']);
+it.each([
+	['./resource', resource, ['openResource']],
+	['./sql', sql, ['PROVENANCE_COLUMNS', 'openSqlResource']],
+	['./sqlite', sqlite, ['sqliteBackend']],
+	['./just-bash', justBash, ['directoryBackend', 'memoryBackend']],
+	['./conformance', conformance, ['sqlConformance', 'workspaceConformance']],
+])('exports exactly its one binding from %s', (_path, entry, names) => {
+	expect(Object.keys(entry).sort()).toEqual(names);
 });
 
 it('loads no backend at the root: no export from the just-bash, resource, or SQL files', async () => {
@@ -122,6 +103,12 @@ it('loads no backend at the root: no export from the just-bash, resource, or SQL
 	expect(index).not.toMatch(/from '\.\/sql-resource\.ts'/);
 	expect(index).not.toMatch(/from '\.\/sqlite(-entry)?\.ts'/);
 	expect(index).not.toMatch(/ROOM_MIRROR_GUIDANCE|roomMirrorPath|DEFAULT_ROTATE_BYTES/);
+});
+
+it('keeps the neutral resource contract free of imports, Pi among them', async () => {
+	const contract = await read('src/resource.ts');
+	expect(contract).not.toMatch(/@earendil-works\/pi/);
+	expect(contract).not.toMatch(/^import /m);
 });
 
 /** The specifiers one built file imports, whatever the quote or the form. */
@@ -157,24 +144,16 @@ async function chunksOf(distDir: URL, entry: string): Promise<Map<string, string
 	return chunks;
 }
 
-const isBanned = (specifier: string): boolean =>
-	specifier === 'just-bash' || specifier === 'node:sqlite';
-
-it('keeps just-bash and node:sqlite out of the root build, across every chunk it imports', async () => {
-	const distDir = new URL('../dist/', import.meta.url);
-	const chunks = await chunksOf(distDir, 'index.mjs');
+it.each([
+	['root', 'index.mjs', ['just-bash', 'node:sqlite']],
+	['conformance', 'conformance.mjs', ['just-bash', 'node:sqlite', 'vitest']],
+])('keeps the %s build, and every chunk it imports, free of %j', async (_name, entry, banned) => {
+	const chunks = await chunksOf(new URL('../dist/', import.meta.url), entry);
 	expect(chunks.size).toBeGreaterThan(0);
 	for (const [file, specifiers] of chunks) {
-		expect({ file, banned: specifiers.filter(isBanned) }).toEqual({ file, banned: [] });
-	}
-});
-
-it('keeps just-bash and vitest out of the conformance build, across every chunk it imports', async () => {
-	const distDir = new URL('../dist/', import.meta.url);
-	const chunks = await chunksOf(distDir, 'conformance.mjs');
-	expect(chunks.size).toBeGreaterThan(0);
-	const bannedHere = (specifier: string) => isBanned(specifier) || specifier === 'vitest';
-	for (const [file, specifiers] of chunks) {
-		expect({ file, banned: specifiers.filter(bannedHere) }).toEqual({ file, banned: [] });
+		expect({ file, banned: specifiers.filter((s) => banned.includes(s)) }).toEqual({
+			file,
+			banned: [],
+		});
 	}
 });
