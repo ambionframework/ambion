@@ -45,9 +45,9 @@ function counted(inner: SqlBackend) {
 	let disposals = 0;
 	const backend: SqlBackend = {
 		...inner,
-		connect: (agent, signal) => {
+		connect: (agent, files, signal) => {
 			agents.push(agent.name);
-			return inner.connect(agent, signal);
+			return inner.connect(agent, files, signal);
 		},
 		dispose: async () => {
 			disposals += 1;
@@ -173,9 +173,39 @@ describe('a workspace with a SQL backend', () => {
 	it('exposes the SQL owner for host code', async () => {
 		const { workspace } = withSql();
 		const outcome = await workspace.sql?.use({ name: 'host' }, (env) =>
-			env.run('SELECT 7 AS n', ctx),
+			env.run('SELECT 7 AS n', { maxRows: 50 }, ctx),
 		);
-		expect(outcome).toEqual({ ok: true, rows: [{ n: 7 }] });
+		expect(outcome).toEqual({ ok: true, columns: ['n'], rows: [{ n: 7 }], rowCount: 1 });
+	});
+
+	it('lets host code export through the SQL owner, as the host agent', async () => {
+		const { workspace } = withSql();
+		const outcome = await workspace.sql?.use({ name: 'host' }, (env) =>
+			env.run('SELECT 7 AS n', { maxRows: 0, export: '~/n.csv' }, ctx),
+		);
+		expect(outcome).toMatchObject({ ok: true, rows: [], rowCount: 1, export: '/home/host/n.csv' });
+		expect(await shellText(workspace, '/home/host/n.csv')).toBe('n\n7\n');
+	});
+
+	it('writes an export through the bash owner, so the export waits for a running shell operation', async () => {
+		const { workspace } = withSql();
+		let release = (): void => {};
+		const held = workspace.use(
+			{ name: 'host' },
+			() => new Promise<void>((done) => (release = done)),
+		);
+		let finished = false;
+		const exporting = call(workspace, { sql: 'SELECT 1 AS one', export: '~/one.csv' }).then(
+			(text) => {
+				finished = true;
+				return text;
+			},
+		);
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(finished).toBe(false);
+		release();
+		await held;
+		expect(await exporting).toContain('Wrote 1 row to /home/ada/one.csv.');
 	});
 
 	it('disposes both owners, and the SQL backend once', async () => {

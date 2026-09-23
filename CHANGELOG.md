@@ -8,16 +8,21 @@ now `WorkspaceBackends`: `{ bash, sql? }`. Write
 `backend: memoryBackend()`. `WorkspaceBackend` is renamed `BashBackend`,
 and `MemoryWorkspaceBackend` is renamed `MemoryBashBackend`. The root entry
 exports the `WorkspaceBackends`, `SqlBackend`, `SqlEnv`, `SqlOutcome`,
-`SqlRow`, and `SqlValue` types.
+`SqlRow`, `SqlRunOptions`, `SqlValue`, and `WorkspaceFiles` types.
 
 **The `sql` tool runs on a SQL backend, and a workspace with no SQL
 backend has no `sql` tool.** `backend.sql` takes a `SqlBackend`: a shared
 database that need not live on the shell's filesystem. The new
 `@ambionframework/workspace/sqlite` entry exports `sqliteBackend(location)`,
 the default SQL backend over `node:sqlite`. The SQL backend runs under an
-owner of its own. The `sql` tool takes `sql`, `export`, and `maxRows`, and
-`export` writes the CSV file on the shell. `Workspace.sql` exposes the SQL
-owner, and `dispose()` disposes both owners.
+owner of its own. `connect(agent, files)` gives it the calling agent's
+`WorkspaceFiles` on the bash backend. `run(sql, { maxRows, export? })`
+gives the last statement's columns, its first `maxRows` rows, and its row
+count, and writes an export as CSV through `files`. The root entry exports
+`sqlResult`, which does the preview, the count, and the streamed export
+for a backend. The `sql` tool takes `sql`, `export`, and `maxRows`.
+`Workspace.sql` exposes the SQL owner, and `dispose()` disposes the SQL
+owner and then the bash owner.
 
 **The `sql` tool no longer runs `sqlite3` through the shell.** The tool
 loses its `database` and `timeout` parameters. `WorkspaceLayout` loses

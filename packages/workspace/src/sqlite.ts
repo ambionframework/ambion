@@ -9,9 +9,10 @@
  *
  * `run` runs the statements of one call in order. `prepare` compiles the
  * first statement of the text, and `sourceSQL` gives that statement's own
- * text, so the rest of the text starts after it. The rows of the last
- * statement come back. `node:sqlite` runs a statement to its end, so an
- * abort takes effect before the next statement.
+ * text, so the rest of the text starts after it. The last statement's rows
+ * stream through `sqlResult`: a preview comes back, and an export goes to
+ * the agent's files on the bash backend. `node:sqlite` runs a statement to
+ * its end, so an abort takes effect before the next statement or row.
  *
  * The database is a file on the host, so a statement must not open another
  * host file. `ATTACH` opens `:memory:` alone, and `VACUUM INTO` is refused.
@@ -23,9 +24,17 @@
 
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import type { Context } from '@earendil-works/pi-agent-core';
-import type { SqlBackend, SqlEnv, SqlOutcome, SqlRow } from './sql-backend.ts';
+import type {
+	SqlBackend,
+	SqlEnv,
+	SqlOutcome,
+	SqlRow,
+	SqlRunOptions,
+	WorkspaceFiles,
+} from './sql-backend.ts';
+import { sqlResult } from './sql-result.ts';
 
 /** The in-memory location. Every agent shares it while the backend lives. */
 const MEMORY = ':memory:';
@@ -81,32 +90,50 @@ function authorize(db: DatabaseSync): void {
 	);
 }
 
-/** Run one statement at the front of `text`, and give its rows and the rest of the text. */
-function step(db: DatabaseSync, text: string): { rows: SqlRow[]; rest: string } {
+/** Compile the statement at the front of `text`, refuse it if it opens a host file, and give the rest. */
+function prepare(db: DatabaseSync, text: string): { statement: StatementSync; rest: string } {
 	const statement = db.prepare(text);
 	const source = statement.sourceSQL;
 	const refused = refusal(source);
 	if (refused !== undefined) throw new Error(refused);
-	const returnsRows = statement.columns().length > 0;
-	const rows = returnsRows ? (statement.all() as SqlRow[]) : [];
-	if (!returnsRows) statement.run();
-	return { rows, rest: text.slice(source.length) };
+	return { statement, rest: text.slice(source.length) };
 }
 
-/** Run every statement of `sql` in order, and keep the rows of the last one. */
-function runAll(db: DatabaseSync, sql: string, context: Context): SqlOutcome {
+/** The outcome of the last statement: its preview, its count, and its export. */
+function lastResult(
+	statement: StatementSync,
+	options: SqlRunOptions,
+	files: WorkspaceFiles,
+	context: Context,
+): Promise<SqlOutcome> {
+	const columns = statement.columns().map((column) => column.name);
+	if (columns.length === 0) statement.run();
+	const rows = columns.length === 0 ? [] : (statement.iterate() as Iterable<SqlRow>);
+	return sqlResult(columns, rows, options, files, context);
+}
+
+/** Run every statement of `sql` in order, and give the outcome of the last one. */
+async function runAll(
+	db: DatabaseSync,
+	sql: string,
+	options: SqlRunOptions,
+	files: WorkspaceFiles,
+	context: Context,
+): Promise<SqlOutcome> {
 	let rest = sql;
-	let rows: SqlRow[] = [];
 	try {
 		while (!blank(rest)) {
 			if (context.abortSignal?.aborted) throw abortError(context.abortSignal);
-			({ rows, rest } = step(db, rest));
+			const next = prepare(db, rest);
+			rest = next.rest;
+			if (blank(rest)) return await lastResult(next.statement, options, files, context);
+			next.statement.run();
 		}
 	} catch (error) {
 		if (context.abortSignal?.aborted) throw abortError(context.abortSignal);
 		return { ok: false, message: error instanceof Error ? error.message : String(error) };
 	}
-	return { ok: true, rows };
+	return sqlResult([], [], options, files, context);
 }
 
 function abortError(signal: AbortSignal): unknown {
@@ -128,18 +155,18 @@ function open(location: string): DatabaseSync {
  */
 export function sqliteBackend(location: string): SqlBackend {
 	let db: DatabaseSync | undefined;
-	const env: SqlEnv = {
-		run: async (sql, context) => {
+	const envFor = (files: WorkspaceFiles): SqlEnv => ({
+		run: async (sql, options, context) => {
 			if (context.abortSignal?.aborted) throw abortError(context.abortSignal);
 			db ??= open(location);
-			return runAll(db, sql, context);
+			return runAll(db, sql, options, files, context);
 		},
 		cleanup: async () => undefined,
-	};
+	});
 	return {
 		database: location,
 		guidance: GUIDANCE,
-		connect: async () => env,
+		connect: async (_agent, files) => envFor(files),
 		dispose: async () => {
 			db?.close();
 			db = undefined;

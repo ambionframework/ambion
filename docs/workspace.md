@@ -370,12 +370,16 @@ tables. `sqlite_master` holds each view's definition, so an agent reads how a
 shared view was built before the agent trusts its data. Prefer a view or a
 table for every hand-off between agents.
 
-**`export` writes the result into the shell's filesystem.** Set it when a
-script or another tool needs the rows. The tool runs the query on the SQL
-owner and holds the rows in memory. It then releases the SQL owner and
-writes the CSV file on the bash owner, through a temporary file and a
-rename. A failed query leaves an existing file unchanged. A NULL value
-reads as `\N`, and a blob reads as hex.
+**`export` writes the full result into the shell's filesystem, and the
+tool returns a preview.** Set it when a script or another tool needs the
+rows. The SQL backend streams every row as CSV to the calling agent's
+files through `WorkspaceFiles`, and gives back the first `maxRows` rows and
+the row count. The tool shows the head of the file. A failed query leaves
+an existing file unchanged. A NULL value reads as `\N`, and a blob reads
+as hex.
+
+**A result never enters memory whole.** The backend keeps the first
+`maxRows` rows and counts the rest. An export streams in chunks.
 
 ### The SQLite backend
 
@@ -389,7 +393,7 @@ reads as `\N`, and a blob reads as hex.
   A Node whose `node:sqlite` has `setAuthorizer` also refuses them in the
   engine. `node:sqlite` loads no extension.
 - **A statement runs to its end.** `node:sqlite` is synchronous, so an abort
-  takes effect before the next statement of the call.
+  takes effect before the next statement, or the next row of the last one.
 - **Every agent shares one handle.** The SQL owner runs one operation at a
   time, so writes take a total order.
 
@@ -399,24 +403,46 @@ reads as `\N`, and a blob reads as hex.
 backend, such as a database server with one account for each agent,
 implements them.
 
-| Member                     | Meaning                                                                |
-| -------------------------- | ---------------------------------------------------------------------- |
-| `connect(agent, signal?)`  | An `SqlEnv` for one agent. A backend with accounts connects as it      |
-| `dispose()`                | Optional. Release local handles, and keep the data                     |
-| `database`                 | The name the tool reports and the guidance states, with no credential  |
-| `guidance`                 | Optional. The dialect and the limits of the database                   |
-| `SqlEnv.run(sql, context)` | Run one or more statements in order, and give the rows of the last one |
-| `SqlEnv.cleanup()`         | The owner calls it after each operation                                |
+| Member                              | Meaning                                                                |
+| ----------------------------------- | ---------------------------------------------------------------------- |
+| `connect(agent, files, signal?)`    | An `SqlEnv` for one agent. A backend with accounts connects as it      |
+| `dispose()`                         | Optional. Release local handles, and keep the data                     |
+| `database`                          | The name the tool reports and the guidance states, with no credential  |
+| `guidance`                          | Optional. The dialect and the limits of the database                   |
+| `SqlEnv.run(sql, options, context)` | Run the statements in order, and give a preview of the last one's rows |
+| `SqlEnv.cleanup()`                  | The owner calls it after each operation                                |
 
-**`run` gives an outcome.** A statement that the database refuses gives
-`{ ok: false, message }`, with the database's own message, and the run
-stops at that statement. A fault of the connection rejects. An aborted
-`context.abortSignal` rejects before the first statement runs.
+**`files` is the agent's view of the bash backend.** `WorkspaceFiles` has
+one method, `writeFile(path, chunks, context)`. It resolves `~` and a
+relative path under the agent's home, creates missing directories, and
+writes the chunks to a temporary file that it then renames onto `path`. It
+gives the absolute path. Each call is one operation on the bash owner, as
+the calling agent.
+
+**`run` takes `maxRows` and an optional `export` path.** An `ok` outcome
+holds the last statement's `columns`, its first `maxRows` rows, its
+`rowCount`, and the absolute `export` path when the options named one. A
+statement that the database refuses, or an export that fails, gives
+`{ ok: false, message }`, and the run stops there. A fault of the
+connection rejects. An aborted `context.abortSignal` rejects before the
+next statement runs.
+
+**`sqlResult` does the preview, the count, and the export for a backend.**
+The root entry exports it. A backend passes the last statement's columns,
+a row iterator, the options, and `files`. It reads the rows once, and
+streams the CSV to `files` in chunks. A backend with a native export writes
+through `files` itself.
 
 **Each backend gets its own resource owner.** A long `bash` command does
 not delay a query. `workspace.use` and `mirror()` reach the bash owner.
-`workspace.sql` is the SQL owner, for host code. Do not await one owner's
-`use` inside a callback of the other. `dispose()` disposes both owners.
+`workspace.sql` is the SQL owner, for host code.
+
+**A SQL operation may wait on the bash owner, and a bash operation never
+waits on the SQL owner.** An export waits for the running shell operation
+to end. Do not await `workspace.sql.use` inside a callback of
+`workspace.use`: that callback holds the bash owner. `dispose()` disposes
+the SQL owner first, so an export in progress still reaches the bash
+owner, and then the bash owner.
 
 **Two owners give no total order across the backends.** Each owner orders
 its own operations. A `bash` call and a `sql` call from two agents can

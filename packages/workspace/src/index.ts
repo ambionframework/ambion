@@ -50,7 +50,16 @@ export {
 export type { WorkspaceLog, WorkspaceLogOptions } from './log.ts';
 export { openLog } from './log.ts';
 export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.ts';
-export type { SqlBackend, SqlEnv, SqlOutcome, SqlRow, SqlValue } from './sql-backend.ts';
+export type {
+	SqlBackend,
+	SqlEnv,
+	SqlOutcome,
+	SqlRow,
+	SqlRunOptions,
+	SqlValue,
+	WorkspaceFiles,
+} from './sql-backend.ts';
+export { sqlResult } from './sql-result.ts';
 export type { Workspace } from './workspace.ts';
 export { openWorkspace } from './workspace.ts';
 

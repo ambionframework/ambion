@@ -2,6 +2,7 @@ import type { Room, ToolBundle } from '@ambionframework/ambion';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
 import { createFileTools, defaultToolGuidance } from './default-tools.ts';
+import { workspaceFiles } from './files.ts';
 import {
 	mirrorRoom,
 	type RoomMirror,
@@ -24,8 +25,8 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	readonly host: WorkspaceAgent;
 	/**
 	 * The owner of the SQL backend, when the workspace has one. Host code
-	 * runs statements through its `use`. Do not await one owner's `use`
-	 * inside the other's callback.
+	 * runs statements through its `use`. A SQL operation may wait on the
+	 * bash owner, so do not await this owner inside a callback of `use`.
 	 */
 	readonly sql?: WorkspaceResource<SqlEnv>;
 	/**
@@ -86,18 +87,44 @@ function workspaceTools(
 	});
 }
 
-/** Dispose every owner, and report the first failure once each one has settled. */
-async function disposeAll(owners: readonly { dispose(): Promise<void> }[]): Promise<void> {
-	const results = await Promise.allSettled(owners.map((owner) => owner.dispose()));
-	const failure = results.find((result) => result.status === 'rejected');
+/** Dispose each owner in turn, and report the first failure once every one has run. */
+async function disposeInOrder(owners: readonly { dispose(): Promise<void> }[]): Promise<void> {
+	let failure: { reason: unknown } | undefined;
+	for (const owner of owners) {
+		try {
+			await owner.dispose();
+		} catch (reason) {
+			failure ??= { reason };
+		}
+	}
 	if (failure !== undefined) throw failure.reason;
+}
+
+/**
+ * Open the SQL owner. Each connection gets the calling agent's
+ * `WorkspaceFiles` on the bash owner, so a SQL operation may wait on the
+ * bash owner. No bash operation waits on the SQL owner.
+ */
+function openSqlOwner(
+	name: string,
+	backend: SqlBackend,
+	shell: WorkspaceResource<WorkspaceEnv>,
+): WorkspaceResource<SqlEnv> {
+	return openResource<SqlEnv>({
+		name,
+		backend: {
+			connect: (agent, signal) => backend.connect(agent, workspaceFiles(shell.use, agent), signal),
+			dispose: async () => backend.dispose?.(),
+		},
+	});
 }
 
 /**
  * Open one workspace over its backends. `backend.bash` is required, and
  * `backend.sql` is optional. Each backend gets its own resource owner, so
- * a long shell command does not delay a query. `use` and `mirror()` reach
- * the bash owner, and `sql` exposes the SQL owner. The bash backend's
+ * a long shell command does not delay a query. The SQL backend reaches the
+ * bash backend through `WorkspaceFiles` to write an export. `use` and
+ * `mirror()` reach the bash owner, and `sql` exposes the SQL owner. The bash backend's
  * `layout` names where the audit log and the room mirrors live. A
  * workspace with no SQL backend has no `sql` tool. Set `audit.path`
  * to record every bound tool call at a path of your own; the default is
@@ -115,10 +142,7 @@ export function openWorkspace(options: {
 	const sql =
 		sqlBackend === undefined
 			? undefined
-			: {
-					backend: sqlBackend,
-					owner: openResource<SqlEnv>({ name: options.name, backend: sqlBackend }),
-				};
+			: { backend: sqlBackend, owner: openSqlOwner(options.name, sqlBackend, resource) };
 	const layout = bash.layout;
 	const audit =
 		options.audit === undefined
@@ -131,8 +155,9 @@ export function openWorkspace(options: {
 	const host: WorkspaceAgent = { name: `${options.name}-host` };
 	const mirror = (room: Room, mirrorOptions?: RoomMirrorOptions): Promise<RoomMirror> =>
 		mirrorRoom(room, resource, host, layout.rooms, mirrorOptions);
-	const owners = sql === undefined ? [resource] : [resource, sql.owner];
-	const dispose = (): Promise<void> => disposeAll(owners);
+	// The SQL owner goes first: a SQL operation may still write through the bash owner.
+	const owners = sql === undefined ? [resource] : [sql.owner, resource];
+	const dispose = (): Promise<void> => disposeInOrder(owners);
 	return Object.freeze({
 		...resource,
 		dispose,

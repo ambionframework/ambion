@@ -74,7 +74,7 @@ it('holds exactly six entries: the root, one per binding, and the conformance su
 	]);
 });
 
-it('exports one resource, its two logs, and the environment helpers from the root, and no backend', () => {
+it('exports one resource, its two logs, the environment helpers, and sqlResult from the root, and no backend', () => {
 	expect(Object.keys(main).sort()).toEqual([
 		'BACKGROUND_CONTEXT',
 		'DEFAULT_AUDIT_LOG',
@@ -89,6 +89,7 @@ it('exports one resource, its two logs, and the environment helpers from the roo
 		'resolvePath',
 		'spill',
 		'spillPath',
+		'sqlResult',
 		'tempDirPath',
 		'tempFilePath',
 	]);

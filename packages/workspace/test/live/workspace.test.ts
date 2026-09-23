@@ -77,6 +77,7 @@ live('the workspace', () => {
 			env.run(
 				'CREATE TABLE pour(id INTEGER, grade TEXT, tonnes REAL);' +
 					" INSERT INTO pour VALUES (1,'C30',10),(2,'C40',5),(3,'C30',15),(4,'C40',20)",
+				{ maxRows: 0 },
 				BACKGROUND_CONTEXT,
 			),
 		);
