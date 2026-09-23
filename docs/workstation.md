@@ -1,11 +1,9 @@
 # The workstation
 
-**This page is a design. No package implements it yet.** The
-[backlog](../planning/backlog.md#designs-with-a-shape) names the condition
-that schedules it. The design builds on the workspace interface that
-[Workspace](workspace.md) states. Every name below that the workspace
-package does not export is a proposal, and it changes if the review
-changes it.
+**`@ambionframework/workstation` implements this page.** It builds on the
+workspace interface that [Workspace](workspace.md) states. The
+[package guide](../packages/workstation/README.md) shows how to prepare a
+server.
 
 **A workstation is one remote server with one Unix account for each
 agent.** A workspace connects to it over SSH, and each agent logs in with
@@ -374,9 +372,9 @@ application names the commands that its server installs.
 
 ## Trust
 
-**`docs/trust.md` gets a new row before the backend ships.** An agent on
-a workstation has a real shell and network access. The account
-permissions on the server contain it. The kernel does not.
+**`docs/trust.md` holds a row for the workstation.** An agent on a
+workstation has a real shell and network access. The account permissions
+on the server contain it. The kernel does not.
 
 **The live exclusivity test covers the just-bash backends only.** It
 shows that a seat cannot read `/etc/hosts`
@@ -400,21 +398,21 @@ and spill file has mode `0600`, and each temporary directory has mode
 
 **Both tiers run `workspaceConformance`.** A `ConformanceBackend` harness
 opens a fresh `workstationBackend` and disposes of it. The cases check the
-`ExecutionEnv` rules that the four file tools need. `startSshServer` is a
-proposed test helper: the scripted tier starts an `ssh2` server, and the
-integration tier starts `sshd`.
+`ExecutionEnv` rules that the four file tools need. The scripted harness
+starts an `ssh2` server for each case
+(`packages/workstation/test/conformance.test.ts`).
 
 ```ts
 import type { ConformanceBackend } from '@ambionframework/workspace/conformance';
 import { workspaceConformance } from '@ambionframework/workspace/conformance';
 import { workstationBackend } from '@ambionframework/workstation';
 import { describe, it } from 'vitest';
-import { startSshServer } from './support/ssh.ts';
+import { startSshServer } from './support/server.ts';
 
 const harness: ConformanceBackend = {
   name: 'workstation',
   async open() {
-    const server = await startSshServer(['surveyor', 'planner', 'lab-host']);
+    const server = await startSshServer(['conformance']);
     const backend = workstationBackend(server.options);
     return {
       backend,
@@ -433,7 +431,7 @@ describe(harness.name, () => {
 
 **The scripted tier serves a temporary directory over SFTP.** The test
 starts an `ssh2` `Server` in its own process. Its SFTP handlers read and
-write a temporary directory on the local disk, and each `exec` runs `bash`
+write a temporary directory on the local disk, and each `exec` runs `sh -c`
 in that directory. The tier needs no container and no network, and
 `pnpm check` runs it. It needs `setsid` from util-linux, so it runs on
 Linux and skips on a machine without `setsid`, such as macOS.
@@ -446,17 +444,20 @@ Linux and skips on a machine without `setsid`, such as macOS.
 
 **The integration tier runs in a CI job of its own.** Only root creates
 the accounts, and only an `sshd` that runs as root logs in as more than
-one user. `pnpm check` runs without root. The job runs a container image
-with `sshd`, and it runs only when `AMBION_WORKSTATION_SSHD` is set. It
-proves what only OpenSSH can:
+one user. `pnpm check` runs without root. The `workstation` job runs
+`test/sshd/setup.sh` with `sudo` on its runner. The script adds four
+accounts and one group, makes the two layout folders, and starts `sshd` on
+port 2222. The tier runs only when `AMBION_WORKSTATION_SSHD` names the file
+the script writes. It proves what only OpenSSH can:
 
-- the replacing rename and the group kill
+- the conformance cases, with the replacing rename and the group kill
 - the error classification against the status codes of OpenSSH
-- the channel count under `MaxSessions`
+- the channel count under `MaxSessions` over many commands and timeouts
 - that one account cannot read another account's home or temporary files
 - that a file one agent creates in the audit folder stays writable for
-  the other agent
+  the other agent, across a rotation
 - that an agent cannot write under `layout.rooms`
+- that the audit log records each agent's tool call as that agent
 
 ## Out of v1
 

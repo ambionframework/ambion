@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**New package: `@ambionframework/workstation`.** `workstationBackend(options)`
+returns a `BashBackend` over SSH to one remote server, with one Unix account
+for each agent. File calls go over SFTP, and each command runs in its own
+process group, which a timeout or an abort kills. The backend pins the
+server's host key, keeps one client for each agent, and closes a client
+after `idleTimeout` seconds unused, 300 by default. `credentialFor` gives
+the key of each agent and of the host account. See
+[Workstation](docs/workstation.md).
+
 **`WorkspaceFiles` writes its temporary file beside the target.** An
 export lands in `<target>.<random>.part` in the target's folder, and the
 rename onto the target stays on one filesystem. It wrote under `/tmp`
