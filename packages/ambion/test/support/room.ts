@@ -1,7 +1,8 @@
 import type { JournalEntry, JournalOpener } from '@ambionframework/journal';
-import { pi } from '../../../pi/src/index.ts';
+import { type PiOptions, pi } from '../../../pi/src/index.ts';
 import { hostingOf } from '../../src/hosting.ts';
 import {
+	type AgentDefinition,
 	defineAgent,
 	defineHuman,
 	type Message,
@@ -21,6 +22,22 @@ export const assistant = defineAgent({
 });
 
 export const andrei = defineHuman({ name: 'andrei', identity: 'Founder. Owns the room.' });
+
+/**
+ * A Pi agent on the scripted model `scripted/<name>`. A scripted stream
+ * routes on the seat name. The options go to `pi()` and replace the defaults.
+ */
+export function scriptedAgent(
+	name: string,
+	identity = `${name}.`,
+	options: Partial<PiOptions> = {},
+): AgentDefinition {
+	return defineAgent({
+		name,
+		identity,
+		executor: pi({ instructions: 'Answer.', model: `scripted/${name}`, ...options }),
+	});
+}
 
 let unique = 0;
 

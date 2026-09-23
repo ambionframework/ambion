@@ -134,6 +134,31 @@ vitest.live.config.ts test/live/<file>.test.ts`) over the whole suite. Run the
   imports no model library. A scripted Pi stream comes from
   `@ambionframework/pi/testing`.
 
+## Writing tests
+
+- **Run the real thing.** A test starts a real room over a real journal, a
+  real filesystem, or a real SQLite file. The scripted model stream is the
+  one standard stand-in. It replaces the provider, and every other part of
+  the path runs as it does in production.
+- **Mock only what a test cannot run.** `vi.mock` and `vi.spyOn` are for a
+  dependency that needs a network or a key, and for a binding case, where
+  the sentinel rule is the mechanism under test. To record calls, pass a
+  plain function that pushes to an array.
+- **One path, one test.** Before you add a test, find the test that already
+  runs the same path, and add your assertion to it. Delete a test that
+  asserts nothing another test does not assert.
+- **A table for cases that differ only in data.** Use `it.each` or
+  `describe.each` over a list of inputs and expected results. Keep one body.
+- **Shared setup lives in `test/support`.** In the core,
+  `scriptedAgent(name)` defines a seat on the scripted model, and
+  `stopAtEnd(room)` stops a room when the test ends. Use them in place of a
+  local `defineAgent` and a `try`/`finally`.
+- **Coverage holds when tests shrink.** A change that merges or deletes
+  tests keeps every line, branch and function the suite covered before.
+  Run `pnpm exec vitest run --coverage.enabled --coverage.reporter=json` in
+  the package before and after the change, and compare the two
+  `coverage/coverage-final.json` files.
+
 ## Writing documentation
 
 Write all documentation, code comments, and commit messages in **ASD-STE100

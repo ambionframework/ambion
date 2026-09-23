@@ -4,7 +4,8 @@
 	"workspaces": {
 		".": {
 			"entry": ["scripts/{version,publish,release,journal-smoke,projection-envelope}.mjs"],
-			"project": ["scripts/*.mjs"]
+			"project": ["scripts/*.mjs"],
+			"ignoreDependencies": ["@vitest/coverage-v8"]
 		},
 		"packages/*": {
 			"project": ["src/**/*.ts"]
