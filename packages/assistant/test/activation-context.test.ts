@@ -7,9 +7,17 @@ import { defineAgent, defineHuman, type Room, startRoom } from '@ambionframework
 import { pi, piExecution } from '@ambionframework/pi';
 import { quiet, scripted, seat, speak, toolNames } from '@ambionframework/pi/testing';
 import type { Context } from '@earendil-works/pi-ai';
-import { expect, it } from 'vitest';
-import { stopAtEnd } from '../../ambion/test/support/stop.ts';
+import { expect, it, onTestFinished } from 'vitest';
 import { defineAssistant } from '../src/index.ts';
+
+/**
+ * Stop the room when the test ends. The declaration build reads the test
+ * files, so a test here imports no test file of another package.
+ */
+function stopAtEnd(room: Room): Room {
+	onTestFinished(() => room.stop());
+	return room;
+}
 
 const request = 'Bring in writer for R-19 only. Draft two sentences. Do not edit any files.';
 const goal = 'Resolve customer reports within the static prototype scope.';
