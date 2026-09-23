@@ -26,7 +26,8 @@ What is built:
   `visit` ensures presence, and repeated `leave` is harmless.
 - **`SeatObject`** runs one seat. `wake` stores the activation id and sets
   an alarm; `alarm()` claims the lease, reads the view, runs the activation
-  and whatever queued behind it to their end, and releases the lease.
+  and whatever queued behind it to their end, and releases the lease. A
+  second `alarm()` while a run is live in the object returns at once.
   `steer` delivers a recorded message to its exact running activation. It
   writes no activation metadata and sets no alarm. Unread messages remain
   recoverable from the room journal. `cut` stops the activation the room ended. The seat's audit session lives in its own

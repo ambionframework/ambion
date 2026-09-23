@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+**A second seat alarm returns while a run is live.** `SeatObject.alarm()`
+returns at once while a run is live in the object. Before, a second call
+treated the live run as one that an eviction lost. It released the lease
+as `failed`, and the room refused the run's next say. workerd runs one
+alarm at a time, and a test that calls `alarm()` directly, as
+`runDurableObjectAlarm` does, reached this path. An object that was
+evicted mid-activation holds no live run, and its next alarm still
+releases the lost run.
+
+**A stall of the workstation host does not cut the output early.** After
+the exit status, the channel closes 1 second after the last output. When
+that timer fires more than half a second late, the process stalled, and
+output can wait unread behind the stall. `SshEnv` then waits one more
+second, up to the 5-second limit. The view ends with the drain notice only
+when output arrived in the last second before the limit.
+
 **The just-bash backends run `git`.** Each agent's shell has `git` from
 `just-git`, with no configuration from the host. The author of every commit
 is the agent's name, and `git config` does not change it. `git` has no
