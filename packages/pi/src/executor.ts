@@ -29,14 +29,15 @@
  * `activation` ([`agent.md`](../../../docs/agent.md), Execution boundary), and the
  * lease entries and the trace of each one carry that word.
  *
- * **Exchange continuity.** The executor keeps the transcript of the last
- * activation that did not fail, under the id of the activation that began
- * it. The next activation continues that transcript only when the room hands
- * back the same id in `spec.resume`, which it does inside one exchange. It
- * then builds its agent over the transcript and prompts with what the record
- * holds beyond the position the transcript read through. Any other activation
- * drops the transcript and begins a fresh one. The kept transcript lives in
- * this process, so a restart begins a fresh one. Freshness still governs
+ * **Exchange continuity.** The executor keeps a transcript through its last
+ * pass that did not fail, under the id of the activation that began it. An
+ * activation continues a kept transcript only when the room names its id in
+ * `spec.resume`, which it does inside one exchange. It then builds its agent
+ * over the transcript and prompts with what the record holds beyond the
+ * position the transcript read through. Any other activation begins a fresh
+ * transcript. The seat keeps the two latest transcripts: the open exchange
+ * may run beside the summary of the exchange before it. The kept transcripts
+ * live in this process, so a restart begins a fresh one. Freshness still governs
  * speech: `readThrough` starts at the position the kept transcript read, and
  * a say against newer record is refused.
  */
@@ -93,14 +94,18 @@ interface SeatMemory {
 	through: Seq;
 }
 
-/** The holder of a seat's memory. It holds nothing before the first activation that does not fail. */
-interface MemoryHolder {
-	kept?: SeatMemory;
-}
+/**
+ * The transcripts a seat keeps, by id, oldest first. Two cover the open
+ * exchange and the summary of the exchange before it.
+ */
+type MemoryHolder = Map<string, SeatMemory>;
+
+/** How many transcripts a seat keeps. */
+const KEPT = 2;
 
 /** The Pi executor. One instance per seat, for as long as the room runs. */
 export function createPiExecutor(options: PiExecutorOptions): Executor {
-	const memory: MemoryHolder = {};
+	const memory: MemoryHolder = new Map();
 	return {
 		open(activation: ExecutorActivation): ExecutorSession {
 			return new Activation(activation, options, memory);
@@ -138,7 +143,7 @@ export class Activation implements ExecutorSession {
 	constructor(
 		activation: ExecutorActivation,
 		options: PiExecutorOptions,
-		memory: MemoryHolder = {},
+		memory: MemoryHolder = new Map(),
 	) {
 		this.id = activation.id;
 		this.room = activation.room;
@@ -157,9 +162,13 @@ export class Activation implements ExecutorSession {
 	 * ran no pass, or a fresh transcript failed before the seat kept it.
 	 */
 	get session(): HarnessSession | undefined {
-		const kept = this.memory.kept;
-		if (kept === undefined || kept.id !== this.transcript) return undefined;
-		return { harness: 'pi', id: kept.id };
+		const kept = this.kept;
+		return kept === undefined ? undefined : { harness: 'pi', id: kept.id };
+	}
+
+	/** The kept transcript this activation continues or began, when the seat keeps it. */
+	private get kept(): SeatMemory | undefined {
+		return this.transcript === undefined ? undefined : this.memory.get(this.transcript);
 	}
 
 	/** The seq this activation may commit against: the freshness boundary `readThrough`. */
@@ -246,29 +255,34 @@ export class Activation implements ExecutorSession {
 	}
 
 	/**
-	 * On the first pass, continue the kept transcript when the room names it
-	 * in `spec.resume`. Otherwise drop it: this activation begins a fresh one.
+	 * On the first pass, continue the kept transcript that the room names in
+	 * `spec.resume`. Otherwise this activation begins a fresh one.
 	 */
 	private adopt(view: ActivationView): void {
 		if (this.transcript !== undefined) return;
-		const kept = this.memory.kept;
-		if (kept !== undefined && kept.id === sessionToResume(view, 'pi')) {
-			this.context.acknowledgeThrough(kept.through);
-			this.transcript = kept.id;
+		const resume = sessionToResume(view, 'pi');
+		const kept = resume === undefined ? undefined : this.memory.get(resume);
+		if (kept === undefined) {
+			this.transcript = this.id;
 			return;
 		}
-		this.memory.kept = undefined;
-		this.transcript = this.id;
+		this.context.acknowledgeThrough(kept.through);
+		this.transcript = kept.id;
 	}
 
 	/** Keep the transcript for the seat's next activation. A failed pass keeps nothing. */
 	private keep(agent: PiAgent): void {
 		if (this.stopped || this.transcript === undefined) return;
-		this.memory.kept = {
+		this.memory.delete(this.transcript);
+		this.memory.set(this.transcript, {
 			id: this.transcript,
 			messages: [...agent.state.messages],
 			through: this.readThrough,
-		};
+		});
+		for (const id of this.memory.keys()) {
+			if (this.memory.size <= KEPT) break;
+			this.memory.delete(id);
+		}
 	}
 
 	/**
@@ -282,11 +296,17 @@ export class Activation implements ExecutorSession {
 
 	/**
 	 * The message that starts a run. The first pass hands the model the whole
-	 * view. A later pass hands it the delta, and none when nothing is new.
+	 * view. A later pass, and a response over a kept transcript, hand it the
+	 * delta, and none when nothing is new. A closing activation reads the
+	 * whole view.
 	 */
 	private promptFor(input: PassInput): AgentMessage | undefined {
-		const resumed = this.resumedPrompt(input);
-		if (resumed !== undefined) return resumed;
+		const kept = this.kept;
+		if (input.kind === 'view' && kept !== undefined && input.view.spec.purpose.kind === 'respond') {
+			const text = renderDelta(input.view, kept.through);
+			if (text === undefined) return undefined;
+			return this.context.delta(kept.through, input.view.through, text, this.now());
+		}
 		if (input.kind === 'view') {
 			const context = renderActivation(input.view, this.definition).context;
 			return this.context.initial(input.view.through, context, this.now());
@@ -294,20 +314,6 @@ export class Activation implements ExecutorSession {
 		const text = renderDelta(input.view, input.since);
 		if (text === undefined) return undefined;
 		return this.context.delta(input.since, input.view.through, text, this.now());
-	}
-
-	/**
-	 * The prompt of the first pass of an activation over a kept transcript:
-	 * the record beyond what the transcript read. A closing activation and a
-	 * pass with nothing new read the whole view.
-	 */
-	private resumedPrompt(input: PassInput): AgentMessage | undefined {
-		const kept = this.memory.kept;
-		if (input.kind !== 'view' || kept === undefined) return undefined;
-		if (input.view.spec.purpose.kind !== 'respond') return undefined;
-		const text = renderDelta(input.view, kept.through);
-		if (text === undefined) return undefined;
-		return this.context.delta(kept.through, input.view.through, text, this.now());
 	}
 
 	/**
@@ -387,7 +393,7 @@ export class Activation implements ExecutorSession {
 				model: await this.model(modelOf(def.executor), def.name),
 				thinkingLevel: 'off',
 				tools: toolsFor(view, def, binding(this, this.room), () => this.currentView(view)),
-				messages: [...(this.memory.kept?.messages ?? [])],
+				messages: [...(this.kept?.messages ?? [])],
 			},
 		});
 		if (this.stopped) return agent;

@@ -6,6 +6,7 @@
  */
 import type { Message } from '@ambionframework/ambion';
 import type {
+	ActivationSpec,
 	CommitRequest,
 	CommitResult,
 	HarnessSession,
@@ -285,5 +286,59 @@ describe('exchange continuity', () => {
 		expect(session.shouldRefresh?.(Number.MAX_SAFE_INTEGER)).toBe(false);
 		// A cut activation keeps nothing, so it records no transcript.
 		expect(session.session).toBeUndefined();
+	});
+
+	/** One executor for the seat, and a pass of one activation with the spec it names. */
+	function seatOn(room: TwoQuestions) {
+		const seen: Context[] = [];
+		const executor = createPiExecutor({
+			definition: scriptedAgent('product'),
+			model: stubModel,
+			stream: scripted((context) => {
+				seen.push(context);
+				return quiet();
+			}),
+			now: () => 0,
+		});
+		const run = async (id: string, spec: Partial<ActivationSpec> = {}) => {
+			const answer = await room.view(id);
+			if (!('view' in answer)) throw new Error('The room answered stale.');
+			const session = executor.open({ id, room, emit: () => {}, trace: noTrace });
+			const view = { ...answer.view, spec: { ...answer.view.spec, ...spec } };
+			const result = await session.pass({ kind: 'view', view });
+			return { result, session: session.session, readThrough: session.readThrough };
+		};
+		return { seen, run };
+	}
+
+	it('keeps the transcript of a closed exchange for its summary while the next exchange runs', async () => {
+		const room = new TwoQuestions(2, 'none');
+		const { seen, run } = seatOn(room);
+		await run('message:1:product:1');
+		await run('message:2:product:1');
+		const summary = {
+			kind: 'summarize',
+			exchange: 1,
+			person: 'andrei',
+			people: ['andrei'],
+			through: 1,
+		} as const;
+		const closing = await run('closed:1:product:1', { purpose: summary, resume: began(1) });
+		expect(closing.session).toEqual(began(1));
+		// The closing activation continued the first transcript: it holds the first answer.
+		expect(seen.at(-1)?.messages.length).toBeGreaterThan(1);
+		const next = await run('message:2:product:2', { resume: began(2) });
+		expect(next.session).toEqual(began(2));
+	});
+
+	it('starts no run for a continued transcript with nothing new, and reads through the view', async () => {
+		const room = new TwoQuestions(1, 'none');
+		const { seen, run } = seatOn(room);
+		await run('message:1:product:1');
+		const again = await run('message:1:product:2', { resume: began(1) });
+		expect(again.result).toEqual({ failed: false });
+		expect(seen).toHaveLength(1);
+		expect(again.readThrough).toBe(1);
+		expect(again.session).toEqual(began(1));
 	});
 });

@@ -37,14 +37,14 @@ declare const RUNTIME: unique symbol;
 export interface Runtime {
 	readonly [RUNTIME]: true;
 	readonly clock: Clock;
-	/** The host's native storage. The runtime derives its room and Pi views from it. */
+	/** The host's native storage. The runtime derives its room journals and traces from it. */
 	readonly storage: JournalOpener;
 }
 
 /**
  * What the runtime hands an execution composition: the clock, the host's
  * native storage, the limits, and the transport. The storage lets an
- * executor keep its own audit beside the record.
+ * executor keep its trace beside the record.
  */
 export interface ExecutionHost {
 	readonly clock: Clock;

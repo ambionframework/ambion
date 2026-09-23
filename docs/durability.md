@@ -252,8 +252,9 @@ new id. The activation does not fail.
 - **The Pi id names the activation that began the transcript.** The
   transcript lives in the process, so a restart loses it.
 - **The Claude and Codex ids come from the SDK.** The SDK stores the
-  session on the local disk. A restart on the same disk resumes it. A
-  Cloudflare Durable Object has no such store and starts fresh.
+  session on the local disk. A restart on the same disk resumes it.
+- **A Cloudflare seat keeps a Pi transcript while its object stays in
+  memory.** An eviction loses it, and the next activation starts fresh.
 
 Cancellation adds the `cancel` entry kind. Older runtimes must not resume a
 journal that contains cancellation entries, because they do not interpret

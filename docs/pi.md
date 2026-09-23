@@ -209,13 +209,18 @@ narrowest reach that the job needs, and use a workspace backend for files.
 [Executors](executors.md#exchange-continuity) states the rule, the recorded
 session, and the fresh start.
 
-**The executor keeps the transcript of the last activation that did not
+**The executor keeps a transcript through its last pass that did not
 fail.** The id of the activation that began the transcript names it, and
 the release records `{ harness: 'pi', id }`. An activation continues the
 transcript only when `spec.resume` names that id. Its agent starts over the
 transcript, and its first prompt is the delta: the record beyond the
-position the transcript read through. A closing activation reads the whole
-view. `readThrough` starts at the position the transcript read.
+position the transcript read through. A delta with no message starts no
+run. A closing activation reads the whole view. `readThrough` starts at
+the position the transcript read.
+
+**The seat keeps the two latest transcripts.** The open exchange can run
+beside the summary of the exchange before it, and each continues its own
+transcript.
 
 **The transcript lives in the process.** Pi writes no transcript to the
 storage. A restart loses it, and the first activation after the restart

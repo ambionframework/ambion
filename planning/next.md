@@ -222,8 +222,9 @@ entry. The fix is not on main. PR #171 branches from a history that main
 no longer shares, so its one commit goes onto main as a new change. Land
 it before the rest, because the rest edits the same code.
 
-- One best-effort record path and one `reportError` in `log.ts`, for
-  `audit.ts:133` and `mirror.ts:136`.
+- One best-effort record path and one `reportError` in
+  `workspace/src/log.ts`, for the workspace audit log (`audit.ts:133`) and
+  `mirror.ts:136`.
 - One rotated-file match beside `rotatedName` (`log.ts:45`), for
   `isLogFile` (`mirror.ts:100`).
 - One import-free Markdown table module for `sql-tool.ts:160` and
