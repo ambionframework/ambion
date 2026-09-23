@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="650" viewBox="0 0 1000 650" role="img" aria-labelledby="title desc">
+  <title id="title">What an activation reads, and what survives</title>
+  <desc id="desc">A room over two exchanges, on a time axis. Entries in the room journal: 1, a person asks. Agents A and B activate and read the record. 2, A says. 3, B says to A, which wakes A again. A's second activation resumes the harness session of its first and reads only entries 2 and 3. 4, A says. 5, the exchange closes. 6, a summary. 7, the person asks again, which opens exchange 2. A's third activation starts a fresh session and reads the record, with the summary in place of exchange 1. 8, A says. B stays silent in exchange 2. The record is durable and a restart replays it. The trace of each activation is stored for people to read. The harness session is a cache for one exchange: Claude and Codex keep it on the local disk and Pi keeps it in the process. When it is lost, the next activation starts fresh from the record.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#a3aba8"/></marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#6cc4bb"/></marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.35"/></filter>
+    <style>
+      .sans { font-family: Inter, "IBM Plex Sans", system-ui, sans-serif; }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+      .ink { fill: #e8e9e4; } .dim { fill: #a3aba8; } .teal { fill: #6cc4bb; } .code { fill: #a4b6f2; }
+      .n { font-size: 16px; font-weight: 700; } .s { font-size: 14px; } .x { font-size: 13px; }
+      .flow { fill: none; stroke: #a3aba8; stroke-width: 2; }
+      .flow-teal { fill: none; stroke: #6cc4bb; stroke-width: 2; stroke-dasharray: 6 5; }
+      .guide { stroke: #384143; stroke-width: 1.5; stroke-dasharray: 2 6; }
+      .split { stroke: #a3aba8; stroke-width: 1.5; stroke-dasharray: 6 6; }
+    </style>
+  </defs>
+  <rect width="1000" height="650" rx="20" fill="#171c1d"/>
+  <text x="24" y="70" class="sans ink n">Person</text>
+  <text x="24" y="90" class="sans dim s">asks, reads</text>
+  <text x="24" y="140" class="sans ink n">Room</text>
+  <text x="24" y="160" class="sans dim s">the journal</text>
+  <text x="24" y="238" class="sans ink n">Agent A</text>
+  <text x="24" y="258" class="sans dim s">Pi</text>
+  <text x="24" y="328" class="sans ink n">Agent B</text>
+  <text x="24" y="348" class="sans dim s">Claude Agent SDK</text>
+  <line x1="190" y1="70" x2="976" y2="70" class="guide"/>
+  <line x1="190" y1="238" x2="976" y2="238" class="guide"/>
+  <line x1="190" y1="328" x2="976" y2="328" class="guide"/>
+  <line x1="744" y1="28" x2="744" y2="392" class="split"/>
+  <text x="200" y="36" class="sans dim x" font-weight="700" letter-spacing="1.2">EXCHANGE 1</text>
+  <text x="756" y="36" class="sans dim x" font-weight="700" letter-spacing="1.2">EXCHANGE 2</text>
+  <circle cx="210" cy="70" r="7" fill="#e39a78"/>
+  <path d="M210 78 V112" class="flow" marker-end="url(#arrow)"/>
+  <circle cx="812" cy="70" r="7" fill="#e39a78"/>
+  <path d="M812 78 V112" class="flow" marker-end="url(#arrow)"/>
+  <text x="222" y="60" class="mono code x">visit.send()</text>
+  <text x="824" y="60" class="mono code x">visit.send()</text>
+  <g filter="url(#shadow)">
+    <rect x="190" y="116" width="786" height="64" rx="12" fill="#20282a" stroke="#e8e9e4" stroke-width="1.5"/>
+  </g>
+  <circle cx="210" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="210" y="144" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">1</text>
+  <text x="228" y="145" class="sans ink s">ask</text>
+  <circle cx="320" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="320" y="144" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">2</text>
+  <text x="338" y="145" class="sans ink s">A says</text>
+  <circle cx="420" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="420" y="144" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">3</text>
+  <text x="438" y="145" class="sans ink s">B → A</text>
+  <text x="438" y="167" class="sans dim s">wakes A</text>
+  <circle cx="528" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="528" y="144" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">4</text>
+  <text x="546" y="145" class="sans ink s">A says</text>
+  <circle cx="614" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="614" y="144" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">5</text>
+  <text x="632" y="145" class="sans ink s">close</text>
+  <text x="632" y="167" class="sans dim s">quiet</text>
+  <circle cx="697" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="697" y="144" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">6</text>
+  <text x="715" y="145" class="sans ink s">summary</text>
+  <text x="715" y="167" class="sans dim s">of 1–5</text>
+  <circle cx="812" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="812" y="144" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">7</text>
+  <text x="830" y="145" class="sans ink s">ask</text>
+  <circle cx="905" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="905" y="144" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">8</text>
+  <text x="923" y="145" class="sans ink s">A says</text>
+  <path d="M226 180 V221" class="flow" marker-end="url(#arrow)"/>
+  <path d="M436 180 V221" class="flow" marker-end="url(#arrow)"/>
+  <path d="M826 180 V221" class="flow" marker-end="url(#arrow)"/>
+  <path d="M200 180 V311" class="flow" marker-end="url(#arrow)"/>
+  <path d="M784 180 V311" class="flow" marker-end="url(#arrow)"/>
+  <path d="M310 223 V184" class="flow" marker-end="url(#arrow)"/>
+  <path d="M518 223 V184" class="flow" marker-end="url(#arrow)"/>
+  <path d="M900 223 V184" class="flow" marker-end="url(#arrow)"/>
+  <path d="M396 313 V184" class="flow" marker-end="url(#arrow)"/>
+  <rect x="226" y="223" width="92" height="30" rx="15" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
+  <text x="240" y="243" class="sans ink s">reads 1</text>
+  <rect x="436" y="223" width="90" height="30" rx="15" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
+  <text x="450" y="243" class="sans ink s">reads 2–3</text>
+  <rect x="826" y="223" width="86" height="30" rx="15" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
+  <text x="840" y="243" class="sans ink s">reads 6–7</text>
+  <rect x="200" y="313" width="204" height="30" rx="15" fill="#243a20" stroke="#86cc70" stroke-width="1.5"/>
+  <text x="214" y="333" class="sans ink s">reads 1, steered 2</text>
+  <rect x="784" y="313" width="70" height="30" rx="15" fill="#3d321c" stroke="#e4b060" stroke-width="1.5"/>
+  <text x="798" y="333" class="sans ink s">silent</text>
+  <rect x="226" y="262" width="388" height="8" rx="4" fill="#36615d"/>
+  <line x1="318" y1="266" x2="436" y2="266" stroke="#6cc4bb" stroke-width="2" stroke-dasharray="4 4"/>
+  <rect x="226" y="262" width="92" height="8" rx="4" fill="#6cc4bb"/>
+  <rect x="436" y="262" width="90" height="8" rx="4" fill="#6cc4bb"/>
+  <rect x="826" y="262" width="86" height="8" rx="4" fill="#6cc4bb"/>
+  <text x="420" y="290" class="sans teal s">activation 2 resumes the session</text>
+  <text x="836" y="290" class="sans teal s">a fresh session</text>
+  <rect x="200" y="352" width="414" height="8" rx="4" fill="#36615d"/>
+  <rect x="200" y="352" width="204" height="8" rx="4" fill="#6cc4bb"/>
+  <rect x="784" y="352" width="70" height="8" rx="4" fill="#6cc4bb"/>
+  <text x="414" y="380" class="sans teal s">kept, not needed again</text>
+  <text x="734" y="380" text-anchor="end" class="sans dim x">no session crosses</text>
+  <path d="M190 404 H976" class="flow" stroke-opacity="0.5" marker-end="url(#arrow)"/>
+  <text x="976" y="424" text-anchor="end" class="sans dim s">time</text>
+  <g filter="url(#shadow)">
+    <rect x="24" y="446" width="304" height="176" rx="12" fill="#20282a" stroke="#e8e9e4" stroke-width="1.5"/>
+  </g>
+  <text x="42" y="478" class="sans ink n">The record · durable</text>
+  <text x="42" y="510" class="sans ink s">Messages, closes, summaries, and the</text>
+  <text x="42" y="534" class="sans ink s">lease entries. A lease entry names its</text>
+  <text x="42" y="558" class="sans ink s">session. Every activation reads the</text>
+  <text x="42" y="582" class="sans ink s">record. A restart replays it.</text>
+  <g filter="url(#shadow)">
+    <rect x="348" y="446" width="304" height="176" rx="12" fill="#20282a" stroke="#384143" stroke-width="1.5"/>
+  </g>
+  <text x="366" y="478" class="sans ink n">The trace · stored for people</text>
+  <text x="366" y="510" class="sans ink s">The steps of each activation: thinking,</text>
+  <text x="366" y="534" class="sans ink s">tool calls and results, usage. Writes</text>
+  <text x="366" y="558" class="sans ink s">are best effort. A person reads it.</text>
+  <text x="366" y="582" class="sans ink s">No model reads it.</text>
+  <g filter="url(#shadow)">
+    <rect x="672" y="446" width="304" height="176" rx="12" fill="#1c2e2d" stroke="#36615d" stroke-width="1.5"/>
+  </g>
+  <text x="690" y="478" class="sans teal n">The session · a cache</text>
+  <text x="690" y="510" class="sans ink s">What the model saw and did, for one</text>
+  <text x="690" y="534" class="sans ink s">exchange. Claude, Codex: local disk.</text>
+  <text x="690" y="558" class="sans ink s">Pi: the process. When it is lost, the</text>
+  <text x="690" y="582" class="sans ink s">next activation reads the record.</text>
+</svg>

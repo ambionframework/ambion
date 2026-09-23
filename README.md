@@ -123,6 +123,25 @@ builds its team the same way and runs it in a terminal.
 **An exchange runs from `visit.send()` to `waitForClose()`.** A room started
 with `summary` adds a closing summary, and `waitForSummary()` returns it.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-context-dark.svg">
+  <img alt="A room over two exchanges on a time axis. A person asks, entry 1. Agents A and B read the record. A says, entry 2. B says to A, entry 3, which wakes A again. A's second activation resumes the harness session of its first and reads only entries 2 and 3. A says, entry 4. The exchange closes, entry 5, and a summary follows, entry 6. The person asks again, entry 7, which opens exchange 2. A's third activation starts a fresh session and reads the summary and entry 7. B stays silent. The record is durable. The trace is stored for people. The session is a cache for one exchange." src="docs/assets/ambion-context.svg">
+</picture>
+
+**The record is durable, and every activation reads it.** It holds every
+message, close, summary and lease entry. A restart replays it. A summary
+replaces the messages it covers in later prompts.
+
+**A seat keeps its harness session for one exchange.** A later activation
+of the seat in the same exchange resumes the session and reads only the new
+entries. The first activation of the seat in the next exchange starts
+fresh. No session crosses an exchange.
+
+**The session is a cache.** Claude and Codex keep it on the local disk, and
+Pi keeps it in the process. When it is lost, the next activation reads the
+record and starts fresh. The trace keeps the steps of each activation for
+people to read. See [Exchange continuity](docs/executors.md#exchange-continuity).
+
 ## What you get
 
 - **A record that answers for itself.** The journal holds every message and
