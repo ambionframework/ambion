@@ -6,9 +6,9 @@
  * follows it.
  */
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { pi, piExecution } from '../../pi/src/index.ts';
+import { piExecution } from '../../pi/src/index.ts';
 import { inProcessTransport, runningRoom } from '../src/hosting.ts';
-import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
+import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import { foldRoom } from '../src/room/fold.ts';
@@ -17,9 +17,9 @@ import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
 import { fakeClock } from '../src/testing.ts';
 import { bindings } from './support/binding.ts';
-import { closedExchange, roomName, waitForRoom } from './support/room.ts';
+import { closedExchange, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
-import { memory } from './support/storage.ts';
+import { stopAtEnd } from './support/stop.ts';
 
 vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
 	const { mocked } = await import('./support/binding.ts');
@@ -198,13 +198,22 @@ describe('the room runs the verified rules', () => {
 		expect(foldRoom([composition, person, question, cancel], options).pending).toEqual([]);
 	});
 
-	it('grants an activation only what activationGrant answers', () => {
-		const claim = { type: 'claim', id, expiry: 60_000, deadline: 600_000 } as const;
-		bind.once(rules.activationGrant, undefined);
-		expect(decide(asked(), claim, now)).toMatchObject({
+	it.each([
+		['what activationGrant answers', () => bind.once(rules.activationGrant, undefined), asked, id],
+		['when wellFormed admits its id', () => bind.once(rules.wellFormed, false), asked, id],
+		[
+			'for the close closeFor finds',
+			() => bind.once(rules.closeFor, undefined),
+			() => foldRoom([writerNamed, person, question, closed3], options),
+			'closed:3:product:1',
+		],
+	])('grants an activation only %s', (_name, refuse, state, activation) => {
+		const claim = { type: 'claim', id: activation, expiry: 60_000, deadline: 600_000 } as const;
+		refuse();
+		expect(decide(state(), claim, now)).toMatchObject({
 			refusal: { reason: expect.stringMatching(/no room grant/) },
 		});
-		expect(decide(asked(), claim, now)).toMatchObject({ event: { kind: 'lease' } });
+		expect(decide(state(), claim, now)).toMatchObject({ event: { kind: 'lease' } });
 	});
 
 	it('numbers the next attempt as nextActivationId answers', () => {
@@ -230,16 +239,7 @@ describe('the room runs the verified rules', () => {
 	});
 
 	it('owes a summary only when summaryVerdict says the close owes one', () => {
-		const named: Entry = {
-			...composition,
-			body: { ...composition.body, summary: 'product' },
-		};
-		const close: Entry = {
-			kind: 'close',
-			seq: 4,
-			body: { owner: 'priya', from: 3, through: 3, at, summary: 'product' },
-		};
-		const closed = () => foldRoom([named, person, question, close], options);
+		const closed = () => foldRoom([writerNamed, person, question, closed3], options);
 		bind.once(rules.summaryVerdict, { status: 'failed' });
 		expect(closed().owed).toEqual([]);
 		expect(closed().owed).toMatchObject([{ writer: 'product', through: 3 }]);
@@ -253,12 +253,6 @@ describe('the room runs the verified rules', () => {
 	});
 
 	it('stamps a closing commit as the rules answer', () => {
-		const named: Entry = { ...composition, body: { ...composition.body, summary: 'product' } };
-		const close: Entry = {
-			kind: 'close',
-			seq: 4,
-			body: { owner: 'priya', from: 3, through: 3, at, summary: 'product' },
-		};
 		const drafting: Entry = {
 			kind: 'lease',
 			seq: 5,
@@ -270,7 +264,7 @@ describe('the room runs the verified rules', () => {
 				readThrough: 4,
 			},
 		};
-		const state = foldRoom([named, person, question, close, drafting], options);
+		const state = foldRoom([writerNamed, person, question, closed3, drafting], options);
 		const commit: CommitRequest = {
 			activation: 'closed:3:product:1',
 			key: 'summary',
@@ -320,16 +314,6 @@ describe('the room runs the verified rules', () => {
 		expect(decide(state, late, now)).toMatchObject({ refusal: { category: 'refused' } });
 	});
 
-	it('grants an activation only when wellFormed admits its id', () => {
-		const state = asked();
-		const claim = { type: 'claim', id, expiry: 60_000, deadline: 600_000 } as const;
-		bind.once(rules.wellFormed, false);
-		expect(decide(state, claim, now)).toMatchObject({
-			refusal: { reason: expect.stringMatching(/no room grant/) },
-		});
-		expect(decide(state, claim, now)).toMatchObject({ event: { kind: 'lease' } });
-	});
-
 	it('publishes a summary only when coversExchange says it covers', () => {
 		const published: Entry = {
 			kind: 'message',
@@ -350,21 +334,6 @@ describe('the room runs the verified rules', () => {
 		expect(foldRoom(entries, options).owed).toHaveLength(1);
 	});
 
-	it('grants a closing activation only for the close closeFor finds', () => {
-		const state = foldRoom([writerNamed, person, question, closed3], options);
-		const claim = {
-			type: 'claim',
-			id: 'closed:3:product:1',
-			expiry: 60_000,
-			deadline: 600_000,
-		} as const;
-		bind.once(rules.closeFor, undefined);
-		expect(decide(state, claim, now)).toMatchObject({
-			refusal: { reason: expect.stringMatching(/no room grant/) },
-		});
-		expect(decide(state, claim, now)).toMatchObject({ event: { kind: 'lease' } });
-	});
-
 	it('closes only when exchangeLive says nothing of the exchange is live', () => {
 		const quiet = foldRoom([writerNamed, person, quietQuestion], options);
 		expect(reconcile(quiet).events).toMatchObject([
@@ -375,50 +344,38 @@ describe('the room runs the verified rules', () => {
 	});
 
 	it('closes on a later pass when admitsClose refuses once', async () => {
-		const opened = await memory.open();
 		const runtime = createRuntime({
-			storage: opened.storage,
 			clock: fakeClock(),
 			transport: inProcessTransport(),
 			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
-		const room = await startRoom({
-			name: roomName('binding-close'),
-			runtime,
-			agents: [
-				defineAgent({
-					name: 'product',
-					identity: 'Product.',
-					executor: pi({ instructions: 'Answer.', model: 'scripted/product' }),
-				}),
-			],
-			execution: piExecution({ stream: scripted(() => quiet()) }),
-		});
-		try {
-			const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Person.' }));
-			const first = await visit.send({ text: 'Question.' });
-			const peer = runningRoom(runtime, room.name);
-			if (peer === undefined) throw new Error('The room is absent.');
-			const activation = `message:${first.from}:product:1`;
-			expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
-			const request: CommitRequest = {
-				activation,
-				key: 'c',
-				readThrough: first.from,
-				intent: { kind: 'said', text: 'Answer.' },
-			};
-			expect(await peer.commit(request)).toMatchObject({ committed: { text: 'Answer.' } });
-			// A refused close leaves the exchange open. A later pass asks admitsClose
-			// again, and the close lands.
-			bind.once(rules.admitsClose, false);
-			await peer.lease({ activation, operation: 'release', reason: 'released', readThrough: 4 });
-			await visit.send({ text: 'Again.' });
-			await waitForRoom(room);
-			expect(closedExchange(room, first.from)).toBeDefined();
-			expect(vi.mocked(rules.admitsClose).mock.calls.length).toBeGreaterThan(1);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('binding-close'),
+				runtime,
+				agents: [scriptedAgent('product', 'Product.')],
+			}),
+		);
+		const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Person.' }));
+		const first = await visit.send({ text: 'Question.' });
+		const peer = runningRoom(runtime, room.name);
+		if (peer === undefined) throw new Error('The room is absent.');
+		const activation = `message:${first.from}:product:1`;
+		expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
+		const request: CommitRequest = {
+			activation,
+			key: 'c',
+			readThrough: first.from,
+			intent: { kind: 'said', text: 'Answer.' },
+		};
+		expect(await peer.commit(request)).toMatchObject({ committed: { text: 'Answer.' } });
+		// A refused close leaves the exchange open. A later pass asks admitsClose
+		// again, and the close lands.
+		bind.once(rules.admitsClose, false);
+		await peer.lease({ activation, operation: 'release', reason: 'released', readThrough: 4 });
+		await visit.send({ text: 'Again.' });
+		await waitForRoom(room);
+		expect(closedExchange(room, first.from)).toBeDefined();
+		expect(vi.mocked(rules.admitsClose).mock.calls.length).toBeGreaterThan(1);
 	});
 });

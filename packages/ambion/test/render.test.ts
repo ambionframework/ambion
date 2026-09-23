@@ -1,35 +1,36 @@
 /**
- * What a participant reads of one message. `renderLine` is pure, so every
- * test here hands it a value.
- *
- * What the whole record reads like inside a running room is covered by the
- * context tests; this file holds the one line.
+ * What a participant reads of one message, of the omitted record, of the
+ * delta a later pass reads, and the URIs a prompt states. The renderers are
+ * pure, so every test here hands them a value.
  */
 import { describe, expect, it } from 'vitest';
-import { pi } from '../../pi/src/index.ts';
-import { renderActivation, renderLine, renderRecord } from '../src/execution/render.ts';
+import {
+	renderActivation,
+	renderDelta,
+	renderLine,
+	renderRecord,
+} from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
-import { defineAgent, messageUri, roomUri } from '../src/index.ts';
+import { messageUri, roomUri } from '../src/index.ts';
 import type { Message } from '../src/types.ts';
+import { scriptedAgent } from './support/room.ts';
+
+const at = '2026-01-01T09:00:00.000Z';
 
 describe('the omission line', () => {
-	const at = '2026-01-01T09:00:00.000Z';
 	const record: Message[] = [
 		{ kind: 'said', seq: 5, at, from: 'priya', text: 'Newer.' },
 		{ kind: 'said', seq: 6, at, from: 'worker', text: 'Reply.' },
 	];
 	const now = Date.parse(at);
 
-	it('leads the record with a count of the earlier messages', () => {
+	it('leads the record with a count of the earlier messages, before the exchange divider', () => {
 		expect(renderRecord(record, [], now, 6, 3).split('\n')[0]).toBe(
 			'── 3 earlier messages not shown ──',
 		);
 		expect(renderRecord(record, [], now, undefined, 1).split('\n')[0]).toBe(
 			'── 1 earlier message not shown ──',
 		);
-	});
-
-	it('shows the line before the exchange divider', () => {
 		const lines = renderRecord(record, [], now, 5, 2).split('\n');
 		expect(lines[0]).toContain('2 earlier messages');
 		expect(lines[1]).toContain('Current exchange begins here');
@@ -42,8 +43,6 @@ describe('the omission line', () => {
 });
 
 describe('one line of the record', () => {
-	const at = '2026-01-01T09:00:00.000Z';
-
 	it('reads a say as its author, and names who it was directed at', () => {
 		const said: Message = { kind: 'said', seq: 2, at, from: 'priya', text: 'Is the pour on?' };
 		expect(renderLine(said)).toBe('[priya] Is the pour on?');
@@ -102,11 +101,7 @@ describe('one line of the record', () => {
 });
 
 describe('the URIs a prompt states', () => {
-	const worker = defineAgent({
-		name: 'worker',
-		identity: 'Works.',
-		executor: pi({ instructions: 'Work.', model: 'scripted/worker' }),
-	});
+	const worker = scriptedAgent('worker');
 	const spec = { id: 'a', seat: 'worker', attempt: 1 };
 	const context = { name: 'site', now: 0, participants: [], messages: [], reserve: [] };
 
@@ -140,5 +135,25 @@ describe('the URIs a prompt states', () => {
 		expect(`${rendered.mechanism}${rendered.agent}${rendered.context}`).toContain(
 			messageUri('site', 4),
 		);
+	});
+});
+
+describe('renderDelta', () => {
+	const messages: Message[] = [
+		{ kind: 'said', seq: 1, at, from: 'priya', text: 'Old.' },
+		{ kind: 'said', seq: 2, at, from: 'worker', to: 'priya', text: 'Newer.', refs: ['file:///a'] },
+		{ kind: 'arrived', seq: 3, at, subject: 'sam' },
+	];
+	const view: ActivationView = {
+		spec: { id: 'a', seat: 'worker', attempt: 1, purpose: { kind: 'respond', message: 1 } },
+		through: 3,
+		context: { name: 'site', now: 0, participants: [], messages, reserve: [] },
+	};
+
+	it('prefixes each later message with [new], in order, and returns nothing past the end', () => {
+		expect(renderDelta(view, 1)).toBe(
+			'[new] [worker → priya] Newer. (refs: file:///a)\n[new] · sam arrived',
+		);
+		expect(renderDelta(view, 3)).toBeUndefined();
 	});
 });

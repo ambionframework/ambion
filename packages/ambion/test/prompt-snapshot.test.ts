@@ -1,10 +1,11 @@
 /**
  * The rendered prompt of one ordinary and one closing activation, part by
  * part. The snapshots put the prompt text in the diff of every change to it.
+ * The speaking policy of a definition replaces the default in the agent part.
  */
 import { describe, expect, it } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
-import { renderActivation } from '../src/execution/render.ts';
+import { DEFAULT_GUIDANCE, renderActivation } from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
 import { defineAgent } from '../src/index.ts';
 import type { Message } from '../src/types.ts';
@@ -72,7 +73,7 @@ describe('the rendered prompt', () => {
 		expect(read).toMatchSnapshot('context');
 	});
 
-	it('keeps the mechanism the same for every purpose and definition', () => {
+	it('keeps the mechanism the same for every purpose and definition, and renders the speaking policy', () => {
 		const other = defineAgent({
 			name: 'other',
 			identity: 'Other.',
@@ -83,5 +84,9 @@ describe('the rendered prompt', () => {
 		expect(renderActivation(respond, other).mechanism).toBe(mechanism);
 		for (const text of ['worker', 'site', 'Is the pour on?', 'Work carefully.'])
 			expect(mechanism).not.toContain(text);
+		expect(renderActivation(respond, worker).agent).toContain(DEFAULT_GUIDANCE);
+		const policy = renderActivation(respond, other).agent;
+		expect(policy).toContain('Be brief.');
+		expect(policy).not.toContain(DEFAULT_GUIDANCE);
 	});
 });
