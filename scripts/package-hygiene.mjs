@@ -159,24 +159,29 @@ export function checkEngines(manifests) {
 	return [finding('engines', '(all)', `engines.node differs: ${list.join(', ')}.`)];
 }
 
-/** The package name of a bare import specifier, or undefined for a relative path or a scheme. */
+/** The package name of a bare import specifier, or undefined for a path, a scheme, or a `#` import. */
 function packageOf(specifier) {
-	if (/^[./]/.test(specifier) || /^[a-z][a-z0-9+.-]*:/.test(specifier)) return undefined;
+	if (/^[./#]/.test(specifier) || /^[a-z][a-z0-9+.-]*:/.test(specifier)) return undefined;
 	const parts = specifier.split('/');
 	return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
 }
 
 /** A static import or export statement, a side-effect import, or a dynamic import. */
 const SPECIFIER =
-	/(?:^\s*(?:import|export)\b[^'"]*?\bfrom\s*|^\s*import\s*|\bimport\s*\(\s*)["']([^"']+)["']/gm;
-const INLINED =
-	/^\/\/#region .*node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?((?:@[^/]+\/)?[^/]+)\//gm;
+	/(?:^\s*(?:import|export)\b[^'"();=]*?\bfrom\s*|^\s*import\s*|\bimport\s*\(\s*)["']([^"']+)["']/gm;
+/** A block comment, or a line that holds only a comment. */
+const COMMENT = /\/\*[\s\S]*?\*\/|^\s*\/\/.*$/gm;
+/** A region of bundled code whose source lies outside the package's own `src`. */
+const OUTSIDE = /^\/\/#region (?!src\/)(\S+)/gm;
+/** The package that a node_modules path names. */
+const MODULE = /node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?((?:@[^/]+\/)?[^/]+)\//;
 
 /**
  * (g) A built file imports only the package itself and what the manifest
  * declares in dependencies, peerDependencies, or optionalDependencies. A
- * built file inlines no code from node_modules. The bundler inlines a
- * devDependency, so an undeclared runtime import shows as one of the two.
+ * built file holds no code from outside the package's own `src`. tsdown
+ * inlines a package that the manifest declares only in devDependencies.
+ * Thus a runtime import of such a package gives an inlined region.
  */
 export function checkDist(manifest, files) {
 	const declared = new Set([
@@ -193,8 +198,8 @@ export function checkDist(manifest, files) {
 				`${path} imports ${dependency}, which is not a dependency.`,
 			);
 		}
-		for (const [, dependency] of text.matchAll(INLINED)) {
-			found.set(`inline ${dependency}`, `${path} inlines ${dependency} from node_modules.`);
+		for (const source of inlinedSources(text)) {
+			found.set(`inline ${source}`, `${path} inlines ${source}.`);
 		}
 	}
 	return [...found.values()].map((message) => finding('dist', manifest.name, message));
@@ -202,14 +207,23 @@ export function checkDist(manifest, files) {
 
 /** The packages a built file imports that are not in `declared`. */
 function undeclaredImports(text, declared) {
-	return [...text.matchAll(SPECIFIER)]
+	return [...text.replace(COMMENT, '').matchAll(SPECIFIER)]
 		.map(([, specifier]) => packageOf(specifier))
 		.filter((dependency) => dependency !== undefined && !declared.has(dependency));
 }
 
-/** Every JavaScript and declaration file of a built dist, with its text. */
+/** What each inlined region holds: a node_modules package by name, or else its path. */
+function inlinedSources(text) {
+	return [...text.matchAll(OUTSIDE)].map(([, path]) => {
+		const module = path.match(MODULE);
+		return module ? `${module[1]} from node_modules` : path;
+	});
+}
+
+/** Every JavaScript and declaration file of a built dist, with its text. No dist gives none. */
 async function distFiles(dir) {
 	const root = join(dir, 'dist');
+	if (!existsSync(root)) return [];
 	const names = (await readdir(root)).filter((file) => /\.d?\.?m?[jt]s$/.test(file));
 	return Promise.all(
 		names.map(async (file) => ({

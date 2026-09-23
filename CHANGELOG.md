@@ -16,7 +16,8 @@ sessions supplies the one copy that the host and the package share.
 
 **Package hygiene reads the built files.** `pnpm run check:packages` fails on
 an import in `dist` of a package that the manifest does not declare as a
-runtime or peer dependency, and on code inlined from `node_modules`.
+runtime or peer dependency. It also fails on bundled code from outside the
+package's own `src`.
 
 **New package: `@ambionframework/workstation`.** `workstationBackend(options)`
 returns a `BashBackend` over SSH to one remote server, with one Unix account
