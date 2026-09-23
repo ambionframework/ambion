@@ -432,9 +432,10 @@ implements them.
 **`files` is the agent's view of the bash backend.** `WorkspaceFiles` has
 one method, `writeFile(path, chunks, context)`. It resolves `~` and a
 relative path under the agent's home, creates missing directories, and
-writes the chunks to a temporary file that it then renames onto `path`. It
-gives the absolute path. Each call is one operation on the bash owner, as
-the calling agent.
+writes the chunks to a temporary file beside `path`, which it then renames
+onto `path`. The rename stays in one folder, so it stays on one
+filesystem. It gives the absolute path. Each call is one operation on the
+bash owner, as the calling agent.
 
 **`run` takes `maxRows` and an optional `export` path.** An `ok` outcome
 holds the last statement's `columns`, its first `maxRows` rows, its

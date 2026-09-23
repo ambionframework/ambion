@@ -1,11 +1,9 @@
 # The workstation
 
-**This page is a design. No package implements it yet.** The
-[backlog](../planning/backlog.md#designs-with-a-shape) names the condition
-that schedules it. The design builds on the workspace interface that
-[Workspace](workspace.md) states. Every name below that the workspace
-package does not export is a proposal, and it changes if the review
-changes it.
+**`@ambionframework/workstation` implements this page.** It builds on the
+workspace interface that [Workspace](workspace.md) states. The
+[package guide](../packages/workstation/README.md) shows how to prepare a
+server.
 
 **A workstation is one remote server with one Unix account for each
 agent.** A workspace connects to it over SSH, and each agent logs in with
@@ -216,15 +214,17 @@ entry's helpers supply the rest:
 Pi's `NodeExecutionEnv` implements the same methods on a local machine,
 and `SshEnv` follows its behavior.
 
-**SFTP needs five adjustments.** `workspaceConformance` checks each row.
+**SFTP needs six adjustments.** `workspaceConformance` checks most rows,
+and the package's own tests check the rest.
 
-| Method                | SFTP gap                                                                                          | `SshEnv` does                                                                 |
-| --------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Every file method     | OpenSSH answers `ENOTDIR` as `NO_SUCH_FILE`, and `EISDIR`, `EEXIST`, and `ENOTEMPTY` as `FAILURE` | On either status, one `lstat` picks the Pi code, as the next paragraph states |
-| `renameFile`          | SFTP v3 refuses to rename onto a file                                                             | Calls `posix-rename@openssh.com`; a server without it gets a plain `RENAME`   |
-| `createDir`           | SFTP makes one directory per request, and an existing one answers `FAILURE`                       | Makes each missing component in order; `lstat` finds a directory that exists  |
-| `remove`              | SFTP removes one entry per request                                                                | Runs `rm -rf --` through `exec` for a recursive call                          |
-| `fileInfo`, `listDir` | SFTP gives `mtime` in seconds                                                                     | Multiplies it by 1000 for `mtimeMs`; `readdir` gives each entry's attributes  |
+| Method                    | SFTP gap                                                                                          | `SshEnv` does                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Every file method         | OpenSSH answers `ENOTDIR` as `NO_SUCH_FILE`, and `EISDIR`, `EEXIST`, and `ENOTEMPTY` as `FAILURE` | On either status, one `lstat` picks the Pi code, as the next paragraph states |
+| `renameFile`              | SFTP v3 refuses to rename onto a file                                                             | Calls `posix-rename@openssh.com`; a server without it gets a plain `RENAME`   |
+| `createDir`               | SFTP makes one directory per request, and an existing one answers `FAILURE`                       | Makes each missing component in order; `lstat` finds a directory that exists  |
+| `writeFile`, `appendFile` | SFTP creates no parent folder                                                                     | Makes each missing parent first, as `NodeExecutionEnv` does                   |
+| `remove`                  | SFTP removes one entry per request                                                                | Runs `rm -rf --` through `exec` for a recursive call                          |
+| `fileInfo`, `listDir`     | SFTP gives `mtime` in seconds                                                                     | Multiplies it by 1000 for `mtimeMs`; `readdir` gives each entry's attributes  |
 
 **One `lstat` classifies a coarse status by the operation.** A file
 operation on a directory gives `is_directory`. A directory operation on a
@@ -234,13 +234,11 @@ holds files, gives `invalid` or `unknown`, as `BashEnv` does. The `lstat`
 runs after the failed call. A change between the two can pick the wrong
 code, and it changes no file.
 
-**The `sql` export needs its rename on one filesystem.** `WorkspaceFiles`
-writes an export to a temporary file under `/tmp` and renames it onto the
-target. Many servers mount `/tmp` as a filesystem of its own, and a
-rename across two filesystems fails. The workstation needs `WorkspaceFiles`
-to write its temporary file beside the target, and the
-[backlog](../planning/backlog.md#designs-with-a-shape) holds that change.
-Log rotation renames inside one folder, so it needs no change.
+**The `sql` export keeps its rename on one filesystem.** `WorkspaceFiles`
+writes an export to a temporary file beside the target and renames it
+onto the target. Many servers mount `/tmp` as a filesystem of its own, and
+a rename across two filesystems fails. Log rotation also renames inside
+one folder.
 
 **`exec` checks the directory first.** `SshEnv` runs one SFTP `lstat`
 of the working directory. When the directory does not exist, it returns
@@ -258,23 +256,31 @@ standard input:
 3. One `export NAME='value'` for each variable, with each value quoted
    for the shell.
 4. The command as the body of a quoted heredoc, passed to `bash -c` with
-   standard input from `/dev/null`:
+   standard input from `/dev/null` and its stderr joined to its stdout:
 
    ```sh
    bash -c "$(cat <<'AMBION_7f3a9c'
    <command>
    AMBION_7f3a9c
-   )" </dev/null
+   )" </dev/null 2>&1
    ```
 
    The command runs as `bash -c <command>`, the same as in
    `NodeExecutionEnv`, and it reads an empty standard input. `SshEnv` picks
    a random delimiter that no line of the command equals.
 
-**`SshEnv` removes its own lines from stderr.** It buffers stderr until
-the first newline, reads the `AMBION_PGID=` line, and keeps it out of the
-output view. After a group kill, `setsid` writes a line that the child did
-not exit normally, and `SshEnv` removes that line too.
+**The output arrives in the order the command wrote it.** The command's
+stderr joins its stdout, so the channel's stdout carries the whole output.
+The channel's stderr carries only the script's own lines. `SshEnv` reads
+the `AMBION_PGID=` line from it and keeps that line out of the view. It
+also removes the line that `setsid` writes after a group kill.
+
+**The spill file is written on the server.** When the caller asks for a
+spill, the script creates `/tmp/shell-<random>.out` with an exclusive
+create and mode `0600`. The output then goes through `tee` into that file.
+`SshEnv` names the file when the view cuts the output, and removes it
+otherwise. A named spill file stays in `/tmp` until the server clears it,
+the same as in `NodeExecutionEnv`.
 
 **No value reaches a command line.** `ps` on the server shows no variable
 of one agent to another account.
@@ -299,13 +305,24 @@ tells an abort apart from a timeout, and a command with no timeout gets
 30 seconds. `SshEnv` supplies the group kill for both.
 
 **`SshEnv` hands one view to `onUpdate`.** The conformance suite expects
-one update for each command, the same as `BashEnv` gives. `SshEnv`
-collects stdout and stderr until the command ends and builds one
-`boundedView`. `spill` writes the whole output when the view cuts it.
+one update for each command, the same as `BashEnv` gives. `SshEnv` builds
+the view when the command ends.
 
-**A process that starts its own session escapes the kill.** Its channel
-stays open until it exits. When the client cannot open a channel, the
-backend drops the client, and the next `connect()` builds a new one.
+**The Ambion host holds a bounded window of the output.** A command can
+write gigabytes, and every agent's workspace runs in the host's process.
+`SshEnv` keeps twice `maxBytes` on the side the view retains, and counts
+the bytes and lines of the whole output, as Pi's `OutputCapture` does.
+With no `maxBytes`, the window is 8 MiB.
+
+**A child that keeps the output open does not hold the result.** The
+server sends the exit status when the command exits, and the output it
+still holds after it. `SshEnv` closes the channel 1 second after the last
+output. Pi waits 100 ms on a local pipe, and over a slow link that cuts
+the output that waits on a window adjustment.
+
+**A process that starts its own session escapes the kill.** After a kill,
+its channel closes 2 seconds later. When the client cannot open a channel,
+the backend drops the client, and the next `connect()` builds a new one.
 
 ## Connections
 
@@ -324,9 +341,12 @@ call adds network round trips to every tool call.
   client, because an `error` event with no listener stops the Node
   process. `keepaliveInterval` turns a dead connection into that event.
   The next `connect()` builds a new client.
-- **A call that loses its connection fails, and nothing retries it.** An
-  append that the connection lost can have landed or not, and the caller
-  cannot tell which.
+- **A call that loses its connection fails at once, and nothing retries
+  it.** `ssh2` keeps an SFTP request on a dead channel pending forever,
+  so every call races the end of its client. A file call answers
+  `unknown`, and a command answers `ExecutionError` `unknown` with no exit
+  code. An append that the connection lost can have landed or not, and the
+  caller cannot tell which.
 - **`idleTimeout` closes an unused client.** A client that runs no
   operation for `idleTimeout` seconds closes, and the default is 300. The
   next `connect()` for that agent builds a new client. A long workspace
@@ -376,9 +396,9 @@ application names the commands that its server installs.
 
 ## Trust
 
-**`docs/trust.md` gets a new row before the backend ships.** An agent on
-a workstation has a real shell and network access. The account
-permissions on the server contain it. The kernel does not.
+**`docs/trust.md` holds a row for the workstation.** An agent on a
+workstation has a real shell and network access. The account permissions
+on the server contain it. The kernel does not.
 
 **The live exclusivity test covers the just-bash backends only.** It
 shows that a seat cannot read `/etc/hosts`
@@ -402,21 +422,21 @@ and spill file has mode `0600`, and each temporary directory has mode
 
 **Both tiers run `workspaceConformance`.** A `ConformanceBackend` harness
 opens a fresh `workstationBackend` and disposes of it. The cases check the
-`ExecutionEnv` rules that the four file tools need. `startSshServer` is a
-proposed test helper: the scripted tier starts an `ssh2` server, and the
-integration tier starts `sshd`.
+`ExecutionEnv` rules that the four file tools need. The scripted harness
+starts an `ssh2` server for each case
+(`packages/workstation/test/conformance.test.ts`).
 
 ```ts
 import type { ConformanceBackend } from '@ambionframework/workspace/conformance';
 import { workspaceConformance } from '@ambionframework/workspace/conformance';
 import { workstationBackend } from '@ambionframework/workstation';
 import { describe, it } from 'vitest';
-import { startSshServer } from './support/ssh.ts';
+import { startSshServer } from './support/server.ts';
 
 const harness: ConformanceBackend = {
   name: 'workstation',
   async open() {
-    const server = await startSshServer(['surveyor', 'planner', 'lab-host']);
+    const server = await startSshServer(['conformance']);
     const backend = workstationBackend(server.options);
     return {
       backend,
@@ -435,7 +455,7 @@ describe(harness.name, () => {
 
 **The scripted tier serves a temporary directory over SFTP.** The test
 starts an `ssh2` `Server` in its own process. Its SFTP handlers read and
-write a temporary directory on the local disk, and each `exec` runs `bash`
+write a temporary directory on the local disk, and each `exec` runs `sh -c`
 in that directory. The tier needs no container and no network, and
 `pnpm check` runs it. It needs `setsid` from util-linux, so it runs on
 Linux and skips on a machine without `setsid`, such as macOS.
@@ -448,17 +468,21 @@ Linux and skips on a machine without `setsid`, such as macOS.
 
 **The integration tier runs in a CI job of its own.** Only root creates
 the accounts, and only an `sshd` that runs as root logs in as more than
-one user. `pnpm check` runs without root. The job runs a container image
-with `sshd`, and it runs only when `AMBION_WORKSTATION_SSHD` is set. It
-proves what only OpenSSH can:
+one user. `pnpm check` runs without root. The `workstation` job runs
+`test/sshd/setup.sh` with `sudo` on its runner. The script adds four
+accounts and one group, makes the two layout folders, and starts `sshd` on
+port 2222. The tier runs only when `AMBION_WORKSTATION_SSHD` names the file
+the script writes. It proves what only OpenSSH can:
 
-- the replacing rename and the group kill
+- the conformance cases, with the replacing rename and the group kill
 - the error classification against the status codes of OpenSSH
-- the channel count under `MaxSessions`
-- that one account cannot read another account's home or temporary files
+- the channel count under `MaxSessions` over many commands and timeouts
+- that one account cannot read another account's home, temporary files,
+  or spill files
 - that a file one agent creates in the audit folder stays writable for
-  the other agent
+  the other agent, across a rotation
 - that an agent cannot write under `layout.rooms`
+- that the audit log records each agent's tool call as that agent
 
 ## Out of v1
 

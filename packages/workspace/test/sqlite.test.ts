@@ -237,7 +237,7 @@ describe('the SQLite backend', () => {
 		);
 		expect(messageOf(outcome)).toContain('ran past');
 		const left = await site.use({ name: 'alpha' }, async (env) => {
-			const listed = await env.listDir('/tmp', BACKGROUND_CONTEXT);
+			const listed = await env.listDir('/home/alpha', BACKGROUND_CONTEXT);
 			const exists = await env.exists('/home/alpha/big.csv', BACKGROUND_CONTEXT);
 			return {
 				parts: listed.ok ? listed.value.filter((file) => file.name.endsWith('.part')) : [],
