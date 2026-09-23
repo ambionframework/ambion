@@ -37,6 +37,8 @@ export interface TestServer {
 	dropClients(): void;
 	/** Refuse each new session channel while `refuse` is true, as a full `MaxSessions` would. */
 	refuseChannels(refuse: boolean): void;
+	/** Write `text` to stderr before each command, as a login shell's `.bashrc` can. */
+	setLoginNoise(text: string): void;
 	stop(): Promise<void>;
 }
 
@@ -68,7 +70,8 @@ function ed25519Pair(): { private: string; public: string } {
 }
 
 /** Run one `exec` request as `sh -c` in the account's home, and pipe it both ways. */
-function runExec(stream: ServerChannel, command: string, home: string): void {
+function runExec(stream: ServerChannel, command: string, home: string, noise: string): void {
+	if (noise !== '') stream.stderr.write(noise);
 	const child = spawn('sh', ['-c', command], { cwd: home, env: { ...process.env, HOME: home } });
 	child.stdout.pipe(stream, { end: false });
 	child.stderr.pipe(stream.stderr, { end: false });
@@ -87,6 +90,7 @@ interface ServerState {
 	readonly logins: Map<string, number>;
 	readonly key: Parsed;
 	refuse: boolean;
+	loginNoise: string;
 }
 
 function onClient(client: Connection, state: ServerState) {
@@ -109,7 +113,9 @@ function onClient(client: Connection, state: ServerState) {
 			if (state.refuse) return reject();
 			const session = accept();
 			const home = homes.get(account ?? '') ?? '/';
-			session.on('exec', (acceptExec, _reject, info) => runExec(acceptExec(), info.command, home));
+			session.on('exec', (acceptExec, _reject, info) =>
+				runExec(acceptExec(), info.command, home, state.loginNoise),
+			);
 			session.on('sftp', (acceptSftp) => serveSftp(acceptSftp(), home));
 		});
 	});
@@ -127,7 +133,7 @@ export async function startSshServer(accounts: readonly string[]): Promise<TestS
 	}
 	const logins = new Map<string, number>();
 	const clients = new Set<Connection>();
-	const state: ServerState = { homes, logins, key: allowed, refuse: false };
+	const state: ServerState = { homes, logins, key: allowed, refuse: false, loginNoise: '' };
 	const server = new Server({ hostKeys: [hostKey.private] }, (client) => {
 		// The server side of a connection has `setNoDelay` at runtime, and its types omit it.
 		(client as Connection & { setNoDelay(on: boolean): void }).setNoDelay(true);
@@ -153,6 +159,9 @@ export async function startSshServer(accounts: readonly string[]): Promise<TestS
 		},
 		refuseChannels: (refuse) => {
 			state.refuse = refuse;
+		},
+		setLoginNoise: (text) => {
+			state.loginNoise = text;
 		},
 		stop: async () => {
 			for (const client of clients) client.end();

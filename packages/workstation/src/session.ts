@@ -48,8 +48,9 @@ export class Session {
 	private readonly onEnd: Array<() => void> = [];
 	private stop: (error: Error) => void = () => undefined;
 	/**
-	 * Rejects when the session ends. `ssh2` keeps an SFTP request on a dead
-	 * channel pending forever, so `guard` races every call against it.
+	 * Rejects when the session ends. `ssh2` fails the SFTP requests in flight
+	 * when the channel closes, and keeps a request made after that pending
+	 * forever, so `guard` races every call against it.
 	 */
 	private readonly ended = new Promise<never>((_, reject) => {
 		this.stop = reject;

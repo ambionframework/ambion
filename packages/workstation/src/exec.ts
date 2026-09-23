@@ -5,7 +5,9 @@
  *
  * `setsid --wait` makes the script's `bash` the leader of a new process
  * group and waits for it, so the channel reports the command's exit status.
- * The script's first stderr line gives the group ID. An abort or a deadline
+ * The script's first stderr line gives the group ID. A login shell can write
+ * lines of its own first, such as a `.bashrc` that Debian's bash reads for
+ * `sshd`, so `exec` looks for that line among the others. An abort or a deadline
  * opens a second channel and kills the whole group, as Pi's
  * `NodeExecutionEnv` does on a local machine. The SSH signal request cannot:
  * it reaches the session's own child alone.
@@ -13,8 +15,9 @@
  * The command's output arrives on the channel's stdout, and `Capture` holds
  * it within a bound. `exec` hands one view to `onUpdate` after the command
  * ends, the same as `BashEnv`. A child that keeps the output open after the
- * command exits gets `EXIT_GRACE_MS` after the last output, and then the
- * channel closes.
+ * command exits gets `EXIT_GRACE_MS` after the last output, and at most
+ * `EXIT_DRAIN_MS` in all, and then the channel closes. A command that exits
+ * before its deadline gives its exit status, whatever arrives after it.
  */
 
 import { constants } from 'node:os';
@@ -49,6 +52,12 @@ const CLOSE_GRACE_MS = 2_000;
  */
 const EXIT_GRACE_MS = 1_000;
 
+/**
+ * The longest the channel stays open after the command exits. A background
+ * child that keeps writing would otherwise hold the result until the deadline.
+ */
+const EXIT_DRAIN_MS = 5_000;
+
 /** How much of the script's own stderr `exec` keeps. The command's stderr joins its stdout. */
 const SCRIPT_STDERR_BYTES = 64 * 1024;
 
@@ -67,7 +76,10 @@ export interface CommandHost {
 	discard(path: string): Promise<void>;
 }
 
-/** The script's own stderr: the group ID line first, then any line of the script itself. */
+/** The whole line that gives the group ID, wherever the login shell's own lines put it. */
+const GROUP_LINE = new RegExp(`^${PGID_PREFIX}(\\d+)\n`, 'm');
+
+/** The script's own stderr: the group ID line, and any other line the login shell or the script writes. */
 class ScriptStderr {
 	private text = '';
 	pgid: number | undefined;
@@ -76,12 +88,13 @@ class ScriptStderr {
 	push(chunk: Buffer): void {
 		if (this.text.length < SCRIPT_STDERR_BYTES) this.text += chunk.toString('utf8');
 		if (this.pgid !== undefined) return;
-		const newline = this.text.indexOf('\n');
-		if (newline === -1) return;
-		const first = this.text.slice(0, newline);
-		if (!first.startsWith(PGID_PREFIX)) return;
-		this.pgid = Number(first.slice(PGID_PREFIX.length));
-		this.text = this.text.slice(newline + 1);
+		const line = GROUP_LINE.exec(this.text);
+		if (line === null) return;
+		this.text = this.text.slice(0, line.index) + this.text.slice(line.index + line[0].length);
+		const pgid = Number(line[1]);
+		// Group 0 and group 1 are never the script's: `kill -- -0` reaches the caller's own group.
+		if (pgid <= 1) return;
+		this.pgid = pgid;
 		this.onPgid?.();
 	}
 
@@ -97,6 +110,8 @@ class ScriptStderr {
 /** How a channel ended: the exit status, or none when it closed first. */
 interface Ending {
 	readonly exited: boolean;
+	/** Whether the deadline had fired when the exit status arrived. */
+	readonly late: boolean;
 	readonly code: number | null | undefined;
 	readonly signal: string | undefined;
 }
@@ -111,16 +126,23 @@ function exitCodeOf(code: number | null | undefined, signal: string | undefined)
 
 /**
  * Wait for the channel to close. After the exit status, each chunk of output
- * restarts a short timer, and the timer closes the channel.
+ * restarts a short timer, up to a limit, and the timer closes the channel.
  */
-function finished(channel: ClientChannel, output: Capture, stderr: ScriptStderr): Promise<Ending> {
+function finished(
+	channel: ClientChannel,
+	output: Capture,
+	stderr: ScriptStderr,
+	deadline: AbortSignal,
+): Promise<Ending> {
 	return new Promise((resolve) => {
-		let ending: Ending = { exited: false, code: undefined, signal: undefined };
+		let ending: Ending = { exited: false, late: false, code: undefined, signal: undefined };
 		let grace: NodeJS.Timeout | undefined;
+		let drainEnd = Number.POSITIVE_INFINITY;
 		const arm = () => {
 			if (!ending.exited) return;
 			clearTimeout(grace);
-			grace = setTimeout(() => channel.close(), EXIT_GRACE_MS);
+			const wait = Math.min(EXIT_GRACE_MS, Math.max(0, drainEnd - Date.now()));
+			grace = setTimeout(() => channel.close(), wait);
 		};
 		channel.on('data', (chunk: Buffer) => {
 			output.push(chunk);
@@ -128,7 +150,8 @@ function finished(channel: ClientChannel, output: Capture, stderr: ScriptStderr)
 		});
 		channel.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
 		channel.on('exit', (code: number | null, signal?: string) => {
-			ending = { exited: true, code, signal: signal ?? undefined };
+			ending = { exited: true, late: deadline.aborted, code, signal: signal ?? undefined };
+			drainEnd = Date.now() + EXIT_DRAIN_MS;
 			arm();
 		});
 		channel.on('close', () => {
@@ -219,7 +242,7 @@ async function run(
 	const channel = await host.open('exec setsid --wait bash -s');
 	const output = new Capture(options?.capture?.limits);
 	const stderr = new ScriptStderr();
-	const done = finished(channel, output, stderr);
+	const done = finished(channel, output, stderr, deadline.signal);
 	stopWhenAborted(host, channel, stderr, deadline);
 	channel.end(commandScript(command, cwd, options?.env, spill));
 	const ending = await done;
@@ -277,7 +300,8 @@ async function attempt(
 		const early = deadline.error() ?? (await refusal(host, cwd, options));
 		if (early) return err(early);
 		const ran = await run(host, command, cwd, options, spill, deadline);
-		const stopped = deadline.error();
+		// A command that exited before its deadline keeps its exit status.
+		const stopped = ran.ending.exited && !ran.ending.late ? undefined : deadline.error();
 		if (stopped) return err(stopped);
 		return await settled(host, ran, spill, options, context);
 	} catch (error) {

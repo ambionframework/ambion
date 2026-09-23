@@ -223,8 +223,12 @@ describe.skipIf(!hasSetsid)('a workstation command', () => {
 		});
 	});
 
-	it('kills the whole process group on a timeout', async () => {
+	it.each([
+		['', 'a quiet login shell'],
+		['Welcome to the lab.\n', 'a login shell that writes to stderr first'],
+	])('kills the whole process group on a timeout, under %j (%s)', async (noise) => {
 		const started = await server();
+		started.setLoginNoise(noise);
 		const backend = backendFor(started.options);
 		const home = started.homes.get('ada') ?? '';
 		const timedOut = await withEnv(backend, 'ada', (env) =>

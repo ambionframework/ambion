@@ -240,8 +240,8 @@ onto the target. Many servers mount `/tmp` as a filesystem of its own, and
 a rename across two filesystems fails. Log rotation also renames inside
 one folder.
 
-**`exec` checks the directory first.** `SshEnv` runs one SFTP `lstat`
-of the working directory. When the directory does not exist, it returns
+**`exec` checks the directory first.** `SshEnv` runs one SFTP `stat`
+of the working directory, which follows a symbolic link. When the directory does not exist, it returns
 `spawn_error`, as `NodeExecutionEnv` does, and opens no channel.
 
 **`exec` sends the script on standard input.** `sshd` drops an `env`
@@ -295,6 +295,12 @@ second channel and sends `kill -KILL -- -<group>`. An abort that comes
 before the `AMBION_PGID=` line waits for that line, which is the first
 thing the script prints.
 
+**A login shell can write lines before the script's first line.**
+`sshd` runs the command through the account's login shell, and Debian's
+bash reads `~/.bashrc` for it. `SshEnv` looks for the `AMBION_PGID=` line
+among the lines the channel's stderr holds, so a `.bashrc` that writes to
+stderr does not stop the kill. The view shows those other lines.
+
 **The SSH signal request cannot do this alone.** OpenSSH 7.9 added signal
 delivery to `sshd`. It sends a subset of signals, and only to a login or a
 command session. A forced command gets none. The signal reaches the
@@ -317,8 +323,14 @@ With no `maxBytes`, the window is 8 MiB.
 **A child that keeps the output open does not hold the result.** The
 server sends the exit status when the command exits, and the output it
 still holds after it. `SshEnv` closes the channel 1 second after the last
-output. Pi waits 100 ms on a local pipe, and over a slow link that cuts
-the output that waits on a window adjustment.
+output, and 5 seconds after the exit status at most. Pi waits 100 ms on a
+local pipe, and over a slow link that cuts the output that waits on a
+window adjustment.
+
+**A command that exits before its deadline gives its exit status.** A
+background child that keeps writing after the command exits holds the
+channel until the 5 seconds end or the deadline fires. Either way, the
+result is the command's exit status.
 
 **A process that starts its own session escapes the kill.** After a kill,
 its channel closes 2 seconds later. When the client cannot open a channel,
@@ -341,9 +353,11 @@ call adds network round trips to every tool call.
   client, because an `error` event with no listener stops the Node
   process. `keepaliveInterval` turns a dead connection into that event.
   The next `connect()` builds a new client.
-- **A call that loses its connection fails at once, and nothing retries
-  it.** `ssh2` keeps an SFTP request on a dead channel pending forever,
-  so every call races the end of its client. A file call answers
+- **A call that loses its connection fails when the client sees the end,
+  and nothing retries it.** `ssh2` fails the SFTP requests in flight when
+  the channel closes, and keeps a request made after that pending forever.
+  So every call races the end of its client. A connection that dies with
+  no sign ends after three keepalives with no answer, about 45 seconds. A file call answers
   `unknown`, and a command answers `ExecutionError` `unknown` with no exit
   code. An append that the connection lost can have landed or not, and the
   caller cannot tell which.

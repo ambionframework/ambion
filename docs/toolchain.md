@@ -74,6 +74,12 @@ runner, the executor contract, and rendering. It imports no model library:
 both behind the public facade.
 `biome.jsonc` enforces these import boundaries.
 
+**A test checks that each import rule refuses what it names.** Biome reads
+each group as a gitignore pattern, and a pattern that matches nothing
+passes every import in silence. `scripts/import-rules.test.mjs` lints one
+probe file for each case in a copy of the tree. Add a case with each new
+rule.
+
 ## 2. Toolchain choices
 
 | Concern                | Tool                                                       |

@@ -64,7 +64,7 @@ issues, and rotates no credential.
 - **`layout.rooms` belongs to the host account,** with mode `2750` and
   the same group.
 
-[`test/sshd/setup.sh`](test/sshd/setup.sh) does each step on a disposable
+[`test/sshd/setup.sh`](https://github.com/ambionframework/ambion/blob/main/packages/workstation/test/sshd/setup.sh) does each step on a disposable
 machine.
 
 ## Tests
