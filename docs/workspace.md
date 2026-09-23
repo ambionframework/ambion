@@ -587,7 +587,8 @@ holds them. The workspace package does not depend on just-bash, so a host
 that uses another backend installs no just-bash. The backends provide a
 virtual Unix filesystem and shell
 for tools, with JavaScript and Python execution available. Network commands
-are absent. just-bash is single-user: agents sharing one resource can read
+are absent. Each shell also runs `git` from just-git, with the agent's name as
+the locked author and no network access. just-bash is single-user: agents sharing one resource can read
 each other's homes. The default workspace does not provide operating-system isolation between
 agents or distributed ownership of a shared directory. Hosts own credentials
 and authorization for external services.
