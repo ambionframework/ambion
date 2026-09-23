@@ -2,9 +2,10 @@
 
 **This page is a design. No package implements it yet.** The
 [backlog](../planning/backlog.md#designs-with-a-shape) names the condition
-that schedules it. The design assumes the workspace interface of 0.2.0 item
-M7 ([next.md](../planning/next.md#m-one-owner-per-mechanism)). Every name
-below is a proposal, and it changes if the review changes it.
+that schedules it. The design builds on the workspace interface that
+[Workspace](workspace.md) states. Every name below that the workspace
+package does not export is a proposal, and it changes if the review
+changes it.
 
 **A workstation is one remote server with one Unix account for each
 agent.** A workspace connects to it over SSH, and each agent logs in with
@@ -16,51 +17,52 @@ files apart from another's. The just-bash backends have no such boundary
 
 **The name is the concept, and SSH is the v1 protocol.** The package
 `@ambionframework/workstation` exports `workstationBackend(options)`. It
-returns a `WorkspaceBackend`, and `openWorkspace` takes it as it takes a
-just-bash backend. A later protocol joins the same package under the same
-name.
+returns a `BashBackend`, the one backend kind that every workspace has. A
+later protocol joins the same package under the same name.
 
 ```ts
 import { openWorkspace } from '@ambionframework/workspace';
+import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { workstationBackend } from '@ambionframework/workstation';
 
 const lab = openWorkspace({
   name: 'lab',
-  backend: workstationBackend({
-    host: 'lab.internal',
-    hostKey: secrets.labHostKey,
-    layout: { shared: '/srv/ambion/lab', rooms: '/srv/ambion/lab/rooms' },
-    credentialFor: (agent) => secrets.sshLogin(agent.name),
-  }),
+  backend: {
+    bash: workstationBackend({
+      host: 'lab.internal',
+      hostKey: secrets.labHostKey,
+      layout: { audit: '/srv/ambion/lab/audit/audit.jsonl', rooms: '/srv/ambion/lab/rooms' },
+      credentialFor: (agent) => secrets.sshLogin(agent.name),
+    }),
+    sql: sqliteBackend('./data/lab.db'),
+  },
 });
 ```
 
-**The package reaches the workspace through its root entry.** After M7
-that entry holds the interface and loads no backend, so a workstation
-loads no just-bash and no `node:sqlite`. The tests also import
+**The package reaches the workspace through its root entry.** That entry
+holds the interface and the environment helpers, and it loads no just-bash
+and no `node:sqlite`. The tests also import
 `@ambionframework/workspace/conformance`.
 
 ## What the backend supplies
 
-**M7 splits the work between the workspace and its backend.** The
-workstation supplies the transport and the facts of its server. The
-workspace supplies everything that holds on every backend.
+**A `BashBackend` supplies a transport and the facts of its server.** The
+workspace supplies everything that holds on every backend
+([The resource contract](workspace.md#the-resource-contract)).
 
-| Part                                   | Owner                                             |
-| -------------------------------------- | ------------------------------------------------- |
-| `connect()` and `dispose()`            | The workstation                                   |
-| `SshEnv`, the transport of each call   | The workstation                                   |
-| `layout`, the shared folders           | The workstation, from its options                 |
-| The guidance about the shell           | The workstation                                   |
-| `read`, `write`, `edit`, `bash`, `sql` | The workspace: the default tool set               |
-| The guidance about the tools           | The workspace                                     |
-| Path rule, deadline, output view       | The workspace: the environment helpers            |
-| Audit log and room mirror              | The workspace, in the folders that `layout` names |
+| Part                                  | Owner                                           |
+| ------------------------------------- | ----------------------------------------------- |
+| `connect()` and `dispose()`           | The workstation                                 |
+| `SshEnv`, the transport of each call  | The workstation                                 |
+| `layout`: the audit log and the rooms | The workstation, from its options               |
+| `guidance` about the shell            | The workstation                                 |
+| `read`, `write`, `edit`, `bash`       | The workspace: the four file tools              |
+| `sql`                                 | The workspace, when `backend.sql` is set        |
+| Path rule, deadline, output view      | The workspace: the environment helpers          |
+| Audit log and room mirror             | The workspace, at the paths that `layout` names |
 
-**The workstation lists no tools.** The default tool set covers every
-tool that an agent needs on a server. The backend has no `destroy()`, no
-change log, and no `changedPaths`, because M7 removes all three from the
-contract.
+**The workstation adds no tools.** The four file tools cover every file
+and shell operation on a server, so `tools` stays unset.
 
 ## The SSH client
 
@@ -92,11 +94,14 @@ adapter gets no workstation in v1.
 
 ## Credentials
 
-**The host owns every credential.** `docs/workspace.md` states the rule
-for every backend: the host owns credentials for external services. The
+**The host owns every credential.** The workspace states the rule for
+every backend: the host owns credentials for external services. The
 backend takes one resolver and holds no credential of its own.
 
 ```ts
+import type { WorkspaceLayout } from '@ambionframework/workspace';
+import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
+
 interface WorkstationCredential {
   readonly username: string;
   readonly privateKey: string;
@@ -108,16 +113,16 @@ interface WorkstationOptions {
   readonly port?: number;
   /** The server's host key fingerprint, as `ssh-keygen -lf` prints it. */
   readonly hostKey: string;
-  /** The folders of the shared records. */
-  readonly layout: { readonly shared: string; readonly rooms: string };
+  readonly layout: WorkspaceLayout;
   credentialFor(agent: WorkspaceAgent): WorkstationCredential;
 }
 ```
 
-**The resolver answers for every agent and for the host identity.** After
-M7, `WorkspaceAgent` holds `name` alone. The workspace names its host
-identity, and the room mirror writes as that identity. The host gives it
-an account and a key, the same as an agent.
+**The resolver answers for every agent and for `workspace.host`.** A
+`WorkspaceAgent` holds `name` alone. `openWorkspace` builds the host
+agent `<name>-host`, and `mirror()` writes as it
+([The layout and the host identity](workspace.md#the-layout-and-the-host-identity)).
+The host gives it an account and a key, the same as an agent.
 
 **The host provisions each account and each key before the first
 connection.** The resolver reads them from the store the application
@@ -144,36 +149,49 @@ and agent. V1 has neither.
 **The account's home is the working directory.** The just-bash backends
 make `/home/<name>` on the first connection. A workstation account has a
 home from the server's own user management. `connect()` reads `$HOME`
-from the login and makes no directory. The workspace's path rule resolves
-`~` and a relative path against that home.
+from the login and makes no directory. `resolvePath` resolves `~` and a
+relative path against that home.
 
-## Shared folders
+## The layout on a server
 
-**Every account writes to the folders that `layout` names.** Each agent
-appends to the audit log through its own environment, and each agent
-writes the shared database through `sql`. The host identity writes the
-room mirror.
+**`layout` names one file and one folder.** `layout.audit` is the path of
+the audit log. `layout.rooms` is the folder that `mirror()` writes each
+room's record under. The two paths need different permissions, because
+different accounts write them.
 
-**The host provisions the folders with a group.** One Unix group holds
-every agent account and the host account. The group owns both folders,
-with group write and the setgid bit, so a new file keeps the group.
+| Path                  | Writer                                                 | Mode on the server                      |
+| --------------------- | ------------------------------------------------------ | --------------------------------------- |
+| The folder of `audit` | Every agent: each tool call writes its entry as itself | Group write, setgid, owned by the group |
+| `rooms`               | The host account alone                                 | Owner write, group read                 |
+| Each agent's home     | That agent alone                                       | `0700`                                  |
+
+**One group holds every agent account and the host account.** The folder
+of the audit log belongs to that group, with group write and the setgid
+bit, so a new file keeps the group. A rotation renames the active file
+inside that folder, so the folder needs group write as well as the file.
 
 **`SshEnv` keeps new files writable for the group.** It runs each command
-under `umask 002`, and SFTP creates each file with mode `0664`. SQLite
-creates its journal file beside the database, so the umask covers that
-file too. Each home stays at mode `0700`, so the group reaches no home.
+under `umask 002`, and SFTP creates each file with mode `0664`. The agent
+that rotates the audit log creates the next file, and every other agent
+still appends to it. Each home stays at mode `0700`, so the group reaches
+no home.
 
 ## The environment
 
 **`SshEnv` implements the transport of Pi's `ExecutionEnv`.** A file call
-goes over SFTP. Each `exec` opens one channel on the SSH client. The
-workspace's environment helpers supply the rest: the path rule, the
-deadline, the bounded output view with its spill file, and the temporary
-names. Pi's `NodeExecutionEnv` implements the same methods on a local
-machine, and `SshEnv` follows its behavior.
+goes over SFTP. Each `exec` opens one channel on the SSH client. The root
+entry's helpers supply the rest:
+
+- `resolvePath` for `~` and a relative path
+- `Deadline`, which tells an abort apart from a timeout
+- `boundedView` and `spill` for the output view and its spill file
+- `tempDirPath`, `tempFilePath`, and `spillPath` for the names under `/tmp`
+
+Pi's `NodeExecutionEnv` implements the same methods on a local machine,
+and `SshEnv` follows its behavior.
 
 **Three methods need more than one SFTP request, and one needs fewer.**
-The conformance entry checks each row.
+`workspaceConformance` checks each row.
 
 | Method       | SFTP gap                                        | `SshEnv` does                                        |
 | ------------ | ----------------------------------------------- | ---------------------------------------------------- |
@@ -182,8 +200,10 @@ The conformance entry checks each row.
 | `remove`     | SFTP removes one entry per request              | Runs `rm -rf --` through `exec` for a recursive call |
 | `listDir`    | None: `readdir` returns each entry's attributes | One request, where `BashEnv` calls `lstat` per entry |
 
-**The `sql` export and log rotation need the replacing rename.** Both
-rename a file onto a path that can exist. OpenSSH servers offer the
+**The `sql` export needs the replacing rename.** `WorkspaceFiles` writes
+an export to a temporary file and renames it onto the target, which can
+exist. Log rotation renames onto a fresh name, so plain SFTP serves it.
+OpenSSH servers offer the
 `posix-rename@openssh.com` extension, and `ssh2` calls it through
 `ext_openssh_rename`.
 
@@ -205,15 +225,14 @@ delivery to `sshd`. It sends a subset of signals, and only to a login or a
 command session. A forced command gets none. The signal reaches the
 session's own child, and a pipeline's other processes keep running.
 
-**A deadline takes the same path and reports `timeout`.** The workspace's
-deadline helper tells an abort apart from a timeout, and it gives a
-command with no timeout the default of 30 seconds. `SshEnv` supplies the
-group kill for both.
+**A deadline takes the same path and reports `timeout`.** `Deadline`
+tells an abort apart from a timeout, and a command with no timeout gets
+30 seconds. `SshEnv` supplies the group kill for both.
 
 **Output streams while the command runs.** `ssh2` delivers stdout and
-stderr as the server sends them. `SshEnv` passes each part to the
-workspace's output view, which bounds it to the caller's limits and hands
-each view to `onUpdate`.
+stderr as the server sends them. `SshEnv` passes each part to
+`boundedView`, which bounds it to the caller's limits, and hands each view
+to `onUpdate`.
 
 ## Connections
 
@@ -233,35 +252,43 @@ call adds network round trips to every tool call.
   server. The host removes a workspace's folders with its own tools.
 
 **The channels stay under the server's limit.** OpenSSH allows 10 sessions
-on one connection by default (`MaxSessions`). The owner runs one operation
-at a time, so a client holds at most three channels: SFTP, one command,
-and one abort.
+on one connection by default (`MaxSessions`). The bash owner runs one
+operation at a time, so a client holds at most three channels: SFTP, one
+command, and one abort.
 
-**The owner queue serializes every agent.** The queue protects the shared
-memory of just-bash and the `sql` write-back. A workstation keeps it in
-v1, and each operation now waits on the network. A long command from one
-agent delays every other agent's tool call.
+**The bash owner serializes every agent's file and shell work.** A
+workstation keeps one queue in v1, and each operation now waits on the
+network. A long command from one agent delays every other agent's file
+tool. A query runs on the SQL owner, so a command delays no query.
 
-## SQL
+## The shared database
 
-**`sql` runs the server's own `sqlite3`.** The tool calls `sqlite3`
-through `exec` ([Workspace](workspace.md#query-the-shared-database)), and
-the shared database lives in the `shared` folder. After M7, `sqlite3` is
-the one command that the default tools need, because the tool counts its
-own export rows.
+**The workstation adds no SQL backend.** The `sql` tool runs on
+`backend.sql`, a backend kind apart from the shell
+([Query the shared database](workspace.md#query-the-shared-database)). A
+workspace on a workstation sets it as any workspace does.
 
-**`ATTACH` of a second file works.** The server's `sqlite3` reads the real
-filesystem. The just-bash engine opens `:memory:` only.
+**`sqliteBackend` is the v1 pairing.** Its database lives on the Ambion
+host, beside the workstation, so no agent reaches the file through
+`bash`. The workstation needs no `sqlite3` for the `sql` tool.
 
-**Postgres and MySQL wait.** Each needs another command, another dialect,
-and a database credential apart from the SSH login. A second resolver or a
-wider `credentialFor` carries that credential.
+**An export lands on the workstation as the calling agent.** The SQL
+backend streams the CSV through `WorkspaceFiles`, one operation on the
+bash owner as that agent. The file lands in the agent's home, or at the
+path the agent names, with that account's permissions.
+
+**A database server waits in the backlog.** The
+[backlog](../planning/backlog.md#designs-with-a-shape) entry for a SQL
+backend over a database server pairs it with a workstation. That backend
+connects as each agent with its own database credential, so the server
+enforces the grants. `sqliteBackend` gives every agent one handle and one
+set of grants.
 
 ## Guidance
 
 **The workspace describes the tools, and the workstation describes its
-shell.** The workstation's guidance states what every workstation has: a
-real shell, open network access, and one account for each agent. The
+shell.** The workstation's `guidance` states what every workstation has:
+a real shell, open network access, and one account for each agent. The
 application names the commands that its server installs.
 
 ## Trust
@@ -275,17 +302,20 @@ shows that a seat cannot read `/etc/hosts`
 ([Trust](trust.md#what-each-harness-exposes)). On a workstation that
 result depends on the server's permissions.
 
-**Every agent can change the audit log.** Each agent appends to it
-through its own account, so the group has write access to the file. An
-agent can edit or remove earlier entries through `bash`. The
+**Every agent can change the audit log.** Each agent writes its own
+entries through its own account, so the group has write access to the
+file. An agent can edit or remove earlier entries through `bash`. The
 [backlog](../planning/backlog.md#designs-with-a-shape) decides which
 identity writes the audit log.
 
+**No agent can change the room mirror.** Only the host account writes
+`layout.rooms`, and the agents read it through the group.
+
 ## Tests
 
-**Both tiers run the workspace conformance entry.** The entry checks the
-`ExecutionEnv` rules that the default tools need, and the scenario matrix
-that the just-bash backends pass.
+**Both tiers run `workspaceConformance`.** A `ConformanceBackend` harness
+opens a fresh `workstationBackend` and disposes of it. The cases check the
+`ExecutionEnv` rules that the four file tools need.
 
 **The scripted tier runs an SSH server in the test process.** `ssh2`
 ships a `Server` class, and its SFTP server mode answers file requests.
@@ -299,18 +329,20 @@ It proves what only OpenSSH can:
 - the replacing rename and the group kill
 - the channel count under `MaxSessions`
 - that one account cannot read another account's home
-- that a file one account writes in a shared folder stays writable for
-  the group
+- that a file one agent creates in the audit folder stays writable for
+  the other agent
+- that an agent cannot write under `layout.rooms`
 
 The `ssh2` repository runs its own suite against OpenSSH the same way.
 
 ## Out of v1
 
-- Postgres or MySQL on the server.
+- A SQL backend over a database server, or over the server's own
+  `sqlite3`.
 - Credential issuance and rotation, and OpenSSH certificates.
 - A workspace across two or more servers.
 - A workstation under workerd.
-- Concurrent operations on one workspace. The
+- Concurrent operations on the bash owner. The
   [backlog](../planning/backlog.md#designs-with-a-shape) holds the backend
   profile that allows them.
 
