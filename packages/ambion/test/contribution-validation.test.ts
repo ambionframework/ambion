@@ -14,7 +14,7 @@ import {
 	type StartRoomOptions,
 	startRoom,
 } from '../src/index.ts';
-import { openStorage, person, protocolOf, recordingTransport } from './support/core-exchange.ts';
+import { person, protocolOf, recordingTransport } from './support/core-exchange.ts';
 import { refusal } from './support/errors.ts';
 import {
 	collect,
@@ -26,7 +26,7 @@ import {
 	waitForRoom,
 } from './support/room.ts';
 import { quiet, scripted, speak, toolResultTexts } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { faultyJournals, memory, type Storage, storages } from './support/storage.ts';
 
 const secondPerson = defineHuman({ name: 'sam', identity: 'Engineer.' });
@@ -42,7 +42,7 @@ async function openWorld(
 	options: Omit<StartRoomOptions, 'name' | 'runtime'>,
 	runtimeOptions: CreateRuntimeOptions = {},
 ) {
-	const opened = await openStorage(storage);
+	const opened = await openFor(storage);
 	const runtime = createRuntime({
 		storage: opened.storage,
 		transport: recordingTransport(),
@@ -217,7 +217,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 	});
 
 	it('replays a delivery after its append acknowledgement is lost', async () => {
-		const opened = await openStorage(storage);
+		const opened = await openFor(storage);
 		const faulty = faultyJournals(opened.storage);
 		const runtime = createRuntime({ storage: faulty.journals, transport: recordingTransport() });
 		const room = stopAtEnd(await startRoom({ name: roomName('delivery-lost-ack'), runtime }));

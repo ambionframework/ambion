@@ -33,11 +33,11 @@ import {
 	script,
 	TIMING,
 } from './support/cast.ts';
-import { childWrites, openFor, quietNow } from './support/core-failure.ts';
+import { childWrites, quietNow } from './support/core-failure.ts';
 import { History, standing, violations } from './support/history.ts';
 import { collect, messagesOf, roomName, storedOf, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import {
 	childJournals,
 	childStorage,
@@ -158,7 +158,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 		await waitForRoom(room);
 		// the second host takes the name while the first is alive and keeps taking questions
 		const second = host();
-		const taken = await resume(second);
+		const taken = stopAtEnd(await resume(second));
 		await (await taken.visit(sam)).send({ text: 'Second?', key: 'q2' });
 		await waitForRoom(taken);
 		// the first host's next write finds the fence: it is superseded, and writes nothing
@@ -171,7 +171,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 		expect(record.map((m) => m.key)).not.toContain('q3');
 		expect(new Set(record.map((m) => m.seq)).size).toBe(record.length);
 		// and a third host reads the same record off the storage, and fences the second out
-		const third = await resume();
+		const third = stopAtEnd(await resume());
 		expect((await messagesOf(third)).map((m) => m.seq)).toEqual(record.map((m) => m.seq));
 		await third.stop();
 		// the second host learns at its next write: its stop finds the fence, says so, and frees the name

@@ -9,10 +9,9 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
-import { openStorage } from './support/core-exchange.ts';
 import { roomName, scriptedAgent, storedOf, waitForRoom } from './support/room.ts';
 import { isClosing, quiet, scripted, speak, toolNames } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { memory, storages } from './support/storage.ts';
 
 const assistant = scriptedAgent('assistant');
@@ -21,7 +20,7 @@ const reviewer = scriptedAgent('reviewer');
 const person = defineHuman({ name: 'priya', identity: 'The request owner.' });
 
 async function open(options: Partial<StartRoomOptions> = {}) {
-	const opened = await openStorage(memory);
+	const opened = await openFor(memory);
 	const runtime = createRuntime({
 		storage: opened.storage,
 		clock: fakeClock(),
@@ -100,7 +99,7 @@ describe('assistant room shorthand', () => {
 		await expect(open({ seats: { assistant: 'named' } })).rejects.toThrow("must use 'broadcast'");
 
 		const name = roomName('assistant-conflict-retry');
-		const opened = await openStorage(memory);
+		const opened = await openFor(memory);
 		const runtime = createRuntime({ storage: opened.storage });
 		await expect(startRoom({ name, runtime, assistant, summary: 'builder' })).rejects.toThrow(
 			'conflicts with summary',
@@ -143,7 +142,7 @@ describe('assistant room shorthand', () => {
 	it.each(storages)(
 		'preserves changed membership and summary assignment after $name resume',
 		async (storage) => {
-			const opened = await openStorage(storage);
+			const opened = await openFor(storage);
 			const room = stopAtEnd(
 				await startRoom({
 					name: roomName('assistant-resume'),

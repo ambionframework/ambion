@@ -9,10 +9,10 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { exchangeActivation } from '../src/room/exchange.ts';
-import { openStorage, settledFlag } from './support/core-exchange.ts';
+import { settledFlag } from './support/core-exchange.ts';
 import { deferred, roomName, scriptedAgent, tick, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { type Storage, storages } from './support/storage.ts';
 
 const at = '2026-01-01T00:00:00.000Z';
@@ -80,7 +80,7 @@ async function appendRecord(journals: JournalOpener, name: string, entries: read
 
 /** A stopped room over the record and any entries after it, and a runtime that reads it. */
 async function seeded(storage: Storage, extra: readonly Written[] = []) {
-	const opened = await openStorage(storage);
+	const opened = await openFor(storage);
 	const name = roomName('exchange-read');
 	await appendRecord(opened.journals, name, [...record, ...extra]);
 	const runtime = createRuntime({
@@ -99,7 +99,7 @@ function closedOf(read: ExchangeRead | undefined) {
 
 describe.each(storages)('readExchange on $name storage', (storage) => {
 	it('reads an open exchange immediately while the live wait remains pending', async () => {
-		const opened = await openStorage(storage);
+		const opened = await openFor(storage);
 		const started = deferred();
 		const release = deferred();
 		const runtime = createRuntime({

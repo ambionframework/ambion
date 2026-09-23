@@ -26,7 +26,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
-import { observed, openFor, tapped } from './support/core-failure.ts';
+import { observed, tapped } from './support/core-failure.ts';
 import {
 	collect,
 	deferred,
@@ -50,7 +50,7 @@ import {
 	summarise,
 	toolResultTexts,
 } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import {
 	faultyJournals,
 	memory,

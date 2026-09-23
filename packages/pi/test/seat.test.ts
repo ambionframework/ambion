@@ -365,7 +365,9 @@ describe('runner liveness', () => {
 	/**
 	 * The lease expires at 100 and the runner renews at 50. A refused renewal
 	 * cuts the activation at once. Any other renewal that does not move the
-	 * expiry leaves the activation to run until the expiry it holds.
+	 * expiry leaves the activation to run until the expiry it holds. The row
+	 * whose renewal never resolves holds a room call open for 10 seconds, so
+	 * the lease expiry cuts the activation before the call times out.
 	 */
 	it.each([
 		{
@@ -384,6 +386,7 @@ describe('runner liveness', () => {
 		{
 			renewal: 'never resolves',
 			answer: () => never<LeaseResponse>(),
+			call: { attempts: 1, timeout: 10_000 },
 			cutAt: 100,
 			reason: 'failed',
 		},
@@ -395,10 +398,11 @@ describe('runner liveness', () => {
 		},
 	])(
 		'cuts the activation at $cutAt as $reason when the renewal $renewal',
-		async ({ answer, cutAt, reason, events }) => {
+		async ({ answer, call, cutAt, reason, events }) => {
 			const reported: string[] = [];
 			const { actor, room, clock } = playSeat({
 				stream: deaf,
+				...(call === undefined ? {} : { call }),
 				lease: (request) => (request.operation === 'renew' ? answer() : undefined),
 				emit: (event) => {
 					if (event.type === 'delivery_error') reported.push(event.operation);

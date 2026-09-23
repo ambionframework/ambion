@@ -9,7 +9,6 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { openFor } from './support/core-room.ts';
 import {
 	crash,
 	deferred,
@@ -22,7 +21,7 @@ import {
 	waitForRoom,
 } from './support/room.ts';
 import { callTool, quiet, scripted } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
 const alpha = scriptedAgent('alpha');

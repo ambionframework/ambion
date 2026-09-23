@@ -236,7 +236,7 @@ describe('Session on the real host', () => {
 });
 
 describe('Session /attach while other work runs', () => {
-	it('stages a copy that lands after a room switch into the array the session holds by then, not a stale one', async () => {
+	it('stages a copy that lands after a room switch into the array the session holds by then', async () => {
 		const { host, session } = await started();
 		const gate = Promise.withResolvers<void>();
 		host.attachGate = gate.promise;

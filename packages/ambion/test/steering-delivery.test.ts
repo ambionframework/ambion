@@ -9,7 +9,7 @@ import { piExecution } from '../../pi/src/index.ts';
 import type { Steer, Wake } from '../src/hosting.ts';
 import { createRuntime, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
-import { openFor, tapped } from './support/core-failure.ts';
+import { tapped } from './support/core-failure.ts';
 import {
 	assistant,
 	assistantEnded,
@@ -23,7 +23,7 @@ import {
 	waitForRoom,
 } from './support/room.ts';
 import { byAgent, contextText, quiet, says, scripted, summarise } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
 const alpha = scriptedAgent('alpha');

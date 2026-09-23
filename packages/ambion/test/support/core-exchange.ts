@@ -1,12 +1,9 @@
 /**
  * Set-up that the exchange, summary, cancellation and stop tests share.
- * This file imports the test runner, so no child process may import it.
  */
-import { onTestFinished } from 'vitest';
 import { pi } from '../../../pi/src/index.ts';
 import { type RoomProtocol, runningRoom, type Transport, type Wake } from '../../src/hosting.ts';
 import { defineAgent, defineHuman, type Runtime } from '../../src/index.ts';
-import type { OpenedStorage, Storage } from './storage.ts';
 
 export const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
 
@@ -15,17 +12,6 @@ export const worker = defineAgent({
 	identity: 'Works on the question.',
 	executor: pi({ instructions: 'answer the question', model: 'scripted/worker' }),
 });
-
-/**
- * Open a storage and dispose of it when the test ends. Cleanup runs in the
- * reverse order of registration, so every room the test registers after
- * this call stops before the storage closes.
- */
-export async function openStorage(storage: Storage): Promise<OpenedStorage> {
-	const opened = await storage.open();
-	onTestFinished(() => opened.dispose());
-	return opened;
-}
 
 /** A transport that records each wake and runs nothing, so no seat claims its work. */
 export function recordingTransport(wakes: Wake[] = []): Transport {

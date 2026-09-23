@@ -18,9 +18,9 @@ import {
 import { createRuntime } from '../src/index.ts';
 import type { Close, Composition, LeaseChange } from '../src/journal/events.ts';
 import { fakeClock } from '../src/testing.ts';
-import { openFor } from './support/core-failure.ts';
 import { roomName, storedOf } from './support/room.ts';
 import { oneExchange } from './support/scenarios.ts';
+import { openFor } from './support/stop.ts';
 import { sqlite } from './support/storage.ts';
 
 const at = '2026-01-01T09:00:00.000Z';

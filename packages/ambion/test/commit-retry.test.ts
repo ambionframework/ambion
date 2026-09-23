@@ -7,10 +7,10 @@
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
-import { openFor, tapped } from './support/core-failure.ts';
+import { tapped } from './support/core-failure.ts';
 import { collect, messagesOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { quiet, scripted, speak, toolResultTexts } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
 const worker = scriptedAgent('worker');

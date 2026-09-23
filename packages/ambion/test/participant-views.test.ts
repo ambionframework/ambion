@@ -12,10 +12,9 @@ import {
 import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { viewOf } from '../src/room/view.ts';
-import { openFor } from './support/core-room.ts';
 import { participantsOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted, speak } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
 const writer = scriptedAgent('writer', 'Writes room answers.');

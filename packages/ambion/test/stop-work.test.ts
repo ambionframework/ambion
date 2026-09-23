@@ -13,7 +13,6 @@ import {
 } from '../src/index.ts';
 import {
 	manualClock,
-	openStorage,
 	person,
 	protocolOf,
 	recordingTransport,
@@ -30,7 +29,7 @@ import {
 	waitForRoom,
 } from './support/room.ts';
 import { isClosing, quiet, scripted, speak } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import {
 	faultyJournals,
 	gatedJournals,
@@ -128,7 +127,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 	] as const)(
 		'revokes %s, keeps the exchange open, and a resume does not retry it',
 		async (_case, fault) => {
-			const opened = await openStorage(storage);
+			const opened = await openFor(storage);
 			const faulty = faultyJournals(opened.storage);
 			const time = manualClock();
 			const work = holding();
@@ -160,7 +159,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 	);
 
 	it('waits for an unread claim before acknowledging stop', async () => {
-		const opened = await openStorage(storage);
+		const opened = await openFor(storage);
 		const lost = losing(opened.storage, 'lease');
 		const wakes: Wake[] = [];
 		const runtime = createRuntime({
@@ -190,7 +189,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 	});
 
 	it('does not acknowledge stop while a durable arrival is unreadable', async () => {
-		const opened = await openStorage(storage);
+		const opened = await openFor(storage);
 		const lost = losing(opened.storage, 'message');
 		const runtime = createRuntime({ storage: lost.journals });
 		const room = stopAtEnd(await startRoom({ name: roomName('stop-empty-cache'), runtime }));
@@ -212,7 +211,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 	});
 
 	it('revokes an expired pending summary lease before resume', async () => {
-		const opened = await openStorage(storage);
+		const opened = await openFor(storage);
 		const time = manualClock();
 		const drafted = deferred();
 		let summaryCalls = 0;
@@ -257,7 +256,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 	});
 
 	it('answers a woken but unclaimed question after a resume', async () => {
-		const opened = await openStorage(storage);
+		const opened = await openFor(storage);
 		// This runtime only wakes the seat and never claims, so the question is
 		// due but no lease covers it when the room stops.
 		const wakes: Wake[] = [];
@@ -289,7 +288,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 });
 
 it('takes up unread steering work after a stop and resume', async () => {
-	const opened = await openStorage(sqlite);
+	const opened = await openFor(sqlite);
 	const lost = losing(opened.storage, 'message');
 	const work = holding();
 	const runtime = createRuntime({
@@ -335,7 +334,7 @@ it('takes up unread steering work after a stop and resume', async () => {
 });
 
 it('fences a delayed old stop from revoking work in a newer run', async () => {
-	const opened = await openStorage(sqlite);
+	const opened = await openFor(sqlite);
 	const revocationStarted = deferred();
 	const releaseRevocation = deferred();
 	let holdRevocation = false;

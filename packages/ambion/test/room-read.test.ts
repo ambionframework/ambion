@@ -6,8 +6,8 @@ import type { RoomState } from '../src/room/fold.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import { readView } from '../src/room/read.ts';
 import type { Message, RoomRead } from '../src/types.ts';
-import { openFor } from './support/core-room.ts';
 import { roomName } from './support/room.ts';
+import { openFor } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
 const opening: Message = {

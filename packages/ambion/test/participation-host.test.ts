@@ -3,9 +3,8 @@ import { type Runtime, runningRoom } from '../src/host/runtime.ts';
 import { createRuntime, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
 import type { Intent } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
-import { openFor } from './support/core-room.ts';
 import { crash, messagesOf, roomName, scriptedAgent, stateOf } from './support/room.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
 const alpha = scriptedAgent('alpha');

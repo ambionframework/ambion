@@ -12,7 +12,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
-import { openStorage, settledFlag, turn } from './support/core-exchange.ts';
+import { settledFlag, turn } from './support/core-exchange.ts';
 import {
 	assistantEnded,
 	closedExchange,
@@ -36,7 +36,7 @@ import {
 	speak,
 	summarise,
 } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { faultyJournals, memory, storages } from './support/storage.ts';
 
 const assistant = scriptedAgent('assistant');
@@ -89,7 +89,7 @@ const resumeWith = async (room: Room, runtime: Runtime, script: Script) =>
 
 describe.each(storages)('replayed exchange responses on $name', (storage) => {
 	const runtimeOver = async (attempts: number, backoff: number) => {
-		const opened = await openStorage(storage);
+		const opened = await openFor(storage);
 		const clock = fakeClock();
 		const runtime = () =>
 			createRuntime({
@@ -157,7 +157,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 
 describe('exchange completion handles', () => {
 	const memoryRuntime = async (options: Partial<Parameters<typeof createRuntime>[0]> = {}) => {
-		const opened = await openStorage(memory);
+		const opened = await openFor(memory);
 		return {
 			opened,
 			runtime: createRuntime({
@@ -170,7 +170,7 @@ describe('exchange completion handles', () => {
 	};
 
 	it('keeps a close wait pending when the close append fails, then resolves after retry', async () => {
-		const opened = await openStorage(memory);
+		const opened = await openFor(memory);
 		const faulty = faultyJournals(opened.storage);
 		const room = stopAtEnd(
 			await startRoom({

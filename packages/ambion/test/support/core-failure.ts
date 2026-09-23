@@ -4,7 +4,7 @@
  * source, and the reader of a child process that reports its writes.
  * The test runner imports this file, and no child process does.
  */
-import { expect, onTestFinished } from 'vitest';
+import { expect } from 'vitest';
 import {
 	type AgentPort,
 	inProcessTransport,
@@ -18,18 +18,8 @@ import type { FakeClock } from '../../src/testing.ts';
 import type { Cast } from './cast.ts';
 import { type CrashPoint, idle, World, within } from './chaos.ts';
 import { messagesOf, roomName } from './room.ts';
-import type { OpenedStorage, Storage } from './storage.ts';
-
-/**
- * Open the storage and close it when the test ends. Vitest runs the end
- * hooks in reverse order, so a room that `stopAtEnd` registers later
- * stops before its storage closes.
- */
-export async function openFor(storage: Storage): Promise<OpenedStorage> {
-	const opened = await storage.open();
-	onTestFinished(() => opened.dispose());
-	return opened;
-}
+import { openFor } from './stop.ts';
+import type { Storage } from './storage.ts';
 
 type Context = Parameters<Transport['connect']>[1];
 

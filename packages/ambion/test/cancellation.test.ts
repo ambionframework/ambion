@@ -20,7 +20,6 @@ import {
 } from '../src/index.ts';
 import {
 	manualClock,
-	openStorage,
 	person,
 	protocolOf,
 	recordingTransport,
@@ -30,7 +29,7 @@ import {
 } from './support/core-exchange.ts';
 import { deferred, messagesOf, roomName, stateOf, storedOf, waitForRoom } from './support/room.ts';
 import { byAgent, isClosing, quiet, scripted, speak } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { faultyJournals, gatedJournals, memory, sqlite, storages } from './support/storage.ts';
 
 const assistant = defineAgent({
@@ -136,7 +135,7 @@ describe('durable cancellation', () => {
 	);
 
 	it('does not let a stale cancellation cut a newer run', async () => {
-		const opened = await openStorage(memory);
+		const opened = await openFor(memory);
 		const cancelStarted = deferred();
 		const releaseCancel = deferred();
 		const runtime = createRuntime({
@@ -170,7 +169,7 @@ describe('durable cancellation', () => {
 	});
 
 	it('orders a send behind the cut, which closes the exchange, and the send opens a new one', async () => {
-		const opened = await openStorage(memory);
+		const opened = await openFor(memory);
 		const cancelStarted = deferred();
 		const releaseCancel = deferred();
 		let gate = true;
@@ -241,7 +240,7 @@ describe('durable cancellation', () => {
 
 describe.each(storages)('cancellation storage recovery on $name', (storage) => {
 	const faultyRoom = async () => {
-		const opened = await openStorage(storage);
+		const opened = await openFor(storage);
 		const faulty = faultyJournals(opened.storage);
 		const room = await workerRoom(createRuntime({ storage: faulty.journals }));
 		return { opened, faulty, room, visit: await room.visit(person) };
@@ -280,7 +279,7 @@ describe.each(storages)('cancellation storage recovery on $name', (storage) => {
 });
 
 it('does not retry cancelled work after a restart', async () => {
-	const opened = await openStorage(sqlite);
+	const opened = await openFor(sqlite);
 	const time = manualClock();
 	const runtime = createRuntime({ storage: opened.storage, clock: time.clock });
 	let calls = 0;

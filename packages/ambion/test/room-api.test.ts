@@ -13,7 +13,6 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
-import { openFor } from './support/core-room.ts';
 import { refusal } from './support/errors.ts';
 import {
 	assistant,
@@ -34,7 +33,7 @@ import {
 	speak,
 	summarise,
 } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { memory, type Storage, storages } from './support/storage.ts';
 
 const alpha = scriptedAgent('alpha');

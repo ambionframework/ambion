@@ -16,7 +16,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
-import { flush, openFor, tapped } from './support/core-failure.ts';
+import { flush, tapped } from './support/core-failure.ts';
 import {
 	assistant,
 	collect,
@@ -28,7 +28,7 @@ import {
 	waitForRoom,
 } from './support/room.ts';
 import { byAgent, quiet, scripted } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { type Storage, storages } from './support/storage.ts';
 
 const alpha = scriptedAgent('alpha');

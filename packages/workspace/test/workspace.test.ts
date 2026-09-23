@@ -21,7 +21,7 @@ import type { Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Bash, InMemoryFs } from 'just-bash';
 import { Type } from 'typebox';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import { enter, roomName as name, scriptedAgent } from '../../ambion/test/support/room.ts';
 import {
 	byAgent,
@@ -84,6 +84,7 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 describe('the built-in tools', () => {
 	it('write, read and bash reach one directory on disk that two agents share, rooted at each home, and it outlasts dispose', async () => {
 		const parent = await mkdtemp(join(tmpdir(), 'ambion-'));
+		onTestFinished(() => rm(parent, { recursive: true, force: true }));
 		const root = join(parent, 'site');
 		const site = openWorkspace({ name: name('shared'), backend: { bash: directoryBackend(root) } });
 		const tools = site.tools();
@@ -128,7 +129,6 @@ describe('the built-in tools', () => {
 		expect(await readFile(join(root, 'home', 'writer', 'notes.txt'), 'utf8')).toBe(
 			'slab pour Thu\n',
 		);
-		await rm(parent, { recursive: true, force: true });
 	});
 
 	it('accepts Pi alternate edit arguments, and serializes two edits in one model batch so both land', async () => {

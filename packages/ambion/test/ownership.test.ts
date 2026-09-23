@@ -24,10 +24,9 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
-import { openFor } from './support/core-room.ts';
 import { andrei, messagesOf, participantsOf, roomName, scriptedAgent } from './support/room.ts';
 import { isClosing, quiet, scripted, speak } from './support/scripted.ts';
-import { stopAtEnd } from './support/stop.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { type OpenedStorage, type Storage, storages } from './support/storage.ts';
 
 function changeMessage(message: Message): void {
