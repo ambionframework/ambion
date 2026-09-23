@@ -30,7 +30,7 @@ whose question opened it. The room does not open a second exchange.
 **Each person who spoke gets a summary.** The closed exchange view carries
 `summaries`. Summary owns the assignment rules; see
 [the closing activation](summary.md#closing-activation). The tests are in
-`multi-summary.test.ts`.
+`summary.test.ts`.
 
 ## Waiting on a person
 

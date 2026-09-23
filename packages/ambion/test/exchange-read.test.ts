@@ -1,55 +1,55 @@
-import type { JournalOpener, JournalStorage } from '@ambionframework/journal';
+import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
-import { pi, piExecution } from '../../pi/src/index.ts';
-import { createRuntime, defineAgent, defineHuman, readExchange, startRoom } from '../src/index.ts';
+import { piExecution } from '../../pi/src/index.ts';
+import {
+	createRuntime,
+	defineHuman,
+	type ExchangeRead,
+	readExchange,
+	startRoom,
+} from '../src/index.ts';
 import { exchangeActivation } from '../src/room/exchange.ts';
-import type { LeaseHold } from '../src/room/lease.ts';
-import { deferred, roomName, tick, waitForRoom } from './support/room.ts';
+import { openStorage, settledFlag } from './support/core-exchange.ts';
+import { deferred, roomName, scriptedAgent, tick, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted } from './support/scripted.ts';
-import { storages } from './support/storage.ts';
+import { stopAtEnd } from './support/stop.ts';
+import { type Storage, storages } from './support/storage.ts';
 
 const at = '2026-01-01T00:00:00.000Z';
 const run = 'exchange-read-run';
 const firstFrom = 4;
 
-const composition = {
-	version: 2 as const,
-	goal: 'Keep the record coherent.',
-	agents: [{ name: 'assistant', identity: 'Assistant.', attention: 'none' as const }],
-	available: [],
-	at,
-};
+type Written = { kind: string; body: unknown; seq: number; run: string };
+const entry = (kind: string, body: unknown, seq = 0): Written => ({ kind, body, seq, run });
 
-const record = [
-	{ kind: 'run', body: { at }, seq: 1, run },
-	{ kind: 'composition', body: composition, seq: 2, run },
-	{
-		kind: 'message',
-		body: { kind: 'arrived', at, from: 'priya', subject: 'priya', identity: 'Priya.' },
-		seq: 3,
-		run,
-	},
-	{
-		kind: 'message',
-		body: { kind: 'said', at, from: 'priya', text: 'First question?', wakes: ['assistant'] },
-		seq: firstFrom,
-		run,
-	},
-	{
-		kind: 'close',
-		body: { owner: 'priya', from: firstFrom, through: firstFrom, at, summary: 'assistant' },
-		seq: 5,
-		run,
-	},
-	{
-		kind: 'message',
-		body: { kind: 'said', at, from: 'priya', text: 'Second question?' },
-		seq: 6,
-		run,
-	},
-	{
-		kind: 'message',
-		body: {
+const record: readonly Written[] = [
+	entry('run', { at }, 1),
+	entry(
+		'composition',
+		{
+			version: 2,
+			goal: 'Keep the record coherent.',
+			agents: [{ name: 'assistant', identity: 'Assistant.', attention: 'none' }],
+			available: [],
+			at,
+		},
+		2,
+	),
+	entry('message', { kind: 'arrived', at, from: 'priya', subject: 'priya', identity: 'Priya.' }, 3),
+	entry(
+		'message',
+		{ kind: 'said', at, from: 'priya', text: 'First question?', wakes: ['assistant'] },
+		firstFrom,
+	),
+	entry(
+		'close',
+		{ owner: 'priya', from: firstFrom, through: firstFrom, at, summary: 'assistant' },
+		5,
+	),
+	entry('message', { kind: 'said', at, from: 'priya', text: 'Second question?' }, 6),
+	entry(
+		'message',
+		{
 			kind: 'summary',
 			at,
 			from: 'assistant',
@@ -57,145 +57,133 @@ const record = [
 			text: 'First answer.',
 			covers: { from: firstFrom, through: firstFrom },
 		},
-		seq: 7,
-		run,
-	},
+		7,
+	),
 	// An administrative entry advances the journal without becoming a message.
-	{ kind: 'run', body: { at }, seq: 8, run },
-] as const;
+	entry('run', { at }, 8),
+];
 
-async function appendRecord(
-	journals: JournalOpener,
-	name: string,
-	entries: readonly { kind: string; body: unknown; seq: number; run: string }[],
-): Promise<void> {
-	const storage: JournalStorage = await journals.open(name);
+const published = {
+	status: 'published',
+	summary: { text: 'First answer.', covers: { from: firstFrom, through: firstFrom } },
+};
+
+async function appendRecord(journals: JournalOpener, name: string, entries: readonly Written[]) {
+	const storage = await journals.open(name);
 	let position = (await storage.read(0)).position;
-	for (const entry of entries) {
-		const landed = await storage.append(entry, position);
+	for (const written of entries) {
+		const landed = await storage.append(written, position);
 		if (landed === undefined) throw new Error('The test record moved while it was being written.');
 		position = landed.position;
 	}
 }
 
-async function seeded(storage: (typeof storages)[number], prefix: string) {
-	const opened = await storage.open();
-	const name = roomName(prefix);
-	await appendRecord(opened.journals, name, record);
+/** A stopped room over the record and any entries after it, and a runtime that reads it. */
+async function seeded(storage: Storage, extra: readonly Written[] = []) {
+	const opened = await openStorage(storage);
+	const name = roomName('exchange-read');
+	await appendRecord(opened.journals, name, [...record, ...extra]);
 	const runtime = createRuntime({
 		storage: opened.storage,
 		clock: { now: () => 0, alarm: () => () => {} },
 	});
-	return { name, opened, runtime };
+	const read = (from: number) => readExchange(name, from, { runtime });
+	return { name, opened, runtime, read };
+}
+
+function closedOf(read: ExchangeRead | undefined) {
+	if (read === undefined || read.exchange.status !== 'closed')
+		throw new Error('Expected a closed exchange.');
+	return read.exchange;
 }
 
 describe.each(storages)('readExchange on $name storage', (storage) => {
 	it('reads an open exchange immediately while the live wait remains pending', async () => {
-		const opened = await storage.open();
+		const opened = await openStorage(storage);
 		const started = deferred();
 		const release = deferred();
-		const agent = defineAgent({
-			name: 'worker',
-			identity: 'Holds work.',
-			executor: pi({ instructions: 'Wait for the test.', model: 'scripted/worker' }),
-		});
 		const runtime = createRuntime({
 			storage: opened.storage,
 			clock: { now: () => 0, alarm: () => () => {} },
 		});
-		const room = await startRoom({
-			name: roomName(`exchange-read-open-${storage.name}`),
-			runtime,
-			agents: [agent],
-			execution: piExecution({
-				stream: scripted(async (context) => {
-					if (!contextText(context).includes('What is open?')) return quiet();
-					started.resolve();
-					await release.promise;
-					return quiet();
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('exchange-read-open'),
+				runtime,
+				agents: [scriptedAgent('worker')],
+				execution: piExecution({
+					stream: scripted(async (context) => {
+						if (!contextText(context).includes('What is open?')) return quiet();
+						started.resolve();
+						await release.promise;
+						return quiet();
+					}),
 				}),
 			}),
-		});
-		try {
-			const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
-			const visit = await room.visit(person);
-			await waitForRoom(room, 'settled');
-			const handle = await visit.send({ text: 'What is open?' });
-			await started.promise;
-
-			const read = await readExchange(room.name, handle.from, { runtime });
-			expect(read?.exchange).toMatchObject({ status: 'open', from: handle.from });
-			expect(read?.messages.map((message) => message.seq)).toEqual([handle.from]);
-
-			let closed = false;
-			const waiting = handle.waitForClose().then(() => {
-				closed = true;
-			});
-			await tick();
-			expect(closed).toBe(false);
-			release.resolve();
-			await waiting;
-		} finally {
-			release.resolve();
-			await room.stop();
-			await opened.dispose();
-		}
-	});
-
-	it('reads a stopped open record without appending or executing work', async () => {
-		const { name, opened, runtime } = await seeded(
-			storage,
-			`exchange-read-stopped-${storage.name}`,
 		);
-		try {
-			const before = await (await opened.journals.open(name)).read(0);
-			const read = await readExchange(name, 6, { runtime });
-			const after = await (await opened.journals.open(name)).read(0);
-			expect(read?.exchange).toEqual({
-				status: 'open',
-				owner: 'priya',
-				from: 6,
-				at,
-				activations: [],
-			});
-			expect(read?.messages.map((message) => message.seq)).toEqual([6]);
-			expect(after.position).toBe(before.position);
-		} finally {
-			await opened.dispose();
-		}
+		const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Project manager.' }));
+		await waitForRoom(room, 'settled');
+		const handle = await visit.send({ text: 'What is open?' });
+		await started.promise;
+
+		const read = await readExchange(room.name, handle.from, { runtime });
+		expect(read?.exchange).toMatchObject({ status: 'open', from: handle.from });
+		expect(read?.messages.map((message) => message.seq)).toEqual([handle.from]);
+
+		const waiting = handle.waitForClose();
+		const closed = settledFlag(waiting);
+		await tick();
+		expect(closed()).toBe(false);
+		release.resolve();
+		await waiting;
 	});
 
-	it('returns the fixed discussion and published summary for a closed exchange', async () => {
-		const { name, opened, runtime } = await seeded(storage, `exchange-read-closed-${storage.name}`);
-		try {
-			const result = await readExchange(name, firstFrom, { runtime });
-			if (result === undefined || result.exchange.status !== 'closed')
-				throw new Error('Expected the first exchange to be closed.');
-			expect(result.messages.map((message) => message.seq)).toEqual([firstFrom]);
-			expect(result.messages.every((message) => message.kind !== 'summary')).toBe(true);
-			expect(result.exchange.summary).toMatchObject({
-				status: 'published',
-				summary: { text: 'First answer.', covers: { from: firstFrom, through: firstFrom } },
-			});
-			// The late summary follows the opening of the next exchange, but stays with its close.
-			const later = await readExchange(name, 6, { runtime });
-			expect(later?.exchange).toMatchObject({ status: 'open', from: 6 });
-			expect(later?.messages.map((message) => message.seq)).toEqual([6]);
-			expect(result.watermark).toBe(8);
-		} finally {
-			await opened.dispose();
-		}
-	});
+	it('reads a stopped record without appending: open, closed, missing, and detached', async () => {
+		const { name, opened, read } = await seeded(storage);
+		const position = async () => (await (await opened.journals.open(name)).read(0)).position;
+		const before = await position();
 
-	it('sums the usage of every attempt and the summary activation on a closed exchange', async () => {
-		const opened = await storage.open();
-		const name = roomName(`exchange-read-usage-${storage.name}`);
-		const ended = (id: string, reason: 'failed' | 'released', usage?: object, seq = 0) => ({
-			kind: 'lease',
-			body: { id, phase: 'ended', reason, at, readThrough: 0, ...(usage ? { usage } : {}) },
-			seq,
-			run,
+		// The late summary follows the opening of the next exchange, but stays with its close.
+		const open = await read(6);
+		expect(open?.exchange).toEqual({
+			status: 'open',
+			owner: 'priya',
+			from: 6,
+			at,
+			activations: [],
 		});
+		expect(open?.messages.map((message) => message.seq)).toEqual([6]);
+		const first = await read(firstFrom);
+		const closed = closedOf(first);
+		expect(first?.messages.map((message) => message.seq)).toEqual([firstFrom]);
+		expect(first?.messages.every((message) => message.kind !== 'summary')).toBe(true);
+		expect(closed.summary).toMatchObject(published);
+		expect(closed).not.toHaveProperty('usage');
+		expect(first?.watermark).toBe(8);
+		expect(await position()).toBe(before);
+
+		for (const interior of [3, 5, 7]) expect(await read(interior)).toBeUndefined();
+		expect(await read(99)).toBeUndefined();
+		const runtime = createRuntime({ storage: opened.storage });
+		expect(await readExchange(roomName('exchange-read-absent'), 1, { runtime })).toBeUndefined();
+
+		// Nested values are detached on every read.
+		const message = first?.messages[0];
+		if (message?.kind !== 'said' || closed.summary.status !== 'published')
+			throw new Error('Expected the opening message and a published summary.');
+		message.wakes?.push('mutated');
+		closed.summary.summary.covers.from = 99;
+		closed.summary.summary.text = 'mutated';
+		const again = await read(firstFrom);
+		const original = again?.messages[0];
+		expect(original?.kind === 'said' ? original.wakes : undefined).toEqual(['assistant']);
+		expect(closedOf(again).summary).toMatchObject(published);
+	});
+
+	it('lists every activation with its seat, attempt, purpose, outcome, and summed usage', async () => {
+		const lease = (body: object) => entry('lease', body);
+		const ended = (id: string, reason: string, extra: object = {}) =>
+			lease({ id, phase: 'ended', reason, at, readThrough: 0, ...extra });
 		const spent = (input: number, cost?: number) => ({
 			input,
 			output: input * 2,
@@ -203,96 +191,56 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 			cacheWrite: 0,
 			...(cost === undefined ? {} : { cost }),
 		});
-		await appendRecord(opened.journals, name, [
-			...record,
-			ended('message:4:assistant:1', 'failed', spent(10, 0.5), 9),
-			ended('message:4:assistant:2', 'released', spent(20, 0.25), 10),
-			ended('closed:4:assistant:1', 'released', spent(5), 11),
+		const { read } = await seeded(storage, [
+			ended('message:4:assistant:1', 'failed', { cause: 'transient', usage: spent(10, 0.5) }),
+			ended('message:4:assistant:2', 'released', { usage: spent(20, 0.25) }),
+			ended('closed:4:assistant:1', 'revoked', { usage: spent(5) }),
 			// Outside the range of the first exchange.
-			ended('message:6:assistant:1', 'released', spent(1000, 9), 12),
+			ended('message:6:assistant:1', 'released', { usage: spent(1000, 9) }),
+			lease({ id: 'message:6:assistant:2', phase: 'running', expiresAt: 10, at, readThrough: 0 }),
 		]);
-		const runtime = createRuntime({
-			storage: opened.storage,
-			clock: { now: () => 0, alarm: () => () => {} },
+		const closed = closedOf(await read(firstFrom));
+		expect(closed.usage).toEqual({
+			input: 35,
+			output: 70,
+			cacheRead: 3,
+			cacheWrite: 0,
+			cost: 0.75,
 		});
-		try {
-			const read = await readExchange(name, firstFrom, { runtime });
-			if (read === undefined || read.exchange.status !== 'closed')
-				throw new Error('Expected the first exchange to be closed.');
-			expect(read.exchange.usage).toEqual({
-				input: 35,
-				output: 70,
-				cacheRead: 3,
-				cacheWrite: 0,
-				cost: 0.75,
-			});
-			const quietRoom = await seeded(storage, `exchange-read-nousage-${storage.name}`);
-			try {
-				const bare = await readExchange(quietRoom.name, firstFrom, { runtime: quietRoom.runtime });
-				expect(bare?.exchange).not.toHaveProperty('usage');
-			} finally {
-				await quietRoom.opened.dispose();
-			}
-		} finally {
-			await opened.dispose();
-		}
-	});
-
-	it('lists every activation of an exchange with its seat, attempt, purpose, and outcome', async () => {
-		const opened = await storage.open();
-		const name = roomName(`exchange-read-activations-${storage.name}`);
-		const lease = (body: object, seq = 0) => ({ kind: 'lease', body, seq, run });
-		const ended = (id: string, reason: string, extra: object = {}) =>
-			lease({ id, phase: 'ended', reason, at, readThrough: 0, ...extra });
-		const spent = { input: 3, output: 4, cacheRead: 0, cacheWrite: 0 };
-		await appendRecord(opened.journals, name, [
-			...record,
-			ended('message:4:assistant:1', 'failed', { cause: 'transient' }),
-			ended('message:4:assistant:2', 'released', { usage: spent }),
-			ended('closed:4:assistant:1', 'revoked'),
-			lease({ id: 'message:6:assistant:1', phase: 'running', expiresAt: 10, at, readThrough: 0 }),
+		const activation = (id: string, attempt: number, purpose: string, outcome: object) => ({
+			id,
+			seat: 'assistant',
+			attempt,
+			purpose,
+			outcome,
+		});
+		expect(closed.activations).toEqual([
+			{
+				...activation('message:4:assistant:1', 1, 'respond', {
+					status: 'failed',
+					cause: 'transient',
+				}),
+				usage: spent(10, 0.5),
+			},
+			{
+				...activation('message:4:assistant:2', 2, 'respond', { status: 'released' }),
+				usage: spent(20, 0.25),
+			},
+			{
+				...activation('closed:4:assistant:1', 1, 'summary', { status: 'revoked' }),
+				usage: spent(5),
+			},
 		]);
-		const runtime = createRuntime({
-			storage: opened.storage,
-			clock: { now: () => 0, alarm: () => () => {} },
-		});
-		try {
-			const closed = (await readExchange(name, firstFrom, { runtime }))?.exchange;
-			expect(closed?.activations).toEqual([
-				{
-					id: 'message:4:assistant:1',
-					seat: 'assistant',
-					attempt: 1,
-					purpose: 'respond',
-					outcome: { status: 'failed', cause: 'transient' },
-				},
-				{
-					id: 'message:4:assistant:2',
-					seat: 'assistant',
-					attempt: 2,
-					purpose: 'respond',
-					outcome: { status: 'released' },
-					usage: spent,
-				},
-				{
-					id: 'closed:4:assistant:1',
-					seat: 'assistant',
-					attempt: 1,
-					purpose: 'summary',
-					outcome: { status: 'revoked' },
-				},
-			]);
-			const open = (await readExchange(name, 6, { runtime }))?.exchange;
-			expect(open?.activations).toEqual([
-				expect.objectContaining({ id: 'message:6:assistant:1', outcome: { status: 'running' } }),
-			]);
-		} finally {
-			await opened.dispose();
-		}
+		expect((await read(6))?.exchange.activations).toEqual([
+			expect.objectContaining({ id: 'message:6:assistant:1', outcome: { status: 'released' } }),
+			expect.objectContaining({ id: 'message:6:assistant:2', outcome: { status: 'running' } }),
+		]);
 	});
+});
 
-	it('marks an activation a cancellation ended', () => {
-		const lease: LeaseHold = {
+it('marks an activation a cancellation ended', () => {
+	expect(
+		exchangeActivation({
 			id: 'message:4:assistant:1',
 			phase: 'ended',
 			at,
@@ -302,69 +250,15 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 			reason: 'revoked',
 			cancelled: true,
 			until: 6,
-		};
-		expect(exchangeActivation(lease).outcome).toEqual({ status: 'revoked', cancelled: true });
-	});
-
-	it('returns undefined for interior positions, missing exchanges, and missing rooms', async () => {
-		const { name, opened, runtime } = await seeded(
-			storage,
-			`exchange-read-missing-${storage.name}`,
-		);
-		try {
-			expect(await readExchange(name, 3, { runtime })).toBeUndefined();
-			expect(await readExchange(name, 5, { runtime })).toBeUndefined();
-			expect(await readExchange(name, 7, { runtime })).toBeUndefined();
-			expect(await readExchange(roomName('exchange-read-absent'), 1, { runtime })).toBeUndefined();
-		} finally {
-			await opened.dispose();
-		}
-	});
-
-	it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, 1.5, Number.MAX_SAFE_INTEGER + 1])(
-		'rejects invalid exchange reference %s',
-		async (from) => {
-			const opened = await storage.open();
-			const runtime = createRuntime({ storage: opened.storage });
-			try {
-				await expect(
-					readExchange(roomName(`exchange-read-invalid-${storage.name}`), from, { runtime }),
-				).rejects.toThrow(/positive safe integer/i);
-			} finally {
-				await opened.dispose();
-			}
-		},
-	);
-
-	it('detaches nested discussion and summary values on every read', async () => {
-		const { name, opened, runtime } = await seeded(
-			storage,
-			`exchange-read-detached-${storage.name}`,
-		);
-		try {
-			const first = await readExchange(name, firstFrom, { runtime });
-			if (first === undefined || first.exchange.status !== 'closed')
-				throw new Error('Expected a closed exchange.');
-			const message = first.messages[0];
-			if (message === undefined || message.kind !== 'said')
-				throw new Error('Expected the opening message.');
-			message.wakes?.push('mutated');
-			if (first.exchange.summary.status !== 'published')
-				throw new Error('Expected a published summary.');
-			first.exchange.summary.summary.covers.from = 99;
-			first.exchange.summary.summary.text = 'mutated';
-
-			const again = await readExchange(name, firstFrom, { runtime });
-			if (again === undefined || again.exchange.status !== 'closed')
-				throw new Error('Expected a closed exchange.');
-			const original = again.messages[0];
-			expect(original?.kind === 'said' ? original.wakes : undefined).toEqual(['assistant']);
-			expect(again.exchange.summary).toMatchObject({
-				status: 'published',
-				summary: { text: 'First answer.', covers: { from: firstFrom, through: firstFrom } },
-			});
-		} finally {
-			await opened.dispose();
-		}
-	});
+		}).outcome,
+	).toEqual({ status: 'revoked', cancelled: true });
 });
+
+it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, 1.5, Number.MAX_SAFE_INTEGER + 1])(
+	'rejects invalid exchange reference %s',
+	async (from) => {
+		await expect(
+			readExchange(roomName('exchange-read-invalid'), from, { runtime: createRuntime() }),
+		).rejects.toThrow(/positive safe integer/i);
+	},
+);
