@@ -429,10 +429,14 @@
 									{
 										// `@ambionframework/ambion/hosting` and `/conformance` are
 										// published entries, and the manifest names them. Every other
-										// path reaches inside the core.
+										// path reaches inside the core. Biome reads each group as a
+										// gitignore pattern: `!` excludes one path, and an extglob
+										// such as `!(a|b)` matches nothing.
 										"group": [
-											"@ambionframework/ambion/!(hosting|conformance)",
-											"**/packages/ambion/src/*"
+											"@ambionframework/ambion/**",
+											"!@ambionframework/ambion/hosting",
+											"!@ambionframework/ambion/conformance",
+											"**/ambion/src/**"
 										],
 										"message": "Reach the core through `@ambionframework/ambion` or its `/hosting` or `/conformance` entry, never a file inside it."
 									}
@@ -538,8 +542,10 @@
 								"patterns": [
 									{
 										"group": [
-											"@ambionframework/ambion/!(hosting|conformance)",
-											"**/packages/ambion/src/*"
+											"@ambionframework/ambion/**",
+											"!@ambionframework/ambion/hosting",
+											"!@ambionframework/ambion/conformance",
+											"**/ambion/src/**"
 										],
 										"message": "Reach the core through `@ambionframework/ambion` or its `/hosting` or `/conformance` entry, never a file inside it."
 									},
@@ -595,8 +601,8 @@
 									{
 										"group": [
 											"@ambionframework/ambion",
-											"@ambionframework/ambion/*",
-											"**/packages/ambion/**"
+											"@ambionframework/ambion/**",
+											"**/ambion/**"
 										],
 										"message": "A workspace backend knows the workspace interface, not the room."
 									},
@@ -629,11 +635,7 @@
 							"options": {
 								"patterns": [
 									{
-										"group": [
-											"@ambionframework/*",
-											"@earendil-works/pi-*",
-											"**/packages/ambion/**"
-										],
+										"group": ["@ambionframework/*", "@earendil-works/pi-*", "**/ambion/**"],
 										"message": "The record knows no room. Nothing in this repository sits below it."
 									}
 								]
@@ -657,7 +659,7 @@
 									{
 										"group": [
 											"@ambionframework/ambion",
-											"@ambionframework/ambion/*",
+											"@ambionframework/ambion/**",
 											"**/packages/ambion/**",
 											"**/ambion/**"
 										],

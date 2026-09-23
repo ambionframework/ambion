@@ -14,9 +14,9 @@
  * - a recursive `remove` runs `rm -rf --` through `exec`
  * - SFTP gives `mtime` in seconds, and `FileInfo` wants milliseconds
  *
- * Every SFTP call races the end of the session: `ssh2` keeps a request on a
- * dead channel pending forever, and the owner runs one operation at a time
- * for every agent. A call that the connection's end cuts short answers
+ * Every SFTP call races the end of the session: `ssh2` keeps a request made
+ * after its channel closes pending forever, and the owner runs one
+ * operation at a time for every agent. A call that the connection's end cuts short answers
  * `unknown`, and nothing retries it.
  *
  * An ordinary file is created with mode `0664`, so a default ACL on a shared

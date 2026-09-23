@@ -142,6 +142,22 @@ describe.skipIf(!hasSetsid)('a command that ends early', () => {
 		expect(view?.kind === 'replace' && view.output.text).toBe('started\n');
 	});
 
+	it('gives the exit status of a command that exits before its deadline, while a child keeps writing', async () => {
+		const started = await server();
+		const backend = backendFor(started);
+		const env = await backend.connect({ name: 'ada' });
+		const chatty = '(while :; do echo tick; sleep 0.1; done) & echo started';
+		for (const timeout of [2, 20]) {
+			const began = Date.now();
+			const result = await env.exec(chatty, { timeout }, ctx);
+			const took = Date.now() - began;
+			// Under the short deadline the deadline ends the wait; under the long one the drain limit does.
+			expect(result).toMatchObject({ ok: true, value: { exitCode: 0 } });
+			expect(took).toBeLessThan(8_000);
+		}
+		await env.cleanup();
+	});
+
 	it('refuses a timeout that is not a positive finite number of seconds', async () => {
 		const started = await server();
 		const backend = backendFor(started);
