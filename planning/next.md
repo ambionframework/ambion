@@ -227,7 +227,7 @@ one copy of each mechanism.
       file list, one table, and one call envelope. P1. (M4)
 - [ ] **3.** One set of scripted room fixtures in the conformance suite.
       P2. (M5)
-- [ ] **4.** The workspace as an interface: a conformance entry, a
+- [x] **4.** The workspace as an interface: a conformance entry, a
       contract with no `destroy()` and no change log, a neutral layer that
       owns the tools, their guidance, and the environment helpers, and one
       entry for each binding. Needs 2. P1. (M7)
