@@ -137,10 +137,10 @@ of the seat in the same exchange resumes the session and reads only the new
 entries. The first activation of the seat in the next exchange starts
 fresh. No session crosses an exchange.
 
-**The session is a cache.** Claude and Codex keep it on the local disk, and
-Pi keeps it in the process. When it is lost, the next activation reads the
-record and starts fresh. The steps of each activation go to the logger
-that the host passes in. See [Exchange continuity](docs/executors.md#exchange-continuity).
+**The session is a cache.** Claude and Codex keep it on the local disk, and Pi
+keeps it in the process. When it is lost, the next activation reads the record
+and starts fresh. The steps of each activation go to the logger that the host
+passes in. See [Exchange continuity](docs/executors.md#exchange-continuity).
 
 ## What you get
 

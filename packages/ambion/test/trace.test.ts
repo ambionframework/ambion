@@ -232,7 +232,7 @@ describe('the trace limits and policy', () => {
 		expect(JSON.stringify(output)).not.toContain('QUJD');
 	});
 
-	it('sums usage steps with no logger', async () => {
+	it('sums usage steps, and keeps the sum when the pass cap drops steps', async () => {
 		const options = {
 			room: 'usage-sum',
 			seat: 'product',
@@ -241,7 +241,8 @@ describe('the trace limits and policy', () => {
 			policy: { thinking: 'full', toolOutput: 'full' } as const,
 			now: () => 0,
 		};
-		const sink = openTrace(options);
+		const log = collectSteps();
+		const sink = openTrace({ ...options, logger: log.logger });
 		expect(sink.usage()).toBeUndefined();
 		sink.startPass('view', 1);
 		sink.record({ type: 'text', text: 'dropped', final: true });
@@ -255,6 +256,8 @@ describe('the trace limits and policy', () => {
 			cost: 1.5,
 		});
 		await expect(sink.close()).resolves.toBeUndefined();
+		// The cap of one step a pass logged the pass step only.
+		expect(log.records.map((record) => record.step.type)).toEqual(['pass']);
 		const costless = openTrace({ ...options, activation: 'message:2:product:2' });
 		costless.record({ type: 'usage', input: 5, output: 1, cacheRead: 0, cacheWrite: 0 });
 		expect(costless.usage()).toEqual({ input: 5, output: 1, cacheRead: 0, cacheWrite: 0 });

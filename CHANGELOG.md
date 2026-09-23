@@ -25,11 +25,11 @@ each executor definition. `resumesForSeat` is gone from
 `@ambionframework/ambion/hosting`. The golden journals changed.
 
 **`@ambionframework/pi-journal` and the Pi transcript audit are gone.** The
-activation trace, given to the host's logger, shows what a seat did. `seatSessionId`, the
-`transcripts` and `room` options of `createPiExecutor`, the `transcripts`
-service of `createExecutionServices`, and the `audit_error` event are gone.
-Storage keeps no `ambion/pi-session` journals. Pass a `logger` to
-`createRuntime` to read the steps.
+activation trace, given to the host's logger, shows what a seat did.
+`seatSessionId`, the `transcripts` and `room` options of `createPiExecutor`,
+the `transcripts` service of `createExecutionServices`, and the `audit_error`
+event are gone. Storage keeps no `ambion/pi-session` journals. Pass a `logger`
+to `createRuntime` to read the steps.
 
 **The executor conformance suite has a case for the fresh start.** An
 executor that declares `memory` starts a fresh session when the view names

@@ -53,8 +53,10 @@ A host must:
 6. Restore domain resources under their own persistence contracts.
 
 **The trace goes to the host's logs.** Room history lives in the journal.
-Pass a `logger` to `createRuntime`, or to `configure` on Cloudflare, to keep
-the steps of each activation. A restart keeps no trace. A harness session is not part of the recovery: a restart loses a
+Pass a `logger` to `createRuntime`, or to `configure` on Cloudflare, to
+receive the steps of each activation. A restart keeps no trace.
+
+**A harness session is not part of the recovery.** A restart loses a
 session that lived in the process, and the next activation reads the record
 again. See [Exchange continuity](executors.md#exchange-continuity).
 

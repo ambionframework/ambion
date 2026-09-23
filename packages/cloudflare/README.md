@@ -24,20 +24,22 @@ What is built:
   Identity and presence come from the room journal. Restart restores handles
   only for present humans; `send` never enters the room implicitly. Explicit
   `visit` ensures presence, and repeated `leave` is harmless.
-- **`SeatObject`** runs one seat. `wake` stores the activation id and sets
-  an alarm; `alarm()` claims the lease, reads the view, runs the activation
-  and whatever queued behind it to their end, and releases the lease. A
-  second `alarm()` while a run is live in the object returns at once.
-  `steer` delivers a recorded message to its exact running activation. It
-  writes no activation metadata and sets no alarm. Unread messages remain
-  recoverable from the room journal. `cut` stops the activation the room ended. The seat gives the
-  steps of each activation to the `logger` that `configure` takes. Absent, it drops them. The Pi executor lives on the object
-  instance, so an eviction loses the kept transcript, and the next activation
-  starts fresh.
-  It composes `AgentRunner` services directly from the worker configuration. It does not create a room runtime.
-- **`configure`** names the complete agent definitions the objects resolve by name,
-  the model call they make, and an optional `logger` for the steps of each activation.
-  Pass `(record) => console.log({ ambion: 'step', ...record })` to send the steps to Workers Logs.
+- **`SeatObject`** runs one seat. `wake` stores the activation id and sets an
+  alarm; `alarm()` claims the lease, reads the view, runs the activation and
+  whatever queued behind it to their end, and releases the lease. A second
+  `alarm()` while a run is live in the object returns at once. `steer`
+  delivers a recorded message to its exact running activation. It writes no
+  activation metadata and sets no alarm. Unread messages remain recoverable
+  from the room journal. `cut` stops the activation the room ended. The seat
+  gives the steps of each activation to the `logger` that `configure` takes.
+  Absent, it drops them. The Pi executor lives on the object instance, so an
+  eviction loses the kept transcript, and the next activation starts fresh. It
+  composes `AgentRunner` services directly from the worker configuration. It
+  does not create a room runtime.
+- **`configure`** names the complete agent definitions the objects resolve by
+  name, the model call they make, and an optional `logger` for the steps of
+  each activation. To send the steps to Workers Logs, pass
+  `(record) => console.log({ ambion: 'step', ...record })`.
 
 `RoomObject.start` receives the complete agent definitions in `agents`, an optional
 `summary` name, and an optional `seats` map. The map sets initial members and

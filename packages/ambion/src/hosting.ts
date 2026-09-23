@@ -52,7 +52,7 @@ export type {
 } from './execution/room-tools.ts';
 export { agentTools, roomTools, toolContext } from './execution/room-tools.ts';
 export { AgentRunner, inProcessTransport } from './execution/runner.ts';
-export type { TraceOpener, TraceOptions, TraceSink } from './execution/trace.ts';
+export type { TraceOpener, TraceSink } from './execution/trace.ts';
 export { registerDefaultExecution } from './host/defaults.ts';
 export type {
 	AgentExecutionContext,
