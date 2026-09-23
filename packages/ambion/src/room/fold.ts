@@ -78,17 +78,6 @@ export interface BaseFacts {
 	deliveries: Map<Seq, MessageDelivery>;
 }
 
-/** The private base facts held by a projection for incremental evolution. */
-export const baseOf = (state: RoomState): BaseFacts => ({
-	messages: [...state.messages],
-	closes: [...state.closes],
-	cancelledAt: state.cancelledAt,
-	cancelClosed: [...state.cancelClosed],
-	leases: new Map(state.leases),
-	composition: state.composition,
-	deliveries: new Map(state.deliveries),
-});
-
 /** The empty room facts before the first committed event. */
 export const older = (): BaseFacts => ({
 	messages: [],
