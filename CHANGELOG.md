@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**The hosting entry holds the room tools once.** `roomTools(view, binding,
+options?)` returns `say`, `seat`, and `unseat` for one activation, or `say`
+alone for a closing activation. `agentTools(view, agent, signal, current)`
+returns the tools of the definition in the same form, and
+`toolContext(agent, view, call, signal, onUpdate?)` builds the context of
+one call. The entry also exports the `RoomTool`, `RoomToolBinding`,
+`RoomToolContent`, `RoomToolOptions`, and `RoomToolResult` types. The Pi,
+Claude, and Codex executors adapt these tools and keep no copy of their
+rules. A Claude or Codex call of a definition tool now takes its call id
+before `prepareArguments` runs.
+
 **`@ambionframework/workspace` imports `typebox` and bundles no copy of it.**
 The SQL tools use `typebox` at runtime, and the manifest declared it only for
 development. tsdown then inlined `typebox` 1.3.18 into `dist`, 143 KB of the

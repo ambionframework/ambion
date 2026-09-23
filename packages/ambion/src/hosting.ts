@@ -51,6 +51,14 @@ export {
 	renderLine,
 	summaryToolDescription,
 } from './execution/render.ts';
+export type {
+	RoomTool,
+	RoomToolBinding,
+	RoomToolContent,
+	RoomToolOptions,
+	RoomToolResult,
+} from './execution/room-tools.ts';
+export { agentTools, roomTools, toolContext } from './execution/room-tools.ts';
 export { AgentRunner, inProcessTransport } from './execution/runner.ts';
 export {
 	type TraceOpener,
