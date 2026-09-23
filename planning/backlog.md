@@ -36,7 +36,18 @@ that fails when it is stale. **Condition:** an adapter or host author who
 cannot work from the typed README examples and the export snapshot.
 
 **A workstation backend.** A workspace backend over SSH to one remote
-server. PR #268 holds the scope. **Condition:** the owner schedules it.
+server, with one Unix account for each agent.
+[docs/workstation.md](../docs/workstation.md) holds the design.
+**Condition:** the owner schedules it.
+
+**`WorkspaceFiles` writes its temporary file beside the target.**
+`writeThrough` (`packages/workspace/src/files.ts:50`) writes a `sql` export
+to a temporary file under `/tmp` and renames it onto the target. Many
+servers mount `/tmp` as a filesystem of its own, and a rename across two
+filesystems fails. A name beside the target, such as
+`<target>.<random>.part`, keeps the rename on one filesystem. The
+just-bash backends have one filesystem, so they see no change.
+**Condition:** the workstation backend is scheduled.
 
 **A SQL backend over a database server.** `backend.sql` takes any
 `SqlBackend` ([Workspace](../docs/workspace.md#query-the-shared-database)),
@@ -94,4 +105,3 @@ today. **Condition:** a fault that one of them would have caught.
 | #151 | Exchange-scoped tasks and Relay background work | Close in 0.2.0 phase 3; delegation by reference replaces it |
 | #153 | Room simulation evals (draft)                   | Hold; see the evals package above                           |
 | #171 | Workspace log regression and path checks        | Land in 0.2.0 phase 5 step 2, before the log cleanup        |
-| #268 | Scope a workstation backend                     | Merge into this file as the workstation entry               |
