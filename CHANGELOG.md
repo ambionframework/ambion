@@ -71,8 +71,11 @@ entry held them already; only the root re-export is gone.
 
 **The root entry no longer exports three names with no consumer.**
 `ROOM_MIRROR_GUIDANCE`, `roomMirrorPath`, and `DEFAULT_ROTATE_BYTES` are
-gone from the root. `mirror.ts` still exports the first two for the
-package's own tests.
+gone from the root. `mirror.ts` still exports `roomMirrorPath`, now
+`roomMirrorPath(root, roomName)`, and the guidance text as a function,
+`roomMirrorGuidance(root)`, for the package's own tests.
+`DEFAULT_ROTATE_BYTES` has no replacement. It stays a local default
+in `log.ts`, unexported.
 
 **A new `@ambionframework/workspace/conformance` entry holds the
 `ExecutionEnv` rules the built-in tools need.** It exports
@@ -82,8 +85,12 @@ existing target, a recursive `createDir`, a forced and a recursive
 `remove`, the file error codes, `~` expansion, an abort apart from a
 timeout, the bounded output view with its spill file, and a distinct
 temporary name under `/tmp`. The memory and directory backends run the
-suite in `test/conformance.test.ts`. The adapter tests that duplicated
-these rules are gone from `test/workspace.test.ts`.
+suite in `test/conformance.test.ts`. The just-bash adapter tests that
+duplicated these rules are gone from `test/workspace.test.ts`. What stays
+just-bash-specific stays adapter-only: the error-code mapping for
+`canonicalPath`, `createDir`, and `remove`; `exec`'s `cwd` option and its
+statelessness across calls; stderr joining stdout in one output stream;
+and a temp file's prefix and suffix.
 
 **The `sql` tool export needs only the `sqlite3` command.** The export path no
 longer calls `xan` to count rows or `readTextLines` to preview them. It reads

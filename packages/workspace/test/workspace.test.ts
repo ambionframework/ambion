@@ -56,12 +56,13 @@ const ctx = BACKGROUND_CONTEXT;
 async function sh(
 	env: ExecutionEnv,
 	command: string,
-	options: { timeout?: number } = {},
+	options: { cwd?: string; timeout?: number } = {},
 ): Promise<{ ok: boolean; exitCode?: number; code?: string; output: string }> {
 	let output = '';
 	const result = await env.exec(
 		command,
 		{
+			...(options.cwd === undefined ? {} : { cwd: options.cwd }),
 			...(options.timeout === undefined ? {} : { timeout: options.timeout }),
 			capture: { limits: { maxBytes: 1_000_000, maxLines: 100_000 } },
 			onUpdate: (update) => {
@@ -589,6 +590,62 @@ describe('the just-bash adapter', () => {
 		const backend = memoryBackend();
 		return { env: await backend.connect(agent(agentName)), backend };
 	}
+
+	it("classifies just-bash's thrown errors into Pi's codes, beyond the conformance suite", async () => {
+		const { env: alpha } = await env();
+		await alpha.writeFile('f.txt', 'x', ctx);
+		const codeOf = (result: { ok: boolean; error?: { code: string } }) =>
+			result.ok ? 'ok' : result.error?.code;
+		// The conformance suite proves not_found, is_directory, and not_directory
+		// through readTextFile and listDir. canonicalPath maps the same way, and
+		// Pi's write and edit tools read that mapping to decide whether a path is
+		// a new file (bash-env.ts's toFileError).
+		expect(codeOf(await alpha.canonicalPath('missing', ctx))).toBe('not_found');
+		// createDir without recursive, and remove on the env's own root, both
+		// answer invalid: neither case is in the conformance suite.
+		expect(codeOf(await alpha.createDir('f.txt', { recursive: false }, ctx))).toBe('invalid');
+		expect(codeOf(await alpha.remove('.', undefined, ctx))).toBe('invalid');
+	});
+
+	it('answers false for exists on a path that was never created', async () => {
+		const { env: alpha } = await env();
+		// Distinct from the conformance suite's forcedRemove case, which checks
+		// exists only after a remove. A path that never existed answers the
+		// same way, with no remove call in between.
+		expect(await alpha.exists('missing', ctx)).toEqual({ ok: true, value: false });
+	});
+
+	it('resolves a relative path through .. under cwd', async () => {
+		const { env: alpha } = await env();
+		const home = alpha.cwd;
+		// The conformance suite proves ~, ~/x, and one plain relative path. It
+		// does not prove normalization through a .. segment.
+		expect(await alpha.absolutePath('sub/../y', ctx)).toEqual({ ok: true, value: `${home}/y` });
+	});
+
+	it('scopes cwd to one exec call, keeps no cd across calls, and joins stderr into the same output', async () => {
+		const { env: alpha } = await env();
+		const combined = await sh(alpha, 'mkdir -p sub && cd sub && pwd && echo warn >&2');
+		expect(combined).toMatchObject({ ok: true, exitCode: 0, output: '/home/alpha/sub\nwarn\n' });
+		// A cd inside one exec call does not persist to the next: each call is
+		// stateless.
+		expect(await sh(alpha, 'pwd')).toMatchObject({ ok: true, output: '/home/alpha\n' });
+		// A caller's own cwd option scopes just that one command.
+		expect(await sh(alpha, 'pwd', { cwd: 'sub' })).toMatchObject({
+			ok: true,
+			output: '/home/alpha/sub\n',
+		});
+	});
+
+	it('honors a temp file prefix and suffix, and appends across two calls', async () => {
+		const { env: alpha } = await env();
+		const file = await alpha.createTempFile({ prefix: 'bash-', suffix: '.journal' }, ctx);
+		expect(file.ok && file.value).toMatch(/^\/tmp\/bash-[0-9a-f]+\.journal$/);
+		if (!file.ok) return;
+		await alpha.appendFile(file.value, 'a', ctx);
+		await alpha.appendFile(file.value, 'b', ctx);
+		expect(await alpha.readTextFile(file.value, ctx)).toEqual({ ok: true, value: 'ab' });
+	});
 
 	it('lists a directory with each entry sized, and reads lines', async () => {
 		const { env: alpha } = await env();
