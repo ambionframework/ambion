@@ -47,7 +47,7 @@ changes of each one.
 | M7. The workspace as an interface                   | #276, #277 | A neutral root entry, a conformance entry, one entry for each binding, and backends by kind: bash and an optional SQL                   |
 | S1. The workstation, `@ambionframework/workstation` | #280       | A bash backend over SSH with one Unix account for each agent, tested on an in-process server and on OpenSSH                             |
 | The removal of `@ambionframework/cli`               | #273       | Every library package needs only Node `>=22.19.0`                                                                                       |
-| M1. Kernel decision layers                          | #M1PR      | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts` |
+| M1. Kernel decision layers                          | #286       | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts` |
 
 **Two themes stay open, each with the acceptance it must meet on the
 tagged commit.** The phases below deliver them; the items explain them.
