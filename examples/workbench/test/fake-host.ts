@@ -1,7 +1,7 @@
 import { people } from '../src/definitions.ts';
 import { Session } from '../src/session.ts';
 import type {
-	ActivationRead,
+	ActivationSteps,
 	Approval,
 	FileContent,
 	RoomView,
@@ -47,7 +47,7 @@ export class FakeHost implements Workbench {
 	readonly watching = new Map<string, Set<() => void>>();
 	readonly sentRefs: string[][] = [];
 	/** The traces the host holds, by activation id. */
-	readonly traces = new Map<string, ActivationRead>();
+	readonly traces = new Map<string, ActivationSteps>();
 	pendingApprovals: Approval[] = [];
 	/** Every path the session asked the host to read. */
 	readonly reads: string[] = [];

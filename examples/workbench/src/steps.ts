@@ -1,4 +1,20 @@
-import type { ActivationRead, ExchangeActivation, TraceStep, Usage } from '@ambionframework/ambion';
+import type { ExchangeActivation, TraceLogger, TraceStep, Usage } from '@ambionframework/ambion';
+
+/** One pass of an activation: what it read and the steps it took. */
+interface ActivationPass {
+	readonly pass: number;
+	/** Whether the pass read the whole view or only what changed. */
+	readonly input: 'view' | 'delta';
+	/** The last seq the pass read. */
+	readonly through: number;
+	readonly steps: readonly TraceStep[];
+}
+
+/** The steps of one activation that the logger received, grouped by pass. */
+export interface ActivationSteps {
+	readonly activation: string;
+	readonly passes: readonly ActivationPass[];
+}
 
 /** One step of an activation, ready to draw. */
 interface StepLine {
@@ -96,7 +112,7 @@ function lineOf(step: TraceStep): StepLine {
  * pass and shows in its header, so it makes no line. A trace with no `end` step
  * is a running or a crashed activation, and it shows as far as it goes.
  */
-export function stepsView(read: ActivationRead): PassView[] {
+export function stepsView(read: ActivationSteps): PassView[] {
 	return read.passes.map((pass) => ({
 		pass: pass.pass,
 		input: pass.input,
@@ -106,6 +122,48 @@ export function stepsView(read: ActivationRead): PassView[] {
 }
 
 /** True when the trace has an `end` step. */
-export function ended(read: ActivationRead): boolean {
+export function ended(read: ActivationSteps): boolean {
 	return read.passes.some((pass) => pass.steps.some((step) => step.type === 'end'));
+}
+
+/** Group steps, in pass and index order, into passes. A `pass` step opens each one. */
+function activationSteps(activation: string, steps: readonly TraceStep[]): ActivationSteps {
+	const passes: { pass: number; input: 'view' | 'delta'; through: number; steps: TraceStep[] }[] =
+		[];
+	for (const step of steps) {
+		if (step.type === 'pass')
+			passes.push({ pass: step.pass, input: step.input, through: step.through, steps: [] });
+		passes.at(-1)?.steps.push(step);
+	}
+	return { activation, passes };
+}
+
+/**
+ * The steps this process logged, in memory, by room and activation. It keeps
+ * the latest `limit` activations and drops the oldest. A restart loses them.
+ */
+export function stepLog(limit = 200) {
+	const kept = new Map<string, TraceStep[]>();
+	const key = (room: string, activation: string) => `${room}\n${activation}`;
+	const logger: TraceLogger = ({ room, step }) => {
+		const at = key(room, step.activation);
+		const steps = kept.get(at);
+		if (steps !== undefined) {
+			steps.push(step);
+			return;
+		}
+		kept.set(at, [step]);
+		for (const oldest of kept.keys()) {
+			if (kept.size <= limit) break;
+			kept.delete(oldest);
+		}
+	};
+	return {
+		logger,
+		/** The steps of one activation, or nothing when this process logged none. */
+		read(room: string, activation: string): ActivationSteps | undefined {
+			const steps = kept.get(key(room, activation));
+			return steps === undefined ? undefined : activationSteps(activation, steps);
+		},
+	};
 }

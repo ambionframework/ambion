@@ -223,48 +223,45 @@ activation carries the sum, and a closed exchange read carries the sum of
 its activations. An end that the room writes (`expired`, `revoked`,
 `abandoned`) carries no usage.
 [Durability](durability.md#5-what-the-room-does-not-promise) states this.
-The trace caps do not cut the sum, because the driver adds each step
-before the cap applies.
+The trace caps do not cut the sum, because the sink adds each step before
+the cap applies. The sum holds when the host passes no logger.
 
-## The trace journal
+## The trace log
 
-**The trace journal holds one activation.** The driver opens a `TraceSink`
-for each activation and passes it to the executor at `open`. The sink writes
-to a journal named by the room and the activation, in the `ambion/trace`
-namespace of the host storage. A trace that takes no step opens no journal.
-Each step has the key `pass:index`, so a repeated activation writes each
-step once. The record and the trace never share an entry.
+**The trace goes to the host's logger.** The driver opens a `TraceSink` for
+each activation and passes it to the executor at `open`. The sink gives each
+step to the `logger` that the host passes to `createRuntime`, as one
+`TraceRecord`: `room`, `seat`, and the stamped step. With no logger, the
+sink drops the steps. The record and the trace never share an entry.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/ambion-activation-trace-dark.svg">
-  <img alt="Agent B activates on entry 1 of the room journal. Each thing the activation does is one step in its trace journal: a pass, thinking, tool calls and results, and the room answers. The first say comes back missed with entry 2, and the second say commits as entry 3. A usage step holds tokens and cost, and an end step stops the activation. The driver writes the pass, room, and end steps. The release entry in the record carries the usage sum." src="assets/ambion-activation-trace.svg">
+  <img alt="Agent B activates on entry 1 of the room journal. Each thing the activation does is one step in its trace, which goes to the host's logger: a pass, thinking, tool calls and results, and the room answers. The first say comes back missed with entry 2, and the second say commits as entry 3. A usage step holds tokens and cost, and an end step stops the activation. The driver records the pass, room, and end steps. The release entry in the record carries the usage sum." src="assets/ambion-activation-trace.svg">
 </picture>
 
-**The trace never gates the activation.** The trace is a second journal that
-the room does not read. A failed trace write raises a `trace_error` event.
-The activation outcome and the lease do not change. The driver closes the
-sink after it releases the lease. The trace is not part of the record or of
-the durability promise.
+**The trace never gates the activation.** The room does not read the trace.
+A logger that throws or rejects does not change the activation outcome or
+the lease. The driver closes the sink after it releases the lease. The
+trace is not part of the record or of the durability promise.
 
 **The sink applies the policy and the limits.** The sink joins the deltas of
-a `thinking` or `text` block into one step, so a block is one entry and one
-event. `limits.trace.stepsPerPass` caps the steps of one pass, and an `end`
-step is always kept. `limits.trace.toolOutputBytes` cuts a tool output that
-is larger, and the step keeps the start of it with a note of the size.
-The Pi execution applies the limits of the host. The Claude execution
-applies the defaults and ignores `limits.trace`.
+a `thinking` or `text` block into one step. `limits.trace.stepsPerPass`
+caps the steps of one pass, and an `end` step is always kept.
+`limits.trace.toolOutputBytes` cuts a tool output that is larger, and the
+step keeps the start of it with a note of the size. The Pi execution
+applies the limits of the host. The Claude execution applies the defaults
+and ignores `limits.trace`.
 
 **A definition sets its trace policy.** `defineAgent({ trace })` takes
 `thinking` (`omit`, `summary`, or `full`) and `toolOutput` (`omit` or
 `full`). The default is `{ thinking: 'summary', toolOutput: 'full' }`.
 `summary` keeps the first 280 characters of each thinking block.
 
-**Each step also arrives live.** The event stream carries a `step` event for
-each step the trace writes, in the same order as the journal. A reader
-merges the two by `activation`, `pass`, and `index`. In a separated host the
-trace lives in the storage of the seat, so a read across objects needs a call
-to the seat. `readActivation` reads the trace of one activation; see
-[Exchange](exchange.md).
+**The logger receives the steps in order.** The sink calls the logger once
+for each step, in the order of `pass` and `index`, before the release. The
+logger runs on the path of the activation, so it must not block. In a
+separated host the seat calls its own logger; `@ambionframework/cloudflare`
+takes it in `configure`.
 
 ## Exchange continuity
 
@@ -359,9 +356,9 @@ family. `@ambionframework/claude` is the worked example, and
    one activation, and adapt each result to the form the harness needs.
    [The room tools](#the-room-tools) states the commit key and the room
    answers.
-4. **Write the steps you own.** Call the `TraceSink` of the activation for
+4. **Record the steps you own.** Call the `TraceSink` of the activation for
    `thinking`, `text`, `tool_call`, `tool_result`, `steer`, `approval`, and
-   `usage`. The driver writes `pass`, `room`, and `end`.
+   `usage`. The driver records `pass`, `room`, and `end`.
 5. **Declare steering and rest correctness on freshness.** Advance
    `readThrough` when the model has consumed a message, and on nothing
    earlier. [How an activation runs](#how-an-activation-runs) states the
@@ -405,7 +402,8 @@ const room = await startRoom({
 `@ambionframework/ambion/conformance` exports `executorConformance`. It
 plays the driver and the room for one executor, runs the executor through
 the real driver over a scripted room, and checks the room calls and the
-trace journal. It checks nothing an executor says beyond its neutral plans.
+steps the logger receives. It checks nothing an executor says beyond its
+neutral plans.
 
 An adapter supplies an `ExecutorHarness`. `open(plan, definition)` builds
 the executor for one `ExecutorPlan`, using a fake model or a fake

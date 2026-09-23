@@ -15,7 +15,7 @@
  * resource request with `Method not found`. Any other native tool in the list
  * fails this test.
  */
-import { defineTool } from '@ambionframework/ambion';
+import { defineTool, type TraceStep } from '@ambionframework/ambion';
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
 import {
@@ -26,7 +26,6 @@ import {
 	person,
 	saidBy,
 	seat,
-	stepsOf,
 	untilQuiet,
 } from './support.ts';
 
@@ -72,13 +71,13 @@ const LIST =
 	'Use the exact name as your tool list shows it. Send the list with one say.';
 
 /** The names of the tools that an activation called. */
-async function calledIn(
-	name: string,
+function calledIn(
+	steps: (activation: string) => TraceStep[],
 	activation: string | undefined,
-	runtime: Awaited<ReturnType<typeof open>>['runtime'],
-): Promise<string[]> {
-	const steps = await stepsOf(name, activation ?? '', runtime);
-	return steps.filter((step) => step.type === 'tool_call').map((step) => step.name);
+): string[] {
+	return steps(activation ?? '')
+		.filter((step) => step.type === 'tool_call')
+		.map((step) => step.name);
 }
 
 live('nativeTools', () => {
@@ -114,7 +113,7 @@ live('nativeTools', () => {
 	});
 
 	it('reads no host file by default', async () => {
-		const { room, name, runtime, events } = await open('exclusive-read', {
+		const { room, steps, events } = await open('exclusive-read', {
 			agents: [seat('clerk', { instructions: 'Do what is asked with your tools, then say.' })],
 		});
 		try {
@@ -124,7 +123,7 @@ live('nativeTools', () => {
 			});
 			await untilQuiet(room);
 			const [activation] = activationsOf(events, 'clerk');
-			const called = (await calledIn(name, activation, runtime)).map((tool) =>
+			const called = calledIn(steps, activation).map((tool) =>
 				tool.replace(/^(?:codex__|functions\.)/, ''),
 			);
 			// The seat may try an MCP helper. The room tools server answers it with Method not found.
@@ -140,7 +139,7 @@ live('nativeTools', () => {
 	});
 
 	it('brings the native tools back with nativeTools codex', async () => {
-		const { room, name, runtime, events } = await open('exclusive-codex', {
+		const { room, steps, events } = await open('exclusive-codex', {
 			agents: [
 				seat('clerk', {
 					nativeTools: 'codex',
@@ -153,7 +152,7 @@ live('nativeTools', () => {
 			await visit.send({ text: 'Run the shell command `echo ambion` and say what it printed.' });
 			await untilQuiet(room);
 			const [activation] = activationsOf(events, 'clerk');
-			const called = await calledIn(name, activation, runtime);
+			const called = calledIn(steps, activation);
 			expect(called.some((tool) => !ROOM.includes(tool))).toBe(true);
 			expect(errorsIn(events)).toEqual([]);
 		} finally {

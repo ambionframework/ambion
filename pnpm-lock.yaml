@@ -264,9 +264,6 @@ importers:
       '@ambionframework/ambion':
         specifier: workspace:*
         version: link:../ambion
-      '@ambionframework/journal':
-        specifier: workspace:*
-        version: link:../journal
       '@earendil-works/pi-agent-core':
         specifier: ^0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)

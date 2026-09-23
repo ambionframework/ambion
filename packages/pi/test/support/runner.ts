@@ -122,7 +122,6 @@ export function seatHost(options: SeatOptions = {}) {
 	const clock = fakeClock(0);
 	const runtime = createRuntime({ clock, limits: { call: options.call } });
 	const services = createExecutionServices({
-		storage: runtime.storage,
 		clock,
 		stream: options.stream ?? scripted(() => quiet()),
 	});

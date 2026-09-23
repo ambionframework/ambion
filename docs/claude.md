@@ -144,7 +144,7 @@ unchanged.
 | `pathToClaudeCodeExecutable` | The executable of the SDK           | The Claude Code executable to spawn.                                                            |
 | `env`                        | The environment of the host process | The environment of the executable. A value **replaces** the environment. See the trust section. |
 
-The runtime supplies the clock, the storage, the call limits, and the
+The runtime supplies the clock, the call limits, the logger, and the
 transport. The Claude execution does not read `limits.trace` from the host.
 It applies the default trace limits, 65,536 bytes of tool output and 1,000
 steps for each pass. `createClaudeExecutor` builds one executor for a seat,

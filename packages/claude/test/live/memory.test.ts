@@ -12,7 +12,6 @@ import { expect, it } from 'vitest';
 import type { CommitRequest, RoomProtocol, TraceSink } from '../../../ambion/src/hosting.ts';
 import { isSpoken, type Step } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
-import { traceOf } from '../../../ambion/test/support/trace.ts';
 import { createClaudeExecutor } from '../../src/index.ts';
 import { viewOf } from '../support.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
@@ -41,7 +40,7 @@ const definition = (cwd: string) =>
 /** Two exchanges with one seat. Returns the steps of each activation and the said texts. */
 async function twoQuestions() {
 	const cwd = await directory();
-	const { session, runtime, name } = await open('memory', [definition(cwd)]);
+	const { session, steps: stepsOf } = await open('memory', [definition(cwd)]);
 	try {
 		const visit = await enter(session, person);
 		const ids: string[] = [];
@@ -62,8 +61,8 @@ async function twoQuestions() {
 			.map((m) => m.text);
 		const exchanges = (await session.read()).exchanges;
 		return {
-			firstSteps: await traceOf(runtime, name, first ?? ''),
-			secondSteps: await traceOf(runtime, name, second ?? ''),
+			firstSteps: stepsOf(first ?? ''),
+			secondSteps: stepsOf(second ?? ''),
 			said,
 			sessions: exchanges.flatMap((x) => x.activations.map((a) => a.session)),
 		};

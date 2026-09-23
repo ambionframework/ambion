@@ -177,12 +177,8 @@ open exchange lists the activations since its question. The `session` field
 holds the harness session that the activation recorded at its release. It
 is absent when the harness recorded none.
 
-**`readActivation(name, activation, { runtime })` reads the trace of one
-activation.** It returns `passes`, each with its `input`, its `through`, and
-its `steps` in order. It returns `undefined` for a malformed id and no
-passes for an activation without a trace. The read never waits. The trace
-write is best effort, so a running or a crashed activation can return a
-partial trace.
+**The steps of an activation go to the host's logger.** See
+[Executors](executors.md#the-trace-log).
 
 ## 7. What reads one
 

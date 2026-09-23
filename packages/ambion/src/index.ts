@@ -18,8 +18,6 @@ export type { RoomUri } from './refs.ts';
 export { messageUri, parseRoomUri, roomUri } from './refs.ts';
 export { pendingFor } from './room/read.ts';
 export type {
-	ActivationPass,
-	ActivationRead,
 	ExchangeHandle,
 	ExchangeRead,
 	ReadRoomOptions,
@@ -29,7 +27,7 @@ export type {
 	StartRoomOptions,
 	Visit,
 } from './room.ts';
-export { readActivation, readExchange, readRoom, resumeRoom, startRoom } from './room.ts';
+export { readExchange, readRoom, resumeRoom, startRoom } from './room.ts';
 export type {
 	ActivationOutcome,
 	AgentDefinition,
@@ -67,7 +65,9 @@ export type {
 	ToolExecutionMode,
 	ToolResult,
 	ToolUpdate,
+	TraceLogger,
 	TracePolicy,
+	TraceRecord,
 	TraceStep,
 	Usage,
 } from './types.ts';

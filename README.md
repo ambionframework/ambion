@@ -17,9 +17,9 @@ constraints. Each agent has its own owner, instructions, model, tools, and
 framework. Each contributes when it has something useful to add.
 
 Ambion makes those contributions usable together. A room stays open between
-questions. People arrive and leave. A person drills from a room to an
-exchange, to one activation, to the steps an agent took, with the cost of
-each. Ambion serves TypeScript application developers. The application
+questions. People arrive and leave. A person reads a room by exchange and
+by activation, with the cost of each. The steps an agent took go to the
+logs of the host. Ambion serves TypeScript application developers. The application
 supplies hosting, agent definitions, credentials, and domain tools.
 
 **Workbench is the first application on Ambion.** It seats specialists for
@@ -125,7 +125,7 @@ with `summary` adds a closing summary, and `waitForSummary()` returns it.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-context-dark.svg">
-  <img alt="A room over two exchanges on a time axis. A person asks, entry 1. Agents A and B read the record. A says, entry 2. B says to A, entry 3, which wakes A again. A's second activation resumes the harness session of its first and reads only entries 2 and 3. A says, entry 4. The exchange closes, entry 5, and a summary follows, entry 6. The person asks again, entry 7, which opens exchange 2. A's third activation starts a fresh session and reads the summary and entry 7. B stays silent. The record is durable. The trace is stored for people. The session is a cache for one exchange." src="docs/assets/ambion-context.svg">
+  <img alt="A room over two exchanges on a time axis. A person asks, entry 1. Agents A and B read the record. A says, entry 2. B says to A, entry 3, which wakes A again. A's second activation resumes the harness session of its first and reads only entries 2 and 3. A says, entry 4. The exchange closes, entry 5, and a summary follows, entry 6. The person asks again, entry 7, which opens exchange 2. A's third activation starts a fresh session and reads the summary and entry 7. B stays silent. The record is durable. The trace goes to the host's logs. The session is a cache for one exchange." src="docs/assets/ambion-context.svg">
 </picture>
 
 **The record is durable, and every activation reads it.** It holds every
@@ -139,13 +139,13 @@ fresh. No session crosses an exchange.
 
 **The session is a cache.** Claude and Codex keep it on the local disk, and
 Pi keeps it in the process. When it is lost, the next activation reads the
-record and starts fresh. The trace keeps the steps of each activation for
-people to read. See [Exchange continuity](docs/executors.md#exchange-continuity).
+record and starts fresh. The steps of each activation go to the logger
+that the host passes in. See [Exchange continuity](docs/executors.md#exchange-continuity).
 
 ## What you get
 
 - **A record that answers for itself.** The journal holds every message and
-  every step. See [Room](docs/room.md).
+  every lease entry, with usage and cost. See [Room](docs/room.md).
 - **Speech that is checked.** A `say` that read a stale record is refused
   with the messages it missed, so agents reason in parallel and the room
   serializes what it accepts. See [Agents](docs/agent.md).
@@ -154,8 +154,9 @@ people to read. See [Exchange continuity](docs/executors.md#exchange-continuity)
   [Exchanges](docs/exchange.md).
 - **Any framework, one adapter each.** Pi, Claude, and Codex ship as
   packages. See [Executors](docs/executors.md).
-- **Work you can inspect.** Every activation writes its steps live, with
-  usage and cost. See [Executors](docs/executors.md#the-trace-journal).
+- **Work you can inspect.** Every activation gives its steps to the logger
+  the host passes in, with usage and cost. See
+  [Executors](docs/executors.md#the-trace-log).
 - **The same tools on every harness.** See [Trust](docs/trust.md#what-each-harness-exposes)
   for how each package enforces it and which test guards it.
 

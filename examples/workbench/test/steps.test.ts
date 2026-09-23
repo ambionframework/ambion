@@ -1,6 +1,13 @@
-import type { ActivationRead, ExchangeActivation, Usage } from '@ambionframework/ambion';
+import type { ExchangeActivation, TraceStep, Usage } from '@ambionframework/ambion';
 import { describe, expect, it } from 'vitest';
-import { activationLine, ended, formatUsage, stepsView } from '../src/steps.ts';
+import {
+	type ActivationSteps,
+	activationLine,
+	ended,
+	formatUsage,
+	stepLog,
+	stepsView,
+} from '../src/steps.ts';
 
 const AT = '2026-01-01T00:00:00Z';
 const usage = (extra: Partial<Usage> = {}): Usage => ({
@@ -11,7 +18,7 @@ const usage = (extra: Partial<Usage> = {}): Usage => ({
 	...extra,
 });
 
-const read = (steps: Record<string, unknown>[][]): ActivationRead =>
+const read = (steps: Record<string, unknown>[][]): ActivationSteps =>
 	({
 		activation: 'a',
 		passes: steps.map((list, pass) => ({
@@ -26,7 +33,7 @@ const read = (steps: Record<string, unknown>[][]): ActivationRead =>
 				...step,
 			})),
 		})),
-	}) as unknown as ActivationRead;
+	}) as unknown as ActivationSteps;
 
 describe('stepsView', () => {
 	it('groups a trace by pass, in order, with one line per step', () => {
@@ -127,5 +134,34 @@ describe('activationLine', () => {
 		expect(activationLine({ ...base, usage: undefined, outcome: { status: 'running' } })).toBe(
 			'design · respond · attempt 1 · running',
 		);
+	});
+});
+
+describe('stepLog', () => {
+	const step = (activation: string, pass: number, index: number, extra: object): TraceStep =>
+		({ activation, pass, index, at: AT, ...extra }) as TraceStep;
+	const opened = (activation: string, pass: number) =>
+		step(activation, pass, 0, { type: 'pass', pass, input: 'view', through: 3 });
+
+	it('groups the steps of an activation by pass, and keeps only the latest activations', () => {
+		const log = stepLog(2);
+		log.logger({ room: 'lab', seat: 'product', step: opened('first', 1) });
+		log.logger({ room: 'lab', seat: 'product', step: opened('second', 1) });
+		log.logger({
+			room: 'lab',
+			seat: 'product',
+			step: step('second', 1, 1, { type: 'end', stop: 'stopped' }),
+		});
+		log.logger({ room: 'lab', seat: 'product', step: opened('second', 2) });
+		log.logger({ room: 'other', seat: 'product', step: opened('third', 1) });
+		expect(log.read('lab', 'first')).toBeUndefined();
+		expect(log.read('lab', 'third')).toBeUndefined();
+		const second = log.read('lab', 'second');
+		expect(second?.activation).toBe('second');
+		expect(second?.passes.map((pass) => [pass.pass, pass.steps.length])).toEqual([
+			[1, 2],
+			[2, 1],
+		]);
+		expect(second && ended(second)).toBe(true);
 	});
 });

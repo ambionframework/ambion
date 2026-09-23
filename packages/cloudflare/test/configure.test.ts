@@ -1,9 +1,7 @@
 import { defineAgent } from '@ambionframework/ambion';
-import { traceJournals } from '@ambionframework/ambion/hosting';
-import { memoryJournals } from '@ambionframework/journal';
 import { pi } from '@ambionframework/pi';
 import { describe, expect, it } from 'vitest';
-import { configure, definitionOf, executionFor, runtimeFor } from '../src/configure.ts';
+import { configure, definitionOf, executionFor, traceLogger } from '../src/configure.ts';
 import { scripted } from './scripted.ts';
 
 const agent = (name: string) =>
@@ -30,18 +28,13 @@ describe('configure', () => {
 		expect(() => configure({ agents: [first, second] })).toThrow(/repeat agent 'duplicate'/);
 	});
 
-	it('composes the configured stream and traces over supplied storage', async () => {
+	it('composes the configured stream and logger', () => {
 		const stream = scripted;
-		configure({ agents: [agent('execution')], stream });
-		const storage = memoryJournals();
-		const services = executionFor({ storage });
-		const journal = await services.traces.open('configured-execution');
-		await journal.append({ step: 1 }, 0);
-		const runtimeTraces = traceJournals(runtimeFor({ storage }).storage);
-
-		expect(services.stream).toBe(stream);
-		expect((await (await runtimeTraces.open('configured-execution')).read(0)).entries).toHaveLength(
-			1,
-		);
+		const logger = () => {};
+		configure({ agents: [agent('execution')], stream, logger });
+		expect(executionFor({}).stream).toBe(stream);
+		expect(traceLogger()).toBe(logger);
+		configure({ agents: [agent('execution')] });
+		expect(traceLogger()).toBeUndefined();
 	});
 });

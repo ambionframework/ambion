@@ -13,7 +13,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { enter } from '../../../ambion/test/support/room.ts';
-import { traceOf } from '../../../ambion/test/support/trace.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
 live('approval', () => {
@@ -37,7 +36,7 @@ live('approval', () => {
 					: { behavior: 'deny', message: 'The room allows the file allowed.txt and nothing else.' };
 			},
 		});
-		const { session, runtime, name, events } = await open('approval', [runner]);
+		const { session, events, steps: stepsOf } = await open('approval', [runner]);
 		try {
 			const visit = await enter(session, person);
 			const started = new Promise<string>((resolve) => {
@@ -51,7 +50,7 @@ live('approval', () => {
 			const activation = await within(started, 60_000, 'the activation starting');
 			await untilQuiet(session);
 
-			const steps = await traceOf(runtime, name, activation);
+			const steps = stepsOf(activation);
 			const approvals = stepsOfType(steps, 'approval');
 			// One approval step for each request the application answered.
 			expect(approvals).toHaveLength(asked.length);

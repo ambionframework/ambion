@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="650" viewBox="0 0 1000 650" role="img" aria-labelledby="title desc">
   <title id="title">What an activation reads, and what survives</title>
-  <desc id="desc">A room over two exchanges, on a time axis. Entries in the room journal: 1, a person asks. Agents A and B activate and read the record. 2, A says. 3, B says to A, which wakes A again. A's second activation resumes the harness session of its first and reads only entries 2 and 3. 4, A says. 5, the exchange closes. 6, a summary. 7, the person asks again, which opens exchange 2. A's third activation starts a fresh session and reads the record, with the summary in place of exchange 1. 8, A says. B stays silent in exchange 2. The record is durable and a restart replays it. The trace of each activation is stored for people to read. The harness session is a cache for one exchange: Claude and Codex keep it on the local disk and Pi keeps it in the process. When it is lost, the next activation starts fresh from the record.</desc>
+  <desc id="desc">A room over two exchanges, on a time axis. Entries in the room journal: 1, a person asks. Agents A and B activate and read the record. 2, A says. 3, B says to A, which wakes A again. A's second activation resumes the harness session of its first and reads only entries 2 and 3. 4, A says. 5, the exchange closes. 6, a summary. 7, the person asks again, which opens exchange 2. A's third activation starts a fresh session and reads the record, with the summary in place of exchange 1. 8, A says. B stays silent in exchange 2. The record is durable and a restart replays it. The steps of each activation go to the logger the host passes in. The harness session is a cache for one exchange: Claude and Codex keep it on the local disk and Pi keeps it in the process. When it is lost, the next activation starts fresh from the record.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#a3aba8"/></marker>
     <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#6cc4bb"/></marker>
@@ -111,11 +111,11 @@
   <g filter="url(#shadow)">
     <rect x="348" y="446" width="304" height="176" rx="12" fill="#20282a" stroke="#384143" stroke-width="1.5"/>
   </g>
-  <text x="366" y="478" class="sans ink n">The trace · stored for people</text>
-  <text x="366" y="510" class="sans ink s">The steps of each activation: thinking,</text>
-  <text x="366" y="534" class="sans ink s">tool calls and results, usage. Writes</text>
-  <text x="366" y="558" class="sans ink s">are best effort. A person reads it.</text>
-  <text x="366" y="582" class="sans ink s">No model reads it.</text>
+  <text x="366" y="478" class="sans ink n">The trace · the host's logs</text>
+  <text x="366" y="510" class="sans ink s">The steps of each activation go to</text>
+  <text x="366" y="534" class="sans ink s">the logger the host passes in. A</text>
+  <text x="366" y="558" class="sans ink s">person or an agent reads them there.</text>
+  <text x="366" y="582" class="sans ink s">No model in the room reads them.</text>
   <g filter="url(#shadow)">
     <rect x="672" y="446" width="304" height="176" rx="12" fill="#1c2e2d" stroke="#36615d" stroke-width="1.5"/>
   </g>

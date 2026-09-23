@@ -24,8 +24,8 @@ the table. `Limits` in
 | `limits.call.attempts`         | Retries of a claim or a release                             | 2                      |
 | `limits.context.messages`      | Messages one view holds beyond the open exchange            | unbounded (`Infinity`) |
 | `limits.message.bytes`         | UTF-8 bytes in one spoken message or summary text           | unbounded (`Infinity`) |
-| `limits.trace.toolOutputBytes` | Bytes of tool output that a step keeps                      | 65,536                 |
-| `limits.trace.stepsPerPass`    | Steps that one pass keeps                                   | 1,000                  |
+| `limits.trace.toolOutputBytes` | Bytes of tool output that a logged step keeps               | 65,536                 |
+| `limits.trace.stepsPerPass`    | Steps that one pass logs                                    | 1,000                  |
 
 **Two limits change what the room does with a message.**
 `limits.context.messages` windows the view and refuses nothing. The room

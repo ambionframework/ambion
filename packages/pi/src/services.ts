@@ -1,9 +1,8 @@
-/** Model, stream and trace services that a Pi execution host composes. */
+/** Model, stream and trace-limit services that a Pi execution host composes. */
 
 import { systemClock } from '@ambionframework/ambion';
 import type { Clock, Limits } from '@ambionframework/ambion/hosting';
-import { callLimits, DEFAULT_TRACE_LIMITS, traceJournals } from '@ambionframework/ambion/hosting';
-import type { JournalOpener } from '@ambionframework/journal';
+import { callLimits, DEFAULT_TRACE_LIMITS } from '@ambionframework/ambion/hosting';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models } from '@earendil-works/pi-ai';
 
@@ -19,15 +18,12 @@ interface TraceLimits {
 export interface ExecutionServices {
 	readonly clock: Clock;
 	readonly call: Limits['call'];
-	/** Opens the trace journal of an activation over the same storage. */
-	readonly traces: JournalOpener;
 	readonly trace: TraceLimits;
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
 }
 
 export interface ExecutionServicesOptions {
-	readonly storage: JournalOpener;
 	/** Absent, the system clock. */
 	readonly clock?: Clock;
 	readonly call?: Partial<Limits['call']>;
@@ -72,12 +68,11 @@ export const stubModel: ModelResolver = (id, agent): Model<Api> => ({
 	maxTokens: 64_000,
 });
 
-export function createExecutionServices(options: ExecutionServicesOptions): ExecutionServices {
+export function createExecutionServices(options: ExecutionServicesOptions = {}): ExecutionServices {
 	const custom = options.stream !== undefined;
 	return {
 		clock: options.clock ?? systemClock(),
 		call: callLimits(options.call),
-		traces: traceJournals(options.storage),
 		trace: { ...DEFAULT_TRACE_LIMITS, ...options.trace },
 		stream: options.stream ?? registryStream,
 		model: custom ? stubModel : registryModel,

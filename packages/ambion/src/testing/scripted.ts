@@ -1,4 +1,4 @@
-import { DEFAULT_TRACE } from '../define.ts';
+import { composeConnector } from '../execution/connector.ts';
 import type {
 	Executor,
 	ExecutorActivation,
@@ -6,8 +6,6 @@ import type {
 	PassInput,
 	PassResult,
 } from '../execution/executor.ts';
-import { inProcessTransport } from '../execution/runner.ts';
-import { traceJournals, traceOpener } from '../execution/trace.ts';
 import type { Execution, ExecutionConnector, ExecutionHost } from '../host/runtime.ts';
 import type { ActivationView, CommitResult } from '../protocol.ts';
 import type {
@@ -298,32 +296,12 @@ export function scripted(script: Script): Execution {
 }
 
 function connectorFor(host: ExecutionHost, script: Script): ExecutionConnector {
-	const traces = traceJournals(host.storage);
-	const transport = host.transport ?? inProcessTransport();
 	const counts = new Map<string, number>();
-	return {
-		connect(room, request) {
-			const executor: Executor = {
-				open: (activation) => new ScriptedSession(activation, request.definition, script, counts),
-			};
-			return transport.connect(room, {
-				clock: host.clock,
-				call: host.limits.call,
-				definition: request.definition,
-				room: request.room,
-				seat: request.seat,
-				executor,
-				emit: request.emit,
-				trace: traceOpener({
-					room: request.room,
-					agent: request.seat,
-					traces,
-					limits: host.limits.trace,
-					policy: request.definition.trace ?? DEFAULT_TRACE,
-					emit: request.emit,
-					now: () => host.clock.now(),
-				}),
-			});
-		},
-	};
+	return composeConnector({
+		host,
+		traceLimits: host.limits.trace,
+		buildExecutor: (request) => ({
+			open: (activation) => new ScriptedSession(activation, request.definition, script, counts),
+		}),
+	});
 }

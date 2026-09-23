@@ -4,7 +4,6 @@ import {
 	createRuntime,
 	type Room,
 	type RoomNotification,
-	readActivation,
 	readRoom,
 	resumeRoom,
 	startRoom,
@@ -29,6 +28,7 @@ import {
 } from './families.ts';
 import { openInstrument } from './instrument.ts';
 import { instruments, labSchema, labWritable, scenarios, seedWorkspace } from './scenarios.ts';
+import { stepLog } from './steps.ts';
 import { unavailable } from './unavailable.ts';
 
 /** What a person can do to a room's work. Abort ends the open exchange. Stop and resume end and start a run. */
@@ -115,14 +115,22 @@ export async function openRooms(
 		options.stream || options.executions
 			? []
 			: unavailableSeats(options.env ?? process.env).map(({ seat }) => seat);
+	const entries = new Map<string, HostedRoom>();
+	// The steps of each activation go to a log in this process. Each step
+	// tells the watchers of its room to read again.
+	const log = stepLog();
 	const runtime = createRuntime({
 		storage: sqliteJournals(sql),
 		execution: familyExecutions(options),
+		logger: (record) => {
+			log.logger(record);
+			const entry = entries.get(record.room);
+			if (entry) for (const watcher of [...entry.watchers]) watcher();
+		},
 	});
 	database.exec(
 		'CREATE TABLE IF NOT EXISTS workbench_rooms (name TEXT PRIMARY KEY, goal TEXT NOT NULL, enabled INTEGER NOT NULL)',
 	);
-	const entries = new Map<string, HostedRoom>();
 	let closing = false;
 	const workspacePath = resolve(directory, 'workspace');
 	const workspace = openWorkspace({
@@ -313,9 +321,8 @@ export async function openRooms(
 		withWorkspace,
 		workspace,
 		lifecycle,
-		/** The trace of one activation, read from the runtime the room writes to. */
-		activation: (name: string, id: string) =>
-			withRoom(name, () => readActivation(name, id, { runtime })),
+		/** The steps of one activation that this process logged. */
+		activation: (name: string, id: string) => withRoom(name, async () => log.read(name, id)),
 		/** The operations of a room that wait for the owner of the exchange. */
 		approvals: (name: string) => withRoom(name, () => readApprovals(lab, name)),
 		list: () =>

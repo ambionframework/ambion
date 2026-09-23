@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { scenarios } from '../src/scenarios.ts';
 import { Session } from '../src/session.ts';
-import type { ActivationRead, OpenOptions, Workbench } from '../src/workbench.ts';
+import type { ActivationSteps, OpenOptions, Workbench } from '../src/workbench.ts';
 import { started, view } from './fake-host.ts';
 import { freshDirectory, idleStream, openHost } from './hosting.ts';
 
@@ -338,7 +338,7 @@ const closedExchange = (from: number, extra: Record<string, unknown> = {}) => ({
 	],
 	...extra,
 });
-const trace = (id: string, withEnd: boolean): ActivationRead =>
+const trace = (id: string, withEnd: boolean): ActivationSteps =>
 	({
 		activation: id,
 		passes: [
@@ -353,7 +353,7 @@ const trace = (id: string, withEnd: boolean): ActivationRead =>
 				],
 			},
 		],
-	}) as unknown as ActivationRead;
+	}) as unknown as ActivationSteps;
 const blockTypes = (session: Session) => session.blocks.map((block) => block.type);
 const stepsBlock = (session: Session) =>
 	session.blocks.find((candidate) => candidate.type === 'steps');

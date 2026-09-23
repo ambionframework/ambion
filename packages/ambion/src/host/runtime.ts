@@ -24,9 +24,9 @@
 
 import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework/journal';
 import type { Executor } from '../execution/executor.ts';
-import { type TraceOpener, traceJournals } from '../execution/trace.ts';
+import type { TraceOpener } from '../execution/trace.ts';
 import type { AgentPort, RoomProtocol } from '../protocol.ts';
-import type { AgentDefinition, Clock, ExecutionEvent } from '../types.ts';
+import type { AgentDefinition, Clock, ExecutionEvent, TraceLogger } from '../types.ts';
 import { systemClock } from './clock.ts';
 import { defaultExecutionFactory } from './defaults.ts';
 
@@ -37,19 +37,20 @@ declare const RUNTIME: unique symbol;
 export interface Runtime {
 	readonly [RUNTIME]: true;
 	readonly clock: Clock;
-	/** The host's native storage. The runtime derives its room journals and traces from it. */
+	/** The host's native storage. The runtime derives its room journals from it. */
 	readonly storage: JournalOpener;
 }
 
 /**
  * What the runtime hands an execution composition: the clock, the host's
- * native storage, the limits, and the transport. The storage lets an
- * executor keep its trace beside the record.
+ * native storage, the limits, the logger, and the transport.
  */
 export interface ExecutionHost {
 	readonly clock: Clock;
 	readonly storage: JournalOpener;
 	readonly limits: Limits;
+	/** Where the steps of each activation go. Absent, the trace drops them. */
+	readonly logger?: TraceLogger;
 	/** Absent, every seat is an actor in this process. */
 	readonly transport?: Transport;
 }
@@ -140,8 +141,6 @@ export const DEFAULT_TRACE_LIMITS: Limits['trace'] = Object.freeze({
  */
 export interface Hosting {
 	readonly journals: JournalOpener;
-	/** Opens the trace journal of an activation, one journal per activation. */
-	readonly traces: JournalOpener;
 	/** How the room reaches a seat. Absent, every seat is an actor in this process. */
 	readonly transport?: Transport;
 	/** The execution every room in this runtime uses, unless a room names its own. */
@@ -157,6 +156,7 @@ interface RuntimeState extends Hosting {
 	readonly defaults: Map<string, ExecutionConnector | undefined>;
 	readonly clock: Clock;
 	readonly storage: JournalOpener;
+	readonly logger?: TraceLogger;
 }
 
 const stateFor = new WeakMap<Runtime, RuntimeState>();
@@ -172,7 +172,6 @@ export function hostingOf(runtime: Runtime): Hosting {
 	const found = state(runtime);
 	return {
 		journals: found.journals,
-		traces: found.traces,
 		...(found.transport === undefined ? {} : { transport: found.transport }),
 		...(found.execution === undefined ? {} : { execution: found.execution }),
 		limits: found.limits,
@@ -207,6 +206,7 @@ export function executionHostOf(runtime: Runtime): ExecutionHost {
 		clock: found.clock,
 		storage: found.storage,
 		limits: found.limits,
+		...(found.logger === undefined ? {} : { logger: found.logger }),
 		...(found.transport === undefined ? {} : { transport: found.transport }),
 	};
 }
@@ -291,7 +291,7 @@ export function roomRuntime(runtime: Runtime, name: string): RoomRuntime {
 export interface CreateRuntimeOptions {
 	clock?: Clock;
 	transport?: Transport;
-	/** Where the runtime opens room journals and Pi transcript sessions. */
+	/** Where the runtime opens room journals. */
 	storage?: JournalOpener;
 	/**
 	 * The execution every room in this runtime uses, such as `piExecution()`
@@ -301,6 +301,11 @@ export interface CreateRuntimeOptions {
 	 * error event.
 	 */
 	execution?: Execution;
+	/**
+	 * Where the steps of each activation go, such as the host's log. Absent,
+	 * the trace drops them. The kernel writes nothing to stdout.
+	 */
+	logger?: TraceLogger;
 	/** Any field of any group. An omitted field keeps its default. */
 	limits?: { readonly [Group in keyof Limits]?: Partial<Limits[Group]> };
 }
@@ -365,10 +370,13 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		running,
 		defaults: new Map(),
 		journals,
-		traces: traceJournals(storage),
 		clock,
 		storage,
-		...optional({ transport: options.transport, execution: options.execution }),
+		...optional({
+			transport: options.transport,
+			execution: options.execution,
+			logger: options.logger,
+		}),
 		limits,
 		evict(name) {
 			const room = running.get(name);

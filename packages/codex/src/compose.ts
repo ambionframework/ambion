@@ -15,7 +15,7 @@ export type CodexExecutionOptions = CodexRuntime;
 /**
  * The Codex execution for a runtime or a room. Pass it as `execution` to
  * `createRuntime`, `startRoom` or `resumeRoom`. The runtime supplies its
- * clock, storage, limits and transport when it builds the connector.
+ * clock, limits, logger and transport when it builds the connector.
  */
 export function codexExecution(options: CodexExecutionOptions = {}): Execution {
 	return {

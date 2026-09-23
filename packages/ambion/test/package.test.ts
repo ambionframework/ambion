@@ -57,7 +57,6 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 		'messageUri',
 		'parseRoomUri',
 		'pendingFor',
-		'readActivation',
 		'readExchange',
 		'readRoom',
 		'resumeRoom',
@@ -100,8 +99,6 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'sessionToResume',
 		'summaryToolDescription',
 		'toolContext',
-		'traceJournals',
-		'traceOpener',
 	]);
 	for (const name of Object.keys(main)) {
 		expect(hosting).not.toHaveProperty(name);

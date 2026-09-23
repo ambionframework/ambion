@@ -6,7 +6,6 @@
  * scripted stream. A real stream needs a key and a network.
  */
 import { isSpoken, startRoom, systemClock } from '@ambionframework/ambion';
-import { memoryJournals } from '@ambionframework/journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import {
 	type AssistantMessageEventStream,
@@ -46,9 +45,7 @@ async function freshServices(count: number) {
 	vi.resetModules();
 	catalog.builds = 0;
 	const { createExecutionServices } = await import('../src/services.ts');
-	return Array.from({ length: count }, () =>
-		createExecutionServices({ storage: memoryJournals(), clock: systemClock() }),
-	);
+	return Array.from({ length: count }, () => createExecutionServices({ clock: systemClock() }));
 }
 
 describe('default provider runtime', () => {

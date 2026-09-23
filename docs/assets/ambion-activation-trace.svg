@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="536" viewBox="0 0 1000 536" role="img" aria-labelledby="title desc">
   <title id="title">The trace of one activation</title>
-  <desc id="desc">Agent B activates on entry 1 of the room journal and claims a lease. Each thing the activation does is one step in a trace journal for that activation alone: a pass, thinking, tool calls and their results, and the room answers. Its first say comes back missed, with entry 2. The agent reconsiders, writes a file, and its second say commits as entry 3. A usage step holds tokens and cost, and an end step stops the activation. The driver writes the pass, room, and end steps, and the executor writes the rest. The release entry in the record carries the usage sum. The trace is not the record.</desc>
+  <desc id="desc">Agent B activates on entry 1 of the room journal and claims a lease. Each thing the activation does is one step that the trace gives to the host's logger: a pass, thinking, tool calls and their results, and the room answers. Its first say comes back missed, with entry 2. The agent reconsiders, writes a file, and its second say commits as entry 3. A usage step holds tokens and cost, and an end step stops the activation. The driver records the pass, room, and end steps, and the executor records the rest. The release entry in the record carries the usage sum. The trace is not the record.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0 0 10 5 0 10Z" fill="#666d6b"/>
@@ -80,9 +80,9 @@
   <path d="M336 310 H264" class="flow" marker-end="url(#arrow)"/>
   <text x="300" y="300" text-anchor="middle" class="sans dim s">releases</text>
   <path d="M548 150 H612" class="flow" marker-end="url(#arrow)"/>
-  <text x="580" y="140" text-anchor="middle" class="sans dim s">writes</text>
+  <text x="580" y="140" text-anchor="middle" class="sans dim s">logs</text>
   <text x="580" y="172" text-anchor="middle" class="sans dim s">steps</text>
-  <text x="632" y="86" text-anchor="start" class="sans ink t">Trace journal</text>
+  <text x="632" y="86" text-anchor="start" class="sans ink t">Trace log</text>
   <text x="632" y="108" text-anchor="start" class="sans dim lab">ONE ACTIVATION · NOT THE RECORD</text>
   <line x1="612" y1="124" x2="976" y2="124" class="rule"/>
   <text x="652" y="152" text-anchor="end" class="mono dim x">0</text>
@@ -138,7 +138,7 @@
   <text x="782" y="464" text-anchor="start" class="sans dim s">stopped</text>
   <circle cx="954" cy="460" r="5" fill="#2f817a" stroke="#2f817a" stroke-width="1.5"/>
   <circle cx="632" cy="510" r="5" fill="#2f817a" stroke="#2f817a" stroke-width="1.5"/>
-  <text x="644" y="515" text-anchor="start" class="sans dim x">the driver writes</text>
+  <text x="644" y="515" text-anchor="start" class="sans dim x">the driver records</text>
   <circle cx="792" cy="510" r="5" fill="#fbfaf6" stroke="#2f817a" stroke-width="1.5"/>
-  <text x="804" y="515" text-anchor="start" class="sans dim x">the executor writes</text>
+  <text x="804" y="515" text-anchor="start" class="sans dim x">the executor records</text>
 </svg>

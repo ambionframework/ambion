@@ -79,9 +79,8 @@ describe('provider loading', () => {
 		async () => {
 			const result = await runFreshProcess(
 				`const { systemClock } = await import('@ambionframework/ambion');
-			const { memoryJournals } = await import('@ambionframework/journal');
 			const { createExecutionServices } = await import(${JSON.stringify(entry)});
-			const services = createExecutionServices({ storage: memoryJournals(), clock: systemClock() });
+			const services = createExecutionServices({ clock: systemClock() });
 			const model = await services.model('anthropic/claude-sonnet-4-5', 'test');
 			if (model.id !== 'claude-sonnet-4-5' || model.provider !== 'anthropic') {
 				throw new Error('unexpected model');

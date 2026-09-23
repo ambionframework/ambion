@@ -37,9 +37,9 @@ limits of the 0.1.0 release. The [README](../README.md) holds the positioning.
   three room tools through an MCP server. A conformance suite proves the Pi
   and Claude adapters on fakes. The Codex adapter runs live.
 - **Speech through `say` only; everything else into a trace.** Every
-  activation writes its steps live to its own trace: thinking, text, tool
-  calls, room calls, steers, approvals, and usage. `readActivation` returns
-  them by pass, and `subscribe` streams them with an activation id.
+  activation gives its steps to the host's logger as they happen: thinking,
+  text, tool calls, room calls, steers, approvals, and usage. The release
+  entry keeps the usage sum.
 - **Artifacts by reference.** A message and a summary carry `refs`, URIs the
   kernel validates, stores, and renders, and never reads behind. Rooms and
   exchanges have URIs. Every resource change carries the activation, the
@@ -75,10 +75,9 @@ limits of the 0.1.0 release. The [README](../README.md) holds the positioning.
 - **Any framework, one adapter each.** A definition is a name, an identity,
   and an executor. The kernel keeps the leases, the passes, and the freshness
   check; a framework supplies one session with passes.
-- **The trace beside the record.** Harness output maps to one step
-  vocabulary, written live per activation, so a person drills from a room to
-  an exchange to an activation to a step, with usage and cost on every
-  activation.
+- **The trace in the host's logs.** Harness output maps to one step
+  vocabulary, logged live per activation with room, seat, activation, pass
+  and index. The record keeps usage and cost on every activation.
 - **Artifacts by reference.** Files and tables are the medium. The record
   names them, and the kernel reads none of them.
 - **The workspace audits and mirrors the room.** A rotating log records

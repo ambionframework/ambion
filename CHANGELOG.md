@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**The trace goes to the host's logger.** `createRuntime({ logger })` and
+Cloudflare `configure({ logger })` take a `TraceLogger`. The sink gives it
+one `TraceRecord` for each step: `room`, `seat`, and the stamped step. With
+no logger, the sink drops the steps. `readActivation`, `ActivationRead` and
+`ActivationPass` are gone from `@ambionframework/ambion`. `traceJournals`
+and `traceOpener` are gone from `@ambionframework/ambion/hosting`, and
+`Hosting.traces` is gone. The `step` and `trace_error` events are gone.
+`createExecutionServices` takes no `storage` and returns no `traces`.
+Storage keeps no `ambion/trace` journals. `@ambionframework/pi` no longer
+depends on `@ambionframework/journal`.
+
 **A seat keeps its harness session for one exchange, and the `memory`
 option is gone.** `pi()`, `claude()` and `codex()` take no `memory`. Every
 executor records its session on the `ended` lease entry. The room hands it
@@ -14,11 +25,11 @@ each executor definition. `resumesForSeat` is gone from
 `@ambionframework/ambion/hosting`. The golden journals changed.
 
 **`@ambionframework/pi-journal` and the Pi transcript audit are gone.** The
-activation trace is the record of what a seat did. `seatSessionId`, the
+activation trace, given to the host's logger, shows what a seat did. `seatSessionId`, the
 `transcripts` and `room` options of `createPiExecutor`, the `transcripts`
 service of `createExecutionServices`, and the `audit_error` event are gone.
-Storage keeps no `ambion/pi-session` journals. Read the trace with
-`readActivation`.
+Storage keeps no `ambion/pi-session` journals. Pass a `logger` to
+`createRuntime` to read the steps.
 
 **The executor conformance suite has a case for the fresh start.** An
 executor that declares `memory` starts a fresh session when the view names

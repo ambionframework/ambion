@@ -20,6 +20,7 @@ import {
 	type TraceStep,
 } from '../../../ambion/src/index.ts';
 import { collect, roomName, waitForRoom } from '../../../ambion/test/support/room.ts';
+import { collectSteps } from '../../../ambion/test/support/trace.ts';
 import { type ClaudeOptions, claude, claudeExecution } from '../../src/index.ts';
 
 /** The Claude model id: `AMBION_MODEL` without its provider prefix. */
@@ -43,16 +44,20 @@ export const seat = (
 ): AgentDefinition =>
 	defineAgent({ name, identity, executor: claude({ model: MODEL, ...options }) });
 
-/** A live room with fresh storage. `execution` defaults to the Claude execution. */
+/**
+ * A live room with fresh storage and a logger that keeps the steps.
+ * `execution` defaults to the Claude execution.
+ */
 export async function open(
 	prefix: string,
 	agents: AgentDefinition[],
 	execution: Execution = claudeExecution(),
 ) {
-	const runtime = createRuntime({ storage: memoryJournals(), execution });
+	const log = collectSteps();
+	const runtime = createRuntime({ storage: memoryJournals(), execution, logger: log.logger });
 	const name = roomName(prefix);
 	const session = await startRoom({ name, agents, runtime });
-	return { session, runtime, name, events: collect(session) };
+	return { session, runtime, name, events: collect(session), steps: log.of };
 }
 
 /** A promise that fails after `ms`, naming what did not happen. */

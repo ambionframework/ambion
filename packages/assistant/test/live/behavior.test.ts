@@ -32,7 +32,7 @@ async function evaluate(options: {
 	attention?: Attention;
 	instructions?: string;
 }) {
-	const services = createExecutionServices({ storage: createRuntime().storage });
+	const services = createExecutionServices();
 	const resolved = await services.model(model, 'assistant');
 	let answered = false;
 	const stream: NonNullable<PiExecutionOptions['stream']> = (requested, context, settings) => {

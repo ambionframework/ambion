@@ -1,5 +1,5 @@
 /**
- * Native journals and traces use one SQLite table through distinct names.
+ * Native journals use one SQLite table through distinct names.
  * Each keeps its own ordering and replay contract.
  */
 
@@ -9,7 +9,7 @@ import { storageConformance } from '@ambionframework/journal/conformance';
 import { expect, it } from 'vitest';
 import { roomMetadata, seatMetadata, sqlStorage } from '../src/storage.ts';
 
-it('orders native journal appends conditionally beside traces on one backend', async () => {
+it('orders native journal appends conditionally beside a second journal name on one backend', async () => {
 	const stub = env.ROOM.get(env.ROOM.idFromName('storage-conditional'));
 	await runInDurableObject(stub, async (_instance, state) => {
 		const storage = sqlStorage(state);
@@ -25,10 +25,10 @@ it('orders native journal appends conditionally beside traces on one backend', a
 		expect(read.position).toBe(1);
 		expect(read.entries).toHaveLength(1);
 
-		const trace = await namespaced(storage, 'ambion/trace').open('room');
-		await trace.append({ step: 1 }, 0);
+		const other = await namespaced(storage, 'ambion/other').open('room');
+		await other.append({ step: 1 }, 0);
 		expect((await first.read(0)).entries).toEqual(read.entries);
-		expect((await trace.read(0)).entries).toHaveLength(1);
+		expect((await other.read(0)).entries).toHaveLength(1);
 	});
 });
 

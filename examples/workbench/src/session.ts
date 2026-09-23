@@ -1,4 +1,4 @@
-import type { ActivationRead, ExchangeView } from '@ambionframework/ambion';
+import type { ExchangeView } from '@ambionframework/ambion';
 import { attachCommand, type StagedAttachment } from './attachments.ts';
 import { attentionOf, newest, pick } from './attention.ts';
 import { FileBrowser } from './browser.ts';
@@ -7,7 +7,7 @@ import { RoomFeed } from './feed.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
 import { holderOf, type Known, labUri, type RefItem, refItems, shows, tableOfUri } from './refs.ts';
 import { DONE, errorText, HELP, refusal, workingAgents } from './session-text.ts';
-import { activationLine, ended, stepsView } from './steps.ts';
+import { type ActivationSteps, activationLine, ended, stepsView } from './steps.ts';
 import { type Block, buildTimeline } from './timeline.ts';
 import type { Approval, FileEntry, Person, RoomAction, RoomView, Workbench } from './workbench.ts';
 
@@ -45,7 +45,7 @@ export class Session {
 	/** The operations of the open room that wait for an answer. */
 	approvals: Approval[] = [];
 	/** The activation whose steps the terminal shows. It re-reads on each room change. */
-	steps: { id: string; read: ActivationRead | undefined } | undefined;
+	steps: { id: string; read: ActivationSteps | undefined } | undefined;
 	pendingRefs: StagedAttachment[] = [];
 	private readonly feed: RoomFeed<RoomView>;
 	private readonly changed: () => void;

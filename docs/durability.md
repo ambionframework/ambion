@@ -120,9 +120,9 @@ holds the lease for `limits.lease.ttl`. No renewal reaches past
 
 Steering carries explicit consumed ranges, so reordered or duplicated context
 cannot acknowledge a gap. A fresh activation reconstructs missed context from
-the record. A failed trace step write is a `trace_error`. It does not turn
-successful or deliberately silent collaboration into failed work, and no
-durable trace backlog is promised.
+the record. The trace goes to the host's logger. A logger that fails does
+not turn successful or deliberately silent collaboration into failed work.
+The room promises no trace.
 
 ### Permanent and transient failure
 

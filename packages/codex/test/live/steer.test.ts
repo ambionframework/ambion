@@ -11,14 +11,17 @@ import {
 	open,
 	person,
 	seat,
-	stepsOf,
 	untilQuiet,
 	within,
 } from './support.ts';
 
 live('a message during a turn', () => {
 	it('is held, and the next pass reads it', async () => {
-		const { room, name, runtime, events } = await open('steer', {
+		const {
+			room,
+			steps: stepsOf,
+			events,
+		} = await open('steer', {
 			agents: [
 				seat('clerk', {
 					instructions:
@@ -53,7 +56,7 @@ live('a message during a turn', () => {
 			expect(second).toBeDefined();
 
 			const [activation] = activationsOf(events, 'clerk');
-			const read = await stepsOf(name, activation ?? '', runtime);
+			const read = stepsOf(activation ?? '');
 			// Codex takes no steer: no step of the activation records one.
 			expect(read.some((step) => step.type === 'steer')).toBe(false);
 

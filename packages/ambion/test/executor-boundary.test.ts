@@ -85,9 +85,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 		expect(events.filter((event) => event.type === 'tool_execution_start')).toEqual([
 			expect.objectContaining({ agent: writer.name, toolName: 'seat' }),
 		]);
-		expect(
-			events.filter((event) => event.type === 'error' || event.type === 'trace_error'),
-		).toEqual([]);
+		expect(events.filter((event) => event.type === 'error')).toEqual([]);
 	});
 });
 

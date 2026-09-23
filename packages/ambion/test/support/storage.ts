@@ -105,22 +105,16 @@ export type AppendHook = (
 /** When a write fails: before it lands, or after it landed and before the writer hears. */
 export type FailMode = false | 'before' | 'after';
 
-/** The room namespace is the only part of a raw storage that a room fault may break. */
-function roomId(name: string): string | undefined {
+/** The room of a journal name: the name inside the room namespace, or the raw name. */
+function roomId(name: string): string {
 	try {
 		const parsed: unknown = JSON.parse(name);
-		if (
-			Array.isArray(parsed) &&
-			parsed.length === 2 &&
-			parsed[0] === 'ambion/room' &&
-			typeof parsed[1] === 'string'
-		) {
+		if (Array.isArray(parsed) && parsed[0] === 'ambion/room' && typeof parsed[1] === 'string')
 			return parsed[1];
-		}
-		return undefined;
 	} catch {
-		return name;
+		// A raw name is the name of its room.
 	}
+	return name;
 }
 
 /** A journal opener whose appends report around their durable boundary. */
@@ -133,7 +127,6 @@ export function tappedJournals(journals: JournalOpener, hook: AppendHook): Journ
 			return {
 				read: storage.read.bind(storage),
 				async append(entry, expectedPosition) {
-					if (id === undefined) return storage.append(entry, expectedPosition);
 					const n = (counts.get(id) ?? 0) + 1;
 					counts.set(id, n);
 					const kind =
@@ -180,11 +173,9 @@ export function gatedJournals(
 	return {
 		async open(name) {
 			const storage = await journals.open(name);
-			const id = roomId(name);
 			return {
 				read: storage.read.bind(storage),
 				async append(entry, expectedPosition) {
-					if (id === undefined) return storage.append(entry, expectedPosition);
 					const kind =
 						typeof entry === 'object' && entry !== null && 'kind' in entry
 							? String((entry as { kind: unknown }).kind)

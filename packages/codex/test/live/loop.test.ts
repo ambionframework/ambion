@@ -5,11 +5,15 @@
  */
 import { isSpoken } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
-import { errorsIn, live, open, person, saidBy, seat, stepsOf, untilQuiet } from './support.ts';
+import { errorsIn, live, open, person, saidBy, seat, untilQuiet } from './support.ts';
 
 live('the loop', () => {
 	it('answers through say, with the room tools approved and the usage counted', async () => {
-		const { room, name, runtime, events } = await open('loop', {
+		const {
+			room,
+			steps: stepsOf,
+			events,
+		} = await open('loop', {
 			agents: [seat('clerk', { instructions: 'Answer through one say, in one sentence.' })],
 		});
 		try {
@@ -28,7 +32,7 @@ live('the loop', () => {
 
 			// (b) No tool result carries an approval error.
 			const activation = ended.find((event) => event.agent === 'clerk')?.activation ?? '';
-			const steps = await stepsOf(name, activation, runtime);
+			const steps = stepsOf(activation);
 			const results = steps.filter((step) => step.type === 'tool_result');
 			expect(steps.some((step) => step.type === 'tool_call' && step.name === 'say')).toBe(true);
 			for (const result of results) {

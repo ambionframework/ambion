@@ -83,8 +83,6 @@ function diagnostics(room: Room): void {
 	room.subscribe((event: RoomNotification) => {
 		if (event.type === 'error')
 			process.stderr.write(`restart error agent=${event.agent}: ${event.error.message}\n`);
-		if (event.type === 'trace_error')
-			process.stderr.write(`restart trace_error agent=${event.agent}: ${event.error.message}\n`);
 		if (event.type === 'abandoned')
 			process.stderr.write(
 				`restart abandoned agent=${event.agent} activation=${event.activation}\n`,

@@ -1,17 +1,16 @@
 /**
  * The connector composer: what every executor package wires the same way.
  *
- * A connector opens the trace journal over the host's storage, picks the
- * host's transport or the in-process default, and builds one seat's
- * execution context from the request the room sends. `seatContext` is the
- * inner value: the context one seat needs to run, with its trace opener
- * built from the definition's policy. `composeConnector` folds it into an
- * `ExecutionConnector`, and takes the executor build as a closure, so an
- * executor package supplies only what makes it different: how it builds one
- * seat's `Executor`, and what its trace keeps.
+ * A connector picks the host's transport or the in-process default, and
+ * builds one seat's execution context from the request the room sends.
+ * `seatContext` is the inner value: the context one seat needs to run, with
+ * a trace opener over the host's logger and the definition's policy.
+ * `composeConnector` folds it into an `ExecutionConnector`, and takes the
+ * executor build as a closure, so an executor package supplies only what
+ * makes it different: how it builds one seat's `Executor`, and what its
+ * trace keeps.
  */
 
-import type { JournalOpener } from '@ambionframework/journal';
 import { DEFAULT_TRACE } from '../define.ts';
 import type {
 	AgentExecutionContext,
@@ -20,10 +19,10 @@ import type {
 	ExecutionHost,
 	Limits,
 } from '../host/runtime.ts';
-import type { AgentDefinition, Clock, ExecutionEvent } from '../types.ts';
+import type { AgentDefinition, Clock, ExecutionEvent, TraceLogger } from '../types.ts';
 import type { Executor } from './executor.ts';
 import { inProcessTransport } from './runner.ts';
-import { traceJournals, traceOpener } from './trace.ts';
+import { traceOpener } from './trace.ts';
 
 /** What one seat needs to run: its definition, its executor, and where its trace goes. */
 export interface SeatContextInput {
@@ -34,22 +33,22 @@ export interface SeatContextInput {
 	readonly seat: string;
 	readonly executor: Executor;
 	readonly emit: (event: ExecutionEvent) => void;
-	readonly traces: JournalOpener;
+	/** Where the steps of each activation go. Absent, the trace drops them. */
+	readonly logger?: TraceLogger;
 	readonly limits: Limits['trace'];
 }
 
 /** The context of one seat, with its trace opener built from the definition's policy. */
 export function seatContext(input: SeatContextInput): AgentExecutionContext {
-	const { traces, limits, ...rest } = input;
+	const { logger, limits, ...rest } = input;
 	return {
 		...rest,
 		trace: traceOpener({
 			room: input.room,
-			agent: input.seat,
-			traces,
+			seat: input.seat,
+			logger,
 			limits,
 			policy: input.definition.trace ?? DEFAULT_TRACE,
-			emit: input.emit,
 			now: () => input.clock.now(),
 		}),
 	};
@@ -67,7 +66,6 @@ export interface ConnectorComposition {
 /** One `ExecutionConnector`, wired from an executor package's own build and trace limits. */
 export function composeConnector(composition: ConnectorComposition): ExecutionConnector {
 	const { host, buildExecutor, traceLimits } = composition;
-	const traces = traceJournals(host.storage);
 	const transport = host.transport ?? inProcessTransport();
 	return {
 		connect(room, request) {
@@ -81,7 +79,7 @@ export function composeConnector(composition: ConnectorComposition): ExecutionCo
 					seat: request.seat,
 					executor: buildExecutor(request),
 					emit: request.emit,
-					traces,
+					logger: host.logger,
 					limits: traceLimits,
 				}),
 			);

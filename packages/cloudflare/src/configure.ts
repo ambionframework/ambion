@@ -8,6 +8,7 @@ import type {
 	CreateRuntimeOptions,
 	ExecutionEvent,
 	Runtime,
+	TraceLogger,
 } from '@ambionframework/ambion';
 import { createRuntime } from '@ambionframework/ambion';
 import { createExecutionServices, type PiExecutionOptions, piExecution } from '@ambionframework/pi';
@@ -44,6 +45,12 @@ export interface ConfigureOptions {
 	 * or one that does nothing to keep them out of the logs.
 	 */
 	onSeatEvent?: (event: SeatEvent) => void;
+	/**
+	 * Where the steps of each activation go. Absent, the seat drops them. Pass
+	 * `(record) => console.log({ ambion: 'step', ...record })` to send them to
+	 * Workers Logs.
+	 */
+	logger?: TraceLogger;
 }
 
 let settings: ConfigureOptions | undefined;
@@ -64,6 +71,11 @@ export function seatEvent(event: SeatEvent): void {
 	take(event);
 }
 
+/** Where a seat gives the steps of each activation, or nothing when the worker passed no logger. */
+export function traceLogger(): TraceLogger | undefined {
+	return settings?.logger;
+}
+
 /** A runtime over this object's storage and clock, with the worker's model call. */
 export function runtimeFor(
 	options: Pick<CreateRuntimeOptions, 'storage' | 'clock' | 'transport'>,
@@ -78,9 +90,9 @@ export function runtimeFor(
 	});
 }
 
-/** Compose model and transcript services for a seat object over its own storage. */
+/** Compose the model services and the limits for a seat object. */
 export function executionFor(
-	options: Pick<Parameters<typeof createExecutionServices>[0], 'storage' | 'clock'>,
+	options: Pick<NonNullable<Parameters<typeof createExecutionServices>[0]>, 'clock'>,
 ): ReturnType<typeof createExecutionServices> {
 	if (settings === undefined) {
 		throw new Error('Call configure() at module scope before an object runs.');

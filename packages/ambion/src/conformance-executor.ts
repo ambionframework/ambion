@@ -1,10 +1,10 @@
 /**
  * The cases every `Executor` must pass. The suite plays the driver and the
  * room for one executor. It runs the executor through the real driver over a
- * scripted room, then checks the room calls and the trace journal. It never
- * checks what an executor says beyond the neutral plans it asks for.
+ * scripted room, then checks the room calls and the steps the logger
+ * receives. It never checks what an executor says beyond the neutral plans
+ * it asks for.
  */
-import { type JournalOpener, memoryJournals } from '@ambionframework/journal';
 import type { ConformanceCase } from '@ambionframework/journal/conformance';
 import { type ExecutorRoom, executorRoom, type RoomScript } from './conformance-executor-room.ts';
 import {
@@ -20,7 +20,6 @@ import { defineAgent, describeExecutor } from './define.ts';
 import { seatContext } from './execution/connector.ts';
 import type { Executor } from './execution/executor.ts';
 import { inProcessTransport } from './execution/runner.ts';
-import { readTrace, traceJournals } from './execution/trace.ts';
 import { systemClock } from './host/clock.ts';
 import { DEFAULT_TRACE_LIMITS } from './host/runtime.ts';
 import type { AgentPort, CommitResult, LeaseRequest } from './protocol.ts';
@@ -31,6 +30,7 @@ import {
 	type FailureCause,
 	type HarnessSession,
 	type Message,
+	type TraceRecord,
 	type TraceStep,
 	type Usage,
 } from './types.ts';
@@ -93,7 +93,7 @@ interface Run {
 	/** Wake the seat for the first activation, or for the one that `activation` names. */
 	wake(activation?: string): Promise<void>;
 	waitFor(read: () => boolean, what: string): Promise<void>;
-	/** The trace steps once the `end` step landed. */
+	/** The steps the logger received, once the `end` step landed. */
 	trace(): Promise<TraceStep[]>;
 }
 
@@ -428,7 +428,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 		const room = executorRoom(names.room, names.seat, one.room);
 		const activation = `message:1:${names.seat}:1`;
 		const events: ExecutionEvent[] = [];
-		const traces = traceJournals(memoryJournals());
+		const records: TraceRecord[] = [];
 		const definition = defineAgent({
 			name: names.seat,
 			identity: 'Says a plan.',
@@ -447,7 +447,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 					seat: names.seat,
 					executor,
 					emit,
-					traces,
+					logger: (record) => void records.push(record),
 					limits: DEFAULT_TRACE_LIMITS,
 				}),
 			);
@@ -461,7 +461,14 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 				wake: (id = activation) =>
 					port.wake({ room: names.room, seat: names.seat, activation: id }),
 				waitFor: (read, what) => until(read, patience, what),
-				trace: () => traceWhenEnded(traces, names.room, activation, patience),
+				trace: async () => {
+					const steps = () =>
+						records.flatMap((record) =>
+							record.step.activation === activation ? [record.step] : [],
+						);
+					await until(() => steps().some((step) => step.type === 'end'), patience, 'the end step');
+					return steps();
+				},
 			});
 		} finally {
 			room.release();
@@ -469,20 +476,4 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 		}
 	};
 	return cases.map((one) => ({ name: one.name, run: () => run(one) }));
-}
-
-/** The steps of the activation once its `end` step is in the journal. The driver writes it last. */
-async function traceWhenEnded(
-	traces: JournalOpener,
-	room: string,
-	activation: string,
-	patience: number,
-): Promise<TraceStep[]> {
-	const deadline = Date.now() + patience;
-	for (;;) {
-		const steps = await readTrace(traces, room, activation);
-		if (steps.some((step) => step.type === 'end')) return steps;
-		if (Date.now() > deadline) throw new Error(`No end step came within ${patience} ms.`);
-		await pause(20);
-	}
 }

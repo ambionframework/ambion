@@ -93,7 +93,7 @@ try {
 ```
 
 **Importing `@ambionframework/pi` registers the default Pi execution.** It
-keeps traces in the storage of the runtime. A host that
+gives the steps of each activation to the logger of the runtime. A host that
 needs a scripted stream, custom storage, a transport, or limits passes
 `piExecution(options)` as `execution`. [Executors](executors.md#the-executor-contract)
 states how a room resolves an execution.
@@ -119,8 +119,8 @@ validates the shared fields. Pi adds `model`.
 | -------- | ---------------------- | --------------------------------------------------------------------------------- |
 | `stream` | The Pi registry stream | A Pi `StreamFn`. A custom stream makes the model resolve to a stub (see Testing). |
 
-The runtime supplies the clock, the storage, the call limits, the trace
-limits, and the transport. `pi()` throws at definition time when
+The runtime supplies the clock, the call limits, the trace limits, the
+logger, and the transport. `pi()` throws at definition time when
 `estimateTokens` has no `activationTokenLimit`, and when the limit is not a
 positive integer.
 
@@ -224,8 +224,8 @@ transcript.
 
 **The transcript lives in the process.** Pi writes no transcript to the
 storage. A restart loses it, and the first activation after the restart
-reads the whole view. [The trace](executors.md#the-step-vocabulary) is the
-record of what the model did.
+reads the whole view. [The trace](executors.md#the-trace-log) shows the
+host's logger what the model did.
 
 ## The step mapping
 
@@ -341,7 +341,7 @@ Pi seats.
 | The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY` and the credit of the account.     |
 | `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat ran under `piExecution()`. Route with `composeExecutions`.                                   |
 | `An agent estimateTokens needs an activationTokenLimit.`            | `estimateTokens` is set with no limit.                                                                     |
-| The agent never speaks                                              | Silence is legal. Read the trace with `readActivation` to see the thinking and the tool calls.             |
+| The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.       |
 | A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again. |
 | A steer shows `consumed: false`                                     | The pass ended before the next provider request. The next delta carries the line.                          |
 | The first activation after a restart re-reads the record            | The kept transcript lives in the process. A restart starts a new one.                                      |

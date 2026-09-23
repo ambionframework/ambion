@@ -10,7 +10,6 @@ import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { isSpoken } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
-import { traceOf } from '../../../ambion/test/support/trace.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
 const CODE = 'TANGO-7731';
@@ -25,7 +24,7 @@ async function directory(): Promise<string> {
 
 /** Ask one seat one question. Returns its steps and what it said. */
 async function ask(prefix: string, definition: ReturnType<typeof seat>, text: string) {
-	const { session, runtime, name } = await open(prefix, [definition]);
+	const { session, steps: stepsOf } = await open(prefix, [definition]);
 	try {
 		const visit = await enter(session, person);
 		const started = new Promise<string>((resolve) => {
@@ -41,7 +40,7 @@ async function ask(prefix: string, definition: ReturnType<typeof seat>, text: st
 			.filter((m) => m.from === definition.name)
 			.map((m) => m.text)
 			.join('\n');
-		return { steps: await traceOf(runtime, name, activation), said };
+		return { steps: stepsOf(activation), said };
 	} finally {
 		await session.stop();
 	}

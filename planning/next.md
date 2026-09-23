@@ -238,8 +238,7 @@ block, and `stale` constant (`conformance.ts:177`,
 `conformance-executor-room.ts:88`).
 
 - The shared question, participants block, and `stale` constant move to
-  `conformance-support.ts`. `until` accepts an async predicate, and
-  `traceWhenEnded` uses it.
+  `conformance-support.ts`. `until` accepts an async predicate.
 
 **M6. Each doc fact has one home.** The positioning rule in
 [CLAUDE.md](../CLAUDE.md) states that every page states a fact once.

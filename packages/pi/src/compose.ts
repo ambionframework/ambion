@@ -18,13 +18,12 @@ export interface PiExecutionOptions {
 /**
  * The Pi execution for a runtime or a room. Pass it as `execution` to
  * `createRuntime`, `startRoom` or `resumeRoom`. The runtime supplies its
- * clock, storage, limits and transport when it builds the connector.
+ * clock, limits, logger and transport when it builds the connector.
  */
 export function piExecution(options: PiExecutionOptions = {}): Execution {
 	return {
 		connector: (host) => {
 			const services = createExecutionServices({
-				storage: host.storage,
 				clock: host.clock,
 				call: host.limits.call,
 				trace: host.limits.trace,
