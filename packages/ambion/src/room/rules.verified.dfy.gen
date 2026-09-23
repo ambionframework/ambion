@@ -645,6 +645,22 @@ lemma activationGrant_ensures(id: ActivationFields, cancelledAt: Option<int>, se
 {
 }
 
+function draftsClose(id: ActivationFields, through: int, writer: string): bool
+  requires (through >= 1)
+  requires (|writer| >= 1)
+{
+  ((id.source.closed? && (id.position == through)) && (id.seat == writer))
+}
+
+lemma draftsClose_ensures(id: ActivationFields, through: int, writer: string)
+  requires (through >= 1)
+  requires (|writer| >= 1)
+  ensures (draftsClose(id, through, writer) ==> !(holdsExchange(id.source)))
+  ensures ((id.seat != writer) ==> !(draftsClose(id, through, writer)))
+  ensures forall n: int :: ((n >= 0) ==> draftsClose(nextActivationId(Source.closed, through, writer, n), through, writer))
+{
+}
+
 function stoodDown(drafts: seq<Draft>): bool
 {
   (exists draft :: draft in drafts && (draft.ended? && ((draft.reason.released? || draft.reason.revoked?) || draft.reason.abandoned?)))

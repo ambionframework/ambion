@@ -245,6 +245,38 @@ describe('the room runs the verified rules', () => {
 		expect(closed().owed).toMatchObject([{ writer: 'product', through: 3 }]);
 	});
 
+	it('counts a draft of a close as draftsClose answers', () => {
+		const drafted = (reason: 'failed' | 'released') => {
+			const draft = 'closed:3:product:1';
+			return foldRoom(
+				[
+					writerNamed,
+					person,
+					quietQuestion,
+					closed3,
+					{
+						kind: 'lease',
+						seq: 5,
+						body: { id: draft, phase: 'running', expiresAt: now, at, readThrough: 0 },
+					},
+					{
+						kind: 'lease',
+						seq: 6,
+						body: { id: draft, phase: 'ended', reason, at, readThrough: 0 },
+					},
+				],
+				options,
+			);
+		};
+		bind.always(rules.draftsClose, () => false);
+		// No lease drafts the close: the failed draft is no attempt, and the released one stands nobody down.
+		expect(drafted('failed').owed).toMatchObject([{ attempt: 1, unsuccessfulAttempts: 0 }]);
+		expect(drafted('released').owed).toMatchObject([{ writer: 'product', through: 3 }]);
+		bind.restore(rules.draftsClose);
+		expect(drafted('failed').owed).toMatchObject([{ attempt: 2, unsuccessfulAttempts: 1 }]);
+		expect(drafted('released').owed).toEqual([]);
+	});
+
 	it('admits a claim or a renewal as admitsLease answers', () => {
 		const renew = { type: 'renew', id, expiry: 60_000, deadline: 600_000 } as const;
 		bind.once(rules.admitsLease, 'granted');

@@ -583,6 +583,16 @@ export function activationGrant(
 	};
 }
 
+//@ contract A lease drafts a close when a close caused it, its position is the close's boundary, and its seat is the close's writer. The id of every attempt the room derives for the writer drafts the close. Another seat's lease drafts nothing for it.
+export function draftsClose(id: ActivationFields, through: number, writer: string): boolean {
+	//@ requires through >= 1
+	//@ requires writer.length >= 1
+	//@ ensures \result ==> !holdsExchange(id.source)
+	//@ ensures id.seat != writer ==> !\result
+	//@ ensures forall(n, n >= 0 ==> draftsClose(nextActivationId('closed', through, writer, n), through, writer))
+	return id.source === 'closed' && id.position === through && id.seat === writer;
+}
+
 /** A draft of one close's summary, as the verdict reads it: running, or ended with its reason and the marker. */
 export type Draft =
 	| { readonly phase: 'running' }

@@ -48,6 +48,7 @@ import { type LeaseHold, removedAfter } from './lease.ts';
 import {
 	coversExchange,
 	type Draft,
+	draftsClose,
 	exchangeOutcome,
 	lastOf,
 	openingQuestion,
@@ -99,11 +100,12 @@ function draftsOf(
 	through: Seq,
 	writer: string | undefined,
 ): Draft[] {
+	if (writer === undefined) return [];
 	return [...leases.values()]
 		.filter((lease) => {
 			const parsed = decodeActivationId(lease.id);
 			// A terminal lease from another seat cannot settle this close.
-			return parsed?.source === 'closed' && parsed.position === through && parsed.seat === writer;
+			return parsed !== undefined && draftsClose(parsed, through, writer);
 		})
 		.map((lease) =>
 			lease.phase === 'running'

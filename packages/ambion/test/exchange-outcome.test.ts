@@ -10,6 +10,7 @@ import { validateRoomBody } from '../src/journal/validate.ts';
 import { summaryCompletion } from '../src/room/exchange.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
+import { projectState, replay } from '../src/room/projection.ts';
 import { pendingFor, readView } from '../src/room/read.ts';
 import type { ExchangeView, Message, RoomRead, SummaryMessage } from '../src/types.ts';
 import { evolve } from './support/evolve.ts';
@@ -280,6 +281,32 @@ describe('summary completion query', () => {
 		expect(summaryCompletion(closes, messages, new Map(holds.map((h) => [h.id, h])))).toEqual(
 			expected,
 		);
+	});
+
+	it("counts only the writer's drafts as attempts, in the fold and in the projection", () => {
+		const failed = (seq: number, id: string): Entry[] => [
+			{ kind: 'lease', seq, body: { id, phase: 'running', expiresAt: 0, at, readThrough: 0 } },
+			{
+				kind: 'lease',
+				seq: seq + 1,
+				body: { id, phase: 'ended', reason: 'failed', at, readThrough: 0 },
+			},
+		];
+		// A journal from another writer: a seat that is not the close's writer drafted and failed.
+		const entries = [
+			composition,
+			arrival(2, 'priya'),
+			said(3, 'priya'),
+			close(4, 3, 3, 'writer'),
+			...failed(5, 'closed:3:worker:1'),
+		];
+		const owed = { writer: 'writer', through: 3, attempt: 1, unsuccessfulAttempts: 0 };
+		expect(foldRoom(entries, retry).owed).toMatchObject([owed]);
+		expect(projectState(replay(entries, retry)).owed).toMatchObject([owed]);
+		const retried = [...entries, ...failed(7, 'closed:3:writer:1')];
+		expect(foldRoom(retried, retry).owed).toMatchObject([
+			{ ...owed, attempt: 2, unsuccessfulAttempts: 1, id: 'closed:3:writer:2' },
+		]);
 	});
 });
 
