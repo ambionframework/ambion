@@ -67,7 +67,7 @@ export function commandScript(
 	);
 	const output = spill === undefined ? '2>&1' : `> >(exec tee -a -- "$${SPILL_VARIABLE}") 2>&1`;
 	return [
-		`printf '${PGID_PREFIX}%s\\n' "$$" >&2`,
+		`printf '\\n${PGID_PREFIX}%s\\n' "$$" >&2`,
 		`cd -- ${quote(cwd)} || exit 1`,
 		...exports,
 		...(spill === undefined ? [] : spillLines(spill)),

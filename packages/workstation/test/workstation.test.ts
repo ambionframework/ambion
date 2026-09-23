@@ -224,9 +224,11 @@ describe.skipIf(!hasSetsid)('a workstation command', () => {
 	});
 
 	it.each([
-		['', 'a quiet login shell'],
-		['Welcome to the lab.\n', 'a login shell that writes to stderr first'],
-	])('kills the whole process group on a timeout, under %j (%s)', async (noise) => {
+		{ noise: '', shell: 'a quiet login shell' },
+		{ noise: 'Welcome to the lab.\n', shell: 'a login shell that writes to stderr first' },
+		{ noise: 'Welcome to the lab.', shell: 'a login shell that writes no newline at its end' },
+		{ noise: 'x'.repeat(70_000), shell: 'a login shell that writes past the cap' },
+	])('kills the whole process group on a timeout, under $shell', async ({ noise }) => {
 		const started = await server();
 		started.setLoginNoise(noise);
 		const backend = backendFor(started.options);
