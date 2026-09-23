@@ -97,7 +97,8 @@ export function summaryCompletion(
 /**
  * The drafts of one close's summary: every lease of the writer's closing
  * activations at the close. The validator holds `through >= 1`. A close
- * with no writer has no drafts, and a decoded id always names a seat.
+ * with no writer has no drafts, and `decodeActivationId` always names a
+ * seat.
  */
 function draftsOf(
 	leases: ReadonlyMap<string, LeaseHold>,
