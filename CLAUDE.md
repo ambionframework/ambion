@@ -31,6 +31,7 @@ floor.
 | `docs/presence.md`    | Design contract for presence and visits — read with `agent.md`                                                                               |
 | `docs/summary.md`     | Design contract for optional summaries of closed exchanges                                                                                   |
 | `docs/workspace.md`   | Design contract for the workspace an agent's tools reach into — read with `agent.md`                                                         |
+| `docs/backends.md`    | Design, not built: a workspace with a shell backend and a SQL backend, one credential per agent on each — read with `workspace.md`           |
 | `docs/example.md`     | The one runnable example, an agentic lab workspace, and what it must show                                                                    |
 | `docs/roster.md`      | Design contract for a roster that changes while the room runs — read with `agent.md`                                                         |
 | `docs/durability.md`  | What the record promises under failure, and how the tiers prove it — read with `agent.md`                                                    |

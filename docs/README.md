@@ -29,6 +29,7 @@ each page.
 | [Summaries](summary.md)               | Optional closing work and context replacement                          |
 | [Resources](resources.md)             | The resource contract, references, and provenance                      |
 | [Workspace](workspace.md)             | The Pi filesystem binding of the resource contract                     |
+| [Backends](backends.md)               | A design, not built: a shell backend and a SQL backend per workspace   |
 | [Example](example.md)                 | The one runnable example: an agentic lab workspace                     |
 | [Durability](durability.md)           | Journal guarantees, recovery, leases, and failure evidence             |
 | [Formal](formal.md)                   | The verified rules, their proofs, and how the gate runs them           |
