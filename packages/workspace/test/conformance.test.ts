@@ -1,13 +1,17 @@
 /**
- * The two conformance suites on the backends this package ships. Every
- * workspace case runs on memory and on directory, and every SQL case runs on
- * SQLite in memory and on a file (`test/support/backends.ts`).
+ * The two conformance suites. The workspace cases run on the just-bash memory
+ * backend, which proves the suite itself; `@ambionframework/just-bash` and
+ * `@ambionframework/workstation` run them on their own backends. Every SQL
+ * case runs on SQLite in memory and on a file (`test/support/backends.ts`).
  */
 import { describe, it } from 'vitest';
+import { backends } from '../../just-bash/test/support/backends.ts';
 import { sqlConformance, workspaceConformance } from '../src/conformance.ts';
-import { backends, sqlBackends } from './support/backends.ts';
+import { sqlBackends } from './support/backends.ts';
 
-describe.each(backends)('$name', (harness) => {
+const memory = backends.filter((harness) => harness.name === 'memory');
+
+describe.each(memory)('$name', (harness) => {
 	for (const c of workspaceConformance(harness)) it(c.name, c.run);
 });
 

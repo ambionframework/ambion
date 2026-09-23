@@ -6,14 +6,12 @@
  */
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, err, FileError } from '@earendil-works/pi-agent-core';
-import { Bash, InMemoryFs } from 'just-bash';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { memoryBackend } from '../../just-bash/src/index.ts';
 import { DEFAULT_AUDIT_LOG, openAuditLog } from '../src/audit.ts';
-import type { BashBackend } from '../src/backend.ts';
-import { BashEnv } from '../src/bash-env.ts';
+import type { BashBackend, WorkspaceEnv } from '../src/backend.ts';
 import { openWorkspace, type Workspace } from '../src/index.ts';
-import { memoryBackend } from '../src/just-bash.ts';
 import { callAs, invokeText, toolOf, wrapped } from './support/backends.ts';
 
 const ctx = BACKGROUND_CONTEXT;
@@ -39,12 +37,11 @@ async function readLines(env: ExecutionEnv, path: string): Promise<Record<string
 const entriesOf = (site: Workspace) => site.use(scribe, (env) => readLines(env, DEFAULT_AUDIT_LOG));
 
 /**
- * A `BashEnv` over its own in-memory filesystem, for `openAuditLog` alone.
- * Its first `failures` appends fail as a full filesystem refuses them.
+ * An env of a fresh memory backend, for `openAuditLog` alone. Its first
+ * `failures` appends fail as a full filesystem refuses them.
  */
-function bareEnv(failures = 0): BashEnv {
-	const home = '/home/scribe';
-	const env = new BashEnv(new Bash({ fs: new InMemoryFs(), cwd: home, env: { HOME: home } }), home);
+async function bareEnv(failures = 0): Promise<WorkspaceEnv> {
+	const env = await memoryBackend().connect(scribe);
 	const append = env.appendFile.bind(env);
 	let left = failures;
 	env.appendFile = async (path, content, context) => {
@@ -55,7 +52,7 @@ function bareEnv(failures = 0): BashEnv {
 	return env;
 }
 
-async function listNames(env: BashEnv, path: string): Promise<string[]> {
+async function listNames(env: WorkspaceEnv, path: string): Promise<string[]> {
 	const listed = await env.listDir(path, ctx);
 	if (!listed.ok) throw new Error(listed.error.message);
 	return listed.value.map((file) => file.name).sort();
@@ -205,7 +202,7 @@ describe('the workspace audit log', () => {
 
 describe('openAuditLog', () => {
 	it('accumulates into one file, then rotates the whole file once it passes maxBytes', async () => {
-		const env = bareEnv();
+		const env = await bareEnv();
 		const oneLine = `${JSON.stringify(entryFor('one'))}\n`;
 		const log = openAuditLog({ path: '/workspace/audit.jsonl', maxBytes: oneLine.length + 5 });
 
@@ -225,7 +222,7 @@ describe('openAuditLog', () => {
 	});
 
 	it('falls back to a short notice when an entry will not serialize', async () => {
-		const env = bareEnv();
+		const env = await bareEnv();
 		const log = openAuditLog({ path: '/workspace/audit.jsonl' });
 		const circular: Record<string, unknown> = {};
 		circular.self = circular;
@@ -235,7 +232,7 @@ describe('openAuditLog', () => {
 	});
 
 	it('falls back to a short notice, and keeps the call, when the full entry will not fit', async () => {
-		const env = bareEnv(1);
+		const env = await bareEnv(1);
 		const errors: Error[] = [];
 		const log = openAuditLog({
 			path: '/workspace/audit.jsonl',
@@ -250,7 +247,7 @@ describe('openAuditLog', () => {
 
 	it('reports to onError, and never throws, even from a throwing onError, when the notice does not fit either', async () => {
 		const errors: Error[] = [];
-		const reporting = bareEnv(2);
+		const reporting = await bareEnv(2);
 		const path = '/workspace/audit.jsonl';
 		const log = openAuditLog({ path, onError: (error) => errors.push(error) });
 		await expect(log.record(reporting, entryFor('one'), ctx)).resolves.toBeUndefined();
@@ -263,6 +260,6 @@ describe('openAuditLog', () => {
 				throw new Error('a broken onError callback');
 			},
 		});
-		await expect(throwing.record(bareEnv(2), entryFor('one'), ctx)).resolves.toBeUndefined();
+		await expect(throwing.record(await bareEnv(2), entryFor('one'), ctx)).resolves.toBeUndefined();
 	});
 });

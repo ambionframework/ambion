@@ -13,9 +13,9 @@ import { composeExecutions, type Execution } from '@ambionframework/ambion/hosti
 import { claudeExecution } from '@ambionframework/claude';
 import { codexExecution } from '@ambionframework/codex';
 import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
+import { directoryBackend } from '@ambionframework/just-bash';
 import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
 import { openWorkspace, type RoomMirror } from '@ambionframework/workspace';
-import { directoryBackend } from '@ambionframework/workspace/just-bash';
 import { openSqlResource } from '@ambionframework/workspace/sql';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { readApprovals } from './approvals.ts';

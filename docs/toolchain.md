@@ -15,9 +15,10 @@ packages/
   cloudflare/   Durable Object adapter
   codex/        Codex SDK executor: codex() and codexExecution()
   journal/      append-only journal storage
+  just-bash/    workspace bash backends over just-bash, in memory or over a directory
   pi/           Pi executor: pi(), piExecution(), and the seat transcript audit
   pi-journal/   Pi session persistence over journal storage
-  workspace/    filesystem resource and tool bundles
+  workspace/    workspace resource, tool bundles, and backend helpers
   workstation/  workspace bash backend over SSH, one account for each agent
 examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
 scripts/        package discovery, versioning, publishing, reports
@@ -26,7 +27,7 @@ planning/       the plan for the next release and the backlog
 .github/        CI, live, and dev-release workflows
 ```
 
-The ten `packages/*` entries are publishable and share a lockstep version.
+The eleven `packages/*` entries are publishable and share a lockstep version.
 Examples are private. The package graph is:
 
 ```text
@@ -37,9 +38,16 @@ claude ──▶ ambion
 codex ──▶ ambion
 cloudflare ──▶ ambion, journal, pi
 workspace ──▶ ambion
+just-bash ──▶ workspace
 workstation ──▶ workspace
 assistant ──▶ ambion, pi
 ```
+
+**A test reaches a package that depends on its own by relative path.** The
+core's tests read the Pi source. The workspace's tests read the just-bash
+source and its test support. A manifest dependency would close a cycle in
+the graph above. The test config sends the package's own specifiers to its
+source, so a test reads one module.
 
 Internal dependencies use `workspace:*`; pnpm rewrites them to the release
 version while packing. Two packages get a packed-consumer smoke check that
@@ -264,7 +272,7 @@ and [`durability.md`](durability.md) for the claims those tests enforce.
 
 ## 9. Release and publishing
 
-Two channels publish the ten packages under the `@ambionframework` scope.
+Two channels publish the eleven packages under the `@ambionframework` scope.
 
 | Channel | Registry                     | Dist-tag         | Who publishes                 |
 | ------- | ---------------------------- | ---------------- | ----------------------------- |

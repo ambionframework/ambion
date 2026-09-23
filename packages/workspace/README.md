@@ -5,13 +5,13 @@ Optional filesystem resources and tools for the
 these resources and choose which agents share them. Workspace files remain
 separate from the collaboration journal.
 
-This package owns workspace resources and two backends over
-[just-bash](https://github.com/vercel-labs/just-bash).
+This package owns workspace resources, their tools, and the helpers a bash
+backend builds on.
 
 ## Install
 
 ```sh
-pnpm add @ambionframework/ambion @ambionframework/workspace
+pnpm add @ambionframework/ambion @ambionframework/workspace @ambionframework/just-bash
 ```
 
 The packages install from npmjs with no token. A dev build of `main` installs
@@ -29,7 +29,7 @@ at `/home/<agent name>`.
 import { defineAgent } from '@ambionframework/ambion';
 import { pi } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
-import { memoryBackend } from '@ambionframework/workspace/just-bash';
+import { memoryBackend } from '@ambionframework/just-bash';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 
 const drive = openWorkspace({
@@ -52,8 +52,7 @@ const surveyor = defineAgent({
 
 The root entry loads no backend. `./resource` holds only the neutral
 contract: `openResource` and its types. It loads neither the Ambion runtime
-nor a model library. `./just-bash` holds the two bash backends,
-`memoryBackend` and `directoryBackend`. `./sqlite` holds `sqliteBackend`,
+nor a model library. `./sqlite` holds `sqliteBackend`,
 the SQL backend over one SQLite database. `./sql` holds `openSqlResource`, a
 resource over its own SQLite database, with its `SqlProvenance` and
 `SqlResourceEnv` types. `./conformance` holds `workspaceConformance`, the
@@ -66,7 +65,7 @@ then runs on that database. With no SQL backend, the workspace has no `sql`
 tool. The root entry exports the `SqlBackend` interface.
 
 ```ts
-import { memoryBackend } from '@ambionframework/workspace/just-bash';
+import { memoryBackend } from '@ambionframework/just-bash';
 import { openResource } from '@ambionframework/workspace/resource';
 
 const backend = memoryBackend({
@@ -82,33 +81,24 @@ This handle has `use` and `dispose`. The root `openWorkspace` function adds
 the Ambion tool bundle over the same resource implementation. Both paths use
 the lifecycle contract below.
 
-## The two backends
+## The bash backends
 
-**`memoryBackend(options)` keeps the files in memory**, for as long as the
-handle lives. `options.seed` writes files before any agent connects, and
-`readFiles()` reads every file back out without an agent. A host reaches the
-workspace's files with no tool call, which is what a real directory gives for
-free.
+A bash backend is a separate package, and this package depends on none of
+them:
 
-**`directoryBackend(root)` writes through to a real directory.** It creates
-the root when an operation needs it. `drive.dispose()` releases the handle
-and keeps the root and its files. A host deletes the data it owns.
+| Package                        | Backend                                                           |
+| ------------------------------ | ----------------------------------------------------------------- |
+| `@ambionframework/just-bash`   | `memoryBackend` and `directoryBackend`, over just-bash in process |
+| `@ambionframework/workstation` | `workstationBackend`, over SSH to one remote server               |
 
-Agents connected to one workspace share every file. just-bash is single-user,
-so one agent can read another agent's home. The default workspace provides no
-operating-system isolation between agents or distributed ownership of a shared
-directory. Hosts own credentials and authorization for external services.
-
-Every instance runs with `javascript: true` and `python: true`, so `bash`
-runs a script with `js-exec` or `python3` beside just-bash's coreutils, `jq`,
-`yq`, `xan` and `sqlite3`. No instance takes a `network` option, so `curl`
-and every other network command stay absent.
+A new backend builds its `ExecutionEnv` on the helpers of the root entry
+and runs `workspaceConformance`.
 
 ## The contract
 
 [`docs/workspace.md`](https://github.com/ambionframework/ambion/blob/main/docs/workspace.md)
 is the design contract. It specifies the resource, its lifecycle, backend
-tools and both backends.
+tools and the just-bash backends.
 
 ## License
 

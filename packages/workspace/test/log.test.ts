@@ -6,8 +6,8 @@
 import { posix } from 'node:path';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
+import { backends } from '../../just-bash/test/support/backends.ts';
 import { BACKGROUND_CONTEXT, openAuditLog, openLog } from '../src/index.ts';
-import { backends } from './support/backends.ts';
 
 const ctx = BACKGROUND_CONTEXT;
 

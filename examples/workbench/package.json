@@ -19,6 +19,7 @@
 		"@ambionframework/claude": "workspace:*",
 		"@ambionframework/codex": "workspace:*",
 		"@ambionframework/journal": "workspace:*",
+		"@ambionframework/just-bash": "workspace:*",
 		"@ambionframework/pi": "workspace:*",
 		"@ambionframework/workspace": "workspace:*",
 		"@opentui/core": "0.5.11",

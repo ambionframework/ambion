@@ -1,8 +1,9 @@
 /**
- * The package's six entries, and what each one names. `index.ts` opens a
- * resource and its logs, over no backend. `./resource`, `./sql`,
- * `./sqlite`, and `./just-bash` each hold one binding. `./conformance`
- * holds the cases every `BashBackend` and every `SqlBackend` must pass.
+ * The package's five entries, and what each one names. `index.ts` opens a
+ * resource and its logs, over no backend. `./resource`, `./sql`, and
+ * `./sqlite` each hold one binding. `./conformance` holds the cases every
+ * `BashBackend` and every `SqlBackend` must pass. No entry loads just-bash:
+ * the just-bash backends are the package `@ambionframework/just-bash`.
  */
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +11,6 @@ import { expect, it } from 'vitest';
 import * as conformance from '../src/conformance.ts';
 import * as main from '../src/index.ts';
 import { PACKAGE_NAME } from '../src/index.ts';
-import * as justBash from '../src/just-bash-entry.ts';
 import * as resource from '../src/resource-entry.ts';
 import * as sql from '../src/sql-resource.ts';
 import * as sqlite from '../src/sqlite-entry.ts';
@@ -30,17 +30,15 @@ const STEMS: Record<string, string> = {
 	'./resource': 'resource-entry',
 	'./sql': 'sql-resource',
 	'./sqlite': 'sqlite-entry',
-	'./just-bash': 'just-bash-entry',
 	'./conformance': 'conformance',
 };
 
-it('holds exactly six entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
+it('holds exactly five entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
 	const { name, exports } = await manifest();
 	expect(PACKAGE_NAME).toBe(name);
 	expect(Object.keys(exports).sort()).toEqual([
 		'.',
 		'./conformance',
-		'./just-bash',
 		'./package.json',
 		'./resource',
 		'./sql',
@@ -53,7 +51,6 @@ it('holds exactly six entries, builds each under the name the manifest gives it,
 		'src/resource-entry.ts',
 		'src/sql-resource.ts',
 		'src/sqlite-entry.ts',
-		'src/just-bash-entry.ts',
 		'src/conformance.ts',
 	]);
 	for (const [path, target] of Object.entries(exports)) {
@@ -69,10 +66,13 @@ it('exports one resource, its two logs, the environment helpers, and sqlResult f
 	expect(Object.keys(main).sort()).toEqual([
 		'BACKGROUND_CONTEXT',
 		'DEFAULT_AUDIT_LOG',
+		'DEFAULT_TIMEOUT_SECONDS',
 		'Deadline',
+		'HomeEnv',
 		'PACKAGE_NAME',
 		'TMP',
 		'boundedView',
+		'deliverView',
 		'openAuditLog',
 		'openLog',
 		'openWorkspace',
@@ -83,6 +83,7 @@ it('exports one resource, its two logs, the environment helpers, and sqlResult f
 		'sqlResult',
 		'tempDirPath',
 		'tempFilePath',
+		'withDeadline',
 	]);
 });
 
@@ -90,15 +91,13 @@ it.each([
 	['./resource', resource, ['openResource']],
 	['./sql', sql, ['PROVENANCE_COLUMNS', 'openSqlResource']],
 	['./sqlite', sqlite, ['sqliteBackend']],
-	['./just-bash', justBash, ['directoryBackend', 'memoryBackend']],
 	['./conformance', conformance, ['sqlConformance', 'workspaceConformance']],
 ])('exports exactly its one binding from %s', (_path, entry, names) => {
 	expect(Object.keys(entry).sort()).toEqual(names);
 });
 
-it('loads no backend at the root: no export from the just-bash, resource, or SQL files', async () => {
+it('loads no backend at the root: no export from the resource or SQL files', async () => {
 	const index = await read('src/index.ts');
-	expect(index).not.toMatch(/from '\.\/just-bash\.ts'/);
 	expect(index).not.toMatch(/from '\.\/resource\.ts'/);
 	expect(index).not.toMatch(/from '\.\/sql-resource\.ts'/);
 	expect(index).not.toMatch(/from '\.\/sqlite(-entry)?\.ts'/);
@@ -146,6 +145,9 @@ async function chunksOf(distDir: URL, entry: string): Promise<Map<string, string
 
 it.each([
 	['root', 'index.mjs', ['just-bash', 'node:sqlite']],
+	['resource', 'resource-entry.mjs', ['just-bash']],
+	['sql', 'sql-resource.mjs', ['just-bash']],
+	['sqlite', 'sqlite-entry.mjs', ['just-bash']],
 	['conformance', 'conformance.mjs', ['just-bash', 'node:sqlite', 'vitest']],
 ])('keeps the %s build, and every chunk it imports, free of %j', async (_name, entry, banned) => {
 	const chunks = await chunksOf(new URL('../dist/', import.meta.url), entry);

@@ -11,8 +11,8 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import { afterEach, describe, expect, it } from 'vitest';
+import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { openWorkspace, type SqlOutcome, type Workspace } from '../src/index.ts';
-import { directoryBackend, memoryBackend } from '../src/just-bash.ts';
 import { sqliteBackend } from '../src/sqlite-entry.ts';
 
 const cleanups: (() => Promise<unknown>)[] = [];

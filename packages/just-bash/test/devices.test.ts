@@ -6,9 +6,9 @@
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { openWorkspace } from '@ambionframework/workspace';
 import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
-import { openWorkspace } from '../src/index.ts';
 import { directoryBackend, memoryBackend } from '../src/just-bash.ts';
 import { backends, sh } from './support/backends.ts';
 
@@ -32,6 +32,11 @@ describe.each(backends)('the root and the null device on $name', (backend) => {
 		withEnv(async (env) => {
 			expect((await env.createDir('/shared', undefined, ctx)).ok).toBe(true);
 			expect((await env.writeFile('/shared/prototype.html', '<h1>Relay</h1>', ctx)).ok).toBe(true);
+			expect(await env.readBinaryFile('/shared/prototype.html', ctx)).toEqual({
+				ok: true,
+				value: new TextEncoder().encode('<h1>Relay</h1>'),
+			});
+			expect((await sh(env, 'cat /shared/prototype.html')).output).toBe('<h1>Relay</h1>');
 			expect(await env.fileInfo('/', ctx)).toMatchObject({
 				ok: true,
 				value: { kind: 'directory' },
@@ -54,6 +59,10 @@ describe.each(backends)('the root and the null device on $name', (backend) => {
 			expect((await env.writeFile('/dev/null', 'x', ctx)).ok).toBe(true);
 			expect((await env.appendFile('/dev/null', 'y', ctx)).ok).toBe(true);
 			expect(await env.readTextFile('/dev/null', ctx)).toEqual(empty);
+			expect(await env.readBinaryFile('/dev/null', ctx)).toEqual({
+				ok: true,
+				value: new Uint8Array(),
+			});
 		}));
 
 	it('is a character device that swallows stderr and keeps the exit code, beside the same devices', () =>

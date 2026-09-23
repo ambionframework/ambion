@@ -2,12 +2,13 @@
  * The rules every `ExecutionEnv` backend needs, independent of the
  * filesystem behind it.
  *
- * Four rules live here: `resolvePath`, the `~` and relative path rule that
- * every backend resolves a path with; `Deadline`, which tells an abort
- * apart from a timeout; `boundedView`, the bounded output view that a shell
- * command's caller reads before `exec` resolves; and the temporary names
- * and paths under `/tmp` that a spill file, a temp file, and a temp
- * directory share.
+ * Six rules live here: `resolvePath`, the `~` and relative path rule that
+ * every backend resolves a path with; `HomeEnv`, the members that follow
+ * from that rule alone; `Deadline` and `withDeadline`, which tell an abort
+ * apart from a timeout; `boundedView` and `deliverView`, the bounded output
+ * view that a shell command's caller reads before `exec` resolves; and the
+ * temporary names and paths under `/tmp` that a spill file, a temp file, and
+ * a temp directory share.
  *
  * `spill` takes a `MinimalWriter`, one `mkdir` plus one `writeFile`, so a
  * backend supplies its own filesystem here without this module reaching
@@ -16,8 +17,19 @@
 
 import { randomBytes } from 'node:crypto';
 import { posix } from 'node:path';
-import type { ShellOutputLimits, ShellOutputView } from '@earendil-works/pi-agent-core';
-import { ExecutionError, truncateHead, truncateTail } from '@earendil-works/pi-agent-core';
+import type {
+	Context,
+	FileError,
+	Result,
+	ShellExecOptions,
+	ShellExecResult,
+	ShellOutputLimits,
+	ShellOutputView,
+} from '@earendil-works/pi-agent-core';
+import { ExecutionError, err, ok, truncateHead, truncateTail } from '@earendil-works/pi-agent-core';
+
+/** What a command gets when its caller names no timeout. Pi's `bash` tool names none by default. */
+export const DEFAULT_TIMEOUT_SECONDS = 30;
 
 /** The directory every backend's temporary names and paths sit under. */
 export const TMP = '/tmp';
@@ -32,6 +44,45 @@ export function resolvePath(home: string, cwd: string, path: string): string {
 	if (path === '~') return home;
 	const expanded = path.startsWith('~/') ? posix.join(home, path.slice(2)) : path;
 	return posix.resolve(cwd, expanded);
+}
+
+/**
+ * The members of an `ExecutionEnv` that follow from the agent's home and the
+ * working directory alone. `cwd` is the home for the life of the env. A
+ * backend extends this class and supplies every file and shell member.
+ */
+export abstract class HomeEnv {
+	readonly cwd: string;
+
+	protected constructor(protected readonly home: string) {
+		this.cwd = home;
+	}
+
+	/** `~` and `~/` are the agent's home, and a relative path is under `cwd`. */
+	protected resolve(path: string): string {
+		return resolvePath(this.home, this.cwd, path);
+	}
+
+	async absolutePath(path: string): Promise<Result<string, FileError>> {
+		return ok(this.resolve(path));
+	}
+
+	async joinPath(parts: string[]): Promise<Result<string, FileError>> {
+		return ok(posix.join(...parts));
+	}
+
+	abstract readTextFile(path: string, context: Context): Promise<Result<string, FileError>>;
+
+	async readTextLines(
+		path: string,
+		options: { maxLines?: number } | undefined,
+		context: Context,
+	): Promise<Result<string[], FileError>> {
+		const text = await this.readTextFile(path, context);
+		if (!text.ok) return text;
+		const lines = text.value.split('\n');
+		return ok(options?.maxLines === undefined ? lines : lines.slice(0, options.maxLines));
+	}
 }
 
 /** A path for a new temporary directory. Neither filesystem starts with `/tmp`. */
@@ -86,6 +137,25 @@ export function boundedView(
 }
 
 /**
+ * Hand the one view of a command's output to the caller's `onUpdate`, and
+ * return the result that names the exit code, the truncation, and the spill
+ * file when the view has one.
+ */
+export function deliverView(
+	view: ShellOutputView,
+	exitCode: number,
+	options: ShellExecOptions | undefined,
+	context: Context,
+): ShellExecResult {
+	options?.onUpdate?.({ kind: 'replace', output: view }, context);
+	return {
+		exitCode,
+		truncation: view.truncation,
+		...(view.spillPath === undefined ? {} : { spillPath: view.spillPath }),
+	};
+}
+
+/**
  * One signal for a command, fired by the caller's abort or by a per-call
  * timeout, and which of the two it was. A backend that reports the same
  * exit code for both still tells them apart here.
@@ -126,5 +196,26 @@ export class Deadline {
 	clear(): void {
 		clearTimeout(this.timer);
 		this.caller?.removeEventListener('abort', this.abort);
+	}
+}
+
+/**
+ * Run one command under a `Deadline` from the caller's signal and `timeout`.
+ * `run` returns the result. What it throws becomes an `unknown`
+ * `ExecutionError`, and the deadline clears in every case.
+ */
+export async function withDeadline<T>(
+	signal: AbortSignal | undefined,
+	timeout: number | undefined,
+	run: (deadline: Deadline) => Promise<Result<T, ExecutionError>>,
+): Promise<Result<T, ExecutionError>> {
+	const deadline = new Deadline(signal, timeout);
+	try {
+		return await run(deadline);
+	} catch (error) {
+		const cause = error instanceof Error ? error : new Error(String(error));
+		return err(new ExecutionError('unknown', cause.message, cause));
+	} finally {
+		deadline.clear();
 	}
 }

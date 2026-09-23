@@ -14,14 +14,21 @@
  *
  * The command's output arrives on the channel's stdout, and `Capture` holds
  * it within a bound. `exec` hands one view to `onUpdate` after the command
- * ends, the same as `BashEnv`. A child that keeps the output open after the
+ * ends, through the workspace's `deliverView`, the same as the just-bash
+ * backends. A child that keeps the output open after the
  * command exits gets `EXIT_GRACE_MS` after the last output, and at most
  * `EXIT_DRAIN_MS` in all, and then the channel closes. A command that exits
  * before its deadline gives its exit status, whatever arrives after it.
  */
 
 import { constants } from 'node:os';
-import { Deadline, spillPath } from '@ambionframework/workspace';
+import {
+	DEFAULT_TIMEOUT_SECONDS,
+	type Deadline,
+	deliverView,
+	spillPath,
+	withDeadline,
+} from '@ambionframework/workspace';
 import {
 	type Context,
 	ExecutionError,
@@ -34,9 +41,6 @@ import {
 import type { ClientChannel } from 'ssh2';
 import { Capture } from './capture.ts';
 import { commandScript, invalidNames, PGID_PREFIX } from './script.ts';
-
-/** What a command gets when its caller names no timeout, the same as `BashEnv`. */
-const DEFAULT_TIMEOUT_SECONDS = 30;
 
 /** The longest timeout a timer holds, in seconds. */
 const MAX_TIMEOUT_SECONDS = 2_147_483;
@@ -314,12 +318,7 @@ async function result(
 	if (view.truncation.truncated && spill !== undefined && (await host.exists(spill))) {
 		view.spillPath = spill;
 	}
-	options?.onUpdate?.({ kind: 'replace', output: view }, context);
-	return {
-		exitCode,
-		truncation: view.truncation,
-		...(view.spillPath === undefined ? {} : { spillPath: view.spillPath }),
-	};
+	return deliverView(view, exitCode, options, context);
 }
 
 /** The result of a command that ran to its channel's close. */
@@ -346,21 +345,16 @@ async function attempt(
 	spill: string | undefined,
 	context: Context,
 ): Promise<Result<ShellExecResult, ExecutionError>> {
-	const deadline = new Deadline(context.abortSignal, options?.timeout ?? DEFAULT_TIMEOUT_SECONDS);
-	try {
+	const timeout = options?.timeout ?? DEFAULT_TIMEOUT_SECONDS;
+	return withDeadline(context.abortSignal, timeout, async (deadline) => {
 		const early = deadline.error() ?? (await refusal(host, cwd, options));
 		if (early) return err(early);
 		const ran = await run(host, command, cwd, options, spill, deadline);
 		// A command that exited before its deadline keeps its exit status.
 		const stopped = ran.ending.exited && !ran.ending.late ? undefined : deadline.error();
 		if (stopped) return err(stopped);
-		return await settled(host, ran, spill, options, context);
-	} catch (error) {
-		const cause = error instanceof Error ? error : new Error(String(error));
-		return err(new ExecutionError('unknown', cause.message, cause));
-	} finally {
-		deadline.clear();
-	}
+		return settled(host, ran, spill, options, context);
+	});
 }
 
 /** Run `command` in `cwd` on the workstation, and remove a spill file the result does not name. */

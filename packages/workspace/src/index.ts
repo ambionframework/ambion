@@ -5,16 +5,17 @@
  * `openWorkspace` opens a workspace over its backends by kind:
  * `backend: { bash, sql? }`. `workspace.tools()` returns the tools and
  * guidance the workspace exposes to an agent. The root entry loads no
- * backend: `./just-bash` holds the just-bash bash backends, `./sqlite`
- * holds the SQLite SQL backend, `./resource` holds the neutral resource
- * contract, and `./sql` holds the SQL resource. The root entry exports the
- * environment helpers from `./execution-env.ts`, so a new `ExecutionEnv`
- * backend can build on them without a dependency on `just-bash`.
+ * backend: `./sqlite` holds the SQLite SQL backend, `./resource` holds the
+ * neutral resource contract, and `./sql` holds the SQL resource. The bash
+ * backends are separate packages: `@ambionframework/just-bash` and
+ * `@ambionframework/workstation`. The root entry exports the environment
+ * helpers from `./execution-env.ts`, so a new `ExecutionEnv` backend can
+ * build on them.
  *
  * ```ts
  * import { defineAgent } from '@ambionframework/ambion';
  * import { openWorkspace } from '@ambionframework/workspace';
- * import { memoryBackend } from '@ambionframework/workspace/just-bash';
+ * import { memoryBackend } from '@ambionframework/just-bash';
  * import { sqliteBackend } from '@ambionframework/workspace/sqlite';
  *
  * const drive = openWorkspace({
@@ -38,7 +39,10 @@ export type { BashBackend, WorkspaceBackends, WorkspaceEnv, WorkspaceLayout } fr
 export type { MinimalWriter } from './execution-env.ts';
 export {
 	boundedView,
+	DEFAULT_TIMEOUT_SECONDS,
 	Deadline,
+	deliverView,
+	HomeEnv,
 	randomName,
 	resolvePath,
 	spill,
@@ -46,6 +50,7 @@ export {
 	TMP,
 	tempDirPath,
 	tempFilePath,
+	withDeadline,
 } from './execution-env.ts';
 export type { WorkspaceLog, WorkspaceLogOptions } from './log.ts';
 export { openLog } from './log.ts';

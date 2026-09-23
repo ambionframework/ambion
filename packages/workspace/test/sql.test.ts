@@ -9,10 +9,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
+import { memoryBackend } from '../../just-bash/src/index.ts';
+import { sh } from '../../just-bash/test/support/backends.ts';
 import { openWorkspace, type SqlBackend, type Workspace } from '../src/index.ts';
-import { memoryBackend } from '../src/just-bash.ts';
 import { sqliteBackend } from '../src/sqlite-entry.ts';
-import { sh, toolOf } from './support/backends.ts';
+import { toolOf } from './support/backends.ts';
 
 const ctx = BACKGROUND_CONTEXT;
 

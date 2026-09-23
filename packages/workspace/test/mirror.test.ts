@@ -16,8 +16,8 @@ import type {
 import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { roomName as name } from '../../ambion/test/support/room.ts';
+import { memoryBackend } from '../../just-bash/src/index.ts';
 import { openWorkspace } from '../src/index.ts';
-import { memoryBackend } from '../src/just-bash.ts';
 import type { WorkspaceAgent } from '../src/resource.ts';
 
 const reader: WorkspaceAgent = { name: 'reader' };

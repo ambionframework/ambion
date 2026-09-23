@@ -27,12 +27,15 @@
 
 import { mkdir } from 'node:fs/promises';
 import { posix } from 'node:path';
+import {
+	type BashBackend,
+	DEFAULT_AUDIT_LOG,
+	type WorkspaceLayout,
+} from '@ambionframework/workspace';
+import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import { Bash, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
-import { DEFAULT_AUDIT_LOG } from './audit.ts';
-import type { BashBackend, WorkspaceLayout } from './backend.ts';
 import { BashEnv } from './bash-env.ts';
 import { DEV_DIR, withDevices } from './devices.ts';
-import type { WorkspaceAgent } from './resource.ts';
 
 /**
  * Where the just-bash backends keep the audit log and the room mirrors.

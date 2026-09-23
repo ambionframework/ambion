@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+**New package: `@ambionframework/just-bash`.** It holds `memoryBackend`,
+`directoryBackend`, and their `MemoryBackendFile`, `MemoryBackendOptions`,
+`MemoryBashBackend`, and `SeedWriter` types. The `./just-bash` entry of
+`@ambionframework/workspace` is gone, and the workspace no longer depends
+on `just-bash`. A host that uses the workstation installs no just-bash.
+Import from `@ambionframework/just-bash` where you imported from
+`@ambionframework/workspace/just-bash`.
+
+**The workspace root entry exports four more environment helpers.**
+`HomeEnv` is a base class for an `ExecutionEnv` with `cwd`,
+`absolutePath`, `joinPath`, and `readTextLines`. `withDeadline` runs a
+command under a `Deadline` and turns a thrown error into `unknown`.
+`deliverView` hands the output view to `onUpdate` and returns the result.
+`DEFAULT_TIMEOUT_SECONDS` is 30. The just-bash backends and the
+workstation both build on them.
+
 **New package: `@ambionframework/workstation`.** `workstationBackend(options)`
 returns a `BashBackend` over SSH to one remote server, with one Unix account
 for each agent. File calls go over SFTP, and each command runs in its own

@@ -17,8 +17,8 @@ import {
 	spent,
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
+import { memoryBackend } from '../../../just-bash/src/index.ts';
 import { BACKGROUND_CONTEXT, openWorkspace } from '../../src/index.ts';
-import { memoryBackend } from '../../src/just-bash.ts';
 import { sqliteBackend } from '../../src/sqlite-entry.ts';
 
 live('the workspace', () => {

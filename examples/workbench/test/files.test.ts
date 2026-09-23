@@ -1,8 +1,8 @@
 import { mkdtemp, rm, writeFile as writeLocalFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { memoryBackend } from '@ambionframework/just-bash';
 import { BACKGROUND_CONTEXT, openWorkspace } from '@ambionframework/workspace';
-import { memoryBackend } from '@ambionframework/workspace/just-bash';
 import { afterEach, describe, expect, it } from 'vitest';
 import { attachFile, isImagePath, readFile } from '../src/files.ts';
 

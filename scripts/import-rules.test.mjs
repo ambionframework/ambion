@@ -31,16 +31,26 @@ const CASES = [
 	['packages/cloudflare/src', '@ambionframework/ambion/hosting', false],
 	['examples/workbench/src', '@ambionframework/ambion/testing', true],
 	['examples/workbench/src', '../../../packages/ambion/src/room.ts', true],
-	// The workspace reaches the core the same way, and just-bash through one entry.
+	// The workspace reaches the core the same way, and loads no just-bash.
 	['packages/workspace/src', '@ambionframework/ambion', false],
 	['packages/workspace/src', '@ambionframework/ambion/testing', true],
 	['packages/workspace/src', 'just-bash', true],
+	['packages/workspace/src', '@ambionframework/just-bash', true],
 	// The workstation knows the workspace interface and no room.
 	['packages/workstation/src', '@ambionframework/workspace', false],
 	['packages/workstation/src', '@ambionframework/workspace/resource', false],
-	['packages/workstation/src', '@ambionframework/workspace/just-bash', true],
+	['packages/workstation/src', '@ambionframework/workspace/sqlite', true],
+	['packages/workstation/src', '@ambionframework/just-bash', true],
 	['packages/workstation/src', '@ambionframework/ambion', true],
 	['packages/workstation/src', 'node:sqlite', true],
+	// The just-bash backends know the workspace interface and no room.
+	['packages/just-bash/src', '@ambionframework/workspace', false],
+	['packages/just-bash/src', '@ambionframework/workspace/resource', false],
+	['packages/just-bash/src', 'just-bash', false],
+	['packages/just-bash/src', '@ambionframework/workspace/sqlite', true],
+	['packages/just-bash/src', '../../workspace/src/audit.ts', true],
+	['packages/just-bash/src', '@ambionframework/ambion', true],
+	['packages/just-bash/src', 'node:sqlite', true],
 	// The journal sits below everything.
 	['packages/journal/src', '@ambionframework/ambion', true],
 	['packages/journal/src', '../../ambion/src/room.ts', true],
