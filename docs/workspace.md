@@ -68,10 +68,11 @@ console.log(drive.host); // { name: 'town-host' }
 
 ## Give the resource to an agent
 
-`workspace.tools()` returns an ordinary Ambion `ToolBundle`. A backend supplies
-its tools and optional guidance. The bundle binds each backend tool through
-the resource owner and keeps one stable identity. Pass the bundle in an
-agent's `bundles` field.
+`workspace.tools()` returns an ordinary Ambion `ToolBundle`. The neutral layer
+binds five default tools first: `read`, `write`, `edit`, `bash`, and `sql`.
+A backend then adds its own tools, and its own guidance about its own shell,
+if it has any. The bundle binds every tool through the resource owner and
+keeps one stable identity. Pass the bundle in an agent's `bundles` field.
 
 ```ts
 import { defineAgent, defineTool } from '@ambionframework/ambion';
@@ -389,13 +390,20 @@ The contract lives in [Resources](resources.md).
 The memory and directory backends are the Pi binding. They export from the
 `./just-bash` entry. The root entry names `WorkspaceEnv`, the Pi
 `ExecutionEnv` that has a zero-argument `cleanup()`. `WorkspaceBackend`
-extends `ResourceBackend<WorkspaceEnv>` and adds Pi harness tools, optional
-guidance, and a required `layout` (see
+extends `ResourceBackend<WorkspaceEnv>` and adds optional Pi harness tools
+beyond the five defaults, optional guidance about the backend's own shell,
+and a required `layout` (see
 [The layout and the host identity](#the-layout-and-the-host-identity)).
-`openWorkspace` creates the resource owner and binds the backend tools to
+`openWorkspace` creates the resource owner, builds the five default tools
+over `layout.database`, and binds them, and any tool the backend adds, to
 its `use` method. `Workspace` adds `tools()`, `host`, and `mirror()` to the
 resource surface. Direct operations and tool calls share one queue and one
 lifecycle.
+
+**A new backend implements `connect()` and an `ExecutionEnv`, over the
+shared helpers below, and names its own `layout`.** It adds only the tools
+and the guidance beyond the five defaults, passes
+`@ambionframework/workspace/conformance`, and loads no just-bash.
 
 **The root entry also exports the environment helpers a new `ExecutionEnv`
 backend needs.** `resolvePath` holds the `~` and relative path rule.
@@ -472,6 +480,13 @@ and authorization for external services.
 
 Backends perform raw filesystem I/O below the owner. They do not maintain a
 second destruction mark or a second operation queue.
+
+**A new backend follows one recipe.** It implements `connect()` and an
+`ExecutionEnv` over the shared helpers (see [The resource
+contract](#the-resource-contract)), names its own `layout`, and adds only
+the tools and the shell guidance beyond the five defaults every workspace
+already has. It passes `@ambionframework/workspace/conformance` and loads
+no just-bash.
 
 ### The null device
 

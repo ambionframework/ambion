@@ -27,21 +27,13 @@
 
 import { mkdir } from 'node:fs/promises';
 import { posix } from 'node:path';
-import {
-	type AgentHarnessTool,
-	createBashTool,
-	createEditTool,
-	createReadTool,
-	createWriteTool,
-	type ExecutionToolContext,
-} from '@earendil-works/pi-agent-core';
 import { Bash, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
 import { DEFAULT_AUDIT_LOG } from './audit.ts';
 import type { WorkspaceBackend, WorkspaceLayout } from './backend.ts';
 import { BashEnv } from './bash-env.ts';
 import { DEV_DIR, withDevices } from './devices.ts';
 import type { WorkspaceAgent } from './resource.ts';
-import { createSqlTool, SHARED_DATABASE } from './sql.ts';
+import { SHARED_DATABASE } from './sql.ts';
 
 /**
  * Where the just-bash backends keep the audit log, the shared database, and
@@ -113,37 +105,15 @@ export interface MemoryWorkspaceBackend extends WorkspaceBackend {
 	readFiles(): Promise<MemoryBackendFile[]>;
 }
 
-/** Default tool guidance for the just-bash backends. */
+/** Shell guidance for the just-bash backends: their commands, network, and isolation. */
 const JUST_BASH_GUIDANCE = [
-	`Your workspace gives you five tools: read, write, edit, bash and sql, over a shared`,
-	`virtual filesystem. Your home is /home/<your name>. Other agents connected to this`,
-	`workspace read and write the same files, with no wall between one agent's home and`,
-	`another's.`,
-	``,
-	`bash runs a simulated Unix shell: the common coreutils (ls, cat, grep, sed, awk, find,`,
-	`tar, and more), plus jq for JSON, yq for YAML and TOML, xan for CSV, and sqlite3. Run`,
-	`a script with js-exec (JavaScript) or python3 (Python). bash has no network: curl and`,
-	`every other network command are disabled.`,
-	``,
-	`sql runs SQLite statements on one shared database at ${SHARED_DATABASE}. Every agent`,
-	`queries this database, so a table or a view you create is data another agent reads at`,
-	`once. Share through a view or a table; this needs no copy. Attach a private scratch`,
-	`database with ATTACH ':memory:' inside one call. The tool shows the last result as a`,
-	`table and keeps the data in the database. Set export to write the full result as a CSV`,
-	`file for another tool or script. This is SQLite: dates are functions, || joins text,`,
-	`and a column type is an affinity.`,
+	`Your home is /home/<your name>. bash runs a simulated Unix shell: the common coreutils`,
+	`(ls, cat, grep, sed, awk, find, tar, and more), plus jq for JSON, yq for YAML and TOML,`,
+	`xan for CSV, and sqlite3. Run a script with js-exec (JavaScript) or python3 (Python).`,
+	`bash has no network: curl and every other network command are disabled. Other agents`,
+	`connected to this workspace read and write the same files, with no wall between one`,
+	`agent's home and another's.`,
 ].join('\n');
-
-/** Create the Pi harness tools offered by each just-bash backend instance. */
-function justBashTools(database: string): readonly AgentHarnessTool<ExecutionToolContext>[] {
-	return [
-		createReadTool(),
-		createWriteTool(),
-		createEditTool(),
-		createBashTool(),
-		createSqlTool(database),
-	];
-}
 
 /**
  * Every plain file under `dir`, read as text, recursively. A symlink is
@@ -219,7 +189,6 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
 		connect: async (agent) => connectOver(await resource.get(), agent),
 		dispose: async () => resource.clear(inMemory()),
 		readFiles: async () => listFiles(await resource.get()),
-		tools: justBashTools(JUST_BASH_LAYOUT.database),
 		guidance: JUST_BASH_GUIDANCE,
 		layout: JUST_BASH_LAYOUT,
 	};
@@ -249,7 +218,6 @@ export function directoryBackend(root: string): WorkspaceBackend {
 	return {
 		connect: async (agent) => connectOver(await resource.get(), agent),
 		dispose: async () => resource.clear(),
-		tools: justBashTools(JUST_BASH_LAYOUT.database),
 		guidance: JUST_BASH_GUIDANCE,
 		layout: JUST_BASH_LAYOUT,
 	};

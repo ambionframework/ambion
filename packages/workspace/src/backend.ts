@@ -25,8 +25,13 @@ export interface WorkspaceLayout {
 
 /** A workspace backend that also supplies the tools for the Ambion facade. */
 export interface WorkspaceBackend extends ResourceBackend<WorkspaceEnv> {
-	/** Backend-owned tools to expose through the workspace's `tools()` method. */
-	tools: readonly AgentHarnessTool<ExecutionToolContext>[];
+	/**
+	 * Tools the backend adds beyond the five defaults every workspace already
+	 * has: read, write, edit, bash and sql. Omit it, or list an empty array,
+	 * when the backend adds none of its own.
+	 */
+	tools?: readonly AgentHarnessTool<ExecutionToolContext>[];
+	/** Guidance for the backend's own shell: its commands, its network, and its isolation. */
 	guidance?: string;
 	/** Where this backend keeps the audit log, the shared database, and the room mirrors. */
 	readonly layout: WorkspaceLayout;

@@ -30,10 +30,10 @@ import {
 import { DEFAULT_AUDIT_LOG } from '../src/audit.ts';
 import type { WorkspaceLayout } from '../src/backend.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
+import { defaultToolGuidance } from '../src/default-tools.ts';
 import { openWorkspace, SHARED_DATABASE, type WorkspaceBackend } from '../src/index.ts';
 import { directoryBackend, MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
 import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
-import { createSqlTool } from '../src/sql.ts';
 
 const workspaceAgent = (name: string) => ({ name });
 
@@ -232,17 +232,25 @@ describe('the built-in tools', () => {
 });
 
 describe('the workspace resource owner', () => {
-	it('keeps an empty backend tool set empty', async () => {
+	it('gives a backend with no tools of its own the five defaults', async () => {
 		const inner = memoryBackend();
 		const workspace = openWorkspace({
 			name: name('empty-tools'),
 			backend: { tools: [], connect: (agent) => inner.connect(agent), layout },
 		});
 		expect(workspace.tools()).toBe(workspace.tools());
-		expect(workspace.tools().tools).toEqual([]);
+		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual([
+			'read',
+			'write',
+			'edit',
+			'bash',
+			'sql',
+		]);
 		// The /rooms guidance is unconditional: it names no room, so a
 		// workspace states it even with no other guidance to add.
-		expect(workspace.tools().guidance).toBe(ROOM_MIRROR_GUIDANCE);
+		expect(workspace.tools().guidance).toBe(
+			`${defaultToolGuidance(layout.database)}\n\n${ROOM_MIRROR_GUIDANCE}`,
+		);
 		await workspace.dispose();
 	});
 
@@ -273,9 +281,18 @@ describe('the workspace resource owner', () => {
 			},
 		});
 		const bundle = workspace.tools();
-		expect(bundle.guidance).toBe(`Custom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`);
-		expect(bundle.tools.map((tool) => tool.name)).toEqual(['inspect']);
-		const tool = bundle.tools[0];
+		expect(bundle.guidance).toBe(
+			`${defaultToolGuidance(layout.database)}\n\nCustom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`,
+		);
+		expect(bundle.tools.map((tool) => tool.name)).toEqual([
+			'read',
+			'write',
+			'edit',
+			'bash',
+			'sql',
+			'inspect',
+		]);
+		const tool = bundle.tools.find((t) => t.name === 'inspect');
 		if (tool === undefined) throw new Error('The backend tool is missing.');
 		const result = await tool.invoke(
 			{},
@@ -318,7 +335,7 @@ describe('the workspace resource owner', () => {
 			await release.promise;
 		});
 		await started.promise;
-		const bound = workspace.tools().tools[0];
+		const bound = workspace.tools().tools.find((tool) => tool.name === 'inspect');
 		if (bound === undefined) throw new Error('The bound tool is missing.');
 		const queued = bound.invoke(
 			{},
@@ -498,7 +515,6 @@ describe("a backend's layout", () => {
 		};
 		const inner = memoryBackend();
 		const backend: WorkspaceBackend = {
-			tools: [createSqlTool(own.database)],
 			connect: (caller, signal) => inner.connect(caller, signal),
 			layout: own,
 		};

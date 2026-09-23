@@ -250,7 +250,7 @@ describe('the workspace audit log', () => {
 			layout,
 		};
 		const site = openWorkspace({ name: name('audited-error'), backend: failing, audit: {} });
-		const tool = site.tools().tools[0];
+		const tool = site.tools().tools.find((one) => one.name === 'explode');
 		if (tool === undefined) throw new Error('The custom tool is missing.');
 
 		await expect(
@@ -433,7 +433,7 @@ describe('recording under an aborted signal', () => {
 			layout,
 		};
 		const site = openWorkspace({ name: name('cut-mid-flight'), backend: slow, audit: {} });
-		const tool = site.tools().tools[0];
+		const tool = site.tools().tools.find((one) => one.name === 'slow');
 		if (tool === undefined) throw new Error('The custom tool is missing.');
 		const controller = new AbortController();
 

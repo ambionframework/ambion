@@ -94,6 +94,24 @@ same scan, and so does the preview, so a quoted newline no longer splits a
 preview row. The tool holds the whole export in memory while it scans, so the
 preview keeps a quoted newline inside its record.
 
+**The neutral layer now owns the five default tools, and a backend adds only
+its own.** `openWorkspace` builds `read`, `write`, `edit`, `bash`, and `sql`
+itself, over the backend's `layout.database`, and binds them before any tool
+the backend adds. `WorkspaceBackend.tools` is now optional: a backend states
+only the tools it adds beyond the five defaults. `justBashTools` is gone from
+`just-bash.ts`, and neither just-bash backend imports `createReadTool`,
+`createWriteTool`, `createEditTool`, `createBashTool`, or `createSqlTool` any
+longer, nor lists a `tools` field of its own.
+
+**Tool guidance now has one owner for its shared part.** The neutral layer
+states the five tools, the shared files, and the `sql` tool's shared
+database, with `ATTACH ':memory:'`, `export`, and the SQLite dialect. A
+just-bash backend's own guidance now states only its shell: the coreutils,
+`jq`, `yq`, `xan`, and `sqlite3`, `js-exec` and `python3`, no network, and no
+wall between one agent's home and another's. `openWorkspace` joins the tool
+guidance, the backend's shell guidance, the audit guidance, and the rooms
+guidance, in that order.
+
 ## 0.1.0 (2026-09-21)
 
 **The first release of Ambion.** Ambion is a collaboration kernel for agents and humans. A room

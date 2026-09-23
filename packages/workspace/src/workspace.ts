@@ -1,6 +1,7 @@
 import type { Room, ToolBundle } from '@ambionframework/ambion';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { WorkspaceBackend, WorkspaceEnv } from './backend.ts';
+import { createDefaultTools, defaultToolGuidance } from './default-tools.ts';
 import {
 	mirrorRoom,
 	type RoomMirror,
@@ -27,27 +28,33 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	mirror(room: Room, options?: RoomMirrorOptions): Promise<RoomMirror>;
 }
 
-/** The backend's own guidance, with a note about the audit log appended when one is set. */
+/**
+ * The default tool guidance, the backend's own guidance, the audit note
+ * when one is set, and the rooms note, joined in that order.
+ */
 function guidanceFor(
+	toolGuidance: string,
 	backendGuidance: string | undefined,
 	audit: AuditLog | undefined,
 	roomsRoot: string,
-): string | undefined {
+): string {
 	const notes = [
+		toolGuidance,
 		backendGuidance,
 		audit && auditGuidance(audit),
 		roomMirrorGuidance(roomsRoot),
 	].filter((note): note is string => note !== undefined && note !== '');
-	return notes.length === 0 ? undefined : notes.join('\n\n');
+	return notes.join('\n\n');
 }
 
 /**
- * Open one workspace resource and bind its backend tools to that owner. The
- * backend's `layout` names where the audit log, the shared database, and the
- * room mirrors live. Set `audit.path` to record every bound tool call at a
- * path of your own; the default is `layout.audit`. Tool guidance then tells
- * every agent the log exists and where to read it, and always names the room
- * mirror convention at `layout.rooms`.
+ * Open one workspace resource, and bind the five default tools and the
+ * backend's own tools to that owner. The backend's `layout` names where the
+ * audit log, the shared database, and the room mirrors live. Set
+ * `audit.path` to record every bound tool call at a path of your own; the
+ * default is `layout.audit`. Tool guidance then tells every agent the log
+ * exists and where to read it, and always names the room mirror convention
+ * at `layout.rooms`.
  */
 export function openWorkspace(options: {
 	name: string;
@@ -60,10 +67,17 @@ export function openWorkspace(options: {
 		options.audit === undefined
 			? undefined
 			: openAuditLog({ ...options.audit, path: options.audit.path ?? layout.audit });
+	// The five defaults bind first; a backend's own tools follow.
+	const boundTools = [...createDefaultTools(layout.database), ...(options.backend.tools ?? [])];
 	const toolBundle = bindTools(
-		options.backend.tools,
+		boundTools,
 		resource.use,
-		guidanceFor(options.backend.guidance, audit, layout.rooms),
+		guidanceFor(
+			defaultToolGuidance(layout.database),
+			options.backend.guidance,
+			audit,
+			layout.rooms,
+		),
 		audit,
 	);
 	const tools = (): ToolBundle => toolBundle;
