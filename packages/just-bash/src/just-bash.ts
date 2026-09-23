@@ -12,9 +12,10 @@
  * coreutils, `jq`, `yq`, `xan` and `sqlite3`. Each instance also has `git`
  * from just-git, with the agent's name as the locked author. No instance is
  * given a `network` option, so `curl` and every other network command stay
- * absent, and `git` runs with `network: false` — the one exception the
- * workspace contract names, and the boundary this file does not close. The
- * backend's guidance states this same set to a connected agent.
+ * absent. `git` runs with `network: false`, so it stays inside the same
+ * boundary. That absence is the one exception the workspace contract names,
+ * and the boundary this file does not close. The backend's guidance states
+ * this same set to a connected agent.
  *
  * `connect` runs one unconditional `mkdir -p` and checks nothing first. Two
  * calls for one agent can overlap, since Pi runs a turn's tool calls in
