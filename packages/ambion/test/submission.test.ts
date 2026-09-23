@@ -1,227 +1,212 @@
-import { describe, expect, it } from 'vitest';
-import { pi, piExecution } from '../../pi/src/index.ts';
-import { type AgentPort, hostingOf, inProcessTransport, type Transport } from '../src/hosting.ts';
+/**
+ * Submission and its effects under faults. A write that lands and loses
+ * its confirmation leaves the room in doubt: the journal reads the storage
+ * at once, and the room hears what it finds the way it hears what it wrote.
+ * A transport that throws, or a listener that evicts the room, does not
+ * undo a delivery that the record confirmed, and a keyed retry lands
+ * nothing new.
+ */
+import type { JournalOpener } from '@ambionframework/journal';
+import { describe, expect, it, onTestFinished } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
+import {
+	type AgentPort,
+	type CommitResult,
+	hostingOf,
+	inProcessTransport,
+	type Transport,
+} from '../src/hosting.ts';
 import {
 	createRuntime,
-	defineAgent,
 	defineHuman,
-	type Room,
-	type RoomNotification,
+	isPresence,
+	isSpoken,
+	isSummary,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
+import { fakeClock } from '../src/testing.ts';
+import { observed, openFor, tapped } from './support/core-failure.ts';
 import {
+	collect,
+	deferred,
 	messagesOf,
 	participantsOf,
 	roomName,
 	runningLeases,
+	scriptedAgent,
 	stateOf,
+	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
-import { faultyJournals, storages } from './support/storage.ts';
+import {
+	answersLastQuestion,
+	byAgent,
+	isClosing,
+	quiet,
+	type Script,
+	says,
+	scripted,
+	summarise,
+	toolResultTexts,
+} from './support/scripted.ts';
+import {
+	faultyJournals,
+	memory,
+	type Storage,
+	storages,
+	tappedJournals,
+} from './support/storage.ts';
+import { stopAtEnd } from './support/stop.ts';
 
 const person = defineHuman({ name: 'andrei', identity: 'Founder.' });
+const alpha = scriptedAgent('alpha');
+const assistant = scriptedAgent('assistant');
+const watcher = scriptedAgent('watcher');
 
-type Deferred = { promise: Promise<void>; resolve: () => void };
-
-function deferred(): Deferred {
-	let resolve!: () => void;
-	const promise = new Promise<void>((done) => {
-		resolve = done;
-	});
-	return { promise, resolve };
-}
-
-/** Observe every operation before a listener or transport effect can reject it. */
-function observed<T>(promise: Promise<T>): Promise<T> {
-	void promise.catch(() => {});
-	return promise;
-}
-
-function activationStarted(room: Room, agent: string): Promise<void> {
-	return new Promise((resolve) => {
-		const off = room.subscribe((event) => {
-			if (event.type !== 'activation_start' || event.agent !== agent) return;
-			off();
-			resolve();
-		});
-	});
-}
-
-function throwingConnect(): Transport {
-	return {
-		connect() {
-			throw new Error('transport connect failed');
-		},
-	};
-}
-
-function recordingTransport(isEvicted: () => boolean): {
-	transport: Transport;
-	afterEviction: string[];
-	steers: string[];
-} {
-	const afterEviction: string[] = [];
-	const steers: string[] = [];
-	const record = (effect: string) => {
-		if (isEvicted()) afterEviction.push(effect);
-	};
-	return {
-		afterEviction,
-		steers,
-		transport: {
-			connect(_room, context) {
-				record(`connect:${context.seat}`);
-				const port: AgentPort = {
-					wake: async () => record('wake'),
-					steer: async () => {
-						steers.push(isEvicted() ? 'after' : 'before');
-						record('steer');
-					},
-					cut: async () => record('cut'),
-				};
-				return port;
-			},
-		},
-	};
-}
-
-function types(events: readonly RoomNotification[]): string[] {
-	return events.map((event) => event.type);
-}
-
-describe.each(storages)('submission and effects on $name storage', (storage) => {
-	it('keeps a confirmed delivery durable when steering connect throws, then replays its key once', async () => {
-		const opened = await storage.open();
-		const agent = defineAgent({
-			name: 'watcher',
-			identity: 'Watches the room.',
-			executor: pi({ instructions: 'Stay quiet.', model: 'scripted/watcher' }),
-		});
-		const held = deferred();
-		const started = deferred();
-		const stream = scripted(async () => {
-			started.resolve();
-			await held.promise;
-			return quiet();
-		});
-		const firstRuntime = createRuntime({
-			storage: opened.storage,
-			transport: inProcessTransport(),
-		});
-		const name = roomName(`submission-steer-connect-${storage.name}`);
-		const first = await startRoom({
-			name,
-			agents: [agent],
-			seats: { [agent.name]: 'broadcast' },
-			runtime: firstRuntime,
-			execution: piExecution({ stream: stream }),
-		});
-		let resumed: Room | undefined;
-		try {
-			const visit = await first.visit(person);
-			const firstStarted = activationStarted(first, agent.name);
-			await visit.send({ text: 'first', key: 'submission-first' });
-			await firstStarted;
-			await started.promise;
-
-			hostingOf(firstRuntime).evict(name);
-			held.resolve();
-
-			const throwingRuntime = createRuntime({
-				storage: opened.storage,
-				transport: throwingConnect(),
-			});
-			resumed = await resumeRoom(name, {
-				agents: [agent],
-				runtime: throwingRuntime,
-				execution: piExecution({ stream: scripted(() => quiet()) }),
-			});
-			const reentered = await resumed.visit(person);
-			const confirmed = observed(reentered.send({ text: 'second', key: 'submission-second' }));
-			await expect(confirmed).resolves.toMatchObject({ owner: person.name });
-			expect((await messagesOf(resumed)).filter((message) => message.kind === 'said')).toHaveLength(
-				2,
-			);
-
-			hostingOf(throwingRuntime).evict(name);
-			resumed = undefined;
-			const healthyRuntime = createRuntime({
-				storage: opened.storage,
-				transport: inProcessTransport(),
-			});
-			resumed = await resumeRoom(name, {
-				agents: [agent],
-				runtime: healthyRuntime,
-				execution: piExecution({ stream: scripted(() => quiet()) }),
-			});
-			const retryVisit = await resumed.visit(person);
-			const retry = await retryVisit.send({ text: 'second', key: 'submission-second' });
-			expect(retry.from).toBeGreaterThan(0);
-			expect(
-				(await messagesOf(resumed)).filter(
-					(message) => message.kind === 'said' && message.key === 'submission-second',
+/** Alpha speaks by `script`, and the assistant summarises each closed exchange once. */
+async function summarisedRoom(storage: JournalOpener, script: Script, transport?: Transport) {
+	const clock = fakeClock();
+	const session = stopAtEnd(
+		await startRoom({
+			name: roomName('doubt'),
+			runtime: createRuntime({ clock, storage, ...(transport === undefined ? {} : { transport }) }),
+			summary: assistant.name,
+			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [alpha, assistant],
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						alpha: script,
+						assistant: (context) =>
+							isClosing(context) && !toolResultTexts(context).includes('delivered')
+								? summarise('The one message.')
+								: quiet(),
+					}),
 				),
-			).toHaveLength(1);
-		} finally {
-			held.resolve();
-			await resumed?.stop().catch(() => {});
-			await first.stop().catch(() => {});
-			await opened.dispose();
-		}
+			}),
+		}),
+	);
+	return { clock, session, events: collect(session) };
+}
+
+const answers = answersLastQuestion([person.name]);
+
+describe('a room in doubt', () => {
+	it('returns one summary when its first commit confirmation is lost', async () => {
+		const opened = await openFor(memory);
+		const replies: CommitResult[] = [];
+		const confirmation = deferred();
+		// The first summary commit lands twice, and the seat hears only the second reply.
+		const transport = tapped({
+			room: (room) => ({
+				commit: async (commit) => {
+					if (replies.length > 0 || !commit.activation.startsWith('closed:')) {
+						return room.commit(commit);
+					}
+					replies.push(await room.commit(commit), await room.commit(commit));
+					confirmation.resolve();
+					return replies[1] as CommitResult;
+				},
+			}),
+		});
+		const { session } = await summarisedRoom(opened.storage, says(['one', 'two']), transport);
+		await (await session.visit(person)).send({ text: 'First?', key: 'q1' });
+		await confirmation.promise;
+		const summaries = (await messagesOf(session)).filter(isSummary);
+		expect(summaries).toHaveLength(1);
+		const seqs = replies.flatMap((reply) => ('committed' in reply ? [reply.committed.seq] : []));
+		expect(seqs).toEqual([summaries[0]?.seq, summaries[0]?.seq]);
 	});
 
-	it('lets a message listener submit a nested delivery without deadlocking the append queue', async () => {
-		const opened = await storage.open();
-		const room = await startRoom({
-			name: roomName(`submission-reentrant-${storage.name}`),
-			runtime: createRuntime({ storage: opened.storage }),
-		});
-		try {
-			const visit = await room.visit(person);
-			let nested: Promise<unknown> | undefined;
-			const off = room.subscribe((event) => {
-				if (event.type !== 'message' || event.message.kind !== 'said') return;
-				if (event.message.key !== 'submission-outer') return;
-				nested = observed(visit.send({ text: 'inner', key: 'submission-inner' }));
-			});
+	it('hears a visit and a delivery that landed and lost their confirmation, answers a read with what it found, and wakes the seats once', async () => {
+		const opened = await openFor(memory);
+		const faulty = faultyJournals(opened.storage);
+		const { session, events } = await summarisedRoom(faulty.journals, answers);
+		await waitForRoom(session);
+		faulty.fail('after', 'message');
+		const first = session.visit(person);
+		const second = first.catch(() => session.visit(person));
+		await expect(first).rejects.toThrow(/disk is full/);
+		faulty.fail(false);
+		const visit = await second;
+		await waitForRoom(session);
+		const arrivals = (await messagesOf(session))
+			.filter(isPresence)
+			.filter((m) => m.kind === 'arrived');
+		expect(arrivals).toHaveLength(1);
 
-			const outer = observed(visit.send({ text: 'outer', key: 'submission-outer' }));
-			await expect(outer).resolves.toMatchObject({ owner: person.name });
-			expect(nested).toBeDefined();
-			await expect(nested).resolves.toMatchObject({ owner: person.name });
-			off();
-			expect(
-				(await messagesOf(room))
-					.filter((message) => message.kind === 'said')
-					.map((message) => message.text),
-			).toEqual(['outer', 'inner']);
-		} finally {
-			await room.stop().catch(() => {});
-			await opened.dispose();
-		}
+		faulty.fail('after', 'message');
+		const delivery = visit.send({ text: 'First?', key: 'q1' });
+		const read = messagesOf(session);
+		await expect(delivery).rejects.toThrow(/disk is full/);
+		faulty.fail(false);
+		expect((await read).map((m) => m.key)).toContain('q1');
+		await waitForRoom(session);
+		const record = await messagesOf(session);
+		expect(record.filter((m) => m.key === 'q1')).toHaveLength(1);
+		expect(record.filter(isSpoken).filter((m) => m.from === alpha.name)).toHaveLength(1);
+		expect(events.filter((e) => e.type === 'message' && e.message.key === 'q1')).toHaveLength(1);
+		// and a retry under the same key lands nothing new
+		await visit.send({ text: 'First?', key: 'q1' });
+		expect((await messagesOf(session)).filter((m) => m.key === 'q1')).toHaveLength(1);
 	});
 
-	it('does not steer an inherited lease after a message listener evicts the room', async () => {
-		const opened = await storage.open();
-		const agent = defineAgent({
-			name: 'watcher',
-			identity: 'Watches the room.',
-			executor: pi({ instructions: 'Stay quiet.', model: 'scripted/watcher' }),
+	it('keeps a question queued before close in the current exchange', async () => {
+		const opened = await openFor(memory);
+		let failNextClose = false;
+		const journals = tappedJournals(opened.storage, (_id, _n, phase, customType) => {
+			if (failNextClose && phase === 'after' && customType === 'close') {
+				failNextClose = false;
+				throw new Error('the disk is full');
+			}
 		});
-		const held = deferred();
-		const started = deferred();
-		const firstRuntime = createRuntime({
-			storage: opened.storage,
-			transport: inProcessTransport(),
+		const { clock, session, events } = await summarisedRoom(journals, answers);
+		const visit = await session.visit(person);
+		await waitForRoom(session);
+		// The second question is delivered the moment alpha's activation ends, so its
+		// commit is queued ahead of the close the reconcile decides, and that close
+		// lands and loses its confirmation.
+		let delivered: Promise<unknown> | undefined;
+		session.subscribe((event) => {
+			if (event.type === 'activation_end' && event.agent === alpha.name && !delivered) {
+				failNextClose = true;
+				delivered = visit.send({ text: 'Second?', key: 'q2' });
+			}
 		});
-		const name = roomName(`submission-eviction-steer-${storage.name}`);
-		const first = await startRoom({
+		await visit.send({ text: 'First?', key: 'q1' });
+		await waitForRoom(session);
+		await delivered;
+		for (let i = 0; i < 4; i += 1) await clock.advance(61_000);
+		await waitForRoom(session);
+		const closes = (await storedOf(opened.journals, session.name)).filter(
+			(r) => r.kind === 'close',
+		);
+		expect(closes).toHaveLength(1);
+		expect(closes[0]?.body).toMatchObject({ from: 4, through: 11 });
+		const exchanges = events.filter(
+			(e) => e.type === 'exchange_opened' || e.type === 'exchange_closed',
+		);
+		expect(exchanges.map((e) => e.type)).toEqual(['exchange_opened', 'exchange_closed']);
+	});
+});
+
+/**
+ * A watcher whose activation holds until the test releases it, and a host
+ * that dies while it runs: the next host inherits a running lease.
+ */
+async function inheritedLease(storage: Storage, send: { to?: string; text: string; key: string }) {
+	const opened = await openFor(storage);
+	const held = deferred();
+	const started = deferred();
+	const runtime = createRuntime({ storage: opened.storage, transport: inProcessTransport() });
+	const name = roomName(`submission-${storage.name}`);
+	const first = stopAtEnd(
+		await startRoom({
 			name,
-			agents: [agent],
-			seats: { [agent.name]: 'broadcast' },
-			runtime: firstRuntime,
+			agents: [watcher],
+			seats: { [watcher.name]: 'broadcast' },
+			runtime,
 			execution: piExecution({
 				stream: scripted(async () => {
 					started.resolve();
@@ -229,243 +214,245 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 					return quiet();
 				}),
 			}),
+		}),
+	);
+	await (await first.visit(person)).send(send);
+	await started.promise;
+	hostingOf(runtime).evict(name);
+	const resume = (transport: Transport) => {
+		const next = createRuntime({ storage: opened.storage, transport });
+		return {
+			runtime: next,
+			room: resumeRoom(name, {
+				agents: [watcher],
+				runtime: next,
+				execution: piExecution({ stream: scripted(() => quiet()) }),
+			}),
+		};
+	};
+	return { name, held, resume };
+}
+
+const throwingConnect: Transport = {
+	connect() {
+		throw new Error('transport connect failed');
+	},
+};
+
+describe.each(storages)('submission and effects on $name storage', (storage) => {
+	it('keeps a confirmed delivery durable when steering connect throws, then replays its key once', async () => {
+		const { held, resume } = await inheritedLease(storage, {
+			text: 'first',
+			key: 'submission-first',
 		});
-		let resumed: Room | undefined;
-		let recovered: Room | undefined;
-		try {
-			const visit = await first.visit(person);
-			const activation = activationStarted(first, agent.name);
-			await visit.send({ to: agent.name, text: 'prime lease', key: 'submission-eviction-prime' });
-			await activation;
-			await started.promise;
-			hostingOf(firstRuntime).evict(name);
+		held.resolve();
+		const throwing = resume(throwingConnect);
+		const resumed = await throwing.room;
+		const reentered = await resumed.visit(person);
+		await expect(
+			observed(reentered.send({ text: 'second', key: 'submission-second' })),
+		).resolves.toMatchObject({ owner: person.name });
+		expect((await messagesOf(resumed)).filter((message) => message.kind === 'said')).toHaveLength(
+			2,
+		);
 
-			let evicted = false;
-			const recording = recordingTransport(() => evicted);
-			const failingRuntime = createRuntime({
-				storage: opened.storage,
-				transport: recording.transport,
-			});
-			resumed = await resumeRoom(name, {
-				agents: [agent],
-				runtime: failingRuntime,
-				execution: piExecution({ stream: scripted(() => quiet()) }),
-			});
-			expect(runningLeases(resumed)).toBeGreaterThan(0);
-			const resumedVisit = await resumed.visit(person);
-			await resumedVisit.send({
-				to: agent.name,
-				text: 'prove inherited delivery',
-				key: 'submission-eviction-probe',
-			});
-			await new Promise<void>((resolve) => setImmediate(resolve));
-			expect(recording.steers).toContain('before');
-			let triggerSeq: number | undefined;
-			const off = resumed.subscribe((event) => {
-				if (event.type !== 'message' || event.message.key !== 'submission-eviction-trigger') return;
-				triggerSeq = event.message.seq;
-				hostingOf(failingRuntime).evict(name);
-				evicted = true;
-			});
-
-			await expect(
-				resumedVisit.send({
-					to: agent.name,
-					text: 'evict while publishing',
-					key: 'submission-eviction-trigger',
-				}),
-			).resolves.toMatchObject({ owner: person.name });
-			await new Promise<void>((resolve) => setImmediate(resolve));
-			off();
-			expect(evicted).toBe(true);
-			expect(triggerSeq).toBeDefined();
-			expect(stateOf(resumed).deliveries.get(triggerSeq as number)?.steers).toContainEqual(
-				expect.objectContaining({ seat: agent.name }),
-			);
-			expect(recording.steers).toEqual(['before']);
-			expect(recording.afterEviction).toEqual([]);
-
-			const healthyRuntime = createRuntime({ storage: opened.storage });
-			recovered = await resumeRoom(name, {
-				agents: [agent],
-				runtime: healthyRuntime,
-				execution: piExecution({ stream: scripted(() => quiet()) }),
-			});
-			expect(
-				(await messagesOf(recovered)).filter(
-					(message) => message.kind === 'said' && message.key === 'submission-eviction-trigger',
-				),
-			).toHaveLength(1);
-		} finally {
-			held.resolve();
-			await recovered?.stop().catch(() => {});
-			await resumed?.stop().catch(() => {});
-			await first.stop().catch(() => {});
-			await opened.dispose();
-		}
+		hostingOf(throwing.runtime).evict(resumed.name);
+		const healthy = stopAtEnd(await resume(inProcessTransport()).room);
+		const retry = await (
+			await healthy.visit(person)
+		).send({
+			text: 'second',
+			key: 'submission-second',
+		});
+		expect(retry.from).toBeGreaterThan(0);
+		expect(
+			(await messagesOf(healthy)).filter(
+				(message) => message.kind === 'said' && message.key === 'submission-second',
+			),
+		).toHaveLength(1);
 	});
 
-	it('publishes message, exchange-opened, and exchange-closed in order without replay duplicates', async () => {
-		const opened = await storage.open();
-		const room = await startRoom({
-			name: roomName(`submission-notification-order-${storage.name}`),
-			runtime: createRuntime({ storage: opened.storage }),
+	it('does not steer an inherited lease after a message listener evicts the room', async () => {
+		const { name, held, resume } = await inheritedLease(storage, {
+			to: watcher.name,
+			text: 'prime lease',
+			key: 'submission-eviction-prime',
 		});
-		try {
-			const visit = await room.visit(person);
-			const events: RoomNotification[] = [];
-			const off = room.subscribe((event) => events.push(event));
-			await visit.send({ text: 'question', key: 'submission-order' });
-			await waitForRoom(room);
-			await visit.send({ text: 'follow-up', key: 'submission-order-2' });
-			await waitForRoom(room);
-			const before = types(events);
-			expect(before).toEqual([
-				'message',
-				'exchange_opened',
-				'exchange_closed',
-				'message',
-				'exchange_opened',
-				'exchange_closed',
-			]);
-			const messages = events
-				.filter(
-					(event): event is Extract<RoomNotification, { type: 'message' }> =>
-						event.type === 'message',
-				)
-				.map((event) => event.message);
-			const opened = events.filter(
-				(event): event is Extract<RoomNotification, { type: 'exchange_opened' }> =>
-					event.type === 'exchange_opened',
-			);
-			const closed = events.filter(
-				(event): event is Extract<RoomNotification, { type: 'exchange_closed' }> =>
-					event.type === 'exchange_closed',
-			);
-			expect(messages.map((message) => [message.key, message.seq])).toEqual([
-				['submission-order', messages[0]?.seq],
-				['submission-order-2', messages[1]?.seq],
-			]);
-			expect(opened.map((event) => event.exchange.from)).toEqual(
-				messages.map((message) => message.seq),
-			);
-			expect(closed.map((event) => event.exchange.from)).toEqual(
-				messages.map((message) => message.seq),
-			);
-			expect(
-				closed.every((event, index) => event.exchange.through >= (messages[index]?.seq ?? 0)),
-			).toBe(true);
-
-			await room.reconcile();
-			await messagesOf(room);
-			off();
-			expect(types(events)).toEqual(before);
-		} finally {
-			await room.stop().catch(() => {});
-			await opened.dispose();
-		}
-	});
-
-	it('publishes a recovered after-append message once and continues with later entries', async () => {
-		const opened = await storage.open();
-		const faulty = faultyJournals(opened.storage);
-		const room = await startRoom({
-			name: roomName(`submission-recovered-publication-${storage.name}`),
-			runtime: createRuntime({ storage: faulty.journals }),
+		let evicted = false;
+		const afterEviction: string[] = [];
+		const steers: string[] = [];
+		const record = (effect: string) => {
+			if (evicted) afterEviction.push(effect);
+		};
+		const recording: Transport = {
+			connect(_room, context) {
+				record(`connect:${context.seat}`);
+				const port: AgentPort = {
+					wake: async () => record('wake'),
+					steer: async () => {
+						steers.push(evicted ? 'after' : 'before');
+						record('steer');
+					},
+					cut: async () => record('cut'),
+				};
+				return port;
+			},
+		};
+		const failing = resume(recording);
+		const resumed = stopAtEnd(await failing.room);
+		onTestFinished(() => held.resolve());
+		expect(runningLeases(resumed)).toBeGreaterThan(0);
+		const visit = await resumed.visit(person);
+		await visit.send({
+			to: watcher.name,
+			text: 'prove inherited delivery',
+			key: 'submission-eviction-probe',
 		});
-		try {
-			const visit = await room.visit(person);
-			const events: RoomNotification[] = [];
-			const off = room.subscribe((event) => events.push(event));
-			faulty.fail('after', 'message');
-			const lost = observed(visit.send({ text: 'recovered', key: 'submission-recovered' }));
-			await expect(lost).rejects.toThrow(/disk is full/);
+		await new Promise<void>((resolve) => setImmediate(resolve));
+		expect(steers).toContain('before');
+		let triggerSeq: number | undefined;
+		const off = resumed.subscribe((event) => {
+			if (event.type !== 'message' || event.message.key !== 'submission-eviction-trigger') return;
+			triggerSeq = event.message.seq;
+			hostingOf(failing.runtime).evict(name);
+			evicted = true;
+		});
+		await expect(
+			visit.send({
+				to: watcher.name,
+				text: 'evict while publishing',
+				key: 'submission-eviction-trigger',
+			}),
+		).resolves.toMatchObject({ owner: person.name });
+		await new Promise<void>((resolve) => setImmediate(resolve));
+		off();
+		expect(evicted).toBe(true);
+		expect(stateOf(resumed).deliveries.get(triggerSeq ?? -1)?.steers).toContainEqual(
+			expect.objectContaining({ seat: watcher.name }),
+		);
+		expect(steers).toEqual(['before']);
+		expect(afterEviction).toEqual([]);
 
-			faulty.fail(false);
-			await messagesOf(room);
-			await waitForRoom(room);
-			expect(
-				events.filter(
-					(event) => event.type === 'message' && event.message.key === 'submission-recovered',
-				),
-			).toHaveLength(1);
-			expect(types(events)).toEqual(['message', 'exchange_opened', 'exchange_closed']);
-
-			const later = await visit.send({ text: 'later', key: 'submission-later' });
-			expect(later.owner).toBe(person.name);
-			await waitForRoom(room);
-			expect(
-				events.filter(
-					(event) => event.type === 'message' && event.message.key === 'submission-later',
-				),
-			).toHaveLength(1);
-			expect((await messagesOf(room)).filter((message) => message.kind === 'said')).toHaveLength(2);
-			off();
-		} finally {
-			faulty.fail(false);
-			await room.stop().catch(() => {});
-			await opened.dispose();
-		}
+		const recovered = stopAtEnd(await resume(inProcessTransport()).room);
+		expect(
+			(await messagesOf(recovered)).filter(
+				(message) => message.kind === 'said' && message.key === 'submission-eviction-trigger',
+			),
+		).toHaveLength(1);
 	});
 
 	it('keeps a durable inherited lease revocation successful when cut connect throws', async () => {
-		const opened = await storage.open();
-		const agent = defineAgent({
-			name: 'watcher',
-			identity: 'Watches the room.',
-			executor: pi({ instructions: 'Stay quiet.', model: 'scripted/watcher' }),
+		const { held, resume } = await inheritedLease(storage, {
+			text: 'start work',
+			key: 'submission-cut-start',
 		});
-		const held = deferred();
-		const started = deferred();
-		const stream = scripted(async () => {
-			started.resolve();
-			await held.promise;
-			return quiet();
-		});
-		const name = roomName(`submission-cut-connect-${storage.name}`);
-		const firstRuntime = createRuntime({
-			storage: opened.storage,
-			transport: inProcessTransport(),
-		});
-		const first = await startRoom({
-			name,
-			agents: [agent],
-			seats: { [agent.name]: 'broadcast' },
-			runtime: firstRuntime,
-			execution: piExecution({ stream: stream }),
-		});
-		let resumed: Room | undefined;
-		try {
-			const visit = await first.visit(person);
-			const firstStarted = activationStarted(first, agent.name);
-			await visit.send({ text: 'start work', key: 'submission-cut-start' });
-			await firstStarted;
-			await started.promise;
+		held.resolve();
+		const resumed = await resume(throwingConnect).room;
+		await expect(observed(resumed.stop())).resolves.toBeUndefined();
+		expect(
+			(await participantsOf(resumed)).find((participant) => participant.name === watcher.name),
+		).toMatchObject({ status: 'idle' });
+	});
 
-			hostingOf(firstRuntime).evict(name);
-			held.resolve();
-			const failingRuntime = createRuntime({
-				storage: opened.storage,
-				transport: throwingConnect(),
-			});
-			resumed = await resumeRoom(name, {
-				agents: [agent],
-				runtime: failingRuntime,
-				execution: piExecution({ stream: scripted(() => quiet()) }),
-			});
+	it('lets a message listener submit a nested delivery without deadlocking the append queue', async () => {
+		const opened = await openFor(storage);
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName(`submission-reentrant-${storage.name}`),
+				runtime: createRuntime({ storage: opened.storage }),
+			}),
+		);
+		const visit = await room.visit(person);
+		let nested: Promise<unknown> | undefined;
+		const off = room.subscribe((event) => {
+			if (event.type !== 'message' || event.message.key !== 'submission-outer') return;
+			nested = observed(visit.send({ text: 'inner', key: 'submission-inner' }));
+		});
+		await expect(
+			observed(visit.send({ text: 'outer', key: 'submission-outer' })),
+		).resolves.toMatchObject({ owner: person.name });
+		expect(nested).toBeDefined();
+		await expect(nested).resolves.toMatchObject({ owner: person.name });
+		off();
+		expect(
+			(await messagesOf(room))
+				.filter((message) => message.kind === 'said')
+				.map((message) => message.text),
+		).toEqual(['outer', 'inner']);
+	});
 
-			const stopped = observed(resumed.stop());
-			await expect(stopped).resolves.toBeUndefined();
-			expect(
-				(await participantsOf(resumed)).find((participant) => participant.name === agent.name),
-			).toMatchObject({
-				status: 'idle',
-			});
-		} finally {
-			held.resolve();
-			await resumed?.stop().catch(() => {});
-			await first.stop().catch(() => {});
-			await opened.dispose();
-		}
+	it('publishes message, exchange-opened, and exchange-closed in order without replay duplicates', async () => {
+		const opened = await openFor(storage);
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName(`submission-notification-order-${storage.name}`),
+				runtime: createRuntime({ storage: opened.storage }),
+			}),
+		);
+		const visit = await room.visit(person);
+		const events = collect(room);
+		await visit.send({ text: 'question', key: 'submission-order' });
+		await waitForRoom(room);
+		await visit.send({ text: 'follow-up', key: 'submission-order-2' });
+		await waitForRoom(room);
+		const before = events.map((event) => event.type);
+		expect(before).toEqual([
+			'message',
+			'exchange_opened',
+			'exchange_closed',
+			'message',
+			'exchange_opened',
+			'exchange_closed',
+		]);
+		const messages = events.flatMap((event) => (event.type === 'message' ? [event.message] : []));
+		expect(messages.map((message) => message.key)).toEqual([
+			'submission-order',
+			'submission-order-2',
+		]);
+		const seqs = messages.map((message) => message.seq);
+		const opens = events.flatMap((e) => (e.type === 'exchange_opened' ? [e.exchange] : []));
+		const closed = events.flatMap((e) => (e.type === 'exchange_closed' ? [e.exchange] : []));
+		expect(opens.map((exchange) => exchange.from)).toEqual(seqs);
+		expect(closed.map((exchange) => exchange.from)).toEqual(seqs);
+		expect(closed.every((exchange, index) => exchange.through >= (seqs[index] ?? 0))).toBe(true);
+
+		await room.reconcile();
+		await messagesOf(room);
+		expect(events.map((event) => event.type)).toEqual(before);
+	});
+
+	it('publishes a recovered after-append message once and continues with later entries', async () => {
+		const opened = await openFor(storage);
+		const faulty = faultyJournals(opened.storage);
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName(`submission-recovered-publication-${storage.name}`),
+				runtime: createRuntime({ storage: faulty.journals }),
+			}),
+		);
+		const visit = await room.visit(person);
+		const events = collect(room);
+		const keyed = (key: string) =>
+			events.filter((event) => event.type === 'message' && event.message.key === key);
+		faulty.fail('after', 'message');
+		await expect(
+			observed(visit.send({ text: 'recovered', key: 'submission-recovered' })),
+		).rejects.toThrow(/disk is full/);
+
+		faulty.fail(false);
+		await messagesOf(room);
+		await waitForRoom(room);
+		expect(keyed('submission-recovered')).toHaveLength(1);
+		expect(events.map((event) => event.type)).toEqual([
+			'message',
+			'exchange_opened',
+			'exchange_closed',
+		]);
+
+		const later = await visit.send({ text: 'later', key: 'submission-later' });
+		expect(later.owner).toBe(person.name);
+		await waitForRoom(room);
+		expect(keyed('submission-later')).toHaveLength(1);
+		expect((await messagesOf(room)).filter((message) => message.kind === 'said')).toHaveLength(2);
 	});
 });

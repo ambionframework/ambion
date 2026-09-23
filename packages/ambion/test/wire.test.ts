@@ -18,6 +18,7 @@ import {
 import { createRuntime } from '../src/index.ts';
 import type { Close, Composition, LeaseChange } from '../src/journal/events.ts';
 import { fakeClock } from '../src/testing.ts';
+import { openFor } from './support/core-failure.ts';
 import { roomName, storedOf } from './support/room.ts';
 import { oneExchange } from './support/scenarios.ts';
 import { sqlite } from './support/storage.ts';
@@ -34,14 +35,6 @@ const stored: Record<string, LeaseChange | Close | Composition> = {
 		readThrough: 0,
 	},
 	end: {
-		id: 'message:2:product:1',
-		seq: 4,
-		phase: 'ended',
-		reason: 'released',
-		at,
-		readThrough: 0,
-	},
-	endWithUsage: {
 		id: 'message:2:product:1',
 		seq: 4,
 		phase: 'ended',
@@ -111,12 +104,6 @@ const departed: ActivationView = {
 const requests: Record<string, CommitRequest | LeaseRequest | string> = {
 	say: {
 		activation: 'message:2:product:1',
-		key: 'call-1',
-		readThrough: 2,
-		intent: { kind: 'said', text: 'No.' },
-	},
-	directed: {
-		activation: 'message:2:product:1',
 		key: 'call-2',
 		readThrough: 2,
 		intent: { kind: 'said', to: 'priya', text: 'No.' },
@@ -141,12 +128,6 @@ const requests: Record<string, CommitRequest | LeaseRequest | string> = {
 		operation: 'release',
 		reason: 'released',
 		readThrough: 0,
-	},
-	releaseWithUsage: {
-		activation: 'message:2:product:1',
-		operation: 'release',
-		reason: 'released',
-		readThrough: 0,
 		usage: { input: 5, output: 3, cacheRead: 2, cacheWrite: 1, cost: 0.01 },
 	},
 	viewOf: 'message:2:product:1',
@@ -161,13 +142,10 @@ const responses: Record<string, ViewResponse | CommitResult | LeaseResponse> = {
 		},
 	},
 	stale: { stale: 'the lease ended' },
-	committed: {
-		committed: { kind: 'said', seq: 3, key: 'call-1', at, from: 'product', text: 'No.' },
-	},
 	missed: {
 		missed: [{ kind: 'said', seq: 3, key: 'k', at, from: 'priya', text: 'And the pump?' }],
 	},
-	committedWithRefs: {
+	committed: {
 		committed: {
 			kind: 'said',
 			seq: 3,
@@ -201,21 +179,17 @@ describe('the wire', () => {
 	});
 
 	it('replays a SQLite journal whose every entry is plain JSON', async () => {
-		const opened = await sqlite.open();
-		try {
-			const runtime = createRuntime({ storage: opened.storage, clock: fakeClock() });
-			const name = roomName('wire-sqlite');
-			await oneExchange.run({ runtime, name });
-			const written = await storedOf(opened.journals, name);
-			expect(written.map((entry) => entry.kind)).toContain('close');
-			expect(written.map((entry) => entry.kind)).toContain('composition');
-			expect(written.map((entry) => entry.kind)).toContain('lease');
-			for (const entry of written) {
-				expect(() => assertWire(entry.body)).not.toThrow();
-				expect(roundTrip(entry.body)).toStrictEqual(entry.body);
-			}
-		} finally {
-			await opened.dispose();
+		const opened = await openFor(sqlite);
+		const runtime = createRuntime({ storage: opened.storage, clock: fakeClock() });
+		const name = roomName('wire-sqlite');
+		await oneExchange.run({ runtime, name });
+		const written = await storedOf(opened.journals, name);
+		expect(written.map((entry) => entry.kind)).toEqual(
+			expect.arrayContaining(['close', 'composition', 'lease']),
+		);
+		for (const entry of written) {
+			expect(() => assertWire(entry.body)).not.toThrow();
+			expect(roundTrip(entry.body)).toStrictEqual(entry.body);
 		}
 	});
 });

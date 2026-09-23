@@ -24,7 +24,8 @@ import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
-import { liveLeases } from './support/chaos.ts';
+import { liveLeases, within } from './support/chaos.ts';
+import { mulberry32 } from './support/core-failure.ts';
 import { type Entry, History, standing, violations } from './support/history.ts';
 import { invariants } from './support/invariants.ts';
 import {
@@ -38,17 +39,6 @@ import {
 import { scripted } from './support/scripted.ts';
 import { type FailMode, gatedJournals, memory, sqlite, tappedJournals } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
-
-function mulberry32(seed: number): () => number {
-	let a = seed >>> 0;
-	return () => {
-		a = (a + 0x6d2b79f5) >>> 0;
-		let t = a;
-		t = Math.imul(t ^ (t >>> 15), t | 1);
-		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-	};
-}
 
 const OPERATIONS: Operation[] = ['wake', 'steer', 'cut', 'view', 'commit', 'lease'];
 const RETRY = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
@@ -310,15 +300,6 @@ class Cluster {
 		expect(record.length).toBeGreaterThan(0);
 		expect(violations(this.history, { record, stored, state })).toEqual([]);
 	}
-}
-
-/** The promise, or an error naming what did not happen within `ms`. */
-function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	const deadline = new Promise<never>((_, reject) => {
-		timer = setTimeout(() => reject(new Error(`'${what}' did not finish within ${ms} ms.`)), ms);
-	});
-	return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
 }
 
 const yields = () => new Promise((resolve) => setImmediate(resolve));

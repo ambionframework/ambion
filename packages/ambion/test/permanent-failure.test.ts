@@ -1,136 +1,66 @@
+/**
+ * The room reads a provider error as permanent or transient. A permanent
+ * failure does not pass on a retry, so the room runs the seat once and
+ * abandons the rest. A transient failure may pass, so the room retries to
+ * the cap before it gives up.
+ */
 import { describe, expect, it } from 'vitest';
-import { pi, piExecution } from '../../pi/src/index.ts';
+import { piExecution } from '../../pi/src/index.ts';
 import { hostingOf } from '../src/hosting.ts';
-import {
-	createRuntime,
-	defineAgent,
-	defineHuman,
-	type RoomNotification,
-	startRoom,
-} from '../src/index.ts';
-import { collect, roomName, waitForRoom } from './support/room.ts';
+import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
+import { openFor } from './support/core-failure.ts';
+import { collect, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
+import { stopAtEnd } from './support/stop.ts';
 
-const worker = defineAgent({
-	name: 'worker',
-	identity: 'Answers the question.',
-	executor: pi({ instructions: 'answer the question', model: 'scripted/worker' }),
-});
+const worker = scriptedAgent('worker');
 const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
 
-const errors = (events: readonly RoomNotification[]) =>
-	events.filter((event) => event.type === 'error');
-const abandonments = (events: readonly RoomNotification[]) =>
-	events.filter((event) => event.type === 'abandoned');
-
 describe.each(storages)('provider failure classification on $name storage', (storage) => {
-	it('abandons a permanent failure in one attempt', async () => {
-		const opened = await storage.open();
+	it.each([
+		[
+			'abandons a permanent failure in one attempt',
+			'400 Your credit balance is too low to make this request',
+			'permanent',
+		],
+		// The token count reads like a 400 status, but a rate limit is transient.
+		[
+			'does not read a rate-limit token count as a permanent status',
+			'429 rate limit of 400,000 input tokens per minute exceeded',
+			'transient',
+		],
+		['retries a transient failure to the cap', '503 the provider is overloaded', 'transient'],
+	] as const)('%s', async (_case, message, cause) => {
+		const opened = await openFor(storage);
 		let calls = 0;
 		const runtime = createRuntime({
 			storage: opened.storage,
 			limits: { activation: { backoff: () => 0 } },
 		});
-		const room = await startRoom({
-			name: roomName(`perm-${storage.name}`),
-			agents: [worker],
-			seats: { [worker.name]: 'named' },
-			runtime,
-			execution: piExecution({
-				stream: scripted(() => {
-					calls += 1;
-					throw new Error('400 Your credit balance is too low to make this request');
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName(`${cause}-${storage.name}`),
+				agents: [worker],
+				seats: { [worker.name]: 'named' },
+				runtime,
+				execution: piExecution({
+					stream: scripted(() => {
+						calls += 1;
+						throw new Error(message);
+					}),
 				}),
 			}),
-		});
+		);
 		const events = collect(room);
-		try {
-			const visit = await room.visit(person);
-			await visit.send({ to: worker.name, text: 'answer me' });
-			await waitForRoom(room);
-			// A permanent failure does not pass on a retry, so the room runs the
-			// seat once and abandons the rest.
-			expect(calls).toBe(1);
-			expect(abandonments(events)).toEqual([
-				expect.objectContaining({ agent: worker.name, cause: 'permanent' }),
-			]);
-			expect(errors(events).some((event) => event.cause === 'permanent')).toBe(true);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
-	});
-
-	it('does not read a rate-limit token count as a permanent status', async () => {
-		const opened = await storage.open();
-		let calls = 0;
-		const runtime = createRuntime({
-			storage: opened.storage,
-			limits: { activation: { backoff: () => 0 } },
-		});
-		const room = await startRoom({
-			name: roomName(`ratelimit-${storage.name}`),
-			agents: [worker],
-			seats: { [worker.name]: 'named' },
-			runtime,
-			execution: piExecution({
-				stream: scripted(() => {
-					calls += 1;
-					// The token count reads like a 400 status, but a rate limit is transient.
-					throw new Error('429 rate limit of 400,000 input tokens per minute exceeded');
-				}),
-			}),
-		});
-		const events = collect(room);
-		try {
-			const visit = await room.visit(person);
-			await visit.send({ to: worker.name, text: 'answer me' });
-			await waitForRoom(room);
-			expect(calls).toBe(hostingOf(runtime).limits.activation.attempts);
-			expect(abandonments(events)).toEqual([
-				expect.objectContaining({ agent: worker.name, cause: 'transient' }),
-			]);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
-	});
-
-	it('retries a transient failure to the cap', async () => {
-		const opened = await storage.open();
-		let calls = 0;
-		const runtime = createRuntime({
-			storage: opened.storage,
-			limits: { activation: { backoff: () => 0 } },
-		});
-		const room = await startRoom({
-			name: roomName(`transient-${storage.name}`),
-			agents: [worker],
-			seats: { [worker.name]: 'named' },
-			runtime,
-			execution: piExecution({
-				stream: scripted(() => {
-					calls += 1;
-					throw new Error('503 the provider is overloaded');
-				}),
-			}),
-		});
-		const events = collect(room);
-		try {
-			const visit = await room.visit(person);
-			await visit.send({ to: worker.name, text: 'answer me' });
-			await waitForRoom(room);
-			// A transient failure may pass, so the room retries to the cap before it
-			// gives up.
-			expect(calls).toBe(hostingOf(runtime).limits.activation.attempts);
-			expect(abandonments(events)).toEqual([
-				expect.objectContaining({ agent: worker.name, cause: 'transient' }),
-			]);
-			expect(errors(events).every((event) => event.cause === 'transient')).toBe(true);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
+		await (await room.visit(person)).send({ to: worker.name, text: 'answer me' });
+		await waitForRoom(room);
+		expect(calls).toBe(cause === 'permanent' ? 1 : hostingOf(runtime).limits.activation.attempts);
+		expect(events.filter((event) => event.type === 'abandoned')).toEqual([
+			expect.objectContaining({ agent: worker.name, cause }),
+		]);
+		const errors = events.filter((event) => event.type === 'error');
+		expect(errors.length).toBeGreaterThan(0);
+		expect(errors.every((event) => event.cause === cause)).toBe(true);
 	});
 });

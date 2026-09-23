@@ -23,30 +23,15 @@ import { piExecution } from '../../pi/src/index.ts';
 import { createRuntime, isPresence, type Room, resumeRoom } from '../src/index.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { agents, priya, type Question, questions, sam, script, TIMING } from './support/cast.ts';
-import { idle, liveLeases, outcome, World, within } from './support/chaos.ts';
+import { liveLeases, outcome } from './support/chaos.ts';
+import { childWrites, countWrites, crashOnce, quietNow } from './support/core-failure.ts';
 import { invariants } from './support/invariants.ts';
-import { collect, currentExchange, messagesOf, participantsOf, roomName } from './support/room.ts';
+import { collect, currentExchange, messagesOf, participantsOf } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { childJournals, childStorage, memory, type Storage, storages } from './support/storage.ts';
+import { childJournals, childStorage, memory, storages } from './support/storage.ts';
 
 const full = process.env.AMBION_CHAOS === 'all';
 const node = process.env.AMBION_NODE ?? process.execPath;
-
-/** The appends an untroubled run takes: the crash points the sweep visits. */
-async function countWrites(storage: Storage): Promise<number> {
-	const opened = await storage.open();
-	const world = new World(roomName('chaos-count'), opened);
-	try {
-		await world.run();
-		await world.check();
-		// the stop writes too, and no sweep run gets that far before its check
-		const writes = world.writes;
-		await world.room.stop();
-		return writes;
-	} finally {
-		await opened.dispose();
-	}
-}
 
 const writes = await countWrites(memory);
 const points = Array.from({ length: writes }, (_, i) => i + 1);
@@ -55,22 +40,7 @@ describe.each(full ? storages : [memory])('a crash at every write on $name', (st
 	describe.each(['before', 'after'] as const)('%s the entry lands', (mode) => {
 		it.each(points)(
 			`at write %i of ${writes}, the room resumes and the scenario ends whole`,
-			async (at) => {
-				const opened = await storage.open();
-				const world = new World(roomName(`chaos-${storage.name}-${mode}`), opened, { at, mode });
-				try {
-					await within(world.run(), 20_000, 'the scenario');
-					expect(world.crashes).toBe(1);
-					await world.check();
-					await world.room.stop();
-				} catch (error) {
-					throw new Error(`crash ${mode} write ${at}:\n${await world.describe()}`, {
-						cause: error,
-					});
-				} finally {
-					await opened.dispose();
-				}
-			},
+			(at) => crashOnce(storage, `chaos-${storage.name}`, { at, mode }),
 			30_000,
 		);
 	});
@@ -89,37 +59,13 @@ function killAt(dir: string, name: string, at: number, storage: string): Promise
 		const args = ['--no-warnings', child, dir, name, '40', storage];
 		const process_ = spawn(node, args, { stdio: ['ignore', 'pipe', 'inherit'] });
 		let last = 0;
-		let buffer = '';
-		process_.stdout.on('data', (chunk: Buffer) => {
-			buffer += chunk.toString();
-			const lines = buffer.split('\n');
-			buffer = lines.pop() ?? '';
-			for (const line of lines) {
-				const reported = /^write (\d+)$/.exec(line);
-				if (reported) last = Number(reported[1]);
-				if (last >= at || line === 'done') process_.kill('SIGKILL');
-			}
+		childWrites(process_.stdout, (reported) => {
+			if (reported !== 'done') last = reported;
+			if (last >= at || reported === 'done') process_.kill('SIGKILL');
 		});
 		process_.on('exit', () => resolve(last));
 		process_.on('error', reject);
 	});
-}
-
-/**
- * Time moves until the room is quiet with nothing owed: the lease the
- * killed process held expires, and every retry's backoff passes. The
- * clock is the room's own, so the wait is the test's to move.
- */
-async function quietNow(session: Room, clock: FakeClock): Promise<void> {
-	for (let round = 0; round < 12; round += 1) {
-		const settled = await Promise.race([
-			messagesOf(session).then(() => true),
-			new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300)),
-		]);
-		if (settled && (await idle(session))) return;
-		await clock.advance(2_000);
-	}
-	throw new Error('the room never went quiet');
 }
 
 /** The scenario from wherever the child got to, each step a no-op where the journal holds it already. */

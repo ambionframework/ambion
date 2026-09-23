@@ -1,192 +1,303 @@
+/**
+ * Steering: a message that reaches a seat while its activation runs goes
+ * into that activation. A steer that the transport loses, delays,
+ * reorders or repeats, or that outlives its activation, reaches the seat
+ * once, from the journal.
+ */
 import { describe, expect, it } from 'vitest';
-import { pi, piExecution } from '../../pi/src/index.ts';
-import {
-	inProcessTransport,
-	type LeaseRequest,
-	type Steer,
-	type Transport,
-	type Wake,
-} from '../src/hosting.ts';
-import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
+import { piExecution } from '../../pi/src/index.ts';
+import type { Steer, Wake } from '../src/hosting.ts';
+import { createRuntime, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
-import { assistant, deferred, messagesOf, roomName, stateOf, waitForRoom } from './support/room.ts';
-import { byAgent, contextText, quiet, scripted } from './support/scripted.ts';
+import { openFor, tapped } from './support/core-failure.ts';
+import {
+	assistant,
+	assistantEnded,
+	collect,
+	crash,
+	deferred,
+	messagesOf,
+	roomName,
+	scriptedAgent,
+	stateOf,
+	waitForRoom,
+} from './support/room.ts';
+import { byAgent, contextText, quiet, says, scripted, summarise } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
+import { stopAtEnd } from './support/stop.ts';
 
-const alpha = defineAgent({
-	name: 'alpha',
-	identity: 'Answers questions.',
-	executor: pi({ instructions: 'Answer.', model: 'scripted/alpha' }),
-});
+const alpha = scriptedAgent('alpha');
+const beta = scriptedAgent('beta');
 const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
 
-/** Hold the first release after the executor has finished reading context. */
-function heldReleaseTransport(holdRelease = true) {
+/**
+ * Record every wake and steer. `deferSteers` keeps each steer for the test
+ * to deliver, and `holdRelease` holds alpha's first release until the test
+ * resolves `release`.
+ */
+function observe(options: { holdRelease?: boolean; deferSteers?: boolean } = {}) {
 	const ending = deferred();
 	const release = deferred();
 	const wakes: Wake[] = [];
 	const steers: Steer[] = [];
 	const deliver: (() => Promise<void>)[] = [];
-	const base = inProcessTransport();
 	let held = false;
-	const transport: Transport = {
-		connect(room, context) {
-			const port = base.connect(
-				{
-					view: (id, range) => room.view(id, range),
-					commit: (request) => room.commit(request),
-					lease: async (request: LeaseRequest) => {
-						if (
-							holdRelease &&
-							context.seat === alpha.name &&
-							request.operation === 'release' &&
-							!held
-						) {
-							held = true;
-							ending.resolve();
-							await release.promise;
-						}
-						return room.lease(request);
-					},
-				},
-				context,
-			);
-			return {
-				cut: (activation) => port.cut(activation),
-				wake: (wake) => {
-					wakes.push(wake);
-					return port.wake(wake);
-				},
-				steer: async (steer) => {
-					steers.push(steer);
-					deliver.push(() => port.steer(steer));
-				},
-			};
+	const transport = tapped({
+		room: (room, context) => ({
+			lease: async (request) => {
+				if (
+					options.holdRelease &&
+					context.seat === alpha.name &&
+					request.operation === 'release' &&
+					!held
+				) {
+					held = true;
+					ending.resolve();
+					await release.promise;
+				}
+				return room.lease(request);
+			},
+		}),
+		wake: (wake, port) => {
+			wakes.push(wake);
+			return port.wake(wake);
 		},
-	};
+		steer: async (steer, port) => {
+			steers.push(steer);
+			if (options.deferSteers) deliver.push(() => port.steer(steer));
+			else await port.steer(steer);
+		},
+	});
 	return { transport, ending, release, wakes, steers, deliver };
 }
 
-describe.each(storages)('messages across activation completion on $name', (storage) => {
+/** Alpha records every context it reads, and holds its activation on call `hold`. */
+function holdingAlpha(hold: number) {
+	const started = deferred();
+	const release = deferred();
+	const contexts: string[] = [];
+	const execution = piExecution({
+		stream: scripted(
+			byAgent({
+				alpha: async (context, _agent, call) => {
+					contexts.push(contextText(context));
+					if (call === hold) {
+						started.resolve();
+						await release.promise;
+					}
+					return quiet();
+				},
+			}),
+		),
+	});
+	return { started, release, contexts, execution };
+}
+
+describe.each(storages)('steering on $name', (storage) => {
 	it.each(['lost', 'late'] as const)(
 		'recovers a message through reconciliation when steering is %s',
 		async (delivery) => {
-			const opened = await storage.open();
+			const opened = await openFor(storage);
 			const clock = fakeClock();
 			const before = clock.now();
-			const observed = heldReleaseTransport();
-			const nextStarted = deferred();
-			const nextRelease = deferred();
-			const contexts: string[] = [];
-			const room = await startRoom({
-				name: roomName('steering-release'),
+			const observed = observe({ holdRelease: true, deferSteers: true });
+			const next = holdingAlpha(2);
+			const room = stopAtEnd(
+				await startRoom({
+					name: roomName('steering-release'),
+					agents: [alpha, assistant],
+					seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
+					runtime: createRuntime({ storage: opened.storage, clock, transport: observed.transport }),
+					execution: next.execution,
+				}),
+			);
+			const visit = await room.visit(priya);
+			await visit.send({ to: alpha.name, text: 'Start analysis.' });
+			await observed.ending.promise;
+			// The caller sends an ordinary message while the executor releases.
+			// Its active recipient is recorded even though idle attention excludes it.
+			await visit.send({ to: priya.name, text: 'Keep this final correction.' });
+			const update = (await messagesOf(room)).at(-1);
+			expect(update?.wakes ?? []).toEqual([]);
+			expect(observed.steers).toHaveLength(1);
+			expect(observed.steers[0]?.message).toEqual(update);
+			expect(observed.wakes).toHaveLength(1);
+			observed.release.resolve();
+			await next.started.promise;
+			expect(observed.wakes.map((wake) => wake.activation)).toEqual([
+				observed.steers[0]?.activation,
+				`message:${update?.seq}:alpha:1`,
+			]);
+			// A delayed transport operation must not enter the later activation.
+			if (delivery === 'late') await observed.deliver[0]?.();
+			next.release.resolve();
+			await waitForRoom(room);
+			if (delivery === 'late') await observed.deliver[0]?.();
+			await waitForRoom(room);
+			expect(next.contexts).toHaveLength(2);
+			expect(next.contexts[0]).not.toContain('Keep this final correction.');
+			expect(next.contexts[1]?.split('Keep this final correction.')).toHaveLength(2);
+			expect(observed.wakes).toHaveLength(2);
+			expect(stateOf(room).pending).toEqual([]);
+			expect(clock.now()).toBe(before);
+		},
+	);
 
+	it('steers a message to an active agent with narrow idle attention, and consumes reordered and repeated steers in one activation', async () => {
+		const opened = await openFor(storage);
+		const observed = observe({ deferSteers: true });
+		const first = holdingAlpha(1);
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('steering-order'),
 				agents: [alpha, assistant],
 				seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
-				runtime: createRuntime({ storage: opened.storage, clock, transport: observed.transport }),
+				runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
+				execution: first.execution,
+			}),
+		);
+		const events = collect(room);
+		const visit = await room.visit(priya);
+		await visit.send({ to: alpha.name, text: 'Start analysis.' });
+		await first.started.promise;
+		await visit.send({ to: priya.name, text: 'First correction.' });
+		const update = (await messagesOf(room)).at(-1);
+		expect(update?.wakes ?? []).toEqual([]);
+		expect(observed.steers.map((steer) => [steer.seat, steer.message.seq])).toEqual([
+			['alpha', update?.seq],
+		]);
+		expect(observed.steers[0]?.activation).toBe(
+			[...stateOf(room).leases.values()].find((lease) => lease.phase === 'running')?.id,
+		);
+		await visit.send({ to: priya.name, text: 'Second correction.' });
+		expect(observed.steers).toHaveLength(2);
+		await observed.deliver[1]?.();
+		await observed.deliver[1]?.();
+		await observed.deliver[0]?.();
+		first.release.resolve();
+		await waitForRoom(room);
+		expect(first.contexts.at(-1)).toContain('First correction.');
+		expect(first.contexts.at(-1)).toContain('Second correction.');
+		expect(observed.wakes).toHaveLength(1);
+		expect(
+			events.filter((event) => event.type === 'activation_start').map((event) => event.agent),
+		).toEqual(['alpha']);
+		expect(stateOf(room).pending).toEqual([]);
+		const last = observed.steers.at(-1);
+		expect(stateOf(room).leases.get(last?.activation ?? '')?.readThrough).toBe(last?.message.seq);
+	});
+
+	it('recovers unconsumed steering from the journal after its activation expires', async () => {
+		const opened = await openFor(storage);
+		const clock = fakeClock();
+		const runtime = () =>
+			createRuntime({
+				storage: opened.storage,
+				clock,
+				limits: { activation: { attempts: 3, backoff: () => 1_000 } },
+			});
+		const firstRuntime = runtime();
+		const first = holdingAlpha(1);
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('steering-replay'),
+				agents: [alpha, beta, assistant],
+				seats: { [assistant.name]: 'none', [alpha.name]: 'named', [beta.name]: 'named' },
+				runtime: firstRuntime,
+				execution: first.execution,
+			}),
+		);
+		const visit = await room.visit(priya);
+		await visit.send({ to: alpha.name, text: 'Begin analysis.' });
+		await first.started.promise;
+		await visit.send({ to: priya.name, text: 'Recover this unconsumed context.' });
+		const update = (await messagesOf(room)).at(-1);
+		expect(update?.wakes ?? []).toEqual([]);
+		crash(firstRuntime, room);
+		first.release.resolve();
+		await clock.advance(61_000);
+		const contexts: string[] = [];
+		const resumed = stopAtEnd(
+			await resumeRoom(room.name, {
+				runtime: runtime(),
+				agents: [alpha, beta, assistant],
 				execution: piExecution({
 					stream: scripted(
 						byAgent({
-							alpha: async (context, _agent, call) => {
+							alpha: (context) => {
 								contexts.push(contextText(context));
-								if (call === 2) {
-									nextStarted.resolve();
-									await nextRelease.promise;
-								}
 								return quiet();
 							},
 						}),
 					),
 				}),
-			});
-			try {
-				const visit = await room.visit(priya);
-				await visit.send({ to: alpha.name, text: 'Start analysis.' });
-				await observed.ending.promise;
-				// The caller sends an ordinary message while the executor releases.
-				// Its active recipient is recorded even though idle attention excludes it.
-				await visit.send({ to: priya.name, text: 'Keep this final correction.' });
-				const update = (await messagesOf(room)).at(-1);
-				expect(update?.wakes ?? []).toEqual([]);
-				expect(observed.steers).toHaveLength(1);
-				expect(observed.steers[0]?.message).toEqual(update);
-				expect(observed.wakes).toHaveLength(1);
-				observed.release.resolve();
-				await nextStarted.promise;
-				expect(observed.wakes.map((wake) => wake.activation)).toEqual([
-					observed.steers[0]?.activation,
-					`message:${update?.seq}:alpha:1`,
-				]);
-				// A delayed transport operation must not enter the later activation.
-				if (delivery === 'late') await observed.deliver[0]?.();
-				nextRelease.resolve();
-				await waitForRoom(room);
-				if (delivery === 'late') await observed.deliver[0]?.();
-				await waitForRoom(room);
-				expect(contexts).toHaveLength(2);
-				expect(contexts[0]).not.toContain('Keep this final correction.');
-				expect(contexts[1]?.split('Keep this final correction.')).toHaveLength(2);
-				expect(observed.wakes).toHaveLength(2);
-				expect(stateOf(room).pending).toEqual([]);
-				expect(clock.now()).toBe(before);
-			} finally {
-				observed.release.resolve();
-				nextRelease.resolve();
-				await room.stop();
-				await opened.dispose();
-			}
-		},
-	);
-
-	it('consumes reordered and repeated steering without starting another activation', async () => {
-		const opened = await storage.open();
-		const observed = heldReleaseTransport(false);
-		const started = deferred();
-		const release = deferred();
-		const contexts: string[] = [];
-		const room = await startRoom({
-			name: roomName('steering-order'),
-
-			agents: [alpha, assistant],
-			seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
-			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
-			execution: piExecution({
-				stream: scripted(
-					byAgent({
-						alpha: async (context, _agent, call) => {
-							contexts.push(contextText(context));
-							if (call === 1) {
-								started.resolve();
-								await release.promise;
-							}
-							return quiet();
-						},
-					}),
-				),
 			}),
-		});
-		try {
-			const visit = await room.visit(priya);
-			await visit.send({ to: alpha.name, text: 'Start analysis.' });
-			await started.promise;
-			await visit.send({ to: priya.name, text: 'First correction.' });
-			await visit.send({ to: priya.name, text: 'Second correction.' });
-			expect(observed.steers).toHaveLength(2);
-			await observed.deliver[1]?.();
-			await observed.deliver[1]?.();
-			await observed.deliver[0]?.();
-			release.resolve();
-			await waitForRoom(room);
-			expect(contexts.at(-1)).toContain('First correction.');
-			expect(contexts.at(-1)).toContain('Second correction.');
-			expect(observed.wakes).toHaveLength(1);
-			expect(stateOf(room).pending).toEqual([]);
-			const last = observed.steers.at(-1);
-			expect(stateOf(room).leases.get(last?.activation ?? '')?.readThrough).toBe(last?.message.seq);
-		} finally {
-			release.resolve();
-			await room.stop();
-			await opened.dispose();
-		}
+		);
+		expect(stateOf(resumed).pending).toEqual(
+			expect.arrayContaining([expect.objectContaining({ seat: alpha.name, seq: update?.seq })]),
+		);
+		await clock.advance(1_000);
+		await waitForRoom(resumed);
+		expect(contexts.some((text) => text.includes('Recover this unconsumed context.'))).toBe(true);
+		expect(stateOf(resumed).pending).toEqual([]);
+	});
+
+	it('keeps summary input fixed while delivering its result to an active ordinary agent', async () => {
+		const opened = await openFor(storage);
+		const summaryStarted = deferred();
+		const summaryRelease = deferred();
+		const betaStarted = deferred();
+		const betaRelease = deferred();
+		const contexts: string[] = [];
+		const observed = observe();
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('steering-summary-boundary'),
+				summary: assistant.name,
+				agents: [alpha, beta, assistant],
+				seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast', [beta.name]: 'named' },
+				runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
+				execution: piExecution({
+					stream: scripted(
+						byAgent({
+							alpha: says(['First fact.', 'Second fact.']),
+							beta: async (_context, _agent, call) => {
+								if (call === 1) {
+									betaStarted.resolve();
+									await betaRelease.promise;
+								}
+								return quiet();
+							},
+							assistant: async (context, _agent, call) => {
+								contexts.push(contextText(context));
+								if (call !== 1) return quiet();
+								summaryStarted.resolve();
+								await summaryRelease.promise;
+								return summarise('First exchange result.');
+							},
+						}),
+					),
+				}),
+			}),
+		);
+		const visit = await room.visit(priya);
+		const first = await visit.send({ text: 'First question.' });
+		await summaryStarted.promise;
+		await visit.send({ to: beta.name, text: 'Later question outside the summary.' });
+		await betaStarted.promise;
+		expect(observed.steers.filter((steer) => steer.seat === assistant.name)).toEqual([]);
+		const ended = assistantEnded(room);
+		summaryRelease.resolve();
+		const summary = await first.waitForSummary();
+		await ended;
+		expect(summary?.text).toBe('First exchange result.');
+		expect(contexts.every((text) => !text.includes('Later question outside the summary.'))).toBe(
+			true,
+		);
+		expect(
+			observed.steers.filter((steer) => steer.message.seq === summary?.seq).map((s) => s.seat),
+		).toEqual(['beta']);
+		betaRelease.resolve();
+		await waitForRoom(room);
 	});
 });
