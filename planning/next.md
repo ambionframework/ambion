@@ -39,21 +39,22 @@ between questions ([backlog](backlog.md#030-the-room-works-between-questions)).
 
 ## The scope
 
-**Three items already landed on main.** The changelog names the export
+**Four items already landed on main.** The changelog names the export
 changes of each one.
 
-| Item                                                | PR         | What it gives 0.2.0                                                                                                   |
-| --------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------- |
-| M7. The workspace as an interface                   | #276, #277 | A neutral root entry, a conformance entry, one entry for each binding, and backends by kind: bash and an optional SQL |
-| S1. The workstation, `@ambionframework/workstation` | #280       | A bash backend over SSH with one Unix account for each agent, tested on an in-process server and on OpenSSH           |
-| The removal of `@ambionframework/cli`               | #273       | Every library package needs only Node `>=22.19.0`                                                                     |
+| Item                                                | PR         | What it gives 0.2.0                                                                                                                     |
+| --------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| M7. The workspace as an interface                   | #276, #277 | A neutral root entry, a conformance entry, one entry for each binding, and backends by kind: bash and an optional SQL                   |
+| S1. The workstation, `@ambionframework/workstation` | #280       | A bash backend over SSH with one Unix account for each agent, tested on an in-process server and on OpenSSH                             |
+| The removal of `@ambionframework/cli`               | #273       | Every library package needs only Node `>=22.19.0`                                                                                       |
+| M1. Kernel decision layers                          | #286       | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts` |
 
 **Two themes stay open, each with the acceptance it must meet on the
 tagged commit.** The phases below deliver them; the items explain them.
 
 | Theme                     | Acceptance                                                                                                                                                                                         |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M One owner per mechanism | Each duplication that items M1 to M6 name has one owner. The rules file carries only rules that gate a write. The journal package owns the one crash-safe append loop. Each doc fact has one home. |
+| M One owner per mechanism | Each duplication that items M2 to M6 name has one owner. The rules file carries only rules that gate a write. The journal package owns the one crash-safe append loop. Each doc fact has one home. |
 | R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release.                                                                                |
 
 **The tag waits for the P0 and P1 steps.** A P2 step that is open when the
@@ -156,13 +157,10 @@ and conformance files.
 **Goal:** each kernel rule has one owner, and the rules file carries only
 rules that gate a write.
 
-- [ ] **1.** Kernel decision layers: relocate `evolve`, one retry matcher,
-      one summary narrowing, one recorded envelope base, and one home for
-      the summary text. (M1)
-- [ ] **2.** The rules sweep: a keep-or-withdraw list for every exported
+- [ ] **1.** The rules sweep: a keep-or-withdraw list for every exported
       rule except `exchangeOutcome`, and one `draftsClose` rule for both
-      draft counts. Needs 1. (M2)
-- [ ] **3.** Each doc fact has one home. (M6)
+      draft counts. (M2)
+- [ ] **2.** Each doc fact has one home. (M6)
 
 **Evidence:** `pnpm check`; `pnpm rule:check` on the rules file and
 `pnpm check:lemmascript`; the keep-or-withdraw list in
@@ -204,26 +202,6 @@ Each item states the problem, the solution, and the impact. The file and
 line references are from `main` at `d86e803`.
 
 ### M. One owner per mechanism
-
-**M1. Kernel decision layers.** Test helpers and second narrowings sit in
-the files that decide commands into events.
-
-- Move `evolve` (`room/transition.ts:102`) to test support. It has no
-  production caller, and it is the only reason `transition.ts` imports
-  three fold functions.
-- Add `saidContentMatches` to `room-host/core.ts`. Call it from
-  `contributionMatches` (`room-host/control.ts:53`) and `deliveryMatches`
-  (`room-host/people.ts:66`).
-- Delete `summaryOutcome` (`room/exchange.ts:362`). Call
-  `summaryCompletion` from `closedExchangeView`.
-- Add an internal `Recorded` base for `seq`, `key`, `activationId`,
-  `wakes`, and `at`. `SpokenMessage`, `PresenceMessage`, and
-  `SummaryMessage` (`types.ts:155`, `193`, `236`) extend it. The union
-  keeps its shape.
-- Move `SUMMARY_DUTIES` and `summaryToolDescription` from
-  `execution/summary.ts` into `render.ts`, and delete the file. Let the
-  assistant (`assistant/src/index.ts:39`) reference the shared duties and
-  keep only its own verification rules.
 
 **M2. The rules sweep.** A proof pays for itself on a rule whose fault
 loses or duplicates the record ([docs/formal.md](../docs/formal.md)).

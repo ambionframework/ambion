@@ -23,6 +23,7 @@ import {
 	type RoomBase,
 	refusalError,
 	requireSubmission,
+	saidContentMatches,
 	sameRefs,
 	submit,
 } from './core.ts';
@@ -65,12 +66,7 @@ function contributionMatches(commit: CommitRequest, message: Message): boolean {
 	if (intent.kind === 'seated' || intent.kind === 'unseated') {
 		return message.kind === intent.kind && message.subject === intent.name;
 	}
-	if (message.kind === 'said')
-		return (
-			message.to === intent.to &&
-			message.text === intent.text &&
-			sameRefs(message.refs, intent.refs)
-		);
+	if (message.kind === 'said') return saidContentMatches(message, intent);
 	// A closing agent says through the same `said` intent, but the room records
 	// its contribution as a summary addressed to the exchange owner. An omitted
 	// recipient is that canonical owner; a supplied recipient must still match.

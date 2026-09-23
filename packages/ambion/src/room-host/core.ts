@@ -12,7 +12,7 @@ import type { Composition } from '../journal/events.ts';
 import type { Kind, RoomJournal } from '../journal/journal.ts';
 import type { RoomState } from '../room/fold.ts';
 import type { Refusal, RoomDecision } from '../room/transition.ts';
-import type { Message, RoomNotification, Without } from '../types.ts';
+import type { Message, RoomNotification, SpokenMessage, Without } from '../types.ts';
 import { copyMessage } from '../types.ts';
 import type { CompositionDraft } from './room.ts';
 
@@ -81,6 +81,13 @@ export const sameRefs = (
 	const right = b ?? [];
 	return left.length === right.length && left.every((ref, index) => ref === right[index]);
 };
+
+/** A recorded `said` carries the recipient, the text, and the refs that a same-key retry sent. */
+export const saidContentMatches = (
+	message: Pick<SpokenMessage, 'to' | 'text' | 'refs'>,
+	said: { to?: string; text: string; refs?: readonly string[] },
+): boolean =>
+	message.to === said.to && message.text === said.text && sameRefs(message.refs, said.refs);
 
 export function messageKeyConflict(key: string, message: Message): string {
 	return `The key '${key}' already names a different room operation at message seq ${message.seq}.`;

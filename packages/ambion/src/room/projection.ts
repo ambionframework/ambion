@@ -91,19 +91,13 @@ export function replay(entries: readonly Entry[], options: FoldOptions): RoomPro
 	return projection;
 }
 
-/** The projections that built each state, so `evolveState` finds the one to advance. */
-const built = new WeakMap<RoomState, RoomProjection>();
-
-/** The projection that built a state, or nothing for a state made another way. */
-const projectionOf = (state: RoomState): RoomProjection | undefined => built.get(state);
-
 /** The public state, assembled from a projection. */
 export function projectState(projection: RoomProjection): RoomState {
 	const { base } = projection;
 	const seated = new Set(projection.roster.map((seat) => seat.name));
 	const pending = pendingOf(projection.wakes, seated, base.cancelledAt);
 	const owed = projection.owed.map((entry) => entry.owed);
-	const state: RoomState = {
+	return {
 		composition: base.composition,
 		roster: projection.roster,
 		reserve: reserveOf(base.composition, projection.roster),
@@ -120,8 +114,6 @@ export function projectState(projection: RoomProjection): RoomState {
 		messages: base.messages,
 		lastSeq: projection.lastSeq,
 	};
-	built.set(state, projection);
-	return state;
 }
 
 /** One committed entry applied to a projection. */
@@ -340,14 +332,4 @@ function onComposition(
 		base: { ...prev.base, composition },
 		roster: composition.agents.map((seat) => ({ ...seat })),
 	};
-}
-
-/** The state after one entry, when the state came from a projection. */
-export function evolveState(
-	state: RoomState,
-	entry: Entry,
-	options: FoldOptions,
-): RoomState | undefined {
-	const projection = projectionOf(state);
-	return projection === undefined ? undefined : projectState(advance(projection, entry, options));
 }

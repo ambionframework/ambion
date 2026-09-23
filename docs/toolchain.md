@@ -239,6 +239,13 @@ source, test, or config files, versions out of lockstep, and a different
 verifies version agreement with `node scripts/version.mjs --check` and
 `node scripts/publish.mjs --pack-only`.
 
+**The package hygiene check also reads every built file in `dist`.** It
+fails on an import of a package that the manifest does not declare in
+`dependencies`, `peerDependencies`, or `optionalDependencies`. It also fails
+on a bundled region whose source is outside the package's own `src`. tsdown
+inlines a package that the manifest declares only in `devDependencies`, so a
+runtime import of such a package gives that second finding.
+
 The live workflow runs the same scenarios on a real provider. It runs after a
 change lands on `main`, on a weekly schedule, and by dispatch. It does not run
 on a pull request, because a real-model run costs money. It runs one

@@ -18,6 +18,23 @@ command under a `Deadline` and turns a thrown error into `unknown`.
 `DEFAULT_TIMEOUT_SECONDS` is 30. The just-bash backends and the
 workstation both build on them.
 
+**`@ambionframework/workspace` imports `typebox` and bundles no copy of it.**
+The SQL tools use `typebox` at runtime, and the manifest declared it only for
+development. tsdown then inlined `typebox` 1.3.18 into `dist`, 143 KB of the
+296 KB. `typebox` is now a dependency of the package.
+
+**`@ambionframework/pi-journal` takes `@earendil-works/pi-agent-core` as a
+peer dependency.** The package uses only its types. The host that stores Pi
+sessions supplies the one copy that the host and the package share.
+
+**`@ambionframework/claude` and `@ambionframework/codex` no longer install
+`typebox`.** Each package uses only its types, and no built file imports it.
+
+**Package hygiene reads the built files.** `pnpm run check:packages` fails on
+an import in `dist` of a package that the manifest does not declare as a
+runtime or peer dependency. It also fails on bundled code from outside the
+package's own `src`.
+
 **New package: `@ambionframework/workstation`.** `workstationBackend(options)`
 returns a `BashBackend` over SSH to one remote server, with one Unix account
 for each agent. File calls go over SFTP, and each command runs in its own
@@ -191,6 +208,11 @@ just-bash backend's own guidance now states only its shell: the coreutils,
 wall between one agent's home and another's. `openWorkspace` joins the tool
 guidance, the backend's shell guidance, the audit guidance, and the rooms
 guidance, in that order.
+
+**The assistant's instructions no longer repeat the summary duties.** The
+room renders the summary duties into every closing activation. The
+assistant's summary defaults now add only evidence, artifact paths,
+constraints, unfinished work, and the verification rules.
 
 ## 0.1.0 (2026-09-21)
 
