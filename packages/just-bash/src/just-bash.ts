@@ -9,10 +9,12 @@
  *
  * Every instance runs with `javascript: true` and `python: true`: an agent's
  * `bash` tool can run a script with `js-exec` or `python3`, beside just-bash's
- * coreutils, `jq`, `yq`, `xan` and `sqlite3`. No instance is given a `network`
- * option, so `curl` and every other network command stay absent — the one
- * exception the workspace contract names, and the boundary this file does not
- * close. The backend's guidance states this same set to a connected agent.
+ * coreutils, `jq`, `yq`, `xan` and `sqlite3`. Each instance also has `git`
+ * from just-git, with the agent's name as the locked author. No instance is
+ * given a `network` option, so `curl` and every other network command stay
+ * absent, and `git` runs with `network: false` — the one exception the
+ * workspace contract names, and the boundary this file does not close. The
+ * backend's guidance states this same set to a connected agent.
  *
  * `connect` runs one unconditional `mkdir -p` and checks nothing first. Two
  * calls for one agent can overlap, since Pi runs a turn's tool calls in
@@ -34,6 +36,7 @@ import {
 } from '@ambionframework/workspace';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import { Bash, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
+import { createGit } from 'just-git';
 import { BashEnv } from './bash-env.ts';
 import { DEV_DIR, withDevices } from './devices.ts';
 
@@ -46,6 +49,19 @@ const JUST_BASH_LAYOUT: WorkspaceLayout = {
 	rooms: '/rooms',
 };
 
+/**
+ * The `git` command of one agent. The identity is locked to the agent's
+ * name, so every commit names the seat that made it. `network: false` keeps
+ * git inside the same boundary as the shell: a remote is a path on the
+ * workspace's filesystem.
+ */
+function gitFor(agent: WorkspaceAgent) {
+	return createGit({
+		identity: { name: agent.name, email: `${agent.name}@ambion.invalid`, locked: true },
+		network: false,
+	});
+}
+
 /** Build one agent's environment over the workspace's filesystem. */
 async function connectOver(fs: IFileSystem, agent: WorkspaceAgent): Promise<BashEnv> {
 	const home = `/home/${agent.name}`;
@@ -57,6 +73,7 @@ async function connectOver(fs: IFileSystem, agent: WorkspaceAgent): Promise<Bash
 			env: { HOME: home },
 			javascript: true,
 			python: true,
+			customCommands: [gitFor(agent)],
 		}),
 		home,
 	);
@@ -111,6 +128,12 @@ const JUST_BASH_GUIDANCE = [
 	`The shell is a simulated Unix shell: the common coreutils (ls, cat, grep, sed, awk, find,`,
 	`tar, and more), plus jq for JSON, yq for YAML and TOML, xan for CSV, and sqlite3. Run a`,
 	`script with js-exec (JavaScript) or python3 (Python).`,
+	``,
+	`git is available: init, clone, add, commit, status, log, diff, show, branch, checkout,`,
+	`switch, merge, rebase, cherry-pick, stash, tag, reset, fetch, pull, push, and more. Each`,
+	`command supports a subset of the flags of real git. Your commits carry your name as the`,
+	`author, and git config does not change it. A remote is a path in this filesystem, such as`,
+	`/home/<other agent>/<repo>; git has no network access.`,
 	``,
 	`The shell has no network: curl and every other network command are disabled. Your home is`,
 	`/home/<your name>, and there is no wall between one agent's home and another's.`,

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**The just-bash backends run `git`.** Each agent's shell has `git` from
+`just-git`, with no configuration from the host. The author of every commit
+is the agent's name, and `git config` does not change it. `git` has no
+network access, so a remote is a path on the workspace's filesystem. The
+backend's guidance names the subcommands and these limits.
+
 **New package: `@ambionframework/just-bash`.** It holds `memoryBackend`,
 `directoryBackend`, and their `MemoryBackendFile`, `MemoryBackendOptions`,
 `MemoryBashBackend`, and `SeedWriter` types. The `./just-bash` entry of

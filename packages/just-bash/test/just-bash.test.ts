@@ -1,7 +1,7 @@
 /**
  * The just-bash adapter beyond the conformance suite: path queries, the
  * working directory of one command, temporary names, the default timeout,
- * the scripting commands, the memory limit, and the shared homes. Then the
+ * the scripting commands, git, the memory limit, and the shared homes. Then the
  * memory backend's seed function and `readFiles`.
  */
 import { BACKGROUND_CONTEXT, DEFAULT_TIMEOUT_SECONDS } from '@ambionframework/workspace';
@@ -102,6 +102,31 @@ describe('the just-bash adapter', () => {
 			exitCode: 127,
 			output: 'bash: curl: command not found\n',
 		});
+	});
+
+	it('runs git with the agent as the locked author, clones across homes, and has no git network', async () => {
+		const backend = memoryBackend();
+		const alpha = await backend.connect({ name: 'alpha' });
+		const beta = await backend.connect({ name: 'beta' });
+		const init = 'git init repo && cd repo && echo hi > a.txt && git add . && git commit -m first';
+		expect(await sh(alpha, init)).toMatchObject({ ok: true, exitCode: 0 });
+		// A config write succeeds, and the locked identity still wins.
+		expect(
+			await sh(alpha, 'cd repo && git config user.name other && git log -1 --format="%an <%ae>"'),
+		).toMatchObject({ ok: true, output: 'alpha <alpha@ambion.invalid>\n' });
+		const push =
+			'git clone /home/alpha/repo r && cd r && echo b > b && git add b && git commit -m second && git push origin HEAD:side';
+		expect(await sh(beta, push)).toMatchObject({ ok: true, exitCode: 0 });
+		expect(await sh(alpha, 'cd repo && git log side --format="%an %s"')).toMatchObject({
+			ok: true,
+			output: 'beta second\nalpha first\n',
+		});
+		expect(await sh(alpha, 'git clone https://github.com/example/repo x')).toMatchObject({
+			ok: true,
+			exitCode: 128,
+			output: 'fatal: network access is disabled\n',
+		});
+		expect(backend.guidance).toContain('git is available');
 	});
 
 	it('holds 128 MB in memory, and refuses the write that goes past it', async () => {

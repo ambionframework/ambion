@@ -46,6 +46,13 @@ runs a script with `js-exec` or `python3` beside just-bash's coreutils, `jq`,
 `yq`, `xan` and `sqlite3`. No instance takes a `network` option, so `curl`
 and every other network command stay absent.
 
+**Every instance has `git`**, from [just-git](https://github.com/blindmansion/just-git).
+It supports the common subcommands, each with a subset of the flags of real
+git. The author of a commit is the agent's name, and `git config` does not
+change it. `git` has no network access, so a remote is a path on the
+workspace's filesystem, such as another agent's home. The guidance tells each
+agent the same.
+
 ## Tests
 
 **`pnpm test`** runs `workspaceConformance` on both backends, and the

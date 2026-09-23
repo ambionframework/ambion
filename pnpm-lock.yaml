@@ -251,6 +251,9 @@ importers:
       just-bash:
         specifier: ^3.4.2
         version: 3.4.2
+      just-git:
+        specifier: ^1.8.2
+        version: 1.8.2
     devDependencies:
       tsdown:
         specifier: ^0.22.14
@@ -2760,6 +2763,9 @@ packages:
     resolution: {integrity: sha512-T0Vpy7YRgCjxJdqG3tkxn0ZnIDLJvVwb8hH4L+6NVdp+Te27jQxjxnszW9ODjEKbWxWujj83rP5S0GQxCSufgg==}
     engines: {node: '>=20.18.1'}
     hasBin: true
+
+  just-git@1.8.2:
+    resolution: {integrity: sha512-0DVPqml0VVzjK3DompySws16j+jQTnw1TSExHPl/f1uTikYduza0V36Q+4ViORhIfAxxKTaNbc8S7Wx1avnOLw==}
 
   jwa@2.0.1:
     resolution: {integrity: sha512-hRF04fqJIP8Abbkq5NKGN0Bbr3JxlQ+qhZufXVr0DvujKy93ZCbXZMHDL4EOtodSbCWxOqR8MS1tXA5hwqCXDg==}
@@ -5940,6 +5946,8 @@ snapshots:
       node-liblzma: 2.2.0
     transitivePeerDependencies:
       - supports-color
+
+  just-git@1.8.2: {}
 
   jwa@2.0.1:
     dependencies:
