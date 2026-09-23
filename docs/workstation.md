@@ -279,7 +279,8 @@ also removes the line that `setsid` writes after a group kill.
 spill, the script creates `/tmp/shell-<random>.out` with an exclusive
 create and mode `0600`. The output then goes through `tee` into that file.
 `SshEnv` names the file when the view cuts the output, and removes it
-otherwise.
+otherwise. A named spill file stays in `/tmp` until the server clears it,
+the same as in `NodeExecutionEnv`.
 
 **No value reaches a command line.** `ps` on the server shows no variable
 of one agent to another account.
@@ -314,9 +315,10 @@ the bytes and lines of the whole output, as Pi's `OutputCapture` does.
 With no `maxBytes`, the window is 8 MiB.
 
 **A child that keeps the output open does not hold the result.** The
-server sends the exit status when the command exits. `SshEnv` then waits
-100 ms after the last output, as `NodeExecutionEnv` does, and closes the
-channel.
+server sends the exit status when the command exits, and the output it
+still holds after it. `SshEnv` closes the channel 1 second after the last
+output. Pi waits 100 ms on a local pipe, and over a slow link that cuts
+the output that waits on a window adjustment.
 
 **A process that starts its own session escapes the kill.** After a kill,
 its channel closes 2 seconds later. When the client cannot open a channel,

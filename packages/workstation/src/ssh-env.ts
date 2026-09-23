@@ -180,14 +180,20 @@ export class SshEnv implements WorkspaceEnv {
 		return call<void>((done) => write(path, data, { mode: FILE_MODE, flag }, done));
 	}
 
-	/** Write or append, and make each missing parent first, as `NodeExecutionEnv` does. */
+	/** Write or append, and make each missing parent, as `NodeExecutionEnv` does. */
 	private async putWithParents(
 		path: string,
 		content: string | Uint8Array,
 		flag: 'w' | 'a',
 	): Promise<void> {
-		await this.makeDir(posix.dirname(path), true);
-		await this.put(path, content, flag);
+		try {
+			await this.put(path, content, flag);
+		} catch (error) {
+			// A missing parent answers `NO_SUCH_FILE`. Make the parents and try once more.
+			if (!isMissing(error)) throw error;
+			await this.makeDir(posix.dirname(path), true);
+			await this.put(path, content, flag);
+		}
 	}
 
 	writeFile(path: string, content: string | Uint8Array, context: Context): FileResult<void> {

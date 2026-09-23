@@ -13,8 +13,8 @@
  * The command's output arrives on the channel's stdout, and `Capture` holds
  * it within a bound. `exec` hands one view to `onUpdate` after the command
  * ends, the same as `BashEnv`. A child that keeps the output open after the
- * command exits gets `EXIT_GRACE_MS`, and then the channel closes, as in
- * `NodeExecutionEnv`.
+ * command exits gets `EXIT_GRACE_MS` after the last output, and then the
+ * channel closes.
  */
 
 import { constants } from 'node:os';
@@ -41,8 +41,13 @@ const MAX_TIMEOUT_SECONDS = 2_147_483;
 /** How long an aborted command's channel may stay open after the kill. */
 const CLOSE_GRACE_MS = 2_000;
 
-/** How long the output may keep arriving after the command exits, the same as Pi. */
-const EXIT_GRACE_MS = 100;
+/**
+ * How long the channel stays open after the last output, once the command
+ * exits. `sshd` sends the exit status first and the output it still holds
+ * after it, and over a slow link the rest waits on a window adjustment.
+ * Pi's 100 ms fits a local pipe and can cut a remote output.
+ */
+const EXIT_GRACE_MS = 1_000;
 
 /** How much of the script's own stderr `exec` keeps. The command's stderr joins its stdout. */
 const SCRIPT_STDERR_BYTES = 64 * 1024;
