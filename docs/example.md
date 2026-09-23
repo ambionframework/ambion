@@ -5,10 +5,14 @@ It replaces the site example and Relay. It is the room a new reader opens
 first, the host the deployment guide describes, and the evidence that the
 release claims hold. The directory is `examples/workbench`.
 
-Workbench is a narrow build of a larger idea. This page describes what the
-example does today, on the current kernel API. The section
-[Beyond the current scope](#beyond-the-current-scope) lists the lab
-capabilities that wait for later phases in [next.md](../planning/next.md).
+Workbench is a narrow build of a larger idea. The
+[Workbench repository](https://github.com/fastforwardengine/workbench) runs
+that idea as a real application on Ambion.
+
+This page describes what the example does today, on the current kernel API.
+The section [Beyond the current scope](#beyond-the-current-scope) lists the
+lab capabilities that wait for later phases in
+[next.md](../planning/next.md).
 
 ## Workbench: a lab bench for a toy Arduino kit
 

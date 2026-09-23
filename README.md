@@ -22,6 +22,10 @@ exchange, to one activation, to the steps an agent took, with the cost of
 each. Ambion serves TypeScript application developers. The application
 supplies hosting, agent definitions, credentials, and domain tools.
 
+**Workbench is the first application on Ambion.** It seats specialists for
+electrical engineering, hardware, and electrochemistry over one shared
+workspace. See the [Workbench repository](https://github.com/fastforwardengine/workbench).
+
 ## A room and its workspace
 
 <picture>
