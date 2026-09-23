@@ -240,9 +240,10 @@ onto the target. Many servers mount `/tmp` as a filesystem of its own, and
 a rename across two filesystems fails. Log rotation also renames inside
 one folder.
 
-**`exec` checks the directory first.** `SshEnv` runs one SFTP `stat`
-of the working directory, which follows a symbolic link. When the directory does not exist, it returns
-`spawn_error`, as `NodeExecutionEnv` does, and opens no channel.
+**`exec` checks the directory first.** `SshEnv` runs one SFTP `stat` of
+the working directory, which follows a symbolic link. When the directory
+does not exist, it returns `spawn_error`, as `NodeExecutionEnv` does, and
+opens no channel.
 
 **`exec` sends the script on standard input.** `sshd` drops an `env`
 request unless `AcceptEnv` names the variable. `SshEnv` runs
@@ -297,9 +298,11 @@ thing the script prints.
 
 **A login shell can write lines before the script's first line.**
 `sshd` runs the command through the account's login shell, and Debian's
-bash reads `~/.bashrc` for it. `SshEnv` looks for the `AMBION_PGID=` line
-among the lines the channel's stderr holds, so a `.bashrc` that writes to
-stderr does not stop the kill. The view shows those other lines.
+bash reads `~/.bashrc` for it. The script prints a newline before the
+`AMBION_PGID=` line, so the line stands alone after output with no newline
+at its end. `SshEnv` looks for the line among the others, past the 64 KiB
+that the view keeps of them. A `.bashrc` that writes to stderr does not
+stop the kill, and the view shows its lines.
 
 **The SSH signal request cannot do this alone.** OpenSSH 7.9 added signal
 delivery to `sshd`. It sends a subset of signals, and only to a login or a
@@ -330,7 +333,10 @@ window adjustment.
 **A command that exits before its deadline gives its exit status.** A
 background child that keeps writing after the command exits holds the
 channel until the 5 seconds end or the deadline fires. Either way, the
-result is the command's exit status.
+result is the command's exit status. When the 5 seconds close the channel
+while output still arrives, the view ends with a line that says so. Over
+a slow link, that line also marks output of the command itself that the
+channel still held.
 
 **A process that starts its own session escapes the kill.** After a kill,
 its channel closes 2 seconds later. When the client cannot open a channel,
@@ -357,10 +363,10 @@ call adds network round trips to every tool call.
   and nothing retries it.** `ssh2` fails the SFTP requests in flight when
   the channel closes, and keeps a request made after that pending forever.
   So every call races the end of its client. A connection that dies with
-  no sign ends after three keepalives with no answer, about 45 seconds. A file call answers
-  `unknown`, and a command answers `ExecutionError` `unknown` with no exit
-  code. An append that the connection lost can have landed or not, and the
-  caller cannot tell which.
+  no sign ends after three keepalives with no answer, about 45 seconds. A
+  file call answers `unknown`, and a command answers `ExecutionError`
+  `unknown` with no exit code. An append that the connection lost can have
+  landed or not, and the caller cannot tell which.
 - **`idleTimeout` closes an unused client.** A client that runs no
   operation for `idleTimeout` seconds closes, and the default is 300. The
   next `connect()` for that agent builds a new client. A long workspace

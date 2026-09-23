@@ -58,6 +58,9 @@ const EXIT_GRACE_MS = 1_000;
  */
 const EXIT_DRAIN_MS = 5_000;
 
+/** The line the view ends with when `EXIT_DRAIN_MS` closed the channel while output still arrived. */
+const DRAIN_NOTICE = `\n[The workstation closed the output ${EXIT_DRAIN_MS / 1000} seconds after the command exited. The view does not show the output after that.]\n`;
+
 /** How much of the script's own stderr `exec` keeps. The command's stderr joins its stdout. */
 const SCRIPT_STDERR_BYTES = 64 * 1024;
 
@@ -76,21 +79,40 @@ export interface CommandHost {
 	discard(path: string): Promise<void>;
 }
 
-/** The whole line that gives the group ID, wherever the login shell's own lines put it. */
-const GROUP_LINE = new RegExp(`^${PGID_PREFIX}(\\d+)\n`, 'm');
+/**
+ * The group ID line. The script prints a newline first, so the line stands
+ * alone even after login shell output with no newline at its end.
+ */
+const GROUP_LINE = new RegExp(`\n${PGID_PREFIX}(\\d+)\n`);
+
+/** More than the longest group ID line: the text a search keeps when it trims. */
+const GROUP_LINE_MAX = 64;
 
 /** The script's own stderr: the group ID line, and any other line the login shell or the script writes. */
 class ScriptStderr {
-	private text = '';
+	/** What the view shows, up to `SCRIPT_STDERR_BYTES`. */
+	private shown = '';
+	/** The stderr that comes before the group ID line, which the search reads. */
+	private head = '';
 	pgid: number | undefined;
 	onPgid: (() => void) | undefined;
 
 	push(chunk: Buffer): void {
-		if (this.text.length < SCRIPT_STDERR_BYTES) this.text += chunk.toString('utf8');
-		if (this.pgid !== undefined) return;
-		const line = GROUP_LINE.exec(this.text);
-		if (line === null) return;
-		this.text = this.text.slice(0, line.index) + this.text.slice(line.index + line[0].length);
+		const text = chunk.toString('utf8');
+		if (this.pgid !== undefined) {
+			this.show(text);
+			return;
+		}
+		this.head += text;
+		const line = GROUP_LINE.exec(this.head);
+		if (line === null) {
+			this.trimHead();
+			return;
+		}
+		const before = this.head.slice(0, line.index);
+		this.show(before === '' || before.endsWith('\n') ? before : `${before}\n`);
+		this.show(this.head.slice(line.index + line[0].length));
+		this.head = '';
 		const pgid = Number(line[1]);
 		// Group 0 and group 1 are never the script's: `kill -- -0` reaches the caller's own group.
 		if (pgid <= 1) return;
@@ -98,9 +120,21 @@ class ScriptStderr {
 		this.onPgid?.();
 	}
 
+	/** Keep the search's text within the cap: a line that is not whole yet stays in the tail. */
+	private trimHead(): void {
+		if (this.head.length <= SCRIPT_STDERR_BYTES) return;
+		const cut = this.head.length - GROUP_LINE_MAX;
+		this.show(this.head.slice(0, cut));
+		this.head = this.head.slice(cut);
+	}
+
+	private show(text: string): void {
+		if (this.shown.length < SCRIPT_STDERR_BYTES) this.shown += text;
+	}
+
 	/** The lines to show, without `setsid`'s own notice. */
 	lines(): string {
-		return this.text
+		return (this.shown + this.head)
 			.split(/(?<=\n)/)
 			.filter((line) => !SETSID_NOTICE.test(line.replace(/\n$/, '')))
 			.join('');
@@ -112,6 +146,8 @@ interface Ending {
 	readonly exited: boolean;
 	/** Whether the deadline had fired when the exit status arrived. */
 	readonly late: boolean;
+	/** Whether `EXIT_DRAIN_MS` closed the channel while output still arrived. */
+	readonly cut: boolean;
 	readonly code: number | null | undefined;
 	readonly signal: string | undefined;
 }
@@ -135,14 +171,27 @@ function finished(
 	deadline: AbortSignal,
 ): Promise<Ending> {
 	return new Promise((resolve) => {
-		let ending: Ending = { exited: false, late: false, code: undefined, signal: undefined };
+		let ending: Ending = {
+			exited: false,
+			late: false,
+			cut: false,
+			code: undefined,
+			signal: undefined,
+		};
 		let grace: NodeJS.Timeout | undefined;
 		let drainEnd = Number.POSITIVE_INFINITY;
 		const arm = () => {
 			if (!ending.exited) return;
 			clearTimeout(grace);
-			const wait = Math.min(EXIT_GRACE_MS, Math.max(0, drainEnd - Date.now()));
-			grace = setTimeout(() => channel.close(), wait);
+			const left = Math.max(0, drainEnd - Date.now());
+			const cut = left < EXIT_GRACE_MS;
+			grace = setTimeout(
+				() => {
+					ending = { ...ending, cut };
+					channel.close();
+				},
+				Math.min(EXIT_GRACE_MS, left),
+			);
 		};
 		channel.on('data', (chunk: Buffer) => {
 			output.push(chunk);
@@ -150,7 +199,8 @@ function finished(
 		});
 		channel.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
 		channel.on('exit', (code: number | null, signal?: string) => {
-			ending = { exited: true, late: deadline.aborted, code, signal: signal ?? undefined };
+			const late = deadline.aborted;
+			ending = { exited: true, late, cut: false, code, signal: signal ?? undefined };
 			drainEnd = Date.now() + EXIT_DRAIN_MS;
 			arm();
 		});
@@ -247,6 +297,7 @@ async function run(
 	channel.end(commandScript(command, cwd, options?.env, spill));
 	const ending = await done;
 	output.pushText(stderr.lines());
+	if (ending.cut) output.pushText(DRAIN_NOTICE);
 	return { ending, output };
 }
 

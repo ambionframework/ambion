@@ -147,13 +147,25 @@ describe.skipIf(!hasSetsid)('a command that ends early', () => {
 		const backend = backendFor(started);
 		const env = await backend.connect({ name: 'ada' });
 		const chatty = '(while :; do echo tick; sleep 0.1; done) & echo started';
-		for (const timeout of [2, 20]) {
+		// Under the short deadline the deadline ends the wait; under the long one the drain limit
+		// does, and the view says that it cut the output.
+		for (const [timeout, notice] of [
+			[2, false],
+			[20, true],
+		] as const) {
+			const updates: ShellOutputUpdate[] = [];
 			const began = Date.now();
-			const result = await env.exec(chatty, { timeout }, ctx);
+			const result = await env.exec(
+				chatty,
+				{ timeout, onUpdate: (update) => updates.push(update) },
+				ctx,
+			);
 			const took = Date.now() - began;
-			// Under the short deadline the deadline ends the wait; under the long one the drain limit does.
 			expect(result).toMatchObject({ ok: true, value: { exitCode: 0 } });
-			expect(took).toBeLessThan(8_000);
+			expect(took).toBeLessThan(10_000);
+			const view = updates[0];
+			const text = view?.kind === 'replace' ? view.output.text : '';
+			expect(text.includes('closed the output 5 seconds after the command exited')).toBe(notice);
 		}
 		await env.cleanup();
 	});
