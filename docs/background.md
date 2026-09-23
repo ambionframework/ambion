@@ -13,6 +13,11 @@ tool call.** The tool returns an id. The agent reads the output by the id,
 kills the command by the id, and can ask the room to wake it when the
 command exits.
 
+**A person and a seat own each background command together.** The seat
+started it. The person owns the exchange in which the seat started it, so
+the seat acted for that person. The room treats the command's exit as
+that person's question.
+
 ## 1. The problem
 
 **Every command dies at 30 seconds today.** Pi's `bash` tool names no
@@ -101,11 +106,38 @@ the notice lands.
 | `scope`    | `wake: false`                   | `wake: true`                                                              |
 | ---------- | ------------------------------- | ------------------------------------------------------------------------- |
 | `exchange` | Dies at close. The agent polls. | The exchange stays open until the exit, and the exit wakes the seat in it |
-| `room`     | Lives on. Any agent polls.      | The exit opens an exchange for the owner when the room is quiet           |
+| `room`     | Lives on. Any agent polls.      | The exit lands as the owner's question, and wakes the seat                |
 
 **A server never takes `wake`.** Nothing holds an exchange except a live
 activation or a hold, and a hold ends at the command's bound. The
 guidance tells the model to ask for a wake only for work that ends.
+
+### 4.1 Ownership
+
+**Every background command has two owners.**
+
+| Owner      | Who                                                  | What the owner gets                               |
+| ---------- | ---------------------------------------------------- | ------------------------------------------------- |
+| The person | The owner of the exchange that was open at the start | The exit as a question, the summary, and the kill |
+| The seat   | The seat whose activation started the command        | The wake at the exit, and the kill                |
+
+**The person comes from the record.** The table reads the person from
+`ctx.exchange.owner` when the command starts. No caller names the person.
+
+**A command with no person stays in the foreground.** An activation with
+no open exchange has no person to act for. Its command dies at `wait`,
+as every command dies at 30 seconds today.
+
+**Authority passes through the exchanges of the person.** An exit that
+lands as the person's question opens an exchange that the person owns.
+The activations of that exchange act for the same person. So they can
+read, kill, and start commands with the same owner. A chain of work
+that no person asked for directly still has a person at its root.
+
+**A person leaving the room ends no command.** Ownership outlives
+presence, as the ownership of an exchange does
+([exchange.md](exchange.md)). The close of the exchange still addresses
+that person.
 
 ## 5. Layer A: the process table
 
@@ -217,15 +249,22 @@ closed exchange, then follows each close.
 
 ### 5.6 Authority
 
-| Action | Who                                                                |
-| ------ | ------------------------------------------------------------------ |
-| Start  | A seat, in an activation                                           |
-| Read   | Every agent that can read the log file                             |
-| Kill   | The starter, the close of the exchange, `superseded`, and the host |
+| Action | Who                                                                                   |
+| ------ | ------------------------------------------------------------------------------------- |
+| Start  | A seat, in an activation of an exchange that a person owns                            |
+| Read   | Every agent that can read the log file                                                |
+| Kill   | The seat that started it, the person, any seat in an exchange of the person, the host |
+| End    | The close of the exchange for `scope: 'exchange'`, `superseded`, and the bound        |
 
-**The host API is `workspace.processes()` and `workspace.kill(id)`.** An
-application exposes them to a person. [trust.md](trust.md) gains one row:
-a command outlives its activation, and a retry can start it again.
+**A person has no tools, so a person acts through the application or the
+room.** The host API is `workspace.processes({ owner })` and
+`workspace.kill(id, { by })`. The application passes the person as `by`,
+and the table refuses a person who is not the owner. A person can also
+ask any agent in the room. That agent then acts in the person's exchange
+and may kill the command.
+
+**[trust.md](trust.md) gains one row.** A command outlives its
+activation, and a retry can start it again.
 
 ## 6. Layer B: the wake
 
@@ -234,18 +273,37 @@ of the job design without `on`, `cap`, or the placement queue.
 
 1. **`ctx.hold(handle, { deadline })`.** A tool writes a `hold opened`
    entry. The entry names the handle, the seat of the activation, the
-   owner and the start of the open exchange, and the deadline.
+   person who owns the open exchange, the exchange's `from`, and the
+   deadline.
 2. **`exchangeLive` counts an open hold.** The rule in
    `room/rules.verified.ts` gains a list of holds. An open hold of the
    exchange is live work, so the exchange stays open.
 3. **`room.notify(handle, key, text)`.** The workspace calls it at the
-   exit. The room writes a `notice` message directed to the seat, and the
-   message ends the hold. The key `(handle, 'exit')` drops a repeated
-   notify. Routing wakes the seat inside the open exchange.
+   exit. The room writes a `notice` message, and the message ends the
+   hold. The key `(handle, 'exit')` drops a repeated notify.
 4. **The deadline is a notice from the room.** The reconcile pass writes
    it when the hold outlives its deadline.
-5. **A notice in a quiet room opens an exchange.** This case is for
-   `scope: 'room'`. The owner of the hold owns the new exchange.
+5. **A notice lands as the question of its person.** The opening rule
+   reads a `notice` for a person as that person's question. In a quiet
+   room it opens an exchange that the person owns. While an exchange is
+   open, it joins that exchange, as a question of the person does today.
+
+**The record keeps the author apart from the owner.** The room writes the
+`notice`, and the person did not say it. The message names the person as
+`for`, the seat that started the command, the handle, and the text. It is
+directed to that seat, so it wakes the seat at any attention. When the
+seat has left the roster, it wakes seats by attention.
+
+**An exchange that a notice opens is the person's exchange.** Its owner is
+the person, its close addresses the person, and the person can end it
+with `room.abort()`. It differs from a question in its opening message
+alone.
+
+**The notice needs no queue.** A notice that joins another person's open
+exchange follows the rule for a second person's question
+([exchange.md](exchange.md)). That rule already lets two people's work
+share an exchange, so a notice never waits, and no starvation bound is
+needed.
 
 **The journal is the store of open holds.** On attach, the workspace reads
 the open holds on its handles. It sends `lost` for each one it does not
@@ -255,23 +313,22 @@ run and that has no `.exit` file. Attach runs after `resumeRoom`.
 `ambion://workspace/<name>/process/<id>`, so a message can cite the
 command and its log.
 
-**The changes raise the journal format to 2.** Two entry kinds, one
-message kind, and a second way to open an exchange. The changelog names
-each one.
+**The changes raise the journal format to 2.** One entry kind, one message
+kind, and a second kind of opening message. The changelog names each one.
 
 ## 7. What it takes
 
-| Step | Package                    | Work                                                                                 | Kernel |
-| ---- | -------------------------- | ------------------------------------------------------------------------------------ | ------ |
-| A1   | `workspace`                | The workspace's own `bash` tool with `wait`, `scope`, and `key`                      | No     |
-| A2   | `workspace`                | The process table, the script wrapper, `bash_output`, `bash_kill`, the audit entries | No     |
-| A3   | `workstation`              | Count the envs of an agent before the idle timer starts                              | No     |
-| A4   | `workspace`                | `workspace.attach(room)`: closes, `superseded`, the seed                             | No     |
-| A5   | `workspace`                | `workspace.processes()` and `workspace.kill(id)`                                     | No     |
-| A6   | `workspace`, both backends | Conformance cases on `memoryBackend`, `directoryBackend`, and OpenSSH                | No     |
-| B1   | `ambion`                   | `hold opened`, `ctx.hold`, `exchangeLive` with holds, and its proof                  | Yes    |
-| B2   | `ambion`, `workspace`      | `room.notify`, the `notice` message, the deadline notice, `lost` on attach           | Yes    |
-| B3   | `ambion`                   | The opening rule for a notice in a quiet room, and the ref grammar                   | Yes    |
+| Step | Package                    | Work                                                                               | Kernel |
+| ---- | -------------------------- | ---------------------------------------------------------------------------------- | ------ |
+| A1   | `workspace`                | The workspace's own `bash` tool with `wait`, `scope`, and `key`                    | No     |
+| A2   | `workspace`                | The process table with both owners, the script wrapper, `bash_output`, `bash_kill` | No     |
+| A3   | `workstation`              | Count the envs of an agent before the idle timer starts                            | No     |
+| A4   | `workspace`                | `workspace.attach(room)`: closes, `superseded`, the seed                           | No     |
+| A5   | `workspace`                | `workspace.processes()` and `workspace.kill(id)`                                   | No     |
+| A6   | `workspace`, both backends | Conformance cases on `memoryBackend`, `directoryBackend`, and OpenSSH              | No     |
+| B1   | `ambion`                   | `hold opened`, `ctx.hold`, `exchangeLive` with holds, and its proof                | Yes    |
+| B2   | `ambion`, `workspace`      | `room.notify`, the `notice` message, the deadline notice, `lost` on attach         | Yes    |
+| B3   | `ambion`                   | `openingQuestion` reads a notice as its person's question, and the ref grammar     | Yes    |
 
 **A1 to A6 ship on their own.** Their meaning does not change in Layer B,
 because `scope` never means a hold.
@@ -299,6 +356,7 @@ needed for a build, a test run, a server, or a sweep script.
 | Monitoring: `job_status`, `job_log` | `bash_output`                                             |
 | `cancel(handle)`                    | `bash_kill`, and the host API                             |
 | Attention: watch, notice, `hold`    | Kept, reduced to a hold and one notice at the exit        |
+| The placement queue for a notice    | Dropped. A notice lands as its person's question          |
 | The outbox of notices               | The `.exit` file and a keyed `room.notify`                |
 | The handle grammar                  | Kept                                                      |
 | Snapshot and hash of the program    | Dropped. The audit entry records the command              |
@@ -320,13 +378,16 @@ then one more source of notices, and Layer B does not change.
 | The bound is in the script                  | A timer on the host                     | The bound holds when the host stops                                   |
 | A separate env for each command             | A new backend method                    | No backend changes, except the count on the workstation               |
 | A start over a cap fails                    | Prune the oldest                        | The agent decides what to kill                                        |
+| A person owns each command with the seat    | The seat owns it alone                  | Every agent acts for a person, directly or through a chain            |
+| A notice lands as its person's question     | A notice waits for a quiet room         | One opening rule, and no queue to starve                              |
+| The room is the author of a notice          | The notice is said by the person        | The record shows what the person said, and nothing more               |
 
 ## 11. Open questions
 
 1. **Defaults.** Measure the bounds and the caps against the workbench.
-2. **The scope for a start with no exchange.** A tool call outside an
-   exchange has no exchange to end it. Decide whether it takes `room` or
-   fails.
+2. **The steer of a joined notice.** A notice that joins another person's
+   exchange steers the seats at work in it. Decide whether it steers only
+   the seat that started the command.
 3. **Read access on just-bash.** Every agent reads every home. Decide
    whether the guidance says so, or the table refuses a read by another
    agent.
