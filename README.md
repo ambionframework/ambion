@@ -39,7 +39,8 @@ cites or changes. A room is a shared journal with rules for taking part.
 
 **A workspace has one bash backend and can have one SQL backend.** The
 `read`, `write`, `edit`, and `bash` tools run on the bash backend: in memory,
-on a directory, or, in a [design](docs/workstation.md) not yet built, over SSH.
+on a directory, or on a remote server over SSH with
+[`@ambionframework/workstation`](docs/workstation.md).
 The `sql` tool exists only when the workspace has a SQL backend. SQLite is the
 default. See [Workspace](docs/workspace.md).
 
