@@ -3,11 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
-import { directoryBackend, memoryBackend, openWorkspace } from '../src/index.ts';
+import { openWorkspace } from '../src/index.ts';
+import { directoryBackend, memoryBackend } from '../src/just-bash.ts';
 import { backends } from './support/backends.ts';
 
 const ctx = BACKGROUND_CONTEXT;
-const agent = { name: 'ada', identity: 'ada identity' };
+const agent = { name: 'ada' };
 
 /** Run one command and return its combined output and exit code. */
 async function sh(env: ExecutionEnv, command: string): Promise<{ output: string; code: number }> {

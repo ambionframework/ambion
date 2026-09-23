@@ -79,7 +79,7 @@ const GUIDANCE =
 	'Use `record` to append one row to a table that accepts records. `query` cannot change data. ' +
 	'The room stamps your name, the activation, and the exchange into the provenance columns of a recorded row.';
 
-/** Open one SQL resource. The two handles stay open until `dispose` or `destroy`. */
+/** Open one SQL resource. The two handles stay open until `dispose`. */
 export function openSqlResource(options: SqlResourceOptions): SqlResource {
 	const maxRows = options.maxRows ?? PREVIEW_ROWS;
 	const handles = openHandles(options);
@@ -96,7 +96,7 @@ export function openSqlResource(options: SqlResourceOptions): SqlResource {
 		name: owner.name,
 		use: owner.use,
 		tools: () => bundle(owner, maxRows),
-		...closing(owner, close),
+		dispose: closing(owner, close),
 	});
 }
 
@@ -123,26 +123,14 @@ function openHandles(options: SqlResourceOptions): Handles {
 	}
 }
 
-/** Owner methods that close the handles once the owner finishes. */
-function closing(
-	owner: WorkspaceResource<SqlResourceEnv>,
-	close: () => void,
-): Pick<SqlResource, 'dispose' | 'destroy'> {
+/** A `dispose` that closes the handles once the owner finishes. */
+function closing(owner: WorkspaceResource<SqlResourceEnv>, close: () => void): () => Promise<void> {
 	let closed = false;
-	const once = (): void => {
+	return async () => {
+		await owner.dispose();
 		if (closed) return;
 		closed = true;
 		close();
-	};
-	return {
-		dispose: async () => {
-			await owner.dispose();
-			once();
-		},
-		destroy: async () => {
-			await owner.destroy();
-			once();
-		},
 	};
 }
 
@@ -158,7 +146,6 @@ function sqlBackend(
 	};
 	return {
 		connect: async () => env,
-		destroy: async () => undefined,
 		dispose: async () => undefined,
 	};
 }

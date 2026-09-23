@@ -10,7 +10,8 @@ SQL binding, and the rules for references and provenance.
 ## Open one resource
 
 ```ts
-import { openWorkspace, memoryBackend } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/workspace/just-bash';
 
 const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
 ```
@@ -35,14 +36,43 @@ await drive.use(
 ```
 
 The resource checks revocation before it connects. A queued operation that
-starts after destruction is refused.
+starts after disposal is refused.
+
+## The layout and the host identity
+
+**A `WorkspaceBackend` names a `layout`: where it keeps the audit log, the
+shared database, and the room mirrors.** `WorkspaceLayout` holds three
+paths:
+
+| Field      | Names the default for                                    |
+| ---------- | -------------------------------------------------------- |
+| `audit`    | `openWorkspace`'s `audit` option, when it sets no `path` |
+| `database` | A `sql` call, when it sets no `database`                 |
+| `rooms`    | `mirror()`, the root every room's record writes under    |
+
+A caller's own path always wins: `audit.path` on `openWorkspace`, and
+`database` on a `sql` call, each override the layout's default for that one
+call. `memoryBackend` and `directoryBackend` name the same layout:
+`/workspace/audit.jsonl`, `/workspace/shared.db`, and `/rooms`. A new
+backend states its own layout; nothing in the neutral layer fixes a path of
+its own.
+
+**`openWorkspace` builds one host agent, `<name>-host`, and `mirror()`
+writes as it.** `Workspace.host` exposes this identity. A backend with real
+accounts gives it credentials, the same as any other agent it connects.
+
+```ts
+const drive = openWorkspace({ name: 'town', backend: memoryBackend() });
+console.log(drive.host); // { name: 'town-host' }
+```
 
 ## Give the resource to an agent
 
-`workspace.tools()` returns an ordinary Ambion `ToolBundle`. A backend supplies
-its tools and optional guidance. The bundle binds each backend tool through
-the resource owner and keeps one stable identity. Pass the bundle in an
-agent's `bundles` field.
+`workspace.tools()` returns an ordinary Ambion `ToolBundle`. The neutral layer
+binds five default tools first: `read`, `write`, `edit`, `bash`, and `sql`.
+A backend then adds its own tools, and its own guidance about its own shell,
+if it has any. The bundle binds every tool through the resource owner and
+keeps one stable identity. Pass the bundle in an agent's `bundles` field.
 
 ```ts
 import { defineAgent, defineTool } from '@ambionframework/ambion';
@@ -105,15 +135,11 @@ threshold: the active file is renamed aside under a timestamped name, and a
 fresh file starts at the same path. A record is never split by a rotation.
 
 ```ts
-import {
-  BACKGROUND_CONTEXT,
-  directoryBackend,
-  openLog,
-  openWorkspace,
-} from '@ambionframework/workspace';
+import { BACKGROUND_CONTEXT, openLog, openWorkspace } from '@ambionframework/workspace';
+import { directoryBackend } from '@ambionframework/workspace/just-bash';
 
 const drive = openWorkspace({ name: 'town', backend: directoryBackend('./data') });
-const host = { name: 'host', identity: 'Writes the room record.' };
+const host = { name: 'host' };
 const journal = openLog({ path: '/var/log/room/journal.jsonl' });
 
 await drive.use(host, (env) =>
@@ -165,12 +191,12 @@ const drive = openWorkspace({
 });
 ```
 
-**The log is an ordinary file an agent reads.** The default path is
-`/workspace/audit.jsonl`; set `path` to change it, and `maxBytes` to change
-the 5 MiB rotation threshold. An agent reads the log with `read` or
-`bash cat`, the same as any file a peer wrote, and sees every call any
-agent in any room made, including its own past calls. `jq` filters one
-entry out of many, by `room`, `tool`, `agent`, or `activation`.
+**The log is an ordinary file an agent reads.** The default path is the
+backend's `layout.audit`. Set `path` to open it somewhere else, and
+`maxBytes` to change the 5 MiB rotation threshold. An agent reads the log
+with `read` or `bash cat`, the same as any file a peer wrote, and sees every
+call any agent in any room made, including its own past calls. `jq` filters
+one entry out of many, by `room`, `tool`, `agent`, or `activation`.
 
 **Tool guidance tells every agent the log exists.** `openWorkspace` appends
 a note naming the path and what each line holds to the bundle's guidance, so
@@ -206,52 +232,17 @@ one agent's home and another's (see [Backends and limits](#backends-and-limits))
 and the log is no exception: any agent's `bash` or `write` call can alter or
 remove it, the same as any other file on the workspace.
 
-## Record what changed
-
-**`openWorkspace` can keep a change log, and `workspace.changes` answers
-what changed during one exchange.** Set `changes`. Each successful `write`
-or `edit` call through `workspace.tools()` appends one line to
-`/workspace/changes.jsonl`: the paths, the agent, the tool, the activation,
-and the exchange. `path` and `maxBytes` work as they do for `audit`.
-
-```ts
-const drive = openWorkspace({ name: 'team-site', backend: memoryBackend(), changes: {} });
-const changes = await drive.changes({ exchange: { owner: 'andrei', from: 4 } });
-```
-
-**`changes` returns the entries of one exchange, oldest first.** An entry
-matches when its `exchange.owner` and `exchange.from` equal the query. A call
-made outside an exchange never matches. `changes` returns `[]` when the
-workspace has no `changes` option. The read includes rotated files.
-
-**The backend names the changed paths.** A `WorkspaceBackend` may supply
-`changedPaths`. The just-bash backends name the resolved path of a `write` or
-an `edit` call. The neutral resource contract has no part in it.
-
-**Only `write` and `edit` leave a change.** A `bash` call changes files
-through a shell the workspace cannot inspect, including `js-exec`,
-`python3`, redirects, `mv`, and `rm`. A `sql` call changes rows. None of
-them appears in the change log in 0.1.0.
-
-**A failed call leaves no change.** The audit log records the failure. The
-change log records the call only after it succeeds. A cut activation still
-leaves the change of a call that finished, because the record runs over its
-own unconditional context.
-
-**The change log is best-effort.** It is not a journal transaction. A crash
-between the filesystem change and the log append drops the entry, so the log
-can lag the files. A write failure calls `onError` and does not fail the tool
-call. The room's journal stays the record.
-
 ## Mirror a room's messages
 
 **`workspace.mirror(room)` mirrors one room's message record to
-`/rooms/<room name>/messages.jsonl`, built on `openLog`.** Call it once the
-room has started; it needs no other setup.
+`<layout.rooms>/<room name>/messages.jsonl`, built on `openLog`.** The
+just-bash backends name `layout.rooms` `/rooms`. Call it once the room has
+started; it needs no other setup.
 
 ```ts
-import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
 import { startRoom } from '@ambionframework/ambion';
+import { openWorkspace } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/workspace/just-bash';
 
 const site = openWorkspace({ name: 'town', backend: memoryBackend() });
 const session = await startRoom({ name: 'lobby', agents: [/* ... */] });
@@ -262,10 +253,11 @@ await session.stop();
 await mirror.stop();
 ```
 
-`mirror()` writes as an identity the workspace owns; a caller names only the
-room. Stop the room before the mirror. The room's own shutdown commits a
-`left` message for every present visitor; a mirror already stopped never
-sees it.
+`mirror()` writes as `workspace.host`, the `<name>-host` agent `openWorkspace`
+built (see [The layout and the host identity](#the-layout-and-the-host-identity)),
+so a caller names only the room. Stop the room before the mirror. The room's
+own shutdown commits a `left` message for every present visitor; a mirror
+already stopped never sees it.
 
 **`await site.mirror(room)` returns once recovery is caught up, not once
 every message is durably on disk.** Its promise resolves after the
@@ -314,14 +306,15 @@ subscription and the backfill is written once.
 
 **A room's name is not validated at the kernel today.** This is the first
 place a room name turns into a filesystem path. A name holding `..` or an
-extra `/` would resolve outside `/rooms`; `mirror()` refuses that name and
-writes nothing.
+extra `/` would resolve outside `layout.rooms`; `mirror()` refuses that name
+and writes nothing.
 
-**Every workspace's guidance names the `/rooms` convention, whether or not
-anything mirrors there.** The note is generic — it names no room — so it
-costs nothing to state unconditionally, the same way an agent already
+**Every workspace's guidance names the room-mirror convention, whether or
+not anything mirrors there.** The note is generic — it names no room — so
+it costs nothing to state unconditionally, the same way an agent already
 learns its `/home/<name>` convention. An agent finds the field guide above
-by reading a room's own file; the guidance only points at the path.
+by reading a room's own file; the guidance only points at the path, and
+names the backend's actual `layout.rooms`.
 
 **Directory-per-room organizes the data; it does not wall it off.** Every
 room sharing one workspace shares its filesystem boundary (see
@@ -331,18 +324,19 @@ and `jq` filter it uses on its own.
 
 ## Query the shared database
 
-**The `sql` tool runs SQLite statements on one shared database.** The default
-backends open the database at `/workspace/shared.db`. Every agent queries this
+**The `sql` tool runs SQLite statements on one shared database.** A call
+that names no `database` opens the backend's `layout.database`; the
+just-bash backends name it `/workspace/shared.db`. Every agent queries this
 one file, so a table or a view one agent creates is data another agent reads
 at once. The tool takes these parameters:
 
-| Parameter  | Meaning                                                          |
-| ---------- | ---------------------------------------------------------------- |
-| `sql`      | One or more SQLite statements. The last query gives the preview. |
-| `database` | The file opened as `main`. The default is the shared database.   |
-| `export`   | A path for the full result as CSV. Omit it to write no file.     |
-| `maxRows`  | How many rows the preview shows. The default is 50.              |
-| `timeout`  | Seconds before the query stops.                                  |
+| Parameter  | Meaning                                                                    |
+| ---------- | -------------------------------------------------------------------------- |
+| `sql`      | One or more SQLite statements. The last query gives the preview.           |
+| `database` | The file opened as `main`. The default is the backend's `layout.database`. |
+| `export`   | A path for the full result as CSV. Omit it to write no file.               |
+| `maxRows`  | How many rows the preview shows. The default is 50.                        |
+| `timeout`  | Seconds before the query stops.                                            |
 
 **The preview stays in context and writes nothing to disk.** The tool shows
 the last query's result as a Markdown table, capped at `maxRows`. It keeps the
@@ -366,12 +360,15 @@ private file; the tool opens that file as `main`.
 **Export only for a reader outside SQL.** Set `export` when a script or another
 tool needs the rows. The tool writes the full result as CSV to that path and
 shows the file's head. A NULL value reads as `\N`, so a NULL stays apart from
-an empty string.
+an empty string. The tool holds the whole export in memory while it scans the
+file for the row count and the preview.
 
 ### just-bash as one implementation
 
 The `sql` contract holds over any backend that supplies a `sqlite3` command.
-just-bash is the default implementation, and it has these specific behaviors:
+The export path holds the whole export in memory while it scans, on every
+backend. just-bash is the default implementation, and it has these specific
+behaviors:
 
 - **It loads the main database into a WebAssembly engine and writes the file
   back after each call.** The owner's serialization keeps this write-back safe:
@@ -391,33 +388,77 @@ just-bash is the default implementation, and it has these specific behaviors:
 The contract lives in [Resources](resources.md).
 
 The memory and directory backends are the Pi binding. They export from the
-root entry, with `WorkspaceEnv`, the Pi `ExecutionEnv` that has a zero-argument
-`cleanup()`. `WorkspaceBackend` extends `ResourceBackend<WorkspaceEnv>` and
-adds Pi harness tools and optional guidance. `openWorkspace` creates the
-resource owner and binds the backend tools to its `use` method. `Workspace`
-adds `tools()` to the resource surface. Direct operations and tool calls share
-one queue and one lifecycle.
+`./just-bash` entry. The root entry names `WorkspaceEnv`, the Pi
+`ExecutionEnv` that has a zero-argument `cleanup()`. `WorkspaceBackend`
+extends `ResourceBackend<WorkspaceEnv>` and adds optional Pi harness tools
+beyond the five defaults, optional guidance about the backend's own shell,
+and a required `layout` (see
+[The layout and the host identity](#the-layout-and-the-host-identity)).
+`openWorkspace` creates the resource owner, builds the five default tools
+over `layout.database`, and binds them, and any tool the backend adds, to
+its `use` method. `Workspace` adds `tools()`, `host`, and `mirror()` to the
+resource surface. Direct operations and tool calls share one queue and one
+lifecycle.
 
-## Destroy a resource
+**A new backend implements `connect()` and an `ExecutionEnv`, over the
+shared helpers below, and names its own `layout`.** It adds only the tools
+and the guidance beyond the five defaults, passes
+`@ambionframework/workspace/conformance`, and loads no just-bash.
+
+**The root entry also exports the environment helpers a new `ExecutionEnv`
+backend needs.** `resolvePath` holds the `~` and relative path rule.
+`Deadline` tells an abort apart from a timeout. `boundedView` and `spill`
+build the bounded output view and its spill file, `spill` over a minimal
+writer of one `mkdir` plus one `writeFile`. `TMP`, `randomName`,
+`tempDirPath`, `tempFilePath`, and `spillPath` name the temporary paths
+under `/tmp`. These helpers import no just-bash, so a backend over any
+filesystem builds an `ExecutionEnv` on them.
+
+## The conformance suite
+
+`@ambionframework/workspace/conformance` holds the `ExecutionEnv` rules the
+built-in tools need: a rename that replaces an existing target, a recursive
+`createDir`, a forced and a recursive `remove`, the file error codes, `~`
+expansion, an abort apart from a timeout, the bounded output view with its
+spill file, and a distinct name under `/tmp` for each temporary file or
+directory.
+
+A case is a `ConformanceCase`: a name and a `run` that throws on failure.
+The entry loads no test framework and no just-bash, so any backend runs it.
+`workspaceConformance(harness)` takes a named backend with an `open()` that
+returns a fresh `WorkspaceBackend` and a `dispose()`, and returns the cases:
 
 ```ts
-await drive.destroy();
+import { workspaceConformance } from '@ambionframework/workspace/conformance';
+import { describe, it } from 'vitest';
+
+describe.each(backends)('$name', (harness) => {
+  for (const c of workspaceConformance(harness)) it(c.name, c.run);
+});
 ```
 
-Destruction immediately revokes new and queued work. It waits for an active
-operation and its cleanup, then asks the backend to delete its data once.
-Concurrent calls join that deletion. A successful deletion is terminal. A
-failed deletion leaves the resource active and retryable, though the backend
-can have deleted some data before it reports failure.
+The memory and directory backends run the suite first
+(`packages/workspace/test/conformance.test.ts`). A new backend runs it
+before it takes on tool-specific tests of its own.
 
-`dispose()` releases local resources and terminally closes the handle. A
-directory resource keeps its files when it is disposed. `destroy()` during
-disposal, or after disposal, is refused. `dispose()` during destruction joins
-the destruction. A failed release or deletion leaves its operation retryable.
+## Dispose of a resource
 
-A `use` callback must not await another `use`, `dispose`, or `destroy` call
-on the same owner. The owner serializes those operations, so such nesting
-would wait for the callback that is already running.
+```ts
+await drive.dispose();
+```
+
+Disposal immediately revokes new and queued work. It waits for an active
+operation and its cleanup, then asks the backend to release its local
+handles once. Concurrent calls join that release. A successful disposal is
+terminal. A failed disposal leaves the resource active and retryable.
+
+Disposal keeps the persisted workspace. A directory resource keeps its
+files, and an in-memory resource releases its cached filesystem. A host
+deletes the data that it owns.
+
+A `use` callback must not await another `use` or `dispose` call on the same
+owner. The owner serializes those operations, so such nesting would wait
+for the callback that is already running.
 
 ## Backends and limits
 
@@ -427,8 +468,8 @@ releases its cached filesystem, so a disposed resource does not recreate a
 seeded filesystem.
 
 `directoryBackend(root)` operates on a real directory. It creates the root
-when a backend operation needs it. `destroy()` deletes its contents and
-keeps the root directory.
+when a backend operation needs it. Disposal releases the filesystem handle
+and keeps the root directory and its files.
 
 Both backends use just-bash. They provide a virtual Unix filesystem and shell
 for tools, with JavaScript and Python execution available. Network commands
@@ -437,8 +478,15 @@ each other's homes. The default workspace does not provide operating-system isol
 agents or distributed ownership of a shared directory. Hosts own credentials
 and authorization for external services.
 
-Backends perform raw filesystem I/O below the owner. They do not maintain a
-second destruction mark or a second operation queue.
+Backends perform raw filesystem I/O below the owner. They do not keep a
+second operation queue.
+
+**A new backend follows one recipe.** It implements `connect()` and an
+`ExecutionEnv` over the shared helpers (see [The resource
+contract](#the-resource-contract)), names its own `layout`, and adds only
+the tools and the shell guidance beyond the five defaults every workspace
+already has. It passes `@ambionframework/workspace/conformance` and loads
+no just-bash.
 
 ### The null device
 

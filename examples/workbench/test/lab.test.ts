@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
-import { openSqlResource } from '@ambionframework/workspace';
+import { openSqlResource } from '@ambionframework/workspace/sql';
 import { afterEach, describe, expect, it } from 'vitest';
 import { labSchema, labWritable } from '../src/scenarios.ts';
 import { openWorkbench } from '../src/workbench.ts';
@@ -71,7 +71,7 @@ describe('the lab SQL resource', () => {
 			schema: labSchema,
 			writable: labWritable,
 		});
-		const rows = await lab.use({ name: 'test', identity: 'test' }, (env) =>
+		const rows = await lab.use({ name: 'test' }, (env) =>
 			env.query('SELECT name FROM projects ORDER BY name'),
 		);
 		expect(rows.map((row) => row.name)).toEqual(['bringup', 'power', 'sensing']);

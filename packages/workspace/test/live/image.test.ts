@@ -19,7 +19,8 @@ import {
 	spent,
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
-import { BACKGROUND_CONTEXT, memoryBackend, openWorkspace } from '../../src/index.ts';
+import { BACKGROUND_CONTEXT, openWorkspace } from '../../src/index.ts';
+import { memoryBackend } from '../../src/just-bash.ts';
 
 type Rgb = readonly [number, number, number];
 
@@ -83,7 +84,7 @@ live('a workspace picture', () => {
 	it('a seat reads an image file and describes what it actually shows', async () => {
 		const backend = memoryBackend();
 		const store = openWorkspace({ name: roomName('live-image'), backend });
-		await store.use({ name: 'seed', identity: 'Seeds the gallery.' }, async (env) => {
+		await store.use({ name: 'seed' }, async (env) => {
 			await env.writeFile(
 				'/home/curator/gallery/swatch.png',
 				twoBandPng(64, MAGENTA, CYAN),
@@ -120,6 +121,6 @@ live('a workspace picture', () => {
 		await invariants(session, events);
 		report('a workspace picture', await spent(session));
 		await session.stop();
-		await store.destroy();
+		await store.dispose();
 	});
 });

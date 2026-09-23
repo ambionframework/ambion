@@ -1,5 +1,5 @@
 import { defineTool, type ToolBundle, type ToolContext } from '@ambionframework/ambion';
-import type { SqlProvenance, SqlResource, SqlResourceEnv } from '@ambionframework/workspace';
+import type { SqlProvenance, SqlResource, SqlResourceEnv } from '@ambionframework/workspace/sql';
 import { Type } from 'typebox';
 
 /** One simulated instrument. An operation above `limit` needs the approval of a person. */

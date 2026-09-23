@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -12,7 +12,7 @@ import {
 } from '@ambionframework/ambion';
 import { type PiOptions, pi, piExecution } from '@ambionframework/pi';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
-import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import type { Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Bash, InMemoryFs } from 'just-bash';
@@ -27,17 +27,23 @@ import {
 	scripted,
 	speak,
 } from '../../ambion/test/support/scripted.ts';
+import { DEFAULT_AUDIT_LOG } from '../src/audit.ts';
+import type { WorkspaceLayout } from '../src/backend.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
-import type { WorkspaceBackend } from '../src/index.ts';
-import {
-	directoryBackend,
-	memoryBackend,
-	openWorkspace,
-	ROOM_MIRROR_GUIDANCE,
-} from '../src/index.ts';
-import { MEMORY_LIMIT_BYTES } from '../src/just-bash.ts';
+import { defaultToolGuidance } from '../src/default-tools.ts';
+import { openWorkspace, SHARED_DATABASE, type WorkspaceBackend } from '../src/index.ts';
+import { directoryBackend, MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
+import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
 
-const workspaceAgent = (name: string) => ({ name, identity: `${name} identity` });
+const workspaceAgent = (name: string) => ({ name });
+
+/** The just-bash backends' own layout: `/workspace/audit.jsonl`, `/workspace/shared.db`, `/rooms`. */
+const layout: WorkspaceLayout = {
+	audit: DEFAULT_AUDIT_LOG,
+	database: SHARED_DATABASE,
+	rooms: '/rooms',
+};
+const ROOM_MIRROR_GUIDANCE = roomMirrorGuidance(layout.rooms);
 
 /** A context for a direct filesystem or shell call that has no other one. */
 const ctx = BACKGROUND_CONTEXT;
@@ -50,10 +56,9 @@ const ctx = BACKGROUND_CONTEXT;
 async function sh(
 	env: ExecutionEnv,
 	command: string,
-	options: { cwd?: string; timeout?: number; signal?: AbortSignal } = {},
+	options: { cwd?: string; timeout?: number } = {},
 ): Promise<{ ok: boolean; exitCode?: number; code?: string; output: string }> {
 	let output = '';
-	const context = options.signal ? withAbortSignal(options.signal, BACKGROUND_CONTEXT) : ctx;
 	const result = await env.exec(
 		command,
 		{
@@ -64,7 +69,7 @@ async function sh(
 				if (update.kind === 'replace') output = update.output.text;
 			},
 		},
-		context,
+		ctx,
 	);
 	return result.ok
 		? { ok: true, exitCode: result.value.exitCode, output }
@@ -144,7 +149,7 @@ describe('the built-in tools', () => {
 			'written',
 		);
 		await session.stop();
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('accepts Pi alternate edit arguments through the ordinary workspace bundle', async () => {
@@ -162,7 +167,7 @@ describe('the built-in tools', () => {
 			},
 		});
 		expect(final).toBe('ALPHA\n');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('serializes two edits in one model batch so both updates land', async () => {
@@ -192,11 +197,11 @@ describe('the built-in tools', () => {
 			},
 		});
 		expect(final).toBe('ALPHA\nBETA\n');
-		await site.destroy();
+		await site.dispose();
 	});
 
-	it('fail on the next call once the workspace is destroyed, and the activation goes on', async () => {
-		const site = openWorkspace({ name: name('destroyed'), backend: memoryBackend() });
+	it('fail on the next call once the workspace is disposed, and the activation goes on', async () => {
+		const site = openWorkspace({ name: name('disposed'), backend: memoryBackend() });
 		const tools = site.tools();
 		let after: { tool: string; text: string; failed: boolean }[] = [];
 		let custom: string | undefined;
@@ -210,7 +215,7 @@ describe('the built-in tools', () => {
 			worker: async (context, _who, call) => {
 				if (call === 1) return callTool('write', { path: 'a.txt', content: 'x' });
 				if (call === 2) {
-					await site.destroy();
+					await site.dispose();
 					return callTool('read', { path: 'a.txt' });
 				}
 				if (call === 3) return callTool('probe', {});
@@ -228,18 +233,26 @@ describe('the built-in tools', () => {
 });
 
 describe('the workspace resource owner', () => {
-	it('keeps an empty backend tool set empty', async () => {
+	it('gives a backend with no tools of its own the five defaults', async () => {
 		const inner = memoryBackend();
 		const workspace = openWorkspace({
 			name: name('empty-tools'),
-			backend: { tools: [], connect: (agent) => inner.connect(agent), destroy: async () => {} },
+			backend: { tools: [], connect: (agent) => inner.connect(agent), layout },
 		});
 		expect(workspace.tools()).toBe(workspace.tools());
-		expect(workspace.tools().tools).toEqual([]);
+		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual([
+			'read',
+			'write',
+			'edit',
+			'bash',
+			'sql',
+		]);
 		// The /rooms guidance is unconditional: it names no room, so a
 		// workspace states it even with no other guidance to add.
-		expect(workspace.tools().guidance).toBe(ROOM_MIRROR_GUIDANCE);
-		await workspace.destroy();
+		expect(workspace.tools().guidance).toBe(
+			`${defaultToolGuidance(layout.database)}\n\n${ROOM_MIRROR_GUIDANCE}`,
+		);
+		await workspace.dispose();
 	});
 
 	it('preserves backend-owned tools and guidance through the ordinary bundle', async () => {
@@ -265,24 +278,33 @@ describe('the workspace resource owner', () => {
 				tools: [customTool],
 				guidance: 'Custom backend guidance.',
 				connect: (agent) => inner.connect(agent),
-				destroy: async () => {},
+				layout,
 			},
 		});
 		const bundle = workspace.tools();
-		expect(bundle.guidance).toBe(`Custom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`);
-		expect(bundle.tools.map((tool) => tool.name)).toEqual(['inspect']);
-		const tool = bundle.tools[0];
+		expect(bundle.guidance).toBe(
+			`${defaultToolGuidance(layout.database)}\n\nCustom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`,
+		);
+		expect(bundle.tools.map((tool) => tool.name)).toEqual([
+			'read',
+			'write',
+			'edit',
+			'bash',
+			'sql',
+			'inspect',
+		]);
+		const tool = bundle.tools.find((t) => t.name === 'inspect');
 		if (tool === undefined) throw new Error('The backend tool is missing.');
 		const result = await tool.invoke(
 			{},
 			{
-				agent: workspaceAgent('alpha'),
+				agent: { name: 'alpha', identity: 'alpha' },
 				callId: 'custom-call',
 			},
 		);
 		if (typeof result === 'string') throw new Error('The backend must return a structured result.');
 		expect(result.content[0]).toMatchObject({ type: 'text', text: '/home/alpha' });
-		await workspace.destroy();
+		await workspace.dispose();
 	});
 
 	it('shares queue and revocation between direct use and bound tools', async () => {
@@ -306,7 +328,7 @@ describe('the workspace resource owner', () => {
 					},
 				],
 				connect: (caller, signal) => inner.connect(caller, signal),
-				destroy: async () => {},
+				layout,
 			},
 		});
 		const active = workspace.use(workspaceAgent('alpha'), async () => {
@@ -314,14 +336,17 @@ describe('the workspace resource owner', () => {
 			await release.promise;
 		});
 		await started.promise;
-		const bound = workspace.tools().tools[0];
+		const bound = workspace.tools().tools.find((tool) => tool.name === 'inspect');
 		if (bound === undefined) throw new Error('The bound tool is missing.');
-		const queued = bound.invoke({}, { agent: workspaceAgent('beta'), callId: 'queued' });
-		const destroying = workspace.destroy();
+		const queued = bound.invoke(
+			{},
+			{ agent: { name: 'beta', identity: 'beta' }, callId: 'queued' },
+		);
+		const disposing = workspace.dispose();
 		expect(toolCalls).toBe(0);
 		release.resolve();
 		await active;
-		await destroying;
+		await disposing;
 		await expect(queued).rejects.toThrow(/no longer available/i);
 		expect(toolCalls).toBe(0);
 	});
@@ -344,7 +369,7 @@ describe('the workspace resource owner', () => {
 		await Promise.all([append('alpha', 'alpha'), append('beta', 'beta')]);
 		const files = await backend.readFiles();
 		expect(files).toContainEqual({ path: '/shared.txt', text: 'base\nalpha\nbeta\n' });
-		await workspace.destroy();
+		await workspace.dispose();
 	});
 
 	it('revokes pending and queued calls while an active call drains', async () => {
@@ -354,24 +379,24 @@ describe('the workspace resource owner', () => {
 		const inner = memoryBackend();
 		const backend = {
 			tools: [],
-			connect: async (agent: { name: string; identity: string }) => {
+			connect: async (agent: { name: string }) => {
 				started.resolve();
 				await release.promise;
 				const env = await inner.connect(agent);
 				env.cleanup = async () => void cleaned++;
 				return env;
 			},
-			destroy: async () => {},
+			layout,
 		};
 		const workspace = openWorkspace({ name: name('revoke'), backend });
 		const active = workspace.use(workspaceAgent('alpha'), () => 'done');
 		await started.promise;
 		const queued = workspace.use(workspaceAgent('beta'), () => 'queued');
-		const destroying = workspace.destroy();
+		const disposing = workspace.dispose();
 		release.resolve();
 		await expect(active).rejects.toThrow(/no longer available/i);
 		await expect(queued).rejects.toThrow(/no longer available/i);
-		await destroying;
+		await disposing;
 		expect(cleaned).toBe(1);
 	});
 
@@ -389,7 +414,7 @@ describe('the workspace resource owner', () => {
 					if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
 					return inner.connect(agent, signal);
 				},
-				destroy: async () => {},
+				layout,
 			},
 		});
 		const active = workspace.use(workspaceAgent('alpha'), () => 'active');
@@ -400,12 +425,12 @@ describe('the workspace resource owner', () => {
 		await expect(active).resolves.toBe('active');
 		await expect(queued).rejects.toThrow(/abort/i);
 		expect(connects).toBe(1);
-		await workspace.destroy();
+		await workspace.dispose();
 	});
 
-	it('cleans an environment after active work drains before deletion', async () => {
+	it('cleans an environment after active work drains before dispose', async () => {
 		let cleaned = 0;
-		let destroyed = 0;
+		let disposed = 0;
 		const inner = memoryBackend();
 		const workspace = openWorkspace({
 			name: name('cleanup'),
@@ -416,90 +441,17 @@ describe('the workspace resource owner', () => {
 					env.cleanup = async () => void cleaned++;
 					return env;
 				},
-				destroy: async () => void destroyed++,
+				dispose: async () => void disposed++,
+				layout,
 			},
 		});
 		await workspace.use(workspaceAgent('alpha'), async (env) => {
 			const result = await env.exec('echo ready', undefined, ctx);
 			if (!result.ok) throw new Error('command failed');
 		});
-		await workspace.destroy();
+		await workspace.dispose();
 		expect(cleaned).toBe(1);
-		expect(destroyed).toBe(1);
-	});
-
-	it('drains active work, joins concurrent destroy calls, and destroys once', async () => {
-		const release = Promise.withResolvers<void>();
-		const started = Promise.withResolvers<void>();
-		let destroys = 0;
-		const inner = memoryBackend();
-		const workspace = openWorkspace({
-			name: name('destroy-drain'),
-			backend: {
-				tools: [],
-				connect: async (agent) => inner.connect(agent),
-				destroy: async () => {
-					destroys += 1;
-				},
-			},
-		});
-		const active = workspace.use(workspaceAgent('alpha'), async () => {
-			started.resolve();
-			await release.promise;
-		});
-		await started.promise;
-		const first = workspace.destroy();
-		const second = workspace.destroy();
-		await Promise.resolve();
-		expect(destroys).toBe(0);
-		release.resolve();
-		await Promise.all([active, first, second]);
-		expect(destroys).toBe(1);
-		await expect(workspace.use(workspaceAgent('alpha'), () => 'late')).rejects.toThrow(
-			/no longer available/i,
-		);
-	});
-
-	it('joins dispose when destroy has already started', async () => {
-		let destroys = 0;
-		const inner = memoryBackend();
-		const workspace = openWorkspace({
-			name: name('dispose-destroy-race'),
-			backend: {
-				tools: [],
-				connect: (agent) => inner.connect(agent),
-				destroy: async () => void destroys++,
-			},
-		});
-		const destroying = workspace.destroy();
-		await expect(workspace.dispose()).resolves.toBeUndefined();
-		await destroying;
-		expect(destroys).toBe(1);
-	});
-
-	it('keeps a failed deletion retryable, then becomes terminal without resurrection', async () => {
-		let destroys = 0;
-		const inner = memoryBackend();
-		const workspace = openWorkspace({
-			name: name('retry-destroy'),
-			backend: {
-				tools: [],
-				connect: (agent) => inner.connect(agent),
-				destroy: async () => {
-					destroys += 1;
-					if (destroys === 1) throw new Error('disk busy');
-				},
-			},
-		});
-		await expect(workspace.destroy()).rejects.toThrow('disk busy');
-		await expect(workspace.use(workspaceAgent('alpha'), () => 'retry works')).resolves.toBe(
-			'retry works',
-		);
-		await workspace.destroy();
-		await expect(workspace.use(workspaceAgent('alpha'), () => 'resurrected')).rejects.toThrow(
-			/no longer available/i,
-		);
-		expect(destroys).toBe(2);
+		expect(disposed).toBe(1);
 	});
 });
 
@@ -549,7 +501,83 @@ describe('ToolContext', () => {
 		);
 		expect(seen.outside).toBe(`${site.name} at /home/outside, signal`);
 		expect(connects.sort()).toEqual(['inside', 'inside', 'outside'].sort());
-		await site.destroy();
+		await site.dispose();
+	});
+});
+
+// -- a backend's own layout ---------------------------------------------------
+
+describe("a backend's layout", () => {
+	it('sends the audit log, the sql default database, and the mirror to the named paths, and states them in guidance', async () => {
+		const own: WorkspaceLayout = {
+			audit: '/audit/calls.jsonl',
+			database: '/data/main.db',
+			rooms: '/mirror',
+		};
+		const inner = memoryBackend();
+		const backend: WorkspaceBackend = {
+			connect: (caller, signal) => inner.connect(caller, signal),
+			layout: own,
+		};
+		const site = openWorkspace({ name: name('own-layout'), backend, audit: {} });
+
+		// The guidance names both the audit log and the room mirror root.
+		const guidance = site.tools().guidance ?? '';
+		expect(guidance).toContain(own.audit);
+		expect(guidance).toContain(own.rooms);
+
+		// A call that names no database opens the one the layout names.
+		const sqlTool = site.tools().tools.find((tool) => tool.name === 'sql');
+		if (sqlTool === undefined) throw new Error('The sql tool is missing.');
+		const sqlResult = await sqlTool.invoke(
+			{ sql: 'CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1);' },
+			{ agent: { name: 'alpha', identity: 'alpha' }, callId: 'sql-call', room: 'lobby' },
+		);
+		if (typeof sqlResult === 'string')
+			throw new Error('The sql tool must return a structured result.');
+		expect((sqlResult.details as { database: string }).database).toBe(own.database);
+		expect(await site.use(workspaceAgent('alpha'), (env) => env.exists(own.database, ctx))).toEqual(
+			{
+				ok: true,
+				value: true,
+			},
+		);
+
+		// The audit log lands at the named path.
+		expect(await site.use(workspaceAgent('alpha'), (env) => env.exists(own.audit, ctx))).toEqual({
+			ok: true,
+			value: true,
+		});
+
+		// mirror() writes under the named rooms root.
+		const roomId = name('own-layout-room');
+		const worker = defineAgent({
+			name: 'worker',
+			identity: 'Says one thing.',
+			executor: pi({ instructions: 'speak', model: 'scripted/worker' }),
+		});
+		const session = await startRoom({
+			name: roomId,
+			agents: [worker],
+			execution: piExecution({
+				stream: scripted(
+					byAgent({ worker: (_context, _who, call) => (call === 1 ? speak('hi') : quiet()) }),
+				),
+			}),
+		});
+		const mirror = await site.mirror(session);
+		expect(mirror.path).toBe(roomMirrorPath(own.rooms, roomId));
+		const visit = await enter(session);
+		const exchange = await visit.send({ text: 'go' });
+		await exchange.waitForClose();
+		await session.stop();
+		await mirror.stop();
+		expect(await site.use(workspaceAgent('alpha'), (env) => env.exists(mirror.path, ctx))).toEqual({
+			ok: true,
+			value: true,
+		});
+
+		await site.dispose();
 	});
 });
 
@@ -563,28 +591,60 @@ describe('the just-bash adapter', () => {
 		return { env: await backend.connect(agent(agentName)), backend };
 	}
 
-	it('roots the environment at the home, and expands ~ to it', async () => {
-		const { env: alpha } = await env();
-		expect(alpha.cwd).toBe('/home/alpha');
-		expect(await alpha.absolutePath('~', ctx)).toEqual({ ok: true, value: '/home/alpha' });
-		expect(await alpha.absolutePath('~/x', ctx)).toEqual({ ok: true, value: '/home/alpha/x' });
-		expect(await alpha.absolutePath('sub/../y', ctx)).toEqual({ ok: true, value: '/home/alpha/y' });
-		const pwd = await sh(alpha, 'cd; pwd; echo ~');
-		expect(pwd).toMatchObject({ ok: true, output: '/home/alpha\n/home/alpha\n' });
-	});
-
-	it("classifies just-bash's thrown errors into Pi's codes", async () => {
+	it("classifies just-bash's thrown errors into Pi's codes, beyond the conformance suite", async () => {
 		const { env: alpha } = await env();
 		await alpha.writeFile('f.txt', 'x', ctx);
 		const codeOf = (result: { ok: boolean; error?: { code: string } }) =>
 			result.ok ? 'ok' : result.error?.code;
-		expect(codeOf(await alpha.readTextFile('missing', ctx))).toBe('not_found');
+		// The conformance suite proves not_found, is_directory, and not_directory
+		// through readTextFile and listDir. canonicalPath maps the same way, and
+		// Pi's write and edit tools read that mapping to decide whether a path is
+		// a new file (bash-env.ts's toFileError).
 		expect(codeOf(await alpha.canonicalPath('missing', ctx))).toBe('not_found');
-		expect(codeOf(await alpha.readTextFile('.', ctx))).toBe('is_directory');
-		expect(codeOf(await alpha.listDir('f.txt', ctx))).toBe('not_directory');
+		// createDir without recursive, and remove on the env's own root, both
+		// answer invalid: neither case is in the conformance suite.
 		expect(codeOf(await alpha.createDir('f.txt', { recursive: false }, ctx))).toBe('invalid');
 		expect(codeOf(await alpha.remove('.', undefined, ctx))).toBe('invalid');
+	});
+
+	it('answers false for exists on a path that was never created', async () => {
+		const { env: alpha } = await env();
+		// Distinct from the conformance suite's forcedRemove case, which checks
+		// exists only after a remove. A path that never existed answers the
+		// same way, with no remove call in between.
 		expect(await alpha.exists('missing', ctx)).toEqual({ ok: true, value: false });
+	});
+
+	it('resolves a relative path through .. under cwd', async () => {
+		const { env: alpha } = await env();
+		const home = alpha.cwd;
+		// The conformance suite proves ~, ~/x, and one plain relative path. It
+		// does not prove normalization through a .. segment.
+		expect(await alpha.absolutePath('sub/../y', ctx)).toEqual({ ok: true, value: `${home}/y` });
+	});
+
+	it('scopes cwd to one exec call, keeps no cd across calls, and joins stderr into the same output', async () => {
+		const { env: alpha } = await env();
+		const combined = await sh(alpha, 'mkdir -p sub && cd sub && pwd && echo warn >&2');
+		expect(combined).toMatchObject({ ok: true, exitCode: 0, output: '/home/alpha/sub\nwarn\n' });
+		// A cd inside one exec call does not persist to the next: each call is
+		// stateless.
+		expect(await sh(alpha, 'pwd')).toMatchObject({ ok: true, output: '/home/alpha\n' });
+		// A caller's own cwd option scopes just that one command.
+		expect(await sh(alpha, 'pwd', { cwd: 'sub' })).toMatchObject({
+			ok: true,
+			output: '/home/alpha/sub\n',
+		});
+	});
+
+	it('honors a temp file prefix and suffix, and appends across two calls', async () => {
+		const { env: alpha } = await env();
+		const file = await alpha.createTempFile({ prefix: 'bash-', suffix: '.journal' }, ctx);
+		expect(file.ok && file.value).toMatch(/^\/tmp\/bash-[0-9a-f]+\.journal$/);
+		if (!file.ok) return;
+		await alpha.appendFile(file.value, 'a', ctx);
+		await alpha.appendFile(file.value, 'b', ctx);
+		expect(await alpha.readTextFile(file.value, ctx)).toEqual({ ok: true, value: 'ab' });
 	});
 
 	it('lists a directory with each entry sized, and reads lines', async () => {
@@ -604,29 +664,6 @@ describe('the just-bash adapter', () => {
 		expect(await alpha.readTextFile('d/b.txt', ctx)).toEqual({
 			ok: true,
 			value: 'one\ntwo\nthree',
-		});
-	});
-
-	it('hands one bounded view of combined output to onUpdate, and keeps no cd', async () => {
-		const { env: alpha } = await env();
-		const combined = await sh(alpha, 'mkdir -p sub && cd sub && pwd && echo warn >&2');
-		expect(combined).toMatchObject({ ok: true, exitCode: 0, output: '/home/alpha/sub\nwarn\n' });
-		expect(await sh(alpha, 'pwd')).toMatchObject({ ok: true, output: '/home/alpha\n' });
-		expect(await sh(alpha, 'pwd', { cwd: 'sub' })).toMatchObject({
-			ok: true,
-			output: '/home/alpha/sub\n',
-		});
-	});
-
-	it('tells an abort apart from a timeout', async () => {
-		const { env: alpha } = await env();
-		const controller = new AbortController();
-		const aborted = sh(alpha, 'sleep 5', { signal: controller.signal });
-		controller.abort();
-		expect(await aborted).toMatchObject({ ok: false, code: 'aborted' });
-		expect(await sh(alpha, 'sleep 5', { timeout: 0.05 })).toMatchObject({
-			ok: false,
-			code: 'timeout',
 		});
 	});
 
@@ -662,31 +699,6 @@ describe('the just-bash adapter', () => {
 		});
 	});
 
-	it('spills the whole output to a file when the limits cut it', async () => {
-		const { env: alpha } = await env();
-		let viewSpill: string | undefined;
-		const result = await alpha.exec(
-			'printf "%s\\n" a b c d e',
-			{
-				capture: { limits: { maxBytes: 1_000_000, maxLines: 2 }, spill: true },
-				onUpdate: (update) => {
-					if (update.kind === 'replace') viewSpill = update.output.spillPath;
-				},
-			},
-			ctx,
-		);
-		expect(result.ok && result.value.truncation.truncated).toBe(true);
-		const spillPath = result.ok ? result.value.spillPath : undefined;
-		expect(spillPath).toMatch(/^\/tmp\/shell-[0-9a-f]+\.out$/);
-		expect(viewSpill).toBe(spillPath);
-		if (spillPath !== undefined) {
-			expect(await alpha.readTextFile(spillPath, ctx)).toEqual({
-				ok: true,
-				value: 'a\nb\nc\nd\ne\n',
-			});
-		}
-	});
-
 	it('holds 128 MB in memory, and refuses the write that goes past it', async () => {
 		expect(MEMORY_LIMIT_BYTES).toBe(128 * 1024 * 1024);
 		const { env: alpha } = await env();
@@ -698,18 +710,6 @@ describe('the just-bash adapter', () => {
 		expect(!over.ok && over.error.message).toMatch(/ENOSPC/);
 		await alpha.remove('first', undefined, ctx);
 		expect(await alpha.writeFile('second', half, ctx)).toEqual({ ok: true, value: undefined });
-	});
-
-	it('creates /tmp before a temp file needs it, and appends to it', async () => {
-		const { env: alpha } = await env();
-		const file = await alpha.createTempFile({ prefix: 'bash-', suffix: '.journal' }, ctx);
-		expect(file.ok && file.value).toMatch(/^\/tmp\/bash-[0-9a-f]+\.journal$/);
-		if (!file.ok) return;
-		await alpha.appendFile(file.value, 'a', ctx);
-		await alpha.appendFile(file.value, 'b', ctx);
-		expect(await alpha.readTextFile(file.value, ctx)).toEqual({ ok: true, value: 'ab' });
-		const dir = await alpha.createTempDir(undefined, ctx);
-		expect(dir.ok && dir.value).toMatch(/^\/tmp\/tmp-/);
 	});
 
 	it('recreates a home removed out from under it, and shares files across agents', async () => {
@@ -781,22 +781,6 @@ describe('memoryBackend', () => {
 		expect(attempt).toBe(2);
 	});
 
-	it('clears the backend on destroy, so later reads do not resurrect old files', async () => {
-		let seedCalls = 0;
-		const backend = memoryBackend({
-			seed: async (write) => {
-				seedCalls++;
-				await write.writeFile('/site/README.md', 'hi\n');
-			},
-		});
-		await backend.readFiles();
-		expect(seedCalls).toBe(1);
-		await backend.destroy();
-		expect(await backend.readFiles()).toEqual([]);
-		expect(await backend.connect(agent('alpha'))).toBeDefined();
-		expect(seedCalls).toBe(1); // destroy clears data; it never re-runs the seed
-	});
-
 	it('disposes in-memory resources without retaining old files or reseeding them', async () => {
 		let seeds = 0;
 		const backend = memoryBackend({
@@ -819,33 +803,27 @@ describe('memoryBackend', () => {
 // -- the directory backend ---------------------------------------------------
 
 describe('directoryBackend', () => {
-	it('writes through to a real directory it creates, and destroy empties it', async () => {
+	it('writes through to a real directory it creates', async () => {
 		const root = join(await mkdtemp(join(tmpdir(), 'ambion-')), 'site');
-		const site = openWorkspace({ name: name('disk'), backend: directoryBackend(root) });
-		const tools = site.tools();
-		let read: string | undefined;
-		await run([agent('scribe', { bundles: [tools] })], {
-			scribe: (context, _who, call) => {
-				if (call === 1) return callTool('write', { path: 'journal.md', content: '# day one\n' });
-				if (call === 2) return callTool('bash', { command: 'cat ~/journal.md' });
-				read = toolResults(context).at(-1)?.text;
-				return quiet();
-			},
-		});
-		expect(read).toBe('# day one\n');
-		expect(await readFile(join(root, 'home', 'scribe', 'journal.md'), 'utf8')).toBe('# day one\n');
-		await site.destroy();
-		expect(await readdir(root)).toEqual([]);
-	});
-
-	it('stays destroyed: connect after destroy rejects rather than recreating the root', async () => {
-		const root = join(await mkdtemp(join(tmpdir(), 'ambion-')), 'site');
-		const backend = directoryBackend(root);
-		const site = openWorkspace({ name: name('disk-closed'), backend });
-		await site.use({ name: 'alpha', identity: 'alpha' }, () => undefined);
-		await site.destroy();
-		await expect(site.use({ name: 'beta', identity: 'beta' }, () => undefined)).rejects.toThrow(
-			/no longer available/i,
-		);
+		try {
+			const site = openWorkspace({ name: name('disk'), backend: directoryBackend(root) });
+			const tools = site.tools();
+			let read: string | undefined;
+			await run([agent('scribe', { bundles: [tools] })], {
+				scribe: (context, _who, call) => {
+					if (call === 1) return callTool('write', { path: 'journal.md', content: '# day one\n' });
+					if (call === 2) return callTool('bash', { command: 'cat ~/journal.md' });
+					read = toolResults(context).at(-1)?.text;
+					return quiet();
+				},
+			});
+			expect(read).toBe('# day one\n');
+			expect(await readFile(join(root, 'home', 'scribe', 'journal.md'), 'utf8')).toBe(
+				'# day one\n',
+			);
+			await site.dispose();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
 	});
 });

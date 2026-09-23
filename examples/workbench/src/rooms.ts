@@ -14,12 +14,9 @@ import { claudeExecution } from '@ambionframework/claude';
 import { codexExecution } from '@ambionframework/codex';
 import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
 import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
-import {
-	directoryBackend,
-	openSqlResource,
-	openWorkspace,
-	type RoomMirror,
-} from '@ambionframework/workspace';
+import { openWorkspace, type RoomMirror } from '@ambionframework/workspace';
+import { directoryBackend } from '@ambionframework/workspace/just-bash';
+import { openSqlResource } from '@ambionframework/workspace/sql';
 import { readApprovals } from './approvals.ts';
 import { team } from './definitions.ts';
 import {

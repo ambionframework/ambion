@@ -1,4 +1,4 @@
-import type { SqlResource } from '@ambionframework/workspace';
+import type { SqlResource } from '@ambionframework/workspace/sql';
 import { instruments } from './scenarios.ts';
 
 /** An operation the instrument refused to run until the owner of the exchange answers. */

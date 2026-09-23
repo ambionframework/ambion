@@ -17,7 +17,8 @@ import {
 	spent,
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
-import { BACKGROUND_CONTEXT, memoryBackend, openWorkspace } from '../../src/index.ts';
+import { BACKGROUND_CONTEXT, openWorkspace } from '../../src/index.ts';
+import { memoryBackend } from '../../src/just-bash.ts';
 
 live('the workspace', () => {
 	it('a seat reads a file it was told about, writes one back, and answers from what it read', async () => {
@@ -62,14 +63,14 @@ live('the workspace', () => {
 		await invariants(session, events);
 		report('the workspace', await spent(session));
 		await session.stop();
-		await store.destroy();
+		await store.dispose();
 	});
 
 	it('a seat queries the shared database with the sql tool, and answers from the result', async () => {
 		const backend = memoryBackend();
 		const store = openWorkspace({ name: roomName('live-sql'), backend });
 		// Seed the shared database before the room opens.
-		await store.use({ name: 'seed', identity: 'Seeds the database.' }, async (env) => {
+		await store.use({ name: 'seed' }, async (env) => {
 			const result = await env.exec(
 				'sqlite3 /workspace/shared.db "CREATE TABLE pour(id INTEGER, grade TEXT, tonnes REAL);' +
 					" INSERT INTO pour VALUES (1,'C30',10),(2,'C40',5),(3,'C30',15),(4,'C40',20)\"",
@@ -103,6 +104,6 @@ live('the workspace', () => {
 		await invariants(session, events);
 		report('the workspace', await spent(session));
 		await session.stop();
-		await store.destroy();
+		await store.dispose();
 	});
 });

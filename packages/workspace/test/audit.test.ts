@@ -8,10 +8,21 @@ import { describe, expect, it } from 'vitest';
 import { enter, roomName as name } from '../../ambion/test/support/room.ts';
 import { byAgent, callTool, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import { DEFAULT_AUDIT_LOG, openAuditLog } from '../src/audit.ts';
+import type { WorkspaceLayout } from '../src/backend.ts';
 import { BashEnv } from '../src/bash-env.ts';
-import { memoryBackend, openWorkspace } from '../src/index.ts';
+import { openWorkspace, SHARED_DATABASE } from '../src/index.ts';
+import { memoryBackend } from '../src/just-bash.ts';
 
-const workspaceAgent = (name: string) => ({ name, identity: `${name} identity` });
+const workspaceAgent = (name: string) => ({ name });
+
+/** The just-bash backends' own layout: `/workspace/audit.jsonl`, `/workspace/shared.db`, `/rooms`. */
+const layout: WorkspaceLayout = {
+	audit: DEFAULT_AUDIT_LOG,
+	database: SHARED_DATABASE,
+	rooms: '/rooms',
+};
+/** A `ToolContext.agent`, which still carries `identity` in the core type. */
+const ctxAgent = (name: string) => ({ name, identity: `${name} identity` });
 const ctx = BACKGROUND_CONTEXT;
 
 /** The signature and the shortest valid `IHDR` header: enough for image detection to see a PNG. */
@@ -108,7 +119,7 @@ describe('the workspace audit log', () => {
 		await write.invoke(
 			{ path: 'notes.txt', content: 'hello\n' },
 			{
-				agent: workspaceAgent('scribe'),
+				agent: ctxAgent('scribe'),
 				callId: 'call-1',
 				room: 'lobby',
 				activation: 'message:4:scribe:1',
@@ -131,7 +142,7 @@ describe('the workspace audit log', () => {
 		});
 		expect(entries[0]).toHaveProperty('result');
 		expect(entries[0]).not.toHaveProperty('error');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('is readable through the ordinary read tool, the same as any other file', async () => {
@@ -143,16 +154,16 @@ describe('the workspace audit log', () => {
 
 		await write.invoke(
 			{ path: 'notes.txt', content: 'hello\n' },
-			{ agent: workspaceAgent('scribe'), callId: 'call-1', room: 'lobby' },
+			{ agent: ctxAgent('scribe'), callId: 'call-1', room: 'lobby' },
 		);
 		const result = await read.invoke(
 			{ path: DEFAULT_AUDIT_LOG },
-			{ agent: workspaceAgent('auditor'), callId: 'call-2', room: 'lobby' },
+			{ agent: ctxAgent('auditor'), callId: 'call-2', room: 'lobby' },
 		);
 		if (typeof result === 'string') throw new Error('read must return a structured result.');
 		const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
 		expect(text).toContain('"tool":"write"');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('reads an image file as an image content part, and keeps only its byte count in the audit log', async () => {
@@ -165,7 +176,7 @@ describe('the workspace audit log', () => {
 
 		const result = await read.invoke(
 			{ path: 'photo.png' },
-			{ agent: workspaceAgent('scribe'), callId: 'call-1', room: 'lobby' },
+			{ agent: ctxAgent('scribe'), callId: 'call-1', room: 'lobby' },
 		);
 		if (typeof result === 'string') throw new Error('read must return a structured result.');
 		const image = result.content.find((part) => part.type === 'image');
@@ -184,7 +195,7 @@ describe('the workspace audit log', () => {
 		expect(loggedImage?.data).toBeUndefined();
 		expect(loggedImage?.bytes).toBeGreaterThan(0);
 		expect(JSON.stringify(entry)).not.toContain(image.data);
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('tells the calling agent the log exists, in the workspace guidance', () => {
@@ -209,7 +220,7 @@ describe('the workspace audit log', () => {
 
 		await write.invoke(
 			{ path: 'notes.txt', content: 'hi\n' },
-			{ agent: workspaceAgent('scribe'), callId: 'call-1' },
+			{ agent: ctxAgent('scribe'), callId: 'call-1' },
 		);
 
 		const entries = await site.use(workspaceAgent('scribe'), (env) =>
@@ -218,7 +229,7 @@ describe('the workspace audit log', () => {
 		expect(entries[0]).toMatchObject({ room: '' });
 		expect(entries[0]).not.toHaveProperty('activation');
 		expect(entries[0]).not.toHaveProperty('exchange');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('records an error, and still throws it to the caller, when the call fails', async () => {
@@ -235,15 +246,15 @@ describe('the workspace audit log', () => {
 					},
 				},
 			],
-			connect: (agent: { name: string; identity: string }) => inner.connect(agent),
-			destroy: async () => {},
+			connect: (agent: { name: string }) => inner.connect(agent),
+			layout,
 		};
 		const site = openWorkspace({ name: name('audited-error'), backend: failing, audit: {} });
-		const tool = site.tools().tools[0];
+		const tool = site.tools().tools.find((one) => one.name === 'explode');
 		if (tool === undefined) throw new Error('The custom tool is missing.');
 
 		await expect(
-			tool.invoke({}, { agent: workspaceAgent('scribe'), callId: 'call-2', room: 'lobby' }),
+			tool.invoke({}, { agent: ctxAgent('scribe'), callId: 'call-2', room: 'lobby' }),
 		).rejects.toThrow('kaboom');
 
 		const entries = await site.use(workspaceAgent('scribe'), (env) =>
@@ -257,7 +268,7 @@ describe('the workspace audit log', () => {
 			error: { name: 'Error', message: 'kaboom' },
 		});
 		expect(entries[0]).not.toHaveProperty('result');
-		await site.destroy();
+		await site.dispose();
 	});
 
 	it('names the real room, through a running room, on every tool call it makes', async () => {
@@ -293,7 +304,7 @@ describe('the workspace audit log', () => {
 		);
 		expect(entries).toHaveLength(1);
 		expect(entries[0]).toMatchObject({ room: roomId, agent: 'worker', tool: 'write' });
-		await site.destroy();
+		await site.dispose();
 	});
 });
 
@@ -418,18 +429,18 @@ describe('recording under an aborted signal', () => {
 					},
 				},
 			],
-			connect: (agent: { name: string; identity: string }) => inner.connect(agent),
-			destroy: async () => {},
+			connect: (agent: { name: string }) => inner.connect(agent),
+			layout,
 		};
 		const site = openWorkspace({ name: name('cut-mid-flight'), backend: slow, audit: {} });
-		const tool = site.tools().tools[0];
+		const tool = site.tools().tools.find((one) => one.name === 'slow');
 		if (tool === undefined) throw new Error('The custom tool is missing.');
 		const controller = new AbortController();
 
 		const call = tool.invoke(
 			{},
 			{
-				agent: workspaceAgent('scribe'),
+				agent: ctxAgent('scribe'),
 				callId: 'call-cut',
 				room: 'lobby',
 				signal: controller.signal,
@@ -449,6 +460,6 @@ describe('recording under an aborted signal', () => {
 			tool: 'slow',
 			error: { message: 'cut mid-flight' },
 		});
-		await site.destroy();
+		await site.dispose();
 	});
 });

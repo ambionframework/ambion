@@ -3,7 +3,8 @@ import { defineAssistant } from '@ambionframework/assistant';
 import { claude } from '@ambionframework/claude';
 import { codex } from '@ambionframework/codex';
 import { pi } from '@ambionframework/pi';
-import type { SqlResource, Workspace } from '@ambionframework/workspace';
+import type { Workspace } from '@ambionframework/workspace';
+import type { SqlResource } from '@ambionframework/workspace/sql';
 import { CLAUDE_MODEL, CODEX_MODEL, piModel, seatFamilies } from './families.ts';
 import type { Instrument } from './instrument.ts';
 

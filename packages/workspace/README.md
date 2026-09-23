@@ -19,14 +19,16 @@ from GitHub Packages; see [the toolchain guide](https://github.com/ambionframewo
 
 ## Use
 
-`drive.tools()` returns the tools and optional guidance that the backend
-supplies. Pass it in `bundles`; each tool reaches the environment the backend
-built for that agent, rooted at `/home/<agent name>`.
+`drive.tools()` returns five default tools — `read`, `write`, `edit`, `bash`,
+and `sql` — plus any tool a backend adds of its own, and their guidance. Pass
+it in `bundles`; each tool reaches the environment the backend built for that
+agent, rooted at `/home/<agent name>`.
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';
 import { pi } from '@ambionframework/pi';
-import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/workspace/just-bash';
 
 const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
 
@@ -43,12 +45,17 @@ const surveyor = defineAgent({
 
 ## Use the resource directly
 
-The root entry exports `openResource` beside the just-bash backends. The
-`/resource` entry holds only the neutral contract: `openResource` and its
-types. It loads neither the Ambion runtime nor a model library.
+The root entry loads no backend. `./resource` holds only the neutral
+contract: `openResource` and its types. It loads neither the Ambion runtime
+nor a model library. `./just-bash` holds the two backends,
+`memoryBackend` and `directoryBackend`. `./sql` holds `openSqlResource`, a
+resource over its own SQLite database, with its `SqlProvenance` and
+`SqlResourceEnv` types. `./conformance` holds `workspaceConformance`, the
+scenario matrix a new backend runs to prove it meets the resource contract.
 
 ```ts
-import { memoryBackend, openResource } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/workspace/just-bash';
+import { openResource } from '@ambionframework/workspace/resource';
 
 const backend = memoryBackend({
   seed: async (write) => write.writeFile('notes.txt', 'Checked the plan.'),
@@ -59,9 +66,9 @@ console.log(await backend.readFiles());
 await drive.dispose();
 ```
 
-This handle has `use`, `dispose`, and `destroy`. The root `openWorkspace`
-function adds the Ambion tool bundle over the same resource implementation.
-Both paths use the lifecycle contract below.
+This handle has `use` and `dispose`. The root `openWorkspace` function adds
+the Ambion tool bundle over the same resource implementation. Both paths use
+the lifecycle contract below.
 
 ## The two backends
 
@@ -72,8 +79,8 @@ workspace's files with no tool call, which is what a real directory gives for
 free.
 
 **`directoryBackend(root)` writes through to a real directory.** It creates
-the root when an operation needs it. `drive.destroy()` deletes its contents
-and keeps the root.
+the root when an operation needs it. `drive.dispose()` releases the handle
+and keeps the root and its files. A host deletes the data it owns.
 
 Agents connected to one workspace share every file. just-bash is single-user,
 so one agent can read another agent's home. The default workspace provides no

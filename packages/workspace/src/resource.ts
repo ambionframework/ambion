@@ -1,7 +1,6 @@
-/** The stable identity a backend uses for one calling agent. */
+/** The stable name a backend uses for one calling agent. */
 export interface WorkspaceAgent {
 	readonly name: string;
-	readonly identity: string;
 }
 
 /** The minimal environment the resource owner can clean up. Every binding's env extends it. */
@@ -12,7 +11,6 @@ export interface ResourceEnv {
 /** Storage operations beneath one workspace resource owner. */
 export interface ResourceBackend<Env extends ResourceEnv = ResourceEnv> {
 	connect(agent: WorkspaceAgent, signal?: AbortSignal): Promise<Env>;
-	destroy(): Promise<void>;
 	/** Release host-local resources without deleting the persisted workspace. */
 	dispose?(): Promise<void>;
 }
@@ -26,10 +24,9 @@ export interface WorkspaceResource<Env extends ResourceEnv = ResourceEnv> {
 		signal?: AbortSignal,
 	): Promise<T>;
 	dispose(): Promise<void>;
-	destroy(): Promise<void>;
 }
 
-type Phase = 'active' | 'disposing' | 'destroying' | 'disposed' | 'destroyed';
+type Phase = 'active' | 'disposing' | 'disposed';
 
 const CLOSED = 'Workspace is no longer available.';
 
@@ -47,16 +44,12 @@ export function openResource<Env extends ResourceEnv = ResourceEnv>(options: {
 			`Invalid workspace name '${options.name}': names are lowercase, alphanumeric plus dashes.`,
 		);
 	}
-	if (
-		typeof options.backend?.connect !== 'function' ||
-		typeof options.backend?.destroy !== 'function'
-	) {
-		throw new Error(`Workspace '${options.name}' needs a backend with connect and destroy.`);
+	if (typeof options.backend?.connect !== 'function') {
+		throw new Error(`Workspace '${options.name}' needs a backend with connect.`);
 	}
 
 	let phase: Phase = 'active';
 	let tail = Promise.resolve();
-	let destroyPromise: Promise<void> | undefined;
 	let disposePromise: Promise<void> | undefined;
 
 	const ensureUsable = (signal?: AbortSignal): void => {
@@ -93,55 +86,8 @@ export function openResource<Env extends ResourceEnv = ResourceEnv>(options: {
 		return task;
 	};
 
-	const completeDestroy = async (): Promise<void> => {
-		await tail;
-		try {
-			await options.backend.destroy();
-			phase = 'destroyed';
-		} catch (error) {
-			phase = 'active';
-			throw error;
-		}
-	};
-
-	const destroyPrecondition = (): Promise<void> | undefined => {
-		switch (phase) {
-			case 'destroyed':
-				return Promise.resolve();
-			case 'disposed':
-				return Promise.reject(new Error('Workspace has been disposed.'));
-			case 'disposing':
-				return Promise.reject(new Error('Workspace disposal is in progress.'));
-			default:
-				return undefined;
-		}
-	};
-
-	const destroy = async (): Promise<void> => {
-		const precondition = destroyPrecondition();
-		if (precondition) return precondition;
-		if (destroyPromise) return destroyPromise;
-		phase = 'destroying';
-		const task = completeDestroy();
-		destroyPromise = task;
-		try {
-			await task;
-		} finally {
-			if (destroyPromise === task) destroyPromise = undefined;
-		}
-	};
-
-	const disposePrecondition = (): Promise<void> | undefined => {
-		switch (phase) {
-			case 'disposed':
-			case 'destroyed':
-				return Promise.resolve();
-			case 'destroying':
-				return destroyPromise ?? Promise.resolve();
-			default:
-				return undefined;
-		}
-	};
+	const disposePrecondition = (): Promise<void> | undefined =>
+		phase === 'disposed' ? Promise.resolve() : undefined;
 
 	const completeDispose = async (): Promise<void> => {
 		await tail;
@@ -168,5 +114,5 @@ export function openResource<Env extends ResourceEnv = ResourceEnv>(options: {
 		}
 	};
 
-	return Object.freeze({ name: options.name, use, dispose, destroy });
+	return Object.freeze({ name: options.name, use, dispose });
 }

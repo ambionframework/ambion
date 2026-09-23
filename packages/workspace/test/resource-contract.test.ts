@@ -13,7 +13,7 @@ interface FakeEnv extends ResourceEnv {
 	readonly note: string;
 }
 
-const agent: WorkspaceAgent = { name: 'alpha', identity: 'alpha' };
+const agent: WorkspaceAgent = { name: 'alpha' };
 
 function fakeBackend(events: string[]): ResourceBackend<FakeEnv> {
 	return {
@@ -23,9 +23,6 @@ function fakeBackend(events: string[]): ResourceBackend<FakeEnv> {
 				events.push('cleanup');
 			},
 		}),
-		destroy: async () => {
-			events.push('destroy');
-		},
 		dispose: async () => {
 			events.push('dispose');
 		},
@@ -43,7 +40,7 @@ describe('the neutral resource contract', () => {
 		expect(events).toEqual(['cleanup', 'dispose']);
 	});
 
-	it('cleans up after a failed operation and destroys once', async () => {
+	it('cleans up after a failed operation and disposes once', async () => {
 		const events: string[] = [];
 		const resource = openResource({ name: 'fake', backend: fakeBackend(events) });
 		await expect(
@@ -51,8 +48,8 @@ describe('the neutral resource contract', () => {
 				throw new Error('boom');
 			}),
 		).rejects.toThrow('boom');
-		await resource.destroy();
-		expect(events).toEqual(['cleanup', 'destroy']);
+		await resource.dispose();
+		expect(events).toEqual(['cleanup', 'dispose']);
 	});
 
 	it('imports no module in the contract source', async () => {

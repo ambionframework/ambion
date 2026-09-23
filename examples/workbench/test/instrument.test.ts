@@ -1,5 +1,5 @@
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
-import { openSqlResource, type SqlResource } from '@ambionframework/workspace';
+import { openSqlResource, type SqlResource } from '@ambionframework/workspace/sql';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type Instrument, openInstrument } from '../src/instrument.ts';
 import { instruments, labSchema, labWritable } from '../src/scenarios.ts';
@@ -38,9 +38,7 @@ function tool(instrument: Instrument, name: string): AmbionTool {
 }
 
 const operations = (lab: SqlResource) =>
-	lab.use({ name: 'test', identity: 'test' }, (env) =>
-		env.query('SELECT * FROM operations ORDER BY id'),
-	);
+	lab.use({ name: 'test' }, (env) => env.query('SELECT * FROM operations ORDER BY id'));
 
 /** Call a tool so that a synchronous throw becomes a rejection. */
 const call = (instrument: Instrument, name: string, params: object, ctx: ToolContext) =>
@@ -193,7 +191,7 @@ describe('the instrument resource', () => {
 			{ id: 1, decision: 'allow' },
 			contextOf('assistant', 'act-2'),
 		);
-		const status = await lab.use({ name: 'test', identity: 'test' }, (env) =>
+		const status = await lab.use({ name: 'test' }, (env) =>
 			env.query(
 				'SELECT outcome FROM operations WHERE id = 1 OR request_id = 1 ORDER BY id DESC LIMIT 1',
 			),

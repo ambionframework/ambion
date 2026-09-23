@@ -25,22 +25,25 @@
  * between an agent's commands and the machine.
  */
 
-import { mkdir, readdir, rm } from 'node:fs/promises';
-import { join, posix } from 'node:path';
-import {
-	type AgentHarnessTool,
-	createBashTool,
-	createEditTool,
-	createReadTool,
-	createWriteTool,
-	type ExecutionToolContext,
-} from '@earendil-works/pi-agent-core';
-import { Bash, type IFileSystem, InMemoryFs } from 'just-bash';
-import type { WorkspaceBackend } from './backend.ts';
+import { mkdir } from 'node:fs/promises';
+import { posix } from 'node:path';
+import { Bash, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
+import { DEFAULT_AUDIT_LOG } from './audit.ts';
+import type { WorkspaceBackend, WorkspaceLayout } from './backend.ts';
 import { BashEnv } from './bash-env.ts';
 import { DEV_DIR, withDevices } from './devices.ts';
 import type { WorkspaceAgent } from './resource.ts';
-import { createSqlTool, SHARED_DATABASE } from './sql.ts';
+import { SHARED_DATABASE } from './sql.ts';
+
+/**
+ * Where the just-bash backends keep the audit log, the shared database, and
+ * the room mirrors. Both backends name the same layout, so no file moves.
+ */
+const JUST_BASH_LAYOUT: WorkspaceLayout = {
+	audit: DEFAULT_AUDIT_LOG,
+	database: SHARED_DATABASE,
+	rooms: '/rooms',
+};
 
 /** Build one agent's environment over the workspace's filesystem. */
 async function connectOver(fs: IFileSystem, agent: WorkspaceAgent): Promise<BashEnv> {
@@ -102,31 +105,15 @@ export interface MemoryWorkspaceBackend extends WorkspaceBackend {
 	readFiles(): Promise<MemoryBackendFile[]>;
 }
 
-/** Default tool guidance for the just-bash backends. */
+/** Shell guidance for the just-bash backends: their commands, network, and isolation. */
 const JUST_BASH_GUIDANCE = [
-	`Your workspace gives you five tools: read, write, edit, bash and sql, over a shared`,
-	`virtual filesystem. Your home is /home/<your name>. Other agents connected to this`,
-	`workspace read and write the same files, with no wall between one agent's home and`,
-	`another's.`,
+	`The shell is a simulated Unix shell: the common coreutils (ls, cat, grep, sed, awk, find,`,
+	`tar, and more), plus jq for JSON, yq for YAML and TOML, xan for CSV, and sqlite3. Run a`,
+	`script with js-exec (JavaScript) or python3 (Python).`,
 	``,
-	`bash runs a simulated Unix shell: the common coreutils (ls, cat, grep, sed, awk, find,`,
-	`tar, and more), plus jq for JSON, yq for YAML and TOML, xan for CSV, and sqlite3. Run`,
-	`a script with js-exec (JavaScript) or python3 (Python). bash has no network: curl and`,
-	`every other network command are disabled.`,
-	``,
-	`sql runs SQLite statements on one shared database at ${SHARED_DATABASE}. Every agent`,
-	`queries this database, so a table or a view you create is data another agent reads at`,
-	`once. Share through a view or a table; this needs no copy. Attach a private scratch`,
-	`database with ATTACH ':memory:' inside one call. The tool shows the last result as a`,
-	`table and keeps the data in the database. Set export to write the full result as a CSV`,
-	`file for another tool or script. This is SQLite: dates are functions, || joins text,`,
-	`and a column type is an affinity.`,
+	`The shell has no network: curl and every other network command are disabled. Your home is`,
+	`/home/<your name>, and there is no wall between one agent's home and another's.`,
 ].join('\n');
-
-/** Create the Pi harness tools offered by each just-bash backend instance. */
-function justBashTools(): readonly AgentHarnessTool<ExecutionToolContext>[] {
-	return [createReadTool(), createWriteTool(), createEditTool(), createBashTool(), createSqlTool()];
-}
 
 /**
  * Every plain file under `dir`, read as text, recursively. A symlink is
@@ -181,9 +168,9 @@ function lazyResource<T>(build: () => Promise<T>): {
  * An in-memory filesystem that lives as long as the backend resource.
  * Building it is async when there is a `seed` to run, so `connect` and
  * `readFiles` both await one lazily-built, memoised filesystem rather than
- * the handle building it up front. `destroy` can only ever fail to release
- * memory. Destroying the owning workspace clears the cache, releasing the
- * filesystem; the owner prevents any later connection through the handle.
+ * the handle building it up front. Disposing the owning workspace clears
+ * the cache, releasing the filesystem; the owner prevents any later
+ * connection through the handle. A host deletes the data it owns.
  */
 export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspaceBackend {
 	const resource = lazyResource(async () => {
@@ -200,51 +187,23 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
 	});
 	return {
 		connect: async (agent) => connectOver(await resource.get(), agent),
-		async destroy() {
-			resource.clear(inMemory());
-		},
 		dispose: async () => resource.clear(inMemory()),
 		readFiles: async () => listFiles(await resource.get()),
-		tools: justBashTools(),
 		guidance: JUST_BASH_GUIDANCE,
-		changedPaths: justBashChangedPaths,
+		layout: JUST_BASH_LAYOUT,
 	};
-}
-
-/**
- * The paths a `write` or `edit` call changed, resolved against the agent's
- * home. Every other tool, `bash` included, leaves no change record.
- */
-export function justBashChangedPaths(
-	agent: WorkspaceAgent,
-	tool: string,
-	params: unknown,
-): readonly string[] {
-	if (tool !== 'write' && tool !== 'edit') return [];
-	const path = (params as { path?: unknown } | null)?.path;
-	if (typeof path !== 'string' || path === '') return [];
-	const home = `/home/${agent.name}`;
-	if (path === '~') return [home];
-	const expanded = path.startsWith('~/') ? posix.join(home, path.slice(2)) : path;
-	return [posix.resolve(home, expanded)];
 }
 
 /**
  * A workspace over a real directory. `ReadWriteFs` writes through to disk
  * and needs its root to exist, so the first `connect` creates the root and
- * builds the filesystem; `destroy` removes the root's contents and leaves the
- * root. Deletion errors are propagated so the owning `Workspace` remains live
- * and retryable; lifecycle state belongs only to that owner.
+ * builds the filesystem. Disposal releases the filesystem handle and keeps
+ * the root and its files. A host deletes the data it owns.
  *
- * This backend is the one part of this package that needs a real disk, and it
- * loads `ReadWriteFs` on the first connect. A bundler for a runtime without a
- * disk, such as workerd, then keeps the rest of the package: just-bash offers
- * `ReadWriteFs` in its Node build alone, and a static import of it refuses to
- * bundle for every other target.
+ * This backend is the one part of this package that needs a real disk.
  */
 export function directoryBackend(root: string): WorkspaceBackend {
 	const resource = lazyResource(async () => {
-		const { ReadWriteFs } = await import('just-bash');
 		await mkdir(root, { recursive: true });
 		class DirectoryFs extends ReadWriteFs {
 			override async lstat(path: string) {
@@ -258,29 +217,8 @@ export function directoryBackend(root: string): WorkspaceBackend {
 	});
 	return {
 		connect: async (agent) => connectOver(await resource.get(), agent),
-		async destroy() {
-			let entries: string[];
-			try {
-				entries = await readdir(root);
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-					resource.clear();
-					return;
-				}
-				throw error;
-			}
-			const removals = await Promise.allSettled(
-				entries.map((entry) => rm(join(root, entry), { recursive: true, force: true })),
-			);
-			const failure = removals.find(
-				(result): result is PromiseRejectedResult => result.status === 'rejected',
-			);
-			if (failure) throw failure.reason;
-			resource.clear();
-		},
 		dispose: async () => resource.clear(),
-		tools: justBashTools(),
 		guidance: JUST_BASH_GUIDANCE,
-		changedPaths: justBashChangedPaths,
+		layout: JUST_BASH_LAYOUT,
 	};
 }
