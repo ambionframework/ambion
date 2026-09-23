@@ -31,14 +31,34 @@ import type {
 type DistributiveOmit<T, K extends string> = T extends unknown ? Omit<T, K> : never;
 
 const at = '2026-01-01T09:00:00.000Z';
-const lease = (seq: number, body: LeaseChange): Entry<LeaseChange> => ({
+const id = 'message:2:solo:1';
+const running = (seq: number, readThrough: number): Entry<LeaseChange> => ({
 	kind: 'lease',
 	seq,
-	body,
+	body: { id, phase: 'running', expiresAt: 60_000, at, readThrough },
 });
-
-const explicitDeliveries = (messages: Message[]) =>
-	new Map(messages.map((message) => [message.seq, { wakes: message.wakes ?? [], steers: [] }]));
+const ended = (seq: number, reason: EndReason, readThrough: number): Entry<LeaseChange> => ({
+	kind: 'lease',
+	seq,
+	body: { id, phase: 'ended', reason, at, readThrough },
+});
+const said = (seq: number): Message => ({
+	kind: 'said',
+	seq,
+	at,
+	from: 'priya',
+	text: 'Question',
+	wakes: ['solo'],
+});
+/** The wakes the room still owes for these messages, after these lease entries. */
+const pending = (messages: Message[], leases: Entry<LeaseChange>[]) =>
+	pendingWakes(
+		messages,
+		new Map(messages.map((message) => [message.seq, { wakes: message.wakes ?? [], steers: [] }])),
+		foldLeases(leases),
+		new Set(['solo']),
+		{ backoff: () => 1 },
+	);
 
 describe('verified rules', () => {
 	it('declares the same unions the public types declare', () => {
@@ -108,119 +128,65 @@ describe('verified rules', () => {
 		expect(cancelHold(ended, 2, 9, at)).toBe(ended);
 	});
 
-	it('answers a wake by reason', () => {
-		expect(wakeAnswered([{ phase: 'running', readThrough: 0, position: 2 }], 2)).toBe(true);
-		expect(
-			wakeAnswered([{ phase: 'ended', reason: 'expired', readThrough: 9, position: 2 }], 2),
-		).toBe(false);
-		expect(
-			wakeAnswered([{ phase: 'ended', reason: 'released', readThrough: 1, position: 2 }], 2),
-		).toBe(false);
-		expect(
-			wakeAnswered([{ phase: 'ended', reason: 'revoked', readThrough: 0, position: 2 }], 2),
-		).toBe(true);
+	it.each([
+		['running', undefined, 0, true],
+		['ended', 'expired', 9, false],
+		['ended', 'released', 1, false],
+		['ended', 'revoked', 0, true],
+	] as const)(
+		'answers a wake that a %s %s lease holds: %s',
+		(phase, reason, readThrough, answered) => {
+			const lease = reason === undefined ? { phase } : { phase, reason };
+			expect(wakeAnswered([{ ...lease, readThrough, position: 2 }], 2)).toBe(answered);
+		},
+	);
+
+	it.each([
+		[undefined, 'revoked', false, true],
+		[undefined, 'released', false, false],
+		['ended', 'revoked', true, false],
+		['running', 'abandoned', false, false],
+		['running', 'expired', true, true],
+		['running', 'expired', false, false],
+		['running', 'released', false, true],
+		['running', 'failed', true, false],
+	] as const)('gates a %s lease ending %s, past expiry %s: %s', (phase, reason, past, allowed) => {
+		expect(mayEnd(phase, reason, past)).toBe(allowed);
 	});
 
-	it('gates every end reason by the lease phase and the clock', () => {
-		expect(mayEnd(undefined, 'revoked', false)).toBe(true);
-		expect(mayEnd(undefined, 'released', false)).toBe(false);
-		expect(mayEnd('ended', 'revoked', true)).toBe(false);
-		expect(mayEnd('running', 'abandoned', false)).toBe(false);
-		expect(mayEnd('running', 'expired', true)).toBe(true);
-		expect(mayEnd('running', 'expired', false)).toBe(false);
-		expect(mayEnd('running', 'released', false)).toBe(true);
-		expect(mayEnd('running', 'failed', true)).toBe(false);
-	});
-
-	it('expires a lease at the earlier of the renewal window and the deadline', () => {
-		expect(leaseExpiry(1_000, 1_000, 60, 600)).toBe(1_060);
-		expect(leaseExpiry(1_590, 1_000, 60, 600)).toBe(1_600);
-		expect(leaseExpiry(1_700, 1_000, 60, 600)).toBe(1_600);
+	it.each([
+		[1_000, 1_060],
+		[1_590, 1_600],
+		[1_700, 1_600],
+	])('expires a lease renewed at %i at the earlier of window and deadline: %i', (now, expiry) => {
+		expect(leaseExpiry(now, 1_000, 60, 600)).toBe(expiry);
 	});
 });
 
 describe('lease rules', () => {
 	it('keeps a lease interval through its terminal entry', () => {
-		const leases = foldLeases([
-			lease(2, { id: 'message:2:solo:1', phase: 'running', expiresAt: 60_000, at, readThrough: 2 }),
-			lease(3, { id: 'message:2:solo:1', phase: 'running', expiresAt: 60_000, at, readThrough: 3 }),
-		]);
-		const carried = foldLeases(
-			[
-				lease(8, {
-					id: 'message:2:solo:1',
-					phase: 'ended',
-					reason: 'released',
-					at,
-					readThrough: 3,
-				}),
-			],
-			[...leases.values()],
-		);
-		const held = carried.get('message:2:solo:1');
+		const leases = foldLeases([running(2, 2), running(3, 3)]);
+		const held = foldLeases([ended(8, 'released', 3)], [...leases.values()]).get(id);
 		expect(held).toMatchObject({ since: 2, until: 8, readThrough: 3 });
 		if (held?.phase !== 'ended') throw new Error('Expected terminal lease.');
 		expect(held.until).toBeGreaterThanOrEqual(held.since);
 	});
 
 	it('retries unread released work and counts failed work', () => {
-		const message: Message = {
-			kind: 'said',
-			seq: 2,
-			at,
-			from: 'priya',
-			text: 'Question',
-			wakes: ['solo'],
-		};
-		const released = foldLeases([
-			lease(3, { id: 'message:2:solo:1', phase: 'ended', reason: 'released', at, readThrough: 0 }),
+		expect(pending([said(2)], [ended(3, 'released', 0)])).toMatchObject([
+			{ id: 'message:2:solo:2', unsuccessfulAttempts: 1 },
 		]);
-		expect(
-			pendingWakes([message], explicitDeliveries([message]), released, new Set(['solo']), {
-				backoff: () => 1,
-			}),
-		).toMatchObject([{ id: 'message:2:solo:2', unsuccessfulAttempts: 1 }]);
-		const failed = foldLeases([
-			lease(3, { id: 'message:2:solo:1', phase: 'ended', reason: 'failed', at, readThrough: 0 }),
-		]).get('message:2:solo:1');
+		const failed = foldLeases([ended(3, 'failed', 0)]).get(id);
 		expect(failed !== undefined && cameToNothing(failed)).toBe(true);
 	});
 
-	it('applies each terminal reason to its named work while preserving later work', () => {
-		const message = (seq: number): Message => ({
-			kind: 'said',
-			seq,
-			at,
-			from: 'priya',
-			text: 'Question',
-			wakes: ['solo'],
-		});
-		const pending = (reason: EndReason) => {
-			const messages = [message(2), message(6)];
-			const leases = foldLeases([
-				lease(2, {
-					id: 'message:2:solo:1',
-					phase: 'running',
-					expiresAt: 60_000,
-					at,
-					readThrough: 0,
-				}),
-				lease(4, {
-					id: 'message:2:solo:1',
-					phase: 'running',
-					expiresAt: 60_000,
-					at,
-					readThrough: 4,
-				}),
-				lease(8, { id: 'message:2:solo:1', phase: 'ended', reason, at, readThrough: 4 }),
-			]);
-			return pendingWakes(messages, explicitDeliveries(messages), leases, new Set(['solo']), {
-				backoff: () => 1,
-			}).map((wake) => wake.id);
-		};
-		expect(pending('failed')).toEqual(['message:2:solo:2', 'message:6:solo:2']);
-		expect(pending('expired')).toEqual(['message:2:solo:2', 'message:6:solo:2']);
-		expect(pending('released')).toEqual(['message:6:solo:1']);
-		expect(pending('revoked')).toEqual(['message:6:solo:1']);
+	it.each([
+		['failed', ['message:2:solo:2', 'message:6:solo:2']],
+		['expired', ['message:2:solo:2', 'message:6:solo:2']],
+		['released', ['message:6:solo:1']],
+		['revoked', ['message:6:solo:1']],
+	] as const)('applies a %s end to its named work while preserving later work', (reason, ids) => {
+		const leases = [running(2, 0), running(4, 4), ended(8, reason, 4)];
+		expect(pending([said(2), said(6)], leases).map((wake) => wake.id)).toEqual(ids);
 	});
 });

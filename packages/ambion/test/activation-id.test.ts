@@ -29,27 +29,15 @@ describe('activation id codec', () => {
 		expect(decodeActivationId(raw)).toBeUndefined();
 	});
 
-	it('rejects invalid values when encoding', () => {
-		expect(() =>
-			encodeActivationId({ source: 'message', position: 0, seat: 'alpha', attempt: 1 }),
-		).toThrow();
-		expect(() =>
-			encodeActivationId({ source: 'message', position: 1, seat: 'Alpha', attempt: 1 }),
-		).toThrow();
-		expect(() =>
-			encodeActivationId({ source: 'message', position: 1, seat: 'alpha\n', attempt: 1 }),
-		).toThrow();
-		expect(() =>
-			encodeActivationId({ source: 'message', position: 1, seat: 'alpha', attempt: 0 }),
-		).toThrow();
-		expect(() =>
-			encodeActivationId({
-				source: 'message',
-				position: Number.MAX_SAFE_INTEGER + 1,
-				seat: 'alpha',
-				attempt: 1,
-			}),
-		).toThrow();
+	it.each([
+		{ position: 0 },
+		{ seat: 'Alpha' },
+		{ seat: 'alpha\n' },
+		{ attempt: 0 },
+		{ position: Number.MAX_SAFE_INTEGER + 1 },
+	])('rejects an invalid value when encoding: %j', (change) => {
+		const value: ActivationId = { source: 'message', position: 1, seat: 'alpha', attempt: 1 };
+		expect(() => encodeActivationId({ ...value, ...change })).toThrow();
 	});
 
 	it('does not coerce non-string input at the protocol boundary', () => {

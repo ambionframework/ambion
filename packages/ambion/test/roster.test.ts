@@ -1,15 +1,16 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { pi, piExecution } from '../../pi/src/index.ts';
+import { describe, expect, it } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
 import {
 	type AgentDefinition,
 	type Attention,
 	createRuntime,
-	defineAgent,
 	defineHuman,
 	isPresence,
 	type Message,
 	type Room,
 	type RoomNotification,
+	readRoom,
+	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
@@ -19,6 +20,7 @@ import {
 	messagesOf,
 	participantsOf,
 	roomName,
+	scriptedAgent,
 	waitForRoom,
 } from './support/room.ts';
 import {
@@ -32,43 +34,16 @@ import {
 	speak,
 	toolNames,
 } from './support/scripted.ts';
+import { stopAtEnd } from './support/stop.ts';
 
-const product = defineAgent({
-	name: 'product',
-	identity: 'The product lead.',
-	executor: pi({
-		instructions: 'Answer questions and bring in a specialist when needed.',
-		model: 'scripted/product',
-	}),
-});
-const surveyor = defineAgent({
-	name: 'surveyor',
-	identity: 'Quantity surveyor. Holds the tonnage.',
-	executor: pi({ instructions: 'Answer questions about quantities.', model: 'scripted/surveyor' }),
-});
-const architect = defineAgent({
-	name: 'architect',
-	identity: 'Architect. Holds the drawings.',
-	executor: pi({ instructions: 'Answer questions about drawings.', model: 'scripted/architect' }),
-});
-const greeter = defineAgent({
-	name: 'greeter',
-	identity: 'Meets people at the door.',
-	executor: pi({ instructions: 'Notice arrivals and departures.', model: 'scripted/greeter' }),
-});
-const writer = defineAgent({
-	name: 'writer',
-	identity: 'Writes the one message a person reads at the close.',
-	executor: pi({
-		instructions: 'Write only the useful answer for the person.',
-		model: 'scripted/writer',
-	}),
-});
+const product = scriptedAgent('product', 'The product lead.');
+const surveyor = scriptedAgent('surveyor', 'Quantity surveyor. Holds the tonnage.');
+const architect = scriptedAgent('architect', 'Architect. Holds the drawings.');
+const greeter = scriptedAgent('greeter', 'Meets people at the door.');
+const writer = scriptedAgent('writer', 'Writes the one message a person reads at the close.');
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 
-const clock = fakeClock();
-const runtime = createRuntime({ clock });
-const started: Room[] = [];
+const runtime = createRuntime({ clock: fakeClock() });
 
 async function open(options: {
 	script: Script;
@@ -95,13 +70,8 @@ async function open(options: {
 		runtime,
 		execution: piExecution({ stream: scripted(options.script) }),
 	});
-	started.push(session);
-	return session;
+	return stopAtEnd(session);
 }
-
-afterEach(async () => {
-	for (const session of started.splice(0)) await session.stop();
-});
 
 const kinds = (record: readonly Message[]) => record.map((message) => message.kind);
 const presence = (record: readonly Message[]) => record.filter(isPresence);
@@ -110,12 +80,13 @@ const activated = (events: RoomNotification[]) =>
 const seatNames = async (session: Room) =>
 	(await participantsOf(session)).filter((seat) => seat.kind === 'agent').map((seat) => seat.name);
 describe('ordinary participation', () => {
-	it('shows every ordinary seat the reserve and membership tools', async () => {
+	it('shows every ordinary seat the reserve and membership tools, and wakes presence observers', async () => {
 		const contexts: string[] = [];
 		const tools: string[][] = [];
 		const session = await open({
-			agents: [product],
+			agents: [product, greeter],
 			available: [surveyor],
+			seats: { product: 'broadcast', greeter: 'presence' },
 			script: byAgent({
 				product: (context, _name, call) => {
 					contexts.push(contextText(context));
@@ -123,6 +94,7 @@ describe('ordinary participation', () => {
 					return call === 1 ? seat(surveyor.name) : quiet();
 				},
 				surveyor: (_context, _name, call) => (call === 1 ? speak('11.7 tonnes on site.') : quiet()),
+				greeter: () => quiet(),
 			}),
 		});
 		const events = collect(session);
@@ -133,15 +105,15 @@ describe('ordinary participation', () => {
 		expect(tools[0]).toEqual(['say', 'seat', 'unseat']);
 		expect(contexts[0]).toContain('The reserve: agents not in the room.');
 		expect(contexts[0]).toContain('- surveyor: Quantity surveyor. Holds the tonnage.');
-		expect(kinds(await messagesOf(session))).toEqual(['arrived', 'said', 'seated', 'said']);
-		expect(
-			presence(await messagesOf(session)).find((message) => message.kind === 'seated'),
-		).toMatchObject({
+		const record = await messagesOf(session);
+		expect(kinds(record)).toEqual(['arrived', 'said', 'seated', 'said']);
+		expect(presence(record).find((message) => message.kind === 'seated')).toMatchObject({
 			from: 'product',
 			subject: 'surveyor',
 		});
 		expect(activated(events)).toContain('surveyor');
-		expect(await seatNames(session)).toEqual(['product', 'surveyor']);
+		expect(activated(events)).toContain('greeter');
+		expect(await seatNames(session)).toEqual(['product', 'greeter', 'surveyor']);
 	});
 
 	it('lets an ordinary seat add several colleagues without a local call quota', async () => {
@@ -167,47 +139,6 @@ describe('ordinary participation', () => {
 			'seated',
 			'seated',
 		]);
-	});
-
-	it('returns an unchanged membership result without acknowledging or duplicating it', async () => {
-		const contexts: string[] = [];
-		const session = await open({
-			agents: [product, surveyor],
-			script: byAgent({
-				product: (context, _name, call) => {
-					contexts.push(contextText(context));
-					return call === 1 ? callTool('seat', { name: surveyor.name }) : quiet();
-				},
-				surveyor: () => quiet(),
-			}),
-		});
-
-		await (await session.visit(priya)).send({ text: 'Is the team ready?' });
-		await waitForRoom(session);
-
-		const record = await messagesOf(session);
-		expect(record.filter((message) => message.kind === 'seated')).toHaveLength(0);
-		expect(await seatNames(session)).toEqual(['product', 'surveyor']);
-		expect(contexts[1]).toContain('delivered');
-	});
-
-	it('wakes presence observers when membership changes', async () => {
-		const session = await open({
-			agents: [product, greeter],
-			available: [surveyor],
-			seats: { product: 'broadcast', greeter: 'presence' },
-			script: byAgent({
-				product: (_context, _name, call) => (call === 1 ? seat(surveyor.name) : quiet()),
-				greeter: () => quiet(),
-			}),
-		});
-		const events = collect(session);
-
-		await (await session.visit(priya)).send({ text: 'Who should join?' });
-		await waitForRoom(session);
-
-		expect(activated(events)).toContain('greeter');
-		expect(activated(events)).toContain('surveyor');
 	});
 
 	it('passes a colleague steering message to an ordinary seat still selecting membership', async () => {
@@ -249,44 +180,34 @@ describe('ordinary participation', () => {
 });
 
 describe('ordinary unseating and host membership', () => {
-	it('lets an ordinary seat unseat a colleague and records the departure', async () => {
+	it('returns an unchanged seating unacknowledged, refuses to unseat the fixed writer, and unseats a colleague', async () => {
+		const contexts: string[] = [];
 		const session = await open({
 			agents: [product, surveyor],
+			summary: true,
 			script: byAgent({
-				product: (_context, _name, call) =>
-					call === 1 ? callTool('unseat', { name: surveyor.name }) : quiet(),
+				product: (context, _name, call) => {
+					contexts.push(contextText(context));
+					if (call === 1) return callTool('seat', { name: surveyor.name });
+					if (call === 2) return callTool('unseat', { name: writer.name });
+					return call === 3 ? callTool('unseat', { name: surveyor.name }) : quiet();
+				},
 				surveyor: () => quiet(),
 			}),
 		});
 		const events = collect(session);
 
-		await (await session.visit(priya)).send({ text: 'Can anyone decide?' });
+		await (await session.visit(priya)).send({ text: 'Is the team ready?' });
 		await waitForRoom(session);
 
+		expect(contexts[1]).toContain('delivered');
 		const record = await messagesOf(session);
-		expect(
-			record.some((message) => message.kind === 'unseated' && message.subject === surveyor.name),
-		).toBe(true);
-		expect(await seatNames(session)).toEqual([product.name]);
+		expect(record.filter((message) => message.kind === 'seated')).toHaveLength(0);
+		expect(record.filter((message) => message.kind === 'unseated')).toMatchObject([
+			{ from: product.name, subject: surveyor.name },
+		]);
+		expect(await seatNames(session)).toEqual([product.name, writer.name]);
 		expect(activated(events)).toContain(product.name);
-	});
-
-	it('refuses an ordinary seat trying to unseat the fixed summary writer', async () => {
-		const session = await open({
-			agents: [product],
-			summary: true,
-			script: byAgent({
-				product: (_context, _name, call) =>
-					call === 1 ? callTool('unseat', { name: writer.name }) : quiet(),
-			}),
-		});
-
-		await (await session.visit(priya)).send({ text: 'Remove the writer.' });
-		await waitForRoom(session);
-
-		const record = await messagesOf(session);
-		expect(record.some((message) => message.kind === 'unseated')).toBe(false);
-		expect(await seatNames(session)).toContain(writer.name);
 	});
 
 	it('preserves host seat and unseat records across a stopped and resumed room', async () => {
@@ -305,18 +226,14 @@ describe('ordinary unseating and host membership', () => {
 		expect(kinds(record)).toEqual(['seated', 'unseated']);
 		expect(presence(record).every((message) => message.from === undefined)).toBe(true);
 
-		const name = session.name;
 		await session.stop();
-		started.pop();
-		const { readRoom, resumeRoom } = await import('../src/index.ts');
-		const stopped = await readRoom(name, { runtime });
+		const stopped = await readRoom(session.name, { runtime });
 		expect(stopped.participants.map((seat) => seat.name)).toEqual([product.name]);
-		const resumed = await resumeRoom(name, {
+		const resumed = await resumeRoom(session.name, {
 			agents: [product, surveyor],
 			runtime,
 			execution: piExecution({ stream: scripted(byAgent({})) }),
 		});
-		started.push(resumed);
-		expect(await seatNames(resumed)).toEqual([product.name]);
+		expect(await seatNames(stopAtEnd(resumed))).toEqual([product.name]);
 	});
 });
