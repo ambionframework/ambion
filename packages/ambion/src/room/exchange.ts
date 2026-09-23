@@ -232,7 +232,8 @@ function closedExchangeView(close: Close, pass: Pass): Extract<ExchangeView, { s
 		activations: activationsInRange(pass.leases, close.from, close.through).map(({ lease }) =>
 			exchangeActivation(lease),
 		),
-		// The view copies a published summary, as it copies `summaries`, so it shares nothing with the fold.
+		// The view copies a published summary, as it copies `summaries`, so it
+		// shares nothing with the fold.
 		summary:
 			summary.status === 'published'
 				? { status: 'published', summary: copyMessage(summary.summary) }
