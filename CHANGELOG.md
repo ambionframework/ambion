@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**`WorkspaceFiles` writes its temporary file beside the target.** An
+export lands in `<target>.<random>.part` in the target's folder, and the
+rename onto the target stays on one filesystem. It wrote under `/tmp`
+before, and a server that mounts `/tmp` as a filesystem of its own refused
+that rename.
+
 **`openWorkspace` takes its backends by kind.** The `backend` option is
 now `WorkspaceBackends`: `{ bash, sql? }`. Write
 `backend: { bash: memoryBackend() }` where you wrote

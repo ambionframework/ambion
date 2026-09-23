@@ -234,13 +234,11 @@ holds files, gives `invalid` or `unknown`, as `BashEnv` does. The `lstat`
 runs after the failed call. A change between the two can pick the wrong
 code, and it changes no file.
 
-**The `sql` export needs its rename on one filesystem.** `WorkspaceFiles`
-writes an export to a temporary file under `/tmp` and renames it onto the
-target. Many servers mount `/tmp` as a filesystem of its own, and a
-rename across two filesystems fails. The workstation needs `WorkspaceFiles`
-to write its temporary file beside the target, and the
-[backlog](../planning/backlog.md#designs-with-a-shape) holds that change.
-Log rotation renames inside one folder, so it needs no change.
+**The `sql` export keeps its rename on one filesystem.** `WorkspaceFiles`
+writes an export to a temporary file beside the target and renames it
+onto the target. Many servers mount `/tmp` as a filesystem of its own, and
+a rename across two filesystems fails. Log rotation also renames inside
+one folder.
 
 **`exec` checks the directory first.** `SshEnv` runs one SFTP `lstat`
 of the working directory. When the directory does not exist, it returns
