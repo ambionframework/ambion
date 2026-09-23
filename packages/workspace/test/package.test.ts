@@ -103,8 +103,8 @@ it('exports exactly the just-bash backends from ./just-bash', () => {
 	expect(Object.keys(justBash).sort()).toEqual(['directoryBackend', 'memoryBackend']);
 });
 
-it('exports exactly the conformance suite from ./conformance', () => {
-	expect(Object.keys(conformance).sort()).toEqual(['workspaceConformance']);
+it('exports exactly the two conformance suites from ./conformance', () => {
+	expect(Object.keys(conformance).sort()).toEqual(['sqlConformance', 'workspaceConformance']);
 });
 
 it('loads no backend at the root: no export from the just-bash, resource, or SQL files', async () => {

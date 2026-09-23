@@ -42,10 +42,10 @@ import { type Static, Type } from 'typebox';
 export const SHARED_DATABASE = '/workspace/shared.db';
 
 /** How many rows the preview shows when the caller names no limit. */
-const PREVIEW_ROWS = 50;
+export const PREVIEW_ROWS = 50;
 
 /** The CSV text for a NULL value, so a NULL reads apart from an empty string. */
-const NULL_SENTINEL = '\\N';
+export const NULL_SENTINEL = '\\N';
 
 /** The largest `-json` output, in characters, the default path parses before it asks for a LIMIT. */
 const MAX_JSON_CHARS = 1_000_000;
@@ -79,14 +79,14 @@ const sqlSchema = Type.Object({
 type SqlParams = Static<typeof sqlSchema>;
 
 /** What the tool reports beside its text, for logs and UI. */
-interface SqlDetails {
+export interface SqlDetails {
 	database: string;
 	rows: number;
 	export?: string;
 	truncated?: boolean;
 }
 
-type SqlResult = AgentToolResult<SqlDetails>;
+export type SqlResult = AgentToolResult<SqlDetails>;
 
 /**
  * Create the `sql` tool over the just-bash execution environment. `database`
@@ -140,7 +140,7 @@ async function run(
 	params: SqlParams,
 	context: Context,
 ): Promise<SqlResult> {
-	const database = await resolvePath(env, params.database ?? defaultDatabase, context);
+	const database = await absolutePath(env, params.database ?? defaultDatabase, context);
 	await ensureParent(env, database, context);
 	const scriptPath = await writeScript(env, params.sql, context);
 	const options: ShellExecOptions = params.timeout === undefined ? {} : { timeout: params.timeout };
@@ -148,7 +148,7 @@ async function run(
 	try {
 		if (params.export === undefined)
 			return await preview(env, database, scriptPath, maxRows, options, context);
-		const exportPath = await resolvePath(env, params.export, context);
+		const exportPath = await absolutePath(env, params.export, context);
 		await ensureParent(env, exportPath, context);
 		return await exportCsv(env, database, scriptPath, exportPath, maxRows, options, context);
 	} finally {
@@ -174,6 +174,15 @@ async function preview(
 	}
 	const rows = parseRows(result.output);
 	if (rows === undefined) return report(result.output.trim(), { database, rows: 0 });
+	return previewed(database, rows, maxRows);
+}
+
+/** The report of one preview: a Markdown table of the rows, capped at `maxRows`. */
+export function previewed(
+	database: string,
+	rows: readonly Record<string, unknown>[],
+	maxRows: number,
+): SqlResult {
 	if (rows.length === 0) return report(`Ran on ${database}. No rows.`, { database, rows: 0 });
 	return report(table(rows, maxRows), { database, rows: rows.length });
 }
@@ -210,13 +219,26 @@ async function exportCsv(
 		const previewRecords = records.slice(0, maxRows + 1);
 		const moved = await env.renameFile(tempOut, exportPath, context);
 		if (!moved.ok) throw moved.error;
-		const block =
-			previewRecords.length === 0 ? '(no rows)' : `\`\`\`csv\n${previewRecords.join('\n')}\n\`\`\``;
-		const footer = `\n\nWrote ${rows} ${plural(rows)} to ${exportPath}. A NULL value reads as ${NULL_SENTINEL}.`;
-		return report(`${block}${footer}`, { database, rows, export: exportPath });
+		return exported(database, previewRecords, rows, exportPath);
 	} finally {
 		await env.remove(tempOut, { force: true }, context);
 	}
+}
+
+/**
+ * The report of one export: the head of the file as a CSV block, and the
+ * row count. `previewRecords` holds the header and the first rows.
+ */
+export function exported(
+	database: string,
+	previewRecords: readonly string[],
+	rows: number,
+	exportPath: string,
+): SqlResult {
+	const block =
+		previewRecords.length === 0 ? '(no rows)' : `\`\`\`csv\n${previewRecords.join('\n')}\n\`\`\``;
+	const footer = `\n\nWrote ${rows} ${plural(rows)} to ${exportPath}. A NULL value reads as ${NULL_SENTINEL}.`;
+	return report(`${block}${footer}`, { database, rows, export: exportPath });
 }
 
 /**
@@ -298,7 +320,7 @@ function parseRows(stdout: string): Record<string, unknown>[] | undefined {
 }
 
 /** Render rows as a GitHub Markdown table, capped at `maxRows`, with a footer. */
-function table(rows: Record<string, unknown>[], maxRows: number): string {
+function table(rows: readonly Record<string, unknown>[], maxRows: number): string {
 	const columns = Object.keys(rows[0] ?? {});
 	const shown = rows.slice(0, maxRows);
 	const header = `| ${columns.map(cell).join(' | ')} |`;
@@ -311,19 +333,30 @@ function table(rows: Record<string, unknown>[], maxRows: number): string {
 	return `${[header, rule, ...body].join('\n')}${footer}`;
 }
 
-/** One table cell: NULL for a missing value, and pipes and newlines made safe. */
+/** One table cell: NULL for a missing value, a byte count for a blob, and pipes and newlines made safe. */
 function cell(value: unknown): string {
 	if (value === null || value === undefined) return 'NULL';
+	if (value instanceof Uint8Array) return `(${value.length} bytes)`;
 	return String(value).replace(/\|/g, '\\|').replace(/\n/g, ' ');
 }
 
-async function resolvePath(env: ExecutionEnv, path: string, context: Context): Promise<string> {
+/** `path` as an absolute path on `env`. */
+export async function absolutePath(
+	env: ExecutionEnv,
+	path: string,
+	context: Context,
+): Promise<string> {
 	const resolved = await env.absolutePath(path, context);
 	if (!resolved.ok) throw resolved.error;
 	return resolved.value;
 }
 
-async function ensureParent(env: ExecutionEnv, path: string, context: Context): Promise<void> {
+/** Create the parent directory of `path` on `env`, with every missing parent. */
+export async function ensureParent(
+	env: ExecutionEnv,
+	path: string,
+	context: Context,
+): Promise<void> {
 	const made = await env.createDir(posix.dirname(path), { recursive: true }, context);
 	if (!made.ok) throw made.error;
 }
@@ -349,7 +382,7 @@ function plural(count: number): string {
 	return count === 1 ? 'row' : 'rows';
 }
 
-function failed(database: string, stderr: string): SqlResult {
+export function failed(database: string, stderr: string): SqlResult {
 	const message = stderr.trim() === '' ? 'The query failed.' : stderr.trim();
 	return report(`SQL error on ${database}:\n${message}`, { database, rows: 0 });
 }

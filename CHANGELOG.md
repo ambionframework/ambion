@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+**A workspace can take a SQL backend beside its shell backend.**
+`openWorkspace` takes an optional `sql` option, a `SqlBackend`: a shared
+database that need not live on the shell's filesystem. The root entry
+exports the `SqlBackend`, `SqlEnv`, `SqlOutcome`, `SqlRow`, and `SqlValue`
+types. With a SQL backend, the `sql` tool runs its statements on that
+backend under an owner of its own, and takes `sql`, `export`, and
+`maxRows`. `export` writes the CSV file on the shell. `Workspace.sql`
+exposes the SQL owner, and `dispose()` disposes both owners. With no SQL
+backend, the workspace works as before. The package ships no
+`SqlBackend`.
+
+**`./conformance` exports `sqlConformance`,** the cases every
+`SqlBackend` passes.
+
+**`SqlValue` moves from `./sql` to the root entry.** `./sql` no longer
+exports the type.
+
+**The default tool guidance states the file tools and the `sql` tool in
+two paragraphs.** The first paragraph no longer says that `sql` works over
+the shared files.
+
 **A `WorkspaceBackend` now names its own layout.** A new `WorkspaceLayout`
 type, exported from the root, holds three paths: `audit`, the audit log a
 caller sets no `path` for; `database`, the database a `sql` call names none

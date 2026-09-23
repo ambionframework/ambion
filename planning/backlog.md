@@ -38,13 +38,12 @@ cannot work from the typed README examples and the export snapshot.
 **A workstation backend.** A workspace backend over SSH to one remote
 server. PR #268 holds the scope. **Condition:** the owner schedules it.
 
-**A shell backend and a SQL backend.** A workspace opens a shell backend,
-a SQL backend, or both, each under its own owner. A SQL backend connects
-as each agent with its own credential, and the database server enforces
-the grants. `openSqlResource` becomes a tool policy over any SQL backend.
-[docs/backends.md](../docs/backends.md) holds the design. **Condition:**
-the owner schedules the lab setup: one workstation and one database
-server.
+**A SQL backend.** `openWorkspace` takes an optional `SqlBackend`
+([Workspace](../docs/workspace.md#give-the-workspace-a-sql-backend)), and
+the package ships none. A backend over a database server connects as each
+agent with its own credential, so the server enforces the grants. It
+passes `sqlConformance`. **Condition:** the lab setup, one workstation and
+one database server, is scheduled.
 
 **A backend profile and concurrent operations.** A backend declares its
 isolation, its network, and whether the owner may run operations from two

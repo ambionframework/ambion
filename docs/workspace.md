@@ -2,7 +2,9 @@
 
 **The workspace is the just-bash and Pi binding of the resource
 contract.** The optional `@ambionframework/workspace` package provides a
-workspace resource and its filesystem. Agents receive access through
+workspace resource and its filesystem. A workspace has one shell backend
+and can have one SQL backend
+([Give the workspace a SQL backend](#give-the-workspace-a-sql-backend)). Agents receive access through
 ordinary tool bundles. Workspace files remain separate from the
 collaboration journal. [Resources](resources.md) states the contract, the
 SQL binding, and the rules for references and provenance.
@@ -324,8 +326,8 @@ and `jq` filter it uses on its own.
 
 ## Query the shared database
 
-**The `sql` tool runs SQLite statements on one shared database.** A call
-that names no `database` opens the backend's `layout.database`; the
+**With no SQL backend, the `sql` tool runs SQLite statements on one shared
+database in the shell's filesystem.** A call that names no `database` opens the backend's `layout.database`; the
 just-bash backends name it `/workspace/shared.db`. Every agent queries this
 one file, so a table or a view one agent creates is data another agent reads
 at once. The tool takes these parameters:
@@ -382,6 +384,70 @@ behaviors:
   as `-json` and `-csv`. It does not read dot-commands such as `.mode`.
 - **The dialect is SQLite.** Dates are functions, `||` joins text, and a column
   type is an affinity.
+
+## Give the workspace a SQL backend
+
+**A workspace has one shell backend, and it can have one SQL backend.**
+The `backend` option is the shell backend, and every workspace has one.
+The `sql` option takes a `SqlBackend`: a shared database that need not
+live on the shell's filesystem. The package ships no `SqlBackend` yet. The
+interface is for a future backend, such as a database server with one
+account for each agent.
+
+```ts
+import { openWorkspace, type SqlBackend } from '@ambionframework/workspace';
+import { memoryBackend } from '@ambionframework/workspace/just-bash';
+
+declare const database: SqlBackend;
+const lab = openWorkspace({ name: 'lab', backend: memoryBackend(), sql: database });
+```
+
+**`SqlBackend` holds four members, and `SqlEnv` holds two.**
+
+| Member                     | Meaning                                                                |
+| -------------------------- | ---------------------------------------------------------------------- |
+| `connect(agent, signal?)`  | An `SqlEnv` for one agent. A backend with accounts connects as it      |
+| `dispose()`                | Optional. Release local handles, and keep the data                     |
+| `database`                 | The name the tool reports and the guidance states, with no credential  |
+| `guidance`                 | Optional. The dialect and the limits of the database                   |
+| `SqlEnv.run(sql, context)` | Run one or more statements in order, and give the rows of the last one |
+| `SqlEnv.cleanup()`         | The owner calls it after each operation                                |
+
+**`run` gives an outcome.** A statement that the database refuses gives
+`{ ok: false, message }`, with the database's own message, and the run
+stops at that statement. A fault of the connection rejects. An aborted
+`context.abortSignal` rejects before the first statement runs.
+
+**Each backend gets its own resource owner.** A long `bash` command does
+not delay a query. `workspace.use` and `mirror()` reach the shell owner.
+`workspace.sql` is the SQL owner, for host code. Do not await one owner's
+`use` inside a callback of the other. `dispose()` disposes both owners.
+
+**Two owners give no total order across the backends.** Each owner orders
+its own operations. A `bash` call and a `sql` call from two agents can
+finish in either order.
+
+**The `sql` tool runs its statements on the SQL backend.** It takes `sql`,
+`export`, and `maxRows`. It has no `database` parameter, because the
+backend names the database. The preview and the error text are the same as
+the shell `sql` tool.
+
+**`export` writes the result into the shell's filesystem.** The tool runs
+the query on the SQL owner and holds the rows in memory. It then releases
+the SQL owner and writes the CSV file on the shell owner, through a
+temporary file and a rename. A NULL value reads as `\N`, and a blob reads
+as hex.
+
+**The audit log stays on the shell's filesystem.** The entry of a `sql`
+call is one more shell operation after the call ends. It runs over its own
+unconditional context, so a cut call still leaves its entry. Another
+operation on the shell owner can run between the call and its entry.
+
+**The guidance follows the backend.** It names the backend's `database`
+and adds the backend's `guidance`. It does not name `layout.database`.
+
+**A new SQL backend passes `sqlConformance`** (see
+[The conformance suite](#the-conformance-suite)).
 
 ## The resource contract
 
@@ -440,6 +506,14 @@ describe.each(backends)('$name', (harness) => {
 The memory and directory backends run the suite first
 (`packages/workspace/test/conformance.test.ts`). A new backend runs it
 before it takes on tool-specific tests of its own.
+
+**`sqlConformance(harness)` holds the cases of a `SqlBackend`.** The
+harness has the same shape, with an `open()` that returns a fresh
+`SqlBackend`. The cases check the rows of the last statement, NULL as
+`null`, a last statement with no result, a refused statement as an
+outcome that stops the run, one database for every agent, and an abort
+before the first statement. A test backend over `node:sqlite` runs them
+(`packages/workspace/test/sql-backend.test.ts`).
 
 ## Dispose of a resource
 

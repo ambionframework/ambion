@@ -2,8 +2,10 @@
  * A workspace backend for Ambion: a virtual Unix filesystem and a shell.
  *
  * This package owns the workspace resource, its built-in tools, and two
- * filesystem backends. `openWorkspace` creates one owner; `workspace.tools()`
- * returns the tools and guidance that owner exposes to an agent. The root
+ * filesystem backends. `openWorkspace` opens a workspace over one shell
+ * backend and, when the caller sets one, one SQL backend (`SqlBackend`).
+ * `workspace.tools()` returns the tools and guidance the workspace exposes
+ * to an agent. The root
  * entry loads no backend: `./just-bash` holds the just-bash backends,
  * `./resource` holds the neutral resource contract, and `./sql` holds the
  * SQL resource. The root entry exports the environment helpers from
@@ -46,6 +48,7 @@ export type { WorkspaceLog, WorkspaceLogOptions } from './log.ts';
 export { openLog } from './log.ts';
 export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.ts';
 export { SHARED_DATABASE } from './sql.ts';
+export type { SqlBackend, SqlEnv, SqlOutcome, SqlRow, SqlValue } from './sql-backend.ts';
 export type { Workspace } from './workspace.ts';
 export { openWorkspace } from './workspace.ts';
 

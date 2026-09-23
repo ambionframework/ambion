@@ -51,7 +51,12 @@ nor a model library. `./just-bash` holds the two backends,
 `memoryBackend` and `directoryBackend`. `./sql` holds `openSqlResource`, a
 resource over its own SQLite database, with its `SqlProvenance` and
 `SqlResourceEnv` types. `./conformance` holds `workspaceConformance`, the
-scenario matrix a new backend runs to prove it meets the resource contract.
+scenario matrix a new backend runs to prove it meets the resource contract,
+and `sqlConformance`, the cases a `SqlBackend` runs.
+
+The root entry also exports the `SqlBackend` interface. `openWorkspace`
+takes one as its optional `sql` option, and the `sql` tool then runs on
+that database. The package ships no `SqlBackend`.
 
 ```ts
 import { memoryBackend } from '@ambionframework/workspace/just-bash';

@@ -1,15 +1,16 @@
 /**
- * The neutral layer's five default tools: read, write, edit, bash and sql.
+ * The neutral layer's default tools: read, write, edit, bash and sql.
  *
  * Every workspace gets these five tools before any tool a backend adds of
- * its own. A backend with no tools of its own still offers all five. The
- * tools run over Pi's `ExecutionEnv` alone, so this module names no
+ * its own. A shell backend with no tools of its own still offers all five.
+ * The tools run over Pi's `ExecutionEnv` alone, so this module names no
  * just-bash type.
  *
- * `sql` opens the backend's own shared database by default. A backend
- * states this database's path in its `layout`, and `openWorkspace` passes
- * it here. The guidance below states the same path, so an agent reads one
- * true fact about where its data lives.
+ * `sql` has two forms. With no SQL backend, the shell `sql` tool of
+ * `./sql.ts` opens the shell backend's own shared database, at the path
+ * its `layout` names. With a SQL backend, `./sql-tool.ts` runs the
+ * statements on that backend. The guidance states the form the workspace
+ * has, so an agent reads one true fact about where its data lives.
  */
 
 import {
@@ -22,12 +23,26 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { createSqlTool } from './sql.ts';
 
-/** Guidance for the five default tools and the shared database at `database`. */
+/** Guidance for the four file tools. */
+const FILE_TOOL_GUIDANCE = [
+	`Your workspace gives you five tools: read, write, edit, bash and sql. read, write, edit`,
+	`and bash work on shared files. Other agents connected to this workspace read and write the`,
+	`same files.`,
+].join('\n');
+
+/** Guidance for the five default tools, with the shell `sql` tool opening `database`. */
 export function defaultToolGuidance(database: string): string {
+	return fileToolGuidance(shellSqlGuidance(database));
+}
+
+/** Guidance for the four file tools, and a `sql` tool whose own guidance is `sqlGuidance`. */
+export function fileToolGuidance(sqlGuidance: string): string {
+	return `${FILE_TOOL_GUIDANCE}\n\n${sqlGuidance}`;
+}
+
+/** Guidance for the shell `sql` tool and the shared database at `database`. */
+function shellSqlGuidance(database: string): string {
 	return [
-		`Your workspace gives you five tools: read, write, edit, bash and sql, over shared`,
-		`files. Other agents connected to this workspace read and write the same files.`,
-		``,
 		`sql runs SQLite statements on one shared database at ${database}. Every agent`,
 		`queries this database, so a table or a view you create is data another agent reads at`,
 		`once. Share through a view or a table; this needs no copy. Attach a private scratch`,
@@ -38,15 +53,14 @@ export function defaultToolGuidance(database: string): string {
 	].join('\n');
 }
 
-/** Build the five default tools every workspace gets, with `sql` opening `database` by default. */
+/** Build the four file tools every workspace gets. */
+export function createFileTools(): readonly AgentHarnessTool<ExecutionToolContext>[] {
+	return [createReadTool(), createWriteTool(), createEditTool(), createBashTool()];
+}
+
+/** Build the five default tools of a workspace with no SQL backend, with `sql` opening `database`. */
 export function createDefaultTools(
 	database: string,
 ): readonly AgentHarnessTool<ExecutionToolContext>[] {
-	return [
-		createReadTool(),
-		createWriteTool(),
-		createEditTool(),
-		createBashTool(),
-		createSqlTool(database),
-	];
+	return [...createFileTools(), createSqlTool(database)];
 }
