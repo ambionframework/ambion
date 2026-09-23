@@ -162,8 +162,9 @@ home, so the backend reads it once for each client with `realpath('.')`.
 `resolvePath` resolves `~` and a relative path against that home.
 
 **The server runs bash and util-linux.** `SshEnv` runs each command
-through `bash -s`, whatever the login shell of the account is. It also
-needs a `setsid` that has the `--wait` option.
+through `bash`, whatever the login shell of the account is. It also needs
+a `setsid` that has the `--wait` option. Each account needs a login shell
+that runs a command, so `nologin` does not serve.
 
 ## The layout on a server
 
@@ -215,13 +216,21 @@ and `SshEnv` follows its behavior.
 
 **SFTP needs five adjustments.** `workspaceConformance` checks each row.
 
-| Method                | SFTP gap                                                                                          | `SshEnv` does                                                                |
-| --------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Every file method     | OpenSSH answers `ENOTDIR` as `NO_SUCH_FILE`, and `EISDIR`, `EEXIST`, and `ENOTEMPTY` as `FAILURE` | On either status, one `lstat` of the path and its parent picks the Pi code   |
-| `renameFile`          | SFTP v3 refuses to rename onto a file                                                             | Calls `posix-rename@openssh.com`; a server without it gets a plain `RENAME`  |
-| `createDir`           | SFTP makes one directory per request, and an existing one answers `FAILURE`                       | Makes each missing component in order; `lstat` finds a directory that exists |
-| `remove`              | SFTP removes one entry per request                                                                | Runs `rm -rf --` through `exec` for a recursive call                         |
-| `fileInfo`, `listDir` | SFTP gives `mtime` in seconds                                                                     | Multiplies it by 1000 for `mtimeMs`; `readdir` gives each entry's attributes |
+| Method                | SFTP gap                                                                                          | `SshEnv` does                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Every file method     | OpenSSH answers `ENOTDIR` as `NO_SUCH_FILE`, and `EISDIR`, `EEXIST`, and `ENOTEMPTY` as `FAILURE` | On either status, one `lstat` picks the Pi code, as the next paragraph states |
+| `renameFile`          | SFTP v3 refuses to rename onto a file                                                             | Calls `posix-rename@openssh.com`; a server without it gets a plain `RENAME`   |
+| `createDir`           | SFTP makes one directory per request, and an existing one answers `FAILURE`                       | Makes each missing component in order; `lstat` finds a directory that exists  |
+| `remove`              | SFTP removes one entry per request                                                                | Runs `rm -rf --` through `exec` for a recursive call                          |
+| `fileInfo`, `listDir` | SFTP gives `mtime` in seconds                                                                     | Multiplies it by 1000 for `mtimeMs`; `readdir` gives each entry's attributes  |
+
+**One `lstat` classifies a coarse status by the operation.** A file
+operation on a directory gives `is_directory`. A directory operation on a
+path that is not a directory gives `not_directory`. A path that does not
+exist gives `not_found`. Any other case, such as `rmdir` on a folder that
+holds files, gives `invalid` or `unknown`, as `BashEnv` does. The `lstat`
+runs after the failed call. A change between the two can pick the wrong
+code, and it changes no file.
 
 **The `sql` export needs its rename on one filesystem.** `WorkspaceFiles`
 writes an export to a temporary file under `/tmp` and renames it onto the
@@ -231,19 +240,39 @@ to write its temporary file beside the target, and the
 [backlog](../planning/backlog.md#designs-with-a-shape) holds that change.
 Log rotation renames inside one folder, so it needs no change.
 
+**`exec` checks the directory first.** `SshEnv` runs one SFTP `lstat`
+of the working directory. When the directory does not exist, it returns
+`spawn_error`, as `NodeExecutionEnv` does, and opens no channel.
+
 **`exec` sends the script on standard input.** `sshd` drops an `env`
 request unless `AcceptEnv` names the variable. `SshEnv` runs
 `exec setsid --wait bash -s` on the channel and writes the script to its
 standard input:
 
-1. One line on stderr that gives the process group ID, which `SshEnv`
-   reads and removes from the output.
-2. `cd -- '<dir>'`.
+1. `printf 'AMBION_PGID=%s\n' "$$" >&2`, which gives the process group
+   ID.
+2. `cd -- '<dir>' || exit 1`, which stops the script when the directory
+   went away after the check.
 3. One `export NAME='value'` for each variable, with each value quoted
    for the shell.
-4. The command inside `{ }`, with standard input from `/dev/null`. Bash
-   reads the whole group before it runs it, so the command cannot read the
-   script.
+4. The command as the body of a quoted heredoc, passed to `bash -c` with
+   standard input from `/dev/null`:
+
+   ```sh
+   bash -c "$(cat <<'AMBION_7f3a9c'
+   <command>
+   AMBION_7f3a9c
+   )" </dev/null
+   ```
+
+   The command runs as `bash -c <command>`, the same as in
+   `NodeExecutionEnv`, and it reads an empty standard input. `SshEnv` picks
+   a random delimiter that no line of the command equals.
+
+**`SshEnv` removes its own lines from stderr.** It buffers stderr until
+the first newline, reads the `AMBION_PGID=` line, and keeps it out of the
+output view. After a group kill, `setsid` writes a line that the child did
+not exit normally, and `SshEnv` removes that line too.
 
 **No value reaches a command line.** `ps` on the server shows no variable
 of one agent to another account.
@@ -254,7 +283,9 @@ of one agent to another account.
 starts each command detached and kills the whole group with `SIGKILL`.
 `setsid --wait` makes `bash` the leader of a new group and waits for it,
 so the channel reports the exit status of the command. An abort opens a
-second channel and sends `kill -KILL -- -<group>`.
+second channel and sends `kill -KILL -- -<group>`. An abort that comes
+before the `AMBION_PGID=` line waits for that line, which is the first
+thing the script prints.
 
 **The SSH signal request cannot do this alone.** OpenSSH 7.9 added signal
 delivery to `sshd`. It sends a subset of signals, and only to a login or a
@@ -400,7 +431,8 @@ describe(harness.name, () => {
 starts an `ssh2` `Server` in its own process. Its SFTP handlers read and
 write a temporary directory on the local disk, and each `exec` runs `bash`
 in that directory. The tier needs no container and no network, and
-`pnpm check` runs it.
+`pnpm check` runs it. It needs `setsid` from util-linux, so it runs on
+Linux and skips on a machine without `setsid`, such as macOS.
 
 - **It tests the plain `RENAME` path.** The `ssh2` server announces no
   SFTP extension, so `SshEnv` falls back. The handler replaces an existing
