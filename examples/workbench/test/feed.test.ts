@@ -24,8 +24,11 @@ interface Read {
 	reject: (error: Error) => void;
 }
 
-/** A source whose reads stay open until the test settles them. */
-function heldSource() {
+/**
+ * A feed on bringup, unless `selected` is false. Its source keeps each read
+ * open until the test settles it.
+ */
+function heldFeed(selected = true) {
 	const reads: Read[] = [];
 	const source: FeedSource<TestView> = {
 		read: (room, since) =>
@@ -33,16 +36,16 @@ function heldSource() {
 				reads.push({ room, since, resolve, reject });
 			}),
 	};
-	return { source, reads };
+	const feed = new RoomFeed<TestView>(source);
+	if (selected) feed.select('bringup');
+	return { feed, reads };
 }
 
 const seqs = (feed: RoomFeed<TestView>) => feed.messages.map((message) => message.seq);
 
 describe('RoomFeed', () => {
 	it('reads one request at a time, so overlapping polls add no duplicate', async () => {
-		const { source, reads } = heldSource();
-		const feed = new RoomFeed<TestView>(source);
-		feed.select('bringup');
+		const { feed, reads } = heldFeed();
 		const first = feed.refresh();
 		expect(await feed.refresh()).toBeUndefined();
 		expect(reads).toHaveLength(1);
@@ -58,9 +61,7 @@ describe('RoomFeed', () => {
 	});
 
 	it('drops a read that ends after the feed moved to another room', async () => {
-		const { source, reads } = heldSource();
-		const feed = new RoomFeed<TestView>(source);
-		feed.select('bringup');
+		const { feed, reads } = heldFeed();
 		const stale = feed.refresh();
 		feed.select('power');
 		const current = feed.refresh();
@@ -78,9 +79,7 @@ describe('RoomFeed', () => {
 	});
 
 	it('drops the result of an earlier visit to the same room', async () => {
-		const { source, reads } = heldSource();
-		const feed = new RoomFeed<TestView>(source);
-		feed.select('bringup');
+		const { feed, reads } = heldFeed();
 		const first = feed.refresh();
 		feed.select('power');
 		feed.select('bringup');
@@ -90,9 +89,7 @@ describe('RoomFeed', () => {
 	});
 
 	it('reports a failed read of the current room and reads again after it', async () => {
-		const { source, reads } = heldSource();
-		const feed = new RoomFeed<TestView>(source);
-		feed.select('bringup');
+		const { feed, reads } = heldFeed();
 		const failed = feed.refresh();
 		reads[0]?.reject(new Error('host unreachable'));
 		await expect(failed).rejects.toThrow('host unreachable');
@@ -104,9 +101,7 @@ describe('RoomFeed', () => {
 	});
 
 	it('swallows a failed read of a room the feed already left', async () => {
-		const { source, reads } = heldSource();
-		const feed = new RoomFeed<TestView>(source);
-		feed.select('bringup');
+		const { feed, reads } = heldFeed();
 		const stale = feed.refresh();
 		feed.select('power');
 		reads[0]?.reject(new Error('old room failed'));
@@ -114,8 +109,8 @@ describe('RoomFeed', () => {
 	});
 
 	it('does nothing before a room is selected', async () => {
-		const { source, reads } = heldSource();
-		expect(await new RoomFeed<TestView>(source).refresh()).toBeUndefined();
+		const { feed, reads } = heldFeed(false);
+		expect(await feed.refresh()).toBeUndefined();
 		expect(reads).toHaveLength(0);
 	});
 });

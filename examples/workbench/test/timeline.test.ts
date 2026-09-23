@@ -2,21 +2,37 @@ import type { ExchangeView, Message } from '@ambionframework/ambion';
 import { describe, expect, it } from 'vitest';
 import { type Block, buildTimeline, discussionKeys } from '../src/timeline.ts';
 
-const said = (seq: number, from: string, to?: string): Message =>
-	({ seq, kind: 'said', from, to, text: `${from} ${seq}`, at: '2026-01-01T00:00:00Z' }) as Message;
-type Summary = Extract<Message, { kind: 'summary' }>;
 const AT = '2026-01-01T00:00:00Z';
+const said = (seq: number, from: string, to?: string): Message =>
+	({ seq, kind: 'said', from, to, text: `${from} ${seq}`, at: AT }) as Message;
+type Summary = Extract<Message, { kind: 'summary' }>;
 const summaryOf = (seq: number, to: string): Summary =>
-	({
-		seq,
-		kind: 'summary',
-		from: 'assistant',
-		to,
-		text: `summary ${seq}`,
-		at: '2026-01-01T00:00:00Z',
-	}) as Summary;
+	({ seq, kind: 'summary', from: 'assistant', to, text: `summary ${seq}`, at: AT }) as Summary;
 const arrived = (seq: number): Message =>
-	({ seq, kind: 'arrived', subject: 'theo', at: '2026-01-01T00:00:00Z' }) as Message;
+	({ seq, kind: 'arrived', subject: 'theo', at: AT }) as Message;
+const closedExchange = (
+	from: number,
+	through: number,
+	owner: string,
+	summary: object = { status: 'silent' },
+): ExchangeView =>
+	({
+		from,
+		through,
+		status: 'closed',
+		activations: [],
+		outcome: { kind: 'complete' },
+		owner,
+		at: AT,
+		summary,
+	}) as ExchangeView;
+const openExchange = (from: number): ExchangeView => ({
+	from,
+	status: 'open',
+	owner: 'mira',
+	at: AT,
+	activations: [],
+});
 
 const humans = new Set(['theo', 'mira']);
 const build = (
@@ -50,16 +66,10 @@ const thread = [
 	said(134, 'experiments'),
 	summaryOf(145, 'theo'),
 ];
-const closed: ExchangeView = {
-	from: 98,
-	through: 134,
-	status: 'closed',
-	activations: [],
-	outcome: { kind: 'complete' },
-	owner: 'theo',
-	at: AT,
-	summary: { status: 'published', summary: summaryOf(145, 'theo') },
-};
+const closed = closedExchange(98, 134, 'theo', {
+	status: 'published',
+	summary: summaryOf(145, 'theo'),
+});
 
 describe('buildTimeline', () => {
 	it('keeps a steering message inside the discussion, and the summary last', () => {
@@ -89,62 +99,36 @@ describe('buildTimeline', () => {
 
 	it('shows one reply directly, with no discussion and no summary', () => {
 		const messages = [said(59, 'mira'), said(61, 'assistant', 'mira'), summaryOf(66, 'mira')];
-		const exchange: ExchangeView = {
-			from: 59,
-			through: 61,
-			status: 'closed',
-			activations: [],
-			outcome: { kind: 'complete' },
-			owner: 'mira',
-			at: AT,
-			summary: { status: 'published', summary: summaryOf(66, 'mira') },
-		};
+		const exchange = closedExchange(59, 61, 'mira', {
+			status: 'published',
+			summary: summaryOf(66, 'mira'),
+		});
 		expect(shape(build(messages, [exchange]))).toEqual(['question:59', 'said:61']);
 	});
 
 	it('keeps the closing mark when a person is the only one who spoke after the question', () => {
 		// An exchange aborted after a follow-up: no agent replied, so there is nothing to show directly.
-		const exchange: ExchangeView = {
-			from: 4,
-			through: 9,
-			status: 'closed',
-			activations: [],
-			outcome: { kind: 'complete' },
-			owner: 'mira',
-			at: AT,
-			summary: { status: 'silent' },
-		};
+		const exchange = closedExchange(4, 9, 'mira');
 		const blocks = build([said(4, 'mira'), said(9, 'mira')], [exchange]);
 		expect(shape(blocks)).toEqual(['question:4', 'discussion:4(1)']);
 		expect(blocks[1]).toMatchObject({ flag: 'No summary' });
 	});
 
 	it('notes a closed exchange that has no reply and no summary', () => {
-		const exchange: ExchangeView = {
-			from: 75,
-			through: 75,
-			status: 'closed',
-			activations: [],
-			outcome: { kind: 'complete' },
-			owner: 'theo',
-			at: AT,
-			summary: { status: 'silent' },
-		};
-		const blocks = build([said(75, 'theo')], [exchange]);
+		const blocks = build([said(75, 'theo')], [closedExchange(75, 75, 'theo')]);
 		expect(shape(blocks)).toEqual(['question:75', 'note']);
 		expect(blocks[1]).toMatchObject({ text: 'Closed without a summary' });
 	});
 
 	it('flags a discussion whose summary is pending or failed', () => {
-		const pending: ExchangeView = { ...closed, summary: { status: 'pending' } };
+		const pending = closedExchange(98, 134, 'theo', { status: 'pending' });
 		const blocks = build(thread.slice(0, -1), [pending]);
 		expect(blocks[1]).toMatchObject({ type: 'discussion', flag: 'Summary pending' });
 	});
 
 	it('keeps the open exchange in the open, and ends with a live block', () => {
 		const messages = [said(4, 'mira'), said(6, 'assistant', 'design'), said(9, 'mira')];
-		const open: ExchangeView = { from: 4, status: 'open', owner: 'mira', at: AT, activations: [] };
-		const blocks = build(messages, [open], {
+		const blocks = build(messages, [openExchange(4)], {
 			open: { owner: 'mira' },
 			working: ['assistant', 'design'],
 		});
@@ -157,26 +141,6 @@ describe('buildTimeline', () => {
 	it('ignores presence entries', () => {
 		expect(shape(build([arrived(1), said(2, 'mira'), arrived(3)], []))).toEqual(['question:2']);
 	});
-
-	it('shows an earlier exchange collapsed beside a newer open one', () => {
-		const later: ExchangeView = {
-			from: 150,
-			status: 'open',
-			owner: 'mira',
-			at: AT,
-			activations: [],
-		};
-		const blocks = build([...thread, said(150, 'mira')], [closed, later], {
-			open: { owner: 'mira' },
-		});
-		expect(shape(blocks)).toEqual([
-			'question:98',
-			'discussion:98(5)',
-			'summary:145',
-			'question:150',
-			'live',
-		]);
-	});
 });
 
 describe('cost and awaiting', () => {
@@ -184,12 +148,9 @@ describe('cost and awaiting', () => {
 	const exchangeWith = (extra: Record<string, unknown>): ExchangeView =>
 		({ ...closed, ...extra }) as ExchangeView;
 
-	it('shows the cost of an exchange on its discussion', () => {
+	it('shows the cost of an exchange on its discussion, or its tokens, or nothing without usage', () => {
 		const blocks = build(thread, [exchangeWith({ usage: { ...usage, cost: 0.0123 } })]);
 		expect(blocks[1]).toMatchObject({ type: 'discussion', cost: '$0.0123', activations: 0 });
-	});
-
-	it('falls back to tokens when the usage has no cost, and to nothing without usage', () => {
 		expect(build(thread, [exchangeWith({ usage })])[1]).toMatchObject({ cost: '12.3k tokens' });
 		expect(build(thread, [closed])[1]).toMatchObject({ cost: '' });
 	});
@@ -212,18 +173,18 @@ describe('cost and awaiting', () => {
 		expect(blocks.at(-1)).toEqual({ type: 'note', text: 'Waiting on theo · $0.5000' });
 	});
 
-	it('places the tail blocks after the closed exchanges and before the live block', () => {
-		const later: ExchangeView = {
-			from: 150,
-			status: 'open',
-			owner: 'mira',
-			at: AT,
-			activations: [],
-		};
-		const blocks = build([...thread, said(150, 'mira')], [closed, later], {
+	it('shows an earlier exchange collapsed beside a newer open one, with the tail blocks before the live block', () => {
+		const blocks = build([...thread, said(150, 'mira')], [closed, openExchange(150)], {
 			open: { owner: 'mira' },
 			tail: [{ type: 'note', text: 'Waiting.' }],
 		});
-		expect(shape(blocks).slice(-2)).toEqual(['note', 'live']);
+		expect(shape(blocks)).toEqual([
+			'question:98',
+			'discussion:98(5)',
+			'summary:145',
+			'question:150',
+			'note',
+			'live',
+		]);
 	});
 });

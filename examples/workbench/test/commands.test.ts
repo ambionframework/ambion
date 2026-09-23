@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type Choices, parse, type RoomChoice, suggest } from '../src/commands.ts';
+import { type Choices, type Parsed, parse, type RoomChoice, suggest } from '../src/commands.ts';
 
 const rooms: RoomChoice[] = [
 	{ name: 'bringup', status: 'running', working: false },
@@ -20,28 +20,19 @@ const choices: Choices = {
 };
 
 describe('parse', () => {
-	it('reads plain text as a message', () => {
-		expect(parse('  Which resistor?  ')).toEqual({ kind: 'message', text: 'Which resistor?' });
-	});
-
-	it('reads a command and its argument', () => {
-		expect(parse('/room bringup')).toEqual({ kind: 'command', name: 'room', argument: 'bringup' });
-		expect(parse('/ABORT')).toEqual({ kind: 'command', name: 'abort', argument: '' });
-	});
-
-	it('reports an unknown command by name', () => {
-		expect(parse('/library/led-5mm.md')).toEqual({ kind: 'unknown', name: 'library/led-5mm.md' });
-	});
-
-	it('lets a double slash send a message that starts with one slash', () => {
-		expect(parse('//library/led-5mm.md is the datasheet')).toEqual({
-			kind: 'message',
-			text: '/library/led-5mm.md is the datasheet',
-		});
-	});
-
-	it('sends a multi-line text as a message, even after a slash', () => {
-		expect(parse('/abort\nand then explain')).toMatchObject({ kind: 'message' });
+	it('reads a message, a command with its argument, an unknown command, and a slash in a message', () => {
+		const cases: [string, Parsed][] = [
+			['  Which resistor?  ', { kind: 'message', text: 'Which resistor?' }],
+			['/room bringup', { kind: 'command', name: 'room', argument: 'bringup' }],
+			['/ABORT', { kind: 'command', name: 'abort', argument: '' }],
+			['/steps 2', { kind: 'command', name: 'steps', argument: '2' }],
+			['/library/led-5mm.md', { kind: 'unknown', name: 'library/led-5mm.md' }],
+			// A double slash sends a message that starts with one slash.
+			['//library/x.md is it', { kind: 'message', text: '/library/x.md is it' }],
+			// A multi-line text is a message, even after a slash.
+			['/abort\nand then explain', { kind: 'message', text: '/abort\nand then explain' }],
+		];
+		for (const [text, parsed] of cases) expect(parse(text), text).toEqual(parsed);
 	});
 });
 
@@ -60,6 +51,7 @@ describe('suggest', () => {
 				'/abort',
 				'/stop',
 				'/resume',
+				'/steps',
 				'/expand',
 				'/collapse',
 			]),
@@ -75,7 +67,7 @@ describe('suggest', () => {
 		expect(suggest('/ro', choices)[0]).toMatchObject({ insert: '/room ', run: false });
 	});
 
-	it('lists the rooms after /room, with their state', () => {
+	it('lists the rooms after /room, with their state, and filters them by what follows', () => {
 		const rows = suggest('/room ', choices);
 		expect(rows.map((row) => [row.label, row.detail])).toEqual([
 			['bringup', 'running'],
@@ -83,6 +75,7 @@ describe('suggest', () => {
 			['power', 'stopped'],
 		]);
 		expect(rows[0]).toMatchObject({ insert: '/room bringup', run: true });
+		expect(suggest('/room PO', choices).map((row) => row.label)).toEqual(['power']);
 	});
 
 	it('lists the people after /user, with their role', () => {
@@ -108,21 +101,10 @@ describe('suggest', () => {
 		expect(suggest('/new bringup2', choices)).toEqual([]);
 	});
 
-	it('filters the rooms by what follows /room', () => {
-		expect(suggest('/room PO', choices).map((row) => row.label)).toEqual(['power']);
-	});
-
 	it('opens no palette for text, for a double slash, or for an argument of another command', () => {
 		expect(suggest('hello', choices)).toEqual([]);
 		expect(suggest('//path', choices)).toEqual([]);
 		expect(suggest('/abort now', choices)).toEqual([]);
 		expect(suggest('/room a\nb', choices)).toEqual([]);
-	});
-});
-
-describe('the steps command', () => {
-	it('parses with its argument and appears in the palette', () => {
-		expect(parse('/steps 2')).toEqual({ kind: 'command', name: 'steps', argument: '2' });
-		expect(suggest('/st', choices).map((row) => row.label)).toContain('/steps');
 	});
 });

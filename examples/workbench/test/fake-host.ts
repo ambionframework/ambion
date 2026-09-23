@@ -1,16 +1,13 @@
+import { people } from '../src/definitions.ts';
 import { Session } from '../src/session.ts';
 import type {
 	ActivationRead,
 	Approval,
 	FileContent,
-	FileEntry,
-	Person,
 	RoomView,
 	Workbench,
 } from '../src/workbench.ts';
 
-export const person = (name: string, role: string) =>
-	({ name, role, identity: name }) as unknown as Person;
 export const view = (name: string, extra: Record<string, unknown> = {}) =>
 	({
 		name,
@@ -27,39 +24,37 @@ export const view = (name: string, extra: Record<string, unknown> = {}) =>
 		...extra,
 	}) as unknown as RoomView;
 
-/** A host that records each call and answers from a table. */
+/**
+ * A host that answers from a table and records each call. A test uses it for
+ * what a real host does not let it arrange: a view it writes by hand, a read or
+ * a copy it holds open, and a count of the reads and the watches.
+ */
 export class FakeHost implements Workbench {
-	readonly people = [person('mira', 'Hardware lead'), person('theo', 'Firmware engineer')];
+	readonly people = people;
 	readonly calls: string[] = [];
 	readonly table = new Map<string, RoomView>([
 		['bringup', view('bringup')],
 		['power', view('power')],
 	]);
-	fileList: FileEntry[] = [
-		{ path: '/library/led-5mm.md', size: 797 },
-		{ path: '/shared/notes.md', size: 40 },
-	];
-	failNext: string | undefined;
-
-	private record(call: string): void {
-		this.calls.push(call);
-		if (this.failNext) {
-			const message = this.failNext;
-			this.failNext = undefined;
-			throw new Error(message);
-		}
-	}
+	/** How many times the session read a room. */
+	readCount = 0;
+	/** While set, a read waits for it. */
+	gate: Promise<void> | undefined;
+	/** While set, `send` waits for it. */
+	sendGate: Promise<void> | undefined;
+	/** While set, `attach` waits for it. */
+	attachGate: Promise<void> | undefined;
+	readonly watching = new Map<string, Set<() => void>>();
+	readonly sentRefs: string[][] = [];
+	/** The traces the host holds, by activation id. */
+	readonly traces = new Map<string, ActivationRead>();
+	pendingApprovals: Approval[] = [];
+	/** Every path the session asked the host to read. */
+	readonly reads: string[] = [];
 
 	async rooms() {
 		return [...this.table.values()];
 	}
-	/** How many times the session read a room. */
-	readCount = 0;
-	/** While set, a read waits for it. A test uses it to hold a read open. */
-	gate: Promise<void> | undefined;
-	/** The listeners for each room, as `watch` registered them. */
-	readonly watching = new Map<string, Set<() => void>>();
-
 	async read(room: string) {
 		this.readCount += 1;
 		if (this.gate) await this.gate;
@@ -83,32 +78,22 @@ export class FakeHost implements Workbench {
 		return this.watching.get(room)?.size ?? 0;
 	}
 	async join(room: string, who: string) {
-		this.record(`join:${room}:${who}`);
+		this.calls.push(`join:${room}:${who}`);
 	}
 	async leave(room: string, who: string) {
-		this.record(`leave:${room}:${who}`);
+		this.calls.push(`leave:${room}:${who}`);
 	}
-	sentRefs: string[][] = [];
-	/** While set, `send` waits for it. A test uses it to hold a send in flight. */
-	sendGate: Promise<void> | undefined;
 	async send(room: string, who: string, _key: string, text: string, refs?: string[]) {
-		this.record(`send:${room}:${who}:${text}`);
+		this.calls.push(`send:${room}:${who}:${text}`);
 		if (this.sendGate) await this.sendGate;
 		this.sentRefs.push(refs ?? []);
 	}
-	async control(room: string, action: string) {
-		this.record(`control:${room}:${action}`);
+	async control(room: string) {
 		return this.read(room);
 	}
-	async create(name: string, goal: string) {
-		this.record(`create:${name}:${goal}`);
-		const created = view(name, { goal });
-		this.table.set(name, created);
-		return created;
+	async create(name: string): Promise<RoomView> {
+		throw new Error(`The fake host creates no room ${name}.`);
 	}
-	/** The traces the host holds, by activation id. */
-	readonly traces = new Map<string, ActivationRead>();
-	pendingApprovals: Approval[] = [];
 	async activation(_room: string, id: string) {
 		this.calls.push(`activation:${id}`);
 		return this.traces.get(id);
@@ -117,45 +102,30 @@ export class FakeHost implements Workbench {
 		return this.pendingApprovals;
 	}
 	async files() {
-		return this.fileList;
+		return [{ path: '/library/led-5mm.md', size: 797 }];
 	}
-	/** Every path the session asked the host to read. */
-	readonly reads: string[] = [];
 	async file(path: string): Promise<FileContent> {
 		this.reads.push(path);
 		return { path, text: `text of ${path}`, truncated: false };
 	}
-	/** Every local path the session asked the host to attach. */
-	readonly attached: string[] = [];
-	/** While set, `attach` waits for it. A test uses it to hold a copy in flight. */
-	attachGate: Promise<void> | undefined;
-	async attach(localPath: string): Promise<FileEntry> {
-		this.record(`attach:${localPath}`);
+	async attach(localPath: string) {
+		this.calls.push(`attach:${localPath}`);
 		if (this.attachGate) await this.attachGate;
-		this.attached.push(localPath);
-		const path = `/attachments/${localPath.split('/').at(-1)}`;
-		return { path, size: 42 };
+		return { path: `/attachments/${localPath.split('/').at(-1)}`, size: 42 };
 	}
-	labNames: string[] = ['runs', 'results'];
 	async labTables() {
-		return this.labNames;
+		return ['runs', 'results'];
 	}
 	async labTable(uri: string): Promise<FileContent> {
 		this.reads.push(uri);
 		return { path: uri, text: `table ${uri}`, truncated: false };
 	}
-	async close() {
-		this.calls.push('close');
-	}
+	async close() {}
 }
 
-export async function started(name: string | null = 'mira') {
+export async function started() {
 	const host = new FakeHost();
-	let changes = 0;
-	const identity = name ? host.people.find((candidate) => candidate.name === name) : undefined;
-	const session = new Session(host, identity, () => {
-		changes += 1;
-	});
+	const session = new Session(host, people[0], () => {});
 	await session.start();
-	return { host, session, changes: () => changes };
+	return { host, session };
 }

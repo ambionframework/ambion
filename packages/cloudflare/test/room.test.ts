@@ -1,19 +1,61 @@
 /**
- * The room object: it starts from names, admits a person, and lands a
- * repeated idempotency key once.
+ * The room object: it starts from names, admits a person, lands a repeated
+ * idempotency key once, and resumes over its own storage after eviction.
  */
-import { env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
+import { runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
+import type { Message } from '@ambionframework/ambion';
 import { namespaced } from '@ambionframework/journal';
 import { expect, it } from 'vitest';
 import { sqlStorage } from '../src/storage.ts';
+import { evict, inside, roomOf } from './objects.ts';
 import { until } from './until.ts';
 
-async function seedStoppedOpen(stub: DurableObjectStub, name: string): Promise<void> {
-	await runInDurableObject(stub, async (instance, state) => {
-		type MetadataObject = {
-			metadata: { change: (change: () => { patch: Record<string, unknown> }) => Promise<unknown> };
-		};
-		const object = instance as unknown as MetadataObject;
+/** The internals of the room object that a test reaches. */
+interface Room {
+	visit(person: { name: string; identity: string }): Promise<void>;
+	send(input: {
+		from: string;
+		to?: string;
+		text: string;
+		key?: string;
+	}): Promise<{ owner: string }>;
+	leave(name: string): Promise<void>;
+	visits: Map<string, { leave(): Promise<void> }>;
+	metadata: {
+		read(): Promise<Record<string, unknown>>;
+		change(change: () => { patch: Record<string, unknown> }): Promise<unknown>;
+	};
+}
+
+const priya = { name: 'priya', identity: 'Project manager.' };
+
+/** A started room with no agents that priya has visited. */
+async function visited(name: string) {
+	const stub = roomOf(name);
+	await stub.start({ name, agents: [] });
+	await stub.visit(priya);
+	return stub;
+}
+
+async function count(stub: ReturnType<typeof roomOf>, kind: Message['kind']) {
+	return (await stub.read()).messages.filter((message) => message.kind === kind).length;
+}
+
+const refusesImpostor = (stub: ReturnType<typeof roomOf>) =>
+	inside<Room, void>(stub, async (object) => {
+		await expect(object.visit({ name: 'priya', identity: 'Impostor.' })).rejects.toThrow(
+			/different identity/,
+		);
+	});
+
+async function presenceOf(stub: ReturnType<typeof roomOf>, name: string) {
+	const participants = (await stub.read({ messages: false })).participants;
+	const found = participants.find((one) => one.kind === 'human' && one.name === name);
+	return found && 'presence' in found ? found.presence : undefined;
+}
+
+async function seedStoppedOpen(stub: ReturnType<typeof roomOf>, name: string): Promise<void> {
+	await inside<Room, void>(stub, async (object, state) => {
 		await object.metadata.change(() => ({ patch: { name, agents: [], stopped: true } }));
 		const journal = await namespaced(sqlStorage(state), 'ambion/room').open(name);
 		let position = (await journal.read(0)).position;
@@ -51,13 +93,11 @@ async function seedStoppedOpen(stub: DurableObjectStub, name: string): Promise<v
 			position = landed.position;
 		}
 	});
-	await runInDurableObject(stub, async (_instance, state) => {
-		state.abort('reconstruct stopped record');
-	}).catch(() => {});
+	await evict(stub, 'reconstruct stopped record');
 }
 
-it('starts, admits a person, and returns one plain exchange for repeated sends', async () => {
-	const stub = env.ROOM.get(env.ROOM.idFromName('room-test'));
+it('starts, admits a person, and returns one plain exchange for repeated sends, also for an empty key', async () => {
+	const stub = roomOf('room-test');
 	await stub.start({
 		name: 'room-test',
 		summary: 'assistant',
@@ -65,17 +105,10 @@ it('starts, admits a person, and returns one plain exchange for repeated sends',
 		agents: ['assistant'],
 		goal: 'Decide the pour date.',
 	});
-	await stub.visit({ name: 'priya', identity: 'Project manager.' });
-	const exchange = await stub.send({
-		from: 'priya',
-		text: 'Can I tell the client Thursday?',
-		key: 'question-1',
-	});
-	const retry = await stub.send({
-		from: 'priya',
-		text: 'Can I tell the client Thursday?',
-		key: 'question-1',
-	});
+	await stub.visit(priya);
+	const question = { from: 'priya', text: 'Can I tell the client Thursday?', key: 'question-1' };
+	const exchange = await stub.send(question);
+	const retry = await stub.send(question);
 	expect(exchange).toEqual({ owner: 'priya', from: expect.any(Number), at: expect.any(String) });
 	expect(retry).toEqual(exchange);
 	const conversation = await stub.waitForClose(exchange.from);
@@ -94,266 +127,170 @@ it('starts, admits a person, and returns one plain exchange for repeated sends',
 	expect(participants.map((participant) => participant.name)).toEqual(['assistant', 'priya']);
 	// The closed exchange remains reacquirable by its opening sequence.
 	expect(await stub.exchange(exchange.from)).toEqual(exchange);
-});
 
-it('rejects conflicting identity without poisoning send or restart recovery', async () => {
-	const name = 'room-identity-conflict';
-	const stub = env.ROOM.get(env.ROOM.idFromName(name));
-	await stub.start({ name, agents: [] });
-	await stub.visit({ name: 'priya', identity: 'Project manager.' });
-	await runInDurableObject(stub, async (instance) => {
-		const object = instance as unknown as {
-			visit(person: { name: string; identity: string }): Promise<void>;
-		};
-		await expect(object.visit({ name: 'priya', identity: 'Impostor.' })).rejects.toThrow(
-			/different identity/,
-		);
-	});
-	const first = await stub.send({
-		from: 'priya',
-		text: 'The admitted identity remains usable.',
-		key: 'q1',
-	});
-	expect(first.owner).toBe('priya');
-
-	await runInDurableObject(stub, async (_instance, state) => {
-		state.abort('reconstruct after identity conflict');
-	}).catch(() => {});
-	const again = env.ROOM.get(env.ROOM.idFromName(name));
-	const retry = await until(async () => {
-		try {
-			return await again.send({ from: 'priya', text: 'After restart.', key: 'q2' });
-		} catch {
-			return undefined;
-		}
-	});
-	expect(retry.owner).toBe('priya');
-	await runInDurableObject(again, async (instance) => {
-		const object = instance as unknown as {
-			visit(person: { name: string; identity: string }): Promise<void>;
-		};
-		await expect(object.visit({ name: 'priya', identity: 'Impostor.' })).rejects.toThrow(
-			/different identity/,
-		);
-	});
-});
-
-it('does not persist malformed visits and makes repeated leave harmless', async () => {
-	const name = 'room-malformed-visit';
-	const stub = env.ROOM.get(env.ROOM.idFromName(name));
-	await stub.start({ name, agents: [] });
-	await runInDurableObject(stub, async (instance) => {
-		const object = instance as unknown as {
-			visit(person: { name: string; identity: string }): Promise<void>;
-		};
-		await expect(object.visit({ name: 'Not valid', identity: 'Unknown.' })).rejects.toThrow(
-			/Invalid participant name/,
-		);
-	});
-	const metadata = await runInDurableObject(stub, async (instance) => {
-		const object = instance as unknown as {
-			metadata: { read(): Promise<Record<string, unknown>> };
-		};
-		return object.metadata.read();
-	});
-	expect(metadata.people).toBeUndefined();
-	await stub.visit({ name: 'priya', identity: 'Project manager.' });
-	await stub.leave('priya');
-	await expect(stub.leave('priya')).resolves.toBeUndefined();
-	await runInDurableObject(stub, async (instance) => {
-		const object = instance as unknown as {
-			send(input: { from: string; text: string }): Promise<unknown>;
-		};
-		await expect(object.send({ from: 'priya', text: 'Must not reenter.' })).rejects.toThrow(
-			/has not visited/,
-		);
-	});
-	expect((await stub.read()).messages.filter((message) => message.kind === 'arrived')).toHaveLength(
-		1,
-	);
-	expect((await stub.read()).messages.filter((message) => message.kind === 'left')).toHaveLength(1);
-});
-
-it('preserves an explicitly empty delivery key across RPC retries', async () => {
-	const name = 'room-empty-delivery-key';
-	const stub = env.ROOM.get(env.ROOM.idFromName(name));
-	await stub.start({ name, agents: [] });
-	await stub.visit({ name: 'priya', identity: 'Project manager.' });
-	const first = await stub.send({ from: 'priya', text: 'An empty key is still a key.', key: '' });
-	const retry = await stub.send({ from: 'priya', text: 'An empty key is still a key.', key: '' });
-	expect(retry).toEqual(first);
+	// An explicitly empty delivery key is still a key across RPC retries.
+	const empty = { from: 'priya', text: 'An empty key is still a key.', key: '' };
+	expect(await stub.send(empty)).toEqual(await stub.send(empty));
 	expect(
 		(await stub.read()).messages.filter((message) => message.kind === 'said' && message.key === ''),
 	).toHaveLength(1);
 });
 
+it('resumes over its own storage after eviction: it fences the old run, keeps the person present, and refuses a conflicting identity', async () => {
+	const name = 'room-fence';
+	const stub = await visited(name);
+	await refusesImpostor(stub);
+	const first = await stub.send({ from: 'priya', text: 'Before the restart.', key: 'q1' });
+	expect(first.owner).toBe('priya');
+
+	await evict(stub, 'the test takes the object');
+	const again = roomOf(name);
+	// The next call builds the object again, and its constructor resumes the name.
+	// Startup rebuilds the live handle from journal presence, so a send needs no
+	// second visit. The abort may still be settling: the call that finds it retries.
+	const retry = await until(async () => {
+		try {
+			return await again.send({ from: 'priya', text: 'After the restart.', key: 'q2' });
+		} catch {
+			return undefined;
+		}
+	});
+	expect(retry.owner).toBe('priya');
+	// The rebuild's visit is idempotent, so it adds no arrival.
+	expect(await count(again, 'arrived')).toBe(1);
+	expect(await presenceOf(again, 'priya')).toBe('present');
+	await refusesImpostor(again);
+
+	const runs = await until(async () =>
+		runInDurableObject(again, async (_instance, state) => {
+			const journal = await namespaced(sqlStorage(state), 'ambion/room').open(name);
+			const stored = (await journal.read(0)).entries.map(
+				(entry) => entry.entry as { kind: string; run?: string },
+			);
+			const runs = stored.filter((entry) => entry.kind === 'run');
+			return runs.length > 1 ? runs : undefined;
+		}),
+	);
+	// Two runs, each with a name of its own: the second run's fence stands, and an
+	// entry the first run writes past it is void for every reader. The journal
+	// stamps the run beside every body, and a run entry is where the fence reads it.
+	const ids = runs.map((entry) => entry.run ?? '');
+	expect(ids).toHaveLength(2);
+	expect(new Set(ids).size).toBe(2);
+	// The record holds both messages: the resume lost nothing.
+	const messages = (await again.read()).messages;
+	expect(messages.filter((m) => m.kind === 'said').map((m) => m.key)).toEqual(['q1', 'q2']);
+});
+
+it('does not persist malformed visits and makes repeated leave harmless', async () => {
+	const stub = roomOf('room-malformed-visit');
+	await stub.start({ name: 'room-malformed-visit', agents: [] });
+	const metadata = await inside<Room, Record<string, unknown>>(stub, async (object) => {
+		await expect(object.visit({ name: 'Not valid', identity: 'Unknown.' })).rejects.toThrow(
+			/Invalid participant name/,
+		);
+		return object.metadata.read();
+	});
+	expect(metadata.people).toBeUndefined();
+	await stub.visit(priya);
+	await stub.leave('priya');
+	await expect(stub.leave('priya')).resolves.toBeUndefined();
+	await inside<Room, void>(stub, async (object) => {
+		await expect(object.send({ from: 'priya', text: 'Must not reenter.' })).rejects.toThrow(
+			/has not visited/,
+		);
+	});
+	expect(await count(stub, 'arrived')).toBe(1);
+	expect(await count(stub, 'left')).toBe(1);
+});
+
 it('rejects a conflicting delivery key payload and recipient over RPC', async () => {
 	const name = 'room-delivery-conflict';
-	const stub = env.ROOM.get(env.ROOM.idFromName(name));
+	const stub = roomOf(name);
 	await stub.start({ name, agents: ['assistant'] });
-	await stub.visit({ name: 'priya', identity: 'Project manager.' });
+	await stub.visit(priya);
 	await stub.visit({ name: 'sam', identity: 'Engineering lead.' });
-	await runInDurableObject(stub, async (instance) => {
-		const object = instance as unknown as {
-			send(input: { from: string; to?: string; text: string; key?: string }): Promise<unknown>;
-		};
+	await inside<Room, void>(stub, async (object) => {
 		await object.send({ from: 'priya', to: 'assistant', text: 'Original.', key: 'same' });
-		await expect(
-			object.send({ from: 'priya', to: 'assistant', text: 'Changed.', key: 'same' }),
-		).rejects.toThrow(/different room operation/);
-		await expect(
-			object.send({ from: 'sam', to: 'assistant', text: 'Original.', key: 'same' }),
-		).rejects.toThrow(/different room operation/);
-		await expect(object.send({ from: 'priya', text: 'Original.', key: 'same' })).rejects.toThrow(
-			/different room operation/,
-		);
+		for (const changed of [
+			{ from: 'priya', to: 'assistant', text: 'Changed.' },
+			{ from: 'sam', to: 'assistant', text: 'Original.' },
+			{ from: 'priya', text: 'Original.' },
+		])
+			await expect(object.send({ ...changed, key: 'same' })).rejects.toThrow(
+				/different room operation/,
+			);
 	});
 });
 
 it('rebuilds an admitted visit after the adapter loses its cache on eviction', async () => {
 	const name = 'room-interrupted-admission';
-	const stub = env.ROOM.get(env.ROOM.idFromName(name));
+	const stub = roomOf(name);
 	await stub.start({ name, agents: [] });
-	await runInDurableObject(stub, async (instance) => {
-		const object = instance as unknown as {
-			visit(person: { name: string; identity: string }): Promise<void>;
-			visits: Map<string, unknown>;
-		};
+	await inside<Room, void>(stub, async (object) => {
 		const originalSet = object.visits.set.bind(object.visits);
-		object.visits.set = ((key: string, value: unknown) => {
+		object.visits.set = ((key: string, value: { leave(): Promise<void> }) => {
 			if (key === 'priya') throw new Error('lose adapter admission cache');
 			return originalSet(key, value);
 		}) as typeof object.visits.set;
-		await expect(object.visit({ name: 'priya', identity: 'Project manager.' })).rejects.toThrow(
-			/lose adapter admission cache/,
-		);
+		await expect(object.visit(priya)).rejects.toThrow(/lose adapter admission cache/);
 	});
-	await runInDurableObject(stub, async (_instance, state) => {
-		state.abort('lose adapter admission cache');
-	}).catch(() => {});
-	const again = env.ROOM.get(env.ROOM.idFromName(name));
-	const exchange = await runInDurableObject(again, async (instance) => {
-		const object = instance as unknown as {
-			send(input: { from: string; text: string; key?: string }): Promise<{ owner: string }>;
-		};
-		return object.send({ from: 'priya', text: 'The admitted visit survived.', key: 'q1' });
-	});
+	await evict(stub, 'lose adapter admission cache');
+	const again = roomOf(name);
+	const exchange = await inside<Room, { owner: string }>(again, (object) =>
+		object.send({ from: 'priya', text: 'The admitted visit survived.', key: 'q1' }),
+	);
 	expect(exchange.owner).toBe('priya');
-	expect(
-		(await again.read()).messages.filter((message) => message.kind === 'arrived'),
-	).toHaveLength(1);
-});
-
-it('rebuilds a present human handle after restart without a duplicate arrival', async () => {
-	const name = 'room-present-restart';
-	const stub = env.ROOM.get(env.ROOM.idFromName(name));
-	await stub.start({ name, agents: [] });
-	await stub.visit({ name: 'priya', identity: 'Project manager.' });
-	await stub.send({ from: 'priya', text: 'Before the restart.', key: 'q1' });
-	await runInDurableObject(stub, async (_instance, state) => {
-		state.abort('reconstruct with a present human');
-	}).catch(() => {});
-	const again = env.ROOM.get(env.ROOM.idFromName(name));
-	// Startup rebuilds the live handle from journal presence, so a send needs no
-	// second visit. The rebuild's visit is idempotent, so it adds no arrival.
-	const exchange = await again.send({ from: 'priya', text: 'After the restart.', key: 'q2' });
-	expect(exchange.owner).toBe('priya');
-	expect(
-		(await again.read()).messages.filter((message) => message.kind === 'arrived'),
-	).toHaveLength(1);
-	expect(
-		(await again.read({ messages: false })).participants.some(
-			(participant) =>
-				participant.kind === 'human' &&
-				participant.name === 'priya' &&
-				participant.presence === 'present',
-		),
-	).toBe(true);
+	expect(await count(again, 'arrived')).toBe(1);
 });
 
 it('keeps a departed human absent after restart', async () => {
 	const name = 'room-departure-restart';
-	const stub = env.ROOM.get(env.ROOM.idFromName(name));
-	await stub.start({ name, agents: [] });
-	await stub.visit({ name: 'priya', identity: 'Project manager.' });
+	const stub = await visited(name);
 	await stub.leave('priya');
-	await runInDurableObject(stub, async (_instance, state) => {
-		state.abort('reconstruct after departure');
-	}).catch(() => {});
-	const again = env.ROOM.get(env.ROOM.idFromName(name));
-	await until(async () => {
-		try {
-			const participants = (await again.read({ messages: false })).participants;
-			return participants.some(
-				(participant) =>
-					participant.kind === 'human' &&
-					participant.name === 'priya' &&
-					participant.presence === 'absent',
-			)
-				? true
-				: undefined;
-		} catch {
-			return undefined;
-		}
-	});
-	await runInDurableObject(again, async (instance) => {
-		const object = instance as unknown as {
-			send(input: { from: string; text: string }): Promise<unknown>;
-			leave(name: string): Promise<void>;
-		};
+	await evict(stub, 'reconstruct after departure');
+	const again = roomOf(name);
+	await until(() =>
+		presenceOf(again, 'priya').then(
+			(presence) => presence === 'absent',
+			() => false,
+		),
+	);
+	await inside<Room, void>(again, async (object) => {
 		await expect(object.send({ from: 'priya', text: 'Must stay absent.' })).rejects.toThrow(
 			/has not visited/,
 		);
 		await object.leave('priya');
 	});
-	expect(
-		(await again.read()).messages.filter((message) => message.kind === 'arrived'),
-	).toHaveLength(1);
+	expect(await count(again, 'arrived')).toBe(1);
 });
 
 it('does not delete a deliberately reentered handle after an older leave returns', async () => {
-	const name = 'room-leave-reentry-fence';
-	const stub = env.ROOM.get(env.ROOM.idFromName(name));
-	await stub.start({ name, agents: [] });
-	await stub.visit({ name: 'priya', identity: 'Project manager.' });
-	await runInDurableObject(stub, async (instance) => {
-		const object = instance as unknown as {
-			visits: Map<string, { leave(): Promise<void> }>;
-			leave(name: string): Promise<void>;
-			visit(person: { name: string; identity: string }): Promise<void>;
-			send(input: { from: string; text: string; key?: string }): Promise<unknown>;
-		};
+	const stub = await visited('room-leave-reentry-fence');
+	await inside<Room, void>(stub, async (object) => {
 		const old = object.visits.get('priya');
 		if (old === undefined) throw new Error('The test visit was not cached.');
 		const original = old.leave.bind(old);
-		let release!: () => void;
-		const gate = new Promise<void>((resolve) => {
-			release = resolve;
-		});
-		let departed!: () => void;
-		const departure = new Promise<void>((resolve) => {
-			departed = resolve;
-		});
+		const gate = Promise.withResolvers<void>();
+		const departure = Promise.withResolvers<void>();
 		old.leave = async () => {
 			await original();
-			departed();
-			await gate;
+			departure.resolve();
+			await gate.promise;
 		};
 		const leaving = object.leave('priya');
-		await departure;
-		await object.visit({ name: 'priya', identity: 'Project manager.' });
-		release();
+		await departure.promise;
+		await object.visit(priya);
+		gate.resolve();
 		await leaving;
 		await object.send({ from: 'priya', text: 'The new visit remains cached.', key: 'q1' });
 	});
-	expect((await stub.read()).messages.filter((message) => message.kind === 'arrived')).toHaveLength(
-		2,
-	);
-	expect((await stub.read()).messages.filter((message) => message.kind === 'left')).toHaveLength(1);
+	expect(await count(stub, 'arrived')).toBe(2);
+	expect(await count(stub, 'left')).toBe(1);
 });
 
 it('can ensure a resumed room and report its current state', async () => {
-	const stub = env.ROOM.get(env.ROOM.idFromName('room-status'));
+	const stub = roomOf('room-status');
 	const composition = { name: 'room-status', assistant: 'assistant', agents: [] } as const;
 	await stub.ensureStart(composition);
 	await stub.ensureStart(composition);
@@ -367,13 +304,9 @@ it('can ensure a resumed room and report its current state', async () => {
 	void stub.status;
 });
 
-it('keeps a stopped record readable without resuming the room', async () => {
-	const stub = env.ROOM.get(env.ROOM.idFromName('room-stopped-status'));
-	await stub.start({
-		name: 'room-stopped-status',
-		agents: [],
-	});
-	await stub.visit({ name: 'priya', identity: 'Project manager.' });
+it('keeps a stopped record readable without resuming the room, and runs the alarm only while the room runs', async () => {
+	await expect(runDurableObjectAlarm(roomOf('room-alarm-idle'))).resolves.toBe(false);
+	const stub = await visited('room-stopped-status');
 	const exchange = await stub.send({
 		from: 'priya',
 		text: 'A durable question?',
@@ -381,9 +314,10 @@ it('keeps a stopped record readable without resuming the room', async () => {
 	});
 	await stub.waitForClose(exchange.from);
 	await stub.waitForSummary(exchange.from);
+	await runInDurableObject(stub, (instance) => instance.alarm());
 	await stub.stop();
-	const read = await stub.read();
-	expect(read).toMatchObject({
+	await runInDurableObject(stub, (instance) => instance.alarm());
+	expect(await stub.read()).toMatchObject({
 		name: 'room-stopped-status',
 		initialized: true,
 		exchange: undefined,
@@ -393,9 +327,8 @@ it('keeps a stopped record readable without resuming the room', async () => {
 });
 
 it('reads a stopped open exchange and reconstructs it after eviction', async () => {
-	const stub = env.ROOM.get(env.ROOM.idFromName('room-stopped-open'));
-	await seedStoppedOpen(stub, 'room-stopped-open');
-	const again = env.ROOM.get(env.ROOM.idFromName('room-stopped-open'));
+	await seedStoppedOpen(roomOf('room-stopped-open'), 'room-stopped-open');
+	const again = roomOf('room-stopped-open');
 	const stopped = await again.read({ messages: false });
 	expect(stopped.exchange).toMatchObject({ status: 'open', from: 4 });
 	expect(stopped.watermark).toBe(4);
@@ -403,46 +336,37 @@ it('reads a stopped open exchange and reconstructs it after eviction', async () 
 });
 
 it('retains the stopped handle when saving stop metadata fails', async () => {
-	const stub = env.ROOM.get(env.ROOM.idFromName('room-stop-retry'));
+	const stub = roomOf('room-stop-retry');
 	await stub.start({ name: 'room-stop-retry', agents: [] });
-	await runInDurableObject(stub, async (instance) => {
-		type MutableObject = {
-			metadata: { change: (...args: never[]) => Promise<unknown> };
-			stop(): Promise<void>;
-		};
-		const object = instance as unknown as MutableObject;
+	type Stoppable = {
+		metadata: { change: (...args: never[]) => Promise<unknown> };
+		stop(): Promise<void>;
+	};
+	await inside<Stoppable, void>(stub, async (object) => {
 		const original = object.metadata.change.bind(object.metadata);
 		let fail = true;
 		object.metadata.change = (...args) => {
-			if (fail) {
-				fail = false;
-				return Promise.reject(new Error('metadata write failed'));
-			}
-			return original(...args);
+			if (!fail) return original(...args);
+			fail = false;
+			return Promise.reject(new Error('metadata write failed'));
 		};
 		await expect(object.stop()).rejects.toThrow('metadata write failed');
 		await object.stop();
 	});
-	const again = env.ROOM.get(env.ROOM.idFromName('room-stop-retry'));
+	const again = roomOf('room-stop-retry');
 	await expect(again.read({ messages: false })).resolves.toMatchObject({ initialized: true });
 });
 
 it('leaves an uninitialized named record for an explicit start retry', async () => {
 	const name = 'room-uninitialized-retry';
-	const stub = env.ROOM.get(env.ROOM.idFromName(name));
-	await runInDurableObject(stub, async (instance) => {
-		type MetadataObject = {
-			metadata: { change: (change: () => { patch: Record<string, unknown> }) => Promise<unknown> };
-		};
-		const object = instance as unknown as MetadataObject;
+	const stub = roomOf(name);
+	await inside<Room, void>(stub, async (object) => {
 		await object.metadata.change(() => ({
 			patch: { name, agents: ['assistant'], stopped: false },
 		}));
 	});
-	await runInDurableObject(stub, async (_instance, state) => {
-		state.abort('reconstruct uninitialized object');
-	}).catch(() => {});
-	const again = env.ROOM.get(env.ROOM.idFromName(name));
+	await evict(stub, 'reconstruct uninitialized object');
+	const again = roomOf(name);
 	await expect(again.read({ messages: false })).resolves.toMatchObject({
 		name,
 		initialized: false,
@@ -454,90 +378,23 @@ it('leaves an uninitialized named record for an explicit start retry', async () 
 	});
 });
 
-it('resumes over its own storage after an abort, and fences the run before it', async () => {
-	const stub = env.ROOM.get(env.ROOM.idFromName('room-fence'));
-	await stub.start({
-		name: 'room-fence',
-		summary: 'assistant',
-		seats: { assistant: 'none' },
-		agents: ['assistant'],
-	});
-	await stub.visit({ name: 'priya', identity: 'Project manager.' });
-	await stub.send({ from: 'priya', text: 'First?', key: 'q1' });
-
-	// the object goes away mid-life, the way the platform may take it. The abort
-	// breaks the stub that held it, so what comes next takes a stub of its own.
-	await runInDurableObject(stub, async (_instance, state) => {
-		state.abort('the test takes the object');
-	}).catch(() => {});
-	const again = env.ROOM.get(env.ROOM.idFromName('room-fence'));
-	// the next call builds the object again, and its constructor resumes the name
-	await until(async () => {
-		// The abort may still be settling: the call that finds it retries.
-		try {
-			await again.send({ from: 'priya', text: 'Second?', key: 'q2' });
-			return true;
-		} catch {
-			return false;
-		}
-	});
-
-	const runs = await until(async () =>
-		runInDurableObject(again, async (_instance, state) => {
-			const journal = await namespaced(sqlStorage(state), 'ambion/room').open('room-fence');
-			const stored = (await journal.read(0)).entries.map(
-				(entry) => entry.entry as { kind: string; run?: string },
-			);
-			const runs = stored.filter((entry) => entry.kind === 'run');
-			return runs.length > 1 ? runs : undefined;
-		}),
-	);
-	// two runs, each with a name of its own: the second run's fence stands,
-	// and an entry the first run writes past it is void for every reader
-	// The journal stamps the run beside every body, and a run entry is where the fence reads it.
-	const ids = (runs ?? []).map((entry) => entry.run ?? '');
-	expect(ids).toHaveLength(2);
-	expect(new Set(ids).size).toBe(2);
-	// the record holds both messages: the resume lost nothing
-	const messages = (await again.read()).messages;
-	expect(messages.filter((m) => m.kind === 'said').map((m) => m.key)).toEqual(['q1', 'q2']);
-});
-
 it('changes membership by name without installing a definition', async () => {
-	const stub = env.ROOM.get(env.ROOM.idFromName('room-roster'));
+	const stub = roomOf('room-roster');
 	await stub.start({
 		name: 'room-roster',
 		summary: 'assistant',
 		agents: ['product', 'assistant'],
-		seats: { assistant: 'none', ...{} },
+		seats: { assistant: 'none' },
 	});
-	expect(
-		(await stub.read({ messages: false })).participants.map((participant) => participant.name),
-	).toEqual(['assistant']);
+	const names = async () =>
+		(await stub.read({ messages: false })).participants.map((participant) => participant.name);
+	expect(await names()).toEqual(['assistant']);
 	await stub.seat('product', { attention: 'named' });
 	expect(
 		(await stub.read({ messages: false })).participants.find(
 			(participant) => participant.name === 'product',
 		),
-	).toMatchObject({
-		attention: 'named',
-	});
+	).toMatchObject({ attention: 'named' });
 	await stub.unseat('product');
-	expect(
-		(await stub.read({ messages: false })).participants.map((participant) => participant.name),
-	).toEqual(['assistant']);
-});
-
-it('runs the alarm through the hosting registry, and ignores it without a running room', async () => {
-	const idle = env.ROOM.get(env.ROOM.idFromName('room-alarm-idle'));
-	await expect(runDurableObjectAlarm(idle)).resolves.toBe(false);
-	const stub = env.ROOM.get(env.ROOM.idFromName('room-alarm'));
-	await stub.start({ name: 'room-alarm', agents: [] });
-	await stub.visit({ name: 'priya', identity: 'Project manager.' });
-	const exchange = await stub.send({ from: 'priya', text: 'Alarm question?', key: 'alarm-1' });
-	await stub.waitForClose(exchange.from);
-	await runInDurableObject(stub, (instance) => instance.alarm());
-	await stub.stop();
-	await runInDurableObject(stub, (instance) => instance.alarm());
-	expect((await stub.read()).exchanges).toMatchObject([{ status: 'closed', from: exchange.from }]);
+	expect(await names()).toEqual(['assistant']);
 });

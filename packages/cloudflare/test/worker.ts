@@ -25,12 +25,15 @@ export const slow = defineAgent({
 	executor: pi({ instructions: 'Answer what is asked.', model: 'scripted/slow' }),
 });
 
-configure({
+/** The configuration of the tier. A test that configures its own restores this one. */
+export const configuration = {
 	agents: [assistant, product, slow],
 	stream: scripted,
 	// Alarms fire on their own in workerd: a wake nobody takes is sent again this often.
 	limits: { delivery: { resend: 50 } },
-});
+};
+
+configure(configuration);
 
 export { RoomObject, SeatObject };
 

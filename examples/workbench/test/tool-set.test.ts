@@ -1,6 +1,3 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createRuntime, startRoom } from '@ambionframework/ambion';
 import {
 	byAgent,
@@ -14,34 +11,27 @@ import { openWorkspace } from '@ambionframework/workspace';
 import { memoryBackend } from '@ambionframework/workspace/just-bash';
 import { openSqlResource } from '@ambionframework/workspace/sql';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import { people, team } from '../src/definitions.ts';
 import { openInstrument } from '../src/instrument.ts';
 import { instruments, labSchema, labWritable } from '../src/scenarios.ts';
 
-const cleanups: (() => Promise<unknown>)[] = [];
-
-afterEach(async () => {
-	for (const cleanup of cleanups.splice(0)) await cleanup().catch(() => undefined);
-});
-
-async function build() {
-	const directory = await mkdtemp(join(tmpdir(), 'ambion-workbench-toolset-'));
+/** The Workbench team over an in-memory workspace and lab. The test disposes them. */
+function build() {
 	const workspace = openWorkspace({
 		name: 'workbench',
 		backend: { bash: memoryBackend(), sql: sqliteBackend(':memory:') },
 	});
 	const lab = openSqlResource({
 		name: 'lab',
-		location: join(directory, 'lab.db'),
+		location: ':memory:',
 		schema: labSchema,
 		writable: labWritable,
 	});
-	cleanups.push(
-		() => workspace.dispose(),
-		() => lab.dispose(),
-		() => rm(directory, { recursive: true, force: true }),
-	);
+	onTestFinished(async () => {
+		await workspace.dispose();
+		await lab.dispose();
+	});
 	return team(workspace, lab, openInstrument({ lab, instruments }));
 }
 
@@ -50,13 +40,9 @@ const shapeOf = (tools: readonly { name: string; parameters: unknown }[]) =>
 	tools.map(({ name, parameters }) => ({ name, parameters: JSON.stringify(parameters) }));
 
 describe('the Workbench tool set', () => {
-	it('puts the specialists on Pi, Claude, and Codex', async () => {
-		const built = await build();
+	it('puts the specialists on Pi, Claude, and Codex with their models, gives every agent the same tools, and enables no native tool', async () => {
+		const built = build();
 		expect(built.specialists.map((seat) => seat.executor.kind)).toEqual(['pi', 'claude', 'codex']);
-	});
-
-	it('gives every agent the same tools, with the same schemas and guidance', async () => {
-		const built = await build();
 		const [first, ...rest] = built.agents;
 		const expected = shapeOf(first?.executor.tools ?? []);
 		expect(expected.map((tool) => tool.name)).toEqual(
@@ -73,37 +59,36 @@ describe('the Workbench tool set', () => {
 		);
 		for (const agent of rest) expect(shapeOf(agent.executor.tools), agent.name).toEqual(expected);
 		const [firstSpecialist, ...otherSpecialists] = built.specialists;
-		for (const agent of otherSpecialists) {
+		for (const agent of otherSpecialists)
 			expect(agent.executor.guidance, agent.name).toEqual(firstSpecialist?.executor.guidance);
-		}
-	});
 
-	it('enables no native tool on the Claude and Codex seats', async () => {
-		const built = await build();
 		const executors = Object.fromEntries(
 			built.specialists.map((seat) => [seat.name, seat.executor]),
 		);
-		const claude = executors.design;
-		expect(claude).toMatchObject({ kind: 'claude' });
-		expect(claude).not.toHaveProperty('allowedTools');
-		expect(claude).not.toHaveProperty('disallowedTools');
-		const codex = executors.experiments;
-		expect(codex).toMatchObject({ kind: 'codex', nativeTools: 'none' });
+		expect(executors.datasheets).toMatchObject({ kind: 'pi' });
+		expect(executors.design).toMatchObject({ kind: 'claude', model: 'claude-sonnet-5' });
+		expect(executors.design).not.toHaveProperty('allowedTools');
+		expect(executors.design).not.toHaveProperty('disallowedTools');
+		expect(executors.experiments).toMatchObject({
+			kind: 'codex',
+			model: 'gpt-5.6-luna',
+			modelReasoningEffort: 'medium',
+			nativeTools: 'none',
+		});
 		for (const option of [
 			'sandboxMode',
 			'approvalPolicy',
 			'networkAccessEnabled',
 			'workingDirectory',
 			'additionalDirectories',
-		]) {
-			expect(codex, option).not.toHaveProperty(option);
-		}
+		])
+			expect(executors.experiments, option).not.toHaveProperty(option);
 	});
 });
 
 describe('the Workbench filesystem', () => {
 	it('lets the Claude seat write a file that the Codex seat reads back', async () => {
-		const built = await build();
+		const built = build();
 		const mira = people[0];
 		if (!mira) throw new Error('No person.');
 		const marker = 'resistor 330 ohm';
@@ -129,7 +114,7 @@ describe('the Workbench filesystem', () => {
 			execution: scripted(script),
 			seats: { design: 'named', experiments: 'named' },
 		});
-		cleanups.push(() => room.stop());
+		onTestFinished(() => room.stop());
 		await (await room.visit(mira)).send({ text: 'Share a file.' });
 		await settled(room);
 		const read = await room.read();
