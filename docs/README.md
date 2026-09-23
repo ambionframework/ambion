@@ -30,6 +30,7 @@ each page.
 | [Resources](resources.md)             | The resource contract, references, and provenance                      |
 | [Workspace](workspace.md)             | The Pi filesystem binding of the resource contract                     |
 | [Workstation](workstation.md)         | A remote server as a workspace over SSH, one account for each agent    |
+| [Background commands](background.md)  | Pending design: a `bash` command that outlives its call, and its wake  |
 | [Example](example.md)                 | The one runnable example: an agentic lab workspace                     |
 | [Durability](durability.md)           | Journal guarantees, recovery, leases, and failure evidence             |
 | [Formal](formal.md)                   | The verified rules, their proofs, and how the gate runs them           |
