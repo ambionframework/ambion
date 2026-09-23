@@ -47,6 +47,8 @@ function seatLine(room: string, seat: string, event: ExecutionEvent): SeatEvent 
 
 export class SeatObject extends DurableObject<Env> {
 	private runner: AgentRunner | undefined;
+	/** Whether an alarm runs in this object now. */
+	private alarming = false;
 	private readonly metadata;
 	private readonly storage;
 
@@ -119,7 +121,23 @@ export class SeatObject extends DurableObject<Env> {
 		return (await this.metadata.read()).cuts ?? 0;
 	}
 
+	/**
+	 * Run the activation this seat holds. A second call while a run is live
+	 * in this object returns at once: the live run owns the activation. The
+	 * flag lives in memory, so an object that was evicted mid-activation has
+	 * none, and its next alarm releases the run that never came back.
+	 */
 	override async alarm(): Promise<void> {
+		if (this.alarming) return;
+		this.alarming = true;
+		try {
+			await this.runHeld();
+		} finally {
+			this.alarming = false;
+		}
+	}
+
+	private async runHeld(): Promise<void> {
 		const state = await this.metadata.read();
 		const { activation, room, seat } = state;
 		if (activation === undefined || room === undefined || seat === undefined) return;

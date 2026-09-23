@@ -93,6 +93,58 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	expect(await room.exchange(secondExchange.from)).toEqual(secondExchange);
 });
 
+it('runs one activation when a second alarm starts while the first runs', async () => {
+	type Seat = { alarm(): Promise<void>; roomFor(room: string): RoomProtocol };
+	// The hold keeps workerd from firing the alarm, so the test starts both. The first run
+	// holds its lease and waits at its say until the second alarm has returned.
+	const seat = seatOf('alarm-twice');
+	await seat.hold(true);
+	const { room } = await asked('alarm-twice');
+	await inside<Seat, void>(seat, async (object) => {
+		const roomFor = object.roomFor.bind(object);
+		let saying = () => {};
+		const reached = new Promise<void>((resolve) => {
+			saying = resolve;
+		});
+		let open = () => {};
+		const gate = new Promise<void>((resolve) => {
+			open = resolve;
+		});
+		object.roomFor = (name) => {
+			const protocol = roomFor(name);
+			return {
+				...protocol,
+				commit: async (commit) => {
+					saying();
+					await gate;
+					return protocol.commit(commit);
+				},
+			};
+		};
+		const first = object.alarm();
+		await reached;
+		await object.alarm();
+		open();
+		await first;
+	});
+	const said = (await room.read()).messages.filter(
+		(m) => m.kind === 'said' && m.from === 'product',
+	);
+	expect(said).toMatchObject([{ activationId: 'message:4:product:1' }]);
+	const leases = await runInDurableObject(room, async (_instance, state) => {
+		const journal = await namespaced(sqlStorage(state), 'ambion/room').open('alarm-twice');
+		return (await journal.read(0)).entries
+			.map((entry) => entry.entry as { kind: string; body: LeaseObservation })
+			.filter((entry) => entry.kind === 'lease')
+			.map((entry) => entry.body);
+	});
+	expect(leases.map((lease) => lease.reason ?? lease.phase)).toEqual([
+		'running',
+		'running',
+		'released',
+	]);
+});
+
 it('cancels an unclaimed wake over RPC and closes its exchange', async () => {
 	const { room, seat, exchange } = await asked('cut-test');
 

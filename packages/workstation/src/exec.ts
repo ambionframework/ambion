@@ -62,6 +62,13 @@ const EXIT_GRACE_MS = 1_000;
  */
 const EXIT_DRAIN_MS = 5_000;
 
+/**
+ * How late the grace timer may fire and still close the channel. A later
+ * timer measured a stall of this process, and output can wait unread in a
+ * pipe or a socket behind it. The timer then waits one more grace.
+ */
+const GRACE_LATE_MS = EXIT_GRACE_MS / 2;
+
 /** The line the view ends with when `EXIT_DRAIN_MS` closed the channel while output still arrived. */
 const DRAIN_NOTICE = `\n[The workstation closed the output ${EXIT_DRAIN_MS / 1000} seconds after the command exited. The view does not show the output after that.]\n`;
 
@@ -189,13 +196,13 @@ function finished(
 			clearTimeout(grace);
 			const left = Math.max(0, drainEnd - Date.now());
 			const cut = left < EXIT_GRACE_MS;
-			grace = setTimeout(
-				() => {
-					ending = { ...ending, cut };
-					channel.close();
-				},
-				Math.min(EXIT_GRACE_MS, left),
-			);
+			const wait = Math.min(EXIT_GRACE_MS, left);
+			const due = Date.now() + wait;
+			grace = setTimeout(() => {
+				if (!cut && Date.now() - due > GRACE_LATE_MS) return arm();
+				ending = { ...ending, cut };
+				channel.close();
+			}, wait);
 		};
 		channel.on('data', (chunk: Buffer) => {
 			output.push(chunk);

@@ -44,6 +44,14 @@ function within<T>(promise: Promise<T>, ms = 3_000): Promise<T> {
 
 const idle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Hold the event loop for `ms`, as a loaded runner does. */
+function blockFor(ms: number): void {
+	const end = Date.now() + ms;
+	while (Date.now() < end) {
+		// Each pass reads the clock again; nothing else runs until the loop ends.
+	}
+}
+
 describe.skipIf(!hasSetsid)('a dropped connection', () => {
 	it('fails each call on the dead session at once, and the next connect logs in again', async () => {
 		const started = await server();
@@ -148,11 +156,14 @@ describe.skipIf(!hasSetsid)('a command that ends early', () => {
 		const env = await backend.connect({ name: 'ada' });
 		const chatty = '(while :; do echo tick; sleep 0.1; done) & echo started';
 		// Under the short deadline the deadline ends the wait; under the long one the drain limit
-		// does, and the view says that it cut the output.
-		for (const [timeout, notice] of [
-			[2, false],
-			[20, true],
+		// does, and the view says that it cut the output. A stall of this process longer than the
+		// grace makes the grace timer fire late, and the drain limit still ends the wait.
+		for (const [timeout, notice, stall] of [
+			[2, false, 0],
+			[20, true, 0],
+			[20, true, 1_700],
 		] as const) {
+			if (stall > 0) setTimeout(() => blockFor(stall), 3_000);
 			const updates: ShellOutputUpdate[] = [];
 			const began = Date.now();
 			const result = await env.exec(
@@ -168,7 +179,7 @@ describe.skipIf(!hasSetsid)('a command that ends early', () => {
 			expect(text.includes('closed the output 5 seconds after the command exited')).toBe(notice);
 		}
 		await env.cleanup();
-	});
+	}, 40_000);
 
 	it('refuses a timeout that is not a positive finite number of seconds', async () => {
 		const started = await server();
