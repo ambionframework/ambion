@@ -4,7 +4,7 @@
  * `sshd` as root, and this tier runs only when `AMBION_WORKSTATION_SSHD`
  * names the file that `setup.sh` writes. It proves what only a real server
  * can: the rename and the group kill on OpenSSH, its status codes, the
- * channel limit, and the permissions between accounts.
+ * channel limit, the spill file, and the permissions between accounts.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -104,10 +104,15 @@ describe.skipIf(configPath === undefined)('integration tier', () => {
 				ok: false,
 				error: { code: 'not_directory' },
 			});
-			expect(await env.writeFile('none/a.txt', 'x', ctx)).toMatchObject({
+			expect(await env.readTextFile('none/a.txt', ctx)).toMatchObject({
 				ok: false,
 				error: { code: 'not_found' },
 			});
+			expect(await env.renameFile('full/a.txt', 'none/b.txt', ctx)).toMatchObject({
+				ok: false,
+				error: { code: 'not_found' },
+			});
+			expect(await env.writeFile('deep/er/a.txt', 'x', ctx)).toMatchObject({ ok: true });
 			expect(await env.createDir('full', { recursive: false }, ctx)).toMatchObject({
 				ok: false,
 				error: { code: 'invalid' },
@@ -167,6 +172,29 @@ describe.skipIf(configPath === undefined)('integration tier', () => {
 			const cat = await env.exec('cat /home/surveyor/secret.txt', undefined, ctx);
 			expect(cat).toMatchObject({ ok: true, value: { exitCode: 1 } });
 		});
+	});
+
+	it('spills a large output to a file that only its account reads', async () => {
+		const spilled = await withEnv(backend, 'surveyor', async (env) => {
+			const result = await env.exec(
+				'seq 1 200000',
+				{ capture: { limits: { maxBytes: 2_000, maxLines: 50 }, spill: true } },
+				ctx,
+			);
+			if (!result.ok) throw result.error;
+			expect(result.value.truncation).toMatchObject({ truncated: true, totalLines: 200_000 });
+			const path = result.value.spillPath ?? '';
+			const whole = await env.readTextFile(path, ctx);
+			expect(whole.ok && whole.value.split('\n').length).toBe(200_001);
+			return path;
+		});
+		await withEnv(backend, 'planner', async (env) => {
+			expect(await env.readTextFile(spilled, ctx)).toMatchObject({
+				ok: false,
+				error: { code: 'permission_denied' },
+			});
+		});
+		await withEnv(backend, 'surveyor', (env) => env.remove(spilled, undefined, ctx));
 	});
 
 	it('keeps each new file in the audit folder writable for every agent', async () => {

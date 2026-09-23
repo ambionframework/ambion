@@ -4,14 +4,20 @@
  * command (`exec.ts`). The workspace's helpers supply the path rule and the
  * temporary names.
  *
- * SFTP needs five adjustments, and `workspaceConformance` checks each one:
+ * SFTP needs six adjustments:
  *
  * - a coarse SFTP status becomes a Pi code through one `lstat` (`sftp.ts`)
+ * - `writeFile` and `appendFile` make each missing parent first
  * - `renameFile` calls `posix-rename@openssh.com`, which replaces the
  *   target, and a server without that extension gets a plain `RENAME`
  * - `createDir` makes each missing component of the path in order
  * - a recursive `remove` runs `rm -rf --` through `exec`
  * - SFTP gives `mtime` in seconds, and `FileInfo` wants milliseconds
+ *
+ * Every SFTP call races the end of the session: `ssh2` keeps a request on a
+ * dead channel pending forever, and the owner runs one operation at a time
+ * for every agent. A call that the connection's end cuts short answers
+ * `unknown`, and nothing retries it.
  *
  * An ordinary file is created with mode `0664`, so a default ACL on a shared
  * folder can give the group write. A temporary file is created with mode
@@ -20,7 +26,7 @@
  */
 
 import { posix } from 'node:path';
-import type { MinimalWriter, WorkspaceEnv } from '@ambionframework/workspace';
+import type { WorkspaceEnv } from '@ambionframework/workspace';
 import { resolvePath, tempDirPath, tempFilePath } from '@ambionframework/workspace';
 import {
 	type Context,
@@ -36,7 +42,7 @@ import {
 import type { ClientChannel, Stats } from 'ssh2';
 import { type CommandHost, runCommand } from './exec.ts';
 import { quote } from './script.ts';
-import type { Session } from './session.ts';
+import { ConnectionClosed, type Session } from './session.ts';
 import {
 	call,
 	type Expect,
@@ -80,12 +86,31 @@ export class SshEnv implements WorkspaceEnv {
 		this.host = {
 			open: (command) => this.open(command),
 			isDirectory: (path) => this.isDirectory(path),
-			writer: this.privateWriter(),
+			exists: (path) => this.guarded(() => this.isPresent(path)),
+			discard: (path) =>
+				this.guarded(() => call<void>((done) => this.sftp.unlink(path, done))).catch(
+					() => undefined,
+				),
 		};
 	}
 
 	private get sftp() {
 		return this.session.sftp;
+	}
+
+	/** `work`, cut short when the session ends. */
+	private guarded<T>(work: () => Promise<T>): Promise<T> {
+		return this.session.guard(work);
+	}
+
+	/** Turn what an SFTP call threw into a `FileError`, with no `lstat` on a closed session. */
+	private classify(error: unknown, path: string, expect: Expect): Promise<FileError> {
+		if (error instanceof ConnectionClosed) {
+			return Promise.resolve(new FileError('unknown', error.message, path, error));
+		}
+		return this.guarded(() => toFileError(this.sftp, error, path, expect)).catch(
+			(closed: Error) => new FileError('unknown', closed.message, path, closed),
+		);
 	}
 
 	/** Run one SFTP operation, and turn what it throws into a `FileError`. */
@@ -98,9 +123,9 @@ export class SshEnv implements WorkspaceEnv {
 		if (context.abortSignal?.aborted)
 			return err(new FileError('aborted', 'Operation aborted', path));
 		try {
-			return ok(await fn());
+			return ok(await this.guarded(fn));
 		} catch (error) {
-			return err(await toFileError(this.sftp, error, path, expect));
+			return err(await this.classify(error, path, expect));
 		}
 	}
 
@@ -155,14 +180,28 @@ export class SshEnv implements WorkspaceEnv {
 		return call<void>((done) => write(path, data, { mode: FILE_MODE, flag }, done));
 	}
 
+	/** Write or append, and make each missing parent first, as `NodeExecutionEnv` does. */
+	private async putWithParents(
+		path: string,
+		content: string | Uint8Array,
+		flag: 'w' | 'a',
+	): Promise<void> {
+		await this.makeDir(posix.dirname(path), true);
+		await this.put(path, content, flag);
+	}
+
 	writeFile(path: string, content: string | Uint8Array, context: Context): FileResult<void> {
 		const resolved = this.resolve(path);
-		return this.attempt(resolved, 'file', context, () => this.put(resolved, content, 'w'));
+		return this.attempt(resolved, 'file', context, () =>
+			this.putWithParents(resolved, content, 'w'),
+		);
 	}
 
 	appendFile(path: string, content: string | Uint8Array, context: Context): FileResult<void> {
 		const resolved = this.resolve(path);
-		return this.attempt(resolved, 'file', context, () => this.put(resolved, content, 'a'));
+		return this.attempt(resolved, 'file', context, () =>
+			this.putWithParents(resolved, content, 'a'),
+		);
 	}
 
 	/** Replace the target through the OpenSSH extension, or rename plainly when the server lacks it. */
@@ -175,10 +214,19 @@ export class SshEnv implements WorkspaceEnv {
 		}
 	}
 
-	renameFile(sourcePath: string, destinationPath: string, context: Context): FileResult<void> {
+	async renameFile(
+		sourcePath: string,
+		destinationPath: string,
+		context: Context,
+	): FileResult<void> {
 		const source = this.resolve(sourcePath);
 		const destination = this.resolve(destinationPath);
-		return this.attempt(source, 'any', context, () => this.rename(source, destination));
+		const moved = await this.attempt(source, 'any', context, () =>
+			this.rename(source, destination),
+		);
+		if (moved.ok || moved.error.code !== 'invalid') return moved;
+		// The source exists, so the destination decides the code: a missing parent is `not_found`.
+		return err(await this.classify(moved.error.cause ?? moved.error, destination, 'any'));
 	}
 
 	fileInfo(path: string, context: Context): FileResult<FileInfo> {
@@ -204,23 +252,28 @@ export class SshEnv implements WorkspaceEnv {
 		);
 	}
 
-	exists(path: string, context: Context): FileResult<boolean> {
-		const resolved = this.resolve(path);
-		return this.attempt(resolved, 'any', context, async () => {
-			try {
-				await stat(this.sftp, resolved);
-				return true;
-			} catch (error) {
-				if (isMissing(error)) return false;
-				throw error;
-			}
-		});
+	/** Whether anything is at `path`. A symbolic link counts, whatever it points at. */
+	private async isPresent(path: string): Promise<boolean> {
+		try {
+			await lstat(this.sftp, path);
+			return true;
+		} catch (error) {
+			if (isMissing(error)) return false;
+			throw error;
+		}
 	}
 
+	exists(path: string, context: Context): FileResult<boolean> {
+		const resolved = this.resolve(path);
+		return this.attempt(resolved, 'any', context, () => this.isPresent(resolved));
+	}
+
+	/** Whether `path` is a directory. A closed session rejects. */
 	private async isDirectory(path: string): Promise<boolean> {
 		try {
-			return (await stat(this.sftp, path)).isDirectory();
-		} catch {
+			return (await this.guarded(() => stat(this.sftp, path))).isDirectory();
+		} catch (error) {
+			if (error instanceof ConnectionClosed) throw error;
 			return false;
 		}
 	}
@@ -319,14 +372,6 @@ export class SshEnv implements WorkspaceEnv {
 			await this.createPrivate(file, '');
 			return file;
 		});
-	}
-
-	/** The writer `spill` uses: `/tmp` exists on every server, and a spill file is private. */
-	private privateWriter(): MinimalWriter {
-		return {
-			mkdir: async () => undefined,
-			writeFile: (path, content) => this.createPrivate(path, content),
-		};
 	}
 
 	private async open(command: string): Promise<ClientChannel> {

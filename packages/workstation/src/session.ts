@@ -46,15 +46,28 @@ export function fingerprint(key: Buffer): string {
 export class Session {
 	private open = true;
 	private readonly onEnd: Array<() => void> = [];
+	private stop: (error: Error) => void = () => undefined;
+	/**
+	 * Rejects when the session ends. `ssh2` keeps an SFTP request on a dead
+	 * channel pending forever, so `guard` races every call against it.
+	 */
+	private readonly ended = new Promise<never>((_, reject) => {
+		this.stop = reject;
+	});
 
 	private constructor(
 		private readonly client: Client,
 		readonly sftp: SFTPWrapper,
 		readonly home: string,
 	) {
+		// Swallow the rejection here; `guard` hands it to each caller.
+		this.ended.catch(() => undefined);
 		const end = () => this.end();
 		client.on('error', end);
 		client.on('close', end);
+		// `client.sftp()` drops its own `error` listener once the channel is ready,
+		// and `ssh2` emits `error` on a malformed SFTP packet.
+		sftp.on('error', end);
 		sftp.on('close', end);
 	}
 
@@ -85,14 +98,19 @@ export class Session {
 		else fn();
 	}
 
+	/** `work`, or a rejection as soon as the session ends. */
+	guard<T>(work: () => Promise<T>): Promise<T> {
+		if (!this.open) return Promise.reject(closedError());
+		return Promise.race([work(), this.ended]);
+	}
+
 	/**
 	 * Open one `exec` channel with no terminal. A client that cannot open a
 	 * channel closes, and the next `connect()` builds a new one.
 	 */
 	async exec(command: string): Promise<ClientChannel> {
-		if (!this.open) throw new Error('The workstation connection is closed.');
 		try {
-			return await call<ClientChannel>((done) => this.client.exec(command, done));
+			return await this.guard(() => call<ClientChannel>((done) => this.client.exec(command, done)));
 		} catch (error) {
 			this.close();
 			throw error;
@@ -107,9 +125,20 @@ export class Session {
 	private end(): void {
 		if (!this.open) return;
 		this.open = false;
+		this.stop(closedError());
 		for (const fn of this.onEnd.splice(0)) fn();
 	}
 }
+
+/** The error of a call that the session's end cut short. */
+export class ConnectionClosed extends Error {
+	constructor() {
+		super('The workstation connection closed.');
+		this.name = 'ConnectionClosed';
+	}
+}
+
+const closedError = () => new ConnectionClosed();
 
 /** A client that has authenticated, or a rejection that names why it did not. */
 function authenticated(
@@ -139,7 +168,7 @@ function authenticated(
 			settle();
 			reject(mismatch === undefined ? error : new Error(mismatch));
 		});
-		client.connect({
+		const options = {
 			host: address.host,
 			port: address.port,
 			username: credential.username,
@@ -153,6 +182,13 @@ function authenticated(
 			},
 			readyTimeout: READY_TIMEOUT_MS,
 			keepaliveInterval: KEEPALIVE_MS,
-		});
+		};
+		try {
+			client.connect(options);
+		} catch (error) {
+			// `ssh2` throws at once for a key it cannot read.
+			settle();
+			reject(error);
+		}
 	});
 }

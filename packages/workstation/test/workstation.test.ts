@@ -250,8 +250,12 @@ describe.skipIf(!hasSetsid)('workstation files', () => {
 			expect(notEmpty).toMatchObject({ ok: false, error: { code: 'invalid' } });
 			const underFile = await env.readTextFile('full/a.txt/x', ctx);
 			expect(underFile).toMatchObject({ ok: false, error: { code: 'not_directory' } });
-			const noParent = await env.writeFile('none/a.txt', 'x', ctx);
+			const noParent = await env.readTextFile('none/a.txt', ctx);
 			expect(noParent).toMatchObject({ ok: false, error: { code: 'not_found' } });
+			const renamed = await env.renameFile('full/a.txt', 'none/b.txt', ctx);
+			expect(renamed).toMatchObject({ ok: false, error: { code: 'not_found' } });
+			const written = await env.writeFile('deep/er/a.txt', 'x', ctx);
+			expect(written.ok).toBe(true);
 			const exists = await env.createDir('full', { recursive: false }, ctx);
 			expect(exists).toMatchObject({ ok: false, error: { code: 'invalid' } });
 		});

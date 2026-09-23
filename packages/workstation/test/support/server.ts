@@ -73,11 +73,13 @@ function runExec(stream: ServerChannel, command: string, home: string): void {
 	child.stdout.pipe(stream, { end: false });
 	child.stderr.pipe(stream.stderr, { end: false });
 	stream.pipe(child.stdin);
-	child.on('close', (code, signal) => {
+	// `sshd` sends the exit status when the child exits, and closes the channel
+	// when the output ends: a background child can hold the output open.
+	child.on('exit', (code, signal) => {
 		if (signal) stream.exit(signal.replace(/^SIG/, ''), false, '');
 		else stream.exit(code ?? 1);
-		stream.end();
 	});
+	child.on('close', () => stream.end());
 }
 
 interface ServerState {
