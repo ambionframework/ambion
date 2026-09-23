@@ -50,6 +50,7 @@ import {
 	summarise,
 	toolResultTexts,
 } from './support/scripted.ts';
+import { stopAtEnd } from './support/stop.ts';
 import {
 	faultyJournals,
 	memory,
@@ -57,7 +58,6 @@ import {
 	storages,
 	tappedJournals,
 } from './support/storage.ts';
-import { stopAtEnd } from './support/stop.ts';
 
 const person = defineHuman({ name: 'andrei', identity: 'Founder.' });
 const alpha = scriptedAgent('alpha');

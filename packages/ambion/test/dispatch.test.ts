@@ -28,8 +28,8 @@ import {
 	waitForRoom,
 } from './support/room.ts';
 import { byAgent, quiet, scripted } from './support/scripted.ts';
-import { type Storage, storages } from './support/storage.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { type Storage, storages } from './support/storage.ts';
 
 const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');

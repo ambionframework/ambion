@@ -24,9 +24,9 @@ import {
 	scriptedAgent,
 	waitForRoom,
 } from './support/room.ts';
-import { type Script, quiet, scripted } from './support/scripted.ts';
-import { gatedJournals, type Storage, storages } from './support/storage.ts';
+import { quiet, type Script, scripted } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { gatedJournals, type Storage, storages } from './support/storage.ts';
 
 const watcher = scriptedAgent('watcher', 'Records room activity.');
 const priya = defineHuman({

@@ -8,9 +8,9 @@ import { piExecution } from '../../pi/src/index.ts';
 import { inProcessTransport, type Transport } from '../src/hosting.ts';
 import {
 	type AgentDefinition,
+	type CreateRuntimeOptions,
 	createRuntime,
 	type Room,
-	type CreateRuntimeOptions,
 	type StartRoomOptions,
 	startRoom,
 } from '../src/index.ts';

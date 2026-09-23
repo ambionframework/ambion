@@ -15,8 +15,8 @@ import {
 } from '../src/index.ts';
 import { observed, openFor } from './support/core-failure.ts';
 import { deferred, messagesOf, roomName, scriptedAgent } from './support/room.ts';
-import { gatedJournals, type Storage, storages, tappedJournals } from './support/storage.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { gatedJournals, type Storage, storages, tappedJournals } from './support/storage.ts';
 
 const person = defineHuman({ name: 'andrei', identity: 'Founder.' });
 const returnedPerson = defineHuman({ name: 'andrei', identity: 'Founder, returned.' });

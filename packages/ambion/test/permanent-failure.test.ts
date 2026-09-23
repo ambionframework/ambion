@@ -11,8 +11,8 @@ import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
 import { openFor } from './support/core-failure.ts';
 import { collect, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { storages } from './support/storage.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { storages } from './support/storage.ts';
 
 const worker = scriptedAgent('worker');
 const person = defineHuman({ name: 'priya', identity: 'Project manager.' });

@@ -11,8 +11,8 @@ import {
 import { createRuntime, defineAgent, readRoom, resumeRoom, startRoom } from '../src/index.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
 import { isClosing, quiet, scripted, seat, speak } from './support/scripted.ts';
-import { storages } from './support/storage.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { storages } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
 const writer = defineAgent({

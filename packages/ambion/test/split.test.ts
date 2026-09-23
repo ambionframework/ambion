@@ -37,6 +37,7 @@ import { childWrites, openFor, quietNow } from './support/core-failure.ts';
 import { History, standing, violations } from './support/history.ts';
 import { collect, messagesOf, roomName, storedOf, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
+import { stopAtEnd } from './support/stop.ts';
 import {
 	childJournals,
 	childStorage,
@@ -45,7 +46,6 @@ import {
 	type Storage,
 	sqlite,
 } from './support/storage.ts';
-import { stopAtEnd } from './support/stop.ts';
 import { serializing } from './support/transport.ts';
 
 const node = process.env.AMBION_NODE ?? process.execPath;

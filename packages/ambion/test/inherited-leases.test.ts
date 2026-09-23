@@ -25,8 +25,8 @@ import {
 import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { roomName, scriptedAgent, storedOf } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
-import { type OpenedStorage, type Storage, storages } from './support/storage.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { type OpenedStorage, type Storage, storages } from './support/storage.ts';
 
 const runner = scriptedAgent('runner', 'Runs on a separate host.');
 const person = defineHuman({ name: 'priya', identity: 'Project manager.' });

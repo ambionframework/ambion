@@ -30,8 +30,8 @@ import {
 	waitForRoom,
 } from './support/room.ts';
 import { byAgent, callTool, quiet, type Script, scripted, speak } from './support/scripted.ts';
-import { memory } from './support/storage.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { memory } from './support/storage.ts';
 
 function tool(name: string, execute: (ctx: ToolContext) => string = () => 'done') {
 	return defineTool({

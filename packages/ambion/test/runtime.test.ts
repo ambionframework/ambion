@@ -11,8 +11,8 @@ import {
 	type CreateRuntimeOptions,
 	createRuntime,
 	isSpoken,
-	readRoom,
 	type Runtime,
+	readRoom,
 	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';

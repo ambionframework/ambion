@@ -8,8 +8,8 @@ import type { RoomNotification, Usage } from '../src/index.ts';
 import { createRuntime, readExchange, startRoom } from '../src/index.ts';
 import { andrei, collect, roomName, scriptedAgent, storedOf, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
-import { storages } from './support/storage.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { storages } from './support/storage.ts';
 import { traceOf } from './support/trace.ts';
 
 const product = scriptedAgent('product', 'Answers questions.');

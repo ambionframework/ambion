@@ -23,8 +23,8 @@ import {
 	waitForRoom,
 } from './support/room.ts';
 import { byAgent, contextText, quiet, says, scripted, summarise } from './support/scripted.ts';
-import { storages } from './support/storage.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { storages } from './support/storage.ts';
 
 const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');

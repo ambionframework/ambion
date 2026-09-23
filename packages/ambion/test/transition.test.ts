@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { CommitRequest } from '../src/hosting.ts';
 import type { Seating } from '../src/journal/events.ts';
 import type { Entry, Kind } from '../src/journal/journal.ts';
-import type { CommitRequest } from '../src/hosting.ts';
 import { activationSpec } from '../src/room/activation.ts';
 import { foldRoom, type RoomState } from '../src/room/fold.ts';
 import { decide, evolve, type RoomDecision } from '../src/room/transition.ts';

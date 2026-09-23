@@ -28,8 +28,8 @@ import {
 } from '../src/index.ts';
 import { andrei, collect, roomName, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted, speak } from './support/scripted.ts';
-import { memory } from './support/storage.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { memory } from './support/storage.ts';
 
 /** A stub execution that counts its builds and the seats it connects. */
 function stub(connected: string[] = []) {

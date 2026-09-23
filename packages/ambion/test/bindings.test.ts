@@ -10,8 +10,8 @@ import {
 	waitForRoom,
 } from './support/room.ts';
 import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
-import { faultyJournals, memory } from './support/storage.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { faultyJournals, memory } from './support/storage.ts';
 
 describe('room bindings', () => {
 	it('keeps same-named agents in separate rooms bound to their own tools', async () => {

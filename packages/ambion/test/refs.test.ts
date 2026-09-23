@@ -22,8 +22,8 @@ import {
 import { isRef, REF_LIMITS, refsRefusal } from '../src/refs.ts';
 import { assistant, collect, roomName, scriptedAgent } from './support/room.ts';
 import { byAgent, callTool, isClosing, quiet, scripted } from './support/scripted.ts';
-import { storages } from './support/storage.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { storages } from './support/storage.ts';
 
 describe('room URIs', () => {
 	it('round-trips a room and a message', () => {

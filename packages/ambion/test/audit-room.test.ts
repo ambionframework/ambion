@@ -27,8 +27,8 @@ import {
 	speak,
 	summarise,
 } from './support/scripted.ts';
-import { type Storage, storages } from './support/storage.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { type Storage, storages } from './support/storage.ts';
 
 const product = scriptedAgent('product', 'Answers questions.');
 

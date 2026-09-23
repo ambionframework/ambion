@@ -50,8 +50,8 @@ import {
 	speak,
 	summarise,
 } from './support/scripted.ts';
-import { gatedJournals, memory } from './support/storage.ts';
 import { stopAtEnd } from './support/stop.ts';
+import { gatedJournals, memory } from './support/storage.ts';
 import { type Fault, faultyTransport } from './support/transport.ts';
 
 const solo = scriptedAgent('solo', 'Speaks once.');
