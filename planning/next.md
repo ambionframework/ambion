@@ -48,7 +48,7 @@ changes of each one.
 | S1. The workstation, `@ambionframework/workstation` | #280       | A bash backend over SSH with one Unix account for each agent, tested on an in-process server and on OpenSSH                                                |
 | The removal of `@ambionframework/cli`               | #273       | Every library package needs only Node `>=22.19.0`                                                                                                          |
 | M1. Kernel decision layers                          | #286       | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts`                    |
-| M2. The rules sweep                                 | #M2PR      | Every exported room rule but `exchangeOutcome` gates a write, and `draftsClose` counts a summary draft by the writer's seat in the fold and in the verdict |
+| M2. The rules sweep                                 | #291       | Every exported room rule but `exchangeOutcome` gates a write, and `draftsClose` counts a summary draft by the writer's seat in the fold and in the verdict |
 
 **Two themes stay open, each with the acceptance it must meet on the
 tagged commit.** The phases below deliver them; the items explain them.
