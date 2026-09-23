@@ -157,33 +157,47 @@ and agent. V1 has neither.
 
 **The account's home is the working directory.** The just-bash backends
 make `/home/<name>` on the first connection. A workstation account has a
-home from the server's own user management. `connect()` reads `$HOME`
-from the login and makes no directory. `resolvePath` resolves `~` and a
-relative path against that home.
+home from the server's own user management. The SFTP server starts in that
+home, so the backend reads it once for each client with `realpath('.')`.
+`resolvePath` resolves `~` and a relative path against that home.
+
+**The server runs bash and util-linux.** `SshEnv` runs each command
+through `bash -s`, whatever the login shell of the account is. It also
+needs a `setsid` that has the `--wait` option.
 
 ## The layout on a server
 
 **`layout` names one file and one folder.** `layout.audit` is the path of
 the audit log. `layout.rooms` is the folder that `mirror()` writes each
-room's record under. The two paths need different permissions, because
-different accounts write them.
+room's record under. Different accounts write the two paths, so they need
+different permissions.
 
-| Path                  | Writer                                                 | Mode on the server                      |
-| --------------------- | ------------------------------------------------------ | --------------------------------------- |
-| The folder of `audit` | Every agent: each tool call writes its entry as itself | Group write, setgid, owned by the group |
-| `rooms`               | The host account alone                                 | Owner write, group read                 |
-| Each agent's home     | That agent alone                                       | `0700`                                  |
+| Path                  | Writer                                                 | Mode on the server                                |
+| --------------------- | ------------------------------------------------------ | ------------------------------------------------- |
+| The folder of `audit` | Every agent: each tool call writes its entry as itself | Group write, setgid, and a default ACL of `g::rw` |
+| `rooms`               | The host account alone                                 | Owner write, group read                           |
+| Each agent's home     | That agent alone                                       | `0700`                                            |
+| `/tmp`                | Every account, one private file each                   | The server's own `/tmp`, with the sticky bit      |
 
 **One group holds every agent account and the host account.** The folder
 of the audit log belongs to that group, with group write and the setgid
 bit, so a new file keeps the group. A rotation renames the active file
 inside that folder, so the folder needs group write as well as the file.
 
-**`SshEnv` keeps new files writable for the group.** It runs each command
-under `umask 002`, and SFTP creates each file with mode `0664`. The agent
-that rotates the audit log creates the next file, and every other agent
-still appends to it. Each home stays at mode `0700`, so the group reaches
-no home.
+**A default ACL keeps each new audit file writable for the group.** The
+SFTP server creates each file under its own umask, and that umask is
+usually `022`. A `umask` inside a command does not reach it. The host sets
+`setfacl -d -m g::rw` on the audit folder, and `SshEnv` asks SFTP for mode
+`0664` on an ordinary file. The agent that rotates the log creates the
+next file, and every other agent still appends to it.
+
+**Each home stays at mode `0700`.** A file of mode `0664` in a home
+reaches no other account.
+
+**A temporary file is private to its account.** Every account shares
+`/tmp`. `SshEnv` creates a temporary file with an exclusive create and
+mode `0600`, and a temporary directory with mode `0700`. A spill file
+holds a command's full output, so no other agent reads it.
 
 ## The environment
 
@@ -199,35 +213,48 @@ entry's helpers supply the rest:
 Pi's `NodeExecutionEnv` implements the same methods on a local machine,
 and `SshEnv` follows its behavior.
 
-**Three methods need more than one SFTP request, and one needs fewer.**
-`workspaceConformance` checks each row.
+**SFTP needs five adjustments.** `workspaceConformance` checks each row.
 
-| Method       | SFTP gap                                        | `SshEnv` does                                        |
-| ------------ | ----------------------------------------------- | ---------------------------------------------------- |
-| `renameFile` | SFTP v3 refuses to rename onto a file           | Calls `posix-rename@openssh.com`, which replaces it  |
-| `createDir`  | SFTP makes one directory per request            | Makes each missing component of the path in order    |
-| `remove`     | SFTP removes one entry per request              | Runs `rm -rf --` through `exec` for a recursive call |
-| `listDir`    | None: `readdir` returns each entry's attributes | One request, where `BashEnv` calls `lstat` per entry |
+| Method                | SFTP gap                                                                                          | `SshEnv` does                                                                |
+| --------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Every file method     | OpenSSH answers `ENOTDIR` as `NO_SUCH_FILE`, and `EISDIR`, `EEXIST`, and `ENOTEMPTY` as `FAILURE` | On either status, one `lstat` of the path and its parent picks the Pi code   |
+| `renameFile`          | SFTP v3 refuses to rename onto a file                                                             | Calls `posix-rename@openssh.com`; a server without it gets a plain `RENAME`  |
+| `createDir`           | SFTP makes one directory per request, and an existing one answers `FAILURE`                       | Makes each missing component in order; `lstat` finds a directory that exists |
+| `remove`              | SFTP removes one entry per request                                                                | Runs `rm -rf --` through `exec` for a recursive call                         |
+| `fileInfo`, `listDir` | SFTP gives `mtime` in seconds                                                                     | Multiplies it by 1000 for `mtimeMs`; `readdir` gives each entry's attributes |
 
-**The `sql` export needs the replacing rename.** `WorkspaceFiles` writes
-an export to a temporary file and renames it onto the target, which can
-exist. Log rotation renames onto a fresh name, so plain SFTP serves it.
-OpenSSH servers offer the
-`posix-rename@openssh.com` extension, and `ssh2` calls it through
-`ext_openssh_rename`.
+**The `sql` export needs its rename on one filesystem.** `WorkspaceFiles`
+writes an export to a temporary file under `/tmp` and renames it onto the
+target. Many servers mount `/tmp` as a filesystem of its own, and a
+rename across two filesystems fails. The workstation needs `WorkspaceFiles`
+to write its temporary file beside the target, and the
+[backlog](../planning/backlog.md#designs-with-a-shape) holds that change.
+Log rotation renames inside one folder, so it needs no change.
 
-**`exec` writes the directory and the variables into the command.**
-`ssh2` can send an `env` request, and `sshd` drops it unless `AcceptEnv`
-names the variable. `SshEnv` sends `cd -- '<dir>' && env NAME=value` in
-front of the command, and it quotes every value for the shell.
+**`exec` sends the script on standard input.** `sshd` drops an `env`
+request unless `AcceptEnv` names the variable. `SshEnv` runs
+`exec setsid --wait bash -s` on the channel and writes the script to its
+standard input:
+
+1. One line on stderr that gives the process group ID, which `SshEnv`
+   reads and removes from the output.
+2. `cd -- '<dir>'`.
+3. One `export NAME='value'` for each variable, with each value quoted
+   for the shell.
+4. The command inside `{ }`, with standard input from `/dev/null`. Bash
+   reads the whole group before it runs it, so the command cannot read the
+   script.
+
+**No value reaches a command line.** `ps` on the server shows no variable
+of one agent to another account.
 
 ## Commands and aborts
 
 **Each command runs in its own process group.** Pi's `NodeExecutionEnv`
 starts each command detached and kills the whole group with `SIGKILL`.
-`SshEnv` starts the command under `setsid`, and the command reports its
-group ID first. An abort opens a second channel and sends
-`kill -KILL -- -<group>`.
+`setsid --wait` makes `bash` the leader of a new group and waits for it,
+so the channel reports the exit status of the command. An abort opens a
+second channel and sends `kill -KILL -- -<group>`.
 
 **The SSH signal request cannot do this alone.** OpenSSH 7.9 added signal
 delivery to `sshd`. It sends a subset of signals, and only to a login or a
@@ -238,10 +265,14 @@ session's own child, and a pipeline's other processes keep running.
 tells an abort apart from a timeout, and a command with no timeout gets
 30 seconds. `SshEnv` supplies the group kill for both.
 
-**Output streams while the command runs.** `ssh2` delivers stdout and
-stderr as the server sends them. `SshEnv` passes each part to
-`boundedView`, which bounds it to the caller's limits, and hands each view
-to `onUpdate`.
+**`SshEnv` hands one view to `onUpdate`.** The conformance suite expects
+one update for each command, the same as `BashEnv` gives. `SshEnv`
+collects stdout and stderr until the command ends and builds one
+`boundedView`. `spill` writes the whole output when the view cuts it.
+
+**A process that starts its own session escapes the kill.** Its channel
+stays open until it exits. When the client cannot open a channel, the
+backend drops the client, and the next `connect()` builds a new one.
 
 ## Connections
 
@@ -250,13 +281,19 @@ calls `connect()` and `cleanup()` once for each operation
 ([Resources](resources.md#the-resource-contract)). A handshake on each
 call adds network round trips to every tool call.
 
-- **`connect()` opens a channel** on the cached client of that agent. It
-  builds the client on the first call.
-- **`cleanup()` closes that channel.** The client stays open.
-- **Each client keeps one SFTP channel open** for its life, and opens one
-  `exec` channel for each command.
-- **`keepaliveInterval` finds a dead connection.** The backend drops the
-  client, and the next `connect()` builds a new one.
+- **`connect()` returns an `SshEnv` over the cached client** of that
+  agent. On the first call it builds the client, opens its SFTP channel,
+  and reads the home.
+- **Each command opens one `exec` channel** and closes it when the
+  command ends. `cleanup()` closes any channel that the operation left
+  open. The client and its SFTP channel stay open.
+- **An `error` event drops the client.** The backend listens on every
+  client, because an `error` event with no listener stops the Node
+  process. `keepaliveInterval` turns a dead connection into that event.
+  The next `connect()` builds a new client.
+- **A call that loses its connection fails, and nothing retries it.** An
+  append that the connection lost can have landed or not, and the caller
+  cannot tell which.
 - **`dispose()` closes every client.** The backend deletes no data on the
   server. The host removes a workspace's folders with its own tools.
 
@@ -320,6 +357,10 @@ identity writes the audit log.
 **No agent can change the room mirror.** Only the host account writes
 `layout.rooms`, and the agents read it through the group.
 
+**No agent reads another agent's temporary files.** Each temporary file
+and spill file has mode `0600`, and each temporary directory has mode
+`0700`.
+
 ## Tests
 
 **Both tiers run `workspaceConformance`.** A `ConformanceBackend` harness
@@ -355,23 +396,31 @@ describe(harness.name, () => {
 });
 ```
 
-**The scripted tier runs an SSH server in the test process.** `ssh2`
-ships a `Server` class, and its SFTP server mode answers file requests.
-The test answers them from memory, so the tier needs no container and no
-network. `packages/claude` tests on a fake executable the same way.
+**The scripted tier serves a temporary directory over SFTP.** The test
+starts an `ssh2` `Server` in its own process. Its SFTP handlers read and
+write a temporary directory on the local disk, and each `exec` runs `bash`
+in that directory. The tier needs no container and no network, and
+`pnpm check` runs it.
 
-**The integration tier runs a real `sshd`.** The test starts `sshd` with
-a temporary config, a host key, two agent accounts, and a host account.
-It proves what only OpenSSH can:
+- **It tests the plain `RENAME` path.** The `ssh2` server announces no
+  SFTP extension, so `SshEnv` falls back. The handler replaces an existing
+  target, as `rename(2)` does.
+- **It tests no permission.** Every account maps to the one user that
+  runs the test.
+
+**The integration tier runs in a CI job of its own.** Only root creates
+the accounts, and only an `sshd` that runs as root logs in as more than
+one user. `pnpm check` runs without root. The job runs a container image
+with `sshd`, and it runs only when `AMBION_WORKSTATION_SSHD` is set. It
+proves what only OpenSSH can:
 
 - the replacing rename and the group kill
+- the error classification against the status codes of OpenSSH
 - the channel count under `MaxSessions`
-- that one account cannot read another account's home
+- that one account cannot read another account's home or temporary files
 - that a file one agent creates in the audit folder stays writable for
   the other agent
 - that an agent cannot write under `layout.rooms`
-
-The `ssh2` repository runs its own suite against OpenSSH the same way.
 
 ## Out of v1
 
@@ -390,5 +439,6 @@ The `ssh2` repository runs its own suite against OpenSSH the same way.
   one client for each agent that connected.
 
 Sources for the client facts: the published `ssh2` 1.17.0 and
-`@microsoft/dev-tunnels-ssh` 3.12.42 packages, and the
-[OpenSSH 7.9 release notes](https://www.openssh.org/txt/release-7.9).
+`@microsoft/dev-tunnels-ssh` 3.12.42 packages, the
+[OpenSSH 7.9 release notes](https://www.openssh.org/txt/release-7.9), and
+`sftp-server.c` in OpenSSH for the status codes and the umask.
