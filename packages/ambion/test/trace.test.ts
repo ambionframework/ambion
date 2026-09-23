@@ -19,11 +19,19 @@ import {
 	type RoomProtocol,
 	type ViewResponse,
 } from '../src/hosting.ts';
-import type { ExecutionEvent, Room, RoomNotification, Runtime, TraceStep } from '../src/index.ts';
+import type {
+	AgentDefinition,
+	CreateRuntimeOptions,
+	ExecutionEvent,
+	Runtime,
+	TraceStep,
+} from '../src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineTool,
+	readActivation,
+	readRoom,
 	startRoom,
 	type TracePolicy,
 } from '../src/index.ts';
@@ -31,6 +39,7 @@ import { assertWire, roundTrip } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
 import { quiet, scripted, speak } from './support/scripted.ts';
+import { stopAtEnd } from './support/stop.ts';
 import { traceOf } from './support/trace.ts';
 
 const product = defineAgent({
@@ -41,43 +50,39 @@ const product = defineAgent({
 
 const sorted = (steps: readonly TraceStep[]) => steps.map((step) => step.type);
 
-/** The trace of the one activation a room ran for a seat. */
-async function ranOnce(runtime: Runtime, room: string, events: readonly RoomNotification[]) {
+/** Ask one question in a room that runs `stream`, and read the trace of its one activation. */
+async function traced(stream: StreamFn, options: CreateRuntimeOptions = {}, agent = product) {
+	const runtime = createRuntime(options);
+	const name = roomName('trace');
+	const room = stopAtEnd(
+		await startRoom({ name, agents: [agent], runtime, execution: piExecution({ stream }) }),
+	);
+	const events = collect(room);
+	await (await room.visit(andrei)).send({ text: 'Ready?' });
+	await waitForRoom(room, 'quiet', 2_000);
 	const started = events.find((event) => event.type === 'activation_start');
 	if (started?.type !== 'activation_start') throw new Error('No activation started.');
-	return { id: started.activation, steps: await traceOf(runtime, room, started.activation) };
+	const id = started.activation;
+	return { room, name, events, id, steps: await traceOf(runtime, name, id) };
 }
 
-async function ask(room: Room, text: string): Promise<void> {
-	const visit = await room.visit(andrei);
-	await visit.send({ text });
-	await waitForRoom(room, 'quiet', 2_000);
-}
+/** A stream that thinks, then calls `tool`, then stops. */
+const thinksThenCalls = (thinking: string, tool: string, input: Record<string, unknown> = {}) =>
+	scripted((_context, _agent, call) =>
+		call === 1
+			? fauxAssistantMessage([fauxThinking(thinking), fauxToolCall(tool, input)], {
+					stopReason: 'toolUse',
+				})
+			: quiet('done'),
+	);
 
 describe('the trace of a room activation', () => {
-	it('holds each step, stamped and in order, with the same steps live', async () => {
-		const runtime = createRuntime();
-		const name = roomName('trace-room');
-		const room = await startRoom({
-			name,
-			agents: [product],
-			runtime,
-			execution: piExecution({
-				stream: scripted((_context, _agent, call) =>
-					call === 1
-						? fauxAssistantMessage(
-								[fauxThinking('weighing it'), fauxToolCall('say', { text: 'Yes.' })],
-								{
-									stopReason: 'toolUse',
-								},
-							)
-						: quiet('done'),
-				),
-			}),
-		});
-		const events = collect(room);
-		await ask(room, 'Ready?');
-		const { id, steps } = await ranOnce(runtime, name, events);
+	it('holds each step, stamped and in order, with the same steps live, and reads them back after a reopen', async () => {
+		const storage = memoryJournals();
+		const { room, name, events, id, steps } = await traced(
+			thinksThenCalls('weighing it', 'say', { text: 'Yes.' }),
+			{ storage },
+		);
 		expect(sorted(steps)).toEqual([
 			'pass',
 			'thinking',
@@ -104,44 +109,27 @@ describe('the trace of a room activation', () => {
 		);
 		expect(live).toEqual(steps);
 		for (const step of steps) assertWire(roundTrip(step));
-	});
+		await room.stop();
 
-	it('joins streamed deltas into one block and closes it', async () => {
-		const runtime = createRuntime();
-		const name = roomName('trace-deltas');
-		const room = await startRoom({
-			name,
-			agents: [product],
-			runtime,
-			execution: piExecution({ stream: deltaStream(['al', 'pha', ' beta']) }),
-		});
-		const events = collect(room);
-		await ask(room, 'Hello?');
-		const { steps } = await ranOnce(runtime, name, events);
-		const texts = steps.filter((step) => step.type === 'text');
-		expect(texts).toEqual([expect.objectContaining({ text: 'alpha beta', final: true })]);
-		expect(
-			events.filter((event) => event.type === 'step' && event.step.type === 'text'),
-		).toHaveLength(1);
-	});
-
-	it('survives a reopen and writes each step once for a repeated activation', async () => {
-		const storage = memoryJournals();
-		const name = roomName('trace-replay');
-		const first = createRuntime({ storage });
-		const room = await startRoom({
-			name,
-			agents: [product],
-			runtime: first,
-			execution: piExecution({
-				stream: scripted((_context, _agent, call) => (call === 1 ? speak('Yes.') : quiet())),
-			}),
-		});
-		const events = collect(room);
-		await ask(room, 'Ready?');
-		const { id, steps } = await ranOnce(first, name, events);
+		// A second runtime over the same storage reads the stopped room.
 		const second = createRuntime({ storage });
 		expect(await traceOf(second, name, id)).toEqual(steps);
+		const read = await readActivation(name, id, { runtime: second });
+		expect(read?.activation).toBe(id);
+		expect(read?.passes).toHaveLength(1);
+		expect(read?.passes[0]).toMatchObject({ pass: 1, input: 'view' });
+		expect(read?.passes.flatMap((pass) => pass.steps)).toEqual(steps);
+		const snapshot = await readRoom(name, { runtime: second });
+		expect(snapshot.exchanges.flatMap((exchange) => exchange.activations)).toContainEqual(
+			expect.objectContaining({
+				id,
+				seat: 'product',
+				attempt: 1,
+				purpose: 'respond',
+				outcome: { status: 'released' },
+			}),
+		);
+
 		// A second sink for the same activation replays the same keys.
 		const again = hostingOf(second);
 		const sink = openTrace({
@@ -158,6 +146,25 @@ describe('the trace of a room activation', () => {
 		sink.record({ type: 'text', text: 'late', final: true });
 		await sink.close();
 		expect(await traceOf(second, name, id)).toEqual(steps);
+	});
+
+	it('joins streamed deltas into one block and closes it', async () => {
+		const { steps, events } = await traced(deltaStream(['al', 'pha', ' beta']));
+		const texts = steps.filter((step) => step.type === 'text');
+		expect(texts).toEqual([expect.objectContaining({ text: 'alpha beta', final: true })]);
+		expect(
+			events.filter((event) => event.type === 'step' && event.step.type === 'text'),
+		).toHaveLength(1);
+	});
+
+	it('reads undefined for a malformed id and no passes for an unknown activation', async () => {
+		const runtime = createRuntime();
+		const name = roomName('read-activation-unknown');
+		expect(await readActivation(name, 'nonsense', { runtime })).toBeUndefined();
+		expect(await readActivation(name, 'message:4:product:1', { runtime })).toEqual({
+			activation: 'message:4:product:1',
+			passes: [],
+		});
 	});
 });
 
@@ -206,99 +213,63 @@ describe('the trace limits and policy', () => {
 		defineAgent({
 			name: 'product',
 			identity: 'Answers questions.',
-			executor: pi({ instructions: 'Answer.', model: 'scripted/product', tools: [lookup] }),
+			executor: pi({ instructions: 'Answer.', model: 'scripted/product', tools: [lookup, viewer] }),
 			...(policy === undefined ? {} : { trace: policy }),
 		});
-	const script = () =>
-		scripted((_context, _agent, call) =>
-			call === 1
-				? fauxAssistantMessage([fauxThinking('a'.repeat(400)), fauxToolCall('lookup', {})], {
-						stopReason: 'toolUse',
-					})
-				: quiet('done'),
-		);
 
-	async function run(
-		agent: ReturnType<typeof asker>,
-		limits?: Parameters<typeof createRuntime>[0],
-	) {
-		const runtime = createRuntime(limits);
-		const name = roomName('trace-policy');
-		const room = await startRoom({
-			name,
-			agents: [agent],
-			runtime,
-			execution: piExecution({ stream: script() }),
-		});
-		const events = collect(room);
-		await ask(room, 'Look?');
-		return (await ranOnce(runtime, name, events)).steps;
+	/** The steps of one activation that thinks, then calls `tool`. */
+	/** The steps of one activation that thinks, then calls `tool`. */
+	async function run(agent: AgentDefinition, options?: CreateRuntimeOptions, tool = 'lookup') {
+		const { steps } = await traced(thinksThenCalls('a'.repeat(400), tool), options, agent);
+		const result = steps.find((step) => step.type === 'tool_result');
+		const thinking = steps.find((step) => step.type === 'thinking');
+		return {
+			steps,
+			output: result?.type === 'tool_result' ? result.output : undefined,
+			thinking: thinking?.type === 'thinking' ? thinking.text.length : undefined,
+		};
 	}
 
-	it('applies the default policy: full tool output, summarised thinking', async () => {
-		const steps = await run(asker());
-		const thinking = steps.find((step) => step.type === 'thinking');
-		expect(thinking?.type === 'thinking' && thinking.text.length).toBe(280);
-		const result = steps.find((step) => step.type === 'tool_result');
-		expect(result?.type === 'tool_result' && JSON.stringify(result.output)).toContain(
+	it.each([
+		['the default policy', undefined, 280, 'x'.repeat(100)],
+		[
+			'full thinking and output',
+			{ thinking: 'full', toolOutput: 'full' } as const,
+			400,
 			'x'.repeat(100),
-		);
+		],
+	])('applies %s', async (_name, policy, thinking, output) => {
+		const ran = await run(asker(policy));
+		expect(ran.thinking).toBe(thinking);
+		expect(JSON.stringify(ran.output)).toContain(output);
 	});
 
 	it('omits what the policy omits', async () => {
-		const steps = await run(asker({ thinking: 'omit', toolOutput: 'omit' }));
-		expect(sorted(steps)).not.toContain('thinking');
-		const result = steps.find((step) => step.type === 'tool_result');
-		expect(result).toMatchObject({ output: null });
-	});
-
-	it('keeps full thinking when the policy says so', async () => {
-		const steps = await run(asker({ thinking: 'full', toolOutput: 'full' }));
-		const thinking = steps.find((step) => step.type === 'thinking');
-		expect(thinking?.type === 'thinking' && thinking.text.length).toBe(400);
+		const ran = await run(asker({ thinking: 'omit', toolOutput: 'omit' }));
+		expect(sorted(ran.steps)).not.toContain('thinking');
+		expect(ran.output).toBeNull();
 	});
 
 	it('cuts tool output to limits.trace.toolOutputBytes', async () => {
-		const steps = await run(asker(), { limits: { trace: { toolOutputBytes: 10 } } });
-		const result = steps.find((step) => step.type === 'tool_result');
-		expect(result?.type === 'tool_result' && String(result.output)).toMatch(
-			/^.{10}\n\[truncated: \d+ bytes\]$/s,
-		);
+		const { output } = await run(asker(), { limits: { trace: { toolOutputBytes: 10 } } });
+		expect(String(output)).toMatch(/^.{10}\n\[truncated: \d+ bytes\]$/s);
 	});
 
 	it('drops steps past limits.trace.stepsPerPass and keeps the end', async () => {
-		const steps = await run(asker(), { limits: { trace: { stepsPerPass: 2 } } });
+		const { steps } = await run(asker(), { limits: { trace: { stepsPerPass: 2 } } });
 		expect(sorted(steps)).toEqual(['pass', 'thinking', 'end']);
 	});
 
 	it('redacts a tool result image before it counts against toolOutputBytes', async () => {
-		const agent = defineAgent({
-			name: 'product',
-			identity: 'Answers questions.',
-			executor: pi({ instructions: 'Answer.', model: 'scripted/product', tools: [viewer] }),
-		});
-		const runtime = createRuntime({ limits: { trace: { toolOutputBytes: 10_000 } } });
-		const name = roomName('trace-image');
-		const room = await startRoom({
-			name,
-			agents: [agent],
-			runtime,
-			execution: piExecution({
-				stream: scripted((_context, _agent, call) =>
-					call === 1
-						? fauxAssistantMessage([fauxToolCall('viewer', {})], { stopReason: 'toolUse' })
-						: quiet('seen'),
-				),
-			}),
-		});
-		const events = collect(room);
-		await ask(room, 'Show me.');
-		const { steps } = await ranOnce(runtime, name, events);
-		const result = steps.find((step) => step.type === 'tool_result');
-		expect(result?.type === 'tool_result' && result.output).toMatchObject({
+		const { output } = await run(
+			asker(),
+			{ limits: { trace: { toolOutputBytes: 10_000 } } },
+			'viewer',
+		);
+		expect(output).toMatchObject({
 			content: [{ type: 'image', mimeType: 'image/png', bytes: 600 }],
 		});
-		expect(JSON.stringify(result?.type === 'tool_result' && result.output)).not.toContain('QUJD');
+		expect(JSON.stringify(output)).not.toContain('QUJD');
 	});
 
 	it('sums usage steps, and keeps the sum when the pass cap drops steps', async () => {
@@ -389,10 +360,10 @@ class PlayedRoom implements RoomProtocol {
 	}
 }
 
-function play(stream: StreamFn) {
+function play(stream: StreamFn, storage?: JournalOpener) {
 	const clock = fakeClock();
-	const runtime = createRuntime({ clock, execution: piExecution({ stream }) });
-	const services = createExecutionServices({ storage: memoryJournals(), clock, stream });
+	const runtime = createRuntime({ clock, storage, execution: piExecution({ stream }) });
+	const services = createExecutionServices({ storage: storage ?? memoryJournals(), clock, stream });
 	const hosting = hostingOf(runtime);
 	const room = new PlayedRoom(() => clock.now());
 	const events: ExecutionEvent[] = [];
@@ -498,24 +469,23 @@ describe('the steps the driver owns', () => {
 	});
 
 	it.each([
-		['a permanent failure', 'invalid_request_error: bad', 'permanent'],
-		['a transient failure', 'the model is down', 'transient'],
-	] as const)('ends %s with its cause', async (_name, message, cause) => {
-		const { actor, runtime } = play(
-			scripted(() => fauxAssistantMessage('', { stopReason: 'error', errorMessage: message })),
-		);
+		[
+			'a permanent failure with its cause',
+			fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'invalid_request_error: bad' }),
+			{ failure: { cause: 'permanent', message: 'invalid_request_error: bad' } },
+		],
+		[
+			'a transient failure with its cause',
+			fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'the model is down' }),
+			{ failure: { cause: 'transient', message: 'the model is down' } },
+		],
+		['deliberate silence as a stop with no failure', quiet(), { stop: 'stopped' }],
+	] as const)('ends %s', async (_name, message, end) => {
+		const { actor, runtime } = play(scripted(() => message));
 		await actor.run(id);
-		const steps = await traceOf(runtime, 'played', id);
-		expect(steps.at(-1)).toMatchObject({ type: 'end', failure: { cause, message } });
-	});
-
-	it('ends deliberate silence as a stop with no failure', async () => {
-		const { actor, runtime } = play(scripted(() => quiet()));
-		await actor.run(id);
-		const steps = await traceOf(runtime, 'played', id);
-		const end = steps.at(-1);
-		expect(end).toMatchObject({ type: 'end', stop: 'stopped' });
-		expect(end && 'failure' in end).toBe(false);
+		const last = (await traceOf(runtime, 'played', id)).at(-1);
+		expect(last).toMatchObject({ type: 'end', ...end });
+		expect(last !== undefined && 'failure' in last).toBe('failure' in end);
 	});
 
 	it('reports a failed trace write and never fails the activation', async () => {
@@ -527,30 +497,10 @@ describe('the steps the driver owns', () => {
 				},
 			}),
 		};
-		const stream = scripted(() => quiet());
-		const runtime = createRuntime({ storage, execution: piExecution({ stream }) });
-		const services = createExecutionServices({ storage, clock: runtime.clock, stream });
-		const hosting = hostingOf(runtime);
-		const events: ExecutionEvent[] = [];
-		const room = new PlayedRoom(() => runtime.clock.now());
-		const executor = createPiExecutor({
-			definition: product,
-			model: services.model,
-			stream: services.stream,
-			transcripts: services.transcripts,
-			room: 'played',
-			now: () => 0,
-		});
-		const actor = new AgentRunner(room, {
-			clock: runtime.clock,
-			call: hosting.limits.call,
-			definition: product,
-			room: 'played',
-			seat: 'product',
-			executor,
-			emit: (event) => events.push(event),
-			trace: traceOpenerFor(runtime, events),
-		});
+		const { actor, events } = play(
+			scripted(() => quiet()),
+			storage,
+		);
 		await actor.run(id);
 		expect(events.some((event) => event.type === 'trace_error')).toBe(true);
 		expect(events.some((event) => event.type === 'error')).toBe(false);

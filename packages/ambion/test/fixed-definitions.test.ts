@@ -1,12 +1,10 @@
 import { Type } from 'typebox';
-import { describe, expect, it } from 'vitest';
-import { pi, piExecution } from '../../pi/src/index.ts';
+import { describe, expect, it, onTestFinished } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
-	defineAgent,
 	defineHuman,
 	defineTool,
-	type Room,
 	readRoom,
 	resumeRoom,
 	startRoom,
@@ -17,179 +15,133 @@ import {
 	messagesOf,
 	participantsOf,
 	roomName,
+	scriptedAgent,
 	stateOf,
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
 import { callTool, quiet, scripted } from './support/scripted.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
-const alpha = defineAgent({
-	name: 'alpha',
-	identity: 'Alpha.',
-	executor: pi({ instructions: 'Answer.', model: 'scripted/alpha' }),
-});
-const beta = defineAgent({
-	name: 'beta',
-	identity: 'Beta.',
-	executor: pi({ instructions: 'Answer.', model: 'scripted/beta' }),
-});
-const gamma = defineAgent({
-	name: 'gamma',
-	identity: 'Gamma.',
-	executor: pi({ instructions: 'Answer.', model: 'scripted/gamma' }),
-});
+const alpha = scriptedAgent('alpha');
+const beta = scriptedAgent('beta');
+const gamma = scriptedAgent('gamma');
 const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
-const silent = () => scripted(() => quiet());
+const silent = () => piExecution({ stream: scripted(() => quiet()) });
+
+type Options = Omit<Parameters<typeof startRoom>[0], 'name' | 'runtime'>;
 
 describe.each(storages)('fixed definitions on $name', (storage) => {
-	it('rejects a summary writer that is not seated at start', async () => {
-		const opened = await storage.open();
-		try {
-			await expect(
-				startRoom({
-					name: roomName('reserve-writer-rejected'),
-					agents: [alpha, beta],
-					seats: { alpha: 'broadcast' },
-					summary: 'beta',
-					runtime: createRuntime({ storage: opened.storage }),
-					execution: piExecution({ stream: silent() }),
-				}),
-			).rejects.toThrow(/not seated/);
-		} finally {
-			await opened.dispose();
-		}
-	});
+	/** A silent room over this storage, stopped at the end of the test. */
+	async function open(label: string, options: Options) {
+		const opened = await openFor(storage);
+		const runtime = createRuntime({ storage: opened.storage });
+		const room = await startRoom({
+			name: roomName(label),
+			runtime,
+			execution: silent(),
+			...options,
+		});
+		/** A second runtime over the same storage, as another host would open it. */
+		const host = () => createRuntime({ storage: opened.storage });
+		return { opened, runtime, host, room: stopAtEnd(room) };
+	}
 
-	it('rejects a summary name that no definition holds, and names it', async () => {
-		const opened = await storage.open();
-		try {
-			await expect(
-				startRoom({
-					name: roomName('unknown-writer-rejected'),
-					agents: [alpha],
-					summary: 'ghost',
-					runtime: createRuntime({ storage: opened.storage }),
-					execution: piExecution({ stream: silent() }),
-				}),
-			).rejects.toThrow(/summary agent 'ghost'/);
-		} finally {
-			await opened.dispose();
-		}
+	it.each([
+		[
+			'a summary writer that is not seated',
+			{ agents: [alpha, beta], seats: { alpha: 'broadcast' }, summary: 'beta' },
+			/not seated/,
+		],
+		[
+			'a summary name that no definition holds',
+			{ agents: [alpha], summary: 'ghost' },
+			/summary agent 'ghost'/,
+		],
+		['a duplicate catalog name', { agents: [alpha, alpha] }, /./],
+		['an unknown initial seat', { agents: [alpha], seats: { missing: 'broadcast' } }, /./],
+	] as const)('rejects %s before any journal write', async (_case, options, message) => {
+		const opened = await openFor(storage);
+		const name = roomName('catalog-invalid');
+		await expect(
+			startRoom({
+				name,
+				...options,
+				runtime: createRuntime({ storage: opened.storage }),
+				execution: silent(),
+			}),
+		).rejects.toThrow(message);
+		expect(await storedOf(opened.journals, name)).toEqual([]);
 	});
 
 	it('resolves a host seat call that repeats a held seat, without a new entry', async () => {
-		const opened = await storage.open();
-		const room = await startRoom({
-			name: roomName('seat-repeat'),
+		const { room } = await open('seat-repeat', {
 			agents: [alpha, beta],
 			seats: { alpha: 'broadcast' },
-			runtime: createRuntime({ storage: opened.storage }),
-			execution: piExecution({ stream: silent() }),
 		});
-		try {
-			await room.seat('alpha');
-			await room.seat('beta');
-			const before = (await participantsOf(room)).length;
-			const entries = (await messagesOf(room)).length;
-			await expect(room.seat('beta')).resolves.toBeUndefined();
-			await expect(room.seat('alpha')).resolves.toBeUndefined();
-			expect((await participantsOf(room)).length).toBe(before);
-			expect((await messagesOf(room)).length).toBe(entries);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
+		await room.seat('alpha');
+		await room.seat('beta');
+		const before = (await participantsOf(room)).length;
+		const entries = (await messagesOf(room)).length;
+		await expect(room.seat('beta')).resolves.toBeUndefined();
+		await expect(room.seat('alpha')).resolves.toBeUndefined();
+		expect((await participantsOf(room)).length).toBe(before);
+		expect((await messagesOf(room)).length).toBe(entries);
 	});
 
 	it('leaves a closed exchange without a summary while the host holds the writer out of the room', async () => {
-		const opened = await storage.open();
-		const runtime = createRuntime({ storage: opened.storage });
-		const room = await startRoom({
-			name: roomName('reserve-writer'),
+		const { room } = await open('reserve-writer', {
 			agents: [alpha, beta],
 			seats: { alpha: 'broadcast', beta: 'none' },
 			summary: 'beta',
-			runtime,
-			execution: piExecution({ stream: silent() }),
 		});
-		try {
-			await room.unseat('beta');
-			const visit = await room.visit(priya);
-			const first = await visit.send({ text: 'No writer seated yet.' });
-			await expect(first.waitForSummary()).resolves.toBeUndefined();
-			expect(stateOf(room).closes.at(-1)?.summary).toBeUndefined();
-			await room.seat('beta', { attention: 'none' });
-			const second = await visit.send({ text: 'The writer is seated now.' });
-			await second.waitForSummary();
-			expect(stateOf(room).closes.at(-1)?.summary).toBe('beta');
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
+		await room.unseat('beta');
+		const visit = await room.visit(priya);
+		const first = await visit.send({ text: 'No writer seated yet.' });
+		await expect(first.waitForSummary()).resolves.toBeUndefined();
+		expect(stateOf(room).closes.at(-1)?.summary).toBeUndefined();
+		await room.seat('beta', { attention: 'none' });
+		const second = await visit.send({ text: 'The writer is seated now.' });
+		await second.waitForSummary();
+		expect(stateOf(room).closes.at(-1)?.summary).toBe('beta');
 	});
 
 	it('separates the catalog from membership and returns every unseated agent to reserve', async () => {
-		const opened = await storage.open();
-		const room = await startRoom({
-			name: roomName('catalog-membership'),
-			agents: [alpha, beta],
-			seats: {},
-			runtime: createRuntime({ storage: opened.storage }),
-			execution: piExecution({ stream: silent() }),
-		});
-		try {
-			expect(await participantsOf(room)).toEqual([]);
-			expect(stateOf(room).reserve.map((agent) => agent.name)).toEqual(['alpha', 'beta']);
-			await room.seat(beta.name, { attention: 'named' });
-			await waitForRoom(room);
-			expect(await participantsOf(room)).toMatchObject([{ name: beta.name, attention: 'named' }]);
-			await room.seat(beta.name, { attention: 'named' });
-			expect(await participantsOf(room)).toMatchObject([{ name: beta.name, attention: 'named' }]);
-			await expect(room.seat(beta.name, { attention: 'broadcast' })).rejects.toThrow();
-			await room.unseat(beta.name);
-			await room.unseat(beta.name);
-			await room.seat(beta.name);
-			expect(await participantsOf(room)).toMatchObject([
-				{ name: beta.name, attention: 'broadcast' },
-			]);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
+		const { room } = await open('catalog-membership', { agents: [alpha, beta], seats: {} });
+		expect(await participantsOf(room)).toEqual([]);
+		expect(stateOf(room).reserve.map((agent) => agent.name)).toEqual(['alpha', 'beta']);
+		await room.seat(beta.name, { attention: 'named' });
+		await waitForRoom(room);
+		expect(await participantsOf(room)).toMatchObject([{ name: beta.name, attention: 'named' }]);
+		await room.seat(beta.name, { attention: 'named' });
+		expect(await participantsOf(room)).toMatchObject([{ name: beta.name, attention: 'named' }]);
+		await expect(room.seat(beta.name, { attention: 'broadcast' })).rejects.toThrow();
+		await room.unseat(beta.name);
+		await room.unseat(beta.name);
+		await room.seat(beta.name);
+		expect(await participantsOf(room)).toMatchObject([{ name: beta.name, attention: 'broadcast' }]);
 	});
 
 	it('rejects unknown names before writing membership and accepts name-based messages', async () => {
-		const opened = await storage.open();
-		const room = await startRoom({
-			name: roomName('catalog-unknown'),
-			agents: [alpha],
-			runtime: createRuntime({ storage: opened.storage }),
-			execution: piExecution({ stream: silent() }),
+		const { opened, room } = await open('catalog-unknown', { agents: [alpha] });
+		const before = await storedOf(opened.journals, room.name);
+		await expect(room.seat('missing')).rejects.toThrow();
+		await expect(room.unseat('missing')).rejects.toThrow();
+		// @ts-expect-error Membership accepts names, never executable definitions.
+		await expect(room.seat(beta)).rejects.toThrow();
+		expect(await storedOf(opened.journals, room.name)).toEqual(before);
+		const visit = await room.visit(priya);
+		await visit.send({ to: alpha.name, text: 'By name.' });
+		await waitForRoom(room);
+		expect((await messagesOf(room)).find((message) => message.kind === 'said')).toMatchObject({
+			from: priya.name,
+			to: alpha.name,
+			text: 'By name.',
 		});
-		try {
-			const before = await storedOf(opened.journals, room.name);
-			await expect(room.seat('missing')).rejects.toThrow();
-			await expect(room.unseat('missing')).rejects.toThrow();
-			// @ts-expect-error Membership accepts names, never executable definitions.
-			await expect(room.seat(beta)).rejects.toThrow();
-			expect(await storedOf(opened.journals, room.name)).toEqual(before);
-			const visit = await room.visit(priya);
-			await visit.send({ to: alpha.name, text: 'By name.' });
-			await waitForRoom(room);
-			expect((await messagesOf(room)).find((message) => message.kind === 'said')).toMatchObject({
-				from: priya.name,
-				to: alpha.name,
-				text: 'By name.',
-			});
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
 	});
 
 	it('captures structural definitions and initial membership before callers can mutate them', async () => {
-		const opened = await storage.open();
 		const calls: string[] = [];
 		const tool = {
 			...defineTool({
@@ -215,11 +167,9 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 		const agents = [definition];
 		const seats = { alpha: 'named' as const };
 		const prompts: string[] = [];
-		const room = await startRoom({
-			name: roomName('catalog-capture'),
+		const { room } = await open('catalog-capture', {
 			agents,
 			seats,
-			runtime: createRuntime({ storage: opened.storage }),
 			execution: piExecution({
 				stream: scripted((context, _agent, call) => {
 					prompts.push(context.systemPrompt ?? '');
@@ -227,132 +177,93 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 				}),
 			}),
 		});
-		try {
-			definition.name = 'replacement';
-			definition.identity = 'Changed.';
-			definition.executor.instructions = 'Changed instructions.';
-			tool.invoke = () => {
-				calls.push('replacement');
-				return 'changed';
-			};
-			agents.splice(0);
-			delete (seats as Partial<typeof seats>).alpha;
-			const person = { name: 'priya', identity: 'Original person.' };
-			const visiting = room.visit(person);
-			person.name = 'someone-else';
-			const visit = await visiting;
-			await visit.send({ to: 'alpha', text: 'Use captured values.' });
-			await waitForRoom(room);
-			expect(await participantsOf(room)).toEqual(
-				expect.arrayContaining([
-					expect.objectContaining({ name: 'alpha', identity: 'Original.', attention: 'named' }),
-				]),
-			);
-			expect(prompts.every((prompt) => prompt.includes('Original instructions.'))).toBe(true);
-			expect(prompts.length).toBeGreaterThan(0);
-			expect(calls).toEqual(['original']);
-			expect((await messagesOf(room)).find((message) => message.kind === 'said')?.from).toBe(
-				'priya',
-			);
-			await expect(room.seat('replacement')).rejects.toThrow();
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
+		definition.name = 'replacement';
+		definition.identity = 'Changed.';
+		definition.executor.instructions = 'Changed instructions.';
+		tool.invoke = () => {
+			calls.push('replacement');
+			return 'changed';
+		};
+		agents.splice(0);
+		delete (seats as Partial<typeof seats>).alpha;
+		const person = { name: 'priya', identity: 'Original person.' };
+		const visiting = room.visit(person);
+		person.name = 'someone-else';
+		const visit = await visiting;
+		await visit.send({ to: 'alpha', text: 'Use captured values.' });
+		await waitForRoom(room);
+		expect(await participantsOf(room)).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ name: 'alpha', identity: 'Original.', attention: 'named' }),
+			]),
+		);
+		expect(prompts.every((prompt) => prompt.includes('Original instructions.'))).toBe(true);
+		expect(prompts.length).toBeGreaterThan(0);
+		expect(calls).toEqual(['original']);
+		expect((await messagesOf(room)).find((message) => message.kind === 'said')?.from).toBe('priya');
+		await expect(room.seat('replacement')).rejects.toThrow();
 	});
 
 	it('preserves membership on resume and records extra definitions for the new run', async () => {
-		const opened = await storage.open();
-		const runtime = createRuntime({ storage: opened.storage });
-		const room = await startRoom({
-			name: roomName('catalog-resume'),
+		const { runtime, host, room } = await open('catalog-resume', {
 			agents: [alpha, beta],
 			seats: { alpha: 'named' },
-			runtime,
-			execution: piExecution({ stream: silent() }),
 		});
-		let resumed: Room | undefined;
-		try {
-			await room.seat(beta.name, { attention: 'none' });
-			await waitForRoom(room);
-			await room.unseat(alpha.name);
-			await waitForRoom(room);
-			expect(stateOf(room).reserve.map((agent) => agent.name)).toEqual(['alpha']);
-			crash(runtime, room);
-			resumed = await resumeRoom(room.name, {
+		await room.seat(beta.name, { attention: 'none' });
+		await waitForRoom(room);
+		await room.unseat(alpha.name);
+		await waitForRoom(room);
+		expect(stateOf(room).reserve.map((agent) => agent.name)).toEqual(['alpha']);
+		crash(runtime, room);
+		const resumed = stopAtEnd(
+			await resumeRoom(room.name, {
 				agents: [alpha, beta, gamma],
-				runtime: createRuntime({ storage: opened.storage }),
-				execution: piExecution({ stream: silent() }),
-			});
-			expect(await participantsOf(resumed)).toMatchObject([{ name: 'beta', attention: 'none' }]);
-			expect(
-				stateOf(resumed)
-					.reserve.map((agent) => agent.name)
-					.sort(),
-			).toEqual(['alpha', 'gamma']);
-			await resumed.seat('gamma', { attention: 'named' });
-			await waitForRoom(resumed);
-			const read = await readRoom(room.name, {
-				runtime: createRuntime({ storage: opened.storage }),
-			});
-			expect(read.participants.map((participant) => participant.name)).toEqual(['beta', 'gamma']);
-			await expect(
-				resumeRoom(room.name, {
-					agents: [beta, gamma],
-					runtime: createRuntime({ storage: opened.storage }),
-					execution: piExecution({ stream: silent() }),
-				}),
-			).rejects.toThrow();
-			// Failed validation must not fence the current host.
-			await resumed.seat('alpha');
-			expect((await participantsOf(resumed)).map((participant) => participant.name)).toContain(
-				'alpha',
-			);
-		} finally {
-			await resumed?.stop();
-			await room.stop();
-			await opened.dispose();
-		}
+				runtime: host(),
+				execution: silent(),
+			}),
+		);
+		expect(await participantsOf(resumed)).toMatchObject([{ name: 'beta', attention: 'none' }]);
+		expect(
+			stateOf(resumed)
+				.reserve.map((agent) => agent.name)
+				.sort(),
+		).toEqual(['alpha', 'gamma']);
+		await resumed.seat('gamma', { attention: 'named' });
+		await waitForRoom(resumed);
+		const read = await readRoom(room.name, { runtime: host() });
+		expect(read.participants.map((participant) => participant.name)).toEqual(['beta', 'gamma']);
+		await expect(
+			resumeRoom(room.name, { agents: [beta, gamma], runtime: host(), execution: silent() }),
+		).rejects.toThrow();
+		// Failed validation must not fence the current host.
+		await resumed.seat('alpha');
+		expect((await participantsOf(resumed)).map((participant) => participant.name)).toContain(
+			'alpha',
+		);
 	});
 
 	it('rejects an added definition that collides with a person without fencing the host', async () => {
-		const opened = await storage.open();
-		const room = await startRoom({
-			name: roomName('catalog-person-collision'),
-			agents: [alpha],
-			runtime: createRuntime({ storage: opened.storage }),
-			execution: piExecution({ stream: silent() }),
-		});
-		try {
-			const visit = await room.visit(priya);
-			const before = await storedOf(opened.journals, room.name);
-			await expect(
-				resumeRoom(room.name, {
-					agents: [alpha, { ...beta, name: priya.name }],
-					runtime: createRuntime({ storage: opened.storage }),
-					execution: piExecution({ stream: silent() }),
-				}),
-			).rejects.toThrow(/person/);
-			expect(await storedOf(opened.journals, room.name)).toEqual(before);
-			await visit.send({ to: alpha.name, text: 'The original run still works.' });
-			await waitForRoom(room);
-			expect((await messagesOf(room)).some((message) => message.kind === 'said')).toBe(true);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
+		const { opened, host, room } = await open('catalog-person-collision', { agents: [alpha] });
+		const visit = await room.visit(priya);
+		const before = await storedOf(opened.journals, room.name);
+		await expect(
+			resumeRoom(room.name, {
+				agents: [alpha, { ...beta, name: priya.name }],
+				runtime: host(),
+				execution: silent(),
+			}),
+		).rejects.toThrow(/person/);
+		expect(await storedOf(opened.journals, room.name)).toEqual(before);
+		await visit.send({ to: alpha.name, text: 'The original run still works.' });
+		await waitForRoom(room);
+		expect((await messagesOf(room)).some((message) => message.kind === 'said')).toBe(true);
 	});
 
 	it('revalidates definitions against a competing resume before fencing it', async () => {
-		const opened = await storage.open();
-		const room = await startRoom({
-			name: roomName('catalog-competing-resume'),
-			agents: [alpha],
-			runtime: createRuntime({ storage: opened.storage }),
-			execution: piExecution({ stream: silent() }),
-		});
+		const { opened, host, room } = await open('catalog-competing-resume', { agents: [alpha] });
 		const entered = deferred();
 		const release = deferred();
+		onTestFinished(release.resolve);
 		let reads = 0;
 		const delayed = createRuntime({
 			storage: {
@@ -371,57 +282,17 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 				},
 			},
 		});
-		let newer: Room | undefined;
-		try {
-			const old = resumeRoom(room.name, {
-				agents: [alpha],
-				runtime: delayed,
-				execution: piExecution({ stream: silent() }),
-			});
-			const rejected = expect(old).rejects.toThrow(/beta/);
-			await entered.promise;
-			newer = await resumeRoom(room.name, {
-				agents: [alpha, beta],
-				runtime: createRuntime({ storage: opened.storage }),
-				execution: piExecution({ stream: silent() }),
-			});
-			const before = await storedOf(opened.journals, room.name);
-			release.resolve();
-			await rejected;
-			expect(await storedOf(opened.journals, room.name)).toEqual(before);
-			await newer.seat('beta');
-			expect((await participantsOf(newer)).map((participant) => participant.name)).toContain(
-				'beta',
-			);
-		} finally {
-			release.resolve();
-			await newer?.stop();
-			await room.stop();
-			await opened.dispose();
-		}
-	});
-
-	it('rejects duplicate catalog names and unknown initial membership before journal writes', async () => {
-		const opened = await storage.open();
-		try {
-			for (const options of [
-				{ agents: [alpha, alpha] },
-				{ agents: [alpha], summary: 'missing' },
-				{ agents: [alpha], seats: { missing: 'broadcast' as const } },
-			]) {
-				const name = roomName('catalog-invalid');
-				await expect(
-					startRoom({
-						name,
-						...options,
-						runtime: createRuntime({ storage: opened.storage }),
-						execution: piExecution({ stream: silent() }),
-					}),
-				).rejects.toThrow();
-				expect(await storedOf(opened.journals, name)).toEqual([]);
-			}
-		} finally {
-			await opened.dispose();
-		}
+		const old = resumeRoom(room.name, { agents: [alpha], runtime: delayed, execution: silent() });
+		const rejected = expect(old).rejects.toThrow(/beta/);
+		await entered.promise;
+		const newer = stopAtEnd(
+			await resumeRoom(room.name, { agents: [alpha, beta], runtime: host(), execution: silent() }),
+		);
+		const before = await storedOf(opened.journals, room.name);
+		release.resolve();
+		await rejected;
+		expect(await storedOf(opened.journals, room.name)).toEqual(before);
+		await newer.seat('beta');
+		expect((await participantsOf(newer)).map((participant) => participant.name)).toContain('beta');
 	});
 });

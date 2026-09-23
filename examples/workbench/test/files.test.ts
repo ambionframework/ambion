@@ -21,13 +21,9 @@ const FAKE_PNG = new Uint8Array([
 
 describe('isImagePath', () => {
 	it('recognizes the extensions the panel previews as a picture', () => {
-		expect(isImagePath('/photos/lab.png')).toBe(true);
-		expect(isImagePath('/photos/lab.JPG')).toBe(true);
-		expect(isImagePath('/photos/lab.jpeg')).toBe(true);
-		expect(isImagePath('/photos/lab.gif')).toBe(true);
-		expect(isImagePath('/photos/lab.webp')).toBe(true);
-		expect(isImagePath('/notes.txt')).toBe(false);
-		expect(isImagePath('/lab.db')).toBe(false);
+		for (const path of ['/a.png', '/a.JPG', '/a.jpeg', '/a.gif', '/a.webp'])
+			expect(isImagePath(path), path).toBe(true);
+		for (const path of ['/notes.txt', '/lab.db']) expect(isImagePath(path), path).toBe(false);
 	});
 });
 

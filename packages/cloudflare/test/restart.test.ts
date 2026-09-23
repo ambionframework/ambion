@@ -7,39 +7,38 @@
  * with the process that wrote it. The room that comes back folds the same entry
  * and serves the same activation, so the work in flight is not lost.
  */
-import { env, runInDurableObject } from 'cloudflare:test';
+import { runInDurableObject } from 'cloudflare:test';
 import { isSpoken } from '@ambionframework/ambion';
 import { namespaced } from '@ambionframework/journal';
 import { expect, it } from 'vitest';
 import { sqlStorage } from '../src/storage.ts';
+import { evict, roomOf } from './objects.ts';
 import { until } from './until.ts';
 
 const NAME = 'room-restart';
 
 type LeaseObservation = { id: string; phase: 'running' | 'ended'; reason?: string };
 
-/** Every entry of one kind on the room's journal, read through a fresh look at its storage. */
-async function stored<T>(stub: DurableObjectStub, type: string): Promise<T[]> {
-	const found = await runInDurableObject(stub, async (_instance, state) => {
-		const journal = await namespaced(sqlStorage(state), 'ambion/room').open(NAME);
-		return (await journal.read(0)).entries.map((entry) => entry.entry as { kind: string; body: T });
-	});
-	return found.filter((entry) => entry.kind === type).map((entry) => entry.body);
-}
-
-/** The run that wrote each entry of one kind: every entry a fenced run writes carries it. */
-const writers = async (stub: DurableObjectStub, type: string): Promise<(string | undefined)[]> => {
+/**
+ * Every entry of one kind on the room's journal, read through a fresh look at
+ * its storage, with the run that wrote it: every entry a fenced run writes carries it.
+ */
+async function stored<T>(stub: DurableObjectStub, type: string) {
 	const found = await runInDurableObject(stub, async (_instance, state) => {
 		const journal = await namespaced(sqlStorage(state), 'ambion/room').open(NAME);
 		return (await journal.read(0)).entries.map(
-			(entry) => entry.entry as { kind: string; run?: string },
+			(entry) => entry.entry as { kind: string; body: T; run?: string },
 		);
 	});
-	return found.filter((entry) => entry.kind === type).map((entry) => entry.run);
-};
+	return found.filter((entry) => entry.kind === type);
+}
+const bodies = async <T>(stub: DurableObjectStub, type: string) =>
+	(await stored<T>(stub, type)).map((entry) => entry.body);
+const writers = async (stub: DurableObjectStub, type: string) =>
+	(await stored(stub, type)).map((entry) => entry.run);
 
 it('serves a seat that was at work when the object went away, and takes its commit after', async () => {
-	const stub = env.ROOM.get(env.ROOM.idFromName(NAME));
+	const stub = roomOf(NAME);
 	await stub.start({
 		name: NAME,
 		summary: 'assistant',
@@ -51,7 +50,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 
 	// The seat claimed its lease, so its activation runs now. The model call it
 	// waits on is what keeps it running while the room goes away.
-	const claim = await until(async () => (await stored<LeaseObservation>(stub, 'lease')).at(0));
+	const claim = await until(async () => (await bodies<LeaseObservation>(stub, 'lease')).at(0));
 	expect(claim.id).toBe('message:4:slow:1');
 	const claimedBy = (await writers(stub, 'lease')).at(0);
 	const firstRun = (await writers(stub, 'run')).at(0);
@@ -61,12 +60,10 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	expect(claimedBy).toBe(firstRun);
 
 	// The platform takes the room. The seat object is untouched and keeps working.
-	await runInDurableObject(stub, async (_instance, state) => {
-		state.abort('the test takes the room while the seat works');
-	}).catch(() => {});
+	await evict(stub, 'the test takes the room while the seat works');
 
 	// The next call builds the room again, and its constructor resumes the name.
-	const again = env.ROOM.get(env.ROOM.idFromName(NAME));
+	const again = roomOf(NAME);
 	const said = await until(async () => {
 		const messages = await again.read().then(
 			(read) => read.messages,
@@ -80,9 +77,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	const resumedNames = (await again.read({ messages: false })).participants.map(
 		(participant) => participant.name,
 	);
-	expect(resumedNames).toContain('slow');
-	expect(resumedNames).toContain('assistant');
-	expect(resumedNames).toContain('priya');
+	expect(resumedNames).toEqual(expect.arrayContaining(['slow', 'assistant', 'priya']));
 	expect(resumedNames).not.toContain('product');
 	await runInDurableObject(again, async (instance) => {
 		await expect(instance.seat('product')).rejects.toThrow(/Unknown agent/);
@@ -97,7 +92,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	expect(runs).toHaveLength(2);
 	expect(new Set(runs).size).toBe(2);
 	expect(runs.at(0)).toBe(firstRun);
-	const messageRows = await stored<{ from?: string }>(again, 'message');
+	const messageRows = await bodies<{ from?: string }>(again, 'message');
 	const spoken = messageRows.findIndex((entry) => entry.from === 'slow');
 	expect(spoken).toBeGreaterThan(-1);
 	expect((await writers(again, 'message')).at(spoken)).toBe(runs.at(1));
@@ -107,7 +102,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	// assistant's draft takes a lease of its own after it, and this test says
 	// nothing about that one.
 	const leases = await until(async () => {
-		const held = await stored<LeaseObservation>(again, 'lease');
+		const held = await bodies<LeaseObservation>(again, 'lease');
 		const mine = held.filter((entry) => entry.id === claim.id);
 		return mine.at(-1)?.phase === 'ended' ? held : undefined;
 	});

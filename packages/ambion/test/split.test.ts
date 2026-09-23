@@ -1,12 +1,12 @@
 /**
  * The split the design forbids, as a history: two live hosts over one
- * journal. The first host is paused, in this process by holding its writes
- * and in a process of its own with SIGSTOP, a second host resumes the
- * name, and the first comes back and keeps writing. Conditional appends
- * refuse the first host's held write when the second host takes the name.
- * A child that uses JSONL for its transcripts keeps the record in the
- * durable journal. A second host can resume the name while the child is
- * stopped, and the child cannot corrupt the record when it continues.
+ * journal. The first host stays alive, or is paused (in this process by
+ * holding its writes, and in a process of its own with SIGSTOP), while a
+ * second host resumes the name. The fence of the second host voids the
+ * first: conditional appends refuse every later write of the first host,
+ * and the record holds every seq once. A child that uses JSONL for its
+ * transcripts keeps the record in the durable journal, and cannot corrupt
+ * the record when it continues after the stop.
  */
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -18,10 +18,10 @@ import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/host/runtime.ts';
 import { inProcessTransport } from '../src/hosting.ts';
-import { createRuntime, type Room, resumeRoom, startRoom } from '../src/index.ts';
+import { createRuntime, resumeRoom, startRoom } from '../src/index.ts';
 import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
-import { type FakeClock, fakeClock } from '../src/testing.ts';
+import { fakeClock } from '../src/testing.ts';
 import {
 	agents,
 	assistant,
@@ -33,11 +33,19 @@ import {
 	script,
 	TIMING,
 } from './support/cast.ts';
-import { idle } from './support/chaos.ts';
+import { childWrites, quietNow } from './support/core-failure.ts';
 import { History, standing, violations } from './support/history.ts';
 import { collect, messagesOf, roomName, storedOf, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { childJournals, childStorage, gatedJournals, memory, sqlite } from './support/storage.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
+import {
+	childJournals,
+	childStorage,
+	gatedJournals,
+	memory,
+	type Storage,
+	sqlite,
+} from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
 const node = process.env.AMBION_NODE ?? process.execPath;
@@ -64,38 +72,41 @@ function entriesOf(stored: readonly JournalEntry[]): RoomEntry[] {
 	});
 }
 
+/** A room on its first host, and the hosts that resume it over the same journal. */
+async function splitRoom(storage: Storage, gate?: () => Promise<void> | undefined) {
+	const opened = await openFor(storage);
+	const clock = fakeClock();
+	const host = (journals = opened.storage) =>
+		createRuntime({ storage: journals, clock, transport: serializing(inProcessTransport()) });
+	const first = host(gate === undefined ? undefined : gatedJournals(opened.storage, gate));
+	const name = roomName('split');
+	const room = await startRoom({
+		name,
+		runtime: first,
+		summary: assistant.name,
+		seats: {
+			[product.name]: 'broadcast',
+			[colleague.name]: 'broadcast',
+			[assistant.name]: 'none',
+		},
+		agents: [product, colleague, assistant],
+		execution: piExecution({ stream: scripted(script) }),
+	});
+	const resume = (runtime = host()) =>
+		resumeRoom(name, { runtime, agents, execution: piExecution({ stream: scripted(script) }) });
+	return { opened, clock, first, name, room, events: collect(room), host, resume };
+}
+
 describe.each([memory, sqlite])('a split on $name: two live hosts over one journal', (storage) => {
 	it('a paused host that comes back is fenced out before its held write lands', async () => {
-		const opened = await storage.open();
-		const clock = fakeClock();
-		const history = new History(clock);
 		// the first host's writes are held while it is paused; the second host's are not
 		let gate: Promise<void> | undefined;
 		let release = () => {};
-		const first = createRuntime({
-			storage: gatedJournals(opened.storage, () => gate),
-			clock,
-			transport: serializing(inProcessTransport()),
-		});
-		const second = createRuntime({
-			storage: opened.storage,
-			clock,
-			transport: serializing(inProcessTransport()),
-		});
-		const name = roomName('split-pause');
-		const room = await startRoom({
-			name,
-			runtime: first,
-			summary: assistant.name,
-			seats: {
-				[product.name]: 'broadcast',
-				[colleague.name]: 'broadcast',
-				[assistant.name]: 'none',
-			},
-			agents: [product, colleague, assistant],
-			execution: piExecution({ stream: scripted(script) }),
-		});
-		const events = collect(room);
+		const { opened, clock, first, name, room, events, resume } = await splitRoom(
+			storage,
+			() => gate,
+		);
+		const history = new History(clock);
 		const hers = await room.visit(priya);
 		await history.run('priya', 'deliver', 'q1', () => hers.send({ text: 'First?', key: 'q1' }));
 		await waitForRoom(room);
@@ -107,11 +118,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 			hers.send({ text: 'Second?', key: 'q2' }),
 		);
 		// the second host takes the name and serves a question
-		const taken = await resumeRoom(name, {
-			runtime: second,
-			agents,
-			execution: piExecution({ stream: scripted(script) }),
-		});
+		const taken = stopAtEnd(await resume());
 		const his = await taken.visit(sam);
 		await history.run('sam', 'deliver', 'q3', () => his.send({ text: 'Third?', key: 'q3' }));
 		await waitForRoom(taken);
@@ -128,50 +135,55 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 			() => messagesOf(taken),
 			(record) => record.map((m) => ({ seq: m.seq, key: m.key })),
 		);
-		try {
-			const stored = await storedOf(opened.journals, name);
-			const folded = foldRoom(entriesOf(stored), RETRY);
-			// The fold read the record. A fold that reads no place answers every
-			// check below with nothing, and the checks say the room is whole.
-			expect(folded.lastSeq).toBeGreaterThan(0);
-			expect(folded.messages.every((message) => message.seq > 0)).toBe(true);
-			const found = violations(history, {
-				record: await messagesOf(taken),
-				stored,
-				state: folded,
-			});
-			expect(found).toEqual([]);
-			expect(history.entries.find((e) => e.key === 'q2' && e.phase !== 'invoke')).toMatchObject({
-				phase: 'fail',
-			});
-			expect(events.some((e) => e.type === 'superseded')).toBe(true);
-			expect(history.entries.find((e) => e.key === 'q4' && e.phase !== 'invoke')).toMatchObject({
-				phase: 'fail',
-			});
-			expect(runningRoom(first, name)).toBeUndefined();
-		} finally {
-			await taken.stop();
-			await opened.dispose();
-		}
+		const stored = await storedOf(opened.journals, name);
+		const folded = foldRoom(entriesOf(stored), RETRY);
+		// The fold read the record. A fold that reads no place answers every
+		// check below with nothing, and the checks say the room is whole.
+		expect(folded.lastSeq).toBeGreaterThan(0);
+		expect(folded.messages.every((message) => message.seq > 0)).toBe(true);
+		const record = await messagesOf(taken);
+		expect(violations(history, { record, stored, state: folded })).toEqual([]);
+		const outcome = (key: string) =>
+			history.entries.find((e) => e.key === key && e.phase !== 'invoke');
+		expect(outcome('q2')).toMatchObject({ phase: 'fail' });
+		expect(outcome('q4')).toMatchObject({ phase: 'fail' });
+		expect(events.some((e) => e.type === 'superseded')).toBe(true);
+		expect(runningRoom(first, name)).toBeUndefined();
+	});
+
+	it('the second host fences the live first out, a third host fences the second, and the record holds every seq once', async () => {
+		const { first, name, room, events, host, resume } = await splitRoom(storage);
+		const hers = await room.visit(priya);
+		await hers.send({ text: 'First?', key: 'q1' });
+		await waitForRoom(room);
+		// the second host takes the name while the first is alive and keeps taking questions
+		const second = host();
+		const taken = stopAtEnd(await resume(second));
+		await (await taken.visit(sam)).send({ text: 'Second?', key: 'q2' });
+		await waitForRoom(taken);
+		// the first host's next write finds the fence: it is superseded, and writes nothing
+		await expect(hers.send({ text: 'Third?', key: 'q3' })).rejects.toThrow(/superseded/);
+		await waitForRoom(room);
+		expect(events.some((e) => e.type === 'superseded')).toBe(true);
+		expect(runningRoom(first, name)).toBeUndefined();
+		const record = await messagesOf(taken);
+		expect(record.map((m) => m.key)).toContain('q2');
+		expect(record.map((m) => m.key)).not.toContain('q3');
+		expect(new Set(record.map((m) => m.seq)).size).toBe(record.length);
+		// and a third host reads the same record off the storage, and fences the second out
+		const third = stopAtEnd(await resume());
+		expect((await messagesOf(third)).map((m) => m.seq)).toEqual(record.map((m) => m.seq));
+		await third.stop();
+		// the second host learns at its next write: its stop finds the fence, says so, and frees the name
+		const takenEvents = collect(taken);
+		await taken.stop();
+		expect(takenEvents.some((e) => e.type === 'superseded')).toBe(true);
+		expect(runningRoom(second, name)).toBeUndefined();
 	});
 });
 
 describe('a split: two live hosts over one SQLite database', () => {
 	const child = fileURLToPath(new URL('./support/child.ts', import.meta.url));
-
-	/** Every `write N` line the child prints, as it prints it. */
-	function writes(stdout: NodeJS.ReadableStream, report: (last: number) => void): void {
-		let buffer = '';
-		stdout.on('data', (chunk: Buffer) => {
-			buffer += chunk.toString();
-			const lines = buffer.split('\n');
-			buffer = lines.pop() ?? '';
-			for (const line of lines) {
-				const reported = /^write (\d+)$/.exec(line);
-				if (reported) report(Number(reported[1]));
-			}
-		});
-	}
 
 	/** Run the child until its journal takes `at` appends, then stop it where it stands. */
 	function stopAt(dir: string, name: string, at: number) {
@@ -181,8 +193,8 @@ describe('a split: two live hosts over one SQLite database', () => {
 		const stopped = new Promise<number>((resolve, reject) => {
 			let sent = false;
 			// stopped once, where it stands; what it writes after the continue is its own
-			writes(process_.stdout, (last) => {
-				if (last < at || sent) return;
+			childWrites(process_.stdout, (last) => {
+				if (last === 'done' || last < at || sent) return;
 				sent = true;
 				process_.kill('SIGSTOP');
 				resolve(last);
@@ -196,18 +208,6 @@ describe('a split: two live hosts over one SQLite database', () => {
 			kill: () => process_.kill('SIGKILL'),
 			exited,
 		};
-	}
-
-	async function quietNow(session: Room, clock: FakeClock): Promise<void> {
-		for (let round = 0; round < 12; round += 1) {
-			const settled = await Promise.race([
-				messagesOf(session).then(() => true),
-				new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300)),
-			]);
-			if (settled && (await idle(session))) return;
-			await clock.advance(2_000);
-		}
-		throw new Error('the room never went quiet');
 	}
 
 	it('a process stopped mid-activation keeps a readable journal after a takeover', async () => {

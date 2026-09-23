@@ -1,7 +1,10 @@
+/**
+ * A visit is idempotent: one person has one arrival and one handle, across
+ * concurrent calls, a storage that fails to read or write, and a resume on
+ * a new host.
+ */
 import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { pi } from '../../pi/src/index.ts';
-import { hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineHuman,
@@ -10,8 +13,10 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import { messagesOf, roomName } from './support/room.ts';
-import { gatedJournals, storages, tappedJournals } from './support/storage.ts';
+import { observed } from './support/core-failure.ts';
+import { deferred, messagesOf, roomName, scriptedAgent } from './support/room.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
+import { gatedJournals, type Storage, storages, tappedJournals } from './support/storage.ts';
 
 const person = defineHuman({ name: 'andrei', identity: 'Founder.' });
 const returnedPerson = defineHuman({ name: 'andrei', identity: 'Founder, returned.' });
@@ -23,19 +28,15 @@ it('types visit as an idempotent definite handle', () => {
 	expectTypeOf(checkTypes).returns.toBeVoid();
 });
 
-function observed<T>(promise: Promise<T>): Promise<T> {
-	void promise.catch(() => {});
-	return promise;
-}
+const count = async (room: Room, kind: 'arrived' | 'left') =>
+	(await messagesOf(room)).filter((message) => message.kind === kind).length;
 
 function bodyKind(entry: unknown): string | undefined {
-	if (entry === null || typeof entry !== 'object') return undefined;
-	const body = (entry as { body?: unknown }).body;
-	if (body === null || typeof body !== 'object') return undefined;
-	const kind = (body as { kind?: unknown }).kind;
-	return typeof kind === 'string' ? kind : undefined;
+	const body = (entry as { body?: { kind?: unknown } } | null)?.body;
+	return typeof body?.kind === 'string' ? body.kind : undefined;
 }
 
+/** A storage whose reads fail while `fail(true)` holds. */
 function unreadableOpener(source: JournalOpener) {
 	let failing = false;
 	let failures = 0;
@@ -58,239 +59,159 @@ function unreadableOpener(source: JournalOpener) {
 		fail(value: boolean) {
 			failing = value;
 		},
-		readFailures() {
-			return failures;
+		readFailures: () => failures,
+	};
+}
+
+/**
+ * A room whose next message write fails at `phase` when `arm()` is called;
+ * the failure also makes every read fail until `unreadable.fail(false)`.
+ */
+async function unreadableRoom(storage: Storage, phase: 'before' | 'after', options = {}) {
+	const opened = await openFor(storage);
+	const unreadable = unreadableOpener(opened.storage);
+	let armed = false;
+	let appended = false;
+	const journals = tappedJournals(unreadable.storage, (_id, _n, at, kind) => {
+		if (!armed || at !== phase || kind !== 'message') return;
+		armed = false;
+		appended = at === 'after';
+		unreadable.fail(true);
+		throw new Error('the disk is full');
+	});
+	const room = stopAtEnd(
+		await startRoom({
+			name: roomName(`visit-unreadable-${storage.name}`),
+			runtime: createRuntime({ storage: journals }),
+			...options,
+		}),
+	);
+	return {
+		room,
+		unreadable,
+		arm: () => {
+			armed = true;
 		},
+		appended: () => appended,
 	};
 }
 
 describe.each(storages)('idempotent visits on $name storage', (storage) => {
 	it('shares concurrent same-identity visits and records one arrival', async () => {
-		const opened = await storage.open();
-		let arrivalStarted!: () => void;
-		const started = new Promise<void>((resolve) => {
-			arrivalStarted = resolve;
-		});
-		let releaseArrival!: () => void;
-		const release = new Promise<void>((resolve) => {
-			releaseArrival = resolve;
-		});
+		const opened = await openFor(storage);
+		const started = deferred();
+		const release = deferred();
 		const journals = gatedJournals(opened.storage, async (kind, entry) => {
 			if (kind !== 'message' || bodyKind(entry) !== 'arrived') return;
-			arrivalStarted();
-			await release;
+			started.resolve();
+			await release.promise;
 		});
-		const room = await startRoom({
-			name: roomName(`visit-idempotent-race-${storage.name}`),
-			runtime: createRuntime({ storage: journals }),
-		});
-		try {
-			const first = observed(room.visit(person));
-			await started;
-			const second = observed(room.visit(person));
-			const third = observed(room.visit(person));
-			expect(
-				await Promise.race([
-					second.then(
-						() => true,
-						() => true,
-					),
-					new Promise<boolean>((resolve) => setImmediate(() => resolve(false))),
-				]),
-			).toBe(false);
-			releaseArrival();
-			const [one, two, three] = await Promise.all([first, second, third]);
-			expect(one.human).toEqual(person);
-			expect(two.human).toEqual(person);
-			expect(three.human).toEqual(person);
-			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
-				1,
-			);
-
-			const mismatch = observed(room.visit(returnedPerson));
-			await expect(mismatch).rejects.toThrow(/different identity/);
-			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
-				1,
-			);
-			await one.leave();
-		} finally {
-			releaseArrival();
-			await room.stop().catch(() => {});
-			await opened.dispose();
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName(`visit-idempotent-race-${storage.name}`),
+				runtime: createRuntime({ storage: journals }),
+			}),
+		);
+		const first = observed(room.visit(person));
+		await started.promise;
+		const second = observed(room.visit(person));
+		const third = observed(room.visit(person));
+		const settled = second.then(
+			() => true,
+			() => true,
+		);
+		const pending = new Promise<boolean>((resolve) => setImmediate(() => resolve(false)));
+		expect(await Promise.race([settled, pending])).toBe(false);
+		release.resolve();
+		for (const visit of await Promise.all([first, second, third])) {
+			expect(visit.human).toEqual(person);
 		}
+		expect(await count(room, 'arrived')).toBe(1);
+
+		await expect(observed(room.visit(returnedPerson))).rejects.toThrow(/different identity/);
+		expect(await count(room, 'arrived')).toBe(1);
+		await (await first).leave();
 	});
 
 	it('rejects a cached visit while recovery reads are unavailable, then reuses it after healing', async () => {
-		const opened = await storage.open();
-		const unreadable = unreadableOpener(opened.storage);
-		let failSeat = false;
-		const journals = tappedJournals(unreadable.storage, (_id, _n, phase, kind) => {
-			if (!failSeat || phase !== 'before' || kind !== 'message') return;
-			failSeat = false;
-			unreadable.fail(true);
-			throw new Error('the disk is full');
-		});
-		const room = await startRoom({
-			name: roomName(`visit-present-read-failure-${storage.name}`),
-			agents: [
-				{
-					name: 'watcher',
-					identity: 'Watches the room.',
-					executor: pi({ instructions: 'Stay quiet.', model: 'scripted/watcher', tools: [] }),
-				},
-			],
+		const { room, unreadable, arm } = await unreadableRoom(storage, 'before', {
+			agents: [scriptedAgent('watcher', 'Watches the room.', { tools: [] })],
 			seats: {},
-			runtime: createRuntime({ storage: journals }),
 		});
-		try {
-			const first = await room.visit(person);
-			failSeat = true;
-			const failedWrite = observed(room.seat('watcher'));
-			await expect(failedWrite).rejects.toThrow(/disk is full/);
-			const failedRead = observed(room.visit(person));
-			await expect(failedRead).rejects.toThrow(/unreadable/);
-			expect(unreadable.readFailures()).toBeGreaterThan(0);
+		const first = await room.visit(person);
+		arm();
+		await expect(observed(room.seat('watcher'))).rejects.toThrow(/disk is full/);
+		await expect(observed(room.visit(person))).rejects.toThrow(/unreadable/);
+		expect(unreadable.readFailures()).toBeGreaterThan(0);
 
-			unreadable.fail(false);
-			const existing = await room.visit(person);
-			expect(existing.human).toEqual(first.human);
-			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
-				1,
-			);
-			await existing.leave();
-		} finally {
-			failSeat = false;
-			unreadable.fail(false);
-			await room.stop().catch(() => {});
-			await opened.dispose();
-		}
+		unreadable.fail(false);
+		const existing = await room.visit(person);
+		expect(existing.human).toEqual(first.human);
+		expect(await count(room, 'arrived')).toBe(1);
+		await existing.leave();
 	});
 
-	it('fences an older host before it can reuse a visit after resume', async () => {
-		const opened = await storage.open();
-		const firstRuntime = createRuntime({ storage: opened.storage });
+	it('fences an older host before it can reuse a visit after resume, and shares the resumed visit across concurrent handles', async () => {
+		const opened = await openFor(storage);
 		const name = roomName(`visit-fenced-${storage.name}`);
-		const first = await startRoom({ name, runtime: firstRuntime });
-		let resumed: Awaited<ReturnType<typeof startRoom>> | undefined;
-		try {
-			await first.visit(person);
-			resumed = await resumeRoom(name, {
-				agents: [],
-				runtime: createRuntime({ storage: opened.storage }),
-			});
-			const stale = observed(first.visit(person));
-			await expect(stale).rejects.toThrow(/stopped|evicted|gone|superseded/);
-			expect((await resumed.visit(person)).human).toEqual(person);
-			expect(
-				(await messagesOf(resumed)).filter((message) => message.kind === 'arrived'),
-			).toHaveLength(1);
-		} finally {
-			await resumed?.stop().catch(() => {});
-			await first.stop().catch(() => {});
-			await opened.dispose();
-		}
-	});
-
-	it('shares resumed visit authority across concurrent reacquisition handles', async () => {
-		const opened = await storage.open();
-		const name = roomName(`visit-shared-handle-${storage.name}`);
-		const firstRuntime = createRuntime({ storage: opened.storage });
-		const first = await startRoom({ name, runtime: firstRuntime });
-		let room: Awaited<ReturnType<typeof startRoom>> | undefined;
-		try {
-			await first.visit(person);
-			hostingOf(firstRuntime).evict(name);
-			room = await resumeRoom(name, {
-				agents: [],
-				runtime: createRuntime({ storage: opened.storage }),
-			});
-			const [one, two] = await Promise.all([room.visit(person), room.visit(person)]);
-			await one.leave();
-			await expect(two.send({ text: 'after the shared leave' })).rejects.toThrow(/ended|leaving/);
-			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
-				1,
-			);
-		} finally {
-			await room?.stop().catch(() => {});
-			await first.stop().catch(() => {});
-			await opened.dispose();
-		}
+		const first = stopAtEnd(
+			await startRoom({ name, runtime: createRuntime({ storage: opened.storage }) }),
+		);
+		await first.visit(person);
+		const resumed = stopAtEnd(
+			await resumeRoom(name, { agents: [], runtime: createRuntime({ storage: opened.storage }) }),
+		);
+		await expect(observed(first.visit(person))).rejects.toThrow(/stopped|evicted|gone|superseded/);
+		const [one, two] = await Promise.all([resumed.visit(person), resumed.visit(person)]);
+		expect(one.human).toEqual(person);
+		await one.leave();
+		await expect(two.send({ text: 'after the shared leave' })).rejects.toThrow(/ended|leaving/);
+		expect(await count(resumed, 'arrived')).toBe(1);
 	});
 
 	it('recovers an uncertain departure before recording one explicit reentry', async () => {
-		const opened = await storage.open();
-		const unreadable = unreadableOpener(opened.storage);
-		let failDeparture = false;
-		let appended = false;
-		const journals = tappedJournals(unreadable.storage, (_id, _n, phase, kind) => {
-			if (!failDeparture || phase !== 'after' || kind !== 'message') return;
-			failDeparture = false;
-			appended = true;
-			unreadable.fail(true);
-			throw new Error('the disk is full');
-		});
-		const room = await startRoom({
-			name: roomName(`visit-departure-recovery-${storage.name}`),
-			runtime: createRuntime({ storage: journals }),
-		});
-		try {
-			const old = await room.visit(person);
-			failDeparture = true;
-			const departure = observed(old.leave());
-			await expect(departure).rejects.toThrow(/disk is full/);
-			const failedRead = observed(messagesOf(room));
-			await failedRead.catch(() => {});
-			expect(appended).toBe(true);
-			expect(unreadable.readFailures()).toBeGreaterThan(0);
+		const { room, unreadable, arm, appended } = await unreadableRoom(storage, 'after');
+		const old = await room.visit(person);
+		arm();
+		await expect(observed(old.leave())).rejects.toThrow(/disk is full/);
+		await observed(messagesOf(room)).catch(() => {});
+		expect(appended()).toBe(true);
+		expect(unreadable.readFailures()).toBeGreaterThan(0);
 
-			unreadable.fail(false);
-			const fresh = await room.visit(person);
-			expect(fresh).not.toBe(old);
-			expect((await messagesOf(room)).filter((message) => message.kind === 'left')).toHaveLength(1);
-			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
-				2,
-			);
-			await expect(old.send({ text: 'old handle is ended' })).rejects.toThrow(/ended|leaving/);
-			await fresh.leave();
-		} finally {
-			failDeparture = false;
-			unreadable.fail(false);
-			await room.stop().catch(() => {});
-			await opened.dispose();
-		}
+		unreadable.fail(false);
+		const fresh = await room.visit(person);
+		expect(fresh).not.toBe(old);
+		expect(await count(room, 'left')).toBe(1);
+		expect(await count(room, 'arrived')).toBe(2);
+		await expect(old.send({ text: 'old handle is ended' })).rejects.toThrow(/ended|leaving/);
+		await fresh.leave();
 	});
 
 	it('keeps an ended handle invalid while keyed retry reuses the original exchange after reentry', async () => {
-		const opened = await storage.open();
-		const room = await startRoom({
-			name: roomName(`visit-key-retry-${storage.name}`),
-			runtime: createRuntime({ storage: opened.storage }),
-		});
-		try {
-			const old = await room.visit(person);
-			const original = await old.send({ text: 'same question', key: 'visit-question' });
-			await old.leave();
-			await expect(old.send({ text: 'same question', key: 'visit-question' })).rejects.toThrow(
-				/ended|leaving/,
-			);
+		const opened = await openFor(storage);
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName(`visit-key-retry-${storage.name}`),
+				runtime: createRuntime({ storage: opened.storage }),
+			}),
+		);
+		const question = { text: 'same question', key: 'visit-question' };
+		const old = await room.visit(person);
+		const original = await old.send(question);
+		await old.leave();
+		await expect(old.send(question)).rejects.toThrow(/ended|leaving/);
 
-			const fresh = await room.visit(person);
-			const retry = await fresh.send({ text: 'same question', key: 'visit-question' });
-			expect(fresh).not.toBe(old);
-			expect(retry.from).toBe(original.from);
-			expect(retry.owner).toBe(original.owner);
-			expect(
-				(await messagesOf(room)).filter(
-					(message) => message.kind === 'said' && message.key === 'visit-question',
-				),
-			).toHaveLength(1);
-			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
-				2,
-			);
-			await fresh.leave();
-		} finally {
-			await room.stop().catch(() => {});
-			await opened.dispose();
-		}
+		const fresh = await room.visit(person);
+		const retry = await fresh.send(question);
+		expect(fresh).not.toBe(old);
+		expect(retry.from).toBe(original.from);
+		expect(retry.owner).toBe(original.owner);
+		expect(
+			(await messagesOf(room)).filter(
+				(message) => message.kind === 'said' && message.key === question.key,
+			),
+		).toHaveLength(1);
+		expect(await count(room, 'arrived')).toBe(2);
+		await fresh.leave();
 	});
 });

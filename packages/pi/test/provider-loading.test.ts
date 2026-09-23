@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const node = process.env.AMBION_NODE ?? process.execPath;
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 const entry = pathToFileURL(`${packageRoot}/dist/index.mjs`).href;
+const testing = pathToFileURL(`${packageRoot}/dist/testing.mjs`).href;
 const loader = fileURLToPath(new URL('./support/import-trace-loader.mjs', import.meta.url));
 
 /**
@@ -43,53 +44,24 @@ function runFreshProcess(code: string): Promise<{ code: number | null; stderr: s
 
 describe('provider loading', () => {
 	it(
-		'does not load the provider catalog while importing the Pi entry and reading a room',
+		'does not load the provider catalog while importing the Pi entry, reading a room, or running a scripted room',
 		async () => {
 			const result = await runFreshProcess(
-				`const { readRoom } = await import('@ambionframework/ambion');
-			await import(${JSON.stringify(entry)});
-			await readRoom('lazy-provider-test');`,
-			);
-			expect(result.code).toBe(0);
-			expect(result.stderr).not.toContain('AMBION_PROVIDER_IMPORT:');
-		},
-		testLimit,
-	);
-
-	it(
-		'does not load the provider catalog during scripted room execution',
-		async () => {
-			const result = await runFreshProcess(
-				`const { createAssistantMessageEventStream, fauxAssistantMessage } = await import(
-				'@earendil-works/pi-ai'
-			);
-			const { startRoom, defineAgent, defineHuman } = await import('@ambionframework/ambion');
+				`const { readRoom, startRoom, defineAgent, defineHuman } = await import('@ambionframework/ambion');
 			const { pi, piExecution } = await import(${JSON.stringify(entry)});
-			const stream = (_model, _context, options) => {
-				const stream = createAssistantMessageEventStream();
-				const message = fauxAssistantMessage('', { stopReason: 'stop' });
-				queueMicrotask(() => {
-					if (options?.signal?.aborted) return;
-					stream.push({ type: 'start', partial: message });
-					stream.push({ type: 'done', reason: 'stop', message });
+			const { quiet, scripted } = await import(${JSON.stringify(testing)});
+			await readRoom('lazy-provider-test');
+			const agent = (name) =>
+				defineAgent({
+					name,
+					identity: name,
+					executor: pi({ instructions: 'quiet', model: 'scripted/' + name }),
 				});
-				return stream;
-			};
-			const assistant = defineAgent({
-				name: 'assistant',
-				identity: 'summarizes',
-				executor: pi({ instructions: 'quiet', model: 'scripted/assistant' }),
-			});
-			const worker = defineAgent({
-				name: 'worker',
-				identity: 'answers',
-				executor: pi({ instructions: 'quiet', model: 'scripted/worker' }),
-			});
 			const room = await startRoom({
 				name: 'lazy-scripted-check',
-				agents: [worker, assistant],
-				summary: assistant.name,
-				execution: piExecution({ stream }),
+				agents: [agent('worker'), agent('assistant')],
+				summary: 'assistant',
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			const visit = await room.visit(defineHuman({ name: 'person', identity: 'tester' }));
 			const exchange = await visit.send({ text: 'hello' });

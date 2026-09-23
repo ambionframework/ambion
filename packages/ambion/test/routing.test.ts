@@ -40,21 +40,21 @@ describe('what a message reaches', () => {
 		covers: { from: 2, through: 2 },
 	};
 
-	it('wakes a seat whose attention is at least as wide as the message', () => {
-		expect(wakes(seat('product', 'broadcast'), said())).toBe(true);
-		expect(wakes(seat('product', 'named'), said())).toBe(false);
+	// A summary is written for one person over a range the room has closed:
+	// it is news to nobody in the room. A seat woken by it would read a
+	// message about itself and answer it, and the room would never settle.
+	it.each([
+		['product', 'broadcast', 'a broadcast say', said(), true],
+		['product', 'named', 'a broadcast say', said(), false],
 		// a directed say reaches the one it names, however narrowly it is seated
-		expect(wakes(seat('product', 'none'), said('product'))).toBe(true);
-		expect(wakes(seat('other', 'presence'), said('product'))).toBe(false);
-	});
-
-	it('wakes nobody for a summary, however wide the seat is seated', () => {
-		// A summary is written for one person over a range the room has closed:
-		// it is news to nobody in the room. A seat woken by it would read a
-		// message about itself and answer it, and the room would never settle.
-		for (const attention of ['none', 'named', 'broadcast', 'presence'] as const) {
-			expect(wakes(seat('product', attention), summary)).toBe(false);
-		}
+		['product', 'none', 'a say to product', said('product'), true],
+		['other', 'presence', 'a say to product', said('product'), false],
+		['product', 'none', 'a summary', summary, false],
+		['product', 'named', 'a summary', summary, false],
+		['product', 'broadcast', 'a summary', summary, false],
+		['product', 'presence', 'a summary', summary, false],
+	] as const)('wakes %s, seated %s, for a %s: %s', (name, attention, _label, message, woken) => {
+		expect(wakes(seat(name, attention), message)).toBe(woken);
 	});
 
 	it('wakes a seat occupied by closing work for a later ordinary exchange', () => {

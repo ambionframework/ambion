@@ -65,16 +65,13 @@ const entries: Entry[] = [
 	},
 ];
 
-const facts = () => {
-	const state = foldRoom(entries, { backoff: () => 0 });
-	return {
-		name: 'payments',
-		now,
-		state,
-		live: new Map<string, string[]>(),
-		messagesSince: () => 0,
-	};
-};
+const facts = (record = entries) => ({
+	name: 'payments',
+	now,
+	state: foldRoom(record, { backoff: () => 0 }),
+	live: new Map<string, string[]>(),
+	messagesSince: () => 0,
+});
 
 const spec = {
 	respond: {
@@ -243,20 +240,13 @@ describe('structured activation context', () => {
 				body: { owner: 'priya', from: 7, through: 7, at, summary: 'worker' },
 			},
 		];
-		const state = foldRoom(twoExchanges, { backoff: () => 0 });
 		const priyaClose: ActivationSpec = {
 			id: 'closed:7:worker:1',
 			seat: 'worker',
 			attempt: 1,
 			purpose: { kind: 'summarize', exchange: 7, person: 'priya', people: ['priya'], through: 7 },
 		};
-		const view = viewOf(priyaClose, {
-			name: 'payments',
-			now,
-			state,
-			live: new Map(),
-			messagesSince: () => 0,
-		});
+		const view = viewOf(priyaClose, facts(twoExchanges));
 
 		// Sam's already-summarised exchange is background priya's writer now
 		// reads, folded the same way it would be for an ordinary activation —

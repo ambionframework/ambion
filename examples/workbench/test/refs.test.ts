@@ -1,7 +1,6 @@
-import type { Message } from '@ambionframework/ambion';
 import { describe, expect, it } from 'vitest';
-import { chipLine, type Known, labUri, refItems, resolveRef, tableOfUri } from '../src/refs.ts';
-import type { Block } from '../src/timeline.ts';
+import { shared } from '../src/definitions.ts';
+import { chipLine, type Known, labUri, resolveRef, tableOfUri } from '../src/refs.ts';
 
 const known: Known = {
 	room: 'bringup',
@@ -113,40 +112,14 @@ describe('chipLine', () => {
 	});
 });
 
-const said = (seq: number, refs?: string[]): Message =>
-	({ seq, kind: 'said', from: 'design', text: `m${seq}`, at: '', refs }) as Message;
-
-describe('refItems', () => {
-	const blocks: Block[] = [
-		{
-			type: 'message',
-			message: said(1, ['lab:///runs', 'file:///library/led-5mm.md']),
-			role: 'said',
-		},
-		{ type: 'message', message: said(2), role: 'said' },
-		{
-			type: 'discussion',
-			key: '1',
-			count: 1,
-			voices: [],
-			flag: '',
-			cost: '',
-			activations: 1,
-			expanded: false,
-			items: [{ type: 'message', message: said(3, ['lab:///results']), role: 'said' }],
-		},
-	];
-
-	it('lists the refs of the shown messages in order, with one id each', () => {
-		const items = refItems(blocks, known);
-		expect(items.map((item) => item.id)).toEqual(['1#0', '1#1']);
-		expect(items.map((item) => item.resolved.kind)).toEqual(['table', 'file']);
-	});
-
-	it('lists the refs inside a discussion only when it is open', () => {
-		const open = blocks.map((block) =>
-			block.type === 'discussion' ? { ...block, expanded: true } : block,
+describe('the team instructions', () => {
+	it('name the URI form of a file and a table, with examples that the terminal resolves', () => {
+		expect(shared).toContain('file:///<path>');
+		expect(shared).toContain('lab:///<table>');
+		const examples = [...shared.matchAll(/(?:file|lab):\/\/\/[A-Za-z0-9_./-]+[A-Za-z0-9]/g)].map(
+			(match) => match[0],
 		);
-		expect(refItems(open, known).map((item) => item.id)).toEqual(['1#0', '1#1', '3#0']);
+		expect(examples).toEqual(['file:///library/led-5mm.md', 'lab:///runs']);
+		for (const example of examples) expect(resolveRef(example, known).target).toBeDefined();
 	});
 });

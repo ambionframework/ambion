@@ -2,6 +2,9 @@
 dist/
 *.tsbuildinfo
 
+# coverage reports, produced on demand by vitest --coverage
+coverage/
+
 # dependencies
 node_modules/
 

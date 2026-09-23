@@ -12,48 +12,46 @@ const result = (fields: object) =>
 		...fields,
 	}) as SDKResultMessage;
 
-it('ends a clean result as a pass that did not fail', () => {
-	expect(passResultOf(result({ stop_reason: 'end_turn' }))).toEqual({ failed: false });
-});
+const permanent = { failed: true, cause: 'permanent' };
 
-it('ends a max_tokens stop and a turn limit as a length stop', () => {
-	expect(passResultOf(result({ stop_reason: 'max_tokens' }))).toEqual({
-		failed: false,
-		stop: 'length',
-	});
-	expect(passResultOf(result({ subtype: 'error_max_turns', is_error: true, errors: [] }))).toEqual({
-		failed: false,
-		stop: 'length',
-	});
-});
-
-it('ends a spent budget as a permanent failure', () => {
-	expect(
-		passResultOf(
-			result({ subtype: 'error_max_budget_usd', is_error: true, errors: ['Budget spent.'] }),
-		),
-	).toEqual({ failed: true, cause: 'permanent', message: 'Budget spent.' });
-});
-
-it('ends a failed result as transient unless its text or status names a refusal', () => {
-	expect(
-		passResultOf(result({ is_error: true, result: 'API Error: 529 overloaded' })),
-	).toMatchObject({
-		failed: true,
-		cause: 'transient',
-	});
-	expect(
-		passResultOf(result({ is_error: true, result: 'API Error: 401', api_error_status: 401 })),
-	).toMatchObject({ failed: true, cause: 'permanent' });
-	expect(
-		passResultOf(
-			result({
-				subtype: 'error_during_execution',
-				is_error: true,
-				errors: ['Your credit balance is too low'],
-			}),
-		),
-	).toMatchObject({ failed: true, cause: 'permanent' });
+it.each([
+	['a clean result as a pass that did not fail', { stop_reason: 'end_turn' }, { failed: false }],
+	[
+		'a max_tokens stop as a length stop',
+		{ stop_reason: 'max_tokens' },
+		{ failed: false, stop: 'length' },
+	],
+	[
+		'a turn limit as a length stop',
+		{ subtype: 'error_max_turns', is_error: true, errors: [] },
+		{ failed: false, stop: 'length' },
+	],
+	[
+		'a spent budget as a permanent failure',
+		{ subtype: 'error_max_budget_usd', is_error: true, errors: ['Budget spent.'] },
+		{ ...permanent, message: 'Budget spent.' },
+	],
+	[
+		'a failed result as transient',
+		{ is_error: true, result: 'API Error: 529 overloaded' },
+		{ failed: true, cause: 'transient', message: 'API Error: 529 overloaded' },
+	],
+	[
+		'a failed result as permanent when its status names a refusal',
+		{ is_error: true, result: 'API Error: 401', api_error_status: 401 },
+		{ ...permanent, message: 'API Error: 401' },
+	],
+	[
+		'a failed result as permanent when its text names a refusal',
+		{
+			subtype: 'error_during_execution',
+			is_error: true,
+			errors: ['Your credit balance is too low'],
+		},
+		{ ...permanent, message: 'Your credit balance is too low' },
+	],
+])('ends %s', (_what, fields, expected) => {
+	expect(passResultOf(result(fields))).toEqual(expected);
 });
 
 it('reads a status only from a status, and never from free text', () => {

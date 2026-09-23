@@ -51,7 +51,6 @@ function room(host: FakeHost, cite = true): void {
 
 async function open() {
 	const made = await started();
-	made.host.fileList = [{ path: '/library/led-5mm.md', size: 797 }];
 	room(made.host);
 	await made.session.refreshRooms();
 	await made.session.refresh();
@@ -83,14 +82,7 @@ function keysOver(session: Awaited<ReturnType<typeof open>>['session']) {
 }
 
 describe('the refs of a message', () => {
-	it('lists the refs of the shown messages only, and every discussion opens more', async () => {
-		const { session } = await open();
-		expect(session.refItems.map((item) => item.id)).toEqual(['4#0', '4#1', '5#0', '5#1', '5#2']);
-		session.setAllOpen(true);
-		expect(session.refItems.map((item) => item.id).slice(0, 2)).toEqual(['2#0', '2#1']);
-	});
-
-	it('marks each ref that does not resolve, and each one outside the workspace', async () => {
+	it('lists and marks the refs of the shown messages, and a message ref opens its discussion', async () => {
 		const { session } = await open();
 		const state = session.refItems.map((item) => [item.id, Boolean(item.resolved.target)]);
 		expect(state).toEqual([
@@ -100,65 +92,44 @@ describe('the refs of a message', () => {
 			['5#1', false],
 			['5#2', false],
 		]);
-	});
-
-	it('opens a file ref in the same preview the files panel gives', async () => {
-		const { session, host } = await open();
-		session.setAllOpen(true);
-		const intent = await session.openRef('2#0');
-		expect(intent).toEqual({ type: 'files' });
-		await vi.waitFor(() => expect(session.browser.file?.path).toBe('/library/led-5mm.md'));
-		expect(session.browser.open).toBe(true);
-		expect(session.browser.selected?.path).toBe('/library/led-5mm.md');
-		expect(host.reads).toContain('/library/led-5mm.md');
-	});
-
-	it('opens a table ref in the table preview', async () => {
-		const { session, host } = await open();
-		session.setAllOpen(true);
-		expect(await session.openRef('2#1')).toEqual({ type: 'files' });
-		await vi.waitFor(() => expect(session.browser.file?.path).toBe('lab:///runs'));
-		expect(session.browser.selected).toEqual({ path: 'lab:///runs', size: 0, kind: 'table' });
-		expect(host.reads).toContain('lab:///runs');
-	});
-
-	it('lists the tables in the files panel beside the files', async () => {
-		const { session } = await open();
-		await session.submit('/files');
-		expect(session.browser.matches.map((entry) => entry.path)).toEqual([
-			'/library/led-5mm.md',
-			'lab:///runs',
-			'lab:///results',
-		]);
-	});
-
-	it('opens nothing for a ref that does not resolve, and reads nothing from the host', async () => {
-		const { session, host } = await open();
-		host.reads.length = 0;
-		for (const id of ['4#1', '5#0', '5#1', '5#2']) {
-			expect(await session.openRef(id)).toBeUndefined();
-		}
-		expect(session.browser.open).toBe(false);
-		expect(host.reads).toEqual([]);
-	});
-
-	it('jumps to a message inside a closed discussion, and opens the discussion', async () => {
-		const { session } = await open();
-		expect(session.refItems.find((item) => item.id === '4#0')?.resolved.target).toEqual({
-			kind: 'message',
-			seq: 3,
-		});
+		expect(session.refItems[0]?.resolved.target).toEqual({ kind: 'message', seq: 3 });
 		expect(session.expanded.has('1')).toBe(false);
 		await session.openRef('4#0');
 		expect(session.expanded.has('1')).toBe(true);
 		expect(session.focus).toBe(3);
 		session.clearFocus();
 		expect(session.focus).toBeUndefined();
+		session.setAllOpen(true);
+		expect(session.refItems.map((item) => item.id).slice(0, 2)).toEqual(['2#0', '2#1']);
+	});
+
+	it('opens a file or a table ref in the files panel, beside the tables, and nothing for a ref that does not resolve', async () => {
+		const { session, host } = await open();
+		host.reads.length = 0;
+		for (const id of ['4#1', '5#0', '5#1', '5#2'])
+			expect(await session.openRef(id)).toBeUndefined();
+		expect(session.browser.open).toBe(false);
+		expect(host.reads).toEqual([]);
+
+		session.setAllOpen(true);
+		expect(await session.openRef('2#0')).toEqual({ type: 'files' });
+		await vi.waitFor(() => expect(session.browser.file?.path).toBe('/library/led-5mm.md'));
+		expect(session.browser.open).toBe(true);
+		expect(session.browser.selected?.path).toBe('/library/led-5mm.md');
+		expect(session.browser.matches.map((entry) => entry.path)).toEqual([
+			'/library/led-5mm.md',
+			'lab:///runs',
+			'lab:///results',
+		]);
+		expect(await session.openRef('2#1')).toEqual({ type: 'files' });
+		await vi.waitFor(() => expect(session.browser.file?.path).toBe('lab:///runs'));
+		expect(session.browser.selected).toEqual({ path: 'lab:///runs', size: 0, kind: 'table' });
+		expect(host.reads).toEqual(expect.arrayContaining(['/library/led-5mm.md', 'lab:///runs']));
 	});
 });
 
 describe('the ref keys', () => {
-	it('chooses a ref with r, moves with Up and Down, and goes back with Escape', async () => {
+	it('chooses a ref with r, moves with Up and Down, ignores Enter on a ref that does not resolve, and goes back with Escape', async () => {
 		const { session } = await open();
 		const { keys, press } = keysOver(session);
 		press('tab');
@@ -166,6 +137,9 @@ describe('the ref keys', () => {
 		press('r');
 		expect(keys.mode).toBe('refs');
 		expect(keys.picking).toBe('5#2');
+		press('return');
+		expect(keys.mode).toBe('refs');
+		expect(session.browser.open).toBe(false);
 		press('up');
 		expect(keys.picking).toBe('5#1');
 		press('down');
@@ -225,16 +199,5 @@ describe('the ref keys', () => {
 		expect(keys.mode).toBe('refs');
 		press('down');
 		expect(session.focus).toBeUndefined();
-	});
-
-	it('does nothing when Enter meets a ref that does not resolve', async () => {
-		const { session } = await open();
-		const { keys, press } = keysOver(session);
-		press('tab');
-		press('r');
-		expect(keys.picking).toBe('5#2');
-		press('return');
-		expect(keys.mode).toBe('refs');
-		expect(session.browser.open).toBe(false);
 	});
 });

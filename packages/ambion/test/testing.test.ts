@@ -1,14 +1,12 @@
 /**
  * The `/testing` entry: the scripted executor, the wait, and the clock,
  * proved through a room and through the executor contract. Nothing here
- * imports Pi or a model library.
+ * imports Pi or a model library; `package.test.ts` holds the entry to that rule.
  */
-import { readdir, readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import { Type } from 'typebox';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ExecutorActivation, PassInput } from '../src/execution/executor.ts';
-import { createRuntime, defineAgent, defineTool, type Room, startRoom } from '../src/index.ts';
+import { createRuntime, defineAgent, defineTool, startRoom } from '../src/index.ts';
 import type { ActivationView, CommitRequest, CommitResult } from '../src/protocol.ts';
 import {
 	byAgent,
@@ -24,6 +22,7 @@ import {
 } from '../src/testing.ts';
 import type { AgentExecutor, ExecutionEvent } from '../src/types.ts';
 import { andrei, collect, roomName } from './support/room.ts';
+import { stopAtEnd } from './support/stop.ts';
 
 const echo = defineTool({
 	name: 'echo',
@@ -39,67 +38,39 @@ const agent = (name: string, tools: AgentExecutor['tools'] = []) =>
 		executor: { kind: 'scripted', instructions: 'answer what is asked', tools },
 	});
 
-const started: Room[] = [];
-afterEach(async () => {
-	for (const room of started.splice(0)) await room.stop();
-});
-
-const open = async (options: Parameters<typeof startRoom>[0]) => {
-	const room = await startRoom(options);
-	started.push(room);
-	return room;
-};
+const open = async (options: Parameters<typeof startRoom>[0]) =>
+	stopAtEnd(await startRoom(options));
 
 describe('scripted', () => {
-	it('routes on the seat and counts steps per seat', async () => {
+	it('routes on the seat, counts steps per seat, runs a tool, and reads the result of a spoken turn', async () => {
 		const seen: string[] = [];
-		const record = (label: string): Script => {
-			return (_step, seat, call) => {
+		const results: string[][] = [];
+		const record =
+			(label: string, then: Script = () => quiet()): Script =>
+			(step, seat, call) => {
 				seen.push(`${label}:${seat}:${call}`);
-				return quiet();
+				results.push(step.results.map((result) => result.text));
+				return then(step, seat, call);
 			};
-		};
 		const room = await open({
 			name: roomName('testing-route'),
-			agents: [agent('a'), agent('b')],
+			agents: [agent('a', [echo]), agent('b')],
 			runtime: createRuntime(),
-			execution: scripted(byAgent({ a: record('a'), b: record('b') })),
+			execution: scripted(
+				byAgent({
+					a: record('a', (_step, _seat, call) =>
+						call === 1 ? callTool('echo') : call === 2 ? speak('an answer') : quiet(),
+					),
+					b: record('b'),
+				}),
+			),
 		});
+		const events = collect(room);
 		await (await room.visit(andrei)).send({ text: 'Hello?' });
 		await settled(room);
 		expect(seen).toContain('a:a:1');
 		expect(seen).toContain('b:b:1');
 		expect(seen.every((line) => line.split(':')[0] === line.split(':')[1])).toBe(true);
-	});
-
-	it('puts a spoken turn on the record, then reads its result on the next step', async () => {
-		const results: string[][] = [];
-		const room = await open({
-			name: roomName('testing-speak'),
-			agents: [agent('a')],
-			runtime: createRuntime(),
-			execution: scripted((step, _seat, call) => {
-				results.push(step.results.map((result) => result.text));
-				return call === 1 ? speak('an answer') : quiet();
-			}),
-		});
-		await (await room.visit(andrei)).send({ text: 'Hello?' });
-		await settled(room);
-		const { messages } = await room.read();
-		expect(messages.filter((m) => m.kind === 'said' && m.from === 'a')).toHaveLength(1);
-		expect(results).toContainEqual(['delivered']);
-	});
-
-	it('runs a tool of the agent and emits its events', async () => {
-		const room = await open({
-			name: roomName('testing-tool'),
-			agents: [agent('a', [echo])],
-			runtime: createRuntime(),
-			execution: scripted((_step, _seat, call) => (call === 1 ? callTool('echo') : quiet())),
-		});
-		const events = collect(room);
-		await (await room.visit(andrei)).send({ text: 'Hello?' });
-		await settled(room);
 		const tools = events.filter(
 			(event) => event.type === 'tool_execution_start' || event.type === 'tool_execution_end',
 		);
@@ -107,6 +78,9 @@ describe('scripted', () => {
 			'tool_execution_start',
 			'tool_execution_end',
 		]);
+		const { messages } = await room.read();
+		expect(messages.filter((m) => m.kind === 'said' && m.from === 'a')).toHaveLength(1);
+		expect(results).toContainEqual(['echoed', 'delivered']);
 	});
 
 	it('turns a script that throws into a transient error and writes no message', async () => {
@@ -162,16 +136,19 @@ describe('settled', () => {
 			runtime: createRuntime(),
 			execution: scripted((_step, _seat, call) => (call === 1 ? speak('an answer') : quiet())),
 		});
-		const reads = vi.fn(room.read.bind(room));
+		let reads = 0;
 		await (await room.visit(andrei)).send({ text: 'Question?' });
 		const read = await settled({
 			name: room.name,
-			read: reads,
+			read: (options) => {
+				reads += 1;
+				return room.read(options);
+			},
 			subscribe: room.subscribe.bind(room),
 		});
 		expect(read.exchange).toBeUndefined();
 		expect(read.participants.every((p) => p.kind !== 'agent' || p.status === 'idle')).toBe(true);
-		expect(reads).toHaveBeenCalled();
+		expect(reads).toBeGreaterThan(0);
 	});
 
 	it('rejects with the seat named while a backoff runs, and resolves after the clock moves', async () => {
@@ -316,22 +293,5 @@ describe('scriptedExecutor', () => {
 			message: 'broke',
 		});
 		expect(events).toEqual([expect.objectContaining({ type: 'error', cause: 'transient' })]);
-	});
-});
-
-describe('the entry', () => {
-	it('imports no Pi and no model library', async () => {
-		const root = fileURLToPath(new URL('../src', import.meta.url));
-		const files = ['testing.ts', ...(await readdir(`${root}/testing`)).map((f) => `testing/${f}`)];
-		for (const file of files) {
-			const code = await readFile(`${root}/${file}`, 'utf8');
-			const imported = [...code.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map(
-				(m) => m[1] ?? '',
-			);
-			const models = imported.filter((name) =>
-				/^@earendil-works\/|pi-journal$|\/pi(\/|$)/.test(name),
-			);
-			expect({ file, models }).toEqual({ file, models: [] });
-		}
 	});
 });

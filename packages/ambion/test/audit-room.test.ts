@@ -1,7 +1,12 @@
+/**
+ * A transcript write that fails is an audit failure. The room reports it once
+ * and keeps the collaboration record whole: the activation still ends, a
+ * summary still lands, and an audit failure alone starts no new activation.
+ */
 import type { JournalOpener } from '@ambionframework/journal';
-import { describe, expect, it } from 'vitest';
-import { pi, piExecution } from '../../pi/src/index.ts';
-import { createRuntime, defineAgent, type Room, resumeRoom, startRoom } from '../src/index.ts';
+import { describe, expect, it, onTestFinished } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
+import { type CreateRuntimeOptions, createRuntime, resumeRoom, startRoom } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import {
 	andrei,
@@ -9,6 +14,7 @@ import {
 	collect,
 	deferred,
 	roomName,
+	scriptedAgent,
 	stateOf,
 	waitForRoom,
 } from './support/room.ts';
@@ -21,13 +27,10 @@ import {
 	speak,
 	summarise,
 } from './support/scripted.ts';
-import { storages } from './support/storage.ts';
+import { stopAtEnd } from './support/stop.ts';
+import { type Storage, storages } from './support/storage.ts';
 
-const product = defineAgent({
-	name: 'product',
-	identity: 'Answers questions.',
-	executor: pi({ instructions: 'Contribute when useful.', model: 'scripted/product' }),
-});
+const product = scriptedAgent('product', 'Answers questions.');
 
 /** Fail only transcript writes; the collaboration journal remains available. */
 function auditOutage(storage: JournalOpener, before?: () => Promise<void>): JournalOpener {
@@ -46,200 +49,188 @@ function auditOutage(storage: JournalOpener, before?: () => Promise<void>): Jour
 	};
 }
 
+/** Runtimes on one clock over a storage whose transcript writes fail. */
+async function outage(storage: Storage, before?: () => Promise<void>) {
+	const opened = await storage.open();
+	onTestFinished(() => opened.dispose());
+	const clock = fakeClock();
+	const runtime = (options: Omit<CreateRuntimeOptions, 'storage' | 'clock'> = {}) =>
+		createRuntime({ clock, storage: auditOutage(opened.storage, before), ...options });
+	return { clock, runtime };
+}
+
+const ofType = (events: ReturnType<typeof collect>, type: string, agent?: string) =>
+	events.filter(
+		(event) =>
+			event.type === type && (agent === undefined || ('agent' in event && event.agent === agent)),
+	);
+
 describe.each(storages)('audit failure isolation on $name', (storage) => {
 	it.each(['spoken', 'silent'] as const)(
-		'completes %s work without another activation',
+		'completes %s work without another activation, and a resumed room starts none',
 		async (outcome) => {
-			const opened = await storage.open();
-			const clock = fakeClock();
+			const { clock, runtime } = await outage(storage);
 			let calls = 0;
-			const runtime = () => createRuntime({ clock, storage: auditOutage(opened.storage) });
-			const room = await startRoom({
-				name: roomName('audit-outcome'),
-				agents: [product],
-				runtime: runtime(),
-				execution: piExecution({
+			const counted = (answer?: string) =>
+				piExecution({
 					stream: scripted(() => {
 						calls += 1;
-						return outcome === 'spoken' && calls === 1 ? speak('Accepted answer.') : quiet();
-					}),
-				}),
-			});
-			const events = collect(room);
-			let resumed: Room | undefined;
-			try {
-				const exchange = await (await room.visit(andrei)).send({ text: 'Ready?' });
-				await waitForRoom(room, 'quiet', 2_000);
-				const discussion = await exchange.waitForClose();
-				expect(discussion.filter((message) => message.from === product.name)).toHaveLength(
-					outcome === 'spoken' ? 1 : 0,
-				);
-				expect(events.filter((event) => event.type === 'audit_error')).toHaveLength(1);
-				expect(events.filter((event) => event.type === 'error')).toEqual([]);
-				expect([...stateOf(room).leases.values()]).toEqual([
-					expect.objectContaining({ phase: 'ended', reason: 'released' }),
-				]);
-				const finishedCalls = calls;
-				await clock.advance(120_000);
-				expect(calls).toBe(finishedCalls);
-				await room.stop();
-				resumed = await resumeRoom(room.name, {
-					runtime: runtime(),
-					agents: [product],
-					execution: piExecution({
-						stream: scripted(() => {
-							calls += 1;
-							return quiet();
-						}),
+						return answer !== undefined && calls === 1 ? speak(answer) : quiet();
 					}),
 				});
-				await waitForRoom(resumed, 'quiet', 2_000);
-				expect(calls).toBe(finishedCalls);
-				await expect(resumed.exchange(exchange.from)?.waitForClose()).resolves.toEqual(discussion);
-			} finally {
-				await resumed?.stop();
-				await room.stop();
-				await opened.dispose();
-			}
+			const room = stopAtEnd(
+				await startRoom({
+					name: roomName('audit-outcome'),
+					agents: [product],
+					runtime: runtime(),
+					execution: counted(outcome === 'spoken' ? 'Accepted answer.' : undefined),
+				}),
+			);
+			const events = collect(room);
+			const exchange = await (await room.visit(andrei)).send({ text: 'Ready?' });
+			await waitForRoom(room, 'quiet', 2_000);
+			const discussion = await exchange.waitForClose();
+			expect(discussion.filter((message) => message.from === product.name)).toHaveLength(
+				outcome === 'spoken' ? 1 : 0,
+			);
+			expect(ofType(events, 'audit_error')).toHaveLength(1);
+			expect(ofType(events, 'error')).toEqual([]);
+			expect([...stateOf(room).leases.values()]).toEqual([
+				expect.objectContaining({ phase: 'ended', reason: 'released' }),
+			]);
+			const finishedCalls = calls;
+			await clock.advance(120_000);
+			expect(calls).toBe(finishedCalls);
+			await room.stop();
+
+			const resumed = stopAtEnd(
+				await resumeRoom(room.name, {
+					runtime: runtime(),
+					agents: [product],
+					execution: counted(),
+				}),
+			);
+			await waitForRoom(resumed, 'quiet', 2_000);
+			expect(calls).toBe(finishedCalls);
+			await expect(resumed.exchange(exchange.from)?.waitForClose()).resolves.toEqual(discussion);
 		},
 	);
 
 	it.each(['published', 'silent'] as const)('retains a %s closing response', async (outcome) => {
-		const opened = await storage.open();
-		const clock = fakeClock();
+		const { clock, runtime } = await outage(storage);
 		let summaryCalls = 0;
-		const room = await startRoom({
-			name: roomName('audit-closing'),
-			agents: [product, assistant],
-			summary: assistant.name,
-			seats: { [product.name]: 'broadcast', [assistant.name]: 'none' },
-			runtime: createRuntime({ clock, storage: auditOutage(opened.storage) }),
-			execution: piExecution({
-				stream: scripted(
-					byAgent({
-						product: says(['First fact.', 'Second fact.']),
-						assistant: () => {
-							summaryCalls += 1;
-							return outcome === 'published' && summaryCalls === 1
-								? summarise('Consolidated answer.')
-								: quiet();
-						},
-					}),
-				),
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('audit-closing'),
+				agents: [product, assistant],
+				summary: assistant.name,
+				seats: { [product.name]: 'broadcast', [assistant.name]: 'none' },
+				runtime: runtime(),
+				execution: piExecution({
+					stream: scripted(
+						byAgent({
+							product: says(['First fact.', 'Second fact.']),
+							assistant: () => {
+								summaryCalls += 1;
+								return outcome === 'published' && summaryCalls === 1
+									? summarise('Consolidated answer.')
+									: quiet();
+							},
+						}),
+					),
+				}),
 			}),
-		});
+		);
 		const events = collect(room);
-		try {
-			const exchange = await (await room.visit(andrei)).send({ text: 'Result?' });
-			await waitForRoom(room, 'quiet', 2_000);
-			const response = await exchange.waitForSummary();
-			expect(response?.text).toBe(outcome === 'published' ? 'Consolidated answer.' : undefined);
-			expect(summaryCalls).toBeGreaterThan(0);
-			expect(
-				events.filter((event) => event.type === 'audit_error' && event.agent === assistant.name),
-			).toHaveLength(1);
-			expect(events.filter((event) => event.type === 'error')).toEqual([]);
-			const finishedCalls = summaryCalls;
-			await clock.advance(120_000);
-			expect(summaryCalls).toBe(finishedCalls);
-			expect(stateOf(room).owed).toEqual([]);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
+		const exchange = await (await room.visit(andrei)).send({ text: 'Result?' });
+		await waitForRoom(room, 'quiet', 2_000);
+		const response = await exchange.waitForSummary();
+		expect(response?.text).toBe(outcome === 'published' ? 'Consolidated answer.' : undefined);
+		expect(summaryCalls).toBeGreaterThan(0);
+		expect(ofType(events, 'audit_error', assistant.name)).toHaveLength(1);
+		expect(ofType(events, 'error')).toEqual([]);
+		const finishedCalls = summaryCalls;
+		await clock.advance(120_000);
+		expect(summaryCalls).toBe(finishedCalls);
+		expect(stateOf(room).owed).toEqual([]);
 	});
 
 	it('consumes later context after a failed audit without starting another activation', async () => {
-		const opened = await storage.open();
 		const auditing = deferred();
 		const releaseAudit = deferred();
-		const contexts: string[] = [];
-		const room = await startRoom({
-			name: roomName('audit-context-refresh'),
-			agents: [product],
-			runtime: createRuntime({
-				storage: auditOutage(opened.storage, async () => {
-					auditing.resolve();
-					await releaseAudit.promise;
-				}),
-			}),
-			execution: piExecution({
-				stream: scripted((context) => {
-					contexts.push(contextText(context));
-					return quiet();
-				}),
-			}),
+		onTestFinished(releaseAudit.resolve);
+		const { runtime } = await outage(storage, async () => {
+			auditing.resolve();
+			await releaseAudit.promise;
 		});
+		const contexts: string[] = [];
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('audit-context-refresh'),
+				agents: [product],
+				runtime: runtime(),
+				execution: piExecution({
+					stream: scripted((context) => {
+						contexts.push(contextText(context));
+						return quiet();
+					}),
+				}),
+			}),
+		);
 		const events = collect(room);
-		try {
-			const visit = await room.visit(andrei);
-			const exchange = await visit.send({ text: 'First question.' });
-			await auditing.promise;
-			await visit.send({ text: 'Later correction.' });
-			releaseAudit.resolve();
-			await waitForRoom(room, 'quiet', 2_000);
-			expect(contexts).toHaveLength(2);
-			expect(contexts[0]).not.toContain('Later correction.');
-			expect(contexts[1]).toContain('Later correction.');
-			expect(events.filter((event) => event.type === 'activation_start')).toHaveLength(1);
-			expect(events.filter((event) => event.type === 'audit_error')).toHaveLength(2);
-			expect(events.filter((event) => event.type === 'error')).toEqual([]);
-			const messages = await exchange.waitForClose();
-			expect([...stateOf(room).leases.values()]).toEqual([
-				expect.objectContaining({ reason: 'released', readThrough: messages.at(-1)?.seq }),
-			]);
-		} finally {
-			releaseAudit.resolve();
-			await room.stop();
-			await opened.dispose();
-		}
+		const visit = await room.visit(andrei);
+		const exchange = await visit.send({ text: 'First question.' });
+		await auditing.promise;
+		await visit.send({ text: 'Later correction.' });
+		releaseAudit.resolve();
+		await waitForRoom(room, 'quiet', 2_000);
+		expect(contexts).toHaveLength(2);
+		expect(contexts[0]).not.toContain('Later correction.');
+		expect(contexts[1]).toContain('Later correction.');
+		expect(ofType(events, 'activation_start')).toHaveLength(1);
+		expect(ofType(events, 'audit_error')).toHaveLength(2);
+		expect(ofType(events, 'error')).toEqual([]);
+		const messages = await exchange.waitForClose();
+		expect([...stateOf(room).leases.values()]).toEqual([
+			expect.objectContaining({ reason: 'released', readThrough: messages.at(-1)?.seq }),
+		]);
 	});
 
 	it('keeps a provider failure eligible for retry when its audit also fails', async () => {
-		const opened = await storage.open();
-		const clock = fakeClock();
+		const { clock, runtime } = await outage(storage);
 		let calls = 0;
-		const room = await startRoom({
-			name: roomName('audit-provider-failure'),
-			agents: [product],
-			runtime: createRuntime({
-				clock,
-				storage: auditOutage(opened.storage),
-				limits: { activation: { attempts: 2, backoff: () => 100 } },
-			}),
-			execution: piExecution({
-				stream: scripted(() => {
-					calls += 1;
-					if (calls === 1) throw new Error('Provider unavailable.');
-					return calls === 2 ? speak('Recovered answer.') : quiet();
-				}),
-			}),
-		});
-		const events = collect(room);
-		try {
-			const exchange = await (await room.visit(andrei)).send({ text: 'Ready?' });
-			await expect
-				.poll(() => events.filter((event) => event.type === 'activation_end').length)
-				.toBe(1);
-			expect(events.filter((event) => event.type === 'error')).toEqual([
-				expect.objectContaining({
-					error: expect.objectContaining({
-						message: expect.stringContaining('Provider unavailable.'),
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('audit-provider-failure'),
+				agents: [product],
+				runtime: runtime({ limits: { activation: { attempts: 2, backoff: () => 100 } } }),
+				execution: piExecution({
+					stream: scripted(() => {
+						calls += 1;
+						if (calls === 1) throw new Error('Provider unavailable.');
+						return calls === 2 ? speak('Recovered answer.') : quiet();
 					}),
 				}),
-			]);
-			await clock.advance(100);
-			await waitForRoom(room, 'quiet', 2_000);
-			expect(
-				(await exchange.waitForClose()).filter((message) => message.from === product.name),
-			).toEqual([expect.objectContaining({ text: 'Recovered answer.' })]);
-			expect(events.filter((event) => event.type === 'audit_error')).toHaveLength(2);
-			const finishedCalls = calls;
-			await clock.advance(120_000);
-			expect(calls).toBe(finishedCalls);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
+			}),
+		);
+		const events = collect(room);
+		const exchange = await (await room.visit(andrei)).send({ text: 'Ready?' });
+		await expect.poll(() => ofType(events, 'activation_end').length).toBe(1);
+		expect(ofType(events, 'error')).toEqual([
+			expect.objectContaining({
+				error: expect.objectContaining({
+					message: expect.stringContaining('Provider unavailable.'),
+				}),
+			}),
+		]);
+		await clock.advance(100);
+		await waitForRoom(room, 'quiet', 2_000);
+		expect(
+			(await exchange.waitForClose()).filter((message) => message.from === product.name),
+		).toEqual([expect.objectContaining({ text: 'Recovered answer.' })]);
+		expect(ofType(events, 'audit_error')).toHaveLength(2);
+		const finishedCalls = calls;
+		await clock.advance(120_000);
+		expect(calls).toBe(finishedCalls);
 	});
 });

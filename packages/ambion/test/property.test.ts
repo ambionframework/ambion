@@ -8,11 +8,10 @@
  * `AMBION_SEEDS` widens the walk; the seed prints on failure.
  */
 import { describe, expect, it } from 'vitest';
-import { pi, piExecution } from '../../pi/src/index.ts';
+import { piExecution } from '../../pi/src/index.ts';
 import { hostingOf, inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
-	defineAgent,
 	defineHuman,
 	isSummary,
 	type Room,
@@ -23,14 +22,17 @@ import {
 	type Visit,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
-import { liveLeases } from './support/chaos.ts';
+import { liveLeases, within } from './support/chaos.ts';
+import { mulberry32 } from './support/core-failure.ts';
 import { invariants } from './support/invariants.ts';
 import {
+	assistant,
 	currentExchange,
 	messageBefore,
 	messagesOf,
 	participantsOf,
 	roomName,
+	scriptedAgent,
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
@@ -46,38 +48,9 @@ import {
 import { type FailMode, memory, tappedJournals } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
 
-/** A small, fast, seedable generator: the walk is the same for the same seed. */
-function mulberry32(seed: number): () => number {
-	let a = seed >>> 0;
-	return () => {
-		a = (a + 0x6d2b79f5) >>> 0;
-		let t = a;
-		t = Math.imul(t ^ (t >>> 15), t | 1);
-		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-	};
-}
-
-const assistant = defineAgent({
-	name: 'assistant',
-	identity: 'Writes the one message a person reads.',
-	executor: pi({ instructions: 'Answer what was asked, once.', model: 'scripted/assistant' }),
-});
-const alpha = defineAgent({
-	name: 'alpha',
-	identity: 'Alpha.',
-	executor: pi({ instructions: 'x', model: 'scripted/alpha' }),
-});
-const beta = defineAgent({
-	name: 'beta',
-	identity: 'Beta.',
-	executor: pi({ instructions: 'x', model: 'scripted/beta' }),
-});
-const gamma = defineAgent({
-	name: 'gamma',
-	identity: 'Gamma.',
-	executor: pi({ instructions: 'x', model: 'scripted/gamma' }),
-});
+const alpha = scriptedAgent('alpha');
+const beta = scriptedAgent('beta');
+const gamma = scriptedAgent('gamma');
 const people = [
 	defineHuman({
 		name: 'priya',
@@ -291,15 +264,6 @@ class Walk {
 		for (let i = 0; i < 6; i += 1) await this.clock.advance(61_000);
 		await within(waitForRoom(this.session), 10_000, 'quiet after the drain');
 	}
-}
-
-/** The promise, or an error naming what did not happen within `ms`. */
-function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	const deadline = new Promise<never>((_, reject) => {
-		timer = setTimeout(() => reject(new Error(`'${what}' did not finish within ${ms} ms.`)), ms);
-	});
-	return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
 }
 
 const seeds = Number(process.env.AMBION_SEEDS ?? 25);

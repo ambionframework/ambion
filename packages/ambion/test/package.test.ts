@@ -152,8 +152,9 @@ it('names no model library: the manifest lists none, and no source file imports 
 	expect(files.length).toBeGreaterThan(20);
 	for (const file of files) {
 		const imported = importsOf(await read(`src/${file}`));
+		// A relative path into the Pi package counts: `/testing` must import none.
 		const models = imported.filter((name) =>
-			/^@earendil-works\/|pi-journal$|ambion\/pi$/.test(name),
+			/^@earendil-works\/|pi-journal$|\/pi(\/|$)/.test(name),
 		);
 		expect({ file, models }).toEqual({ file, models: [] });
 	}

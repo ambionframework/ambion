@@ -538,7 +538,7 @@ harness has the same shape, with an `open()` that returns a fresh
 `null`, a last statement with no result, a refused statement as an
 outcome that stops the run, one database for every agent, and an abort
 before the first statement. A test backend over `node:sqlite` runs them
-(`packages/workspace/test/sql-backend.test.ts`).
+(`packages/workspace/test/conformance.test.ts`).
 
 ## Dispose of a resource
 

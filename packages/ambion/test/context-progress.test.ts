@@ -13,6 +13,7 @@ import { decide, evolve, type RoomDecision } from '../src/room/transition.ts';
 const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);
 const retry = { backoff: () => 0 };
+const id = 'message:2:solo:1';
 const composition: Entry = {
 	kind: 'composition',
 	seq: 1,
@@ -62,7 +63,6 @@ const reconciliation = (attempts: number) => ({
 
 describe('acknowledged lease context', () => {
 	it('does not infer progress from a heartbeat without readThrough', () => {
-		const id = 'message:2:solo:1';
 		const beforeHeartbeat = foldRoom(
 			[composition, wake(2), held(id, 3, 2), wake(4, 'Later.')],
 			retry,
@@ -81,7 +81,6 @@ describe('acknowledged lease context', () => {
 	});
 
 	it('keeps explicit acknowledgements monotonic when they repeat or arrive out of order', () => {
-		const id = 'message:2:solo:1';
 		const state = foldRoom(
 			[
 				composition,
@@ -99,7 +98,6 @@ describe('acknowledged lease context', () => {
 	});
 
 	it('refuses invalid lease acknowledgements without proposing an event', () => {
-		const id = 'message:2:solo:1';
 		const state = foldRoom([composition, wake(2), held(id, 3, 2)], retry);
 		for (const readThrough of [-1, 1.5, 99]) {
 			expect(
@@ -119,9 +117,8 @@ describe('acknowledged lease context', () => {
 	});
 
 	it('retries unread released work under a new id and abandons it at the cap', () => {
-		const first = 'message:2:solo:1';
 		const releasedUnread = foldRoom(
-			[composition, wake(2), held(first, 3, 0), released(first, 4, 0)],
+			[composition, wake(2), held(id, 3, 0), released(id, 4, 0)],
 			retry,
 		);
 		expect(releasedUnread.pending).toMatchObject([
@@ -148,41 +145,32 @@ describe('acknowledged lease context', () => {
 		expect(planReconciliation(stopped, reconciliation(1)).sends).toEqual([]);
 	});
 
-	it('keeps unread later work through release and replay', () => {
-		const id = 'message:2:solo:1';
-		const entries = [composition, wake(2), held(id, 3, 2), wake(4, 'Later.'), released(id, 5, 2)];
-		const prefix = foldRoom(entries.slice(0, -1), retry);
-		const incremental = evolve(prefix, entries.at(-1) as Entry, retry);
-		expect(incremental.pending.map((pending) => pending.id)).toEqual(['message:4:solo:1']);
-		const replayed = foldRoom(JSON.parse(JSON.stringify(entries)) as Entry[], retry);
-		expect(replayed).toEqual(incremental);
-	});
-
-	it('retains a released lease as evidence that an unwoken steer reached its seat', () => {
-		const id = 'message:2:solo:1';
-		const laterSteer: Entry = {
-			kind: 'message',
-			seq: 4,
-			body: { kind: 'said', at, from: 'priya', text: 'Later.' },
-		};
-		const before = foldRoom(
-			[composition, wake(2), held(id, 3, 2), laterSteer, released(id, 5, 2)],
-			retry,
-		);
-		expect(before.pending.map((pending) => pending.id)).toEqual(['message:4:solo:1']);
-		expect(before.leases.get(id)).toMatchObject({ phase: 'ended', readThrough: 2 });
-		const replayed = foldRoom(
-			[composition, wake(2), held(id, 3, 2), laterSteer, released(id, 5, 2)],
-			retry,
-		);
-		expect(replayed.pending.map((pending) => pending.id)).toEqual(['message:4:solo:1']);
-		expect(replayed.leases.get(id)).toMatchObject({ phase: 'ended', readThrough: 2 });
-	});
+	// An unwoken steer owes no wake, yet the released lease is the evidence it reached the seat.
+	it.each([
+		['a later wake', wake(4, 'Later.')],
+		[
+			'an unwoken steer',
+			{
+				kind: 'message',
+				seq: 4,
+				body: { kind: 'said', at, from: 'priya', text: 'Later.' },
+			} as Entry,
+		],
+	])(
+		'keeps unread work after %s through release and replay, and retains the released lease',
+		(_name, later) => {
+			const entries = [composition, wake(2), held(id, 3, 2), later, released(id, 5, 2)];
+			const incremental = evolve(foldRoom(entries.slice(0, -1), retry), released(id, 5, 2), retry);
+			expect(incremental.pending.map((pending) => pending.id)).toEqual(['message:4:solo:1']);
+			expect(incremental.leases.get(id)).toMatchObject({ phase: 'ended', readThrough: 2 });
+			expect(foldRoom(JSON.parse(JSON.stringify(entries)) as Entry[], retry)).toEqual(incremental);
+		},
+	);
 
 	it('keeps an earlier unread wake when a later activation is released', () => {
-		const id = 'message:4:solo:1';
+		const later = 'message:4:solo:1';
 		const recovered = foldRoom(
-			[composition, wake(2), wake(4, 'Later.'), held(id, 5, 0), released(id, 6, 0)],
+			[composition, wake(2), wake(4, 'Later.'), held(later, 5, 0), released(later, 6, 0)],
 			retry,
 		);
 		expect(recovered.pending.map((pending) => pending.id)).toContain('message:2:solo:1');

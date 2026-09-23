@@ -1,8 +1,9 @@
-/** Codex thread events as trace steps. */
+/** Codex thread events as trace steps, and the end of a Codex turn as a pass result. */
 import type { Step } from '@ambionframework/ambion';
 import type { ThreadEvent, ThreadItem } from '@openai/codex-sdk';
 import { describe, expect, it } from 'vitest';
 import { CodexSteps, changedPaths, isRoomTool, usageOf } from '../src/codex-trace.ts';
+import { causeOf, passResultOf } from '../src/services.ts';
 
 const started = (item: ThreadItem): ThreadEvent => ({ type: 'item.started', item });
 const updated = (item: ThreadItem): ThreadEvent => ({ type: 'item.updated', item });
@@ -15,7 +16,7 @@ function stepsOf(...events: ThreadEvent[]): Step[] {
 }
 
 describe('text and thinking', () => {
-	it('sends the growth of a message as deltas, then a closing step', () => {
+	it('sends the growth of a message as deltas, then a closing step, and a message that arrives whole as one closing step', () => {
 		const item = { id: 'm1', type: 'agent_message' as const };
 		expect(
 			stepsOf(
@@ -30,9 +31,6 @@ describe('text and thinking', () => {
 			{ type: 'text', text: '.', final: false },
 			{ type: 'text', text: '', final: true },
 		]);
-	});
-
-	it('sends a message that arrives whole as one closing step', () => {
 		expect(stepsOf(completed({ id: 'm1', type: 'agent_message', text: 'Done.' }))).toEqual([
 			{ type: 'text', text: 'Done.', final: true },
 		]);
@@ -171,4 +169,41 @@ describe('usage and paths', () => {
 		expect(changedPaths(patch('failed'))).toEqual([]);
 		expect(changedPaths({ type: 'turn.started' })).toEqual([]);
 	});
+});
+
+it.each([
+	['unexpected status 401 Unauthorized: invalid api key', undefined, 'permanent'],
+	['You exceeded your current quota, please check your plan.', undefined, 'permanent'],
+	['Not logged in. Run codex login.', undefined, 'permanent'],
+	['insufficient_quota', undefined, 'permanent'],
+	['stream error: 529 overloaded_error: try again later', undefined, 'transient'],
+	['connection reset by peer', undefined, 'transient'],
+	['something unknown went wrong', undefined, 'transient'],
+	// The caller can give a status.
+	['The request failed.', 403, 'permanent'],
+	['The request failed.', 500, 'transient'],
+	['The request failed.', null, 'transient'],
+] as const)('causeOf names %j with status %s %s', (text, status, cause) => {
+	expect(causeOf(text, status)).toBe(cause);
+});
+
+it.each([
+	['a clean turn as no failure', undefined, { failed: false }],
+	[
+		'a full context window as a length stop',
+		'Codex ran out of room in the model context window.',
+		{ failed: false, stop: 'length' },
+	],
+	[
+		'an authentication refusal as a permanent failure',
+		'unexpected status 401 Unauthorized',
+		{ failed: true, cause: 'permanent', message: 'unexpected status 401 Unauthorized' },
+	],
+	[
+		'an overloaded provider as a transient failure',
+		'stream error: 529 overloaded_error',
+		{ failed: true, cause: 'transient', message: 'stream error: 529 overloaded_error' },
+	],
+])('passResultOf reports %s', (_what, error, expected) => {
+	expect(passResultOf(error)).toEqual(expected);
 });

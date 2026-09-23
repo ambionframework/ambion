@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join as joinPath } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { byAgent, callTool, quiet, speak } from '@ambionframework/ambion/testing';
@@ -9,11 +8,9 @@ import {
 	fauxAssistantMessage,
 	fauxToolCall,
 } from '@earendil-works/pi-ai';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { openWorkbench, type Workbench } from '../src/workbench.ts';
-import { scriptedFamilies } from './scripted-families.ts';
-
-const opened: { workbench: Workbench; directory: string }[] = [];
+import { describe, expect, it, vi } from 'vitest';
+import type { Workbench } from '../src/workbench.ts';
+import { freshDirectory, idleStream, openHost, scriptedFamilies } from './hosting.ts';
 
 const PLAN = 'LED plan: 330 ohm series resistor at 10 mA.\n';
 
@@ -77,56 +74,71 @@ const makeStream = (): PiExecutionOptions['stream'] => {
 	};
 };
 
-async function open(directory: string, stream = makeStream()) {
-	const workbench = await openWorkbench({
-		directory,
-		stream,
-		executions: scriptedFamilies(designScript),
-	});
-	opened.push({ workbench, directory });
-	return workbench;
-}
-
-const freshDirectory = () => mkdtemp(joinPath(tmpdir(), 'ambion-workbench-host-'));
+/** A host whose assistant asks the design seat, which writes a plan, then a summary closes the exchange. */
+const open = (directory?: string) =>
+	openHost({ directory, stream: makeStream(), executions: scriptedFamilies(designScript) });
 
 async function messagesOf(workbench: Workbench, room: string) {
 	return (await workbench.read(room, 0)).messages;
 }
 
 async function untilSummary(workbench: Workbench, room: string) {
-	for (let attempt = 0; attempt < 100; attempt += 1) {
-		const messages = await messagesOf(workbench, room);
-		if (messages.some((message) => message.kind === 'summary')) return messages;
-		await new Promise<void>((resolve) => setTimeout(resolve, 10));
-	}
-	return messagesOf(workbench, room);
+	await vi.waitFor(
+		async () =>
+			expect((await messagesOf(workbench, room)).some((m) => m.kind === 'summary')).toBe(true),
+		{ timeout: 1_000, interval: 10 },
+	);
 }
 
-afterEach(async () => {
-	for (const { workbench, directory } of opened.splice(0)) {
-		await workbench.close().catch(() => undefined);
-		await rm(directory, { recursive: true, force: true });
-	}
-});
+async function readsTrace(workbench: Workbench) {
+	const view = await workbench.read('bringup', 0);
+	const id = view.exchanges.flatMap((exchange) => exchange.activations)[0]?.id ?? '';
+	const read = await workbench.activation('bringup', id);
+	expect(read?.activation).toBe(id);
+	expect(read?.passes.length).toBeGreaterThan(0);
+	const types = (read?.passes ?? []).flatMap((pass) => pass.steps).map((step) => step.type);
+	expect(types).toContain('tool_call');
+	expect(types.at(-1)).toBe('end');
+	expect(await workbench.activation('bringup', 'not-an-id')).toBeUndefined();
+	await expect(workbench.activation('nowhere', id)).rejects.toThrow(/Unknown room/);
+}
 
 describe('Workbench host', () => {
-	it('lists the people and the three sample rooms, and resumes them without seeding again', async () => {
-		const parent = await freshDirectory();
-		const directory = joinPath(parent, 'run');
-		const first = await open(directory);
-		expect(first.people.map((person) => person.name)).toEqual(['mira', 'theo', 'sol']);
-		expect((await first.rooms()).map((room) => [room.name, room.status])).toEqual([
+	it('runs an exchange to a summary, keeps it across a stop and a restart, and does not seed again', async () => {
+		const directory = await freshDirectory();
+		let workbench = await open(directory);
+		expect(workbench.people.map((person) => person.name)).toEqual(['mira', 'theo', 'sol']);
+		expect((await workbench.rooms()).map((room) => [room.name, room.status])).toEqual([
 			['bringup', 'running'],
 			['sensing', 'running'],
 			['power', 'running'],
 		]);
-		await first.close();
-		const again = await open(directory);
-		expect((await again.rooms()).map((room) => room.name)).toEqual(['bringup', 'sensing', 'power']);
-	});
+		await workbench.join('bringup', 'mira');
+		await workbench.send('bringup', 'mira', 'summary-1', 'Pick the LED resistor.');
+		await untilSummary(workbench, 'bringup');
+		const plan = '/home/design/shared/plan.md';
+		expect((await workbench.file(plan)).text).toBe(PLAN);
+		await readsTrace(workbench);
+
+		const before = await messagesOf(workbench, 'bringup');
+		expect((await workbench.control('bringup', 'stop')).status).toBe('stopped');
+		const history = await messagesOf(workbench, 'bringup');
+		expect(history).toEqual(expect.arrayContaining(before as unknown[]));
+		expect(history.some((message) => message.kind === 'left')).toBe(true);
+		await workbench.close();
+
+		workbench = await open(directory);
+		expect((await workbench.rooms()).map((room) => [room.name, room.status])).toEqual([
+			['bringup', 'stopped'],
+			['sensing', 'running'],
+			['power', 'running'],
+		]);
+		expect((await workbench.file(plan)).text).toBe(PLAN);
+		expect((await workbench.control('bringup', 'resume')).status).toBe('running');
+	}, 20_000);
 
 	it('creates a room, and refuses a duplicate and a bad name or goal', async () => {
-		const workbench = await open(joinPath(await freshDirectory(), 'run'));
+		const workbench = await openHost();
 		const created = await workbench.create('motors', '  Drive a small motor.  ');
 		expect(created).toMatchObject({
 			name: 'motors',
@@ -144,18 +156,33 @@ describe('Workbench host', () => {
 		expect((await workbench.rooms()).map((room) => room.name)).toContain('motors');
 	});
 
-	it('attributes deliveries, retries by key, and keeps rooms independent', async () => {
-		const workbench = await open(joinPath(await freshDirectory(), 'run'));
+	it('requires presence to send, attributes deliveries, retries by key, and keeps rooms independent', async () => {
+		const workbench = await open();
+		const before = await messagesOf(workbench, 'bringup');
+		await workbench.leave('bringup', 'sol');
+		expect(await messagesOf(workbench, 'bringup')).toEqual(before);
+		await expect(workbench.join('bringup', 'nobody')).rejects.toThrow(/Unknown person/);
+		await expect(workbench.join('nowhere', 'mira')).rejects.toThrow(/Unknown room/);
+		await expect(workbench.send('bringup', 'mira', 'k0', 'Hello?')).rejects.toThrow(
+			/Enter this room/,
+		);
+
 		await workbench.join('bringup', 'mira');
 		await workbench.join('sensing', 'theo');
-		await workbench.send('bringup', 'mira', 'bringup-1', 'Which resistor?');
-		await workbench.send('bringup', 'mira', 'bringup-1', 'Which resistor?');
-		await workbench.send('sensing', 'theo', 'sensing-1', 'Which pins?');
+		await workbench.send('bringup', 'mira', 'k1', 'Which resistor?');
+		await workbench.send('bringup', 'mira', 'k1', 'Which resistor?');
+		await workbench.send('sensing', 'theo', 'k2', 'Which pins?');
+		await workbench.leave('bringup', 'mira');
+		await expect(workbench.send('bringup', 'mira', 'k1', 'Which resistor?')).rejects.toThrow(
+			/Enter this room/,
+		);
+		await workbench.join('bringup', 'mira');
+		await workbench.send('bringup', 'mira', 'k1', 'Which resistor?');
+
 		const bringup = await messagesOf(workbench, 'bringup');
 		const sensing = await messagesOf(workbench, 'sensing');
-		expect(
-			bringup.filter((message) => 'key' in message && message.key === 'bringup-1'),
-		).toHaveLength(1);
+		expect(bringup.filter((message) => 'key' in message && message.key === 'k1')).toHaveLength(1);
+		expect(bringup.filter((message) => message.kind === 'arrived')).toHaveLength(2);
 		expect(bringup).toEqual(
 			expect.arrayContaining([expect.objectContaining({ from: 'mira', text: 'Which resistor?' })]),
 		);
@@ -166,62 +193,21 @@ describe('Workbench host', () => {
 		expect(sensing.some((message) => 'from' in message && message.from === 'mira')).toBe(false);
 	});
 
-	it('requires a person to be present before sending, also after leaving', async () => {
-		const workbench = await open(joinPath(await freshDirectory(), 'run'));
-		await expect(workbench.send('bringup', 'mira', 'k0', 'Hello?')).rejects.toThrow(
-			/Enter this room/,
-		);
-		await workbench.join('bringup', 'mira');
-		await workbench.send('bringup', 'mira', 'k1', 'Keep this delivery.');
-		await workbench.leave('bringup', 'mira');
-		await expect(workbench.send('bringup', 'mira', 'k1', 'Keep this delivery.')).rejects.toThrow(
-			/Enter this room/,
-		);
-		await workbench.join('bringup', 'mira');
-		await workbench.send('bringup', 'mira', 'k1', 'Keep this delivery.');
-		const messages = await messagesOf(workbench, 'bringup');
-		expect(messages.filter((message) => 'key' in message && message.key === 'k1')).toHaveLength(1);
-		expect(messages.filter((message) => message.kind === 'arrived')).toHaveLength(2);
-	});
-
-	it('does not record a departure for a person who never entered, and rejects an unknown person', async () => {
-		const workbench = await open(joinPath(await freshDirectory(), 'run'));
-		const before = await messagesOf(workbench, 'bringup');
-		await workbench.leave('bringup', 'sol');
-		expect(await messagesOf(workbench, 'bringup')).toEqual(before);
-		await expect(workbench.join('bringup', 'nobody')).rejects.toThrow(/Unknown person/);
-		await expect(workbench.join('nowhere', 'mira')).rejects.toThrow(/Unknown room/);
-	});
-
-	it('stops, keeps its history, and stays stopped across a restart until resumed', async () => {
-		const parent = await freshDirectory();
-		const directory = joinPath(parent, 'run');
-		let workbench = await open(directory);
-		await workbench.join('bringup', 'mira');
-		await workbench.send('bringup', 'mira', 'stop-1', 'Persist this.');
-		const before = await messagesOf(workbench, 'bringup');
-		const stopped = await workbench.control('bringup', 'stop');
-		expect(stopped.status).toBe('stopped');
-		const history = await messagesOf(workbench, 'bringup');
-		expect(history).toEqual(expect.arrayContaining(before as unknown[]));
-		expect(history.some((message) => message.kind === 'left')).toBe(true);
-		await workbench.close();
-		workbench = await open(directory);
-		const restarted = await workbench.rooms();
-		expect(restarted.find((room) => room.name === 'bringup')?.status).toBe('stopped');
-		expect(restarted.find((room) => room.name === 'power')?.status).toBe('running');
-		const resumed = await workbench.control('bringup', 'resume');
-		expect(resumed.status).toBe('running');
-	}, 20_000);
-
-	it('lists the seeded library, hides shell devices, and refuses unsafe file paths', async () => {
-		const directory = joinPath(await freshDirectory(), 'run');
-		const workbench = await open(directory);
+	it('lists the seeded library, previews a SQLite file, hides shell devices, and refuses unsafe paths', async () => {
+		const directory = await freshDirectory();
+		const workbench = await openHost({ directory });
 		const root = joinPath(directory, 'workspace');
 		await writeFile(joinPath(root, 'plain.txt'), 'safe');
 		await mkdir(joinPath(root, 'dev'), { recursive: true });
 		await writeFile(joinPath(root, 'dev/null'), '');
 		await symlink('/etc/hosts', joinPath(root, 'escape.txt'));
+		const database = new DatabaseSync(joinPath(root, 'shared/data.db'));
+		database.exec(
+			'CREATE TABLE readings (id INTEGER PRIMARY KEY, note TEXT); INSERT INTO readings (note) VALUES (\'near\'), (NULL); CREATE TABLE "odd name" (a);',
+		);
+		database.close();
+		await writeFile(joinPath(root, 'shared/fake.db'), 'not a database');
+
 		const paths = (await workbench.files()).map((file) => file.path);
 		expect(paths).toEqual(
 			expect.arrayContaining(['/plain.txt', '/library/led-5mm.md', '/shared/kit.md']),
@@ -232,33 +218,7 @@ describe('Workbench host', () => {
 		await expect(workbench.file('/escape.txt')).rejects.toThrow(/symbolic links/);
 		await expect(workbench.file('/../rooms.db')).rejects.toThrow(/absolute workspace file path/);
 		await expect(workbench.file('/missing.md')).rejects.toThrow(/File not found/);
-	});
 
-	it('publishes a summary, records a specialist artifact, and keeps it after restart', async () => {
-		const parent = await freshDirectory();
-		const directory = joinPath(parent, 'run');
-		let workbench = await open(directory);
-		await workbench.join('bringup', 'mira');
-		await workbench.send('bringup', 'mira', 'summary-1', 'Pick the LED resistor.');
-		const messages = await untilSummary(workbench, 'bringup');
-		expect(messages.some((message) => message.kind === 'summary')).toBe(true);
-		const path = '/home/design/shared/plan.md';
-		expect((await workbench.file(path)).text).toBe(PLAN);
-		await workbench.close();
-		workbench = await open(directory);
-		expect((await workbench.file(path)).text).toBe(PLAN);
-	}, 20_000);
-
-	it('previews a SQLite database as tables, and refuses a file that is not one', async () => {
-		const directory = joinPath(await freshDirectory(), 'run');
-		const workbench = await open(directory);
-		const root = joinPath(directory, 'workspace');
-		const database = new DatabaseSync(joinPath(root, 'shared/data.db'));
-		database.exec(
-			'CREATE TABLE readings (id INTEGER PRIMARY KEY, note TEXT); INSERT INTO readings (note) VALUES (\'near\'), (NULL); CREATE TABLE "odd name" (a);',
-		);
-		database.close();
-		await writeFile(joinPath(root, 'shared/fake.db'), 'not a database');
 		const preview = await workbench.file('/shared/data.db');
 		expect(preview.tables).toEqual([
 			{ name: 'odd name', columns: ['a'], rows: [], count: 0 },
@@ -276,8 +236,9 @@ describe('Workbench host', () => {
 		await expect(workbench.file('/shared/fake.db')).rejects.toThrow(/not a SQLite database/);
 	});
 
-	it('previews a lab table by its lab URI, and refuses any other name', async () => {
-		const workbench = await open(joinPath(await freshDirectory(), 'run'));
+	it('previews a lab table by its lab URI, and lists a requested operation until an answer names it', async () => {
+		const directory = await freshDirectory();
+		const workbench = await openHost({ directory });
 		expect(await workbench.labTables()).toEqual(
 			expect.arrayContaining(['projects', 'runs', 'results', 'operations']),
 		);
@@ -288,105 +249,7 @@ describe('Workbench host', () => {
 		await expect(workbench.labTable('lab:///nothing')).rejects.toThrow(/No such lab table/);
 		await expect(workbench.labTable('/etc/hosts')).rejects.toThrow(/Use lab:/);
 		await expect(workbench.labTable('lab:///sqlite_master')).rejects.toThrow(/No such lab table/);
-	});
 
-	it('aborts an open exchange and keeps the room available', async () => {
-		const workbench = await open(joinPath(await freshDirectory(), 'run'), () =>
-			createAssistantMessageEventStream(),
-		);
-		await workbench.join('bringup', 'mira');
-		await workbench.send('bringup', 'mira', 'pending-1', 'Wait for work.');
-		expect((await workbench.read('bringup', 0)).exchange).toBeDefined();
-		const aborted = await workbench.control('bringup', 'abort');
-		expect(aborted.exchange).toBeUndefined();
-		expect(aborted.status).toBe('running');
-		expect(aborted.exchanges).toContainEqual(
-			expect.objectContaining({ status: 'closed', summary: { status: 'silent' } }),
-		);
-	});
-});
-
-describe('Workbench host watch', () => {
-	it('tells a watcher when the room records something, and stops after the watch ends', async () => {
-		const workbench = await open(joinPath(await freshDirectory(), 'run'));
-		let changes = 0;
-		let control = 0;
-		const stop = workbench.watch('bringup', () => {
-			changes += 1;
-		});
-		workbench.watch('bringup', () => {
-			control += 1;
-		});
-		await workbench.join('bringup', 'mira');
-		await vi.waitFor(() => expect(changes).toBeGreaterThan(0));
-		stop();
-		const seen = changes;
-		const controlSeen = control;
-		await workbench.send('bringup', 'mira', 'watch-1', 'Which resistor?');
-		await vi.waitFor(() => expect(control).toBeGreaterThan(controlSeen));
-		expect(changes).toBe(seen);
-	});
-
-	it('watches one room and not another', async () => {
-		const workbench = await open(joinPath(await freshDirectory(), 'run'));
-		let bringup = 0;
-		let sensing = 0;
-		workbench.watch('bringup', () => {
-			bringup += 1;
-		});
-		workbench.watch('sensing', () => {
-			sensing += 1;
-		});
-		await workbench.join('sensing', 'theo');
-		await vi.waitFor(() => expect(sensing).toBeGreaterThan(0));
-		expect(bringup).toBe(0);
-	});
-
-	it('refuses to watch a room that does not exist', async () => {
-		const workbench = await open(joinPath(await freshDirectory(), 'run'));
-		expect(() => workbench.watch('nowhere', () => {})).toThrow(/Unknown room/);
-	});
-
-	it('keeps a watch across a stop and a resume', async () => {
-		const workbench = await open(joinPath(await freshDirectory(), 'run'));
-		let changes = 0;
-		workbench.watch('bringup', () => {
-			changes += 1;
-		});
-		await workbench.control('bringup', 'stop');
-		await workbench.control('bringup', 'resume');
-		await new Promise<void>((resolve) => setTimeout(resolve, 50));
-		const settled = changes;
-		await workbench.join('bringup', 'mira');
-		await vi.waitFor(() => expect(changes).toBeGreaterThan(settled));
-	}, 20_000);
-});
-
-describe('Workbench host steps and approvals', () => {
-	it('reads the trace of an activation the room ran', async () => {
-		const workbench = await open(joinPath(await freshDirectory(), 'run'));
-		await workbench.join('bringup', 'mira');
-		await workbench.send('bringup', 'mira', 'trace-1', 'Pick the LED resistor.');
-		await untilSummary(workbench, 'bringup');
-		const view = await workbench.read('bringup', 0);
-		const activations = view.exchanges.flatMap((exchange) => exchange.activations);
-		expect(activations.length).toBeGreaterThan(0);
-		const id = activations[0]?.id ?? '';
-		const read = await workbench.activation('bringup', id);
-		expect(read?.activation).toBe(id);
-		const passes = read?.passes ?? [];
-		expect(passes.length).toBeGreaterThan(0);
-		const steps = passes.flatMap((pass) => pass.steps);
-		const types = steps.map((step) => step.type);
-		expect(types).toContain('tool_call');
-		expect(types.at(-1)).toBe('end');
-		expect(await workbench.activation('bringup', 'not-an-id')).toBeUndefined();
-		await expect(workbench.activation('nowhere', id)).rejects.toThrow(/Unknown room/);
-	}, 20_000);
-
-	it('lists a requested operation until an answer names it', async () => {
-		const directory = joinPath(await freshDirectory(), 'run');
-		const workbench = await open(directory);
 		expect(await workbench.approvals('bringup')).toEqual([]);
 		const lab = new DatabaseSync(joinPath(directory, 'lab.db'));
 		const insert = lab.prepare(
@@ -412,4 +275,47 @@ describe('Workbench host steps and approvals', () => {
 		expect(await workbench.approvals('bringup')).toEqual([]);
 		await expect(workbench.approvals('nowhere')).rejects.toThrow(/Unknown room/);
 	});
+
+	it('aborts an open exchange and keeps the room available', async () => {
+		const workbench = await openHost({ stream: idleStream });
+		await workbench.join('bringup', 'mira');
+		await workbench.send('bringup', 'mira', 'pending-1', 'Wait for work.');
+		expect((await workbench.read('bringup', 0)).exchange).toBeDefined();
+		const aborted = await workbench.control('bringup', 'abort');
+		expect(aborted.exchange).toBeUndefined();
+		expect(aborted.status).toBe('running');
+		expect(aborted.exchanges).toContainEqual(
+			expect.objectContaining({ status: 'closed', summary: { status: 'silent' } }),
+		);
+	});
+
+	it('tells the watchers of one room when it records something, until each watch ends, across a stop and a resume', async () => {
+		const workbench = await openHost();
+		const counts = { ended: 0, bringup: 0, sensing: 0 };
+		const end = workbench.watch('bringup', () => {
+			counts.ended += 1;
+		});
+		workbench.watch('bringup', () => {
+			counts.bringup += 1;
+		});
+		workbench.watch('sensing', () => {
+			counts.sensing += 1;
+		});
+		expect(() => workbench.watch('nowhere', () => {})).toThrow(/Unknown room/);
+		await workbench.join('sensing', 'theo');
+		await vi.waitFor(() => expect(counts.sensing).toBeGreaterThan(0));
+		expect(counts.bringup).toBe(0);
+
+		await workbench.join('bringup', 'mira');
+		await vi.waitFor(() => expect(counts.ended).toBeGreaterThan(0));
+		end();
+		const ended = counts.ended;
+		await workbench.control('bringup', 'stop');
+		await workbench.control('bringup', 'resume');
+		await new Promise<void>((resolve) => setTimeout(resolve, 50));
+		const settled = counts.bringup;
+		await workbench.join('bringup', 'mira');
+		await vi.waitFor(() => expect(counts.bringup).toBeGreaterThan(settled));
+		expect(counts.ended).toBe(ended);
+	}, 20_000);
 });

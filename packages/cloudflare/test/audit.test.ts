@@ -1,25 +1,18 @@
-import { env, runInDurableObject } from 'cloudflare:test';
+import { runInDurableObject } from 'cloudflare:test';
 import type { Message } from '@ambionframework/ambion';
 import type { JournalOpener } from '@ambionframework/journal';
 import { expect, it } from 'vitest';
 import { configure, type SeatEvent } from '../src/configure.ts';
-import { scripted } from './scripted.ts';
+import { roomOf, seatOf } from './objects.ts';
 import { until } from './until.ts';
-import { assistant, product, slow } from './worker.ts';
+import { configuration } from './worker.ts';
 
 it('reports audit failure while a remote seat completes its contribution', async () => {
 	const name = 'audit-outage';
-	const room = env.ROOM.get(env.ROOM.idFromName(name));
-	const seat = env.SEAT.get(
-		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', name, 'product'])),
-	);
+	const room = roomOf(name);
+	const seat = seatOf(name);
 	const events: SeatEvent[] = [];
-	const defaults = {
-		agents: [assistant, product, slow],
-		stream: scripted,
-		limits: { delivery: { resend: 50 } },
-	};
-	configure({ ...defaults, onSeatEvent: (event) => events.push(event) });
+	configure({ ...configuration, onSeatEvent: (event) => events.push(event) });
 	try {
 		await seat.hold(true);
 		await runInDurableObject(seat, async (instance) => {
@@ -59,6 +52,6 @@ it('reports audit failure while a remote seat completes its contribution', async
 		).toMatchObject({ status: 'idle' });
 	} finally {
 		await room.abort();
-		configure(defaults);
+		configure(configuration);
 	}
 });

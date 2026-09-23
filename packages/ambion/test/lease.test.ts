@@ -6,13 +6,13 @@
  * the wire has to arrive exactly once.
  */
 import type { Context } from '@earendil-works/pi-ai';
-import { afterEach, describe, expect, it } from 'vitest';
-import { pi, piExecution } from '../../pi/src/index.ts';
+import { describe, expect, it } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
 import { decodeActivationId } from '../src/activation-id.ts';
 import { hostingOf, inProcessTransport, type RoomProtocol } from '../src/hosting.ts';
 import {
+	type CreateRuntimeOptions,
 	createRuntime,
-	defineAgent,
 	defineHuman,
 	isSpoken,
 	isSummary,
@@ -33,6 +33,7 @@ import {
 	messagesOf,
 	participantsOf,
 	roomName,
+	scriptedAgent,
 	storedOf,
 	tick,
 	waitForRoom,
@@ -49,52 +50,64 @@ import {
 	speak,
 	summarise,
 } from './support/scripted.ts';
+import { stopAtEnd } from './support/stop.ts';
 import { gatedJournals, memory } from './support/storage.ts';
 import { type Fault, faultyTransport } from './support/transport.ts';
 
-const solo = defineAgent({
-	name: 'solo',
-	identity: 'Speaks once.',
-	executor: pi({ instructions: 'speak', model: 'scripted/solo' }),
-});
+const solo = scriptedAgent('solo', 'Speaks once.');
+const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 
-const started: Room[] = [];
-afterEach(async () => {
-	for (const session of started.splice(0)) await session.stop();
-});
+interface Options {
+	faults?: Fault[];
+	limits?: CreateRuntimeOptions['limits'];
+	summary?: boolean;
+	/** A runtime of the test's own on the clock, in place of the faulty transport. */
+	runtime?: (clock: FakeClock) => Runtime;
+}
 
 async function open(
-	faults: Fault[],
 	script: Script,
-	lease?: { ttl: number; deadline: number },
-	summary = false,
+	{ faults = [], limits, summary = false, runtime: own }: Options = {},
 ): Promise<{ session: Room; clock: FakeClock; runtime: Runtime }> {
 	const clock = fakeClock();
-	const runtime = createRuntime({
-		clock,
-		transport: faultyTransport(inProcessTransport(), faults, clock),
-		...(lease === undefined ? {} : { limits: { lease } }),
-	});
-	const session = await startRoom({
-		name: roomName('lease'),
-		...(summary ? { summary: assistant.name } : {}),
-		seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
-		agents: [solo, assistant],
-		runtime,
-		execution: piExecution({ stream: scripted(script) }),
-	});
-	started.push(session);
+	const runtime =
+		own?.(clock) ??
+		createRuntime({
+			clock,
+			transport: faultyTransport(inProcessTransport(), faults, clock),
+			...(limits === undefined ? {} : { limits }),
+		});
+	const session = stopAtEnd(
+		await startRoom({
+			name: roomName('lease'),
+			...(summary ? { summary: assistant.name } : {}),
+			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [solo, assistant],
+			runtime,
+			execution: piExecution({ stream: scripted(script) }),
+		}),
+	);
 	return { session, clock, runtime };
 }
 
+const speaksOnce: Script = (_c, _a, call) => (call === 1 ? speak('hi') : quiet());
 const starts = (events: ReturnType<typeof collect>) =>
 	events.filter((e) => e.type === 'activation_start').length;
+const ends = (events: ReturnType<typeof collect>) =>
+	events.filter((e) => e.type === 'activation_end').length;
+const expired = (events: ReturnType<typeof collect>) =>
+	events.some((e) => e.type === 'error' && /past its lease/.test(e.error.message));
+const speakers = async (session: Room) =>
+	(await messagesOf(session)).filter(isSpoken).map((m) => m.from);
+const leaseChanges = async (runtime: Runtime, session: Room) =>
+	(await storedOf(hostingOf(runtime).journals, session.name)).flatMap((entry) =>
+		entry.kind === 'lease' ? [entry.body as LeaseChange] : [],
+	);
+const operation = (name: string) => (l: unknown) => (l as { operation: string }).operation === name;
 
 describe('a lease', () => {
 	it('sends a dropped wake again after the resend window, and the seat runs once', async () => {
-		const { session, clock } = await open([{ on: 'wake', kind: 'drop' }], (_c, _a, call) =>
-			call === 1 ? speak('hi') : quiet(),
-		);
+		const { session, clock } = await open(speaksOnce, { faults: [{ on: 'wake', kind: 'drop' }] });
 		const events = collect(session);
 		const visit = await enter(session);
 		await visit.send({ text: 'say hi' });
@@ -106,59 +119,43 @@ describe('a lease', () => {
 		await clock.advance(1);
 		await waitForRoom(session);
 		expect(starts(events)).toBe(1);
-		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toEqual([
-			'andrei',
-			'solo',
-		]);
+		expect(await speakers(session)).toEqual(['andrei', 'solo']);
 	});
 
 	it('runs one activation for a duplicated wake', async () => {
-		const { session } = await open([{ on: 'wake', kind: 'duplicate' }], (_c, _a, call) =>
-			call === 1 ? speak('hi') : quiet(),
-		);
+		const { session } = await open(speaksOnce, { faults: [{ on: 'wake', kind: 'duplicate' }] });
 		const events = collect(session);
 		const visit = await enter(session);
 		await visit.send({ text: 'say hi' });
 		await waitForRoom(session);
 		expect(starts(events)).toBe(1);
-		expect((await messagesOf(session)).filter(isSpoken)).toHaveLength(2);
+		expect(await speakers(session)).toHaveLength(2);
 	});
 
 	it('expires a lease whose release was lost twice, and answers the late release stale', async () => {
 		// a release the seat never heard back on is asked again once, so both are lost
-		const ended = (l: unknown) => (l as { operation: string }).operation === 'release';
-		const { session, clock } = await open(
-			[
-				{ on: 'lease', kind: 'drop', match: ended },
-				{ on: 'lease', kind: 'drop', match: ended },
-			],
-			(_c, _a, call) => (call === 1 ? speak('hi') : quiet()),
-		);
+		const lost: Fault = { on: 'lease', kind: 'drop', match: operation('release') };
+		const { session, clock } = await open(speaksOnce, { faults: [lost, { ...lost }] });
 		const events = collect(session);
 		const visit = await enter(session);
 		await visit.send({ text: 'say hi' });
 		await tick();
 		await tick();
 		// the seat spoke, its release was lost, and the room still holds the lease
-		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toContain('solo');
-		expect(events.some((e) => e.type === 'activation_end')).toBe(false);
+		expect(await speakers(session)).toContain('solo');
+		expect(ends(events)).toBe(0);
 		expect(await currentExchange(session)).toBeDefined();
 
 		await clock.advance(60_000);
-		expect(events.some((e) => e.type === 'error' && /past its lease/.test(e.error.message))).toBe(
-			true,
-		);
-		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
+		expect(expired(events)).toBe(true);
+		expect(ends(events)).toBe(1);
 		// the expired lease answers nothing, whatever it said: the seat is woken again
 		// after the backoff, reads its own words on the record, and stands down
 		expect(await currentExchange(session)).toBeDefined();
 		await clock.advance(30_000);
 		await waitForRoom(session);
-		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(2);
-		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toEqual([
-			'andrei',
-			'solo',
-		]);
+		expect(ends(events)).toBe(2);
+		expect(await speakers(session)).toEqual(['andrei', 'solo']);
 		expect(await currentExchange(session)).toBeUndefined();
 
 		const room = session as unknown as RoomProtocol;
@@ -169,21 +166,17 @@ describe('a lease', () => {
 				reason: 'released',
 				readThrough: 0,
 			}),
-		).resolves.toEqual({
-			stale: 'the lease ended',
-		});
+		).resolves.toEqual({ stale: 'the lease ended' });
 	});
 
 	it('expires an activation at its deadline, cuts it, and wakes the seat again after the backoff', async () => {
 		const held = deferred();
 		const { session, clock, runtime } = await open(
-			[],
 			async (_c, _a, call) => {
-				if (call !== 1) return quiet();
-				await held.promise;
+				if (call === 1) await held.promise;
 				return quiet();
 			},
-			{ ttl: 60_000, deadline: 120_000 },
+			{ limits: { lease: { ttl: 60_000, deadline: 120_000 } } },
 		);
 		const events = collect(session);
 		const visit = await enter(session);
@@ -195,16 +188,13 @@ describe('a lease', () => {
 		await clock.advance(119_999);
 		expect(events.some((e) => e.type === 'error')).toBe(false);
 		await clock.advance(1);
-		expect(events.some((e) => e.type === 'error' && /past its lease/.test(e.error.message))).toBe(
-			true,
+		expect(expired(events)).toBe(true);
+		expect(ends(events)).toBe(1);
+		const renewals = (await leaseChanges(runtime, session)).flatMap((lease) =>
+			decodeActivationId(lease.id)?.seat === 'solo' && lease.phase === 'running'
+				? [lease.expiresAt]
+				: [],
 		);
-		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
-		const stored = await storedOf(hostingOf(runtime).journals, session.name);
-		const renewals = stored.flatMap((entry) => {
-			const lease = entry.body as LeaseChange;
-			const mine = entry.kind === 'lease' && decodeActivationId(lease.id)?.seat === 'solo';
-			return mine && lease.phase === 'running' ? [lease.expiresAt] : [];
-		});
 		// the room wrote a claim and renewals, and no change takes the lease past the deadline
 		expect(renewals.length).toBeGreaterThan(1);
 		expect(renewals.every((expiry) => expiry <= clock.now())).toBe(true);
@@ -219,7 +209,7 @@ describe('a lease', () => {
 	});
 
 	it('gives up on a wake at the cap, writes the attempt it does not make, and closes', async () => {
-		const { session, clock, runtime } = await open([], () => {
+		const { session, clock, runtime } = await open(() => {
 			throw new Error('the model failed');
 		});
 		const events = collect(session);
@@ -236,12 +226,10 @@ describe('a lease', () => {
 		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
 			{ type: 'abandoned', agent: 'solo', activation: 'message:4:solo:4', cause: 'transient' },
 		]);
-		const stored = await storedOf(hostingOf(runtime).journals, session.name);
-		const gaveUp = stored.filter((entry) => {
-			const lease = entry.body as LeaseChange;
-			return entry.kind === 'lease' && lease.phase === 'ended' && lease.reason === 'abandoned';
-		});
-		expect(gaveUp.map((entry) => (entry.body as LeaseChange).id)).toEqual(['message:4:solo:4']);
+		const gaveUp = (await leaseChanges(runtime, session)).filter(
+			(lease) => lease.phase === 'ended' && lease.reason === 'abandoned',
+		);
+		expect(gaveUp.map((lease) => lease.id)).toEqual(['message:4:solo:4']);
 
 		// the wake is answered, so the exchange closes and the seat stands idle
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
@@ -257,7 +245,6 @@ describe('a lease', () => {
 
 	it('gives up on a summary at the cap, and the range stays whole for every reader', async () => {
 		const { session, clock, runtime } = await open(
-			[],
 			byAgent({
 				solo: says(['I answered.', 'And again.']),
 				assistant: (context) => {
@@ -265,8 +252,7 @@ describe('a lease', () => {
 					throw new Error('the model failed');
 				},
 			}),
-			undefined,
-			true,
+			{ summary: true },
 		);
 		const events = collect(session);
 		const drafted = assistantEnded(session);
@@ -291,11 +277,8 @@ describe('a lease', () => {
 			seat: 'assistant',
 			attempt: 4,
 		});
-		const stored = await storedOf(hostingOf(runtime).journals, session.name);
 		expect(
-			stored
-				.filter((entry) => (entry.body as LeaseChange).id === givenUp)
-				.map((entry) => entry.body),
+			(await leaseChanges(runtime, session)).filter((lease) => lease.id === givenUp),
 		).toMatchObject([{ phase: 'ended', reason: 'abandoned' }]);
 		// nothing is owed, no summary was written, and the record stands whole
 		expect((await messagesOf(session)).filter(isSummary)).toHaveLength(0);
@@ -307,13 +290,14 @@ describe('a lease', () => {
 	it('refuses a commit from an activation whose renewals were lost past the expiry', async () => {
 		const held = deferred();
 		// the claim goes through; the one renewal before the expiry is lost
-		const renewals = (l: unknown) => (l as { operation: string }).operation === 'renew';
-		const faults: Fault[] = [{ on: 'lease', kind: 'drop', match: renewals }];
-		const { session, clock } = await open(faults, async (_c, _a, call) => {
-			if (call !== 1) return quiet();
-			await held.promise;
-			return speak('too late');
-		});
+		const { session, clock } = await open(
+			async (_c, _a, call) => {
+				if (call !== 1) return quiet();
+				await held.promise;
+				return speak('too late');
+			},
+			{ faults: [{ on: 'lease', kind: 'drop', match: operation('renew') }] },
+		);
 		const events = collect(session);
 		const visit = await enter(session);
 		await visit.send({ text: 'go' });
@@ -322,15 +306,13 @@ describe('a lease', () => {
 
 		// half the expiry: the renewal is lost; the whole expiry: the lease ends
 		await clock.advance(60_000);
-		expect(events.some((e) => e.type === 'error' && /past its lease/.test(e.error.message))).toBe(
-			true,
-		);
+		expect(expired(events)).toBe(true);
 		held.resolve();
 		await tick();
 		await tick();
 		// the say arrived under a lease that ended, so nothing landed
-		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toEqual(['andrei']);
-		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
+		expect(await speakers(session)).toEqual(['andrei']);
+		expect(ends(events)).toBe(1);
 		// a lease that expired without a word answers nothing: the exchange stays
 		// open, and the seat is woken again after the backoff
 		expect(await currentExchange(session)).toMatchObject({ owner: 'andrei' });
@@ -347,18 +329,18 @@ describe('a lease', () => {
 		// activation: the released lease heard through its renewal, so the
 		// question is pending for the seat, and the seat is woken for it.
 		let visit: Visit | undefined;
-		const releases = (l: unknown) => (l as { operation: string }).operation === 'release';
-		const faults: Fault[] = [
-			{
-				on: 'lease',
-				kind: 'hold',
-				match: releases,
-				hold: async () => {
-					await visit?.send({ text: 'Second?' });
+		const { session } = await open(byAgent({ solo: answersEveryQuestion(['andrei']) }), {
+			faults: [
+				{
+					on: 'lease',
+					kind: 'hold',
+					match: operation('release'),
+					hold: async () => {
+						await visit?.send({ text: 'Second?' });
+					},
 				},
-			},
-		];
-		const { session } = await open(faults, byAgent({ solo: answersEveryQuestion(['andrei']) }));
+			],
+		});
 		visit = await enter(session);
 		await visit.send({ text: 'First?' });
 		await waitForRoom(session);
@@ -376,12 +358,12 @@ describe('a lease', () => {
 		const contexts: string[] = [];
 		// the first wake starts the activation; the second, the steer into it, is lost
 		const { session } = await open(
-			[{ on: 'wake', kind: 'drop', skip: 1 }],
 			async (context, _a, call) => {
 				contexts.push(contextText(context as Context));
 				if (call === 1) await held.promise;
 				return quiet();
 			},
+			{ faults: [{ on: 'wake', kind: 'drop', skip: 1 }] },
 		);
 		const events = collect(session);
 		const visit = await enter(session);
@@ -399,10 +381,7 @@ describe('a lease', () => {
 });
 
 describe('a lease judged where its change is written', () => {
-	const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
-
 	it('keeps a remote renewal while retrying a locally expired execution', async () => {
-		const clock = fakeClock();
 		const base = await memory.open();
 		const gate = deferred();
 		let runningRows = 0;
@@ -420,22 +399,16 @@ describe('a lease judged where its change is written', () => {
 			return runningRows === 2 ? gate.promise : undefined;
 		});
 		const held = deferred();
-		const session = await startRoom({
-			name: roomName('lease-renewal'),
-			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
-			agents: [solo, assistant],
-			runtime: createRuntime({ clock, storage: journals }),
-			execution: piExecution({
-				stream: scripted(async (_c, _a, call) => {
-					if (call === 1) {
-						await held.promise;
-						return speak('late but alive');
-					}
-					return call === 2 ? speak('recovered after expiry') : quiet();
-				}),
-			}),
-		});
-		started.push(session);
+		const { session, clock, runtime } = await open(
+			async (_c, _a, call) => {
+				if (call === 1) {
+					await held.promise;
+					return speak('late but alive');
+				}
+				return call === 2 ? speak('recovered after expiry') : quiet();
+			},
+			{ runtime: (clock) => createRuntime({ clock, storage: journals }) },
+		);
 		const events = collect(session);
 		const visit = await enter(session);
 		await visit.send({ text: 'go' });
@@ -456,73 +429,44 @@ describe('a lease judged where its change is written', () => {
 		// schedules the retry after the 30s backoff, at 120s.
 		await clock.advance(60_000);
 		await waitForRoom(session);
-		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toEqual([
-			'andrei',
-			'solo',
-		]);
-		const stored = (await storedOf(base.journals, session.name))
-			.filter((r) => r.kind === 'lease')
-			.map((r) => r.body as LeaseChange)
-			.filter((l) => decodeActivationId(l.id)?.seat === 'solo');
+		expect(await speakers(session)).toEqual(['andrei', 'solo']);
+		const reasons = (await leaseChanges(runtime, session)).flatMap((l) =>
+			decodeActivationId(l.id)?.seat === 'solo' && l.phase === 'ended' ? [l.reason] : [],
+		);
 		// The local expiry releases as a failed attempt; the room's accepted
 		// renewal keeps authority until its later expiry, which creates the retry.
-		expect(stored.filter((l) => l.phase === 'ended').map((l) => l.reason)).toEqual([
-			'expired',
-			'released',
-		]);
+		expect(reasons).toEqual(['expired', 'released']);
 	});
 
 	it('keeps a pending summary for each close when another exchange ends during its claim', async () => {
-		const clock = fakeClock();
-		const opened = await memory.open();
-		// the view of the second attempt at the draft is delayed on the wire
-		const runtime = createRuntime({
-			clock,
-			storage: opened.storage,
-			limits: { call: { timeout: 20_000 } },
-			transport: faultyTransport(
-				inProcessTransport(),
-				[
-					{
-						on: 'view',
-						kind: 'delay',
-						ms: 10_000,
-						match: (id) => {
-							const parsed = typeof id === 'string' ? decodeActivationId(id) : undefined;
-							return parsed?.source === 'closed' && parsed.attempt === 2;
-						},
-					},
-				],
-				clock,
-			),
-		});
 		const held = deferred();
-		const session = await startRoom({
-			name: roomName('lease-draft'),
-			summary: assistant.name,
-			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
-			agents: [solo, assistant],
-			runtime,
-			execution: piExecution({
-				stream: scripted(
-					byAgent({
-						solo: async (context, name, call) => {
-							if (!contextText(context).includes('Second?')) {
-								return says(['a1', 'a2'])(context, name, call);
-							}
-							await held.promise;
-							return says(['a3', 'a4'])(context, name, call);
-						},
-						assistant: (context, _name, call) => {
-							if (!isClosing(context)) return quiet();
-							if (call === 1) throw new Error('the model failed');
-							return summarise('The one message.');
-						},
-					}),
-				),
+		// the view of the second attempt at the draft is delayed on the wire
+		const delayed: Fault = {
+			on: 'view',
+			kind: 'delay',
+			ms: 10_000,
+			match: (id) => {
+				const parsed = typeof id === 'string' ? decodeActivationId(id) : undefined;
+				return parsed?.source === 'closed' && parsed.attempt === 2;
+			},
+		};
+		const { session, clock } = await open(
+			byAgent({
+				solo: async (context, name, call) => {
+					if (!contextText(context).includes('Second?')) {
+						return says(['a1', 'a2'])(context, name, call);
+					}
+					await held.promise;
+					return says(['a3', 'a4'])(context, name, call);
+				},
+				assistant: (context, _name, call) => {
+					if (!isClosing(context)) return quiet();
+					if (call === 1) throw new Error('the model failed');
+					return summarise('The one message.');
+				},
 			}),
-		});
-		started.push(session);
+			{ faults: [delayed], limits: { call: { timeout: 20_000 } }, summary: true },
+		);
 		const events = collect(session);
 		const visit = await session.visit(priya);
 		const drafted = assistantEnded(session);

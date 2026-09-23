@@ -76,17 +76,18 @@ both behind the public facade.
 
 ## 2. Toolchain choices
 
-| Concern                | Tool                                                     |
-| ---------------------- | -------------------------------------------------------- |
-| Workspace and installs | pnpm 10 (`--frozen-lockfile` in CI)                      |
-| Task graph             | Turborepo 2                                              |
-| Language               | TypeScript 7, strict settings                            |
-| Contracts              | LemmaScript 0.6 with Dafny backend                       |
-| Bundling               | tsdown, ESM output and `.d.mts` declarations             |
-| Tests                  | Vitest 4                                                 |
-| Lint                   | Biome 2; its formatter is disabled                       |
-| Formatting             | Prettier 3; 100-column, tabs in code, spaces in Markdown |
-| Dead code              | Knip 6                                                   |
+| Concern                | Tool                                                       |
+| ---------------------- | ---------------------------------------------------------- |
+| Workspace and installs | pnpm 10 (`--frozen-lockfile` in CI)                        |
+| Task graph             | Turborepo 2                                                |
+| Language               | TypeScript 7, strict settings                              |
+| Contracts              | LemmaScript 0.6 with Dafny backend                         |
+| Bundling               | tsdown, ESM output and `.d.mts` declarations               |
+| Tests                  | Vitest 4                                                   |
+| Coverage               | `@vitest/coverage-v8`, on demand; the gate does not run it |
+| Lint                   | Biome 2; its formatter is disabled                         |
+| Formatting             | Prettier 3; 100-column, tabs in code, spaces in Markdown   |
+| Dead code              | Knip 6                                                     |
 
 Every library package requires Node `>=22.19.0`. `examples/workbench`
 requires Node `>=26.4.0`, the OpenTUI floor; it also runs on Bun `>=1.3`. CI

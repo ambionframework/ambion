@@ -1,10 +1,6 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { team } from '../src/definitions.ts';
+import { describe, expect, it, vi } from 'vitest';
 import { describeUnavailable, keyVariable, seatFamilies } from '../src/families.ts';
-import { openWorkbench, type Workbench } from '../src/workbench.ts';
+import { openHost } from './hosting.ts';
 
 describe('Workbench executor families', () => {
 	it('assigns each seat to a family', () => {
@@ -30,38 +26,11 @@ describe('Workbench executor families', () => {
 		expect(describeUnavailable({ ANTHROPIC_API_KEY: 'k', CODEX_API_KEY: 'k' })).toEqual([]);
 		expect(describeUnavailable({})).toHaveLength(4);
 	});
-
-	it('gives each specialist the executor of its family', () => {
-		const bundle = (name: string) =>
-			({ tools: () => ({ name, guidance: '', tools: [] }) }) as never;
-		const built = team(bundle('workspace'), bundle('lab'), bundle('instrument'));
-		const executors = Object.fromEntries(
-			built.specialists.map((seat) => [seat.name, seat.executor]),
-		);
-		expect(executors.datasheets).toMatchObject({ kind: 'pi' });
-		expect(executors.design).toMatchObject({ kind: 'claude', model: 'claude-sonnet-5' });
-		expect(executors.experiments).toMatchObject({
-			kind: 'codex',
-			model: 'gpt-5.6-luna',
-			modelReasoningEffort: 'medium',
-		});
-	});
 });
 
 describe('Workbench with no key', () => {
-	const opened: { workbench: Workbench; directory: string }[] = [];
-
-	afterEach(async () => {
-		for (const { workbench, directory } of opened.splice(0)) {
-			await workbench.close().catch(() => undefined);
-			await rm(directory, { recursive: true, force: true });
-		}
-	});
-
 	it('marks every seat, fails an activation with the missing key, and keeps the room running', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'ambion-workbench-nokey-'));
-		const workbench = await openWorkbench({ directory: join(directory, 'run'), env: {} });
-		opened.push({ workbench, directory });
+		const workbench = await openHost({ env: {}, stream: undefined, executions: undefined });
 		expect((await workbench.read('sensing', 0)).unavailable).toEqual([
 			'assistant',
 			'datasheets',

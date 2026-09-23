@@ -1,8 +1,12 @@
-/** The trace mapping, the usage count and the changed paths, on events a real `codex` recorded. */
+/**
+ * The trace mapping, the usage count, the changed paths and their refs, on
+ * events a real `codex` recorded.
+ */
 import type { Step } from '@ambionframework/ambion';
 import type { ThreadEvent } from '@openai/codex-sdk';
 import { describe, expect, it } from 'vitest';
 import { CodexSteps, changedPaths, usageOf } from '../src/codex-trace.ts';
+import { refOf } from '../src/tools.ts';
 import { recorded } from './fixtures.ts';
 
 const RUNS = ['plain-answer', 'shell-command', 'file-change'] as const;
@@ -31,38 +35,18 @@ describe('a plain answer', () => {
 	});
 });
 
-describe('a shell command', () => {
-	it('gives a call when the command starts and a result when it ends', () => {
-		const steps = stepsOf(recorded('shell-command'));
-		expect(steps.slice(0, 2)).toEqual([
-			{
-				type: 'tool_call',
-				call: 'item_0',
-				name: 'command',
-				input: { command: "/bin/zsh -lc 'echo hello-from-codex'" },
-			},
-			{
-				type: 'tool_result',
-				call: 'item_0',
-				output: { output: 'hello-from-codex\n', exitCode: 0 },
-			},
-		]);
-		expect(steps[2]).toEqual({
-			type: 'text',
-			text: 'It printed `hello-from-codex`.',
-			final: true,
-		});
-	});
-
-	it('counts the usage of the turn', () => {
-		expect(stepsOf(recorded('shell-command')).at(-1)).toEqual({
-			type: 'usage',
-			input: 6,
-			output: 80,
-			cacheRead: 12399,
-			cacheWrite: 12495,
-		});
-	});
+it('gives a call when a shell command starts, a result when it ends, and the usage of the turn', () => {
+	expect(stepsOf(recorded('shell-command'))).toEqual([
+		{
+			type: 'tool_call',
+			call: 'item_0',
+			name: 'command',
+			input: { command: "/bin/zsh -lc 'echo hello-from-codex'" },
+		},
+		{ type: 'tool_result', call: 'item_0', output: { output: 'hello-from-codex\n', exitCode: 0 } },
+		{ type: 'text', text: 'It printed `hello-from-codex`.', final: true },
+		{ type: 'usage', input: 6, output: 80, cacheRead: 12399, cacheWrite: 12495 },
+	]);
 });
 
 describe('a file change', () => {
@@ -79,25 +63,24 @@ describe('a file change', () => {
 		]);
 	});
 
-	it('reports the changed path once the patch completes, and not before', () => {
+	it('reports the changed path once the patch completes, and not before, and cites it as a file URI', () => {
 		const events = recorded('file-change');
 		const reported = events.map((event) => changedPaths(event));
 		expect(reported.flat()).toEqual([path]);
+		expect(refOf(path)).toBe('file:///tmp/codex-cap/file-change/note.txt');
 		const started = events.findIndex((event) => event.type === 'item.started');
 		expect(reported[started]).toEqual([]);
 	});
 });
 
-describe('every recorded run', () => {
-	it.each(RUNS)('%s starts a thread with an id, then a turn', (name) => {
+it.each(RUNS)(
+	'%s starts a thread with an id, then a turn, and ends with a usage step above zero',
+	(name) => {
 		const [first, second] = recorded(name);
 		expect(first).toMatchObject({ type: 'thread.started', thread_id: expect.any(String) });
 		expect(second).toEqual({ type: 'turn.started' });
-	});
-
-	it.each(RUNS)('%s ends with a usage step above zero', (name) => {
 		const usage = stepsOf(recorded(name)).at(-1);
 		expect(usage).toMatchObject({ type: 'usage', output: expect.any(Number) });
 		expect((usage as { output: number }).output).toBeGreaterThan(0);
-	});
-});
+	},
+);

@@ -1,11 +1,9 @@
-import { piSessions } from '@ambionframework/pi-journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { pi, piExecution, seatSessionId } from '../../pi/src/index.ts';
+import { piExecution } from '../../pi/src/index.ts';
 import type { ActivationSpec } from '../src/hosting.ts';
 import {
 	type AgentParticipantInfo,
 	createRuntime,
-	defineAgent,
 	defineHuman,
 	type HumanParticipantInfo,
 	readRoom,
@@ -14,36 +12,36 @@ import {
 import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { viewOf } from '../src/room/view.ts';
-import { participantsOf, roomName, waitForRoom } from './support/room.ts';
+import { participantsOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted, speak } from './support/scripted.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
-const writer = (instructions = 'Answer the room.') =>
-	defineAgent({
-		name: 'writer',
-		identity: 'Writes room answers.',
-		executor: pi({ instructions, model: 'scripted/writer' }),
-	});
+const writer = scriptedAgent('writer', 'Writes room answers.');
+const reader = { kind: 'human', name: 'reader', identity: 'Reads the room.' } as const;
 
 describe('participant views', () => {
-	it('keeps the public roster discriminated and private preferences out of protocol context', async () => {
-		const contexts: string[] = [];
-		const runtime = createRuntime();
-		const room = await startRoom({
-			name: roomName('participants'),
-			agents: [writer()],
-			runtime,
-			execution: piExecution({
-				stream: scripted((context) => {
-					contexts.push(`${context.systemPrompt ?? ''}\n${contextText(context)}`);
-					const text = contextText(context);
-					return text.includes('Question?') && !text.includes('Answer.')
-						? speak('Answer.')
-						: quiet();
+	it.each(storages)(
+		'keeps the roster discriminated and private preferences out of context, live and stopped, on $name',
+		async (storage) => {
+			const contexts: string[] = [];
+			const runtime = createRuntime({ storage: (await openFor(storage)).storage });
+			const room = stopAtEnd(
+				await startRoom({
+					name: roomName('participants'),
+					agents: [writer],
+					runtime,
+					execution: piExecution({
+						stream: scripted((context) => {
+							contexts.push(`${context.systemPrompt ?? ''}\n${contextText(context)}`);
+							const text = contextText(context);
+							return text.includes('Question?') && !text.includes('Answer.')
+								? speak('Answer.')
+								: quiet();
+						}),
+					}),
 				}),
-			}),
-		});
-		try {
+			);
 			const visit = await room.visit(
 				defineHuman({
 					name: 'reader',
@@ -70,31 +68,31 @@ describe('participant views', () => {
 					keyof HumanParticipantInfo
 				>
 			>().toEqualTypeOf<never>();
-			const snapshot = await readRoom(room.name, {
-				runtime: createRuntime({ storage: runtime.storage }),
-				messages: false,
-			});
-			expect(participants).toEqual([
-				{
-					kind: 'agent',
-					name: 'writer',
-					identity: 'Writes room answers.',
-					status: 'idle',
-					attention: 'broadcast',
-				},
-				{ kind: 'human', name: 'reader', identity: 'Reads the room.', presence: 'present' },
-			]);
-			expect(snapshot.participants).toEqual(participants);
+			const agent = {
+				kind: 'agent',
+				name: 'writer',
+				identity: 'Writes room answers.',
+				status: 'idle',
+				attention: 'broadcast',
+			};
+			expect(participants).toEqual([agent, { ...reader, presence: 'present' }]);
+			const recorded = () =>
+				readRoom(room.name, {
+					runtime: createRuntime({ storage: runtime.storage }),
+					messages: false,
+				});
+			expect((await recorded()).participants).toEqual(participants);
 			expect(JSON.stringify(participants)).not.toContain('sessionId');
 			expect(JSON.stringify(participants)).not.toContain('private reading preferences');
 			expect(contexts.some((context) => context.includes('Question?'))).toBe(true);
 			expect(contexts.every((context) => !context.includes('private reading preferences'))).toBe(
 				true,
 			);
-		} finally {
+
 			await room.stop();
-		}
-	});
+			expect((await recorded()).participants).toEqual([agent, { ...reader, presence: 'absent' }]);
+		},
+	);
 
 	it('carries the departure and the unread count in the context view of a person', () => {
 		const at = '2026-01-01T00:00:00.000Z';
@@ -143,73 +141,5 @@ describe('participant views', () => {
 		expect(priya).toMatchObject({ lastDeparture: 5, messagesSinceDeparture: 2 });
 		expect(sam).toMatchObject({ messagesSinceDeparture: 0 });
 		expect(sam).not.toHaveProperty('lastDeparture');
-	});
-
-	it.each(storages)('keeps stopped participant reads consistent on %s storage', async (storage) => {
-		const opened = await storage.open();
-		const runtime = createRuntime({ storage: opened.storage });
-		const room = await startRoom({
-			name: roomName(`stopped-${storage.name}`),
-			agents: [writer()],
-			seats: { writer: 'none' },
-			runtime,
-			execution: piExecution({ stream: scripted(() => quiet()) }),
-		});
-		try {
-			await room.visit(defineHuman({ name: 'reader', identity: 'Reads the room.' }));
-			await room.stop();
-			const snapshot = await readRoom(room.name, { runtime, messages: false });
-			expect(snapshot.participants).toEqual([
-				{
-					kind: 'agent',
-					name: 'writer',
-					identity: 'Writes room answers.',
-					status: 'idle',
-					attention: 'none',
-				},
-				{ kind: 'human', name: 'reader', identity: 'Reads the room.', presence: 'absent' },
-			]);
-			expect(snapshot.participants.every((participant) => !('sessionId' in participant))).toBe(
-				true,
-			);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
-	});
-
-	it('reopens the existing audit transcript through its explicit stable identity', async () => {
-		const runtime = createRuntime();
-		const room = await startRoom({
-			name: roomName('participant-audit'),
-			agents: [writer()],
-			runtime,
-			execution: piExecution({
-				stream: scripted((context) => {
-					const text = contextText(context);
-					return text.includes('Question?') && !text.includes('Answer.')
-						? speak('Answer.')
-						: quiet();
-				}),
-			}),
-		});
-		try {
-			const exchange = await (
-				await room.visit(defineHuman({ name: 'reader', identity: 'Reads the room.' }))
-			).send({ text: 'Question?' });
-			await exchange.waitForClose();
-			await room.stop();
-
-			const expectedId = JSON.stringify(['ambion/seat-session', room.name, 'writer']);
-			expect(seatSessionId(room.name, 'writer')).toBe(expectedId);
-			const transcript = await piSessions(runtime.storage).open(expectedId);
-			expect(await transcript.getMetadata()).toMatchObject({
-				id: expectedId,
-				parentSessionId: room.name,
-			});
-			expect(JSON.stringify(await transcript.findEntries())).toContain('Answer.');
-		} finally {
-			await room.stop();
-		}
 	});
 });

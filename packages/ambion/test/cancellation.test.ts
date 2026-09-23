@@ -1,3 +1,4 @@
+import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { pi, piExecution } from '../../pi/src/index.ts';
 import {
@@ -6,34 +7,31 @@ import {
 	hostingOf,
 	inProcessTransport,
 	type RoomProtocol,
-	runningRoom,
 	type Wake,
 } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
-	defineHuman,
 	type Room,
+	type Runtime,
 	resumeRoom,
+	type StartRoomOptions,
 	startRoom,
 } from '../src/index.ts';
+import {
+	manualClock,
+	person,
+	protocolOf,
+	recordingTransport,
+	settledFlag,
+	turn,
+	worker,
+} from './support/core-exchange.ts';
 import { deferred, messagesOf, roomName, stateOf, storedOf, waitForRoom } from './support/room.ts';
 import { byAgent, isClosing, quiet, scripted, speak } from './support/scripted.ts';
-import {
-	faultyJournals,
-	gatedJournals,
-	memory,
-	type Storage,
-	sqlite,
-	storages,
-} from './support/storage.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
+import { faultyJournals, gatedJournals, memory, sqlite, storages } from './support/storage.ts';
 
-const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
-const worker = defineAgent({
-	name: 'worker',
-	identity: 'Works on the question.',
-	executor: pi({ instructions: 'answer the question', model: 'scripted/worker' }),
-});
 const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Writes a closing summary.',
@@ -42,95 +40,61 @@ const assistant = defineAgent({
 
 const deaf = scripted(() => new Promise<never>(() => {}));
 
-async function unsettledAfterTurn<T>(promise: Promise<T>): Promise<boolean> {
-	let settled = false;
-	void promise.then(
-		() => {
-			settled = true;
-		},
-		() => {
-			settled = true;
-		},
+/** A room with one broadcast worker that never answers, stopped when the test ends. */
+async function workerRoom(runtime?: Runtime, options: Partial<StartRoomOptions> = {}) {
+	return stopAtEnd(
+		await startRoom({
+			name: roomName('cancel'),
+			agents: [worker],
+			seats: { [worker.name]: 'broadcast' },
+			execution: piExecution({ stream: deaf }),
+			...(runtime === undefined ? {} : { runtime }),
+			...options,
+		}),
 	);
-	await new Promise<void>((resolve) => setImmediate(resolve));
-	return settled;
 }
 
-async function closesWithoutSummary(room: Room, from: number): Promise<void> {
-	await room.exchange(from)?.waitForClose();
-}
+const workerSpoke = async (room: Room) =>
+	(await messagesOf(room)).filter((message) => message.from === worker.name);
+
+const cancels = async (journals: JournalOpener, room: Room) =>
+	(await storedOf(journals, room.name)).filter((entry) => entry.kind === 'cancel');
 
 describe('durable cancellation', () => {
 	it('fences every old room call while admitting a new activation', async () => {
-		const oldWake = deferred();
-		const newWake = deferred();
 		const wakes: Wake[] = [];
-		const transport = {
-			connect(_room: RoomProtocol, _context: AgentExecutionContext): AgentPort {
-				return {
-					wake: async (wake) => {
-						wakes.push(wake);
-						(wakes.length === 1 ? oldWake : newWake).resolve();
-					},
-					steer: async () => {},
-					cut: async () => {},
-				};
-			},
-		};
-		const runtime = createRuntime({ transport });
-		const room = await startRoom({
-			name: roomName('cancel-authority'),
-			agents: [worker],
-			seats: { [worker.name]: 'broadcast' },
-			runtime,
-			execution: piExecution({ stream: scripted(() => quiet()) }),
-		});
-		try {
-			const visit = await room.visit(person);
-			const first = await visit.send({ text: 'old question' });
-			await oldWake.promise;
-			const calls = runningRoom(runtime, room.name);
-			if (calls === undefined) throw new Error('The room calls are not running.');
-			const activation = wakes[0]?.activation;
-			if (activation === undefined) throw new Error('The room did not send a wake.');
-			const claimed = await calls.lease({ activation, operation: 'claim' });
-			expect(claimed).toMatchObject({ ok: {} });
-			const opened = await calls.view(activation);
-			if ('stale' in opened) throw new Error('The old activation did not open.');
-			await room.abort();
+		const runtime = createRuntime({ transport: recordingTransport(wakes) });
+		const room = await workerRoom(runtime);
+		const visit = await room.visit(person);
+		const first = await visit.send({ text: 'old question' });
+		while (wakes.length < 1) await turn();
+		const calls = protocolOf(runtime, room.name);
+		const activation = wakes[0]?.activation ?? '';
+		expect(await calls.lease({ activation, operation: 'claim' })).toMatchObject({ ok: {} });
+		const opened = await calls.view(activation);
+		if ('stale' in opened) throw new Error('The old activation did not open.');
+		await room.abort();
 
-			expect(await calls.view(activation)).toMatchObject({ stale: expect.any(String) });
-			expect(await calls.lease({ activation, operation: 'claim' })).toMatchObject({
-				stale: expect.any(String),
-			});
-			expect(await calls.lease({ activation, operation: 'renew' })).toMatchObject({
-				stale: expect.any(String),
-			});
-			expect(
-				await calls.commit({
-					activation,
-					key: 'late-old-speech',
-					readThrough: opened.view.through,
-					intent: { kind: 'said', text: 'late old speech' },
-				}),
-			).toMatchObject({ stale: expect.any(String) });
-			expect((await messagesOf(room)).filter((message) => message.from === worker.name)).toEqual(
-				[],
-			);
+		const stale = { stale: expect.any(String) };
+		expect(await calls.view(activation)).toMatchObject(stale);
+		expect(await calls.lease({ activation, operation: 'claim' })).toMatchObject(stale);
+		expect(await calls.lease({ activation, operation: 'renew' })).toMatchObject(stale);
+		expect(
+			await calls.commit({
+				activation,
+				key: 'late-old-speech',
+				readThrough: opened.view.through,
+				intent: { kind: 'said', text: 'late old speech' },
+			}),
+		).toMatchObject(stale);
+		expect(await workerSpoke(room)).toEqual([]);
 
-			const second = await visit.send({ text: 'new question' });
-			await newWake.promise;
-			expect(wakes[1]?.activation).not.toBe(activation);
-			expect(
-				await calls.lease({ activation: wakes[1]?.activation ?? '', operation: 'claim' }),
-			).toMatchObject({
-				ok: {},
-			});
-			expect(second.from).toBeGreaterThan(first.from);
-			await room.abort();
-		} finally {
-			await room.stop();
-		}
+		const second = await visit.send({ text: 'new question' });
+		while (wakes.length < 2) await turn();
+		const fresh = wakes[1]?.activation ?? '';
+		expect(fresh).not.toBe(activation);
+		expect(await calls.lease({ activation: fresh, operation: 'claim' })).toMatchObject({ ok: {} });
+		expect(second.from).toBeGreaterThan(first.from);
 	});
 
 	it.each(['hangs', 'throws'] as const)(
@@ -154,12 +118,7 @@ describe('durable cancellation', () => {
 					};
 				},
 			};
-			const runtime = createRuntime({ transport });
-			const room = await startRoom({
-				name: roomName('cancel-transport'),
-				agents: [worker],
-				seats: { [worker.name]: 'broadcast' },
-				runtime,
+			const room = await workerRoom(createRuntime({ transport }), {
 				execution: piExecution({
 					stream: scripted(() => {
 						started.resolve();
@@ -167,35 +126,27 @@ describe('durable cancellation', () => {
 					}),
 				}),
 			});
-			try {
-				const visit = await room.visit(person);
-				await visit.send({ text: 'cut the worker' });
-				await started.promise;
-				await room.abort();
-				await cutStarted.promise;
-				expect(cuts).toBe(1);
-			} finally {
-				await room.stop();
-			}
+			await (await room.visit(person)).send({ text: 'cut the worker' });
+			await started.promise;
+			await room.abort();
+			await cutStarted.promise;
+			expect(cuts).toBe(1);
 		},
 	);
 
 	it('does not let a stale cancellation cut a newer run', async () => {
-		const opened = await memory.open();
+		const opened = await openFor(memory);
 		const cancelStarted = deferred();
 		const releaseCancel = deferred();
 		const runtime = createRuntime({
 			storage: gatedJournals(opened.storage, (kind) => {
-				if (kind === 'cancel') {
-					cancelStarted.resolve();
-					return releaseCancel.promise;
-				}
-				return undefined;
+				if (kind !== 'cancel') return undefined;
+				cancelStarted.resolve();
+				return releaseCancel.promise;
 			}),
 		});
-		const name = roomName('cancel-fence');
 		const old = await startRoom({
-			name,
+			name: roomName('cancel-fence'),
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
@@ -203,109 +154,62 @@ describe('durable cancellation', () => {
 		});
 		const oldAbort = old.abort();
 		await cancelStarted.promise;
-		hostingOf(runtime).evict(name);
-		const nextRuntime = createRuntime({ storage: opened.storage });
-		const next = await resumeRoom(name, {
-			agents: [worker],
-			runtime: nextRuntime,
-			execution: piExecution({ stream: deaf }),
-		});
-		try {
-			const visit = await next.visit(person);
-			const exchange = await visit.send({ text: 'new run work' });
-			releaseCancel.resolve();
-			await expect(oldAbort).rejects.toThrow(/gone|evicted|stopped|interrupted|record moved/i);
-			expect(stateOf(next).exchange?.from).toBe(exchange.from);
-			await next.abort();
-		} finally {
-			releaseCancel.resolve();
-			await next.stop();
-			await opened.dispose();
-		}
+		hostingOf(runtime).evict(old.name);
+		const next = stopAtEnd(
+			await resumeRoom(old.name, {
+				agents: [worker],
+				runtime: createRuntime({ storage: opened.storage }),
+				execution: piExecution({ stream: deaf }),
+			}),
+		);
+		const exchange = await (await next.visit(person)).send({ text: 'new run work' });
+		releaseCancel.resolve();
+		await expect(oldAbort).rejects.toThrow(/gone|evicted|stopped|interrupted|record moved/i);
+		expect(stateOf(next).exchange?.from).toBe(exchange.from);
 	});
 
-	it('cuts the current exchange and lets a later send open a new one', async () => {
-		const room = await startRoom({
-			name: roomName('cancel-cut'),
-			agents: [worker],
-			seats: { [worker.name]: 'broadcast' },
-			execution: piExecution({ stream: deaf }),
-		});
-		try {
-			const visit = await room.visit(person);
-			const before = await visit.send({ text: 'before cancellation' });
-			await room.abort();
-			await closesWithoutSummary(room, before.from);
-			const firstEnds = new Map<string, number>();
-			for (const lease of stateOf(room).leases.values()) {
-				if (lease.phase === 'ended' && lease.reason === 'revoked')
-					firstEnds.set(lease.id, lease.until);
-			}
-
-			const after = await visit.send({ text: 'after cancellation' });
-			expect(after.from).toBeGreaterThan(before.from);
-			expect((await messagesOf(room)).filter((message) => message.from === worker.name)).toEqual(
-				[],
-			);
-			await room.abort();
-			for (const [id, until] of firstEnds)
-				expect(stateOf(room).leases.get(id)).toMatchObject({ until });
-		} finally {
-			await room.stop();
-		}
-	});
-
-	it('orders a send behind the cancellation cut', async () => {
-		const opened = await memory.open();
+	it('orders a send behind the cut, which closes the exchange, and the send opens a new one', async () => {
+		const opened = await openFor(memory);
 		const cancelStarted = deferred();
 		const releaseCancel = deferred();
-		const runtime = createRuntime({
-			storage: {
-				async open(name) {
-					const journal = await opened.storage.open(name);
-					return {
-						read: journal.read.bind(journal),
-						async append(entry, expected) {
-							if ((entry as { kind?: string }).kind === 'cancel') {
-								cancelStarted.resolve();
-								await releaseCancel.promise;
-							}
-							return journal.append(entry, expected);
-						},
-					};
-				},
-			},
-		});
-		const room = await startRoom({
-			name: roomName('cancel-order'),
-			agents: [worker],
-			seats: { [worker.name]: 'broadcast' },
-			runtime,
-			execution: piExecution({ stream: deaf }),
-		});
-		try {
-			const visit = await room.visit(person);
-			const before = await visit.send({ text: 'before cancellation' });
-			const cancellation = room.abort();
-			await cancelStarted.promise;
-			const after = visit.send({ text: 'ordered after cancellation' });
-			expect(await unsettledAfterTurn(after)).toBe(false);
-			releaseCancel.resolve();
-			await cancellation;
-			const next = await after;
-			expect(next.from).toBeGreaterThan(before.from);
-			await room.abort();
-		} finally {
-			releaseCancel.resolve();
-			await room.stop();
-			await opened.dispose();
-		}
+		let gate = true;
+		const room = await workerRoom(
+			createRuntime({
+				storage: gatedJournals(opened.storage, (kind) => {
+					if (kind !== 'cancel' || !gate) return undefined;
+					gate = false;
+					cancelStarted.resolve();
+					return releaseCancel.promise;
+				}),
+			}),
+		);
+		const visit = await room.visit(person);
+		const before = await visit.send({ text: 'before cancellation' });
+		const cancellation = room.abort();
+		await cancelStarted.promise;
+		const after = visit.send({ text: 'ordered after cancellation' });
+		const landed = settledFlag(after);
+		await turn();
+		expect(landed()).toBe(false);
+		releaseCancel.resolve();
+		await cancellation;
+		await room.exchange(before.from)?.waitForClose();
+		const firstEnds = new Map<string, number>();
+		for (const lease of stateOf(room).leases.values())
+			if (lease.phase === 'ended' && lease.reason === 'revoked')
+				firstEnds.set(lease.id, lease.until);
+		expect(firstEnds.size).toBeGreaterThan(0);
+
+		expect((await after).from).toBeGreaterThan(before.from);
+		expect(await workerSpoke(room)).toEqual([]);
+		await room.abort();
+		for (const [id, until] of firstEnds)
+			expect(stateOf(room).leases.get(id)).toMatchObject({ until });
 	});
 
 	it('fails an already pending summary without assigning one to the cancelled exchange', async () => {
 		const summaryStarted = deferred();
-		const room = await startRoom({
-			name: roomName('cancel-summary'),
+		const room = await workerRoom(undefined, {
 			summary: assistant.name,
 			agents: [worker, assistant],
 			seats: { [worker.name]: 'broadcast', [assistant.name]: 'none' },
@@ -322,101 +226,62 @@ describe('durable cancellation', () => {
 				),
 			}),
 		});
-		try {
-			const visit = await room.visit(person);
-			const first = await visit.send({ text: 'summarise this' });
-			await first.waitForClose();
-			await summaryStarted.promise;
-			const second = await visit.send({ text: 'a new question' });
-			await room.abort();
-			await expect(first.waitForSummary()).rejects.toThrow(/interrupted/i);
-			await expect(second.waitForSummary()).resolves.toBeUndefined();
-			expect((await messagesOf(room)).filter((message) => message.kind === 'summary')).toEqual([]);
-		} finally {
-			await room.stop();
-		}
+		const visit = await room.visit(person);
+		const first = await visit.send({ text: 'summarise this' });
+		await first.waitForClose();
+		await summaryStarted.promise;
+		const second = await visit.send({ text: 'a new question' });
+		await room.abort();
+		await expect(first.waitForSummary()).rejects.toThrow(/interrupted/i);
+		await expect(second.waitForSummary()).resolves.toBeUndefined();
+		expect((await messagesOf(room)).filter((message) => message.kind === 'summary')).toEqual([]);
 	});
 });
 
-describe.each(storages)('cancellation storage recovery (%s)', (storage: Storage) => {
+describe.each(storages)('cancellation storage recovery on $name', (storage) => {
+	const faultyRoom = async () => {
+		const opened = await openFor(storage);
+		const faulty = faultyJournals(opened.storage);
+		const room = await workerRoom(createRuntime({ storage: faulty.journals }));
+		return { opened, faulty, room, visit: await room.visit(person) };
+	};
+
 	it.each(['before', 'after'] as const)(
 		'converges after a %s-commit cancellation failure',
 		async (phase) => {
-			const opened = await storage.open();
-			const faulty = faultyJournals(opened.storage);
-			const runtime = createRuntime({ storage: faulty.journals });
-			const room = await startRoom({
-				name: roomName(`cancel-${phase}-${storage.name}`),
-				agents: [worker],
-				seats: { [worker.name]: 'broadcast' },
-				runtime,
-				execution: piExecution({ stream: deaf }),
-			});
-			try {
-				const visit = await room.visit(person);
-				const exchange = await visit.send({ text: 'cancel me' });
-				faulty.fail(phase, 'cancel');
-				await expect(room.abort()).rejects.toThrow(/disk is full/);
-				faulty.fail(false);
-				await room.abort();
-				await closesWithoutSummary(room, exchange.from);
-				expect((await messagesOf(room)).filter((message) => message.kind === 'summary')).toEqual(
-					[],
-				);
-			} finally {
-				faulty.fail(false);
-				await room.stop();
-				await opened.dispose();
-			}
+			const { faulty, room, visit } = await faultyRoom();
+			const exchange = await visit.send({ text: 'cancel me' });
+			faulty.fail(phase, 'cancel');
+			await expect(room.abort()).rejects.toThrow(/disk is full/);
+			faulty.fail(false);
+			await room.abort();
+			await room.exchange(exchange.from)?.waitForClose();
+			expect((await messagesOf(room)).filter((message) => message.kind === 'summary')).toEqual([]);
 		},
 	);
 
 	it('reuses the uncertain cancellation key after recovery and preserves later work', async () => {
-		const opened = await storage.open();
-		const faulty = faultyJournals(opened.storage);
-		const runtime = createRuntime({ storage: faulty.journals });
-		const room = await startRoom({
-			name: roomName(`cancel-retry-${storage.name}`),
-			agents: [worker],
-			seats: { [worker.name]: 'broadcast' },
-			runtime,
-			execution: piExecution({ stream: deaf }),
-		});
-		try {
-			const visit = await room.visit(person);
-			const first = await visit.send({ text: 'cancel with an uncertain acknowledgement' });
-			faulty.fail('after', 'cancel');
-			await expect(room.abort()).rejects.toThrow(/disk is full/);
-			faulty.fail(false);
-			await messagesOf(room);
+		const { opened, faulty, room, visit } = await faultyRoom();
+		const first = await visit.send({ text: 'cancel with an uncertain acknowledgement' });
+		faulty.fail('after', 'cancel');
+		await expect(room.abort()).rejects.toThrow(/disk is full/);
+		faulty.fail(false);
+		await messagesOf(room);
 
-			const second = await visit.send({ text: 'land after the durable cut' });
-			await room.abort();
-			expect(
-				(await storedOf(opened.journals, room.name)).filter((entry) => entry.kind === 'cancel'),
-			).toHaveLength(1);
-			expect(stateOf(room).exchange?.from).toBe(second.from);
-			await room.abort();
-			expect(
-				(await storedOf(opened.journals, room.name)).filter((entry) => entry.kind === 'cancel'),
-			).toHaveLength(2);
-			await first.waitForClose();
-		} finally {
-			faulty.fail(false);
-			await room.stop();
-			await opened.dispose();
-		}
+		const second = await visit.send({ text: 'land after the durable cut' });
+		await room.abort();
+		expect(await cancels(opened.journals, room)).toHaveLength(1);
+		expect(stateOf(room).exchange?.from).toBe(second.from);
+		await room.abort();
+		expect(await cancels(opened.journals, room)).toHaveLength(2);
+		await first.waitForClose();
 	});
 });
 
 it('does not retry cancelled work after a restart', async () => {
-	const opened = await sqlite.open();
-	let now = Date.parse('2026-01-01T09:00:00.000Z');
-	const clock = {
-		now: () => now,
-		alarm: (_at: number, _fire: () => void) => () => {},
-	};
-	const runtime = createRuntime({ storage: opened.storage, clock });
+	const opened = await openFor(sqlite);
+	const time = manualClock();
+	const runtime = createRuntime({ storage: opened.storage, clock: time.clock });
 	let calls = 0;
 	const started = deferred();
 	const stream = scripted(() => {
@@ -424,36 +289,21 @@ it('does not retry cancelled work after a restart', async () => {
 		started.resolve();
 		return new Promise<never>(() => {});
 	});
-	const name = roomName('cancel-restart');
-	const room = await startRoom({
-		name,
-		agents: [worker],
-		seats: { [worker.name]: 'broadcast' },
-		runtime,
-		execution: piExecution({ stream: stream }),
-	});
+	const room = await workerRoom(runtime, { execution: piExecution({ stream }) });
 	const visit = await room.visit(person);
 	const exchange = await visit.send({ text: 'do not retry' });
 	await visit.send({ text: 'pre-cut steering' });
 	await started.promise;
-	now += hostingOf(runtime).limits.lease.ttl + 1;
+	time.advance(hostingOf(runtime).limits.lease.ttl + 1);
 	await room.abort();
-	await closesWithoutSummary(room, exchange.from);
-	const ended = [...stateOf(room).leases.values()].find(
-		(lease) => lease.phase === 'ended' && lease.reason === 'revoked',
+	await room.exchange(exchange.from)?.waitForClose();
+	expect([...stateOf(room).leases.values()]).toContainEqual(
+		expect.objectContaining({ phase: 'ended', reason: 'revoked' }),
 	);
-	expect(ended).toBeDefined();
-	hostingOf(runtime).evict(name);
-	const resumed = await resumeRoom(name, {
-		runtime,
-		agents: [worker],
-		execution: piExecution({ stream: stream }),
-	});
-	try {
-		await waitForRoom(resumed);
-		expect(calls).toBe(1);
-	} finally {
-		await resumed.stop();
-		await opened.dispose();
-	}
+	hostingOf(runtime).evict(room.name);
+	const resumed = stopAtEnd(
+		await resumeRoom(room.name, { runtime, agents: [worker], execution: piExecution({ stream }) }),
+	);
+	await waitForRoom(resumed);
+	expect(calls).toBe(1);
 });

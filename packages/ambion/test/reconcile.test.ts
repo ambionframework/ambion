@@ -48,6 +48,23 @@ const close = (body: Omit<Close, 'at'>, seq = body.through): Entry => ({
 	body: { ...body, at },
 	seq,
 });
+const released = (id: string, readThrough = 3) =>
+	lease({ id, phase: 'ended', reason: 'released', at, readThrough });
+const running = (id: string, expiresAt = T0 + 60_000) =>
+	lease({ id, phase: 'running', expiresAt, at, readThrough: 0 });
+const unseated = (seq: number): Entry => ({
+	kind: 'message',
+	seq,
+	body: { kind: 'unseated', at, subject: 'writer' },
+});
+/** A question product answered and released, and the close that assigns the writer. */
+const answered = () => [
+	composition(),
+	arrived(),
+	said(),
+	released('message:3:product:1'),
+	close({ owner: 'priya', from: 3, through: 3, summary: 'writer' }),
+];
 const fold = (entries: Entry[]): RoomState => foldRoom(entries, retry);
 const options = (over: Partial<ReconcileOptions> = {}): ReconcileOptions => ({
 	now: T0,
@@ -60,18 +77,7 @@ const options = (over: Partial<ReconcileOptions> = {}): ReconcileOptions => ({
 
 describe('room reconciliation', () => {
 	it('expires a running activation before closing its exchange', () => {
-		const state = fold([
-			composition(),
-			arrived(),
-			said(),
-			lease({
-				id: 'message:3:product:1',
-				phase: 'running',
-				expiresAt: T0 + 60_000,
-				at,
-				readThrough: 0,
-			}),
-		]);
+		const state = fold([composition(), arrived(), said(), running('message:3:product:1')]);
 		expect(planReconciliation(state, options({ now: T0 + 59_999 }))).toMatchObject({
 			expired: [],
 			close: undefined,
@@ -81,37 +87,24 @@ describe('room reconciliation', () => {
 		expect(result.close).toBeUndefined();
 	});
 
-	it('closes a quiet human exchange and assigns its configured seated writer', () => {
-		const state = fold([
-			composition(),
-			arrived(),
-			said(),
-			lease({ id: 'message:3:product:1', phase: 'ended', reason: 'released', at, readThrough: 3 }),
-		]);
-		expect(planReconciliation(state, options()).close).toEqual({
+	it('closes a quiet human exchange and assigns its seated writer, unless the owner is absent or the writer is unseated', () => {
+		const quiet = [composition(), arrived(), said(), released('message:3:product:1')];
+		expect(planReconciliation(fold(quiet), options()).close).toEqual({
 			owner: 'priya',
 			from: 3,
 			through: 3,
 			at,
 			summary: 'writer',
 		});
-	});
 
-	it('does not assign a summary when the human owner is absent or the writer is unseated', () => {
 		const absentOwner = fold([
 			composition(),
 			said(2, 'visitor'),
-			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at, readThrough: 2 }),
+			released('message:2:product:1', 2),
 		]);
 		expect(planReconciliation(absentOwner, options()).close).toEqual(undefined);
 
-		const writerLeft = fold([
-			composition(),
-			arrived(),
-			said(),
-			{ kind: 'message', seq: 4, body: { kind: 'unseated', at, subject: 'writer' } },
-			lease({ id: 'message:3:product:1', phase: 'ended', reason: 'released', at, readThrough: 3 }),
-		]);
+		const writerLeft = fold([...quiet.slice(0, 3), unseated(4), quiet[3] as Entry]);
 		expect(planReconciliation(writerLeft, options()).close).toEqual({
 			owner: 'priya',
 			from: 3,
@@ -129,40 +122,18 @@ describe('room reconciliation', () => {
 		expect(liveWork(pending, T0).exchange).toBe(true);
 		expect(planReconciliation(pending, options()).close).toBeUndefined();
 
-		const closing = fold([
-			composition(),
-			arrived(),
-			said(),
-			lease({ id: 'message:3:product:1', phase: 'ended', reason: 'released', at, readThrough: 3 }),
-			close({ owner: 'priya', from: 3, through: 3, summary: 'writer' }),
-			lease({
-				id: 'closed:3:writer:1',
-				phase: 'running',
-				expiresAt: T0 + 60_000,
-				at,
-				readThrough: 0,
-			}),
-		]);
+		const closing = fold([...answered(), running('closed:3:writer:1')]);
 		expect(liveWork(closing, T0).exchange).toBe(false);
 	});
 
 	it('sends a pending ordinary wake immediately and after its resend window', () => {
 		const state = fold([composition(), arrived(), said(3, 'priya', { wakes: ['product'] })]);
-		expect(planReconciliation(state, options()).sends).toEqual([
-			{ id: 'message:3:product:1', seat: 'product' },
-		]);
-		expect(
-			planReconciliation(
-				state,
-				options({ now: T0 + 4_999, sent: new Map([['message:3:product:1', T0]]) }),
-			).sends,
-		).toEqual([]);
-		expect(
-			planReconciliation(
-				state,
-				options({ now: T0 + 5_000, sent: new Map([['message:3:product:1', T0]]) }),
-			).sends,
-		).toEqual([{ id: 'message:3:product:1', seat: 'product' }]);
+		const sends = (now: number, sent = new Map<string, number>()) =>
+			planReconciliation(state, options({ now, sent })).sends;
+		const wake = [{ id: 'message:3:product:1', seat: 'product' }];
+		expect(sends(T0)).toEqual(wake);
+		expect(sends(T0 + 4_999, new Map([['message:3:product:1', T0]]))).toEqual([]);
+		expect(sends(T0 + 5_000, new Map([['message:3:product:1', T0]]))).toEqual(wake);
 	});
 
 	it('does not revive a wake recorded before removal when the name is reseated', () => {
@@ -170,7 +141,7 @@ describe('room reconciliation', () => {
 			composition(),
 			arrived(),
 			said(3, 'priya', { wakes: ['writer'] }),
-			{ kind: 'message', seq: 4, body: { kind: 'unseated', at, subject: 'writer' } },
+			unseated(4),
 			{
 				kind: 'message',
 				seq: 5,
@@ -187,47 +158,27 @@ describe('room reconciliation', () => {
 		expect(state.pending.some((wake) => wake.id === 'message:3:writer:1')).toBe(false);
 	});
 
-	it('durably revokes a running activation left behind by removal', () => {
-		const state = fold([
-			composition(),
-			arrived(),
-			said(3, 'priya', { wakes: ['writer'] }),
-			lease({
-				id: 'message:3:writer:1',
-				phase: 'running',
-				expiresAt: T0 + 60_000,
-				at,
-				readThrough: 0,
-			}),
-			{ kind: 'message', seq: 4, body: { kind: 'unseated', at, subject: 'writer' } },
-		]);
-		const result = planReconciliation(state, options());
-		expect(result.revoked).toMatchObject([{ id: 'message:3:writer:1', reason: 'revoked' }]);
-		expect(result.expired).toEqual([]);
-		expect(result.close).toBeUndefined();
-	});
-
-	it('revokes a removed lease even after its expiry deadline', () => {
-		const state = fold([
-			composition(),
-			arrived(),
-			said(3, 'priya', { wakes: ['writer'] }),
-			lease({ id: 'message:3:writer:1', phase: 'running', expiresAt: T0 - 1, at, readThrough: 0 }),
-			{ kind: 'message', seq: 4, body: { kind: 'unseated', at, subject: 'writer' } },
-		]);
-		const result = planReconciliation(state, options());
-		expect(result.revoked).toMatchObject([{ id: 'message:3:writer:1', reason: 'revoked' }]);
-		expect(result.expired).toEqual([]);
-	});
+	it.each([
+		['before', T0 + 60_000],
+		['after', T0 - 1],
+	])(
+		'durably revokes a running activation that removal left behind, %s its expiry',
+		(_when, expiresAt) => {
+			const state = fold([
+				composition(),
+				arrived(),
+				said(3, 'priya', { wakes: ['writer'] }),
+				running('message:3:writer:1', expiresAt),
+				unseated(4),
+			]);
+			const result = planReconciliation(state, options());
+			expect(result.revoked).toMatchObject([{ id: 'message:3:writer:1', reason: 'revoked' }]);
+			expect(result.expired).toEqual([]);
+			expect(result.close).toBeUndefined();
+		},
+	);
 
 	it('retries a failed summary after backoff and abandons it at the configured cap', () => {
-		const base = [
-			composition(),
-			arrived(),
-			said(),
-			lease({ id: 'message:3:product:1', phase: 'ended', reason: 'released', at, readThrough: 3 }),
-			close({ owner: 'priya', from: 3, through: 3, summary: 'writer' }),
-		];
 		const failed = (attempt: number, when: number): Entry =>
 			lease({
 				id: `closed:3:writer:${attempt}`,
@@ -236,7 +187,7 @@ describe('room reconciliation', () => {
 				at: new Date(when).toISOString(),
 				readThrough: 0,
 			});
-		const once = fold([...base, failed(1, T0 + 1_000)]);
+		const once = fold([...answered(), failed(1, T0 + 1_000)]);
 		expect(once.owed).toMatchObject([{ unsuccessfulAttempts: 1, notBefore: T0 + 31_000 }]);
 		expect(planReconciliation(once, options({ now: T0 + 30_999 })).sends).toEqual([]);
 		expect(planReconciliation(once, options({ now: T0 + 31_000 })).sends).toEqual([
@@ -244,7 +195,7 @@ describe('room reconciliation', () => {
 		]);
 
 		const capped = fold([
-			...base,
+			...answered(),
 			failed(1, T0 + 1_000),
 			failed(2, T0 + 40_000),
 			failed(3, T0 + 100_000),
@@ -266,15 +217,7 @@ describe('room reconciliation', () => {
 			text: 'Done.',
 			covers: { from: 3, through: 3 },
 		};
-		const state = fold([
-			composition(),
-			arrived(),
-			said(),
-			lease({ id: 'message:3:product:1', phase: 'ended', reason: 'released', at, readThrough: 3 }),
-			close({ owner: 'priya', from: 3, through: 3, summary: 'writer' }),
-			{ kind: 'message', seq: 5, body: published },
-			{ kind: 'message', seq: 6, body: { kind: 'unseated', at, subject: 'writer' } },
-		]);
+		const state = fold([...answered(), { kind: 'message', seq: 5, body: published }, unseated(6)]);
 		expect(state.owed).toEqual([]);
 	});
 });

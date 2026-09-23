@@ -11,6 +11,7 @@ import {
 import { createRuntime, defineAgent, readRoom, resumeRoom, startRoom } from '../src/index.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
 import { isClosing, quiet, scripted, seat, speak } from './support/scripted.ts';
+import { stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
@@ -53,42 +54,40 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 				}),
 			}),
 		});
-		const stream = reply('Room override.', true);
-		const room = await startRoom({
-			name: roomName('executor-boundary'),
-			agents: [writer],
-			summary: writer.name,
-			runtime,
-			execution: piExecution({ stream: stream }),
-		});
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('executor-boundary'),
+				agents: [writer],
+				summary: writer.name,
+				runtime,
+				execution: piExecution({ stream: reply('Room override.', true) }),
+			}),
+		);
 		const events = collect(room);
-		try {
-			const exchange = await (await room.visit(andrei)).send({ text: 'Answer this.' });
-			await expect(exchange.waitForSummary()).resolves.toMatchObject({
-				text: 'Summary: Room override.',
-			});
-			await waitForRoom(room, 'quiet', 2_000);
-			expect(defaultCalls).toBe(0);
-			expect(connections).toHaveLength(1);
-			const connection = connections[0];
-			if (connection === undefined) throw new Error('No executor connected.');
-			assertRoomCalls(connection.room);
-			expect(connection.room).not.toBe(room);
-			expect(connection.context.definition).toEqual(writer);
-			expect(connection.context.executor).toBeDefined();
-			expect(connection.context).not.toHaveProperty('runtime');
-			expect(connection.context).not.toHaveProperty('evict');
-			const { view } = connection.room;
-			await expect(view('unknown')).resolves.toHaveProperty('stale');
-			expect(events.filter((event) => event.type === 'tool_execution_start')).toEqual([
-				expect.objectContaining({ agent: writer.name, toolName: 'seat' }),
-			]);
-			expect(
-				events.filter((event) => event.type === 'error' || event.type === 'audit_error'),
-			).toEqual([]);
-		} finally {
-			await room.stop();
-		}
+		const exchange = await (await room.visit(andrei)).send({ text: 'Answer this.' });
+		await expect(exchange.waitForSummary()).resolves.toMatchObject({
+			text: 'Summary: Room override.',
+		});
+		await waitForRoom(room, 'quiet', 2_000);
+		expect(defaultCalls).toBe(0);
+		expect(connections).toHaveLength(1);
+		const connection = connections[0];
+		if (connection === undefined) throw new Error('No executor connected.');
+		assertRoomCalls(connection.room);
+		expect(connection.room).not.toBe(room);
+		expect(connection.context).toMatchObject({ room: room.name, seat: writer.name });
+		expect(connection.context.definition).toEqual(writer);
+		expect(connection.context.executor).toBeDefined();
+		expect(connection.context).not.toHaveProperty('runtime');
+		expect(connection.context).not.toHaveProperty('evict');
+		const { view } = connection.room;
+		await expect(view('unknown')).resolves.toHaveProperty('stale');
+		expect(events.filter((event) => event.type === 'tool_execution_start')).toEqual([
+			expect.objectContaining({ agent: writer.name, toolName: 'seat' }),
+		]);
+		expect(
+			events.filter((event) => event.type === 'error' || event.type === 'audit_error'),
+		).toEqual([]);
 	});
 });
 

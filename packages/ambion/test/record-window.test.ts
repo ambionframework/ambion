@@ -20,51 +20,67 @@ const options = { backoff: () => 0 };
 /** One token per character, so a limit reads as a length. */
 const byLength = (text: string): number => text.length;
 
-function said(seq: Seq, text: string): Message {
-	return { kind: 'said', seq, at, from: 'priya', text };
+function said(seq: Seq): Message {
+	return { kind: 'said', seq, at, from: 'priya', text: 'aaaa' };
+}
+
+/** A summary that stands for the closed range [from, through]. */
+function summary(seq: Seq, from: Seq, through: Seq): Message {
+	return {
+		kind: 'summary',
+		seq,
+		at,
+		from: 'worker',
+		to: 'priya',
+		text: 'Done.',
+		covers: { from, through },
+	};
 }
 
 describe('windowToLimit', () => {
-	it('keeps the newest lines that fit the limit', () => {
-		const record = [said(2, 'aaaa'), said(3, 'bbbb'), said(4, 'cccc')];
-		// Each line renders as "[priya] xxxx" (12 chars). A limit of 30 holds two.
-		const window = windowToLimit(record, byLength, 30);
-		expect(window.kept.map((message) => message.seq)).toEqual([3, 4]);
-		expect(window.from).toBe(3);
-	});
-
-	it('keeps at least the newest line when one line exceeds the limit', () => {
-		const record = [said(2, 'aaaa'), said(3, 'bbbb')];
-		const window = windowToLimit(record, byLength, 1);
-		expect(window.kept.map((message) => message.seq)).toEqual([3]);
-	});
-
-	it('pins the open exchange whole, even past the limit', () => {
-		const record = [said(2, 'aaaa'), said(3, 'bbbb'), said(4, 'cccc')];
-		const window = windowToLimit(record, byLength, 1, 2);
-		expect(window.kept.map((message) => message.seq)).toEqual([2, 3, 4]);
-		expect(window.from).toBe(2);
-	});
-
-	it('counts a summarised range once and never splits it', () => {
-		const summary: Message = {
-			kind: 'summary',
-			seq: 5,
-			at,
-			from: 'writer',
-			to: 'priya',
-			text: 'Done.',
-			covers: { from: 2, through: 3 },
-		};
-		const record = [said(2, 'aaaa'), said(3, 'bbbb'), summary, said(6, 'cccc')];
+	// Each line renders as "[priya] aaaa" (12 chars). A limit of 30 holds two.
+	it.each([
+		[
+			'keeps the newest lines that fit the limit',
+			[said(2), said(3), said(4)],
+			30,
+			undefined,
+			[3, 4],
+			3,
+		],
+		[
+			'keeps at least the newest line when one line exceeds the limit',
+			[said(2), said(3)],
+			1,
+			undefined,
+			[3],
+			3,
+		],
+		[
+			'pins the open exchange whole, even past the limit',
+			[said(2), said(3), said(4)],
+			1,
+			2,
+			[2, 3, 4],
+			2,
+		],
 		// A large limit keeps everything: the fold stands for seqs 2 and 3.
-		const window = windowToLimit(record, byLength, 1000);
-		expect(window.kept.map((message) => message.seq)).toEqual([2, 3, 5, 6]);
-		expect(window.from).toBe(2);
+		[
+			'counts a summarised range once and never splits it',
+			[said(2), said(3), summary(5, 2, 3), said(6)],
+			1000,
+			undefined,
+			[2, 3, 5, 6],
+			2,
+		],
+	])('%s', (_name, record, limit, open, kept, from) => {
+		const window = windowToLimit(record, byLength, limit, open);
+		expect(window.kept.map((message) => message.seq)).toEqual(kept);
+		expect(window.from).toBe(from);
 	});
 });
 
-// -- the room pages the record ------------------------------------------------
+// -- the room pages and caps the record ---------------------------------------
 
 const composition: Entry = {
 	kind: 'composition',
@@ -77,215 +93,154 @@ const composition: Entry = {
 	},
 };
 
-function message(seq: Seq, body: Message): Entry {
-	return { kind: 'message', seq, body: withoutSeq(body) } as Entry;
-}
-
 /** The journal assigns the place, so an entry body carries none. */
-function withoutSeq(body: Message): Omit<Message, 'seq'> {
-	const { seq: _seq, ...rest } = body;
-	return rest;
+function message(body: Message): Entry {
+	const { seq, ...rest } = body;
+	return { kind: 'message', seq, body: rest } as Entry;
 }
 
-function respondSpec(): ActivationSpec {
-	return {
-		id: 'message:2:worker:0',
-		seat: 'worker',
-		attempt: 0,
-		purpose: { kind: 'respond', message: 2 },
-	};
-}
+const respond: ActivationSpec = {
+	id: 'message:2:worker:0',
+	seat: 'worker',
+	attempt: 0,
+	purpose: { kind: 'respond', message: 2 },
+};
 
-function facts(state: RoomState): RoomFacts {
-	return {
+const summarize: ActivationSpec = {
+	id: 'summary:2:writer:0',
+	seat: 'worker',
+	attempt: 0,
+	purpose: { kind: 'summarize', person: 'priya', people: ['priya'], exchange: 3, through: 5 },
+};
+
+const short = foldRoom([composition, ...[2, 3, 4, 5].map((seq) => message(said(seq)))], options);
+// A summary at seq 8 stands for the closed range [4, 6].
+const long = foldRoom(
+	[
+		composition,
+		...[2, 3, 4, 5, 6, 7].map((seq) => message(said(seq))),
+		message(summary(8, 4, 6)),
+		...[9, 10].map((seq) => message(said(seq))),
+	],
+	options,
+);
+
+/** Read one view and name what the tests compare. */
+function read(state: RoomState, spec: ActivationSpec, cap?: number, range?: ViewRange) {
+	const facts: RoomFacts = {
 		name: 'window',
 		now,
 		state,
 		live: new Map([['worker', ['message:2:worker:0']]]),
 		messagesSince: () => 0,
+		...(cap === undefined ? {} : { limits: { messages: cap } }),
+	};
+	const view = viewOf(spec, facts, range);
+	const { earliest, omitted } = view.context;
+	return {
+		seqs: view.context.messages.map((m) => m.seq),
+		earliest,
+		omitted,
+		through: view.through,
 	};
 }
 
 describe('the room pages the record', () => {
-	const entries: Entry[] = [
-		composition,
-		message(2, said(2, 'one')),
-		message(3, said(3, 'two')),
-		message(4, said(4, 'three')),
-		message(5, said(5, 'four')),
-	];
-
-	it('reads the whole record without a range', () => {
-		const state = foldRoom(entries, options);
-		const view = viewOf(respondSpec(), facts(state));
-		expect(view.context.messages.map((m) => m.seq)).toEqual([2, 3, 4, 5]);
-		expect(view.context.earliest).toBeUndefined();
-	});
-
-	it('reads one bounded page from the tail and reports the record floor', () => {
-		const state = foldRoom(entries, options);
-		const view = viewOf(respondSpec(), facts(state), { limit: 2 });
-		expect(view.context.messages.map((m) => m.seq)).toEqual([4, 5]);
-		expect(view.context.earliest).toBe(2);
-	});
-
-	it('reads a page before a cursor', () => {
-		const state = foldRoom(entries, options);
-		const view = viewOf(respondSpec(), facts(state), { before: 4, limit: 2 });
-		expect(view.context.messages.map((m) => m.seq)).toEqual([2, 3]);
+	it.each([
+		['the whole record without a range', undefined, [2, 3, 4, 5], undefined],
+		['one bounded page from the tail, with the record floor', { limit: 2 }, [4, 5], 2],
+		['a page before a cursor', { before: 4, limit: 2 }, [2, 3], 2],
+		['the whole record for a zero limit', { limit: 0 }, [2, 3, 4, 5], undefined],
+		['the whole record for a negative limit', { limit: -5 }, [2, 3, 4, 5], undefined],
+		[
+			'the whole record for a limit that is not a number',
+			{ limit: Number.NaN },
+			[2, 3, 4, 5],
+			undefined,
+		],
+		['the whole record for a negative cursor', { limit: 2, before: -1 }, [2, 3, 4, 5], undefined],
+	])('reads %s', (_name, range: ViewRange | undefined, seqs, earliest) => {
+		expect(read(short, respond, undefined, range)).toMatchObject({ seqs, earliest });
 	});
 
 	it('never splits a summarised range across the page floor', () => {
-		// A summary at seq 8 stands for the closed range [4, 6].
-		const summary: Message = {
-			kind: 'summary',
-			seq: 8,
-			at,
-			from: 'worker',
-			to: 'priya',
-			text: 'Done.',
-			covers: { from: 4, through: 6 },
-		};
-		const longer: Entry[] = [
-			composition,
-			message(2, said(2, 'one')),
-			message(3, said(3, 'two')),
-			message(4, said(4, 'three')),
-			message(5, said(5, 'four')),
-			message(6, said(6, 'five')),
-			message(7, said(7, 'six')),
-			message(8, summary),
-			message(9, said(9, 'seven')),
-			message(10, said(10, 'eight')),
-		];
-		const state = foldRoom(longer, options);
 		// A limit of 6 starts at seq 5, inside the covered range [4, 6]. The floor
 		// moves up past the range, so the page drops the split source and keeps
 		// the summary that stands for it.
-		const view = viewOf(respondSpec(), facts(state), { limit: 6 });
-		expect(view.context.messages.map((m) => m.seq)).toEqual([7, 8, 9, 10]);
-	});
-
-	it('reads the whole record when the range is malformed', () => {
-		const state = foldRoom(entries, options);
-		const bad: ViewRange[] = [
-			{ limit: 0 },
-			{ limit: -5 },
-			{ limit: Number.NaN },
-			{ limit: 2, before: -1 },
-		];
-		for (const range of bad) {
-			const view = viewOf(respondSpec(), facts(state), range);
-			expect(view.context.messages.map((m) => m.seq)).toEqual([2, 3, 4, 5]);
-			expect(view.context.earliest).toBeUndefined();
-		}
+		expect(read(long, respond, undefined, { limit: 6 }).seqs).toEqual([7, 8, 9, 10]);
 	});
 });
 
 describe('the room caps the record', () => {
-	const entries: Entry[] = [
-		composition,
-		message(2, said(2, 'one')),
-		message(3, said(3, 'two')),
-		message(4, said(4, 'three')),
-		message(5, said(5, 'four')),
-	];
-	const capped = (state: RoomState, messages: number): RoomFacts => ({
-		...facts(state),
-		limits: { messages },
-	});
-	const seqs = (view: ReturnType<typeof viewOf>): Seq[] => view.context.messages.map((m) => m.seq);
-
-	it('serves the newest messages and counts what it drops', () => {
-		const state = foldRoom(entries, options);
-		const view = viewOf(respondSpec(), capped(state, 2));
-		expect(seqs(view)).toEqual([4, 5]);
-		expect(view.context.earliest).toBe(4);
-		expect(view.context.omitted).toBe(2);
-		expect(view.through).toBe(state.lastSeq);
-	});
-
-	it('serves the open exchange whole below the cap', () => {
-		const state = foldRoom(entries, options);
-		const pinned: RoomState = { ...state, exchange: { owner: 'priya', from: 3, at } };
-		const view = viewOf(respondSpec(), capped(pinned, 1));
-		expect(seqs(view)).toEqual([3, 4, 5]);
-		expect(view.context.omitted).toBe(1);
-	});
-
-	it('moves the floor past a summarised range and keeps the summary', () => {
-		const summary: Message = {
-			kind: 'summary',
-			seq: 8,
-			at,
-			from: 'worker',
-			to: 'priya',
-			text: 'Done.',
-			covers: { from: 4, through: 6 },
-		};
-		const longer: Entry[] = [
-			composition,
-			...[2, 3, 4, 5, 6, 7].map((seq) => message(seq, said(seq, `m${seq}`))),
-			message(8, summary),
-			message(9, said(9, 'seven')),
-			message(10, said(10, 'eight')),
-		];
-		const view = viewOf(respondSpec(), capped(foldRoom(longer, options), 6));
-		expect(seqs(view)).toEqual([7, 8, 9, 10]);
-		expect(view.context.omitted).toBe(5);
-	});
-
-	it('stops a page at the capped floor', () => {
-		const state = foldRoom(entries, options);
-		const view = viewOf(respondSpec(), capped(state, 3), { before: 5, limit: 2 });
-		expect(seqs(view)).toEqual([3, 4]);
-		expect(view.context.earliest).toBe(3);
-		expect(view.context.omitted).toBe(1);
-		const below = viewOf(respondSpec(), capped(state, 3), { before: 3, limit: 2 });
-		expect(seqs(below)).toEqual([]);
-		expect(below.context.omitted).toBe(1);
-	});
-
-	it('reports nothing for an infinite cap without a range', () => {
-		const state = foldRoom(entries, options);
-		const view = viewOf(respondSpec(), capped(state, Number.POSITIVE_INFINITY));
-		expect(seqs(view)).toEqual([2, 3, 4, 5]);
-		expect(view.context.earliest).toBeUndefined();
-		expect(view.context.omitted).toBeUndefined();
-	});
-
-	it('serves the closing exchange whole to a summary purpose', () => {
-		const state = foldRoom(entries, options);
-		const spec: ActivationSpec = {
-			id: 'summary:2:writer:0',
-			seat: 'worker',
-			attempt: 0,
-			purpose: { kind: 'summarize', person: 'priya', people: ['priya'], exchange: 3, through: 5 },
-		};
-		const view = viewOf(spec, capped(state, 1));
-		expect(seqs(view)).toEqual([3, 4, 5]);
-		expect(view.context.omitted).toBe(1);
+	const pinned: RoomState = { ...short, exchange: { owner: 'priya', from: 3, at } };
+	it.each([
+		[
+			'serves the newest messages and counts what it drops',
+			short,
+			respond,
+			2,
+			undefined,
+			{ seqs: [4, 5], earliest: 4, omitted: 2, through: short.lastSeq },
+		],
+		[
+			'serves the open exchange whole below the cap',
+			pinned,
+			respond,
+			1,
+			undefined,
+			{ seqs: [3, 4, 5], omitted: 1 },
+		],
+		[
+			'moves the floor past a summarised range and keeps the summary',
+			long,
+			respond,
+			6,
+			undefined,
+			{ seqs: [7, 8, 9, 10], omitted: 5 },
+		],
+		[
+			'stops a page at the capped floor',
+			short,
+			respond,
+			3,
+			{ before: 5, limit: 2 },
+			{ seqs: [3, 4], earliest: 3, omitted: 1 },
+		],
+		[
+			'serves no page below the capped floor',
+			short,
+			respond,
+			3,
+			{ before: 3, limit: 2 },
+			{ seqs: [], omitted: 1 },
+		],
+		[
+			'reports nothing for an infinite cap without a range',
+			short,
+			respond,
+			Number.POSITIVE_INFINITY,
+			undefined,
+			{ seqs: [2, 3, 4, 5], earliest: undefined, omitted: undefined },
+		],
+		[
+			'serves the closing exchange whole to a summary purpose',
+			short,
+			summarize,
+			1,
+			undefined,
+			{ seqs: [3, 4, 5], omitted: 1 },
+		],
+	])('%s', (_name, state, spec, cap, range: ViewRange | undefined, expected) => {
+		expect(read(state, spec, cap, range)).toMatchObject(expected);
 	});
 });
 
 describe('activationTokenLimit validation', () => {
-	const base = {
-		instructions: 'Read.',
-		model: 'scripted/reader',
-	};
-
-	it('rejects an estimator without a limit', () => {
-		expect(() => pi({ ...base, estimateTokens: (text: string) => text.length })).toThrow(
-			/activationTokenLimit/,
-		);
-	});
-
-	it('rejects a nonpositive limit', () => {
-		expect(() => pi({ ...base, activationTokenLimit: 0 })).toThrow(/positive integer/);
-	});
-
-	it('keeps the limit and estimator on the executor', () => {
+	it('rejects an estimator without a limit and a nonpositive limit, and keeps both on the executor', () => {
+		const base = { instructions: 'Read.', model: 'scripted/reader' };
 		const estimate = (text: string) => text.length;
+		expect(() => pi({ ...base, estimateTokens: estimate })).toThrow(/activationTokenLimit/);
+		expect(() => pi({ ...base, activationTokenLimit: 0 })).toThrow(/positive integer/);
 		const executor = pi({ ...base, activationTokenLimit: 500, estimateTokens: estimate });
 		expect(executor.activationTokenLimit).toBe(500);
 		expect(executor.estimateTokens).toBe(estimate);

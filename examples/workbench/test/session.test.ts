@@ -1,235 +1,242 @@
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { Session } from '../src/session.ts';
-import type { ActivationRead } from '../src/workbench.ts';
+import { scenarios } from '../src/scenarios.ts';
+import { Session } from '../src/session.ts';
+import type { ActivationRead, OpenOptions, Workbench } from '../src/workbench.ts';
 import { started, view } from './fake-host.ts';
+import { freshDirectory, idleStream, openHost } from './hosting.ts';
 
-describe('Session start', () => {
-	it('opens the first running room as the chosen person', async () => {
-		const { host, session } = await started();
-		expect(session.room).toBe('bringup');
-		expect(session.entered).toBe(true);
-		expect(host.calls).toEqual(['join:bringup:mira']);
+const LOGGED = new Set<string | symbol>(['join', 'leave', 'send', 'control', 'create']);
+
+/**
+ * A session on a real host on scripted models. The host records each call the
+ * session makes to change a room, and then runs it.
+ */
+async function onHost(name: string | null = 'mira', options: Partial<OpenOptions> = {}) {
+	const workbench = await openHost(options);
+	const calls: string[] = [];
+	const host = new Proxy(workbench, {
+		get(target, key) {
+			const value = Reflect.get(target, key);
+			if (typeof value !== 'function' || !LOGGED.has(key)) return value;
+			return (...args: unknown[]) => {
+				calls.push([String(key), ...args.slice(0, 2)].join(':'));
+				return value.apply(target, args);
+			};
+		},
 	});
+	let changes = 0;
+	const identity = workbench.people.find((person) => person.name === name);
+	const session = new Session(host, identity, () => {
+		changes += 1;
+	});
+	await session.start();
+	// A watch may read the room while `start` returns, so the first read can land later.
+	if (identity) await vi.waitFor(() => expect(session.view).toBeDefined());
+	return { workbench, session, calls, changes: () => changes };
+}
 
-	it('asks who the person is, and joins no room, when nobody is chosen', async () => {
-		const { host, session } = await started(null);
+/** The arrivals, departures, and messages of the people in a room, in journal order. */
+async function trail(workbench: Workbench, room: string): Promise<string[]> {
+	return (await workbench.read(room, 0)).messages.flatMap((message) => {
+		if (message.kind === 'arrived' || message.kind === 'left')
+			return [`${message.kind}:${message.subject}`];
+		return message.kind === 'said' ? [`said:${message.from}:${message.text}`] : [];
+	});
+}
+
+describe('Session on the real host', () => {
+	it('asks who the person is, then enters the first room, and switches person and room', async () => {
+		const { workbench, session, calls, changes } = await onHost(null);
 		expect(session.identity).toBeUndefined();
 		expect(session.room).toBe('');
-		expect(host.calls).toEqual([]);
-		expect(session.notice).toMatch(/Who are you.*mira, theo/);
-	});
-
-	it('tells the terminal to redraw when the state changes', async () => {
-		const { changes } = await started();
+		expect(session.notice).toMatch(/Who are you.*mira, theo, sol/);
 		expect(changes()).toBeGreaterThan(0);
-	});
-});
+		await session.submit('Hello?');
+		expect(session.notice).toMatch(/Pick a person first/);
+		expect(calls).toEqual([]);
 
-describe('Session users', () => {
-	it('chooses the first person, then enters the first room', async () => {
-		const { host, session } = await started(null);
 		await session.submit('/user theo');
 		expect(session.identity?.name).toBe('theo');
-		expect(host.calls).toEqual(['join:bringup:theo']);
 		expect(session.notice).toBe('You are theo, firmware engineer.');
-	});
-
-	it('leaves the room as the old person, and enters it as the new one', async () => {
-		const { host, session } = await started();
-		host.calls.length = 0;
-		await session.submit('/user theo');
-		expect(host.calls).toEqual(['leave:bringup:mira', 'join:bringup:theo']);
+		await session.submit('/user mira');
 		expect(session.room).toBe('bringup');
 		expect(session.entered).toBe(true);
-	});
+		expect(await trail(workbench, 'bringup')).toEqual([
+			'arrived:theo',
+			'left:theo',
+			'arrived:mira',
+		]);
 
-	it('lists the people for /user, and refuses an unknown or the same person', async () => {
-		const { host, session } = await started();
-		host.calls.length = 0;
+		calls.length = 0;
 		await session.submit('/user');
-		expect(session.notice).toMatch(/Pick a person: mira, theo/);
+		expect(session.notice).toMatch(/Pick a person: mira, theo, sol/);
 		await session.submit('/user nobody');
 		expect(session.notice).toMatch(/No person named nobody/);
 		await session.submit('/user mira');
 		expect(session.notice).toBe('You are already mira.');
-		expect(host.calls).toEqual([]);
-	});
-});
-
-describe('Session rooms', () => {
-	it('leaves the room it was in before it enters another', async () => {
-		const { host, session } = await started();
-		host.calls.length = 0;
-		await session.submit('/room power');
-		expect(host.calls).toEqual(['leave:bringup:mira', 'join:power:mira']);
-		expect(session.room).toBe('power');
-	});
-
-	it('names the fix when the room does not exist', async () => {
-		const { session } = await started();
 		await session.submit('/room nowhere');
 		expect(session.notice).toMatch(/No room named nowhere/);
-		expect(session.room).toBe('bringup');
+		expect(calls).toEqual([]);
+
+		await session.submit('/room power');
+		expect(calls).toEqual(['leave:bringup:mira', 'join:power:mira']);
+		expect(session.room).toBe('power');
+		await workbench.join('power', 'theo');
+		await vi.waitFor(() =>
+			expect(session.view?.participants).toContainEqual(
+				expect.objectContaining({ name: 'theo', presence: 'present' }),
+			),
+		);
 	});
 
-	it('creates a room named with its goal, and opens it', async () => {
-		const { host, session } = await started();
+	it('creates a room with its goal, or asks for the goal, and refuses a bad or taken name', async () => {
+		const { workbench, session, calls } = await onHost();
+		const goals = async () =>
+			Object.fromEntries((await workbench.rooms()).map((room) => [room.name, room.goal]));
 		await session.submit('/new motors Drive a small motor');
-		expect(host.calls).toContain('create:motors:Drive a small motor');
 		expect(session.room).toBe('motors');
 		expect(session.notice).toBe('Created motors.');
-	});
 
-	it('asks for the goal when the command has none, and takes the next line as the goal', async () => {
-		const { host, session } = await started();
-		await session.submit('/new motors');
-		expect(session.awaitingGoal).toBe('motors');
-		expect(session.waiting).toBe('Goal for motors');
-		expect(host.calls.some((call) => call.startsWith('create'))).toBe(false);
-		await session.submit('Drive a small motor');
-		expect(host.calls).toContain('create:motors:Drive a small motor');
+		await session.submit('/new pumps');
+		expect(session.awaitingGoal).toBe('pumps');
+		expect(session.waiting).toBe('Goal for pumps');
+		expect(await goals()).not.toHaveProperty('pumps');
+		await session.submit('Move water');
 		expect(session.awaitingGoal).toBeUndefined();
-		expect(session.room).toBe('motors');
-	});
+		expect(session.room).toBe('pumps');
 
-	it('can drop a room that waits for its goal', async () => {
-		const { host, session } = await started();
-		await session.submit('/new motors');
+		await session.submit('/new fans');
 		session.cancelWaiting();
 		expect(session.awaitingGoal).toBeUndefined();
 		expect(session.notice).toMatch(/Canceled/);
-		expect(host.calls.some((call) => call.startsWith('create'))).toBe(false);
-	});
-
-	it('refuses a bad name at once, and a room that exists', async () => {
-		const { host, session } = await started();
 		await session.submit('/new Bad_Name');
 		expect(session.notice).toMatch(/lowercase room name/);
 		await session.submit('/new bringup');
 		expect(session.notice).toBe('bringup already exists.');
 		await session.submit('/new');
 		expect(session.notice).toMatch(/Name the room/);
-		expect(host.calls.some((call) => call.startsWith('create'))).toBe(false);
-	});
+		expect(calls.filter((call) => call.startsWith('create'))).toEqual([
+			'create:motors:Drive a small motor',
+			'create:pumps:Move water',
+		]);
+		expect(await goals()).toMatchObject({ motors: 'Drive a small motor', pumps: 'Move water' });
 
-	it('reports a failed creation and stops waiting', async () => {
-		const { host, session } = await started();
-		await session.submit('/new motors');
-		host.failNext = 'The host refused.';
-		await session.submit('Drive a motor');
-		expect(session.error).toBe('The host refused.');
+		await session.submit('/new valves');
+		await workbench.create('valves', 'Taken first.');
+		await session.submit('Control the flow');
+		expect(session.error).toMatch(/already exists/);
 		expect(session.awaitingGoal).toBeUndefined();
 	});
-});
 
-describe('Session messages and control', () => {
-	it('sends a message as the person, and enters first when not present', async () => {
-		const { host, session } = await started();
-		session.entered = false;
-		host.calls.length = 0;
-		await session.submit('Which resistor?');
-		expect(host.calls).toEqual(['join:bringup:mira', 'send:bringup:mira:Which resistor?']);
-	});
-
-	it('asks for a person before it sends for nobody', async () => {
-		const { host, session } = await started(null);
-		await session.submit('Hello?');
-		expect(session.notice).toMatch(/Pick a person first/);
-		expect(host.calls).toEqual([]);
-	});
-
-	it('keeps the text and names the fix when the room is stopped', async () => {
-		const { host, session } = await started();
-		host.table.set('bringup', view('bringup', { status: 'stopped' }));
-		await session.refresh();
-		host.calls.length = 0;
-		await session.submit('Anybody?');
-		expect(session.error).toBe('bringup is stopped. Use /resume first.');
-		expect(host.calls).toEqual([]);
-	});
-
-	it('shows a host error instead of losing it', async () => {
-		const { host, session } = await started();
-		host.failNext = 'Enter this room before sending.';
-		await session.submit('Hello');
-		expect(session.error).toBe('Enter this room before sending.');
-	});
-
-	it('refuses to abort when no exchange is open, and aborts when one is', async () => {
-		const { host, session } = await started();
+	it('sends as the person, enters first when not present, aborts, stops, resumes, and leaves', async () => {
+		const { workbench, session, calls } = await onHost('mira', { stream: idleStream });
 		await session.submit('/abort');
 		expect(session.notice).toBe('Nothing to abort. bringup has no open exchange.');
-		expect(host.calls.some((call) => call.startsWith('control'))).toBe(false);
-		host.table.set('bringup', view('bringup', { exchange: { owner: 'mira', from: 4, at: '' } }));
-		await session.refresh();
+		await session.submit('Which resistor?');
+		await vi.waitFor(() => expect(session.view?.exchange).toBeDefined());
 		await session.submit('/abort');
-		expect(host.calls).toContain('control:bringup:abort');
+		expect(calls).toContain('control:bringup:abort');
 		expect(session.notice).toBe('Aborted the open exchange in bringup.');
-	});
 
-	it('stops a room, marks the person out of it, and enters it again on resume', async () => {
-		const { host, session } = await started();
+		await workbench.leave('bringup', 'mira');
+		await session.submit('Are you there?');
+		expect(session.error).toBe('Enter this room before sending.');
+		session.entered = false;
+		calls.length = 0;
+		await session.submit('Are you there?');
+		expect(calls).toEqual(['join:bringup:mira', 'send:bringup:mira']);
+		expect((await trail(workbench, 'bringup')).slice(-2)).toEqual([
+			'arrived:mira',
+			'said:mira:Are you there?',
+		]);
+
 		await session.submit('/stop');
 		expect(session.entered).toBe(false);
-		host.table.set('bringup', view('bringup', { status: 'stopped' }));
-		await session.refresh();
+		await vi.waitFor(() => expect(session.view?.status).toBe('stopped'));
 		await session.submit('/stop');
 		expect(session.notice).toBe('bringup is already stopped.');
-		host.calls.length = 0;
+		calls.length = 0;
+		await session.submit('Anybody?');
+		expect(session.error).toBe('bringup is stopped. Use /resume first.');
+		expect(calls).toEqual([]);
 		await session.submit('/resume');
-		expect(host.calls).toEqual(['control:bringup:resume', 'join:bringup:mira']);
+		expect(calls).toEqual(['control:bringup:resume', 'join:bringup:mira']);
 		expect(session.entered).toBe(true);
-	});
+		await vi.waitFor(() => expect(session.view?.status).toBe('running'));
 
-	it('ends the visit on leave, and only when the person is in the room', async () => {
-		const { host, session } = await started();
-		host.calls.length = 0;
+		calls.length = 0;
 		await session.leave();
-		expect(host.calls).toEqual(['leave:bringup:mira']);
 		session.entered = false;
 		await session.leave();
-		expect(host.calls).toEqual(['leave:bringup:mira']);
-	});
-});
-
-describe('Session /attach', () => {
-	it('copies a local file into the workspace, and cites it as a ref of the next message', async () => {
-		const { host, session } = await started();
-		await session.submit('/attach ~/photos/board.png');
-		expect(host.attached).toEqual(['~/photos/board.png']);
-		expect(session.pendingRefs).toEqual([
-			{ path: '/attachments/board.png', ref: 'file:///attachments/board.png' },
-		]);
-		expect(session.notice).toMatch(/Attached \/attachments\/board\.png/);
-
-		await session.submit('Look at this.');
-		expect(host.sentRefs).toEqual([['file:///attachments/board.png']]);
-		expect(session.pendingRefs).toEqual([]);
+		expect(calls).toEqual(['leave:bringup:mira']);
+		expect((await trail(workbench, 'bringup')).at(-1)).toBe('left:mira');
 	});
 
-	it('asks for a path when the command takes none', async () => {
-		const { session } = await started();
+	it('attaches a local file, cites it on the next message, and drops a staged one on a room switch', async () => {
+		const { workbench, session } = await onHost();
+		const directory = await freshDirectory();
+		const local = join(directory, 'board.png');
+		await writeFile(local, 'picture');
 		await session.submit('/attach');
 		expect(session.notice).toMatch(/Use \/attach/);
-	});
-
-	it('shows a host error, and keeps nothing staged, when the copy fails', async () => {
-		const { host, session } = await started();
-		host.failNext = 'ENOENT: no such file';
-		await session.submit('/attach missing.png');
-		expect(session.error).toBe('ENOENT: no such file');
+		await session.submit(`/attach ${join(directory, 'missing.png')}`);
+		expect(session.error).toMatch(/Cannot read .*missing\.png: ENOENT/);
 		expect(session.pendingRefs).toEqual([]);
-	});
 
-	it('drops a staged attachment on a room switch', async () => {
-		const { session } = await started();
-		await session.submit('/attach board.png');
+		await session.submit(`/attach ${local}`);
+		const [staged] = session.pendingRefs;
+		expect(staged?.path).toMatch(/^\/attachments\/\d+-board\.png$/);
+		expect(staged?.ref).toBe(`file://${staged?.path}`);
+		expect(session.notice).toContain(`Attached ${staged?.path}`);
+		await session.submit('Look at this.');
+		const sent = (await workbench.read('bringup', 0)).messages.find(
+			(message) => message.kind === 'said' && message.text === 'Look at this.',
+		);
+		expect(sent).toMatchObject({ refs: [staged?.ref] });
+		expect(session.pendingRefs).toEqual([]);
+
+		await session.submit(`/attach ${local}`);
 		expect(session.pendingRefs).toHaveLength(1);
 		await session.switchRoom('power');
 		expect(session.pendingRefs).toEqual([]);
 	});
 
-	it('stages a copy that lands after a room switch into the array the session holds by then, not a stale one', async () => {
+	it('opens and narrows the files panel, opens a file by a part of its path, and returns intents', async () => {
+		const { workbench, session } = await onHost();
+		expect(await session.submit('/files')).toEqual({ type: 'files' });
+		const [first, second] = session.browser.matches.map((file) => file.path);
+		await vi.waitFor(() => expect(session.browser.file?.path).toBe(first));
+		expect(session.browser.open).toBe(true);
+		expect(session.browser.file?.text).toBe((await workbench.file(first ?? '')).text);
+		session.browser.type('NOTES');
+		expect(session.browser.matches.map((file) => file.path)).toEqual(['/shared/notes.md']);
+		await vi.waitFor(() => expect(session.browser.file?.path).toBe('/shared/notes.md'));
+		session.browser.clear();
+		await vi.waitFor(() => expect(session.browser.file?.path).toBe(first));
+		session.browser.move(1);
+		await vi.waitFor(() => expect(session.browser.file?.path).toBe(second));
+		session.browser.type('nothing');
+		expect(session.browser.selected).toBeUndefined();
+		await vi.waitFor(() => expect(session.browser.file).toBeUndefined());
+
+		for (const argument of ['/library/led-5mm.md', 'library/led-5mm.md', 'led-5']) {
+			expect(await session.submit(`/open ${argument}`)).toEqual({ type: 'files' });
+			expect(session.browser.selected?.path).toBe('/library/led-5mm.md');
+		}
+		expect(await session.submit('/open nothing')).toBeUndefined();
+		expect(session.notice).toMatch(/No file matches nothing/);
+		expect(await session.submit('/open')).toEqual({ type: 'files' });
+		expect(await session.submit('/try')).toEqual({ type: 'compose', text: scenarios[0]?.prompt });
+		expect(await session.submit('/quit')).toEqual({ type: 'quit' });
+		await session.submit('/nope');
+		expect(session.notice).toMatch(/Unknown command \/nope/);
+	});
+});
+
+describe('Session /attach while other work runs', () => {
+	it('stages a copy that lands after a room switch into the array the session holds by then', async () => {
 		const { host, session } = await started();
 		const gate = Promise.withResolvers<void>();
 		host.attachGate = gate.promise;
@@ -263,81 +270,15 @@ describe('Session /attach', () => {
 	});
 });
 
-describe('Session files and prompts', () => {
-	it('opens the files panel on the first file, and previews it', async () => {
-		const { session } = await started();
-		expect(await session.submit('/files')).toEqual({ type: 'files' });
-		await vi.waitFor(() => expect(session.browser.file?.path).toBe('/library/led-5mm.md'));
-		expect(session.browser.open).toBe(true);
-		expect(session.browser.file?.text).toBe('text of /library/led-5mm.md');
-	});
-
-	it('narrows the files as the person types, and follows the selection', async () => {
-		const { session } = await started();
-		await session.submit('/files');
-		session.browser.type('NOTES');
-		expect(session.browser.matches.map((file) => file.path)).toEqual(['/shared/notes.md']);
-		await vi.waitFor(() => expect(session.browser.file?.path).toBe('/shared/notes.md'));
-		session.browser.clear();
-		await vi.waitFor(() => expect(session.browser.file?.path).toBe('/library/led-5mm.md'));
-		session.browser.move(1);
-		await vi.waitFor(() => expect(session.browser.file?.path).toBe('/shared/notes.md'));
-		session.browser.type('nothing');
-		expect(session.browser.selected).toBeUndefined();
-		await vi.waitFor(() => expect(session.browser.file).toBeUndefined());
-	});
-
-	it('opens the panel on one file for /open, by path or by a part of it', async () => {
-		const { session } = await started();
-		await session.refreshRooms();
-		for (const argument of ['/library/led-5mm.md', 'library/led-5mm.md', 'led-5']) {
-			expect(await session.submit(`/open ${argument}`)).toEqual({ type: 'files' });
-			expect(session.browser.selected?.path).toBe('/library/led-5mm.md');
-		}
-	});
-
-	it('says so when /open matches no file, and opens the panel with none named', async () => {
-		const { session } = await started();
-		expect(await session.submit('/open nothing')).toBeUndefined();
-		expect(session.notice).toMatch(/No file matches nothing/);
-		expect(await session.submit('/open')).toEqual({ type: 'files' });
-	});
-
-	it('fills the composer with the room’s suggested question', async () => {
-		const { session } = await started();
-		expect(await session.submit('/try')).toEqual({ type: 'compose', text: 'Try bringup' });
-	});
-
-	it('returns a quit intent, and a message for an unknown command', async () => {
-		const { session } = await started();
-		expect(await session.submit('/quit')).toEqual({ type: 'quit' });
-		await session.submit('/nope');
-		expect(session.notice).toMatch(/Unknown command \/nope/);
-	});
-});
-
 describe('Session push updates', () => {
-	it('reads the open room when the host reports a change', async () => {
-		const { host, session } = await started();
-		const before = host.readCount;
-		host.table.set('bringup', view('bringup', { exchange: { owner: 'mira', from: 4, at: '' } }));
-		host.notify('bringup');
-		await vi.waitFor(() => expect(session.view?.exchange).toBeDefined());
-		expect(host.readCount).toBeGreaterThan(before);
-	});
-
-	it('watches only the open room, and moves the watch when the room changes', async () => {
+	it('watches only the open room, moves the watch with the room, and ends it on leave', async () => {
 		const { host, session } = await started();
 		expect(host.listeners('bringup')).toBe(1);
 		await session.submit('/room power');
 		expect(host.listeners('bringup')).toBe(0);
 		expect(host.listeners('power')).toBe(1);
-	});
-
-	it('ends the watch when the person leaves', async () => {
-		const { host, session } = await started();
 		await session.leave();
-		expect(host.listeners('bringup')).toBe(0);
+		expect(host.listeners('power')).toBe(0);
 	});
 
 	it('reads once more, not once per change, when changes land during a read', async () => {
@@ -437,7 +378,7 @@ describe('Session steps', () => {
 		expect(blockTypes(session)).not.toContain('steps');
 	});
 
-	it('picks an exchange by ordinal, and refuses one that does not exist', async () => {
+	it('picks an exchange by ordinal or by discussion key, and says so for no exchange or no trace', async () => {
 		const { host, session } = await started();
 		host.table.set(
 			'bringup',
@@ -445,53 +386,35 @@ describe('Session steps', () => {
 		);
 		host.traces.set('act-4', trace('act-4', true));
 		await session.refresh();
+		await session.submit('/steps');
+		expect(session.notice).toMatch(/holds no steps/);
 		await session.submit('/steps 1');
 		expect(session.steps?.id).toBe('act-4');
 		await session.submit('/steps 7');
 		expect(session.notice).toBe('No exchange 7.');
-	});
-
-	it('opens the steps of the exchange a discussion key names', async () => {
-		const { host, session } = await started();
-		host.table.set('bringup', view('bringup', { exchanges: [closedExchange(4)] }));
-		host.traces.set('act-4', trace('act-4', true));
-		await session.refresh();
+		await session.submit('/steps off');
 		await session.showSteps('4');
 		expect(session.steps?.id).toBe('act-4');
-	});
-
-	it('says so when the activation has no trace', async () => {
-		const { host, session } = await started();
-		host.table.set('bringup', view('bringup', { exchanges: [closedExchange(4)] }));
-		await session.refresh();
-		await session.submit('/steps');
-		expect(session.notice).toMatch(/holds no steps/);
 	});
 });
 
 describe('Session awaiting and approval', () => {
-	const awaiting = closedExchange(4, { outcome: { kind: 'awaiting', person: 'mira' } });
-
-	it('shows an awaiting exchange to the person it waits on, and to nobody else', async () => {
+	it('shows an awaiting exchange and a pending operation to the person they wait on only', async () => {
 		const { host, session } = await started();
+		const awaiting = closedExchange(4, { outcome: { kind: 'awaiting', person: 'mira' } });
 		host.table.set('bringup', view('bringup', { exchanges: [awaiting] }));
-		await session.refresh();
-		expect(session.attention).toEqual(['The exchange from message 4 waits for your reply.']);
-		expect(blockTypes(session)).toContain('note');
-		await session.submit('/user theo');
-		expect(session.attention).toEqual([]);
-	});
-
-	it('shows a pending operation to the owner of the exchange only', async () => {
-		const { host, session } = await started();
 		host.pendingApprovals = [
 			{ id: 3, instrument: 'led-current', setpoint: 30, unit: 'mA', owner: 'mira', at: AT },
 		];
 		await session.refresh();
-		expect(session.attention).toHaveLength(1);
-		expect(session.attention[0]).toMatch(/Operation 3 needs your answer.*led-current to 30 mA/);
+		expect(session.attention).toEqual([
+			'The exchange from message 4 waits for your reply.',
+			expect.stringMatching(/Operation 3 needs your answer.*led-current to 30 mA/),
+		]);
+		expect(blockTypes(session)).toContain('note');
 		await session.submit('/user theo');
 		expect(session.attention).toEqual([]);
+		host.table.set('bringup', view('bringup'));
 		host.pendingApprovals = [];
 		await session.submit('/user mira');
 		expect(session.attention).toEqual([]);

@@ -1,11 +1,8 @@
 /** Pi context ranges advance only when Pi gives their exact messages to a provider. */
 import { Agent } from '@earendil-works/pi-agent-core';
-import {
-	createAssistantMessageEventStream,
-	fauxAssistantMessage,
-	type UserMessage,
-} from '@earendil-works/pi-ai';
+import type { UserMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
+import { deferred } from '../../ambion/test/support/room.ts';
 import { quiet, scripted } from '../../ambion/test/support/scripted.ts';
 import { PiContext } from '../src/context.ts';
 import { stubModel } from '../src/services.ts';
@@ -18,26 +15,6 @@ const capturedSteers = () => {
 };
 
 describe('PiContext', () => {
-	it('acknowledges the initial view only when a real Pi request contains it', async () => {
-		const context = new PiContext();
-		const initial = context.initial(4, 'The initial room.', at);
-		expect(context.readThrough).toBe(0);
-		const requests: object[][] = [];
-		const provider = scripted(() => quiet());
-		const agent = new Agent({
-			initialState: { model: await stubModel('scripted/pi-context', 'pi-context') },
-			streamFn: (model, request, options) => {
-				requests.push(request.messages);
-				context.providerRequestStarted(request.messages);
-				return provider(model, request, options);
-			},
-		});
-		await agent.prompt(initial);
-		expect(requests).toHaveLength(1);
-		expect(requests[0]).toContain(initial);
-		expect(context.readThrough).toBe(4);
-	});
-
 	it('does not acknowledge a steer until Pi sends it in a later request', () => {
 		const context = new PiContext();
 		context.acknowledgeThrough(4);
@@ -49,39 +26,35 @@ describe('PiContext', () => {
 		expect(context.readThrough).toBe(7);
 	});
 
-	it('keeps a steer queued during a real provider request out of that request', async () => {
+	it('acknowledges the initial view at its real Pi request, and keeps a steer queued during that request out of it', async () => {
 		const context = new PiContext();
 		const initial = context.initial(4, 'The initial room.', at);
+		expect(context.readThrough).toBe(0);
 		const requests: object[][] = [];
-		let requestStarted = () => {};
-		const started = new Promise<void>((resolve) => {
-			requestStarted = resolve;
+		const started = deferred();
+		const finish = deferred();
+		const provider = scripted(async (_context, _agent, call) => {
+			if (call === 1) {
+				started.resolve();
+				await finish.promise;
+			}
+			return quiet();
 		});
-		let finish = () => {};
-		const provider = scripted(() => quiet());
-		let calls = 0;
 		const agent = new Agent({
 			initialState: { model: await stubModel('scripted/pi-context', 'pi-context') },
 			streamFn: (model, request, options) => {
-				calls += 1;
 				requests.push(request.messages);
 				context.providerRequestStarted(request.messages);
-				if (calls > 1) return provider(model, request, options);
-				const stream = createAssistantMessageEventStream();
-				finish = () => {
-					const message = fauxAssistantMessage('quiet', { stopReason: 'stop' });
-					stream.push({ type: 'start', partial: message });
-					stream.push({ type: 'done', reason: 'stop', message });
-				};
-				requestStarted();
-				return stream;
+				return provider(model, request, options);
 			},
 		});
 		const run = agent.prompt(initial);
-		await started;
+		await started.promise;
+		expect(requests[0]).toContain(initial);
+		expect(context.readThrough).toBe(4);
 		context.steer(agent, { after: 4, seq: 7, line: 'Steered during request.' }, at);
 		expect(context.readThrough).toBe(4);
-		finish();
+		finish.resolve();
 		await run;
 		expect(requests).toHaveLength(2);
 		expect(

@@ -5,36 +5,40 @@
  * so the test waits for what they do.
  */
 
-import { env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
+import { runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import type { LeaseResponse, RoomProtocol, Steer } from '@ambionframework/ambion/hosting';
 import { namespaced } from '@ambionframework/journal';
 import { piSessions } from '@ambionframework/pi-journal';
-import { expect, it } from 'vitest';
+import { expect, it, onTestFinished } from 'vitest';
 import { configure, type SeatEvent } from '../src/configure.ts';
 import { seatMetadata, sqlStorage } from '../src/storage.ts';
-import { scripted } from './scripted.ts';
+import { inside, roomOf, seatOf } from './objects.ts';
 import { until } from './until.ts';
-import { assistant, product, slow } from './worker.ts';
+import { configuration } from './worker.ts';
 
 type LeaseObservation = { id: string; phase: 'running' | 'ended'; reason?: string };
 
-it('wakes, runs the activation on its alarm, and the room sends an untaken wake again', async () => {
-	const room = env.ROOM.get(env.ROOM.idFromName('seat-test'));
-	const seat = env.SEAT.get(
-		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', 'seat-test', 'product'])),
-	);
+/** A room whose product seat answers, with priya's first question sent. */
+async function asked(name: string) {
+	const room = roomOf(name);
+	const seat = seatOf(name);
 	await room.start({
-		name: 'seat-test',
+		name,
 		summary: 'assistant',
 		agents: ['product', 'assistant'],
 		seats: { assistant: 'none', product: 'broadcast' },
 	});
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
-	await room.send({ from: 'priya', text: 'When is the pour?', key: 'q1' });
+	const exchange = await room.send({ from: 'priya', text: 'When is the pour?', key: 'q1' });
 	// At least one wake reached the seat. The room sends a wake nobody has taken
 	// again every 50 ms here, so how many arrive before the alarm runs is the
 	// runner's speed and not the room's behaviour.
 	expect(await until(() => seat.wakes())).toBeGreaterThanOrEqual(1);
+	return { room, seat, exchange };
+}
+
+it('wakes, runs the activation on its alarm, and the room sends an untaken wake again', async () => {
+	const { room, seat } = await asked('seat-test');
 
 	// the seat's alarm runs the activation: a lease claimed, a say, the lease renewed at the
 	// end of the pass, and released
@@ -50,14 +54,8 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	const leases = await until(async () =>
 		runInDurableObject(room, async (_instance, state) => {
 			const journal = await namespaced(sqlStorage(state), 'ambion/room').open('seat-test');
-			const stored = (await journal.read(0)).entries.map(
-				(entry) =>
-					entry.entry as {
-						kind: string;
-						body: LeaseObservation;
-					},
-			);
-			const found = stored
+			const found = (await journal.read(0)).entries
+				.map((entry) => entry.entry as { kind: string; body: LeaseObservation })
 				.filter((entry) => entry.kind === 'lease' && entry.body.id === 'message:4:product:1')
 				.map((entry) => entry.body);
 			return found.at(-1)?.phase === 'ended' ? found : undefined;
@@ -96,22 +94,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 });
 
 it('cancels an unclaimed wake over RPC and closes its exchange', async () => {
-	const room = env.ROOM.get(env.ROOM.idFromName('cut-test'));
-	const seat = env.SEAT.get(
-		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', 'cut-test', 'product'])),
-	);
-	await room.start({
-		name: 'cut-test',
-		summary: 'assistant',
-		agents: ['product', 'assistant'],
-		seats: { assistant: 'none', product: 'broadcast' },
-	});
-	await room.visit({ name: 'priya', identity: 'Project manager.' });
-	const exchange = await room.send({ from: 'priya', text: 'When is the pour?', key: 'q1' });
-	// At least one wake reached the seat. The room sends a wake nobody has taken
-	// again every 50 ms here, so how many arrive before the alarm runs is the
-	// runner's speed and not the room's behaviour.
-	expect(await until(() => seat.wakes())).toBeGreaterThanOrEqual(1);
+	const { room, seat, exchange } = await asked('cut-test');
 
 	// The room records the cancellation and writes off the unclaimed wake.
 	await room.abort();
@@ -131,9 +114,7 @@ it('cancels an unclaimed wake over RPC and closes its exchange', async () => {
 });
 
 it('keeps the first pending activation when different wakes arrive together', async () => {
-	const seat = env.SEAT.get(
-		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', 'wake-race', 'product'])),
-	);
+	const seat = seatOf('wake-race');
 	await seat.hold(true);
 	await Promise.all([
 		seat.wake({ room: 'wake-race', seat: 'product', activation: 'first' }),
@@ -143,18 +124,17 @@ it('keeps the first pending activation when different wakes arrive together', as
 });
 
 it('forwards steering to the live runner without recording a wake', async () => {
-	type FakeRunner = { last?: Steer; steer(value: Steer): Promise<void> };
-	const seat = env.SEAT.get(
-		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', 'steer-forward', 'product'])),
-	);
-	const fake: FakeRunner = {
+	type Runner = { last?: Steer; steer(value: Steer): Promise<void> };
+	type Holder = { runner?: Runner };
+	const seat = seatOf('steer-forward');
+	const runner: Runner = {
 		steer(value) {
 			this.last = value;
 			return Promise.resolve();
 		},
 	};
-	await runInDurableObject(seat, async (instance) => {
-		(instance as unknown as { runner: FakeRunner }).runner = fake;
+	await inside<Holder, void>(seat, async (object) => {
+		object.runner = runner;
 	});
 	const steer: Steer = {
 		room: 'steer-forward',
@@ -170,67 +150,64 @@ it('forwards steering to the live runner without recording a wake', async () => 
 		},
 	};
 	await seat.steer(steer);
-	const forwarded = await runInDurableObject(
-		seat,
-		async (instance) => (instance as unknown as { runner?: FakeRunner }).runner?.last,
-	);
-	expect(forwarded).toEqual(steer);
+	expect(
+		await inside<Holder, Steer | undefined>(seat, async (object) => object.runner?.last),
+	).toEqual(steer);
 	expect(await seat.wakes()).toBe(0);
 	expect(
 		await runInDurableObject(seat, async (_instance, state) => state.storage.getAlarm()),
 	).toBeNull();
-	await runInDurableObject(seat, async (instance) => {
-		(instance as unknown as { runner?: FakeRunner }).runner = undefined;
+	await inside<Holder, void>(seat, async (object) => {
+		object.runner = undefined;
 	});
 });
 
-it('bounds recovery release and clears local state after an unknown result', async () => {
-	const name = 'seat-recovery-release-timeout';
-	const activation = 'message:1:product:1';
-	const seat = env.SEAT.get(
-		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', name, 'product'])),
-	);
-	const events: SeatEvent[] = [];
-	const defaults = {
-		agents: [assistant, product, slow],
-		stream: scripted,
-		limits: { delivery: { resend: 50 } },
+type SeatInternals = {
+	metadata: {
+		change: (
+			change: (current: Readonly<Record<string, unknown>>) => {
+				patch: Record<string, unknown>;
+			},
+		) => Promise<unknown>;
 	};
+	roomFor: (room: string) => RoomProtocol;
+};
+
+/**
+ * A seat that recovers a running activation on its alarm, against a room whose
+ * release call `lease` answers. A room call times out after 10 ms. The test
+ * restores the tier configuration when it ends.
+ */
+async function recovering(
+	name: string,
+	lease: (metadata: ReturnType<typeof seatMetadata>) => Promise<LeaseResponse>,
+) {
+	const activation = 'message:1:product:1';
+	const seat = seatOf(name);
+	const events: SeatEvent[] = [];
 	configure({
-		...defaults,
-		limits: { ...defaults.limits, call: { attempts: 1, timeout: 10 } },
+		...configuration,
+		limits: { ...configuration.limits, call: { attempts: 1, timeout: 10 } },
 		onSeatEvent: (event) => events.push(event),
 	});
-	try {
-		await runInDurableObject(seat, async (instance, state) => {
-			type Internal = {
-				metadata: {
-					change: (
-						change: (current: Readonly<Record<string, unknown>>) => {
-							patch: Record<string, unknown>;
-						},
-					) => Promise<unknown>;
-				};
-				roomFor: (room: string) => RoomProtocol;
-			};
-			const object = instance as unknown as Internal;
-			await object.metadata.change(() => ({
-				patch: { room: name, seat: 'product', activation, phase: 'running' },
-			}));
-			object.roomFor = () => ({
-				view: async () => ({ stale: 'unused' }),
-				commit: async () => ({ stale: 'unused' }),
-				lease: async () => new Promise<LeaseResponse>(() => {}),
-			});
-			await state.storage.setAlarm(Date.now());
+	onTestFinished(() => configure(configuration));
+	await inside<SeatInternals, void>(seat, async (object, state) => {
+		await object.metadata.change(() => ({
+			patch: { room: name, seat: 'product', activation, phase: 'running' },
+		}));
+		const metadata = seatMetadata(sqlStorage(state));
+		object.roomFor = () => ({
+			view: async () => ({ stale: 'unused' }),
+			commit: async () => ({ stale: 'unused' }),
+			lease: () => lease(metadata),
 		});
-
-		await runDurableObjectAlarm(seat);
-		await new Promise((resolve) => setTimeout(resolve, 25));
-		const metadata = await runInDurableObject(seat, (_instance, state) =>
-			seatMetadata(sqlStorage(state)).read(),
-		);
-		expect(metadata.activation).toBeUndefined();
+		await state.storage.setAlarm(Date.now());
+	});
+	await runDurableObjectAlarm(seat);
+	await new Promise((resolve) => setTimeout(resolve, 25));
+	const read = () =>
+		runInDurableObject(seat, (_instance, state) => seatMetadata(sqlStorage(state)).read());
+	const timedOut = () =>
 		expect(events).toContainEqual(
 			expect.objectContaining({
 				event: 'delivery_error',
@@ -239,96 +216,41 @@ it('bounds recovery release and clears local state after an unknown result', asy
 				error: 'Room call timed out.',
 			}),
 		);
-	} finally {
-		configure(defaults);
-	}
+	return { read, timedOut };
+}
+
+it('bounds recovery release and clears local state after an unknown result', async () => {
+	const { read, timedOut } = await recovering(
+		'seat-recovery-release-timeout',
+		() => new Promise<LeaseResponse>(() => {}),
+	);
+	expect((await read()).activation).toBeUndefined();
+	timedOut();
 });
 
 it('keeps newer metadata when a timed out recovery release replies late', async () => {
-	const name = 'seat-recovery-release-late';
-	const activation = 'message:1:product:1';
 	const newer = 'message:2:product:1';
-	const seat = env.SEAT.get(
-		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', name, 'product'])),
-	);
-	let resolveLate: (response: LeaseResponse) => void = () => {};
-	const late = new Promise<LeaseResponse>((resolve) => {
-		resolveLate = resolve;
+	const late = Promise.withResolvers<LeaseResponse>();
+	onTestFinished(() => late.resolve({ stale: 'late' }));
+	const name = 'seat-recovery-release-late';
+	const { read, timedOut } = await recovering(name, async (metadata) => {
+		await metadata.change(() => ({
+			patch: { room: name, seat: 'product', activation: newer, phase: 'pending' },
+		}));
+		return late.promise;
 	});
-	const events: SeatEvent[] = [];
-	const defaults = {
-		agents: [assistant, product, slow],
-		stream: scripted,
-		limits: { delivery: { resend: 50 } },
-	};
-	configure({
-		...defaults,
-		limits: { ...defaults.limits, call: { attempts: 1, timeout: 10 } },
-		onSeatEvent: (event) => events.push(event),
-	});
-	try {
-		await runInDurableObject(seat, async (instance, state) => {
-			type Internal = {
-				metadata: {
-					change: (
-						change: (current: Readonly<Record<string, unknown>>) => {
-							patch: Record<string, unknown>;
-						},
-					) => Promise<unknown>;
-				};
-				roomFor: (room: string) => RoomProtocol;
-			};
-			const object = instance as unknown as Internal;
-			await object.metadata.change(() => ({
-				patch: { room: name, seat: 'product', activation, phase: 'running' },
-			}));
-			const metadata = seatMetadata(sqlStorage(state));
-			object.roomFor = () => ({
-				view: async () => ({ stale: 'unused' }),
-				commit: async () => ({ stale: 'unused' }),
-				lease: async () => {
-					await metadata.change(() => ({
-						patch: { room: name, seat: 'product', activation: newer, phase: 'pending' },
-					}));
-					return late;
-				},
-			});
-			await state.storage.setAlarm(Date.now());
-		});
-
-		await runDurableObjectAlarm(seat);
-		await new Promise((resolve) => setTimeout(resolve, 25));
-		const metadata = await runInDurableObject(seat, (_instance, state) =>
-			seatMetadata(sqlStorage(state)).read(),
-		);
-		expect(metadata.activation).toBe(newer);
-		resolveLate({ ok: { expiresAt: Date.now() + 10_000, lastSeq: 1 } });
-		await new Promise((resolve) => setTimeout(resolve, 20));
-		const afterLate = await runInDurableObject(seat, (_instance, state) =>
-			seatMetadata(sqlStorage(state)).read(),
-		);
-		expect(afterLate.activation).toBe(newer);
-		expect(events).toContainEqual(
-			expect.objectContaining({
-				event: 'delivery_error',
-				activation,
-				operation: 'release',
-				error: 'Room call timed out.',
-			}),
-		);
-	} finally {
-		resolveLate({ stale: 'late' });
-		configure(defaults);
-	}
+	expect((await read()).activation).toBe(newer);
+	late.resolve({ ok: { expiresAt: Date.now() + 10_000, lastSeq: 1 } });
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	expect((await read()).activation).toBe(newer);
+	timedOut();
 });
 
 it.each(['idle', 'pending'] as const)(
 	'ignores steering to a %s seat without changing metadata or alarms',
 	async (phase) => {
 		const name = `steer-${phase}`;
-		const seat = env.SEAT.get(
-			env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', name, 'product'])),
-		);
+		const seat = seatOf(name);
 		if (phase === 'pending') {
 			await seat.hold(true);
 			await seat.wake({ room: name, seat: 'product', activation: 'message:1:product:1' });

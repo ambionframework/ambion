@@ -17,6 +17,7 @@ import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { advance, emptyProjection, projectState, replay } from '../src/room/projection.ts';
 import { readView } from '../src/room/read.ts';
+import { freeze, mulberry32 } from './support/core-failure.ts';
 
 const SEEDS = Number(process.env.AMBION_SEEDS ?? 50);
 const STEPS = 160;
@@ -24,26 +25,6 @@ const retry = { backoff: (attempt: number) => attempt * 30_000 };
 const start = Date.parse('2026-01-01T09:00:00.000Z');
 const PEOPLE = ['priya', 'sam'];
 const SEATS = ['scout', 'writer', 'critic', 'extra'];
-
-/** A small, fast, seedable generator: the walk is the same for the same seed. */
-function mulberry32(seed: number): () => number {
-	let a = seed >>> 0;
-	return () => {
-		a = (a + 0x6d2b79f5) >>> 0;
-		let t = a;
-		t = Math.imul(t ^ (t >>> 15), t | 1);
-		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-	};
-}
-
-/** Freeze a value so a mutation fails where it happens. */
-function freeze(value: unknown): void {
-	if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return;
-	if (value instanceof Map) for (const entry of value.values()) freeze(entry);
-	else for (const entry of Object.values(value)) freeze(entry);
-	Object.freeze(value);
-}
 
 /** The walk: what it has written so far, and the random source. */
 class Walk {

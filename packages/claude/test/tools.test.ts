@@ -7,7 +7,8 @@ import { Type } from 'typebox';
 import { expect, it } from 'vitest';
 import { open, seat, viewOf } from './support.ts';
 
-it('lists the three room tools with JSON Schema, and the tools of the agent beside them', async () => {
+it('lists the room tools with JSON Schema beside the agent tools, runs an agent tool with provenance, and gives the model a tool error as an error result', async () => {
+	const seen: unknown[] = [];
 	const lookup = defineTool({
 		name: 'lookup',
 		description: 'Look up one record.',
@@ -15,48 +16,49 @@ it('lists the three room tools with JSON Schema, and the tools of the agent besi
 			id: Type.String({ description: 'The record id.' }),
 			depth: Type.Optional(Type.Number()),
 		}),
-		execute: () => 'ok',
+		execute: (params, context) => {
+			seen.push({ params, ...context });
+			return 'found r1';
+		},
 	});
-	// The fake lists the tools when it first calls one.
-	const withCall = open(
-		{ turns: [[{ call: { tool: 'lookup', args: { id: 'r1' } } }]] },
-		seat({ tools: [lookup] }),
+	const broken = defineTool({
+		name: 'broken',
+		description: 'Always fails.',
+		parameters: Type.Object({}),
+		execute: () => {
+			throw new Error('The archive is closed.');
+		},
+	});
+	const run = open(
+		{
+			turns: [
+				[{ call: { tool: 'lookup', args: { id: 'r1' } } }, { call: { tool: 'broken', args: {} } }],
+			],
+		},
+		seat({ tools: [lookup, broken] }),
 	);
-	await withCall.session.pass({ kind: 'view', view: viewOf() });
-	const listed = withCall.log().find((line) => 'tools' in line)?.tools as {
+	await run.session.pass({ kind: 'view', view: viewOf() });
+	// The fake lists the tools when it first calls one.
+	const listed = run.log().find((line) => 'tools' in line)?.tools as {
 		name: string;
-		description: string;
 		inputSchema: {
-			properties: Record<string, { type?: string; description?: string }>;
+			properties: Record<string, { description?: string }>;
 			required?: string[];
 		};
 	}[];
-	expect(listed.map((tool) => tool.name).sort()).toEqual(['lookup', 'say', 'seat', 'unseat']);
+	expect(listed.map((tool) => tool.name).sort()).toEqual([
+		'broken',
+		'lookup',
+		'say',
+		'seat',
+		'unseat',
+	]);
 	const say = listed.find((tool) => tool.name === 'say');
 	expect(Object.keys(say?.inputSchema.properties ?? {}).sort()).toEqual(['refs', 'text', 'to']);
 	expect(say?.inputSchema.required).toEqual(['text']);
 	const found = listed.find((tool) => tool.name === 'lookup');
 	expect(found?.inputSchema.properties.id?.description).toBe('The record id.');
 	expect(found?.inputSchema.required).toEqual(['id']);
-	withCall.session.close?.();
-});
-
-it('runs an agent tool with provenance: the agent, the room, the activation and the call', async () => {
-	const seen: unknown[] = [];
-	const lookup = defineTool({
-		name: 'lookup',
-		description: 'Look up one record.',
-		parameters: Type.Object({ id: Type.String() }),
-		execute: (params, context) => {
-			seen.push({ params, ...context });
-			return 'found r1';
-		},
-	});
-	const run = open(
-		{ turns: [[{ call: { tool: 'lookup', args: { id: 'r1' } } }]] },
-		seat({ tools: [lookup] }),
-	);
-	await run.session.pass({ kind: 'view', view: viewOf() });
 	expect(seen).toEqual([
 		{
 			params: { id: 'r1' },
@@ -69,25 +71,9 @@ it('runs an agent tool with provenance: the agent, the room, the activation and 
 		},
 	]);
 	const results = run.steps.filter((step) => step.type === 'tool_result');
-	expect(results).toMatchObject([{ output: [{ type: 'text', text: 'found r1' }] }]);
-	run.session.close?.();
-});
-
-it('gives the model a tool error as an error result', async () => {
-	const broken = defineTool({
-		name: 'broken',
-		description: 'Always fails.',
-		parameters: Type.Object({}),
-		execute: () => {
-			throw new Error('The archive is closed.');
-		},
-	});
-	const run = open(
-		{ turns: [[{ call: { tool: 'broken', args: {} } }]] },
-		seat({ tools: [broken] }),
-	);
-	await run.session.pass({ kind: 'view', view: viewOf() });
-	const results = run.steps.filter((step) => step.type === 'tool_result');
-	expect(results).toMatchObject([{ error: 'The archive is closed.' }]);
+	expect(results).toMatchObject([
+		{ output: [{ type: 'text', text: 'found r1' }] },
+		{ error: 'The archive is closed.' },
+	]);
 	run.session.close?.();
 });

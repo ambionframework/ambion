@@ -1,35 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { pi, piExecution } from '../../pi/src/index.ts';
+import { piExecution } from '../../pi/src/index.ts';
 import { inProcessTransport } from '../src/hosting.ts';
-import { createRuntime, defineAgent, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
+import {
+	createRuntime,
+	defineHuman,
+	resumeRoom,
+	type StartRoomOptions,
+	startRoom,
+} from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
-import { roomName, storedOf, waitForRoom } from './support/room.ts';
+import { roomName, scriptedAgent, storedOf, waitForRoom } from './support/room.ts';
 import { isClosing, quiet, scripted, speak, toolNames } from './support/scripted.ts';
+import { openFor, stopAtEnd } from './support/stop.ts';
 import { memory, storages } from './support/storage.ts';
 
-const assistant = defineAgent({
-	name: 'assistant',
-	identity: 'Coordinates the room.',
-	executor: pi({ instructions: 'Stay concise.', model: 'scripted/assistant' }),
-});
-const builder = defineAgent({
-	name: 'builder',
-	identity: 'Builds the result.',
-	executor: pi({ instructions: 'Build.', model: 'scripted/builder' }),
-});
-const reviewer = defineAgent({
-	name: 'reviewer',
-	identity: 'Reviews the result.',
-	executor: pi({ instructions: 'Review.', model: 'scripted/reviewer' }),
-});
+const assistant = scriptedAgent('assistant');
+const builder = scriptedAgent('builder');
+const reviewer = scriptedAgent('reviewer');
+const person = defineHuman({ name: 'priya', identity: 'The request owner.' });
 
-async function open(options: Partial<Parameters<typeof startRoom>[0]> = {}) {
-	const opened = await memory.open();
+async function open(options: Partial<StartRoomOptions> = {}) {
+	const opened = await openFor(memory);
 	const runtime = createRuntime({
 		storage: opened.storage,
 		clock: fakeClock(),
 		transport: inProcessTransport(),
-		execution: piExecution({ stream: scripted(() => quiet()) }),
 	});
 	const room = await startRoom({
 		name: roomName('assistant-shorthand'),
@@ -40,137 +35,82 @@ async function open(options: Partial<Parameters<typeof startRoom>[0]> = {}) {
 		execution: piExecution({ stream: scripted(() => quiet()) }),
 		...options,
 	});
-	return { opened, room };
+	return { opened, room: stopAtEnd(room) };
 }
 
+const seated = (seats: [string, string][]) =>
+	seats.map(([name, attention]) => ({ name, attention }));
+const everySeat = seated([
+	['assistant', 'broadcast'],
+	['builder', 'named'],
+	['reviewer', 'none'],
+]);
+
 describe('assistant room shorthand', () => {
-	it('expands to one broadcast seat and the assistant summary writer', async () => {
-		const { opened, room } = await open();
-		try {
-			expect((await room.read()).participants).toEqual(
-				expect.arrayContaining([
-					expect.objectContaining({ name: 'assistant', attention: 'broadcast' }),
-					expect.objectContaining({ name: 'builder', attention: 'named' }),
-					expect.objectContaining({ name: 'reviewer', attention: 'none' }),
-				]),
-			);
-			const entries = await storedOf(opened.journals, room.name);
-			const composition = entries.find((entry) => entry.kind === 'composition');
-			expect(composition?.body).toMatchObject({ version: 2, summary: 'assistant' });
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
-	});
-
-	it('seats only the assistant when an empty seat map is supplied', async () => {
-		const { opened, room } = await open({ seats: {} });
-		try {
-			expect((await room.read()).participants.map((seat) => seat.name)).toEqual(['assistant']);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
-	});
-
-	it('keeps every defined agent at broadcast when seats is omitted', async () => {
-		const { opened, room } = await open({ seats: undefined });
-		try {
+	it.each<[string, Partial<StartRoomOptions>, ReturnType<typeof seated>]>([
+		['the default seat map, with one broadcast seat for the assistant', {}, everySeat],
+		[
+			'an empty seat map, with only the assistant',
+			{ seats: {} },
+			seated([['assistant', 'broadcast']]),
+		],
+		[
+			'an omitted seat map, with every agent at broadcast',
+			{ seats: undefined },
+			seated([
+				['assistant', 'broadcast'],
+				['builder', 'broadcast'],
+				['reviewer', 'broadcast'],
+			]),
+		],
+		[
+			'matching explicit settings',
+			{
+				summary: 'assistant',
+				seats: { assistant: 'broadcast', builder: 'named', reviewer: 'none' },
+			},
+			everySeat,
+		],
+		[
+			'an assistant whose name is an own key of a plain object',
+			{ assistant: scriptedAgent('constructor'), seats: {} },
+			seated([['constructor', 'broadcast']]),
+		],
+	])(
+		'expands %s, and records the assistant as the summary writer',
+		async (_case, options, seats) => {
+			const { opened, room } = await open(options);
 			expect(
-				(await room.read()).participants
-					.filter((seat) => seat.kind === 'agent')
-					.map(({ name, attention }) => ({ name, attention })),
-			).toEqual([
-				{ name: 'assistant', attention: 'broadcast' },
-				{ name: 'builder', attention: 'broadcast' },
-				{ name: 'reviewer', attention: 'broadcast' },
-			]);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
-	});
+				(await room.read()).participants.map((seat) => ({
+					name: seat.name,
+					attention: seat.kind === 'agent' ? seat.attention : undefined,
+				})),
+			).toEqual(seats);
+			const composition = (await storedOf(opened.journals, room.name)).find(
+				(entry) => entry.kind === 'composition',
+			);
+			expect(composition?.body).toMatchObject({ version: 2, summary: seats[0]?.name });
+		},
+	);
 
-	it('rejects duplicate and conflicting assistant configuration', async () => {
+	it('rejects duplicate and conflicting assistant configuration, and reserves no name', async () => {
 		await expect(open({ agents: [assistant] })).rejects.toThrow("Duplicate agent name 'assistant'");
 		await expect(open({ summary: 'builder' })).rejects.toThrow('conflicts with summary');
 		await expect(open({ seats: { assistant: 'named' } })).rejects.toThrow("must use 'broadcast'");
-	});
 
-	it('accepts matching explicit assistant settings', async () => {
-		const { opened, room } = await open({
-			summary: 'assistant',
-			seats: { assistant: 'broadcast', builder: 'named', reviewer: 'none' },
-		});
-		try {
-			expect((await room.read()).participants.map((seat) => seat.name)).toEqual([
-				'assistant',
-				'builder',
-				'reviewer',
-			]);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
-	});
-
-	it('does not reserve a failed configuration name', async () => {
 		const name = roomName('assistant-conflict-retry');
-		const opened = await memory.open();
+		const opened = await openFor(memory);
 		const runtime = createRuntime({ storage: opened.storage });
 		await expect(startRoom({ name, runtime, assistant, summary: 'builder' })).rejects.toThrow(
 			'conflicts with summary',
 		);
 		expect(await storedOf(opened.journals, name)).toEqual([]);
-		const room = await startRoom({ name, runtime, assistant });
-		try {
-			expect(room.name).toBe(name);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
-	});
-
-	it('checks assistant names as own seat keys', async () => {
-		const special = defineAgent({
-			name: 'constructor',
-			identity: 'Special assistant.',
-			executor: pi({ instructions: 'Stay quiet.', model: 'scripted/constructor' }),
-		});
-		const opened = await memory.open();
-		const runtime = createRuntime({
-			storage: opened.storage,
-			clock: fakeClock(),
-			transport: inProcessTransport(),
-			execution: piExecution({ stream: scripted(() => quiet()) }),
-		});
-		try {
-			const room = await startRoom({
-				name: roomName('assistant-special-name'),
-				runtime,
-				assistant: special,
-				seats: {},
-			});
-			expect((await room.read()).participants.map((seat) => seat.name)).toEqual(['constructor']);
-			await room.stop();
-		} finally {
-			await opened.dispose();
-		}
+		expect(stopAtEnd(await startRoom({ name, runtime, assistant })).name).toBe(name);
 	});
 
 	it('uses the assistant shorthand for a durable closing summary', async () => {
-		const opened = await memory.open();
-		const runtime = createRuntime({
-			storage: opened.storage,
-			clock: fakeClock(),
-			transport: inProcessTransport(),
-		});
-		const person = defineHuman({ name: 'priya', identity: 'The request owner.' });
 		const closingTools: string[][] = [];
-		const room = await startRoom({
-			name: roomName('assistant-summary'),
-			runtime,
-			assistant,
+		const { room } = await open({
 			agents: [builder],
 			seats: { builder: 'broadcast' },
 			execution: piExecution({
@@ -184,82 +124,69 @@ describe('assistant room shorthand', () => {
 				}),
 			}),
 		});
-		try {
-			const exchange = await (
-				await room.visit(person)
-			).send({ text: 'Question?', key: 'summary-1' });
-			const response = await exchange.waitForSummary();
-			expect(response).toMatchObject({
-				kind: 'summary',
-				from: 'assistant',
-				to: 'priya',
-				text: 'The answer, summarized.',
-			});
-			expect(closingTools).toEqual([['say']]);
-			expect(
-				(await exchange.waitForClose()).some(
-					(message) => message.kind === 'said' && message.from === 'builder',
-				),
-			).toBe(true);
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
+		const exchange = await (await room.visit(person)).send({ text: 'Question?', key: 'summary-1' });
+		expect(await exchange.waitForSummary()).toMatchObject({
+			kind: 'summary',
+			from: 'assistant',
+			to: 'priya',
+			text: 'The answer, summarized.',
+		});
+		expect(closingTools).toEqual([['say']]);
+		expect(
+			(await exchange.waitForClose()).some(
+				(message) => message.kind === 'said' && message.from === 'builder',
+			),
+		).toBe(true);
 	});
 
 	it.each(storages)(
 		'preserves changed membership and summary assignment after $name resume',
 		async (storage) => {
-			const opened = await storage.open();
-			const runtime = createRuntime({
-				storage: opened.storage,
-				execution: piExecution({ stream: scripted(() => quiet()) }),
-			});
-			const room = await startRoom({
-				name: roomName('assistant-resume'),
-				runtime,
-				assistant,
-				agents: [builder, reviewer],
-				seats: { builder: 'named' },
-			});
-			try {
-				await room.unseat(builder.name);
-				await room.seat(reviewer.name);
-				await waitForRoom(room);
-				await room.stop();
-				const resumedRuntime = createRuntime({ storage: opened.storage });
-				await expect(
-					resumeRoom(room.name, { runtime: resumedRuntime, agents: [builder, reviewer] }),
-				).rejects.toThrow();
-				const resumed = await resumeRoom(room.name, {
-					runtime: resumedRuntime,
+			const opened = await openFor(storage);
+			const room = stopAtEnd(
+				await startRoom({
+					name: roomName('assistant-resume'),
+					runtime: createRuntime({
+						storage: opened.storage,
+						execution: piExecution({ stream: scripted(() => quiet()) }),
+					}),
+					assistant,
+					agents: [builder, reviewer],
+					seats: { builder: 'named' },
+				}),
+			);
+			await room.unseat(builder.name);
+			await room.seat(reviewer.name);
+			await waitForRoom(room);
+			await room.stop();
+			const runtime = createRuntime({ storage: opened.storage });
+			await expect(
+				resumeRoom(room.name, { runtime, agents: [builder, reviewer] }),
+			).rejects.toThrow();
+			const resumed = stopAtEnd(
+				await resumeRoom(room.name, {
+					runtime,
 					agents: [assistant, builder, reviewer],
 					execution: piExecution({
 						stream: scripted((context) =>
 							isClosing(context) ? speak('Resumed summary.') : quiet(),
 						),
 					}),
-				});
-				try {
-					expect((await resumed.read()).participants.map((seat) => seat.name)).toEqual([
-						'assistant',
-						'reviewer',
-					]);
-					const person = defineHuman({ name: 'priya', identity: 'Request owner.' });
-					const exchange = await (
-						await resumed.visit(person)
-					).send({ text: 'Record the current status.' });
-					expect(await exchange.waitForSummary()).toMatchObject({
-						from: assistant.name,
-						text: 'Resumed summary.',
-					});
-				} finally {
-					await resumed.stop();
-				}
-			} finally {
-				await room.stop();
-				await opened.dispose();
-			}
+				}),
+			);
+			expect((await resumed.read()).participants.map((seat) => seat.name)).toEqual([
+				'assistant',
+				'reviewer',
+			]);
+			const exchange = await (
+				await resumed.visit(person)
+			).send({
+				text: 'Record the current status.',
+			});
+			expect(await exchange.waitForSummary()).toMatchObject({
+				from: assistant.name,
+				text: 'Resumed summary.',
+			});
 		},
 	);
 });
