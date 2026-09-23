@@ -41,7 +41,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	const { room, seat } = await asked('seat-test');
 
 	// the seat's alarm runs the activation: a lease claimed, a say, the lease renewed at the
-	// end of the pass, and released
+	// end of the pass, and released. workerd may run the alarm first; the call then returns.
 	await runDurableObjectAlarm(seat);
 	const said = await until(async () => {
 		const messages = (await room.read()).messages;

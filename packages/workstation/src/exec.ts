@@ -191,29 +191,31 @@ function finished(
 		};
 		let grace: NodeJS.Timeout | undefined;
 		let drainEnd = Number.POSITIVE_INFINITY;
-		const arm = () => {
+		// Only output sets `cut`: a timer that waits again after a stall saw no output.
+		const arm = (outputArrived: boolean) => {
 			if (!ending.exited) return;
 			clearTimeout(grace);
 			const left = Math.max(0, drainEnd - Date.now());
-			const cut = left < EXIT_GRACE_MS;
+			const cut = outputArrived && left < EXIT_GRACE_MS;
 			const wait = Math.min(EXIT_GRACE_MS, left);
 			const due = Date.now() + wait;
 			grace = setTimeout(() => {
-				if (!cut && Date.now() - due > GRACE_LATE_MS) return arm();
+				const stalled = Date.now() - due > GRACE_LATE_MS;
+				if (!cut && left > 0 && stalled) return arm(false);
 				ending = { ...ending, cut };
 				channel.close();
 			}, wait);
 		};
 		channel.on('data', (chunk: Buffer) => {
 			output.push(chunk);
-			arm();
+			arm(true);
 		});
 		channel.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
 		channel.on('exit', (code: number | null, signal?: string) => {
 			const late = deadline.aborted;
 			ending = { exited: true, late, cut: false, code, signal: signal ?? undefined };
 			drainEnd = Date.now() + EXIT_DRAIN_MS;
-			arm();
+			arm(false);
 		});
 		channel.on('close', () => {
 			clearTimeout(grace);

@@ -155,19 +155,22 @@ describe.skipIf(!hasSetsid)('a command that ends early', () => {
 		const backend = backendFor(started);
 		const env = await backend.connect({ name: 'ada' });
 		const chatty = '(while :; do echo tick; sleep 0.1; done) & echo started';
+		const quiet = 'sleep 30 & echo started';
 		// Under the short deadline the deadline ends the wait; under the long one the drain limit
 		// does, and the view says that it cut the output. A stall of this process longer than the
-		// grace makes the grace timer fire late, and the drain limit still ends the wait.
-		for (const [timeout, notice, stall] of [
-			[2, false, 0],
-			[20, true, 0],
-			[20, true, 1_700],
+		// grace makes the grace timer fire late, and the drain limit still ends the wait. The view
+		// says that it cut the output only when output arrived before the limit.
+		for (const [command, timeout, notice, at, stall] of [
+			[chatty, 2, false, 0, 0],
+			[chatty, 20, true, 0, 0],
+			[chatty, 20, true, 3_000, 1_700],
+			[quiet, 20, false, 700, 4_300],
 		] as const) {
-			if (stall > 0) setTimeout(() => blockFor(stall), 3_000);
+			if (stall > 0) setTimeout(() => blockFor(stall), at);
 			const updates: ShellOutputUpdate[] = [];
 			const began = Date.now();
 			const result = await env.exec(
-				chatty,
+				command,
 				{ timeout, onUpdate: (update) => updates.push(update) },
 				ctx,
 			);

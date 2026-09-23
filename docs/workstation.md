@@ -335,7 +335,8 @@ window adjustment.
 **A stall of the host does not count as a quiet channel.** When the
 1-second timer fires more than half a second late, the process stalled,
 and output can wait unread behind the stall. `SshEnv` then waits one more
-second. The 5-second limit still ends the wait.
+second. The 5-second limit still ends the wait. A wait that ends with no
+output after the stall adds no drain notice to the view.
 
 **A command that exits before its deadline gives its exit status.** A
 background child that keeps writing after the command exits holds the

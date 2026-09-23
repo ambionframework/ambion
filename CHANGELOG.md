@@ -2,10 +2,10 @@
 
 ## Unreleased
 
-**A second seat alarm leaves the live run alone.** `SeatObject.alarm()`
+**A second seat alarm returns while a run is live.** `SeatObject.alarm()`
 returns at once while a run is live in the object. Before, a second call
-took the live run for one that an eviction lost, released its lease as
-`failed`, and the run's next say was refused. workerd runs one alarm at a
+treated the live run as one that an eviction lost. It released the lease
+as `failed`, and the room refused the run's next say. workerd runs one alarm at a
 time, and a test that calls `alarm()` directly, as `runDurableObjectAlarm`
 does, reached this path. An object that was evicted mid-activation holds no
 live run, and its next alarm still releases the lost run.
@@ -14,7 +14,8 @@ live run, and its next alarm still releases the lost run.
 the exit status, the channel closes 1 second after the last output. When
 that timer fires more than half a second late, the process stalled, and
 output can wait unread behind the stall. `SshEnv` then waits one more
-second, up to the 5-second limit.
+second, up to the 5-second limit. The view ends with the drain notice only
+when output arrived in the last second before the limit.
 
 **New package: `@ambionframework/just-bash`.** It holds `memoryBackend`,
 `directoryBackend`, and their `MemoryBackendFile`, `MemoryBackendOptions`,
