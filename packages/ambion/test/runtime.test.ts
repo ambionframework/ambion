@@ -1,46 +1,64 @@
 /**
  * The runtime is what a host owns. Two runtimes in one process are two
  * hosts: they share nothing, and a room on a durable storage is read by a
- * second runtime over the same storage.
+ * second runtime over the same storage. A host reconciles a room by name.
  */
 import { readdir } from 'node:fs/promises';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { hostingOf, reconcileRoom } from '../src/hosting.ts';
-import { createRuntime, isSpoken, readRoom, startRoom } from '../src/index.ts';
+import {
+	type CreateRuntimeOptions,
+	createRuntime,
+	isSpoken,
+	readRoom,
+	type Runtime,
+	startRoom,
+} from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, assistant, messagesOf, roomName, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
 import { childStorage, memory, sqlite } from './support/storage.ts';
 
+const quietRoom = (name: string, runtime: Runtime) =>
+	startRoom({
+		name,
+		runtime,
+		seats: { [assistant.name]: 'none' },
+		agents: [assistant],
+		execution: piExecution({ stream: scripted(() => quiet()) }),
+	});
+
+type Limits = NonNullable<CreateRuntimeOptions['limits']>;
+
 describe('createRuntime', () => {
-	it('refuses a retry cap below one attempt, which the verified cap rule requires', () => {
-		expect(() => createRuntime({ limits: { activation: { attempts: 0 } } })).toThrow(
-			/at least one attempt/,
-		);
-		expect(() => createRuntime({ limits: { activation: { attempts: 1.5 } } })).toThrow(
-			/positive integer/,
-		);
-		expect(
-			hostingOf(createRuntime({ limits: { activation: { attempts: 1 } } })).limits.activation
-				.attempts,
-		).toBe(1);
-	});
-
-	it('refuses a wake interval below one millisecond, so a resend and a claim always wait', () => {
-		expect(() => createRuntime({ limits: { delivery: { resend: 0 } } })).toThrow(
+	it.each<[string, Limits, RegExp]>([
+		['a retry cap below one attempt', { activation: { attempts: 0 } }, /at least one attempt/],
+		['a fractional retry cap', { activation: { attempts: 1.5 } }, /positive integer/],
+		[
+			'a wake interval below one millisecond',
+			{ delivery: { resend: 0 } },
 			/limits.delivery.resend/,
-		);
-		expect(() => createRuntime({ limits: { lease: { ttl: -1 } } })).toThrow(/limits.lease.ttl/);
-		expect(() => createRuntime({ limits: { lease: { deadline: Number.NaN } } })).toThrow(
+		],
+		['a negative lease', { lease: { ttl: -1 } }, /limits.lease.ttl/],
+		[
+			'a deadline that is not a number',
+			{ lease: { deadline: Number.NaN } },
 			/limits.lease.deadline/,
-		);
-		expect(
-			hostingOf(createRuntime({ limits: { delivery: { resend: 1 } } })).limits.delivery.resend,
-		).toBe(1);
+		],
+		['a context of no messages', { context: { messages: 0 } }, /limits.context.messages/],
+		['a fractional context', { context: { messages: 1.5 } }, /limits.context.messages/],
+		[
+			'a context that is not a number',
+			{ context: { messages: Number.NaN } },
+			/limits.context.messages/,
+		],
+		['a message of no bytes', { message: { bytes: 0 } }, /limits.message.bytes/],
+	])('refuses %s', (_, limits, error) => {
+		expect(() => createRuntime({ limits })).toThrow(error);
 	});
 
-	it('exposes every limit at its default, and an override keeps the rest of its group', () => {
+	it('exposes every limit at its default, keeps the rest of a group on override, and accepts the floors', () => {
 		const limits = hostingOf(createRuntime()).limits;
 		expect(limits.delivery).toEqual({ resend: 5_000 });
 		expect(limits.lease).toEqual({ ttl: 60_000, deadline: 600_000 });
@@ -51,19 +69,21 @@ describe('createRuntime', () => {
 		expect(limits.message).toEqual({ bytes: Number.POSITIVE_INFINITY });
 		expect(limits.trace).toEqual({ toolOutputBytes: 65_536, stepsPerPass: 1_000 });
 
-		const overridden = hostingOf(createRuntime({ limits: { lease: { ttl: 1 } } })).limits;
+		const overridden = hostingOf(
+			createRuntime({
+				limits: {
+					lease: { ttl: 1 },
+					activation: { attempts: 1 },
+					delivery: { resend: 1 },
+					context: { messages: 200 },
+				},
+			}),
+		).limits;
 		expect(overridden.lease).toEqual({ ttl: 1, deadline: 600_000 });
-	});
-
-	it('validates the room-level caps and keeps their defaults', () => {
-		for (const messages of [0, 1.5, Number.NaN]) {
-			expect(() => createRuntime({ limits: { context: { messages } } })).toThrow(
-				/limits.context.messages/,
-			);
-		}
-		expect(() => createRuntime({ limits: { message: { bytes: 0 } } })).toThrow(
-			/limits.message.bytes/,
-		);
+		expect(overridden.activation.attempts).toBe(1);
+		expect(overridden.delivery.resend).toBe(1);
+		expect(overridden.context.messages).toBe(200);
+		expect(overridden.message.bytes).toBe(Number.POSITIVE_INFINITY);
 		expect(() =>
 			createRuntime({
 				limits: {
@@ -72,30 +92,15 @@ describe('createRuntime', () => {
 				},
 			}),
 		).not.toThrow();
-		const limits = hostingOf(createRuntime({ limits: { context: { messages: 200 } } })).limits;
-		expect(limits.context.messages).toBe(200);
-		expect(limits.message.bytes).toBe(Number.POSITIVE_INFINITY);
 	});
 
-	it('keeps two runtimes apart: one name runs in both, and neither reads the other', async () => {
+	it('keeps two runtimes apart, and reconciles a room by name only on its own runtime', async () => {
 		const name = roomName('runtime');
 		const [one, two] = await Promise.all([memory.open(), memory.open()]);
 		const first = createRuntime({ storage: one.storage, clock: fakeClock() });
 		const second = createRuntime({ storage: two.storage, clock: fakeClock() });
-		const a = await startRoom({
-			name,
-			runtime: first,
-			seats: { [assistant.name]: 'none' },
-			agents: [assistant],
-			execution: piExecution({ stream: scripted(() => quiet()) }),
-		});
-		const b = await startRoom({
-			name,
-			runtime: second,
-			seats: { [assistant.name]: 'none' },
-			agents: [assistant],
-			execution: piExecution({ stream: scripted(() => quiet()) }),
-		});
+		const a = await quietRoom(name, first);
+		const b = await quietRoom(name, second);
 		await (await a.visit(andrei)).send({ text: 'in the first' });
 		await (await b.visit(andrei)).send({ text: 'in the second' });
 		await Promise.all([waitForRoom(a, 'settled'), waitForRoom(b, 'settled')]);
@@ -104,61 +109,34 @@ describe('createRuntime', () => {
 		expect((await messagesOf(b)).filter(isSpoken).map((m) => m.text)).toEqual(['in the second']);
 		expect((await readRoom(name, { runtime: first })).name).toBe(a.name);
 		expect((await readRoom(name, { runtime: second })).name).toBe(b.name);
+
+		// reconcileRoom runs a room that runs, and ignores a name that no room runs
+		await expect(reconcileRoom(first, name)).resolves.toBeUndefined();
+		await expect(reconcileRoom(first, 'nobody')).resolves.toBeUndefined();
 		await Promise.all([a.stop(), b.stop()]);
+		await expect(reconcileRoom(first, name)).resolves.toBeUndefined();
 	});
 
 	it('writes a room durably, where a second runtime reads it', async () => {
 		const opened = await sqlite.open();
+		onTestFinished(() => opened.dispose());
 		const dir = opened.dir ?? '';
-		try {
-			const name = roomName('sqlite');
-			const writer = createRuntime({
-				storage: opened.storage,
-				clock: fakeClock(),
-			});
-			const session = await startRoom({
-				name,
-				runtime: writer,
-				seats: { [assistant.name]: 'none' },
-				agents: [assistant],
-				execution: piExecution({ stream: scripted(() => quiet()) }),
-			});
-			const visit = await session.visit(andrei);
-			await visit.send({ text: 'kept on disk' });
-			await waitForRoom(session);
-			await session.stop();
-
-			const files = await readdir(dir, { recursive: true });
-			expect(files.some((file) => String(file).endsWith('.db'))).toBe(true);
-
-			const reader = createRuntime({
-				storage: childStorage('sqlite', dir),
-				clock: fakeClock(),
-			});
-			const view = await readRoom(name, { runtime: reader });
-			expect(view.messages.map((m) => m.kind)).toEqual(['arrived', 'said', 'left']);
-			expect(view.messages.filter(isSpoken).map((m) => m.text)).toEqual(['kept on disk']);
-		} finally {
-			await opened.dispose();
-		}
-	});
-});
-
-describe('reconcileRoom', () => {
-	it('reconciles a running room and ignores a name that no room runs', async () => {
-		const name = roomName('reconcile-room');
-		const opened = await memory.open();
-		const runtime = createRuntime({ storage: opened.storage, clock: fakeClock() });
-		const session = await startRoom({
+		const name = roomName('sqlite');
+		const session = await quietRoom(
 			name,
-			runtime,
-			seats: { [assistant.name]: 'none' },
-			agents: [assistant],
-			execution: piExecution({ stream: scripted(() => quiet()) }),
-		});
-		await expect(reconcileRoom(runtime, name)).resolves.toBeUndefined();
-		await expect(reconcileRoom(runtime, 'nobody')).resolves.toBeUndefined();
+			createRuntime({ storage: opened.storage, clock: fakeClock() }),
+		);
+		const visit = await session.visit(andrei);
+		await visit.send({ text: 'kept on disk' });
+		await waitForRoom(session);
 		await session.stop();
-		await expect(reconcileRoom(runtime, name)).resolves.toBeUndefined();
+
+		const files = await readdir(dir, { recursive: true });
+		expect(files.some((file) => String(file).endsWith('.db'))).toBe(true);
+
+		const reader = createRuntime({ storage: childStorage('sqlite', dir), clock: fakeClock() });
+		const view = await readRoom(name, { runtime: reader });
+		expect(view.messages.map((m) => m.kind)).toEqual(['arrived', 'said', 'left']);
+		expect(view.messages.filter(isSpoken).map((m) => m.text)).toEqual(['kept on disk']);
 	});
 });
