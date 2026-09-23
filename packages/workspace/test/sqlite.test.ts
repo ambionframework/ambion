@@ -212,4 +212,52 @@ describe('the SQLite backend', () => {
 		expect(text.split('\n').length).toBe(5002);
 		expect(text.startsWith('x\n1\n2\n')).toBe(true);
 	});
+
+	it('detaches a scratch database after its call, so no other call reads it', async () => {
+		const site = workspace();
+		const made = await run(
+			site,
+			"ATTACH ':memory:' AS scratch; CREATE TABLE scratch.p(x); INSERT INTO scratch.p VALUES (1); SELECT x FROM scratch.p",
+		);
+		expect(made).toMatchObject({ ok: true, rowCount: 1 });
+		const other = await run(site, 'SELECT x FROM scratch.p', { agent: 'beta' });
+		expect(messageOf(other)).toContain('scratch.p');
+		for (let call = 0; call < 12; call += 1) {
+			const again = await run(site, `ATTACH ':memory:' AS s${call}; SELECT 1 AS one`);
+			expect(again.ok, `call ${call}`).toBe(true);
+		}
+	});
+
+	it('removes the temporary file of an export that runs past its time limit', async () => {
+		const site = workspace(':memory:', 0.05);
+		const outcome = await run(
+			site,
+			'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT x FROM c',
+			{ export: '~/big.csv' },
+		);
+		expect(messageOf(outcome)).toContain('ran past');
+		const left = await site.use({ name: 'alpha' }, async (env) => {
+			const listed = await env.listDir('/tmp', BACKGROUND_CONTEXT);
+			const exists = await env.exists('/home/alpha/big.csv', BACKGROUND_CONTEXT);
+			return {
+				parts: listed.ok ? listed.value.filter((file) => file.name.endsWith('.part')) : [],
+				target: exists.ok && exists.value,
+			};
+		});
+		expect(left).toEqual({ parts: [], target: false });
+	});
+
+	it('runs an unterminated comment as nothing, and refuses a NUL character', async () => {
+		const site = workspace();
+		expect(await run(site, 'SELECT 1 AS x; /* open')).toMatchObject({ ok: true, rowCount: 1 });
+		expect(await run(site, '/* open')).toMatchObject({ ok: true, rowCount: 0 });
+		expect(messageOf(await run(site, 'SELECT 1;\0 SELECT 2'))).toContain('NUL');
+	});
+
+	it('refuses a time limit that is not more than 0, or that no timer holds', () => {
+		for (const timeout of [0, -1, Number.POSITIVE_INFINITY, Number.NaN, 3_000_000]) {
+			expect(() => sqliteBackend(':memory:', { timeout }), String(timeout)).toThrow(RangeError);
+		}
+		expect(() => sqliteBackend(':memory:', { timeout: 0.5 })).not.toThrow();
+	});
 });

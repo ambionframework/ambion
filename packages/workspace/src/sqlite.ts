@@ -15,7 +15,9 @@
  *
  * One call is one unit of work on the shared handle. A call that leaves a
  * transaction open gets it rolled back and an `ok: false` outcome, so no
- * later call from another agent runs inside it.
+ * later call from another agent runs inside it. After each call the backend
+ * detaches every database the call attached, so a scratch database lives
+ * for one call and no other agent reads it.
  *
  * `node:sqlite` runs a statement to its end, and has no hook to stop one.
  * The backend stops a call between statements and between rows: on an
@@ -65,16 +67,19 @@ const SQLITE_ATTACH = 24;
 const ATTACH_LITERAL = /^attach\s+(?:database\s+)?('[^']*')\s+as\s+(?:\w+|"[^"]+")\s*;?\s*$/i;
 
 /**
- * What SQLite skips before a statement: whitespace, comments, and the
- * empty statement `;`.
+ * What SQLite skips before a statement: whitespace, comments, the empty
+ * statement `;`, and a block comment that runs to the end of the text.
  */
-const LEADING = /^(?:\s+|;|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/;
+const LEADING = /^(?:\s+|;|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/|\/\*[\s\S]*$)+/;
+
+/** The largest time limit, in seconds, that a timer holds. */
+const MAX_TIMEOUT_SECONDS = 2_147_483;
 
 /** A statement that the backend refuses, reported as an `ok: false` outcome. */
 class Refusal extends Error {}
 
 export interface SqliteBackendOptions {
-	/** Seconds one call may run before the backend stops it. The default is 30. */
+	/** Seconds one call may run before the backend stops it: more than 0, at most 2147483. The default is 30. */
 	timeout?: number;
 }
 
@@ -152,6 +157,8 @@ async function runStatements(
 	files: WorkspaceFiles,
 	context: Context,
 ): Promise<SqlOutcome> {
+	// SQLite stops reading at a NUL, so the statements after one would not run.
+	if (sql.includes('\0')) throw new Refusal('The SQL holds a NUL character. Remove it.');
 	let rest = sql;
 	while (!blank(rest)) {
 		const signal = context.abortSignal;
@@ -175,6 +182,25 @@ function rollBackOpen(db: DatabaseSync): string | undefined {
 	if (!db.isTransaction) return undefined;
 	db.exec('ROLLBACK');
 	return 'The call left a transaction open, so the backend rolled it back. Commit a transaction within one call.';
+}
+
+/** Detach every database a call attached, so a scratch database lives for one call. */
+function detachAll(db: DatabaseSync): void {
+	const attached = db.prepare('PRAGMA database_list').all() as { name: string }[];
+	for (const { name } of attached) {
+		if (name !== 'main' && name !== 'temp')
+			db.exec(`DETACH DATABASE "${name.replace(/"/g, '""')}"`);
+	}
+}
+
+/**
+ * Give the next call a clean handle: roll back an open transaction, and
+ * detach every attached database. Gives the rollback note, if any.
+ */
+function resetHandle(db: DatabaseSync): string | undefined {
+	const rolledBack = rollBackOpen(db);
+	detachAll(db);
+	return rolledBack;
 }
 
 /**
@@ -207,13 +233,13 @@ async function runCall(
 		} else if (stop === undefined && statementError(error)) {
 			outcome = { ok: false, message: error.message };
 		} else {
-			rollBackOpen(db);
+			resetHandle(db);
 			throw error;
 		}
 	} finally {
 		deadline.clear();
 	}
-	const rolledBack = rollBackOpen(db);
+	const rolledBack = resetHandle(db);
 	if (rolledBack === undefined) return outcome;
 	return { ok: false, message: outcome.ok ? rolledBack : `${outcome.message}\n${rolledBack}` };
 }
@@ -243,6 +269,11 @@ function guidance(timeout: number): string {
  */
 export function sqliteBackend(location: string, options: SqliteBackendOptions = {}): SqlBackend {
 	const timeout = options.timeout ?? DEFAULT_TIMEOUT_SECONDS;
+	if (!(timeout > 0 && timeout <= MAX_TIMEOUT_SECONDS)) {
+		throw new RangeError(
+			`sqliteBackend: timeout must be more than 0 and at most ${MAX_TIMEOUT_SECONDS} seconds.`,
+		);
+	}
 	let db: DatabaseSync | undefined;
 	const envFor = (files: WorkspaceFiles): SqlEnv => ({
 		run: async (sql, runOptions, context) => {

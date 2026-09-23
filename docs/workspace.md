@@ -386,13 +386,16 @@ as hex.
 - **The dialect is SQLite.** Dates are functions, `||` joins text, and a
   column type is an affinity. The backend's guidance states this.
 - **`ATTACH` opens `:memory:` alone.** A private scratch database lives for
-  one call, and one statement joins it with the shared tables. SQLite reads
-  `:memory:` in lower case alone, so the backend compares it exactly.
+  one call, and one statement joins it with the shared tables. After each
+  call the backend detaches every attached database, so no other call reads
+  it. SQLite reads `:memory:` in lower case alone, so the backend compares
+  it exactly.
 - **No statement opens another host file.** The backend refuses an
   `ATTACH` of anything but `':memory:'` and a `VACUUM INTO`, and runs no
   later statement of the call. A check of each statement's text holds on
   every supported Node, and skips what SQLite skips: whitespace, comments,
-  and an empty `;`. A Node whose `node:sqlite` has `setAuthorizer` also
+  an empty `;`, and a comment that runs to the end. SQL that holds a NUL
+  character gives an `ok: false` outcome. A Node whose `node:sqlite` has `setAuthorizer` also
   refuses an `ATTACH` in the engine. `node:sqlite` loads no extension.
 - **A call commits its own transaction.** Every agent shares one handle. A
   call that leaves a transaction open gets it rolled back and an `ok: false`
@@ -402,8 +405,10 @@ as hex.
 - **A call stops between statements and between rows.** `sqlResult` yields
   to the event loop every 256 rows, so an abort and the time limit can
   fire, and other rooms keep running. A call stops after 30 seconds; set
-  `timeout` in `sqliteBackend(location, { timeout })` to change it. A
-  timeout is an `ok: false` outcome, and an abort rejects.
+  `timeout` in `sqliteBackend(location, { timeout })` to change it, to a
+  value above 0 and at most 2147483. A timeout is an `ok: false` outcome,
+  and an abort rejects. A stopped export removes its temporary file and
+  leaves the target unchanged.
 - **One statement that gives no rows runs to its end.** `node:sqlite` has no
   hook to stop a statement, so the backend cannot stop such a statement
   early. For example, an aggregate over an unbounded recursive query does

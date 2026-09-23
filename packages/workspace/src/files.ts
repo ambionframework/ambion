@@ -12,7 +12,7 @@
  */
 
 import { posix } from 'node:path';
-import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT, type Context, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 import type { WorkspaceFiles } from './sql-backend.ts';
@@ -54,7 +54,8 @@ async function writeThrough(
 		const moved = await env.renameFile(temp.value, target, context);
 		if (!moved.ok) throw moved.error;
 	} finally {
-		await env.remove(temp.value, { force: true }, context);
+		// The cleanup runs over its own context: an aborted call still removes its temporary file.
+		await env.remove(temp.value, { force: true }, BACKGROUND_CONTEXT);
 	}
 	return target;
 }

@@ -16,6 +16,7 @@ database that need not live on the shell's filesystem. The new
 `@ambionframework/workspace/sqlite` entry exports `sqliteBackend(location)`,
 the default SQL backend over `node:sqlite`. It refuses a statement that
 opens a host file, rolls back a transaction that a call leaves open,
+detaches every database a call attached,
 refuses a result with two columns of one name, and stops a call after
 `timeout` seconds, 30 by default. The SQL backend runs under an
 owner of its own. `connect(agent, files)` gives it the calling agent's
