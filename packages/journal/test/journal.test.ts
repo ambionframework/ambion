@@ -54,28 +54,19 @@ async function store(id: string, entry: unknown): Promise<void> {
 describe('a journal', () => {
 	it('gives every kind the next journal seq', async () => {
 		const journal = await open();
-		const first = await journal.append('note', { decide: () => body(note('one')) });
-		if (!('entry' in first)) throw new Error('the note lands');
-		expect(first.entry.seq).toBe(1);
+		expect(await journal.append('note', { decide: () => body(note('one')) })).toMatchObject({
+			entry: { seq: 1 },
+		});
 		await journal.append('mark', { decide: () => body({ label: 'a' }) });
-		const second = await journal.append('note', { decide: () => body(note('two')) });
-		if (!('entry' in second)) throw new Error('the note lands');
-		expect(second.entry.seq).toBe(3);
+		expect(await journal.append('note', { decide: () => body(note('two')) })).toMatchObject({
+			entry: { seq: 3 },
+		});
 		expect(journal.entries.map((entry) => [entry.kind, entry.seq])).toEqual([
 			['note', 1],
 			['mark', 2],
 			['note', 3],
 		]);
 		expect(journal.lastSeq).toBe(3);
-	});
-
-	it('returns the original entry for a same-kind key retry', async () => {
-		const journal = await open();
-		const first = await journal.append('note', { key: 'k', decide: () => body(note('once')) });
-		const again = await journal.append('note', { key: 'k', decide: () => body(note('twice')) });
-		if (!('entry' in first) || !('entry' in again)) throw new Error('both calls return entries');
-		expect(again.entry).toEqual(first.entry);
-		expect(journal.entries).toHaveLength(1);
 	});
 
 	it('owns append results, public history, callbacks, and captured drafts', async () => {
@@ -163,21 +154,9 @@ describe('a journal', () => {
 		await expect(journal.append('note', { decide: () => body(withFunction) })).rejects.toThrow();
 		expect(journal.entries).toHaveLength(0);
 		expect(journal.lastSeq).toBe(0);
-		const good = await journal.append('note', { decide: () => body(note('after')) });
-		if (!('entry' in good)) throw new Error('the next note lands');
-		expect(good.entry.seq).toBe(1);
-	});
-
-	it('proves at compile time that every body survives cloning', () => {
-		// `CloneableJournal` is a journal only when every body is data. A body map
-		// that holds a function is not a journal; the type resolves to `never`.
-		expectTypeOf<CloneableJournal<Kind, Bodies>>().toEqualTypeOf<Journal<Kind, Bodies>>();
-		interface WithFunction {
-			note: { act: () => void };
-			mark: Mark;
-			run: Run;
-		}
-		expectTypeOf<CloneableJournal<Kind, WithFunction>>().toBeNever();
+		expect(await journal.append('note', { decide: () => body(note('after')) })).toMatchObject({
+			entry: { seq: 1 },
+		});
 	});
 
 	it('isolates accepted bodies from a vocabulary that retains and mutates them', async () => {
@@ -215,9 +194,12 @@ describe('a journal', () => {
 		expect(retry.entry.body.text).toBe('before');
 	});
 
-	it('rejects a key reused by another kind before deciding', async () => {
+	it('returns the original entry for a same-kind key retry, and rejects a key reused by another kind before deciding', async () => {
 		const journal = await open();
-		await journal.append('note', { key: 'k', decide: () => body(note('one')) });
+		const first = await journal.append('note', { key: 'k', decide: () => body(note('once')) });
+		expect(await journal.append('note', { key: 'k', decide: () => body(note('twice')) })).toEqual(
+			first,
+		);
 		let decided = false;
 		await expect(
 			journal.append('mark', {
@@ -244,7 +226,16 @@ describe('a journal', () => {
 		expect('entry' in landed && landed.entry.seq).toBe(1);
 	});
 
-	it('keeps heterogeneous bodies and synchronous decisions type safe', () => {
+	it('proves at compile time that every body survives cloning, that a decision is synchronous, and that kind and body stay correlated', async () => {
+		// `CloneableJournal` is a journal only when every body is data. A body map
+		// that holds a function is not a journal; the type resolves to `never`.
+		expectTypeOf<CloneableJournal<Kind, Bodies>>().toEqualTypeOf<Journal<Kind, Bodies>>();
+		interface WithFunction {
+			note: { act: () => void };
+			mark: Mark;
+			run: Run;
+		}
+		expectTypeOf<CloneableJournal<Kind, WithFunction>>().toBeNever();
 		const wrongIntent: import('../src/journal.ts').AppendIntent<Mark, never> = {
 			// @ts-expect-error a mark cannot carry a note body
 			decide: () => body(note('wrong')),
@@ -255,19 +246,15 @@ describe('a journal', () => {
 			decide: async () => body(note('later')),
 		};
 		expect(asyncIntent.decide).toBeTypeOf('function');
-	});
-
-	it.each(['note', 'mark'] as const)(
-		'preserves kind and body correlation for %s',
-		async (kind: 'note' | 'mark') => {
-			const journal = await open();
+		const journal = await open();
+		for (const kind of ['note', 'mark'] as const) {
 			const result = await journal.append(kind, {
 				decide: () => (kind === 'note' ? body(note('one')) : body({ label: 'one' })),
 			});
 			if ('entry' in result && result.entry.kind === 'note')
 				expectTypeOf(result.entry.body).toEqualTypeOf<Note>();
-		},
-	);
+		}
+	});
 
 	it('allows an explicitly undefined body when that kind accepts it', async () => {
 		type EmptyKind = 'empty' | 'run';
@@ -346,9 +333,9 @@ describe('the envelope and storage cursor', () => {
 		const id = `journal-envelope-${++names}`;
 		const journal = await open(id, 'run-1');
 		const own = { text: 'mine', seq: 99, key: 'stolen', run: 'ghost' };
-		const landed = await journal.append('note', { decide: () => body(own) });
-		if (!('entry' in landed)) throw new Error('the note lands');
-		expect(landed.entry).toEqual({ kind: 'note', body: own, seq: 1, run: 'run-1' });
+		expect(await journal.append('note', { decide: () => body(own) })).toEqual({
+			entry: { kind: 'note', body: own, seq: 1, run: 'run-1' },
+		});
 		const other = await journal.append('note', {
 			key: 'stolen',
 			decide: () => body(note('other')),

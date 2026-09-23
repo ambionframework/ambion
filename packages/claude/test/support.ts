@@ -1,6 +1,7 @@
 /**
  * What the unit tests share: the fake executable, a view of a small room,
- * and one activation opened over a room that records what the seat commits.
+ * and the activations of one executor over a room that records what the
+ * seat commits.
  */
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -72,33 +73,38 @@ export function viewOf(through = 1): ActivationView {
 	};
 }
 
-export interface Opened {
-	readonly session: ExecutorSession;
-	readonly steps: Step[];
-	readonly commits: CommitRequest[];
-	readonly events: ExecutionEvent[];
-	/** The lines the fake wrote to its log. */
-	log(): Record<string, unknown>[];
-}
-
-/** Open one activation of `definition` over the fake, with a scenario. */
-export function open(scenario: FakeScenario, definition: AgentDefinition = seat()): Opened {
+/** An executor of `definition` over the fake, and a room that records what the seat commits. */
+export function fakeRoom(
+	scenario: FakeScenario & {
+		session?: string;
+		rejectResume?: boolean;
+		rejectResumeResult?: boolean;
+	},
+	definition: AgentDefinition = seat(),
+) {
 	const file = join(mkdtempSync(join(tmpdir(), 'ambion-claude-')), 'fake.log');
 	const steps: Step[] = [];
 	const commits: CommitRequest[] = [];
+	const answers: ('committed' | 'missed')[] = [];
 	const events: ExecutionEvent[] = [];
-	let seq = 1;
+	let lastSeq = 1;
 	const room: RoomProtocol = {
 		view: async () => ({ stale: 'unused' }),
 		lease: async () => ({ stale: 'unused' }),
 		commit: async (request) => {
 			commits.push(request);
-			seq += 1;
+			// The room refuses a say against a record that moved.
+			if ((request.readThrough ?? 0) < lastSeq) {
+				answers.push('missed');
+				return { missed: [] };
+			}
+			answers.push('committed');
+			lastSeq += 1;
 			if (request.intent.kind !== 'said') return { refused: 'unused' };
 			return {
 				committed: {
 					kind: 'said',
-					seq,
+					seq: lastSeq,
 					at: new Date(0).toISOString(),
 					from: 'sonnet',
 					text: request.intent.text,
@@ -117,28 +123,37 @@ export function open(scenario: FakeScenario, definition: AgentDefinition = seat(
 		pathToClaudeCodeExecutable: executable,
 		env: { ...process.env, AMBION_FAKE: JSON.stringify({ ...scenario, log: file }) },
 	});
-	const session = executor.open({
-		id: 'message:1:sonnet:1',
-		room,
-		emit: (event) => void events.push(event),
-		trace,
-	});
+	/** The lines the fake wrote to its log. */
+	const log = (): Record<string, unknown>[] => {
+		try {
+			return readFileSync(file, 'utf8')
+				.split('\n')
+				.filter((line) => line !== '')
+				.map((line) => JSON.parse(line) as Record<string, unknown>);
+		} catch {
+			return [];
+		}
+	};
 	return {
-		session,
 		steps,
 		commits,
+		answers,
 		events,
-		log: () => {
-			try {
-				return readFileSync(file, 'utf8')
-					.split('\n')
-					.filter((line) => line !== '')
-					.map((line) => JSON.parse(line) as Record<string, unknown>);
-			} catch {
-				return [];
-			}
+		log,
+		/** The argument list of each start of the fake, in order. */
+		argvs: () => log().flatMap((line) => ('argv' in line ? [line.argv as string[]] : [])),
+		moveRecordTo: (seq: number) => {
+			lastSeq = seq;
 		},
+		activate: (id: string): ExecutorSession =>
+			executor.open({ id, room, emit: (event) => void events.push(event), trace }),
 	};
+}
+
+/** Open one activation of `definition` over the fake, with a scenario. */
+export function open(scenario: FakeScenario, definition: AgentDefinition = seat()) {
+	const room = fakeRoom(scenario, definition);
+	return { ...room, session: room.activate('message:1:sonnet:1') };
 }
 
 /** Wait until `read` holds, for at most `ms` milliseconds. */

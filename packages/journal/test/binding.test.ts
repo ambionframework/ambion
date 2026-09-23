@@ -31,12 +31,13 @@ const note = (text: string) => ({ body: { text } });
 
 let names = 0;
 const journals = memoryJournals();
-async function open(run?: string): Promise<Journal<Kind, Bodies>> {
+async function open(run?: string, lost?: () => void): Promise<Journal<Kind, Bodies>> {
 	const journal = new Journal<Kind, Bodies>(
 		journals.open(`binding-${++names}`),
 		words,
 		undefined,
 		run,
+		lost,
 	);
 	await journal.ready;
 	return journal;
@@ -85,22 +86,17 @@ describe('the journal runs the verified rules', () => {
 	});
 
 	it('hears lost when fenceStep says the run is superseded', async () => {
-		const lost = vi.fn();
-		const journal = new Journal<Kind, Bodies>(
-			journals.open(`binding-${++names}`),
-			words,
-			undefined,
-			'run-1',
-			lost,
-		);
-		await journal.ready;
+		let lost = 0;
+		const journal = await open('run-1', () => {
+			lost += 1;
+		});
 		bind.once(rules.fenceStep, {
 			state: { fence: 'run-2', fenced: true, superseded: true },
 			keep: true,
 			lost: true,
 		});
 		await journal.append('run', { decide: () => ({ body: { owner: 'run-1' } }) });
-		expect(lost).toHaveBeenCalledTimes(1);
+		expect(lost).toBe(1);
 		await expect(journal.append('note', { decide: () => note('late') })).rejects.toThrow(
 			/superseded/,
 		);
