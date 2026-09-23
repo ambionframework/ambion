@@ -122,6 +122,8 @@ interface WorkstationOptions {
   /** The server's host key fingerprint, as `ssh-keygen -lf` prints it. */
   readonly hostKey: string;
   readonly layout: WorkspaceLayout;
+  /** Seconds a client may stay unused before the backend closes it. The default is 300. */
+  readonly idleTimeout?: number;
   credentialFor(agent: WorkspaceAgent): WorkstationCredential | Promise<WorkstationCredential>;
 }
 ```
@@ -325,6 +327,10 @@ call adds network round trips to every tool call.
 - **A call that loses its connection fails, and nothing retries it.** An
   append that the connection lost can have landed or not, and the caller
   cannot tell which.
+- **`idleTimeout` closes an unused client.** A client that runs no
+  operation for `idleTimeout` seconds closes, and the default is 300. The
+  next `connect()` for that agent builds a new client. A long workspace
+  run holds a client only for an agent that works.
 - **`dispose()` closes every client.** The backend deletes no data on the
   server. The host removes a workspace's folders with its own tools.
 
@@ -464,11 +470,6 @@ proves what only OpenSSH can:
 - Concurrent operations on the bash owner. The
   [backlog](../planning/backlog.md#designs-with-a-shape) holds the backend
   profile that allows them.
-
-## Open questions
-
-- **Idle clients.** The cache has no eviction. A long workspace run holds
-  one client for each agent that connected.
 
 Sources for the client facts: the published `ssh2` 1.17.0 and
 `@microsoft/dev-tunnels-ssh` 3.12.42 packages, the
