@@ -38,6 +38,34 @@ await drive.use(
 The resource checks revocation before it connects. A queued operation that
 starts after disposal is refused.
 
+## The layout and the host identity
+
+**A `WorkspaceBackend` names a `layout`: where it keeps the audit log, the
+shared database, and the room mirrors.** `WorkspaceLayout` holds three
+paths:
+
+| Field      | Names the default for                                    |
+| ---------- | -------------------------------------------------------- |
+| `audit`    | `openWorkspace`'s `audit` option, when it sets no `path` |
+| `database` | A `sql` call, when it sets no `database`                 |
+| `rooms`    | `mirror()`, the root every room's record writes under    |
+
+A caller's own path always wins: `audit.path` on `openWorkspace`, and
+`database` on a `sql` call, each override the layout's default for that one
+call. `memoryBackend` and `directoryBackend` name the same layout:
+`/workspace/audit.jsonl`, `/workspace/shared.db`, and `/rooms`. A new
+backend states its own layout; nothing in the neutral layer fixes a path of
+its own.
+
+**`openWorkspace` builds one host agent, `<name>-host`, and `mirror()`
+writes as it.** `Workspace.host` exposes this identity. A backend with real
+accounts gives it credentials, the same as any other agent it connects.
+
+```ts
+const drive = openWorkspace({ name: 'town', backend: memoryBackend() });
+console.log(drive.host); // { name: 'town-host' }
+```
+
 ## Give the resource to an agent
 
 `workspace.tools()` returns an ordinary Ambion `ToolBundle`. A backend supplies
@@ -162,12 +190,12 @@ const drive = openWorkspace({
 });
 ```
 
-**The log is an ordinary file an agent reads.** The default path is
-`/workspace/audit.jsonl`; set `path` to change it, and `maxBytes` to change
-the 5 MiB rotation threshold. An agent reads the log with `read` or
-`bash cat`, the same as any file a peer wrote, and sees every call any
-agent in any room made, including its own past calls. `jq` filters one
-entry out of many, by `room`, `tool`, `agent`, or `activation`.
+**The log is an ordinary file an agent reads.** The default path is the
+backend's `layout.audit`. Set `path` to open it somewhere else, and
+`maxBytes` to change the 5 MiB rotation threshold. An agent reads the log
+with `read` or `bash cat`, the same as any file a peer wrote, and sees every
+call any agent in any room made, including its own past calls. `jq` filters
+one entry out of many, by `room`, `tool`, `agent`, or `activation`.
 
 **Tool guidance tells every agent the log exists.** `openWorkspace` appends
 a note naming the path and what each line holds to the bundle's guidance, so
@@ -206,8 +234,9 @@ remove it, the same as any other file on the workspace.
 ## Mirror a room's messages
 
 **`workspace.mirror(room)` mirrors one room's message record to
-`/rooms/<room name>/messages.jsonl`, built on `openLog`.** Call it once the
-room has started; it needs no other setup.
+`<layout.rooms>/<room name>/messages.jsonl`, built on `openLog`.** The
+just-bash backends name `layout.rooms` `/rooms`. Call it once the room has
+started; it needs no other setup.
 
 ```ts
 import { startRoom } from '@ambionframework/ambion';
@@ -223,10 +252,11 @@ await session.stop();
 await mirror.stop();
 ```
 
-`mirror()` writes as an identity the workspace owns; a caller names only the
-room. Stop the room before the mirror. The room's own shutdown commits a
-`left` message for every present visitor; a mirror already stopped never
-sees it.
+`mirror()` writes as `workspace.host`, the `<name>-host` agent `openWorkspace`
+built (see [The layout and the host identity](#the-layout-and-the-host-identity)),
+so a caller names only the room. Stop the room before the mirror. The room's
+own shutdown commits a `left` message for every present visitor; a mirror
+already stopped never sees it.
 
 **`await site.mirror(room)` returns once recovery is caught up, not once
 every message is durably on disk.** Its promise resolves after the
@@ -275,14 +305,15 @@ subscription and the backfill is written once.
 
 **A room's name is not validated at the kernel today.** This is the first
 place a room name turns into a filesystem path. A name holding `..` or an
-extra `/` would resolve outside `/rooms`; `mirror()` refuses that name and
-writes nothing.
+extra `/` would resolve outside `layout.rooms`; `mirror()` refuses that name
+and writes nothing.
 
-**Every workspace's guidance names the `/rooms` convention, whether or not
-anything mirrors there.** The note is generic — it names no room — so it
-costs nothing to state unconditionally, the same way an agent already
+**Every workspace's guidance names the room-mirror convention, whether or
+not anything mirrors there.** The note is generic — it names no room — so
+it costs nothing to state unconditionally, the same way an agent already
 learns its `/home/<name>` convention. An agent finds the field guide above
-by reading a room's own file; the guidance only points at the path.
+by reading a room's own file; the guidance only points at the path, and
+names the backend's actual `layout.rooms`.
 
 **Directory-per-room organizes the data; it does not wall it off.** Every
 room sharing one workspace shares its filesystem boundary (see
@@ -292,18 +323,19 @@ and `jq` filter it uses on its own.
 
 ## Query the shared database
 
-**The `sql` tool runs SQLite statements on one shared database.** The default
-backends open the database at `/workspace/shared.db`. Every agent queries this
+**The `sql` tool runs SQLite statements on one shared database.** A call
+that names no `database` opens the backend's `layout.database`; the
+just-bash backends name it `/workspace/shared.db`. Every agent queries this
 one file, so a table or a view one agent creates is data another agent reads
 at once. The tool takes these parameters:
 
-| Parameter  | Meaning                                                          |
-| ---------- | ---------------------------------------------------------------- |
-| `sql`      | One or more SQLite statements. The last query gives the preview. |
-| `database` | The file opened as `main`. The default is the shared database.   |
-| `export`   | A path for the full result as CSV. Omit it to write no file.     |
-| `maxRows`  | How many rows the preview shows. The default is 50.              |
-| `timeout`  | Seconds before the query stops.                                  |
+| Parameter  | Meaning                                                                    |
+| ---------- | -------------------------------------------------------------------------- |
+| `sql`      | One or more SQLite statements. The last query gives the preview.           |
+| `database` | The file opened as `main`. The default is the backend's `layout.database`. |
+| `export`   | A path for the full result as CSV. Omit it to write no file.               |
+| `maxRows`  | How many rows the preview shows. The default is 50.                        |
+| `timeout`  | Seconds before the query stops.                                            |
 
 **The preview stays in context and writes nothing to disk.** The tool shows
 the last query's result as a Markdown table, capped at `maxRows`. It keeps the
@@ -357,11 +389,13 @@ The contract lives in [Resources](resources.md).
 The memory and directory backends are the Pi binding. They export from the
 `./just-bash` entry. The root entry names `WorkspaceEnv`, the Pi
 `ExecutionEnv` that has a zero-argument `cleanup()`. `WorkspaceBackend`
-extends `ResourceBackend<WorkspaceEnv>` and adds Pi harness tools and
-optional guidance. `openWorkspace` creates the
-resource owner and binds the backend tools to its `use` method. `Workspace`
-adds `tools()` to the resource surface. Direct operations and tool calls share
-one queue and one lifecycle.
+extends `ResourceBackend<WorkspaceEnv>` and adds Pi harness tools, optional
+guidance, and a required `layout` (see
+[The layout and the host identity](#the-layout-and-the-host-identity)).
+`openWorkspace` creates the resource owner and binds the backend tools to
+its `use` method. `Workspace` adds `tools()`, `host`, and `mirror()` to the
+resource surface. Direct operations and tool calls share one queue and one
+lifecycle.
 
 **The root entry also exports the environment helpers a new `ExecutionEnv`
 backend needs.** `resolvePath` holds the `~` and relative path rule.

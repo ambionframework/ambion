@@ -88,12 +88,14 @@ interface SqlDetails {
 
 type SqlResult = AgentToolResult<SqlDetails>;
 
-/** Create the `sql` tool over the just-bash execution environment. */
-export function createSqlTool(): AgentHarnessTool<
-	ExecutionToolContext,
-	typeof sqlSchema,
-	SqlDetails
-> {
+/**
+ * Create the `sql` tool over the just-bash execution environment. `database`
+ * is the file the tool opens as `main` when a call names none: a backend's
+ * layout names it.
+ */
+export function createSqlTool(
+	database: string,
+): AgentHarnessTool<ExecutionToolContext, typeof sqlSchema, SqlDetails> {
 	return {
 		name: 'sql',
 		label: 'SQL',
@@ -101,7 +103,7 @@ export function createSqlTool(): AgentHarnessTool<
 			'Run SQLite statements on the shared database. Share a table or a view; it needs no copy. Set export for a CSV file.',
 		parameters: sqlSchema,
 		execute: (_toolCallId, params, _onUpdate, toolContext, _invocation, context) =>
-			run(toolContext.env, params, context),
+			run(toolContext.env, database, params, context),
 	};
 }
 
@@ -132,8 +134,13 @@ async function shell(
 	return { output, exitCode: result.value.exitCode };
 }
 
-async function run(env: ExecutionEnv, params: SqlParams, context: Context): Promise<SqlResult> {
-	const database = await resolvePath(env, params.database ?? SHARED_DATABASE, context);
+async function run(
+	env: ExecutionEnv,
+	defaultDatabase: string,
+	params: SqlParams,
+	context: Context,
+): Promise<SqlResult> {
+	const database = await resolvePath(env, params.database ?? defaultDatabase, context);
 	await ensureParent(env, database, context);
 	const scriptPath = await writeScript(env, params.sql, context);
 	const options: ShellExecOptions = params.timeout === undefined ? {} : { timeout: params.timeout };

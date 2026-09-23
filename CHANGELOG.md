@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+**A `WorkspaceBackend` now names its own layout.** A new `WorkspaceLayout`
+type, exported from the root, holds three paths: `audit`, the audit log a
+caller sets no `path` for; `database`, the database a `sql` call names none
+for; and `rooms`, the root `mirror()` writes every room's record under.
+`WorkspaceBackend` gains a required `layout` field. `openWorkspace` reads it:
+the audit log opens at `layout.audit` when `options.audit.path` is absent,
+the `sql` tool opens `layout.database` when a call names no `database`, and
+`mirror()` writes under `layout.rooms`. The room-mirror guidance also names
+this actual path, in place of the fixed text it stated before.
+`memoryBackend` and `directoryBackend` both name `/workspace/audit.jsonl`,
+`/workspace/shared.db`, and `/rooms`, so no file moves.
+
+**`openWorkspace` builds one host agent, and `Workspace` exposes it.** The
+identity `mirror()` writes as, `<name>-host`, is now `Workspace.host`. A
+backend with real accounts can give it credentials.
+
 **The root entry of `@ambionframework/workspace` exports the environment
 helpers.** `resolvePath`, `Deadline`, `boundedView`, `spill`, `TMP`,
 `randomName`, `tempDirPath`, `tempFilePath`, `spillPath`, and the

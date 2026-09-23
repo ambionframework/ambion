@@ -8,11 +8,19 @@ import { describe, expect, it } from 'vitest';
 import { enter, roomName as name } from '../../ambion/test/support/room.ts';
 import { byAgent, callTool, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import { DEFAULT_AUDIT_LOG, openAuditLog } from '../src/audit.ts';
+import type { WorkspaceLayout } from '../src/backend.ts';
 import { BashEnv } from '../src/bash-env.ts';
-import { openWorkspace } from '../src/index.ts';
+import { openWorkspace, SHARED_DATABASE } from '../src/index.ts';
 import { memoryBackend } from '../src/just-bash.ts';
 
 const workspaceAgent = (name: string) => ({ name });
+
+/** The just-bash backends' own layout: `/workspace/audit.jsonl`, `/workspace/shared.db`, `/rooms`. */
+const layout: WorkspaceLayout = {
+	audit: DEFAULT_AUDIT_LOG,
+	database: SHARED_DATABASE,
+	rooms: '/rooms',
+};
 /** A `ToolContext.agent`, which still carries `identity` in the core type. */
 const ctxAgent = (name: string) => ({ name, identity: `${name} identity` });
 const ctx = BACKGROUND_CONTEXT;
@@ -239,6 +247,7 @@ describe('the workspace audit log', () => {
 				},
 			],
 			connect: (agent: { name: string }) => inner.connect(agent),
+			layout,
 		};
 		const site = openWorkspace({ name: name('audited-error'), backend: failing, audit: {} });
 		const tool = site.tools().tools[0];
@@ -421,6 +430,7 @@ describe('recording under an aborted signal', () => {
 				},
 			],
 			connect: (agent: { name: string }) => inner.connect(agent),
+			layout,
 		};
 		const site = openWorkspace({ name: name('cut-mid-flight'), backend: slow, audit: {} });
 		const tool = site.tools().tools[0];

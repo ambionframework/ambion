@@ -27,12 +27,23 @@ import {
 	scripted,
 	speak,
 } from '../../ambion/test/support/scripted.ts';
+import { DEFAULT_AUDIT_LOG } from '../src/audit.ts';
+import type { WorkspaceLayout } from '../src/backend.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
-import { openWorkspace, type WorkspaceBackend } from '../src/index.ts';
+import { openWorkspace, SHARED_DATABASE, type WorkspaceBackend } from '../src/index.ts';
 import { directoryBackend, MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
-import { ROOM_MIRROR_GUIDANCE } from '../src/mirror.ts';
+import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
+import { createSqlTool } from '../src/sql.ts';
 
 const workspaceAgent = (name: string) => ({ name });
+
+/** The just-bash backends' own layout: `/workspace/audit.jsonl`, `/workspace/shared.db`, `/rooms`. */
+const layout: WorkspaceLayout = {
+	audit: DEFAULT_AUDIT_LOG,
+	database: SHARED_DATABASE,
+	rooms: '/rooms',
+};
+const ROOM_MIRROR_GUIDANCE = roomMirrorGuidance(layout.rooms);
 
 /** A context for a direct filesystem or shell call that has no other one. */
 const ctx = BACKGROUND_CONTEXT;
@@ -225,7 +236,7 @@ describe('the workspace resource owner', () => {
 		const inner = memoryBackend();
 		const workspace = openWorkspace({
 			name: name('empty-tools'),
-			backend: { tools: [], connect: (agent) => inner.connect(agent) },
+			backend: { tools: [], connect: (agent) => inner.connect(agent), layout },
 		});
 		expect(workspace.tools()).toBe(workspace.tools());
 		expect(workspace.tools().tools).toEqual([]);
@@ -258,6 +269,7 @@ describe('the workspace resource owner', () => {
 				tools: [customTool],
 				guidance: 'Custom backend guidance.',
 				connect: (agent) => inner.connect(agent),
+				layout,
 			},
 		});
 		const bundle = workspace.tools();
@@ -298,6 +310,7 @@ describe('the workspace resource owner', () => {
 					},
 				],
 				connect: (caller, signal) => inner.connect(caller, signal),
+				layout,
 			},
 		});
 		const active = workspace.use(workspaceAgent('alpha'), async () => {
@@ -355,6 +368,7 @@ describe('the workspace resource owner', () => {
 				env.cleanup = async () => void cleaned++;
 				return env;
 			},
+			layout,
 		};
 		const workspace = openWorkspace({ name: name('revoke'), backend });
 		const active = workspace.use(workspaceAgent('alpha'), () => 'done');
@@ -382,6 +396,7 @@ describe('the workspace resource owner', () => {
 					if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
 					return inner.connect(agent, signal);
 				},
+				layout,
 			},
 		});
 		const active = workspace.use(workspaceAgent('alpha'), () => 'active');
@@ -409,6 +424,7 @@ describe('the workspace resource owner', () => {
 					return env;
 				},
 				dispose: async () => void disposed++,
+				layout,
 			},
 		});
 		await workspace.use(workspaceAgent('alpha'), async (env) => {
@@ -467,6 +483,83 @@ describe('ToolContext', () => {
 		);
 		expect(seen.outside).toBe(`${site.name} at /home/outside, signal`);
 		expect(connects.sort()).toEqual(['inside', 'inside', 'outside'].sort());
+		await site.dispose();
+	});
+});
+
+// -- a backend's own layout ---------------------------------------------------
+
+describe("a backend's layout", () => {
+	it('sends the audit log, the sql default database, and the mirror to the named paths, and states them in guidance', async () => {
+		const own: WorkspaceLayout = {
+			audit: '/audit/calls.jsonl',
+			database: '/data/main.db',
+			rooms: '/mirror',
+		};
+		const inner = memoryBackend();
+		const backend: WorkspaceBackend = {
+			tools: [createSqlTool(own.database)],
+			connect: (caller, signal) => inner.connect(caller, signal),
+			layout: own,
+		};
+		const site = openWorkspace({ name: name('own-layout'), backend, audit: {} });
+
+		// The guidance names both the audit log and the room mirror root.
+		const guidance = site.tools().guidance ?? '';
+		expect(guidance).toContain(own.audit);
+		expect(guidance).toContain(own.rooms);
+
+		// A call that names no database opens the one the layout names.
+		const sqlTool = site.tools().tools.find((tool) => tool.name === 'sql');
+		if (sqlTool === undefined) throw new Error('The sql tool is missing.');
+		const sqlResult = await sqlTool.invoke(
+			{ sql: 'CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1);' },
+			{ agent: { name: 'alpha', identity: 'alpha' }, callId: 'sql-call', room: 'lobby' },
+		);
+		if (typeof sqlResult === 'string')
+			throw new Error('The sql tool must return a structured result.');
+		expect((sqlResult.details as { database: string }).database).toBe(own.database);
+		expect(await site.use(workspaceAgent('alpha'), (env) => env.exists(own.database, ctx))).toEqual(
+			{
+				ok: true,
+				value: true,
+			},
+		);
+
+		// The audit log lands at the named path.
+		expect(await site.use(workspaceAgent('alpha'), (env) => env.exists(own.audit, ctx))).toEqual({
+			ok: true,
+			value: true,
+		});
+
+		// mirror() writes under the named rooms root.
+		const roomId = name('own-layout-room');
+		const worker = defineAgent({
+			name: 'worker',
+			identity: 'Says one thing.',
+			executor: pi({ instructions: 'speak', model: 'scripted/worker' }),
+		});
+		const session = await startRoom({
+			name: roomId,
+			agents: [worker],
+			execution: piExecution({
+				stream: scripted(
+					byAgent({ worker: (_context, _who, call) => (call === 1 ? speak('hi') : quiet()) }),
+				),
+			}),
+		});
+		const mirror = await site.mirror(session);
+		expect(mirror.path).toBe(roomMirrorPath(own.rooms, roomId));
+		const visit = await enter(session);
+		const exchange = await visit.send({ text: 'go' });
+		await exchange.waitForClose();
+		await session.stop();
+		await mirror.stop();
+		expect(await site.use(workspaceAgent('alpha'), (env) => env.exists(mirror.path, ctx))).toEqual({
+			ok: true,
+			value: true,
+		});
+
 		await site.dispose();
 	});
 });

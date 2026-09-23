@@ -29,7 +29,7 @@
 export { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 export type { AuditEntry, AuditLog, AuditLogOptions } from './audit.ts';
 export { DEFAULT_AUDIT_LOG, openAuditLog } from './audit.ts';
-export type { WorkspaceBackend, WorkspaceEnv } from './backend.ts';
+export type { WorkspaceBackend, WorkspaceEnv, WorkspaceLayout } from './backend.ts';
 export type { MinimalWriter } from './execution-env.ts';
 export {
 	boundedView,

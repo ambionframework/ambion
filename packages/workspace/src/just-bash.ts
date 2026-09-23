@@ -36,11 +36,22 @@ import {
 	type ExecutionToolContext,
 } from '@earendil-works/pi-agent-core';
 import { Bash, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
-import type { WorkspaceBackend } from './backend.ts';
+import { DEFAULT_AUDIT_LOG } from './audit.ts';
+import type { WorkspaceBackend, WorkspaceLayout } from './backend.ts';
 import { BashEnv } from './bash-env.ts';
 import { DEV_DIR, withDevices } from './devices.ts';
 import type { WorkspaceAgent } from './resource.ts';
 import { createSqlTool, SHARED_DATABASE } from './sql.ts';
+
+/**
+ * Where the just-bash backends keep the audit log, the shared database, and
+ * the room mirrors. Both backends name the same layout, so no file moves.
+ */
+const JUST_BASH_LAYOUT: WorkspaceLayout = {
+	audit: DEFAULT_AUDIT_LOG,
+	database: SHARED_DATABASE,
+	rooms: '/rooms',
+};
 
 /** Build one agent's environment over the workspace's filesystem. */
 async function connectOver(fs: IFileSystem, agent: WorkspaceAgent): Promise<BashEnv> {
@@ -124,8 +135,14 @@ const JUST_BASH_GUIDANCE = [
 ].join('\n');
 
 /** Create the Pi harness tools offered by each just-bash backend instance. */
-function justBashTools(): readonly AgentHarnessTool<ExecutionToolContext>[] {
-	return [createReadTool(), createWriteTool(), createEditTool(), createBashTool(), createSqlTool()];
+function justBashTools(database: string): readonly AgentHarnessTool<ExecutionToolContext>[] {
+	return [
+		createReadTool(),
+		createWriteTool(),
+		createEditTool(),
+		createBashTool(),
+		createSqlTool(database),
+	];
 }
 
 /**
@@ -202,8 +219,9 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
 		connect: async (agent) => connectOver(await resource.get(), agent),
 		dispose: async () => resource.clear(inMemory()),
 		readFiles: async () => listFiles(await resource.get()),
-		tools: justBashTools(),
+		tools: justBashTools(JUST_BASH_LAYOUT.database),
 		guidance: JUST_BASH_GUIDANCE,
+		layout: JUST_BASH_LAYOUT,
 	};
 }
 
@@ -231,7 +249,8 @@ export function directoryBackend(root: string): WorkspaceBackend {
 	return {
 		connect: async (agent) => connectOver(await resource.get(), agent),
 		dispose: async () => resource.clear(),
-		tools: justBashTools(),
+		tools: justBashTools(JUST_BASH_LAYOUT.database),
 		guidance: JUST_BASH_GUIDANCE,
+		layout: JUST_BASH_LAYOUT,
 	};
 }

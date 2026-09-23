@@ -2,9 +2,11 @@
  * A room's message record, mirrored to the workspace as one JSONL file per
  * room.
  *
- * The mirror lives at `/rooms/<room name>/messages.jsonl`, one line per
- * message, in the room's own order. It is an ordinary file: an agent reads
- * it with `read` or `bash cat`, the same as any file a peer wrote.
+ * The mirror lives at `<rooms root>/<room name>/messages.jsonl`, one line
+ * per message, in the room's own order. The rooms root comes from the
+ * backend's `WorkspaceLayout`; the just-bash backends name it `/rooms`. The
+ * mirror is an ordinary file: an agent reads it with `read` or `bash cat`,
+ * the same as any file a peer wrote.
  *
  * This is a secondary, best-effort copy. `packages/journal` remains the
  * source of truth for the room; a write failure here calls `onError` and
@@ -26,9 +28,6 @@ import type { WorkspaceEnv } from './backend.ts';
 import { openLog } from './log.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 
-/** The directory every room's message record lives under. */
-const ROOMS_ROOT = '/rooms';
-
 /** One line of a room's message record. */
 export type RoomMessageEntry = Message & { readonly room: string };
 
@@ -47,28 +46,31 @@ export interface RoomMirror {
 }
 
 /**
- * Guidance for the `/rooms` convention. It names no room, so a workspace
- * states it unconditionally, with no option to set.
+ * Guidance for the room-mirror convention under `root`, the backend's own
+ * layout for it. It names no room, so a workspace states it
+ * unconditionally, with no option to set.
  */
-export const ROOM_MIRROR_GUIDANCE = [
-	`This workspace may hold /rooms/<room name>/messages.jsonl for any room`,
-	`that mirrors its record here. Read a room's file with read or bash`,
-	`cat. It can hold messages your own context has trimmed or folded`,
-	`into a summary, and the history of a room you are not seated in.`,
-	`Each line carries the message's own seq. A message ref names the`,
-	`same seq: ambion://room/<name>/message/<seq>. Filter it with jq:`,
-	`jq 'select(.seq == <seq>)' finds the line a ref or the ask line`,
-	`names. jq also filters by kind or from.`,
-].join('\n');
+export function roomMirrorGuidance(root: string): string {
+	return [
+		`This workspace may hold ${root}/<room name>/messages.jsonl for any room`,
+		`that mirrors its record here. Read a room's file with read or bash`,
+		`cat. It can hold messages your own context has trimmed or folded`,
+		`into a summary, and the history of a room you are not seated in.`,
+		`Each line carries the message's own seq. A message ref names the`,
+		`same seq: ambion://room/<name>/message/<seq>. Filter it with jq:`,
+		`jq 'select(.seq == <seq>)' finds the line a ref or the ask line`,
+		`names. jq also filters by kind or from.`,
+	].join('\n');
+}
 
 /**
- * The path one room's message record lives at, or a thrown error naming the
- * room. A room's name is not validated at the kernel today, and this is the
- * first place one turns into a filesystem path: a name holding `..` or an
- * extra `/` must not resolve outside `/rooms`.
+ * The path one room's message record lives at under `root`, or a thrown
+ * error naming the room. A room's name is not validated at the kernel
+ * today, and this is the first place one turns into a filesystem path: a
+ * name holding `..` or an extra `/` must not resolve outside `root`.
  */
-export function roomMirrorPath(roomName: string): string {
-	const path = `${ROOMS_ROOT}/${roomName}/messages.jsonl`;
+export function roomMirrorPath(root: string, roomName: string): string {
+	const path = `${root}/${roomName}/messages.jsonl`;
 	if (posix.normalize(path) !== path) {
 		throw new Error(`Room name is not safe to use as a path: '${roomName}'.`);
 	}
@@ -141,11 +143,11 @@ function reportError(onError: ((error: Error) => void) | undefined, error: unkno
 }
 
 /**
- * Start mirroring `room`'s messages to `roomMirrorPath(room.name)` over
- * `drive`, writing as `agent`. Subscribes before it reads, so nothing that
- * lands during recovery is missed, then backfills from the highest `seq`
- * already on disk. A message already accounted for, from either source, is
- * not written twice.
+ * Start mirroring `room`'s messages to `roomMirrorPath(root, room.name)`
+ * over `drive`, writing as `agent`. Subscribes before it reads, so nothing
+ * that lands during recovery is missed, then backfills from the highest
+ * `seq` already on disk. A message already accounted for, from either
+ * source, is not written twice.
  *
  * A live message can land while the backfill `read` is still in flight, and
  * a room only settles that read once every queued append (this one among
@@ -157,15 +159,17 @@ function reportError(onError: ((error: Error) => void) | undefined, error: unkno
  * through the same loop once recovery is over.
  *
  * Not exported from the package root: a caller reaches this through
- * `Workspace.mirror()`, which supplies `drive` and `agent` itself.
+ * `Workspace.mirror()`, which supplies `drive`, `agent`, and `root` itself,
+ * from the backend's own layout.
  */
 export async function mirrorRoom(
 	room: Room,
 	drive: WorkspaceResource<WorkspaceEnv>,
 	agent: WorkspaceAgent,
+	root: string,
 	options: RoomMirrorOptions = {},
 ): Promise<RoomMirror> {
-	const path = roomMirrorPath(room.name);
+	const path = roomMirrorPath(root, room.name);
 	const dir = posix.dirname(path);
 	const fileName = posix.basename(path);
 	const log = openLog({ path, rotateBytes: options.rotateBytes });

@@ -16,10 +16,13 @@ import { enter, roomName as name } from '../../ambion/test/support/room.ts';
 import { byAgent, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import { openWorkspace } from '../src/index.ts';
 import { memoryBackend } from '../src/just-bash.ts';
-import { ROOM_MIRROR_GUIDANCE, roomMirrorPath } from '../src/mirror.ts';
+import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
 import type { WorkspaceAgent } from '../src/resource.ts';
 
 const reader: WorkspaceAgent = { name: 'reader' };
+/** The just-bash backends name `/rooms` in their layout. */
+const ROOMS_ROOT = '/rooms';
+const ROOM_MIRROR_GUIDANCE = roomMirrorGuidance(ROOMS_ROOT);
 
 function said(seq: Seq, text: string, from = 'priya'): Message {
 	return { kind: 'said', seq, at: new Date(seq).toISOString(), from, text };
@@ -85,7 +88,7 @@ async function readLines(env: ExecutionEnv, path: string): Promise<Record<string
 
 describe('Workspace.mirror', () => {
 	it('names the path under /rooms/<room name>/messages.jsonl', () => {
-		expect(roomMirrorPath('lobby')).toBe('/rooms/lobby/messages.jsonl');
+		expect(roomMirrorPath(ROOMS_ROOT, 'lobby')).toBe('/rooms/lobby/messages.jsonl');
 	});
 
 	it('always includes the /rooms guidance in tools(), with no option to set', () => {
