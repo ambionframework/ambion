@@ -45,9 +45,13 @@ const surveyor = defineAgent({
 
 ## Use the resource directly
 
-The root entry loads no backend. `/resource` holds only the neutral
+The root entry loads no backend. `./resource` holds only the neutral
 contract: `openResource` and its types. It loads neither the Ambion runtime
-nor a model library. `/just-bash` holds the two backends.
+nor a model library. `./just-bash` holds the two backends,
+`memoryBackend` and `directoryBackend`. `./sql` holds `openSqlResource`, a
+resource over its own SQLite database, with its `SqlProvenance` and
+`SqlResourceEnv` types. `./conformance` holds `workspaceConformance`, the
+scenario matrix a new backend runs to prove it meets the resource contract.
 
 ```ts
 import { memoryBackend } from '@ambionframework/workspace/just-bash';

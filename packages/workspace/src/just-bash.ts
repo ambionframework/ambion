@@ -107,12 +107,12 @@ export interface MemoryWorkspaceBackend extends WorkspaceBackend {
 
 /** Shell guidance for the just-bash backends: their commands, network, and isolation. */
 const JUST_BASH_GUIDANCE = [
-	`Your home is /home/<your name>. bash runs a simulated Unix shell: the common coreutils`,
-	`(ls, cat, grep, sed, awk, find, tar, and more), plus jq for JSON, yq for YAML and TOML,`,
-	`xan for CSV, and sqlite3. Run a script with js-exec (JavaScript) or python3 (Python).`,
-	`bash has no network: curl and every other network command are disabled. Other agents`,
-	`connected to this workspace read and write the same files, with no wall between one`,
-	`agent's home and another's.`,
+	`The shell is a simulated Unix shell: the common coreutils (ls, cat, grep, sed, awk, find,`,
+	`tar, and more), plus jq for JSON, yq for YAML and TOML, xan for CSV, and sqlite3. Run a`,
+	`script with js-exec (JavaScript) or python3 (Python).`,
+	``,
+	`The shell has no network: curl and every other network command are disabled. Your home is`,
+	`/home/<your name>, and there is no wall between one agent's home and another's.`,
 ].join('\n');
 
 /**

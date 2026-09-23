@@ -478,8 +478,8 @@ each other's homes. The default workspace does not provide operating-system isol
 agents or distributed ownership of a shared directory. Hosts own credentials
 and authorization for external services.
 
-Backends perform raw filesystem I/O below the owner. They do not maintain a
-second destruction mark or a second operation queue.
+Backends perform raw filesystem I/O below the owner. They do not keep a
+second operation queue.
 
 **A new backend follows one recipe.** It implements `connect()` and an
 `ExecutionEnv` over the shared helpers (see [The resource
