@@ -352,11 +352,11 @@ const lab = openWorkspace({
 queries this one database, so a table or a view one agent creates is data
 another agent reads at once. The tool takes these parameters:
 
-| Parameter | Meaning                                                   |
-| --------- | --------------------------------------------------------- |
-| `sql`     | One or more statements. The last query gives the preview. |
-| `export`  | A path in the workspace for the full result as CSV.       |
-| `maxRows` | How many rows the preview shows. The default is 50.       |
+| Parameter | Meaning                                                         |
+| --------- | --------------------------------------------------------------- |
+| `sql`     | One or more statements. The last query gives the preview.       |
+| `export`  | A path in the workspace for the full result as CSV.             |
+| `maxRows` | How many rows the preview shows, up to 1000. The default is 50. |
 
 **The preview stays in context and writes nothing to disk.** The tool shows
 the last query's result as a Markdown table, capped at `maxRows`. It keeps
@@ -386,16 +386,28 @@ as hex.
 - **The dialect is SQLite.** Dates are functions, `||` joins text, and a
   column type is an affinity. The backend's guidance states this.
 - **`ATTACH` opens `:memory:` alone.** A private scratch database lives for
-  one call, and one statement joins it with the shared tables.
+  one call, and one statement joins it with the shared tables. SQLite reads
+  `:memory:` in lower case alone, so the backend compares it exactly.
 - **No statement opens another host file.** The backend refuses an
-  `ATTACH` of a file and a `VACUUM INTO`, and runs no later statement of
-  the call. A check of each statement's text holds on every supported Node.
-  A Node whose `node:sqlite` has `setAuthorizer` also refuses them in the
-  engine. `node:sqlite` loads no extension.
-- **A statement runs to its end.** `node:sqlite` is synchronous, so an abort
-  takes effect before the next statement, or the next row of the last one.
-- **Every agent shares one handle.** The SQL owner runs one operation at a
-  time, so writes take a total order.
+  `ATTACH` of anything but `':memory:'` and a `VACUUM INTO`, and runs no
+  later statement of the call. A check of each statement's text holds on
+  every supported Node, and skips what SQLite skips: whitespace, comments,
+  and an empty `;`. A Node whose `node:sqlite` has `setAuthorizer` also
+  refuses an `ATTACH` in the engine. `node:sqlite` loads no extension.
+- **A call commits its own transaction.** Every agent shares one handle. A
+  call that leaves a transaction open gets it rolled back and an `ok: false`
+  outcome, so no write from a later call lands inside it.
+- **A result keeps one value per column name.** A last statement with two
+  columns of one name gives an `ok: false` outcome that asks for `AS`.
+- **A call stops between statements and between rows.** `sqlResult` yields
+  to the event loop every 256 rows, so an abort and the time limit can
+  fire, and other rooms keep running. A call stops after 30 seconds; set
+  `timeout` in `sqliteBackend(location, { timeout })` to change it. A
+  timeout is an `ok: false` outcome, and an abort rejects.
+- **One statement that gives no rows runs to its end.** `node:sqlite` has no
+  hook to stop a statement, so the backend cannot stop such a statement
+  early. For example, an aggregate over an unbounded recursive query does
+  not return.
 
 ### The SqlBackend interface
 
@@ -422,10 +434,10 @@ the calling agent.
 **`run` takes `maxRows` and an optional `export` path.** An `ok` outcome
 holds the last statement's `columns`, its first `maxRows` rows, its
 `rowCount`, and the absolute `export` path when the options named one. A
-statement that the database refuses, or an export that fails, gives
-`{ ok: false, message }`, and the run stops there. A fault of the
-connection rejects. An aborted `context.abortSignal` rejects before the
-next statement runs.
+statement that the database or the backend refuses gives
+`{ ok: false, message }`, and the run stops there. A call past the
+backend's time limit gives the same. A fault of the connection or of
+`WorkspaceFiles`, and an abort by the caller, reject.
 
 **`sqlResult` does the preview, the count, and the export for a backend.**
 The root entry exports it. A backend passes the last statement's columns,

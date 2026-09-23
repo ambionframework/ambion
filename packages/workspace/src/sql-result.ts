@@ -2,7 +2,10 @@
  * The result of a SQL run: a preview, a row count, and an optional CSV file.
  *
  * `sqlResult` reads the rows of a last statement once. It keeps the first
- * `maxRows` rows and counts every row. With `export`, it streams every row
+ * `maxRows` rows and counts every row. It yields to the event loop every
+ * `ROWS_PER_TURN` rows, so an abort, a time limit, and other rooms make
+ * progress while a large result streams. A non-integer `maxRows` rounds
+ * down, and a negative or non-finite one keeps no row. With `export`, it streams every row
  * as CSV through `WorkspaceFiles`, in chunks, so no backend holds the full
  * result in memory. A backend calls it with its own row iterator; a backend
  * with a native export can write through `WorkspaceFiles` itself.
@@ -22,6 +25,12 @@ export const NULL_SENTINEL = '\\N';
 
 /** How many characters of CSV one chunk holds before `WorkspaceFiles` gets it. */
 const CHUNK_CHARS = 64 * 1024;
+
+/** How many rows `sqlResult` reads before it yields to the event loop. */
+const ROWS_PER_TURN = 256;
+
+/** Let timers and other work run, so an abort or a time limit can fire. */
+const yieldTurn = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 /** One CSV field: `\N` for NULL, hex for a blob, and RFC 4180 quoting for the rest. */
 function csvField(value: SqlValue | undefined): string {
@@ -45,9 +54,12 @@ export function csvRecord(columns: readonly string[], row: SqlRow): string {
 }
 
 /** The CSV text of `rows`, a header first, in chunks of about `CHUNK_CHARS`. */
-function* csvChunks(columns: readonly string[], rows: Iterable<SqlRow>): Generator<string> {
+async function* csvChunks(
+	columns: readonly string[],
+	rows: AsyncIterable<SqlRow>,
+): AsyncGenerator<string> {
 	let chunk = `${csvHeader(columns)}\n`;
-	for (const row of rows) {
+	for await (const row of rows) {
 		chunk += `${csvRecord(columns, row)}\n`;
 		if (chunk.length >= CHUNK_CHARS) {
 			yield chunk;
@@ -55,6 +67,45 @@ function* csvChunks(columns: readonly string[], rows: Iterable<SqlRow>): Generat
 		}
 	}
 	if (chunk !== '') yield chunk;
+}
+
+/** Reject when the caller aborted, or a time limit fired. */
+function throwIfAborted(context: Context): void {
+	const signal = context.abortSignal;
+	if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted.');
+}
+
+/** The first `maxRows` rows, and the count of every row, as the rows stream past. */
+class Tally {
+	readonly preview: SqlRow[] = [];
+	count = 0;
+
+	constructor(private readonly maxRows: number) {}
+
+	/** Count `row`, keep it in the preview while there is room, and give the new count. */
+	add(row: SqlRow): number {
+		if (this.preview.length < this.maxRows) this.preview.push(row);
+		this.count += 1;
+		return this.count;
+	}
+}
+
+/** `rows` through `tally`, with an abort check at each row and a yield every `ROWS_PER_TURN`. */
+async function* counted(
+	rows: Iterable<SqlRow>,
+	tally: Tally,
+	context: Context,
+): AsyncGenerator<SqlRow> {
+	for (const row of rows) {
+		throwIfAborted(context);
+		if (tally.add(row) % ROWS_PER_TURN === 0) await yieldTurn();
+		yield row;
+	}
+}
+
+/** A `maxRows` as a count: rounded down, and 0 when negative or not finite. */
+function previewSize(maxRows: number): number {
+	return Number.isFinite(maxRows) ? Math.max(0, Math.floor(maxRows)) : 0;
 }
 
 /**
@@ -69,25 +120,15 @@ export async function sqlResult(
 	files: WorkspaceFiles,
 	context: Context,
 ): Promise<SqlOutcome> {
-	const preview: SqlRow[] = [];
-	let rowCount = 0;
-	const take = (row: SqlRow): void => {
-		const signal = context.abortSignal;
-		if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted.');
-		if (preview.length < options.maxRows) preview.push(row);
-		rowCount += 1;
-	};
+	const tally = new Tally(previewSize(options.maxRows));
+	const stream = counted(rows, tally, context);
 	if (options.export === undefined) {
-		for (const row of rows) take(row);
-		return { ok: true, columns, rows: preview, rowCount };
-	}
-	function* counted(): Generator<SqlRow> {
-		for (const row of rows) {
-			take(row);
-			yield row;
+		for await (const _ of stream) {
+			// `counted` fills the tally as each row passes.
 		}
+		return { ok: true, columns, rows: tally.preview, rowCount: tally.count };
 	}
-	const chunks = columns.length === 0 ? [] : csvChunks(columns, counted());
+	const chunks = columns.length === 0 ? [] : csvChunks(columns, stream);
 	const path = await files.writeFile(options.export, chunks, context);
-	return { ok: true, columns, rows: preview, rowCount, export: path };
+	return { ok: true, columns, rows: tally.preview, rowCount: tally.count, export: path };
 }

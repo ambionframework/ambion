@@ -45,16 +45,17 @@ export interface WorkspaceFiles {
 
 /** What one `run` gives back, and where it writes the full result. */
 export interface SqlRunOptions {
-	/** How many rows of the last statement the outcome holds. */
+	/** How many rows of the last statement the outcome holds. It rounds down; below 0 is 0. */
 	readonly maxRows: number;
 	/** A workspace path for every row of the last statement, as CSV. */
 	readonly export?: string;
 }
 
 /**
- * What one `run` gives back. A statement that the database refuses, or an
- * export that fails, is an `ok: false` outcome with the message. A fault of
- * the connection, or an abort, rejects the promise.
+ * What one `run` gives back. A statement that the database or the backend
+ * refuses is an `ok: false` outcome with the message, and so is a call
+ * that runs past the backend's time limit. A fault of the connection or of
+ * `WorkspaceFiles`, and an abort by the caller, reject the promise.
  */
 export type SqlOutcome =
 	| {

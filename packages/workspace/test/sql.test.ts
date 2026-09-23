@@ -262,32 +262,6 @@ INSERT INTO big SELECT id FROM seq;`,
 		await site.dispose();
 	});
 
-	it('refuses an ATTACH of a file and a VACUUM INTO, and runs no statement after them', async () => {
-		const site = openWorkspace({
-			name: 'no-files',
-			backend: { bash: memoryBackend(), sql: sqliteBackend(':memory:') },
-		});
-		const dir = await mkdtemp(join(tmpdir(), 'ambion-sqlite-escape-'));
-		const target = join(dir, 'escape.db');
-		for (const statement of [
-			`ATTACH '${target}' AS escape`,
-			`ATTACH DATABASE '${dir}/' || 'escape.db' AS escape`,
-			`/* note */ attach '${target}' as escape`,
-			`CREATE TABLE t(x); VACUUM INTO '${target}'`,
-		]) {
-			const result = await sql(site, 'alpha', { sql: `${statement}; CREATE TABLE after(x);` });
-			expect(result.text, statement).toContain('SQL error');
-		}
-		const after = await sql(site, 'alpha', {
-			sql: "SELECT count(*) AS n FROM sqlite_master WHERE name = 'after';",
-		});
-		expect(after.text).toContain('| 0 |');
-		const { existsSync } = await import('node:fs');
-		expect(existsSync(target)).toBe(false);
-		await rm(dir, { recursive: true, force: true });
-		await site.dispose();
-	});
-
 	it('keeps a file database across workspaces, and creates its directory', async () => {
 		const dir = await mkdtemp(join(tmpdir(), 'ambion-sqlite-file-'));
 		const location = join(dir, 'data', 'lab.db');

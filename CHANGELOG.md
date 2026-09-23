@@ -14,13 +14,16 @@ exports the `WorkspaceBackends`, `SqlBackend`, `SqlEnv`, `SqlOutcome`,
 backend has no `sql` tool.** `backend.sql` takes a `SqlBackend`: a shared
 database that need not live on the shell's filesystem. The new
 `@ambionframework/workspace/sqlite` entry exports `sqliteBackend(location)`,
-the default SQL backend over `node:sqlite`. The SQL backend runs under an
+the default SQL backend over `node:sqlite`. It refuses a statement that
+opens a host file, rolls back a transaction that a call leaves open,
+refuses a result with two columns of one name, and stops a call after
+`timeout` seconds, 30 by default. The SQL backend runs under an
 owner of its own. `connect(agent, files)` gives it the calling agent's
 `WorkspaceFiles` on the bash backend. `run(sql, { maxRows, export? })`
 gives the last statement's columns, its first `maxRows` rows, and its row
 count, and writes an export as CSV through `files`. The root entry exports
 `sqlResult`, which does the preview, the count, and the streamed export
-for a backend. The `sql` tool takes `sql`, `export`, and `maxRows`.
+for a backend. The `sql` tool takes `sql`, `export`, and `maxRows`, an integer up to 1000.
 `Workspace.sql` exposes the SQL owner, and `dispose()` disposes the SQL
 owner and then the bash owner.
 

@@ -30,6 +30,9 @@ import { auditEntry } from './tools.ts';
 /** How many rows the preview shows when the caller names no limit. */
 const PREVIEW_ROWS = 50;
 
+/** The most rows one preview shows. A larger result goes to a file through `export`. */
+const MAX_PREVIEW_ROWS = 1000;
+
 /** What the tool reports beside its text, for logs and UI. */
 interface SqlDetails {
 	database: string;
@@ -52,7 +55,11 @@ const sqlSchema = Type.Object({
 		}),
 	),
 	maxRows: Type.Optional(
-		Type.Number({ description: 'How many rows the preview shows. The default is 50.' }),
+		Type.Integer({
+			minimum: 0,
+			maximum: MAX_PREVIEW_ROWS,
+			description: `How many rows the preview shows, up to ${MAX_PREVIEW_ROWS}. The default is 50.`,
+		}),
 	),
 });
 
