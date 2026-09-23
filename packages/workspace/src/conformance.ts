@@ -1,6 +1,6 @@
 /**
- * The cases every shell backend (`WorkspaceBackend`) and every
- * `SqlBackend` must pass. A shell backend supplies a Pi
+ * The cases every bash backend (`BashBackend`) and every
+ * `SqlBackend` must pass. A bash backend supplies a Pi
  * `ExecutionEnv` (`docs/workspace.md`), and the tools the neutral layer
  * builds over it assume one rule set: how a path resolves, how an error
  * comes back, how an aborted command differs from a timed-out one, how a
@@ -30,7 +30,7 @@ import {
 	type ShellOutputUpdate,
 	withAbortSignal,
 } from '@earendil-works/pi-agent-core';
-import type { WorkspaceBackend, WorkspaceEnv } from './backend.ts';
+import type { BashBackend, WorkspaceEnv } from './backend.ts';
 import type { SqlBackend, SqlEnv, SqlOutcome, SqlRow } from './sql-backend.ts';
 
 export type { ConformanceCase };
@@ -41,7 +41,7 @@ export type { ConformanceCase };
  */
 export interface ConformanceBackend {
 	readonly name: string;
-	open(): Promise<{ backend: WorkspaceBackend; dispose(): Promise<void> }>;
+	open(): Promise<{ backend: BashBackend; dispose(): Promise<void> }>;
 }
 
 const ctx = BACKGROUND_CONTEXT;
@@ -220,7 +220,7 @@ async function runCase(harness: ConformanceBackend, body: Body): Promise<void> {
 }
 
 /**
- * The cases every `WorkspaceBackend` must pass. The order is stable and the
+ * The cases every `BashBackend` must pass. The order is stable and the
  * names are the contract.
  */
 export function workspaceConformance(harness: ConformanceBackend): readonly ConformanceCase[] {

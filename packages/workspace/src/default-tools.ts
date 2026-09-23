@@ -2,12 +2,12 @@
  * The neutral layer's default tools: read, write, edit, bash and sql.
  *
  * Every workspace gets these five tools before any tool a backend adds of
- * its own. A shell backend with no tools of its own still offers all five.
+ * its own. A bash backend with no tools of its own still offers all five.
  * The tools run over Pi's `ExecutionEnv` alone, so this module names no
  * just-bash type.
  *
  * `sql` has two forms. With no SQL backend, the shell `sql` tool of
- * `./sql.ts` opens the shell backend's own shared database, at the path
+ * `./sql.ts` opens the bash backend's own shared database, at the path
  * its `layout` names. With a SQL backend, `./sql-tool.ts` runs the
  * statements on that backend. The guidance states the form the workspace
  * has, so an agent reads one true fact about where its data lives.

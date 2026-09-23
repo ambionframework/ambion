@@ -38,7 +38,7 @@ cannot work from the typed README examples and the export snapshot.
 **A workstation backend.** A workspace backend over SSH to one remote
 server. PR #268 holds the scope. **Condition:** the owner schedules it.
 
-**A SQL backend.** `openWorkspace` takes an optional `SqlBackend`
+**A SQL backend.** `openWorkspace` takes an optional `backend.sql`, a `SqlBackend`
 ([Workspace](../docs/workspace.md#give-the-workspace-a-sql-backend)), and
 the package ships none. A backend over a database server connects as each
 agent with its own credential, so the server enforces the grants. It

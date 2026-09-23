@@ -26,7 +26,7 @@ afterEach(async () => {
 
 async function build() {
 	const directory = await mkdtemp(join(tmpdir(), 'ambion-workbench-toolset-'));
-	const workspace = openWorkspace({ name: 'workbench', backend: memoryBackend() });
+	const workspace = openWorkspace({ name: 'workbench', backend: { bash: memoryBackend() } });
 	const lab = openSqlResource({
 		name: 'lab',
 		location: join(directory, 'lab.db'),

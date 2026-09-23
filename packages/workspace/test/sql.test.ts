@@ -21,12 +21,12 @@ async function sql(
 
 describe('the sql tool', () => {
 	it('lists sql among the workspace tools', () => {
-		const site = openWorkspace({ name: 'tools', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'tools', backend: { bash: memoryBackend() } });
 		expect(site.tools().tools.map((t) => t.name)).toEqual(['read', 'write', 'edit', 'bash', 'sql']);
 	});
 
 	it('shares a table and a view across agents, and shows a Markdown preview', async () => {
-		const site = openWorkspace({ name: 'share', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'share', backend: { bash: memoryBackend() } });
 		const made = await sql(site, 'alpha', {
 			sql: `CREATE TABLE pour(id INTEGER, grade TEXT, tonnes REAL);
 INSERT INTO pour VALUES (1,'C30',12.5),(2,'C40',8.0);
@@ -57,7 +57,7 @@ SELECT * FROM pour ORDER BY id;`,
 	});
 
 	it('renders a NULL value as NULL in the preview', async () => {
-		const site = openWorkspace({ name: 'nulls', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'nulls', backend: { bash: memoryBackend() } });
 		const result = await sql(site, 'alpha', {
 			sql: "SELECT 1 AS id, NULL AS note UNION ALL SELECT 2, 'set' ORDER BY id;",
 		});
@@ -67,7 +67,7 @@ SELECT * FROM pour ORDER BY id;`,
 	});
 
 	it('joins the shared database with a private in-memory scratch in one statement', async () => {
-		const site = openWorkspace({ name: 'attach', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'attach', backend: { bash: memoryBackend() } });
 		await sql(site, 'alpha', {
 			sql: "CREATE TABLE part(id INTEGER, name TEXT); INSERT INTO part VALUES (1,'a'),(2,'b'),(3,'c');",
 		});
@@ -84,7 +84,7 @@ SELECT p.id, p.name FROM part p JOIN scratch.pick USING(id) ORDER BY p.id;`,
 	});
 
 	it('reports no rows for a query that returns none', async () => {
-		const site = openWorkspace({ name: 'empty', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'empty', backend: { bash: memoryBackend() } });
 		await sql(site, 'alpha', { sql: 'CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1);' });
 		const result = await sql(site, 'alpha', { sql: 'SELECT * FROM t WHERE id > 99;' });
 		expect(result.text).toContain('No rows');
@@ -93,7 +93,7 @@ SELECT p.id, p.name FROM part p JOIN scratch.pick USING(id) ORDER BY p.id;`,
 	});
 
 	it('returns a SQL error as content, so the agent can correct it', async () => {
-		const site = openWorkspace({ name: 'error', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'error', backend: { bash: memoryBackend() } });
 		const result = await sql(site, 'alpha', { sql: 'SELECT * FROM missing_table;' });
 		expect(result.text).toContain('SQL error');
 		expect(result.text).toContain('missing_table');
@@ -101,7 +101,7 @@ SELECT p.id, p.name FROM part p JOIN scratch.pick USING(id) ORDER BY p.id;`,
 	});
 
 	it('writes the full result as CSV when export is set, and shows the head', async () => {
-		const site = openWorkspace({ name: 'export', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'export', backend: { bash: memoryBackend() } });
 		await sql(site, 'alpha', {
 			sql: "CREATE TABLE m(id INTEGER, kind TEXT, amt REAL); INSERT INTO m VALUES (1,'a',1.5),(2,'b',NULL),(3,'c',3.5);",
 		});
@@ -140,7 +140,7 @@ PY`,
 	});
 
 	it('opens a private database file when the caller names one', async () => {
-		const site = openWorkspace({ name: 'private', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'private', backend: { bash: memoryBackend() } });
 		await sql(site, 'alpha', {
 			sql: 'CREATE TABLE secret(id INTEGER); INSERT INTO secret VALUES (7);',
 			database: '~/private.db',
@@ -160,7 +160,7 @@ PY`,
 	});
 
 	it('caps the preview and points at export for a large result', async () => {
-		const site = openWorkspace({ name: 'cap', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'cap', backend: { bash: memoryBackend() } });
 		await sql(site, 'alpha', {
 			sql: `CREATE TABLE big(id INTEGER);
 WITH RECURSIVE seq(id) AS (SELECT 1 UNION ALL SELECT id+1 FROM seq WHERE id < 200)
@@ -173,7 +173,7 @@ INSERT INTO big SELECT id FROM seq;`,
 	});
 
 	it('previews the last query when the script has several', async () => {
-		const site = openWorkspace({ name: 'multi', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'multi', backend: { bash: memoryBackend() } });
 		const result = await sql(site, 'alpha', { sql: 'SELECT 1 AS a; SELECT 2 AS b, 3 AS c;' });
 		expect(result.text).toContain('| b | c |');
 		expect(result.text).toContain('| 2 | 3 |');
@@ -183,7 +183,7 @@ INSERT INTO big SELECT id FROM seq;`,
 	});
 
 	it('scans the export for RFC 4180 records, so an embedded newline does not inflate the count', async () => {
-		const site = openWorkspace({ name: 'count', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'count', backend: { bash: memoryBackend() } });
 		await sql(site, 'alpha', {
 			sql: "CREATE TABLE m(id INTEGER, note TEXT); INSERT INTO m VALUES (1,'line one\nline two'),(2,'plain');",
 		});
@@ -197,7 +197,7 @@ INSERT INTO big SELECT id FROM seq;`,
 	});
 
 	it('keeps a quoted newline inside its preview record and its row count exact', async () => {
-		const site = openWorkspace({ name: 'quoted-newline', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'quoted-newline', backend: { bash: memoryBackend() } });
 		await sql(site, 'alpha', {
 			sql: "CREATE TABLE m(id INTEGER, note TEXT); INSERT INTO m VALUES (1,'line one\nline two'),(2,'plain');",
 		});
@@ -211,7 +211,7 @@ INSERT INTO big SELECT id FROM seq;`,
 	});
 
 	it('keeps an escaped double quote inside a preview value', async () => {
-		const site = openWorkspace({ name: 'escaped-quote', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'escaped-quote', backend: { bash: memoryBackend() } });
 		await sql(site, 'alpha', {
 			sql: `CREATE TABLE m(id INTEGER, note TEXT); INSERT INTO m VALUES (1,'a"b'),(2,'plain');`,
 		});
@@ -225,7 +225,7 @@ INSERT INTO big SELECT id FROM seq;`,
 	});
 
 	it('leaves an existing export file unchanged when the query fails', async () => {
-		const site = openWorkspace({ name: 'safe-export', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'safe-export', backend: { bash: memoryBackend() } });
 		await sql(site, 'alpha', { sql: 'CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1);' });
 		const good = await sql(site, 'alpha', { sql: 'SELECT * FROM t;', export: '~/keep.csv' });
 		expect(good.details.rows).toBe(1);

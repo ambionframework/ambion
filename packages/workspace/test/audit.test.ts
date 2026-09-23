@@ -112,7 +112,11 @@ function entryFor(callId: string) {
 
 describe('the workspace audit log', () => {
 	it('records the room, agent, tool, arguments and result for a successful call', async () => {
-		const site = openWorkspace({ name: name('audited'), backend: memoryBackend(), audit: {} });
+		const site = openWorkspace({
+			name: name('audited'),
+			backend: { bash: memoryBackend() },
+			audit: {},
+		});
 		const write = site.tools().tools.find((tool) => tool.name === 'write');
 		if (write === undefined) throw new Error('The write tool is missing.');
 
@@ -146,7 +150,11 @@ describe('the workspace audit log', () => {
 	});
 
 	it('is readable through the ordinary read tool, the same as any other file', async () => {
-		const site = openWorkspace({ name: name('agent-reads'), backend: memoryBackend(), audit: {} });
+		const site = openWorkspace({
+			name: name('agent-reads'),
+			backend: { bash: memoryBackend() },
+			audit: {},
+		});
 		const tools = site.tools().tools;
 		const write = tools.find((tool) => tool.name === 'write');
 		const read = tools.find((tool) => tool.name === 'read');
@@ -167,7 +175,11 @@ describe('the workspace audit log', () => {
 	});
 
 	it('reads an image file as an image content part, and keeps only its byte count in the audit log', async () => {
-		const site = openWorkspace({ name: name('image-read'), backend: memoryBackend(), audit: {} });
+		const site = openWorkspace({
+			name: name('image-read'),
+			backend: { bash: memoryBackend() },
+			audit: {},
+		});
 		const read = site.tools().tools.find((tool) => tool.name === 'read');
 		if (read === undefined) throw new Error('The read tool is missing.');
 		await site.use(workspaceAgent('scribe'), (env) =>
@@ -199,7 +211,11 @@ describe('the workspace audit log', () => {
 	});
 
 	it('tells the calling agent the log exists, in the workspace guidance', () => {
-		const site = openWorkspace({ name: name('guidance'), backend: memoryBackend(), audit: {} });
+		const site = openWorkspace({
+			name: name('guidance'),
+			backend: { bash: memoryBackend() },
+			audit: {},
+		});
 		const guidance = site.tools().guidance ?? '';
 		expect(guidance).toContain(DEFAULT_AUDIT_LOG);
 		expect(guidance).toMatch(/read it/i);
@@ -208,13 +224,17 @@ describe('the workspace audit log', () => {
 	});
 
 	it('keeps the backend guidance, and adds nothing about audit, when no audit log is set', () => {
-		const site = openWorkspace({ name: name('no-audit'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('no-audit'), backend: { bash: memoryBackend() } });
 		const guidance = site.tools().guidance ?? '';
 		expect(guidance).not.toContain('audit');
 	});
 
 	it('names an empty room when the call carries none', async () => {
-		const site = openWorkspace({ name: name('no-room'), backend: memoryBackend(), audit: {} });
+		const site = openWorkspace({
+			name: name('no-room'),
+			backend: { bash: memoryBackend() },
+			audit: {},
+		});
 		const write = site.tools().tools.find((tool) => tool.name === 'write');
 		if (write === undefined) throw new Error('The write tool is missing.');
 
@@ -249,7 +269,11 @@ describe('the workspace audit log', () => {
 			connect: (agent: { name: string }) => inner.connect(agent),
 			layout,
 		};
-		const site = openWorkspace({ name: name('audited-error'), backend: failing, audit: {} });
+		const site = openWorkspace({
+			name: name('audited-error'),
+			backend: { bash: failing },
+			audit: {},
+		});
 		const tool = site.tools().tools.find((one) => one.name === 'explode');
 		if (tool === undefined) throw new Error('The custom tool is missing.');
 
@@ -273,7 +297,11 @@ describe('the workspace audit log', () => {
 
 	it('names the real room, through a running room, on every tool call it makes', async () => {
 		const roomId = name('workspace-audit');
-		const site = openWorkspace({ name: name('through-room'), backend: memoryBackend(), audit: {} });
+		const site = openWorkspace({
+			name: name('through-room'),
+			backend: { bash: memoryBackend() },
+			audit: {},
+		});
 		const worker = defineAgent({
 			name: 'worker',
 			identity: 'Writes one note.',
@@ -432,7 +460,11 @@ describe('recording under an aborted signal', () => {
 			connect: (agent: { name: string }) => inner.connect(agent),
 			layout,
 		};
-		const site = openWorkspace({ name: name('cut-mid-flight'), backend: slow, audit: {} });
+		const site = openWorkspace({
+			name: name('cut-mid-flight'),
+			backend: { bash: slow },
+			audit: {},
+		});
 		const tool = site.tools().tools.find((one) => one.name === 'slow');
 		if (tool === undefined) throw new Error('The custom tool is missing.');
 		const controller = new AbortController();

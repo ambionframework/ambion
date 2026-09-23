@@ -2,12 +2,16 @@
 
 ## Unreleased
 
-**A workspace can take a SQL backend beside its shell backend.**
-`openWorkspace` takes an optional `sql` option, a `SqlBackend`: a shared
-database that need not live on the shell's filesystem. The root entry
-exports the `SqlBackend`, `SqlEnv`, `SqlOutcome`, `SqlRow`, and `SqlValue`
-types. With a SQL backend, the `sql` tool runs its statements on that
-backend under an owner of its own, and takes `sql`, `export`, and
+**`openWorkspace` takes its backends by kind, and a workspace can take a
+SQL backend.** The `backend` option is now `WorkspaceBackends`:
+`{ bash, sql? }`. Write `backend: { bash: memoryBackend() }` where you
+wrote `backend: memoryBackend()`. `WorkspaceBackend` is renamed
+`BashBackend`, and `MemoryWorkspaceBackend` is renamed `MemoryBashBackend`.
+`backend.sql` is an optional `SqlBackend`: a shared database that need not
+live on the shell's filesystem. The root entry exports the
+`WorkspaceBackends`, `SqlBackend`, `SqlEnv`, `SqlOutcome`, `SqlRow`, and
+`SqlValue` types. With a SQL backend, the `sql` tool runs its statements
+on that backend under an owner of its own, and takes `sql`, `export`, and
 `maxRows`. `export` writes the CSV file on the shell. `Workspace.sql`
 exposes the SQL owner, and `dispose()` disposes both owners. With no SQL
 backend, the workspace works as before. The package ships no

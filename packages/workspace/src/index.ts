@@ -17,7 +17,7 @@
  * import { openWorkspace } from '@ambionframework/workspace';
  * import { memoryBackend } from '@ambionframework/workspace/just-bash';
  *
- * const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
+ * const drive = openWorkspace({ name: 'team-site', backend: { bash: memoryBackend() } });
  * const agent = defineAgent({ ..., bundles: [drive.tools()] });
  * ```
  *
@@ -31,7 +31,7 @@
 export { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 export type { AuditEntry, AuditLog, AuditLogOptions } from './audit.ts';
 export { DEFAULT_AUDIT_LOG, openAuditLog } from './audit.ts';
-export type { WorkspaceBackend, WorkspaceEnv, WorkspaceLayout } from './backend.ts';
+export type { BashBackend, WorkspaceBackends, WorkspaceEnv, WorkspaceLayout } from './backend.ts';
 export type { MinimalWriter } from './execution-env.ts';
 export {
 	boundedView,

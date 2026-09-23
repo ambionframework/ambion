@@ -92,12 +92,12 @@ describe('Workspace.mirror', () => {
 	});
 
 	it('always includes the /rooms guidance in tools(), with no option to set', () => {
-		const site = openWorkspace({ name: name('guidance'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('guidance'), backend: { bash: memoryBackend() } });
 		expect(site.tools().guidance).toContain(ROOM_MIRROR_GUIDANCE);
 	});
 
 	it('backfills the full backlog, in order, on a fresh log', async () => {
-		const site = openWorkspace({ name: name('fresh'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('fresh'), backend: { bash: memoryBackend() } });
 		const room = fakeRoom('lobby', [said(1, 'one'), said(2, 'two'), said(3, 'three')]);
 
 		const mirror = await site.mirror(room);
@@ -111,7 +111,7 @@ describe('Workspace.mirror', () => {
 	});
 
 	it('resumes from the highest seq already on disk, writing nothing twice', async () => {
-		const site = openWorkspace({ name: name('resume'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('resume'), backend: { bash: memoryBackend() } });
 		const backlog = [said(1, 'one'), said(2, 'two'), said(3, 'three')];
 
 		const first = await site.mirror(fakeRoom('lobby', backlog));
@@ -127,7 +127,7 @@ describe('Workspace.mirror', () => {
 	});
 
 	it('appends a live message as it arrives, after the backfill', async () => {
-		const site = openWorkspace({ name: name('live'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('live'), backend: { bash: memoryBackend() } });
 		const room = fakeRoom('lobby', [said(1, 'one')]);
 
 		const mirror = await site.mirror(room);
@@ -140,7 +140,7 @@ describe('Workspace.mirror', () => {
 	});
 
 	it('drops a message already accounted for, from either source', async () => {
-		const site = openWorkspace({ name: name('dedup'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('dedup'), backend: { bash: memoryBackend() } });
 		const room = fakeRoom('lobby', [said(1, 'one'), said(2, 'two')]);
 
 		const mirror = await site.mirror(room);
@@ -159,7 +159,7 @@ describe('Workspace.mirror', () => {
 		// read resolves with the message already included. Appending it right
 		// away would mark it accounted for before the backfill loop runs, and
 		// the loop would then skip it as already written: gone for good.
-		const site = openWorkspace({ name: name('race'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('race'), backend: { bash: memoryBackend() } });
 		const backlog = [said(1, 'one'), said(2, 'two')];
 		const base = fakeRoom('lobby', backlog);
 		const room: typeof base = {
@@ -180,7 +180,7 @@ describe('Workspace.mirror', () => {
 	});
 
 	it('ignores a live event once stopped', async () => {
-		const site = openWorkspace({ name: name('stopped'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('stopped'), backend: { bash: memoryBackend() } });
 		const room = fakeRoom('lobby', [said(1, 'one')]);
 
 		const mirror = await site.mirror(room);
@@ -194,7 +194,7 @@ describe('Workspace.mirror', () => {
 	});
 
 	it('reports a write failure to onError, and keeps running', async () => {
-		const site = openWorkspace({ name: name('write-fails'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('write-fails'), backend: { bash: memoryBackend() } });
 		const room = fakeRoom('lobby', [said(1, 'one')]);
 		const errors: Error[] = [];
 
@@ -211,7 +211,7 @@ describe('Workspace.mirror', () => {
 	});
 
 	it('refuses a room name that would resolve outside /rooms, instead of writing there', async () => {
-		const site = openWorkspace({ name: name('escape'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('escape'), backend: { bash: memoryBackend() } });
 		const room = fakeRoom('../escape', []);
 
 		await expect(site.mirror(room)).rejects.toThrow(/room name/i);
@@ -219,7 +219,7 @@ describe('Workspace.mirror', () => {
 	});
 
 	it('unsubscribes before rejecting when the backfill read itself fails', async () => {
-		const site = openWorkspace({ name: name('read-fails'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('read-fails'), backend: { bash: memoryBackend() } });
 		const base = fakeRoom('lobby', []);
 		let subscribed = 0;
 		const room: typeof base = {
@@ -242,7 +242,7 @@ describe('Workspace.mirror', () => {
 
 	it('names the real room, through a running room, over its own message record', async () => {
 		const roomId = name('through-room');
-		const site = openWorkspace({ name: name('site'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('site'), backend: { bash: memoryBackend() } });
 		const worker = defineAgent({
 			name: 'worker',
 			identity: 'Says two things.',

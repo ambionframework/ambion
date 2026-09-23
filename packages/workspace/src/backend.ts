@@ -4,6 +4,7 @@ import type {
 	ExecutionToolContext,
 } from '@earendil-works/pi-agent-core';
 import type { ResourceBackend, ResourceEnv } from './resource.ts';
+import type { SqlBackend } from './sql-backend.ts';
 
 /** A Pi `ExecutionEnv` whose cleanup the resource owner calls with no context. */
 export interface WorkspaceEnv extends Omit<ExecutionEnv, 'cleanup'>, ResourceEnv {}
@@ -23,8 +24,11 @@ export interface WorkspaceLayout {
 	readonly rooms: string;
 }
 
-/** A workspace backend that also supplies the tools for the Ambion facade. */
-export interface WorkspaceBackend extends ResourceBackend<WorkspaceEnv> {
+/**
+ * The bash backend: a shell over a persistent filesystem, with a home for
+ * each agent. It also supplies the tools for the Ambion facade.
+ */
+export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
 	/**
 	 * Tools the backend adds beyond the five defaults every workspace already
 	 * has: read, write, edit, bash and sql. Omit it, or list an empty array,
@@ -35,4 +39,15 @@ export interface WorkspaceBackend extends ResourceBackend<WorkspaceEnv> {
 	guidance?: string;
 	/** Where this backend keeps the audit log, the shared database, and the room mirrors. */
 	readonly layout: WorkspaceLayout;
+}
+
+/**
+ * The backends of one workspace, by kind. Every workspace has a `bash`
+ * backend. Every other kind is optional.
+ */
+export interface WorkspaceBackends {
+	/** The shell and its filesystem. The file tools, the audit log, and the room mirrors run on it. */
+	readonly bash: BashBackend;
+	/** A shared database. Absent, the `sql` tool opens `bash.layout.database` through the shell. */
+	readonly sql?: SqlBackend;
 }

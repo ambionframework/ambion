@@ -39,11 +39,11 @@ const twoWorkspaces: Scenario = {
 		if (!memoryBackend || !directoryBackend) throw new Error('two backends are expected');
 		const memoryDrive = openWorkspace({
 			name: `${name}-memory`,
-			backend: memoryBackend.backend,
+			backend: { bash: memoryBackend.backend },
 		});
 		const directoryDrive = openWorkspace({
 			name: `${name}-directory`,
-			backend: directoryBackend.backend,
+			backend: { bash: directoryBackend.backend },
 		});
 		const alpha = agent('alpha', 'Works in memory.', { bundles: [memoryDrive.tools()] });
 		const beta = agent('beta', 'Works on disk.', { bundles: [directoryDrive.tools()] });

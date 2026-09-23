@@ -30,7 +30,7 @@ live('the workspace', () => {
 				);
 			},
 		});
-		const store = openWorkspace({ name: roomName('live-store'), backend });
+		const store = openWorkspace({ name: roomName('live-store'), backend: { bash: backend } });
 		const librarian = agent('librarian', {
 			identity: 'Keeps the store notes.',
 			instructions: `
@@ -68,7 +68,7 @@ live('the workspace', () => {
 
 	it('a seat queries the shared database with the sql tool, and answers from the result', async () => {
 		const backend = memoryBackend();
-		const store = openWorkspace({ name: roomName('live-sql'), backend });
+		const store = openWorkspace({ name: roomName('live-sql'), backend: { bash: backend } });
 		// Seed the shared database before the room opens.
 		await store.use({ name: 'seed' }, async (env) => {
 			const result = await env.exec(

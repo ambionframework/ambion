@@ -1,10 +1,10 @@
 /**
- * The SQL backend: a shared database beside the shell backend.
+ * The SQL backend: a shared database beside the bash backend.
  *
- * A workspace always has a shell backend. A SQL backend is optional. When a
+ * A workspace always has a bash backend. A SQL backend is optional. When a
  * workspace has one, the `sql` tool runs its statements over this backend,
  * under an owner of its own. The database need not live on the shell's
- * filesystem, and the shell does not reach it.
+ * filesystem.
  *
  * `connect(agent)` gives one agent an environment over the database. A
  * backend with accounts connects as that agent. A backend with one file
@@ -43,7 +43,7 @@ export interface SqlEnv extends ResourceEnv {
 	run(sql: string, context: Context): Promise<SqlOutcome>;
 }
 
-/** A shared database that a workspace opens beside its shell backend. */
+/** A shared database that a workspace opens beside its bash backend. */
 export interface SqlBackend extends ResourceBackend<SqlEnv> {
 	/**
 	 * The name of the database that the `sql` tool reports and the guidance

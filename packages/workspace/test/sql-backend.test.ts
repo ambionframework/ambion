@@ -51,8 +51,7 @@ function withSql(options: { audit?: boolean } = {}) {
 	const sql = sqliteTestBackend();
 	const workspace = openWorkspace({
 		name: 'lab',
-		backend: memoryBackend(),
-		sql,
+		backend: { bash: memoryBackend(), sql },
 		...(options.audit ? { audit: {} } : {}),
 	});
 	return { sql, workspace };
@@ -159,7 +158,7 @@ describe('a workspace with a SQL backend', () => {
 
 describe('a workspace with no SQL backend', () => {
 	it('has no SQL owner, and its sql tool opens the shell database', () => {
-		const workspace = openWorkspace({ name: 'lab', backend: memoryBackend() });
+		const workspace = openWorkspace({ name: 'lab', backend: { bash: memoryBackend() } });
 		expect(workspace.sql).toBeUndefined();
 		const properties = Object.keys(
 			(toolOf(workspace, 'sql').parameters as { properties: Record<string, unknown> }).properties,

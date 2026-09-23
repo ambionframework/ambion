@@ -2,7 +2,7 @@
  * The package's five entries, and what each one names. `index.ts` opens a
  * resource and its logs, over no backend. `./resource`, `./sql`, and
  * `./just-bash` each hold one binding. `./conformance` holds the cases
- * every `WorkspaceBackend` must pass.
+ * every `BashBackend` must pass.
  */
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';

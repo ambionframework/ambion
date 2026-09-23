@@ -85,7 +85,7 @@ function asker() {
 
 async function openRoom(seats: readonly string[]) {
 	const directory = await mkdtemp(join(tmpdir(), 'ambion-workbench-toolset-live-'));
-	const workspace = openWorkspace({ name: 'workbench', backend: memoryBackend() });
+	const workspace = openWorkspace({ name: 'workbench', backend: { bash: memoryBackend() } });
 	const lab = openSqlResource({
 		name: 'lab',
 		location: join(directory, 'lab.db'),

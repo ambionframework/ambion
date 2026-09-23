@@ -33,7 +33,7 @@ describe('isImagePath', () => {
 
 describe('readFile on a picture', () => {
 	it('reads an image file as bytes, with its mime type and no text', async () => {
-		const site = openWorkspace({ name: 'files-image', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'files-image', backend: { bash: memoryBackend() } });
 		await site.use(scribe, (env) =>
 			env.writeFile('/home/scribe/photo.png', FAKE_PNG, BACKGROUND_CONTEXT),
 		);
@@ -47,7 +47,7 @@ describe('readFile on a picture', () => {
 	});
 
 	it('refuses a picture past the preview size limit', async () => {
-		const site = openWorkspace({ name: 'files-image-big', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'files-image-big', backend: { bash: memoryBackend() } });
 		const big = new Uint8Array(8_388_609);
 		big.set(FAKE_PNG);
 		await site.use(scribe, (env) => env.writeFile('/home/scribe/big.png', big, BACKGROUND_CONTEXT));
@@ -63,7 +63,7 @@ describe('attachFile', () => {
 		directories.push(dir);
 		const localPath = join(dir, 'board.png');
 		await writeLocalFile(localPath, FAKE_PNG);
-		const site = openWorkspace({ name: 'attach-real', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'attach-real', backend: { bash: memoryBackend() } });
 
 		const entry = await attachFile(site, localPath);
 
@@ -78,7 +78,7 @@ describe('attachFile', () => {
 	});
 
 	it('expands a ~/ path to the real home directory before reading it', async () => {
-		const site = openWorkspace({ name: 'attach-tilde', backend: memoryBackend() });
+		const site = openWorkspace({ name: 'attach-tilde', backend: { bash: memoryBackend() } });
 		const resolved = join(homedir(), 'no-such-picture.png');
 
 		await expect(attachFile(site, '~/no-such-picture.png')).rejects.toThrow(

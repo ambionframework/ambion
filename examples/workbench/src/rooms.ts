@@ -126,7 +126,7 @@ export async function openRooms(
 	const workspacePath = resolve(directory, 'workspace');
 	const workspace = openWorkspace({
 		name: 'workbench',
-		backend: directoryBackend(workspacePath),
+		backend: { bash: directoryBackend(workspacePath) },
 		audit: {},
 	});
 	try {

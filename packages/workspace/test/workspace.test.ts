@@ -31,7 +31,7 @@ import { DEFAULT_AUDIT_LOG } from '../src/audit.ts';
 import type { WorkspaceLayout } from '../src/backend.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
 import { defaultToolGuidance } from '../src/default-tools.ts';
-import { openWorkspace, SHARED_DATABASE, type WorkspaceBackend } from '../src/index.ts';
+import { type BashBackend, openWorkspace, SHARED_DATABASE } from '../src/index.ts';
 import { directoryBackend, MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
 import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
 
@@ -110,7 +110,7 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 
 describe('the built-in tools', () => {
 	it('write, read and bash reach one filesystem two agents share, rooted at each home', async () => {
-		const site = openWorkspace({ name: name('shared'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('shared'), backend: { bash: memoryBackend() } });
 		const tools = site.tools();
 		const results: Record<string, { tool: string; text: string; failed: boolean }[]> = {};
 		const writerDone = Promise.withResolvers<void>();
@@ -153,7 +153,7 @@ describe('the built-in tools', () => {
 	});
 
 	it('accepts Pi alternate edit arguments through the ordinary workspace bundle', async () => {
-		const site = openWorkspace({ name: name('edits'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('edits'), backend: { bash: memoryBackend() } });
 		const tools = site.tools();
 		let final: string | undefined;
 		await run([agent('editor', { bundles: [tools] })], {
@@ -171,7 +171,7 @@ describe('the built-in tools', () => {
 	});
 
 	it('serializes two edits in one model batch so both updates land', async () => {
-		const site = openWorkspace({ name: name('edits'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('edits'), backend: { bash: memoryBackend() } });
 		const tools = site.tools();
 		let final: string | undefined;
 		await run([agent('editor', { bundles: [tools] })], {
@@ -201,7 +201,7 @@ describe('the built-in tools', () => {
 	});
 
 	it('fail on the next call once the workspace is disposed, and the activation goes on', async () => {
-		const site = openWorkspace({ name: name('disposed'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('disposed'), backend: { bash: memoryBackend() } });
 		const tools = site.tools();
 		let after: { tool: string; text: string; failed: boolean }[] = [];
 		let custom: string | undefined;
@@ -237,7 +237,7 @@ describe('the workspace resource owner', () => {
 		const inner = memoryBackend();
 		const workspace = openWorkspace({
 			name: name('empty-tools'),
-			backend: { tools: [], connect: (agent) => inner.connect(agent), layout },
+			backend: { bash: { tools: [], connect: (agent) => inner.connect(agent), layout } },
 		});
 		expect(workspace.tools()).toBe(workspace.tools());
 		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual([
@@ -275,10 +275,12 @@ describe('the workspace resource owner', () => {
 		const workspace = openWorkspace({
 			name: name('custom-tools'),
 			backend: {
-				tools: [customTool],
-				guidance: 'Custom backend guidance.',
-				connect: (agent) => inner.connect(agent),
-				layout,
+				bash: {
+					tools: [customTool],
+					guidance: 'Custom backend guidance.',
+					connect: (agent) => inner.connect(agent),
+					layout,
+				},
 			},
 		});
 		const bundle = workspace.tools();
@@ -315,20 +317,22 @@ describe('the workspace resource owner', () => {
 		const workspace = openWorkspace({
 			name: name('shared-owner'),
 			backend: {
-				tools: [
-					{
-						name: 'inspect',
-						label: 'Inspect',
-						description: 'Inspect the workspace.',
-						parameters: Type.Object({}),
-						execute: async () => {
-							toolCalls += 1;
-							return { content: [{ type: 'text' as const, text: 'called' }], details: {} };
+				bash: {
+					tools: [
+						{
+							name: 'inspect',
+							label: 'Inspect',
+							description: 'Inspect the workspace.',
+							parameters: Type.Object({}),
+							execute: async () => {
+								toolCalls += 1;
+								return { content: [{ type: 'text' as const, text: 'called' }], details: {} };
+							},
 						},
-					},
-				],
-				connect: (caller, signal) => inner.connect(caller, signal),
-				layout,
+					],
+					connect: (caller, signal) => inner.connect(caller, signal),
+					layout,
+				},
 			},
 		});
 		const active = workspace.use(workspaceAgent('alpha'), async () => {
@@ -357,7 +361,7 @@ describe('the workspace resource owner', () => {
 		});
 		const workspace = openWorkspace({
 			name: name('serialized-edits'),
-			backend,
+			backend: { bash: backend },
 		});
 		const append = async (agentName: string, line: string) =>
 			workspace.use(workspaceAgent(agentName), async (env) => {
@@ -388,7 +392,7 @@ describe('the workspace resource owner', () => {
 			},
 			layout,
 		};
-		const workspace = openWorkspace({ name: name('revoke'), backend });
+		const workspace = openWorkspace({ name: name('revoke'), backend: { bash: backend } });
 		const active = workspace.use(workspaceAgent('alpha'), () => 'done');
 		await started.promise;
 		const queued = workspace.use(workspaceAgent('beta'), () => 'queued');
@@ -407,14 +411,16 @@ describe('the workspace resource owner', () => {
 		const workspace = openWorkspace({
 			name: name('queued-abort'),
 			backend: {
-				tools: [],
-				connect: async (agent, signal) => {
-					connects += 1;
-					if (connects === 1) await release.promise;
-					if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
-					return inner.connect(agent, signal);
+				bash: {
+					tools: [],
+					connect: async (agent, signal) => {
+						connects += 1;
+						if (connects === 1) await release.promise;
+						if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+						return inner.connect(agent, signal);
+					},
+					layout,
 				},
-				layout,
 			},
 		});
 		const active = workspace.use(workspaceAgent('alpha'), () => 'active');
@@ -435,14 +441,16 @@ describe('the workspace resource owner', () => {
 		const workspace = openWorkspace({
 			name: name('cleanup'),
 			backend: {
-				tools: [],
-				connect: async (agent, signal) => {
-					const env = await inner.connect(agent, signal);
-					env.cleanup = async () => void cleaned++;
-					return env;
+				bash: {
+					tools: [],
+					connect: async (agent, signal) => {
+						const env = await inner.connect(agent, signal);
+						env.cleanup = async () => void cleaned++;
+						return env;
+					},
+					dispose: async () => void disposed++,
+					layout,
 				},
-				dispose: async () => void disposed++,
-				layout,
 			},
 		});
 		await workspace.use(workspaceAgent('alpha'), async (env) => {
@@ -461,7 +469,7 @@ describe('ToolContext', () => {
 	it('passes caller identity to a custom tool that closes over its resource', async () => {
 		const connects: string[] = [];
 		const backend = memoryBackend();
-		const site = openWorkspace({ name: name('context'), backend });
+		const site = openWorkspace({ name: name('context'), backend: { bash: backend } });
 		const seen: Record<string, string> = {};
 		const where = defineTool({
 			name: 'where',
@@ -515,11 +523,11 @@ describe("a backend's layout", () => {
 			rooms: '/mirror',
 		};
 		const inner = memoryBackend();
-		const backend: WorkspaceBackend = {
+		const backend: BashBackend = {
 			connect: (caller, signal) => inner.connect(caller, signal),
 			layout: own,
 		};
-		const site = openWorkspace({ name: name('own-layout'), backend, audit: {} });
+		const site = openWorkspace({ name: name('own-layout'), backend: { bash: backend }, audit: {} });
 
 		// The guidance names both the audit log and the room mirror root.
 		const guidance = site.tools().guidance ?? '';
@@ -584,9 +592,7 @@ describe("a backend's layout", () => {
 // -- the adapter -------------------------------------------------------------
 
 describe('the just-bash adapter', () => {
-	async function env(
-		agentName = 'alpha',
-	): Promise<{ env: ExecutionEnv; backend: WorkspaceBackend }> {
+	async function env(agentName = 'alpha'): Promise<{ env: ExecutionEnv; backend: BashBackend }> {
 		const backend = memoryBackend();
 		return { env: await backend.connect(agent(agentName)), backend };
 	}
@@ -789,7 +795,7 @@ describe('memoryBackend', () => {
 				await writeFile('/old.txt', 'old\n');
 			},
 		});
-		const workspace = openWorkspace({ name: name('memory-dispose'), backend });
+		const workspace = openWorkspace({ name: name('memory-dispose'), backend: { bash: backend } });
 		await workspace.use(workspaceAgent('alpha'), async (env) => {
 			const old = await env.readTextFile('/old.txt', ctx);
 			if (!old.ok) throw new Error('seed missing');
@@ -806,7 +812,7 @@ describe('directoryBackend', () => {
 	it('writes through to a real directory it creates', async () => {
 		const root = join(await mkdtemp(join(tmpdir(), 'ambion-')), 'site');
 		try {
-			const site = openWorkspace({ name: name('disk'), backend: directoryBackend(root) });
+			const site = openWorkspace({ name: name('disk'), backend: { bash: directoryBackend(root) } });
 			const tools = site.tools();
 			let read: string | undefined;
 			await run([agent('scribe', { bundles: [tools] })], {

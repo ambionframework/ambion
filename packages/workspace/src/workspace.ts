@@ -1,6 +1,6 @@
 import type { Room, ToolBundle } from '@ambionframework/ambion';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
-import type { WorkspaceBackend, WorkspaceEnv } from './backend.ts';
+import type { BashBackend, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
 import {
 	createDefaultTools,
 	createFileTools,
@@ -46,47 +46,39 @@ function joinNotes(notes: readonly (string | undefined)[]): string {
 	return notes.filter((note): note is string => note !== undefined && note !== '').join('\n\n');
 }
 
-/** What `openWorkspace` takes. */
-interface WorkspaceOptions {
-	name: string;
-	/** The shell backend. Every workspace has one. */
-	backend: WorkspaceBackend;
-	/** A shared database beside the shell. Absent, `sql` opens `backend.layout.database`. */
-	sql?: SqlBackend;
-	audit?: AuditLogOptions;
+/** The SQL backend of a workspace, and the owner the workspace opened over it. */
+interface SqlBinding {
+	readonly backend: SqlBackend;
+	readonly owner: WorkspaceResource<SqlEnv>;
 }
 
 /**
- * Bind the five default tools and the shell backend's own tools. With no
+ * Bind the five default tools and the bash backend's own tools. With no
  * SQL backend, `sql` is the shell tool over `layout.database`. With one,
- * `sql` runs on `sqlOwner`. The guidance names the tools, the SQL
- * backend's note, the shell backend's note, the audit note when one is
+ * `sql` runs on the SQL owner. The guidance names the tools, the SQL
+ * backend's note, the bash backend's note, the audit note when one is
  * set, and the rooms note, in that order.
  */
 function workspaceTools(
-	options: WorkspaceOptions,
+	bash: BashBackend,
 	shell: WorkspaceResource<WorkspaceEnv>,
-	sqlOwner: WorkspaceResource<SqlEnv> | undefined,
+	sql: SqlBinding | undefined,
 	audit: AuditLog | undefined,
 ): ToolBundle {
-	const { layout, tools: own = [], guidance } = options.backend;
+	const { layout, tools: own = [], guidance } = bash;
 	const tail = [guidance, audit && auditGuidance(audit), roomMirrorGuidance(layout.rooms)];
-	if (options.sql === undefined || sqlOwner === undefined) {
+	if (sql === undefined) {
 		const tools = [...createDefaultTools(layout.database), ...own];
-		return bindTools(
-			tools,
-			shell.use,
-			joinNotes([defaultToolGuidance(layout.database), ...tail]),
-			audit,
-		);
+		const notes = [defaultToolGuidance(layout.database), ...tail];
+		return bindTools(tools, shell.use, joinNotes(notes), audit);
 	}
-	const database = options.sql.database;
-	const sql = createBackendSqlTool({ sql: sqlOwner.use, shell: shell.use, database, audit });
+	const database = sql.backend.database;
+	const sqlTool = createBackendSqlTool({ sql: sql.owner.use, shell: shell.use, database, audit });
 	const files = bindTools(createFileTools(), shell.use, undefined, audit).tools;
 	const extra = bindTools(own, shell.use, undefined, audit).tools;
-	const notes = [fileToolGuidance(sqlToolGuidance(database)), options.sql.guidance, ...tail];
+	const notes = [fileToolGuidance(sqlToolGuidance(database)), sql.backend.guidance, ...tail];
 	return Object.freeze({
-		tools: Object.freeze([...files, sql, ...extra]),
+		tools: Object.freeze([...files, sqlTool, ...extra]),
 		guidance: joinNotes(notes),
 	});
 }
@@ -99,36 +91,44 @@ async function disposeAll(owners: readonly { dispose(): Promise<void> }[]): Prom
 }
 
 /**
- * Open one workspace over a shell backend and, when `sql` is set, a SQL
- * backend. Each backend gets its own resource owner, so a long shell
- * command does not delay a query. `use` and `mirror()` reach the shell
- * owner, and `sql` exposes the SQL owner. The shell backend's `layout`
- * names where the audit log and the room mirrors live, and the shared
- * database when the workspace has no SQL backend. Set `audit.path` to
- * record every bound tool call at a path of your own; the default is
+ * Open one workspace over its backends. `backend.bash` is required, and
+ * `backend.sql` is optional. Each backend gets its own resource owner, so
+ * a long shell command does not delay a query. `use` and `mirror()` reach
+ * the bash owner, and `sql` exposes the SQL owner. The bash backend's
+ * `layout` names where the audit log and the room mirrors live, and the
+ * shared database when the workspace has no SQL backend. Set `audit.path`
+ * to record every bound tool call at a path of your own; the default is
  * `layout.audit`. Tool guidance then tells every agent the log exists and
  * where to read it, and always names the room mirror convention at
  * `layout.rooms`.
  */
-export function openWorkspace(options: WorkspaceOptions): Workspace {
-	const resource = openResource<WorkspaceEnv>(options);
-	const sqlOwner =
-		options.sql === undefined
+export function openWorkspace(options: {
+	name: string;
+	backend: WorkspaceBackends;
+	audit?: AuditLogOptions;
+}): Workspace {
+	const { bash, sql: sqlBackend } = options.backend;
+	const resource = openResource<WorkspaceEnv>({ name: options.name, backend: bash });
+	const sql =
+		sqlBackend === undefined
 			? undefined
-			: openResource<SqlEnv>({ name: options.name, backend: options.sql });
-	const layout = options.backend.layout;
+			: {
+					backend: sqlBackend,
+					owner: openResource<SqlEnv>({ name: options.name, backend: sqlBackend }),
+				};
+	const layout = bash.layout;
 	const audit =
 		options.audit === undefined
 			? undefined
 			: openAuditLog({ ...options.audit, path: options.audit.path ?? layout.audit });
-	const toolBundle = workspaceTools(options, resource, sqlOwner, audit);
+	const toolBundle = workspaceTools(bash, resource, sql, audit);
 	const tools = (): ToolBundle => toolBundle;
 	// The workspace's own name for a mirror: one agent it owns, so a caller
 	// names only the room.
 	const host: WorkspaceAgent = { name: `${options.name}-host` };
 	const mirror = (room: Room, mirrorOptions?: RoomMirrorOptions): Promise<RoomMirror> =>
 		mirrorRoom(room, resource, host, layout.rooms, mirrorOptions);
-	const owners = sqlOwner === undefined ? [resource] : [resource, sqlOwner];
+	const owners = sql === undefined ? [resource] : [resource, sql.owner];
 	const dispose = (): Promise<void> => disposeAll(owners);
 	return Object.freeze({
 		...resource,
@@ -136,6 +136,6 @@ export function openWorkspace(options: WorkspaceOptions): Workspace {
 		tools,
 		host,
 		mirror,
-		...(sqlOwner === undefined ? {} : { sql: sqlOwner }),
+		...(sql === undefined ? {} : { sql: sql.owner }),
 	});
 }

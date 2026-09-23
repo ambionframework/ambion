@@ -2,7 +2,7 @@
 
 **The workspace is the just-bash and Pi binding of the resource
 contract.** The optional `@ambionframework/workspace` package provides a
-workspace resource and its filesystem. A workspace has one shell backend
+workspace resource and its filesystem. A workspace has one bash backend
 and can have one SQL backend
 ([Give the workspace a SQL backend](#give-the-workspace-a-sql-backend)). Agents receive access through
 ordinary tool bundles. Workspace files remain separate from the
@@ -15,7 +15,7 @@ SQL binding, and the rules for references and provenance.
 import { openWorkspace } from '@ambionframework/workspace';
 import { memoryBackend } from '@ambionframework/workspace/just-bash';
 
-const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
+const drive = openWorkspace({ name: 'team-site', backend: { bash: memoryBackend() } });
 ```
 
 `openWorkspace` returns one owner for a backend and its data. A host creates
@@ -42,7 +42,7 @@ starts after disposal is refused.
 
 ## The layout and the host identity
 
-**A `WorkspaceBackend` names a `layout`: where it keeps the audit log, the
+**A `BashBackend` names a `layout`: where it keeps the audit log, the
 shared database, and the room mirrors.** `WorkspaceLayout` holds three
 paths:
 
@@ -64,7 +64,7 @@ writes as it.** `Workspace.host` exposes this identity. A backend with real
 accounts gives it credentials, the same as any other agent it connects.
 
 ```ts
-const drive = openWorkspace({ name: 'town', backend: memoryBackend() });
+const drive = openWorkspace({ name: 'town', backend: { bash: memoryBackend() } });
 console.log(drive.host); // { name: 'town-host' }
 ```
 
@@ -140,7 +140,7 @@ fresh file starts at the same path. A record is never split by a rotation.
 import { BACKGROUND_CONTEXT, openLog, openWorkspace } from '@ambionframework/workspace';
 import { directoryBackend } from '@ambionframework/workspace/just-bash';
 
-const drive = openWorkspace({ name: 'town', backend: directoryBackend('./data') });
+const drive = openWorkspace({ name: 'town', backend: { bash: directoryBackend('./data') } });
 const host = { name: 'host' };
 const journal = openLog({ path: '/var/log/room/journal.jsonl' });
 
@@ -188,7 +188,7 @@ the call returned a picture, not the picture (`loggedToolResult`, from
 ```ts
 const drive = openWorkspace({
   name: 'team-site',
-  backend: memoryBackend(),
+  backend: { bash: memoryBackend() },
   audit: {},
 });
 ```
@@ -246,7 +246,7 @@ import { startRoom } from '@ambionframework/ambion';
 import { openWorkspace } from '@ambionframework/workspace';
 import { memoryBackend } from '@ambionframework/workspace/just-bash';
 
-const site = openWorkspace({ name: 'town', backend: memoryBackend() });
+const site = openWorkspace({ name: 'town', backend: { bash: memoryBackend() } });
 const session = await startRoom({ name: 'lobby', agents: [/* ... */] });
 
 const mirror = await site.mirror(session);
@@ -387,19 +387,20 @@ behaviors:
 
 ## Give the workspace a SQL backend
 
-**A workspace has one shell backend, and it can have one SQL backend.**
-The `backend` option is the shell backend, and every workspace has one.
-The `sql` option takes a `SqlBackend`: a shared database that need not
+**A workspace has one bash backend, and it can have one SQL backend.**
+The `backend` option holds the backends by kind, as `WorkspaceBackends`.
+`backend.bash` is a `BashBackend`, and every workspace has one.
+`backend.sql` is an optional `SqlBackend`: a shared database that need not
 live on the shell's filesystem. The package ships no `SqlBackend` yet. The
 interface is for a future backend, such as a database server with one
-account for each agent.
+account for each agent. A later kind of backend gets its own key.
 
 ```ts
 import { openWorkspace, type SqlBackend } from '@ambionframework/workspace';
 import { memoryBackend } from '@ambionframework/workspace/just-bash';
 
 declare const database: SqlBackend;
-const lab = openWorkspace({ name: 'lab', backend: memoryBackend(), sql: database });
+const lab = openWorkspace({ name: 'lab', backend: { bash: memoryBackend(), sql: database } });
 ```
 
 **`SqlBackend` holds four members, and `SqlEnv` holds two.**
@@ -455,7 +456,7 @@ The contract lives in [Resources](resources.md).
 
 The memory and directory backends are the Pi binding. They export from the
 `./just-bash` entry. The root entry names `WorkspaceEnv`, the Pi
-`ExecutionEnv` that has a zero-argument `cleanup()`. `WorkspaceBackend`
+`ExecutionEnv` that has a zero-argument `cleanup()`. `BashBackend`
 extends `ResourceBackend<WorkspaceEnv>` and adds optional Pi harness tools
 beyond the five defaults, optional guidance about the backend's own shell,
 and a required `layout` (see
@@ -492,7 +493,7 @@ directory.
 A case is a `ConformanceCase`: a name and a `run` that throws on failure.
 The entry loads no test framework and no just-bash, so any backend runs it.
 `workspaceConformance(harness)` takes a named backend with an `open()` that
-returns a fresh `WorkspaceBackend` and a `dispose()`, and returns the cases:
+returns a fresh `BashBackend` and a `dispose()`, and returns the cases:
 
 ```ts
 import { workspaceConformance } from '@ambionframework/workspace/conformance';

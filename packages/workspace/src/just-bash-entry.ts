@@ -3,7 +3,7 @@
 export type {
 	MemoryBackendFile,
 	MemoryBackendOptions,
-	MemoryWorkspaceBackend,
+	MemoryBashBackend,
 	SeedWriter,
 } from './just-bash.ts';
 export { directoryBackend, memoryBackend } from './just-bash.ts';

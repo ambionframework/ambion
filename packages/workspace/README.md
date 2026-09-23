@@ -30,7 +30,7 @@ import { pi } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
 import { memoryBackend } from '@ambionframework/workspace/just-bash';
 
-const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
+const drive = openWorkspace({ name: 'team-site', backend: { bash: memoryBackend() } });
 
 const surveyor = defineAgent({
   name: 'surveyor',
@@ -54,9 +54,10 @@ resource over its own SQLite database, with its `SqlProvenance` and
 scenario matrix a new backend runs to prove it meets the resource contract,
 and `sqlConformance`, the cases a `SqlBackend` runs.
 
-The root entry also exports the `SqlBackend` interface. `openWorkspace`
-takes one as its optional `sql` option, and the `sql` tool then runs on
-that database. The package ships no `SqlBackend`.
+`openWorkspace` takes its backends by kind: `backend: { bash, sql }`.
+`bash` is required. `sql` is an optional `SqlBackend`, and the `sql` tool
+then runs on that database. The root entry exports the `SqlBackend`
+interface, and the package ships no implementation of it.
 
 ```ts
 import { memoryBackend } from '@ambionframework/workspace/just-bash';

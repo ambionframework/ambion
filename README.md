@@ -49,7 +49,7 @@ import { pi } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
 import { memoryBackend } from '@ambionframework/workspace/just-bash';
 
-const workspace = openWorkspace({ name: 'lab', backend: memoryBackend() });
+const workspace = openWorkspace({ name: 'lab', backend: { bash: memoryBackend() } });
 const bundles: ToolBundle[] = [workspace.tools()];
 const instructions = 'Read /shared/kit.md before you answer. Cite the path of each fact.';
 
