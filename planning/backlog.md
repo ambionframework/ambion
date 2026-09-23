@@ -88,6 +88,27 @@ the activation, the exchange, and the room. A purpose field, a retry-safe
 operation key that the kernel derives, and a domain operation reused across
 rooms wait. **Condition:** an application that needs one of the three.
 
+**An `apply_patch` tool for Codex seats.** A Codex seat under
+`nativeTools: 'none'` reaches files through the workspace `edit` tool, a
+block-replace tool built for Pi. The Codex catalog patch removes
+`apply_patch`, the tool Codex models are trained to call, so every edit
+goes through a call shape the model was not tuned on. `@openai/agents-core`
+exports `applyDiff`, a pure TypeScript function, MIT licensed, that parses
+and applies one file section of the same patch grammar with no file I/O of
+its own. What remains is an envelope parser for the full patch (`Add
+File`, `Delete File`, `Update File`, `Move to`) and a tool that writes
+each section through `FileSystem`, the interface `edit` already uses.
+Such a tool then works on the memory backend, the directory backend, and
+the workstation alike. A shell command such as `patch` or `git apply`
+reads a different grammar, and only the workstation runs a real one, so it
+buys the tool nothing that `FileSystem` and `applyDiff` do not already
+give it. OpenAI's own Rust crate, `codex-rs/apply-patch`, holds the ground
+truth grammar; a Python binding ships on PyPI as `codex-apply-patch`, but
+neither reaches Node without a WASM build. **Condition:** a live
+comparison of the `edit` tool against an `apply_patch` prototype, on the
+same editing task, shows a real gain in tool-call success for a Codex
+seat. Build the tool only after that measurement.
+
 **The evals package.** PR #153 adds room simulations with human actors,
 judges, and offline regrading: 8,455 lines at alpha maturity by its own
 list of open work. That list holds the failure matrix, live acceptance,
