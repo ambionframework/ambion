@@ -52,11 +52,11 @@ repositories in one account on the server. Each agent reaches them with
 **Three themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
-| Theme                     | Acceptance                                                                                                                                                                                                                                         |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                                                                          |
-| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database.                                                     |
-| G Git on the workstation  | `openWorkspace` refuses a git backend of one shape beside a bash backend of the other. `workstationGitBackend` passes `gitConformance` on OpenSSH. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. |
+| Theme                     | Acceptance                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                                                                                                                                                                                                    |
+| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database.                                                                                                                                                                               |
+| G Git on the workstation  | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. |
 
 **Three format changes.** Each change lands with a golden journal of the
 new shape, and the changelog names each one.
@@ -201,31 +201,131 @@ names the new route.
 **Goal:** an agent on a workstation clones and pushes over SSH to one
 account on its own server, and the host opens no port.
 
-- [ ] **1.** The clean-up: `@ambionframework/git` moves into
+**Each step is one pull request.** Steps 1 and 2 land G1, steps 3 and 4
+land G2, and step 5 documents G2.
+
+- [ ] **1.** G1a, the move. `packages/git` moves to
+      `packages/just-bash/src/git/` behind the new entry
       `@ambionframework/just-bash/git`, and `gitBackend` becomes
-      `justGitBackend` with no `handler` and no `url`. `GitAccess` in the
-      core holds `transport` alone, each bash backend declares the
-      transports that it carries, and `openWorkspace` refuses a pair that
-      does not match. `gitConformance` calls harness hooks for the four
-      credential cases. The template helpers move to
-      `@ambionframework/workspace/git`. The workstation loses
-      `~/.git-credentials`. The workbench, the README, `docs/example.md`,
-      `docs/git.md`, and the package guides take the new names in the same
-      step. P1. (G1)
-- [ ] **2.** `workstationGitBackend`: the git account, `serve`, the agent
-      keys, fork and registration by rename, and the account in
-      `test/sshd/setup.sh`. Needs 1. P1. (G2)
-- [ ] **3.** The docs: `workstation-git.md` describes what shipped, and
-      `git.md`, `trust.md`, and the package guide name the backend. The
-      trust row states the reach of a leaked agent key. Needs 2. P1. (G2)
-- [ ] **4.** `workstation.md` states the new credential rule: the host
-      owns the account keys, and the git backend issues and rotates the
-      git key of each agent. Needs 2. P1. (G2)
+      `justGitBackend`. `handler`, the `url` option, and their two HTTP
+      tests go. The name rules and the template helpers without `just-git`
+      move to the new entry `@ambionframework/workspace/git`. The
+      workstation loses `~/.git-credentials`. `GitAccess` keeps its shape.
+      P1. (G1)
+  - **Code:** the workspace gets `src/git-entry.ts`, `git-names.ts`, and
+    `git-templates.ts`, and `git-tools.ts` imports the name rule from
+    `git-names.ts`. `packages/just-bash/src/git/` gets the backend, its
+    storage, and `tipHashes`, which reads `just-git/repo`. Each new entry
+    goes in its `tsdown.config.ts` and its `package.json`. The step
+    deletes `packages/git/`, `packages/workstation/src/git-credentials.ts`,
+    `test/git.test.ts`, the `services.git` branch of the workstation's
+    `backend.ts`, and the git case of `test/sshd/sshd.test.ts`.
+  - **Guards:** in `biome.jsonc`, an override for
+    `packages/just-bash/src/git/**` repeats the core restriction and
+    allows `node:sqlite`, `just-git/server`, `just-git/repo`, and
+    `@ambionframework/workspace/git`. The rest of
+    `packages/just-bash/src` keeps refusing `node:sqlite`. The override of
+    `packages/git` goes. `scripts/import-rules.test.mjs` moves the four
+    probes of `packages/git/src` to the new folder, and a new probe shows
+    that `packages/just-bash/src` outside it refuses
+    `@ambionframework/workspace/git`.
+  - **Snapshots and resolution:** the export snapshot of the workspace
+    gets its sixth entry, its stem, its build order, and a row of banned
+    chunks for `git-entry.mjs`. The snapshot of just-bash gets two
+    entries, and a test of its built chunks keeps the root free of
+    `node:sqlite`. `pnpm-lock.yaml` drops `@ambionframework/git` from the
+    workbench and the workstation. `packages/workspace/vitest.config.ts`
+    and `tsconfig.check.json` resolve `@ambionframework/workspace/git`
+    ahead of the bare name.
+  - **Pages:** `CLAUDE.md`, the README, `docs/technical-facts.md`,
+    `docs/README.md`, `docs/toolchain.md` (ten packages),
+    `docs/example.md`, `docs/git.md`, the workspace and just-bash
+    guides, and the workbench take the new names. The git text of
+    `docs/workstation.md`, `docs/trust.md`, and `docs/git.md` on a
+    workstation shrinks to one sentence: the workstation carries no git
+    transport until G2. The changelog names each export change.
+  - **Evidence:** `gitConformance` passes on `memoryBackend` and
+    `directoryBackend` under `justGitBackend`. The root chunk of
+    just-bash loads no `node:sqlite`. The workbench tests `lab.test.ts`
+    and `tool-set.test.ts` pass. `pnpm check` passes.
+- [ ] **2.** G1b, the contract. `GitAccess` in the core holds `transport`
+      alone, and `JustGitAccess` holds the rest. Each bash backend that
+      pairs with a git backend declares `gitTransports`, and
+      `openWorkspace` refuses a pair that does not match. `gitConformance`
+      calls harness hooks for the four credential cases. Needs 1. P1. (G1)
+  - **Code:** the step changes `git-backend.ts`, `backend.ts`,
+    `workspace.ts`, and `git-conformance.ts` in the workspace. The
+    refusal goes in a helper, since `workspaceTools` is near the
+    complexity cap. `JustGitAccess`, `GitFetch`, and `GitCredential` go
+    in `packages/just-bash/src/git/`. `just-bash.ts` narrows the access
+    with an `import type` alone, and its two backends declare
+    `['in-process']`. The helper `wrapped()` in
+    `packages/workspace/test/support/backends.ts` carries the transports
+    of the memory backend inside it.
+  - **Suite:** each hook takes the opened backend and workspace.
+    `tokenTtl` and `shortestTokenTtl` become `credentialTtl` and
+    `shortestCredentialTtl`. The harness in
+    `packages/just-bash/test/support/git-harness.ts` implements the hooks
+    for `in-process`.
+  - **Evidence:** `gitConformance` passes on the two just-bash backends
+    through the hooks. A scripted case pairs `justGitBackend` with a bash
+    backend that carries `ssh`, and with one that carries no transport,
+    and gets the refusal each time. The export snapshots pin each change,
+    and the changelog names it. `pnpm check` passes.
+- [ ] **3.** G2a, the server side. `workstationGitBackend` prepares the git
+      account, writes `serve`, registers the templates by rename, and runs
+      `list`, `get`, and `fork`. `identityFor` issues the agent keys and
+      writes `authorized_keys.ambion` under `flock`. `workstationBackend`
+      carries no transport yet, so the tests drive the git backend alone.
+      Needs 2. P1. (G2)
+  - **Code:** the backend goes in new files
+    `packages/workstation/src/git-*.ts`, split to keep each file under 600
+    lines and each function under complexity 10.
+    The key generator retries a pair that `ssh2` cannot read. `index.ts`
+    exports the backend and its three types, and
+    `test/package.test.ts` pins them. The workstation override of
+    `biome.jsonc` allows `@ambionframework/workspace/git`, and a probe in
+    `scripts/import-rules.test.mjs` holds it.
+  - **Evidence:** the groups of the scripted tier that
+    [Workstation git](../docs/workstation-git.md#tests) lists: `serve`
+    over a table of requests, the list, fork, and registration commands,
+    and the lines of `authorized_keys.ambion`. The changelog names each
+    export. `pnpm check` and the `workstation` CI job pass.
+- [ ] **4.** G2b, the agent side and the OpenSSH tier. `workstationBackend`
+      writes the three key files and the `Include` line at each `connect`,
+      and declares `gitTransports: ['ssh']`. The OpenSSH tier runs
+      `gitConformance`. Needs 3. P1. (G2)
+  - **Code:** `session.ts` keeps the host key that the client verified,
+    as the key type and the base64 key. `backend.ts` writes the files and
+    keeps the rest of `~/.ssh/config`.
+    `test/sshd/setup.sh` adds `lab-git` outside the agents' group, with a
+    home of mode `0700`, the `Match User lab-git` block last, a second
+    `ListenAddress` on the runner's address, and `AllowUsers`.
+  - **Harness:** the hooks for `ssh`, with a key life between 3 and 5
+    seconds, since `expiry-time` has a resolution of one second and the
+    server renders it. The OpenSSH harness removes `~lab-git/repos` and
+    `authorized_keys.ambion` between cases.
+  - **Evidence:** the `workstation` CI job runs `gitConformance` on
+    OpenSSH and the checks that
+    [Workstation git](../docs/workstation-git.md#tests) lists, and the
+    scripted tier tests the key files. `pnpm check` passes.
+- [ ] **5.** The docs of G2. `workstation-git.md` describes what shipped.
+      `workstation.md` states the new credential rule, and its out-of-v1
+      list drops credential issuance and rotation. `git.md` states the
+      credential decision in its new words and names the backend in its
+      file table. The trust row states the reach of a leaked agent key.
+      `docs/README.md`, the `CLAUDE.md` row, and the workstation package
+      guide name the backend and the server steps. Needs 4. P1. (G2)
+  - **Evidence:** each statement points at code on `main`.
+    `scripts/evidence-links.test.mjs` and Prettier pass.
 
 **Evidence:** the `workstation` CI job runs `gitConformance` on OpenSSH
 with the SSH harness, and the tier proves the checks that
 [Workstation git](../docs/workstation-git.md#tests) lists. The workbench
 runs on `justGitBackend`.
+
+**A step of G2 merges only with the `workstation` CI job green.** That
+job alone runs the OpenSSH tier.
 
 **The tag needs G1 and G2 together.** After G1 alone, a workstation has
 no git backend.
@@ -291,10 +391,18 @@ an inbound port and sends each token over HTTP.
 
 - **One package holds the local shape.** `@ambionframework/just-bash/git`
   exports `justGitBackend` and `sqliteGitStorage`. The package already
-  depends on the `just-git` library, and its root entry loads no
-  `node:sqlite`. `@ambionframework/git` goes.
+  depends on the `just-git` library. `@ambionframework/git` goes.
+- **The root entry of just-bash loads no `node:sqlite`.** A Biome
+  override lets `packages/just-bash/src/git/` alone import `node:sqlite`
+  and `@ambionframework/workspace/git`. The root entry reads the git
+  access through an `import type` alone, and a test of the built chunks
+  holds the rule.
 - **The backend serves the process it runs in.** `handler` and the `url`
   option go. The clone URLs keep the base `http://git.ambion.invalid`.
+- **The template helpers and the name rules move to
+  `@ambionframework/workspace/git`.** The workstation needs them and must
+  not install `just-git`. `tipHashes` reads `just-git/repo`, so it stays
+  in just-bash.
 - **The core knows a transport by its name.** `GitAccess` in
   `@ambionframework/workspace` holds `transport` alone. `JustGitAccess` in
   `@ambionframework/just-bash/git` adds `prefix`, `fetch`, and
@@ -302,19 +410,26 @@ an inbound port and sends each token over HTTP.
   client reads a credential file.
 - **`gitConformance` stays blind to transports.** The four cases that
   touch a credential call hooks of the harness, and the package of each
-  pair implements them.
+  pair implements them. The suite names the life of a credential in
+  credential terms: `credentialTtl` and `shortestCredentialTtl`.
 - **A bash backend declares its transports, and `openWorkspace` checks
   them.** `BashBackend.gitTransports` lists them. The just-bash backends
-  carry `in-process`. The workstation carries none until G2. A pair that
-  does not match throws when the workspace opens, and the error names both
-  backends.
+  and the test helper of the workspace carry `in-process`. The
+  workstation carries none until G2. A pair that does not match throws
+  when the workspace opens. Neither backend has a name, so the error
+  names the `transport` and the `server` of the git backend, and the
+  transports that the bash backend carries.
 - **The workstation's HTTP path goes.** `git-credentials.ts`, its tests,
-  and the git case of the OpenSSH tier go with it.
+  and the git case of the OpenSSH tier go with it. Until G2, the pages
+  state in one sentence that the workstation carries no git transport.
 
-The owner deprecates `@ambionframework/git` on npmjs with a message that
-names `@ambionframework/just-bash/git`. **Evidence:** a scripted case that
-opens `justGitBackend` beside a workstation and gets the error, and
-`gitConformance` on the just-bash backends under the new names.
+G1 lands in two steps. G1a moves the code and keeps the shape of
+`GitAccess`. G1b changes the contract. The owner deprecates
+`@ambionframework/git` on npmjs with a message that names
+`@ambionframework/just-bash/git`. **Evidence:** a scripted case that
+pairs `justGitBackend` with a bash backend that carries `ssh` or no
+transport and gets the error, `gitConformance` on the just-bash backends
+under the new names, and a root chunk of just-bash without `node:sqlite`.
 
 **G2. A git backend on the workstation.** After G1, a workstation has no
 git backend. [Workstation git](../docs/workstation-git.md) designs one in
@@ -322,11 +437,19 @@ git backend. [Workstation git](../docs/workstation-git.md) designs one in
 repository, and each agent reaches it with `git` over SSH on the loopback
 address. A forced command decides each request by the namespace rule. The
 backend issues one Ed25519 key for each agent, limited by `from` and
-`expiry-time`. A fork or a template lands with one rename, so the backend
-keeps no registry table. **Evidence:** `gitConformance` and the checks of
-the design pass in the OpenSSH tier. The backend renders `expiry-time`
-in the server's time zone, from the server's clock, since the `Z` suffix
-for UTC needs OpenSSH 9.1.
+`expiry-time`. The key generator retries a pair that `ssh2` cannot read.
+A fork or a template lands with one rename, so the backend keeps no
+registry table.
+
+G2 lands in two steps. G2a builds the server side, and its tests drive
+the git backend alone. G2b makes the bash backend write the key files,
+and it adds the OpenSSH tier. Only the `workstation` CI job runs that
+tier, so a step of G2 merges only with that job green. The OpenSSH
+harness removes the repositories and the agent keys of the git account
+between cases. **Evidence:** `gitConformance` and the checks of the
+design pass in the OpenSSH tier. The backend renders `expiry-time` in the
+server's time zone, from the server's clock, since the `Z` suffix for UTC
+needs OpenSSH 9.1.
 
 ### R. Release
 
