@@ -193,6 +193,20 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		expect(prompts.join('\n')).not.toContain('through');
 	});
 
+	it('calls no reminder for a continued session that has nothing new, and starts no run', async () => {
+		const reminded: string[] = [];
+		const remind = (seat: ReminderSeat) => {
+			reminded.push(seat.activation);
+			return 'Reminder.';
+		};
+		const definition = scriptedAgent('product', 'Product.', { bundles: [{ tools: [], remind }] });
+		const { seen, run } = seatOn(new TwoQuestions(1), await store(), undefined, definition);
+		const first = await run('message:1:product:1');
+		await run('message:1:product:2', { resume: first.session });
+		expect(seen).toHaveLength(1);
+		expect(reminded).toEqual(['message:1:product:1']);
+	});
+
 	it('begins a fresh session when the view names none, as in a new exchange', async () => {
 		const { seen, run } = seatOn(new TwoQuestions(), await store());
 		await run('message:1:product:1');

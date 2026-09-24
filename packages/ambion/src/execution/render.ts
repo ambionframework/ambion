@@ -296,11 +296,19 @@ export const DEFAULT_GUIDANCE = [
 
 /** Render the three prompt parts from one detached activation view. */
 export function renderActivation(view: ActivationView, def: AgentDefinition): RenderedPrompt {
-	return {
-		mechanism: MECHANISM,
-		agent: renderAgent(view, def),
-		context: renderTurnContext(view, def),
-	};
+	return { ...renderSystem(view, def), context: renderTurnContext(view, def) };
+}
+
+/**
+ * The two parts of the system prompt alone. It renders no context, so it
+ * calls no reminder: an adapter that builds its system prompt on each pass
+ * leaves a reminder to the pass that sends the context.
+ */
+export function renderSystem(
+	view: ActivationView,
+	def: AgentDefinition,
+): Pick<RenderedPrompt, 'mechanism' | 'agent'> {
+	return { mechanism: MECHANISM, agent: renderAgent(view, def) };
 }
 
 /**

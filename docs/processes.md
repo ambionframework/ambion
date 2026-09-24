@@ -379,10 +379,12 @@ this. The Claude and Codex executors send the whole context, which holds
 the reminder.
 
 **A reminder can mark a finished process as shown that no model read.**
-The table marks it when the room renders the activation. An activation
-that fails before its first request to the provider, and a retry of it
-under a new id, then lose that one notice. `ps` and `status` still reach
-the process.
+The table marks it when the adapter renders the context of the activation.
+An activation that fails between that render and its first request to the
+provider then loses that one notice, and a retry under a new id does not
+show it again. `ps` and `status` still reach the process. The Pi and
+Claude executors build the system prompt with `renderSystem`, which calls
+no reminder, so a continued Pi session with nothing new calls none.
 
 ## Life and disposal
 
@@ -403,8 +405,10 @@ a final state gives that state again.
 
 **`dispose()` stops every process before the bash backend releases its
 handles.** The bash owner refuses new work and drains its queue. The
-process table then refuses new processes, stops every running process,
-and waits up to 10 seconds for each one to end. The bash backend then
+process table then refuses new processes, and stops every running
+process. It stops the processes of one agent one at a time, and waits up
+to 10 seconds for each, so one agent's 4 processes can hold it for 40
+seconds. The bash backend then
 disposes. The git
 owner disposes after the bash owner, so a push in a process still
 reaches the git backend.

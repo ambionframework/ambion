@@ -36,7 +36,12 @@ import type {
 	Seq,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
-import { renderActivation, renderDelta, sessionToResume } from '@ambionframework/ambion/hosting';
+import {
+	renderActivation,
+	renderDelta,
+	renderSystem,
+	sessionToResume,
+} from '@ambionframework/ambion/hosting';
 import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps, plainName } from './claude-trace.ts';
@@ -246,7 +251,7 @@ class Activation implements ExecutorSession {
 		if (this.stream !== undefined) return;
 		if (view.spec.seat !== this.definition.name)
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
-		const { mechanism, agent } = renderActivation(view, this.definition);
+		const { mechanism, agent } = renderSystem(view, this.definition);
 		const executor = claudeOf(this.definition.executor);
 		this.resuming = sessionToResume(view, 'claude');
 		this.begin = () => {

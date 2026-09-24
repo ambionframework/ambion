@@ -53,6 +53,7 @@ import {
 	renderActivation,
 	renderDelta,
 	renderReminders,
+	renderSystem,
 	sessionToResume,
 } from '@ambionframework/ambion/hosting';
 import type { AgentMessage, HarnessEvent, Session, StreamFn } from '@earendil-works/pi-agent-core';
@@ -276,7 +277,7 @@ export class Activation implements ExecutorSession {
 		const def = this.definition;
 		if (view.spec.seat !== def.name)
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
-		const { mechanism, agent } = renderActivation(view, def);
+		const { mechanism, agent } = renderSystem(view, def);
 		this.systemPrompt = `${mechanism}\n\n${agent}`;
 		if (this.opened !== undefined) return this.opened;
 		const model = await this.options.model(modelOf(def.executor), def.name);
