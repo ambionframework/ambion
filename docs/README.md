@@ -46,9 +46,9 @@ Read `patterns.md` to find which primitive represents a human pattern.
 
 Read `resources.md` for the resource contract and `workspace.md` for the
 filesystem binding and the just-bash backends of
-`@ambionframework/just-bash`. `bash.md` is the `bash` tool and the jobs it
-starts. `workstation.md` is the bash backend for a
-workspace on a remote server over SSH. `git.md` is the git backend of
+`@ambionframework/just-bash`. `processes.md` is the `bash` tool, the
+background processes it starts, and `ps`. `workstation.md` is the bash
+backend for a workspace on a remote server over SSH. `git.md` is the git backend of
 `@ambionframework/git`: read-only templates, forks, clones, and pushes.
 
 `assistant.md` describes the assistant package, the room configuration
