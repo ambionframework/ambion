@@ -50,8 +50,8 @@ delegation by reference (D1) carry the change
 
 ## The scope
 
-**Ten changes already landed on main.** The changelog names the export
-changes of each one. Items M1, M2, M7, and S1 came from this plan. The
+**Eleven changes already landed on main.** The changelog names the export
+changes of each one. Items M1, M2, M7, S1, and S2 came from this plan. The
 other rows landed as their own pull requests, and the plan records them
 here so that the release names them.
 
@@ -59,6 +59,7 @@ here so that the release names them.
 | --------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | M7. The workspace as an interface                   | #276, #277       | A neutral root entry, a conformance entry, one entry for each binding, and backends by kind: bash and an optional SQL                                      |
 | S1. The workstation, `@ambionframework/workstation` | #280, #283, #284 | A bash backend over SSH with one Unix account for each agent, tested on an in-process server and on OpenSSH                                                |
+| S2. The git backend, `@ambionframework/git`         | PRGIT            | Read-only templates, forks, clones into the home, and pushes, on the just-bash backends and the workstation, tested on a real `git` and on OpenSSH         |
 | The removal of `@ambionframework/cli`               | #273             | Every library package needs only Node `>=22.19.0`                                                                                                          |
 | M1. Kernel decision layers                          | #286             | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts`                    |
 | M2. The rules sweep                                 | #291             | Every exported room rule but `exchangeOutcome` gates a write, and `draftsClose` counts a summary draft by the writer's seat in the fold and in the verdict |
@@ -68,7 +69,7 @@ here so that the release names them.
 | Exchange continuity, and the trace as host logs     | #294             | A seat keeps its harness session for one exchange. `@ambionframework/pi-journal` and the trace journals go, and each step goes to the host's logger        |
 | The Pi executor on Pi's AgentHarness                | #295             | The harness owns the model loop, the session, and compaction. Pi joins Claude and Codex as a harness adapter, and it runs the executor conformance suite   |
 
-**Four themes stay open, each with the acceptance it must meet on the
+**Three themes stay open, each with the acceptance it must meet on the
 tagged commit.** The phases below deliver them; the items explain them.
 
 | Theme                     | Acceptance                                                                                                                                                                                                                         |
@@ -76,7 +77,6 @@ tagged commit.** The phases below deliver them; the items explain them.
 | M One owner per mechanism | Each duplication that items M3 to M6 name has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2. The journal package owns the one crash-safe append loop. Each doc fact has one home. |
 | L Live evidence           | The live tier passes on the release candidate for the Pi, Claude, and Codex harnesses.                                                                                                                                             |
 | R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release. The pages that name a release name 0.2.0.                                                                      |
-| S Repositories for agents | An agent forks a read-only template, clones the fork into its home, and pushes. The push survives a restart. `gitBackend` passes `gitConformance` on the memory, directory, and workstation backends.                              |
 
 **The tag waits for the P0 and P1 steps.** A P2 step that is open when the
 last P1 step closes moves to the backlog. It does not hold the tag.
@@ -166,24 +166,21 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Four lanes run at once, and the release closes them.** A step names the
+**Three lanes run at once, and the release closes them.** A step names the
 steps it needs; a step with no "Needs" line starts now. **P0** blocks the
 tag. **P1** carries the release story. **P2** moves to the backlog when it
 is late.
 
-| Lane | Chain                                            | Priority   |
-| ---- | ------------------------------------------------ | ---------- |
-| A    | Phase 1: the kernel                              | P0         |
-| B    | Phase 2: the packages                            | P0, P1, P2 |
-| C    | Phase 3: live evidence                           | P1, P2     |
-| D    | Phase 4: the git backend                         | P1         |
-| —    | Phase 5: the release, after lanes A, B, C, and D | P1         |
+| Lane | Chain                                         | Priority   |
+| ---- | --------------------------------------------- | ---------- |
+| A    | Phase 1: the kernel                           | P0         |
+| B    | Phase 2: the packages                         | P0, P1, P2 |
+| C    | Phase 3: live evidence                        | P1, P2     |
+| —    | Phase 4: the release, after lanes A, B, and C | P1         |
 
 **The lanes edit different files.** Phase 1 edits the docs. Phase 2 edits
 the journal, adapter, workspace log, and conformance files. Phase 3 edits
-the live tests and the live workflow. Phase 4 edits the workspace's binding
-of tools after phase 2 step 2 lands, and it adds the package
-`packages/git`.
+the live tests and the live workflow.
 
 ### Phase 1. Consolidate the kernel (P0)
 
@@ -224,33 +221,14 @@ changed.
 **Evidence:** the run of the live workflow on the release candidate, with
 each harness job green and no job skipped.
 
-### Phase 4. The git backend (P1)
-
-**Goal:** an agent forks a template, clones the fork, and pushes, on every
-bash backend. [docs/git.md](../docs/git.md) holds the design.
-
-- [ ] **1.** The git contract in `packages/workspace`: the types, the
-      `repos` and `fork` tools, the guidance, the git owner, and
-      `gitConformance`. P1. Needs phase 2 step 2. (S2)
-- [ ] **2.** The just-bash wiring: `gitFor(agent, access)` and the one
-      sentence of the guidance. P1. Needs 1. (S2)
-- [ ] **3.** `gitBackend` in the new package `packages/git`, with the
-      scripted tier, the restart case, and the room test. P1. Needs 2.
-      (S2)
-- [ ] **4.** The workstation credential file, and the OpenSSH tier with a
-      real `git` against `gitBackend`. P1. Needs 3. (S2)
-
-**Evidence:** `pnpm check`; `gitConformance` on the memory, directory, and
-workstation backends; the restart case and the room test for step 3.
-
-### Phase 5. Release (P1)
+### Phase 4. Release (P1)
 
 **Goal:** the release repeats without the owner's machine.
 
 - [ ] **1.** The changelog entry for 0.2.0: the format changes, each
       export that changed or went, the three new packages, and the two
       retired packages. Needs 2. Needs phase 1, phase 2 steps 1 and 2,
-      phase 3 step 3, and phase 4 steps 1 to 4. (R1)
+      and phase 3 step 3. (R1)
 - [ ] **2.** The pages that name a release name 0.2.0 and list its eleven
       packages. (R2)
 - [ ] **3.** The dev build stamp derives its base from the last tag.
@@ -356,26 +334,6 @@ tests, each harness job makes one small request. A billing or
 authentication refusal fails the job with an annotation that names the
 provider error, and the tests do not run.
 
-### S. Workspace backends
-
-**S2. A git backend.** A task whose best start is a known file tree has no
-home today. The just-bash `git` has no network, so a remote is a path in a
-shared filesystem, and no template stays read-only. A workstation has no
-git server at all. An edit that the memory backend holds is lost on a
-restart.
-
-- Add `git` as a third backend kind, with the `repos` and `fork` tools and
-  a guidance note ([docs/git.md](../docs/git.md#the-contract)).
-- A credential grants one scope on one repository and expires. Only the
-  owner of a repository holds a write credential for it.
-- A template never changes after registration, and `fork` returns when
-  the fork can be cloned.
-- Ship `gitBackend` over the `just-git` server, with its storage in one
-  SQLite file.
-
-An agent starts from a template with one tool call, and a push persists
-its work on every bash backend.
-
 ### R. Release
 
 **R1. A repeatable release.** The 0.1.0 release ran from one machine with
@@ -401,7 +359,7 @@ from the last tag. The changelog entry is the last gate before the tag.
 list its packages.
 
 - The package table of `technical-facts.md:93` lists eight packages. It
-  lacks `just-bash` and `workstation`, and the workspace row names a
+  lacks `just-bash`, `workstation`, and `git`, and the workspace row names a
   directory workspace that moved to `just-bash`.
 - `technical-facts.md:4`, `docs/README.md:17`, `example.md:3`,
   `deployment.md:281`, `deployment.md:303`, and `room.md:8` name 0.1.0.

@@ -447,7 +447,8 @@
 			"includes": [
 				"packages/workspace/src/resource.ts",
 				"packages/workspace/src/resource-entry.ts",
-				"packages/workspace/src/backend.ts"
+				"packages/workspace/src/backend.ts",
+				"packages/workspace/src/git-backend.ts"
 			],
 			"linter": {
 				"rules": {
@@ -611,6 +612,45 @@
 											"node:sqlite"
 										],
 										"message": "Reach the workspace through its root entry or `/resource`. A bash backend loads no SQLite."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// The git backend is a workspace backend. It reaches the workspace
+			// through the root entry and `/resource`, and it loads `just-git`
+			// and `node:sqlite` for its server and its storage. It loads no
+			// just-bash and no part of the core.
+			"includes": ["packages/git/src/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"@ambionframework/ambion",
+											"@ambionframework/ambion/**",
+											"**/ambion/**"
+										],
+										"message": "A workspace backend knows the workspace interface, not the room."
+									},
+									{
+										"group": [
+											"@ambionframework/workspace/*",
+											"!@ambionframework/workspace/resource",
+											"**/packages/workspace/**",
+											"**/workspace/src/**",
+											"just-bash",
+											"@ambionframework/just-bash"
+										],
+										"message": "Reach the workspace through its root entry or `/resource`. The git backend loads no just-bash."
 									}
 								]
 							}

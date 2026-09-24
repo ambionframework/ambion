@@ -25,6 +25,7 @@ floor.
 | `packages/workspace`   | A workspace resource and its tools, the helpers a bash backend builds on, and the interface of an optional SQL backend                       |
 | `packages/just-bash`   | The just-bash workspace backends: `memoryBackend` and `directoryBackend`, a virtual or directory filesystem and shell in process             |
 | `packages/workstation` | A workspace bash backend over SSH: one remote server, one Unix account for each agent. Tested on an in-process server and on OpenSSH in CI   |
+| `packages/git`         | The git backend: `gitBackend` over a `just-git` server in the process. Tested on the just-bash backends and on a real `git`                  |
 | `docs/trust.md`        | Design contract for what one owner guarantees another, and what the kernel does not defend — read before exposing a room to untrusted agents |
 | `docs/agent.md`        | Design contract for the core — read before changing the runtime                                                                              |
 | `docs/assistant.md`    | Design contract for the default assistant package and the `assistant` room option — read with `agent.md`                                     |
@@ -33,7 +34,7 @@ floor.
 | `docs/summary.md`      | Design contract for optional summaries of closed exchanges                                                                                   |
 | `docs/workspace.md`    | Design contract for the workspace an agent's tools reach into — read with `agent.md`                                                         |
 | `docs/workstation.md`  | Design contract for the workspace backend over SSH to one remote server, one Unix account for each agent — read with `workspace.md`          |
-| `docs/git.md`          | Design for a git backend: read-only templates, forks, clones into the home, and pushes — not implemented yet                                 |
+| `docs/git.md`          | Design contract for the git backend: read-only templates, forks, clones into the home, and pushes — read with `workspace.md`                 |
 | `docs/example.md`      | The one runnable example, an agentic lab workspace, and what it must show                                                                    |
 | `docs/roster.md`       | Design contract for a roster that changes while the room runs — read with `agent.md`                                                         |
 | `docs/durability.md`   | What the record promises under failure, and how the tiers prove it — read with `agent.md`                                                    |

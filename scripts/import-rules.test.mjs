@@ -51,6 +51,14 @@ const CASES = [
 	['packages/just-bash/src', '../../workspace/src/audit.ts', true],
 	['packages/just-bash/src', '@ambionframework/ambion', true],
 	['packages/just-bash/src', 'node:sqlite', true],
+	// The git backend knows the workspace interface and no room, and loads just-git.
+	['packages/git/src', '@ambionframework/workspace', false],
+	['packages/git/src', '@ambionframework/workspace/resource', false],
+	['packages/git/src', 'just-git/server', false],
+	['packages/git/src', 'node:sqlite', false],
+	['packages/git/src', '@ambionframework/workspace/sqlite', true],
+	['packages/git/src', '@ambionframework/just-bash', true],
+	['packages/git/src', '@ambionframework/ambion', true],
 	// The journal sits below everything.
 	['packages/journal/src', '@ambionframework/ambion', true],
 	['packages/journal/src', '../../ambion/src/room.ts', true],

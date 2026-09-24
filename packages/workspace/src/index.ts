@@ -1,9 +1,9 @@
 /**
- * A workspace for Ambion: a bash backend, an optional SQL backend, and the
- * tools an agent uses on them.
+ * A workspace for Ambion: a bash backend, an optional SQL backend, an
+ * optional git backend, and the tools an agent uses on them.
  *
  * `openWorkspace` opens a workspace over its backends by kind:
- * `backend: { bash, sql? }`. `workspace.tools()` returns the tools and
+ * `backend: { bash, sql?, git? }`. `workspace.tools()` returns the tools and
  * guidance the workspace exposes to an agent. The root entry loads no
  * backend: `./sqlite` holds the SQLite SQL backend, `./resource` holds the
  * neutral resource contract, and `./sql` holds the SQL resource. The bash
@@ -35,7 +35,13 @@
 export { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 export type { AuditEntry, AuditLog, AuditLogOptions } from './audit.ts';
 export { DEFAULT_AUDIT_LOG, openAuditLog } from './audit.ts';
-export type { BashBackend, WorkspaceBackends, WorkspaceEnv, WorkspaceLayout } from './backend.ts';
+export type {
+	BashBackend,
+	BashServices,
+	WorkspaceBackends,
+	WorkspaceEnv,
+	WorkspaceLayout,
+} from './backend.ts';
 export type { MinimalWriter } from './execution-env.ts';
 export {
 	boundedView,
@@ -52,6 +58,16 @@ export {
 	tempFilePath,
 	withDeadline,
 } from './execution-env.ts';
+export type {
+	GitAccess,
+	GitBackend,
+	GitCredential,
+	GitEnv,
+	GitFetch,
+	GitForkOutcome,
+	GitRepository,
+	GitRepositoryId,
+} from './git-backend.ts';
 export type { WorkspaceLog, WorkspaceLogOptions } from './log.ts';
 export { openLog } from './log.ts';
 export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.ts';

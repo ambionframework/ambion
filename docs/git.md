@@ -1,8 +1,9 @@
 # The git backend
 
-**No package implements this page yet.** This page is the design of a git
-backend for a workspace. [The plan](../planning/next.md) holds the work as
-item S2, in phase 4. The examples show the proposed API.
+**`@ambionframework/git` implements this page.** The contract lives in the
+root entry of `@ambionframework/workspace`, and the just-bash backends and
+the workstation reach it. The [package guide](../packages/git/README.md)
+shows the options.
 
 **A git backend hosts the repositories of one workspace.** A host
 registers read-only templates on it. A person asks an agent to start from
@@ -328,14 +329,15 @@ owner, and that operation ends. The tool then runs `git clone <url>
 
 **Each outcome has one text.** `<url>` is the fork's clone URL.
 
-| Outcome           | The result text                                                                                                |
-| ----------------- | -------------------------------------------------------------------------------------------------------------- |
-| Forked            | `Forked templates/weekly-report to analyst/report. Clone URL: <url>`                                           |
-| Forked and cloned | The line above, then `Cloned it into /home/analyst/report on branch <default branch>. origin is the fork.`     |
-| No such source    | `templates/weekly-report does not exist. Call repos to list the repositories.`                                 |
-| Name taken        | `analyst/report exists. Clone URL: <url>.` With `clone`, the tool then clones it, the same as a new fork       |
-| Refused           | `The git server refused the fork: <message>`                                                                   |
-| Clone failed      | The forked line, then `The clone into /home/analyst/report failed: <git output>. The fork stays; clone <url>.` |
+| Outcome                 | The result text                                                                                                |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Forked                  | `Forked templates/weekly-report to analyst/report. Clone URL: <url>`                                           |
+| Forked and cloned       | The line above, then `Cloned it into /home/analyst/report on branch <default branch>. origin is the fork.`     |
+| No such source          | `templates/weekly-report does not exist. Call repos to list the repositories.`                                 |
+| Name taken              | `analyst/report exists. Clone URL: <url>.` With `clone`, the tool then clones it, the same as a new fork       |
+| Name taken, path in use | The line above, then `/home/analyst/report already exists, so the tool made no clone.`                         |
+| Refused                 | `The git server refused the fork: <message>`                                                                   |
+| Clone failed            | The forked line, then `The clone into /home/analyst/report failed: <git output>. The fork stays; clone <url>.` |
 
 **A taken name makes a repeated call safe.** A `fork` call that repeats
 after a timeout finds its own fork, and the result gives its URL. With
@@ -440,13 +442,20 @@ server accepts.
 
 ### On a workstation
 
-**The real `git` reads the credentials from a file.** On the first
-connection of each client, the workstation backend runs:
+**The real `git` reads the credentials from a file.** The workstation
+backend sets a credential helper that answers `get` from the file alone,
+and `useHttpPath`:
 
 ```sh
-git config --global credential.helper store
+git config --global --replace-all credential.helper \
+  '!f() { test "$1" = get && git credential-store --file ~/.git-credentials get; }; f'
 git config --global credential.useHttpPath true
 ```
+
+**`git` never writes the file.** The plain `store` helper rewrites the file
+after each request, in a form of its own, so the file would differ from the
+backend's at every `connect`. With this helper, the backend is the one
+writer of the file.
 
 **Each `connect` keeps `~/.git-credentials` current.** It reads
 `credentialsFor(agent)` and renders one line for each credential, in this
@@ -462,9 +471,11 @@ to one repository. The backend reads the file over SFTP, and it writes
 the file with mode `0600` when the two differ. The home has mode `0700`,
 so no other account reads the file.
 
-**`git` can erase a line after a refused request.** The `store` helper
-erases a credential that the server refused. The next `connect` writes it
-again, and a tool call is one operation, so the next `bash` call has it.
+**A removed line comes back at the next `connect`.** The backend compares
+the file with the lines it renders, and it writes the file when the two
+differ. Each write sets the two git settings again, since a home that lost
+the file can have lost them too. A tool call is one operation, so the next
+`bash` call has the file.
 
 ## gitBackend: a server in the host's process
 
@@ -621,89 +632,68 @@ the rest.
 `git` locks the author to the agent's name. On a workstation, the agent
 can change `user.name`, and the server knows which credential pushed.
 
-## Implementation
+## Where the code lives
 
-**The work lands in four steps, in this order.** Each step passes
-`pnpm check` before the next one starts.
-
-**The steps match phase 4 of [the plan](../planning/next.md).** Step 1
-waits for phase 2 step 2 there, because both edit the binding of the
-workspace's tools.
-
-1. **The contract, in `packages/workspace`.**
-   - `git-backend.ts`: the types of [The contract](#the-contract).
-   - `backend.ts`: `WorkspaceBackends.git` and `BashServices`.
-   - `git-tools.ts`: `repos`, `fork`, and the git note.
-   - `default-tools.ts`: the tool line counts the git tools.
-   - `workspace.ts`: the git owner, the `connect` wrapper, the tools, the
-     order of the notes, `Workspace.git`, and the order of disposal.
-   - `conformance.ts`: `gitConformance`.
-   - The export snapshot and the changelog.
-2. **The just-bash wiring, in `packages/just-bash`.** `gitFor(agent,
-access)`, and the one sentence of the guidance.
-3. **`gitBackend`, in the new package `packages/git`.** The server, the
-   tokens, the reserved names, the registry table, the templates,
-   `sqliteGitStorage`, and `fromDirectory`. The scripted tier and the room test run here.
-4. **The workstation, in `packages/workstation`.** The two `git config`
-   lines and the credential file. The OpenSSH tier runs a real `git`
-   against `gitBackend`'s handler.
+| Package                | File                         | What it holds                                                   |
+| ---------------------- | ---------------------------- | --------------------------------------------------------------- |
+| `packages/workspace`   | `src/git-backend.ts`         | The types of [The contract](#the-contract)                      |
+| `packages/workspace`   | `src/git-tools.ts`           | `repos`, `fork`, and the git note                               |
+| `packages/workspace`   | `src/workspace.ts`           | The git owner, the `connect` wrapper, and the order of disposal |
+| `packages/workspace`   | `src/git-conformance.ts`     | `gitConformance`                                                |
+| `packages/just-bash`   | `src/just-bash.ts`           | `gitFor(agent, access)`                                         |
+| `packages/git`         | `src/backend.ts`             | `gitBackend`, the access, and the environment                   |
+| `packages/git`         | `src/server.ts`, `tokens.ts` | The `just-git` server, its authentication, and the tokens       |
+| `packages/git`         | `src/registration.ts`        | Template registration                                           |
+| `packages/git`         | `src/storage.ts`             | `sqliteGitStorage` and the registry table                       |
+| `packages/workstation` | `src/git-credentials.ts`     | The credential file and the git settings                        |
 
 ## Tests
 
 **`gitConformance(harness)` holds the cases of a `GitBackend`.** It lives
-in `@ambionframework/workspace/conformance`, beside `sqlConformance`. The
-harness opens a git backend and a bash backend together.
+in `@ambionframework/workspace/conformance`, beside `sqlConformance`. A
+harness opens a store: one bash backend, and a factory that opens a git
+backend over the same repositories each time it is called.
 
-- `repos` shows each template with its description, and each fork with
-  its source, its default branch, and its URL.
-- `repos` with `namespace` shows that namespace alone.
-- `repos` does not show `template-sources`, and no agent holds a
-  credential for it.
-- `fork` with `clone` gives a working copy whose `origin` is the fork.
-  The clone runs at once after `fork` returns.
-- A second `fork` with the same name is a `name_taken` outcome, and it
-  creates nothing. With `clone`, it clones when the path does not exist.
-- A `fork` with a `clone` path that holds files gives the fork and a
-  failed clone, and the fork stays.
-- A `fork` of a source that does not exist is a `no_source` outcome.
+- `list` shows each template with its description, and each fork with its
+  source, its default branch, and its URL. `list` with a namespace shows
+  that namespace alone.
+- `list` does not show `template-sources`, and no agent holds a credential
+  for it.
+- A clone of a fork has the fork as `origin`.
+- A second `fork` with a taken name is `name_taken`, and it creates
+  nothing. A `fork` of a missing source is `no_source`.
 - A fork of a fork names its direct source.
-- An abort during `fork` rejects. A repeated call then finds the fork as
-  `name_taken`, or makes it.
 - An agent named `templates` or `template-sources` is refused.
-- The owner pushes a new branch, and a second clone reads it.
-- A push to a template is refused, and so is a push to another agent's
-  fork. The case checks the exit status of `git push`. The text of a
-  refusal differs from one backend to the other.
-- A peer clones another agent's fork.
+- The owner pushes a branch, and a peer reads it.
+- A push to a template and a push to another agent's fork are refused,
+  and the owner's push is accepted. The case checks the exit status of
+  `git push`. The text of a refusal differs from one backend to the
+  other.
+- An aborted `fork` rejects, and a repeated call is safe.
 - A registration with the same source writes nothing, and one with a
   changed source rejects the first operation with an error that names
   the template.
-- A registration that stopped after the commit to `template-sources`
-  ends with the template at the next registration.
-- A credential is refused after it expires. The harness opens the
-  backend with a `tokenTtl` of 1 second. The case skips a backend whose
-  shortest `tokenTtl` is longer than 5 seconds.
-- A `GIT_HTTP_BEARER_TOKEN` that an agent sets on the just-bash backends
-  pushes nothing to another agent's fork.
+- A credential is refused after it expires. The harness names its
+  shortest `tokenTtl`, and the case skips a backend whose shortest
+  `tokenTtl` is longer than 5 seconds.
 
-**Unit tests hold the texts.** Each outcome of `fork` and the `repos` table
-has a case. One case checks the tool line and the order of the notes, with
-and without a SQL backend. One case checks the just-bash note with and
-without a git backend.
+**`packages/git` runs the cases on the memory and the directory
+backends.** Its own tests add the tokens, a registration that stopped
+after the commit to `template-sources`, a restart over one git file, a
+`GIT_HTTP_BEARER_TOKEN` that an agent sets, a template from a directory,
+and a real `git` that clones and pushes over HTTP through `handler`.
 
-**The scripted tier runs `gitBackend` in process.** It runs the cases on
-the memory and the directory backends, with no network. A restart case
-pushes a branch, disposes the workspace, opens a new one over the same git
-file, and clones the branch with its commits.
+**`packages/workspace` holds the texts and a room test.** Each outcome of
+`fork` and the `repos` table has a case, and so do the tool line and the
+order of the notes. The room test drives the five calls of
+[Prompt an agent](#prompt-an-agent) with a scripted execution, then reads
+the pushed branch through `lab.git.use`. No test needs a model.
 
-**A room test drives the prompt above.** A scripted execution makes the
-five calls of [Prompt an agent](#prompt-an-agent). The test then reads the
-pushed branch through `lab.git.use`. It needs no model.
-
-**The workstation tier runs a real `git` against `gitBackend`.** It joins
-the OpenSSH job of [Workstation](workstation.md#tests). It proves the
-credential file, its line format, its mode, its refresh after an erase,
-and that one account cannot push to another account's fork.
+**The workstation runs a real `git` on both of its tiers.** The scripted
+tier proves the credential file, its line format, its mode, that `git`
+leaves it unchanged, and that a removed line comes back. The OpenSSH tier
+of [Workstation](workstation.md#tests) proves that another account cannot
+read the file, and cannot push to another account's fork.
 
 ## Out of v1
 
