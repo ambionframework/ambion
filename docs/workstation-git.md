@@ -5,7 +5,7 @@
 the [workstation](workstation.md), in the home of one dedicated account,
 and each agent reaches them with `git` over SSH.
 [The plan](../planning/next.md) holds the work as items G1 and G2, in
-phase 4. The examples show the proposed API.
+the five steps of phase 4. The examples show the proposed API.
 
 **The proposal ships in `@ambionframework/workstation`.** The package
 already holds the SSH client and the environment over SFTP and `exec`.
@@ -278,6 +278,12 @@ key pair in the OpenSSH format (`utils.generateKeyPairSync('ed25519')`
 in `ssh2` 1.17.0). The key lives in the backend's memory and in the
 agent's home. The host provisions no agent key for git.
 
+**The key generator retries a pair that `ssh2` cannot read.** About once
+in 256 pairs, the generator drops a leading zero byte of the public key,
+and `utils.parseKey` refuses both halves. The test server of the package
+already retries for this reason. The backend parses each new pair and
+generates again until both halves parse.
+
 **The credential rule of the workstation package changes its words.**
 [Workstation](workstation.md#credentials) states today: "The backend
 stores, issues, and rotates no credential", and it lists credential
@@ -285,7 +291,7 @@ issuance and rotation as out of v1. Proposed: "The host owns the key of
 each account on the server. The git backend owns the git key of each
 agent: it issues the key, rotates it, and the key works only on the
 server until it expires." The bash backend keeps the rule as it
-is. Phase 4 step 4 changes the page.
+is. Phase 4 step 5 changes the page.
 
 **Each `connect` of the bash backend keeps the agent's files current.**
 
@@ -396,14 +402,14 @@ resume. Here the rename gives the same property. The name
 
 ## Changes to the contract
 
-**The core knows a transport by its name alone.** After G1,
+**The core knows a transport by its name alone.** After G1b,
 `@ambionframework/workspace` holds one field on each side of the pair,
 and the refusal. The access of each git backend, with its wire shape,
 lives in the package of its deployment shape, beside the bash backend
 that reads it.
 
 ```ts
-// @ambionframework/workspace, after G1
+// @ambionframework/workspace, after G1b
 interface GitAccess {
   /** The name of the transport, such as `in-process` or `ssh`. */
   readonly transport: string;
@@ -417,7 +423,7 @@ interface BashBackend {
 ```
 
 ```ts
-// @ambionframework/just-bash/git, after G1: the access of justGitBackend
+// @ambionframework/just-bash/git, after G1b: the access of justGitBackend
 interface JustGitAccess extends GitAccess {
   readonly transport: 'in-process';
   readonly prefix: string;
@@ -427,7 +433,7 @@ interface JustGitAccess extends GitAccess {
 ```
 
 ```ts
-// @ambionframework/workstation, G2: the access of workstationGitBackend
+// @ambionframework/workstation, G2a: the access of workstationGitBackend
 interface WorkstationGitAccess extends GitAccess {
   readonly transport: 'ssh';
   /** The key of `agent`. Rejects for a reserved name. */
@@ -452,12 +458,18 @@ interface WorkstationGitIdentity {
 **A bash backend narrows the access by its transport.** It reads
 `transport`, and it casts to the access type of its own package. The
 `gitTransports` check in `openWorkspace` runs first, so the cast sees only
-a transport that the bash backend declared.
+a transport that the bash backend declared. The root entry of just-bash
+imports `JustGitAccess` with `import type` alone, so the root chunk loads
+no `node:sqlite`.
 
 **`openWorkspace` refuses a pair that does not match.** When `backend.git`
 is set and `backend.bash.gitTransports` does not hold its transport,
-`openWorkspace` throws. The error names both backends. A bash backend with
-no `gitTransports` carries none.
+`openWorkspace` throws. Neither backend has a name, so the error names the
+`transport` and the `server` of the git backend, and the transports that
+the bash backend carries. A bash backend with no `gitTransports` carries
+none. In G1b, `memoryBackend` and `directoryBackend` declare
+`in-process`, and the helper `wrapped()` of the workspace tests carries
+the transports of the memory backend inside it.
 
 | Bash backend | `in-process`          | `ssh`                                    |
 | ------------ | --------------------- | ---------------------------------------- |
@@ -472,32 +484,50 @@ checks each request against the namespace rule." The tokens of
 agent, and `serve` applies the rule. The one-pusher rule holds on both.
 
 **The template helpers move to the workspace package.** `fromDirectory`,
-`TemplateRegistration`, `TemplateSource`, `TemplateFiles`, `hashesOf`,
-`sameFiles`, and the name rules of `names.ts` live in `packages/git`
-today, beside `just-git`. `git-tools.ts` repeats the name pattern, and it
-imports the rule from the new entry. The workstation needs them and
-must not install `just-git`. They move to a new entry,
+`filesOf`, `hashesOf`, `sameFiles`, `changeTo`, their types, and the name
+rules of `names.ts` live in `packages/git` today, beside `just-git`.
+`git-tools.ts` repeats the name pattern, and it imports the rule from
+`git-names.ts` in the same package. The workstation needs them and must
+not install `just-git`. They move to a new entry,
 `@ambionframework/workspace/git`, which loads `node:fs` and `node:crypto`
-and no git library. `@ambionframework/just-bash/git` imports them from
-there. The move is part of G1, so the helpers leave `packages/git` once.
+and no git library. `tipHashes` reads `just-git/repo`, so it stays in
+just-bash. `@ambionframework/just-bash/git` imports the rest from the new
+entry. The move is part of G1a, so the helpers leave `packages/git` once.
+
+**Biome holds the imports of each entry.** An override for
+`packages/just-bash/src/git/` allows `node:sqlite`, `just-git/server`,
+`just-git/repo`, and `@ambionframework/workspace/git`. The rest of
+`packages/just-bash/src` refuses `node:sqlite` and the new entry. G2a
+adds `@ambionframework/workspace/git` to the override of the
+workstation. `scripts/import-rules.test.mjs` probes each rule.
 
 **`gitConformance` asks the harness for each credential fact.** The
 suite stays blind to transports. Four cases touch a credential, and each
 calls a hook of `GitConformanceBackend` that the package of the pair
-implements. [Tests](#tests) lists them.
+implements. Each hook takes the opened backend and workspace.
+[Tests](#tests) lists them.
+
+**The suite names the life of a credential in credential terms.**
+`GitConformanceOptions.tokenTtl` becomes `credentialTtl`, and
+`GitConformanceBackend.shortestTokenTtl` becomes `shortestCredentialTtl`.
+The store of each harness maps `credentialTtl` to the option of its
+backend: `tokenTtl` of `justGitBackend` or `keyTtl` of
+`workstationGitBackend`.
 
 **The changelog names these export changes.**
 
-| Item | Change                                                                                                                                                                                                                                    |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| G1   | `@ambionframework/git` goes. `@ambionframework/just-bash/git` exports `justGitBackend`, `sqliteGitStorage`, and `JustGitAccess`. The root entry of just-bash loads no `node:sqlite`                                                       |
-| G1   | `justGitBackend` has no `handler` and no `url`                                                                                                                                                                                            |
-| G1   | `GitAccess` holds `transport` alone. `prefix`, `fetch`, `credentialFor`, and `credentialsFor` leave the workspace. `GitFetch` and `GitCredential` move to `@ambionframework/just-bash/git` beside `JustGitAccess`                         |
-| G1   | `BashBackend` gets `gitTransports`                                                                                                                                                                                                        |
-| G1   | `GitConformanceBackend` gets the credential hooks                                                                                                                                                                                         |
-| G1   | The workstation writes no `~/.git-credentials`                                                                                                                                                                                            |
-| G1   | The new entry `@ambionframework/workspace/git` exports `fromDirectory`, `TemplateRegistration`, `TemplateSource`, `TemplateFiles`, `hashesOf`, `sameFiles`, and the name rules. The export snapshot of the workspace gets its sixth entry |
-| G2   | `@ambionframework/workstation` exports `workstationGitBackend`, `WorkstationGitOptions`, `WorkstationGitAccess`, and `WorkstationGitIdentity`                                                                                             |
+| Step | Change                                                                                                                                                                                                                                                                                 |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G1a  | `@ambionframework/git` goes. The new entry `@ambionframework/just-bash/git` exports `justGitBackend`, `sqliteGitStorage`, `JustGitBackend`, `JustGitBackendOptions`, `GitStorage`, `OpenGitStorage`, `Registry`, and `RegistryRow`. The root entry of just-bash loads no `node:sqlite` |
+| G1a  | `gitBackend` becomes `justGitBackend`, and `GitBackendOptions` becomes `JustGitBackendOptions`. `justGitBackend` has no `handler` and no `url`                                                                                                                                         |
+| G1a  | The new entry `@ambionframework/workspace/git` exports `fromDirectory`, `filesOf`, `hashesOf`, `sameFiles`, `changeTo`, `validName`, `namespaceOf`, `assertAgent`, `readOnly`, `TEMPLATES`, `SOURCES`, `TemplateRegistration`, `TemplateSource`, and `TemplateFiles`                   |
+| G1a  | The export snapshot of the workspace gets its sixth entry, and the snapshot of just-bash gets its second                                                                                                                                                                               |
+| G1a  | The workstation writes no `~/.git-credentials`                                                                                                                                                                                                                                         |
+| G1b  | `GitAccess` holds `transport` alone. `prefix`, `fetch`, `credentialFor`, and `credentialsFor` leave the workspace. `GitFetch` and `GitCredential` move to `@ambionframework/just-bash/git`, which also exports `JustGitAccess`                                                         |
+| G1b  | `BashBackend` gets `gitTransports`. `memoryBackend` and `directoryBackend` carry `in-process`                                                                                                                                                                                          |
+| G1b  | `GitConformanceBackend` gets the credential hooks. `tokenTtl` becomes `credentialTtl`, and `shortestTokenTtl` becomes `shortestCredentialTtl`                                                                                                                                          |
+| G2a  | `@ambionframework/workstation` exports `workstationGitBackend`, `WorkstationGitOptions`, `WorkstationGitAccess`, and `WorkstationGitIdentity`                                                                                                                                          |
+| G2b  | `workstationBackend` carries `ssh`, and it writes the key files of each agent at each `connect`                                                                                                                                                                                        |
 
 ## Owners and order
 
@@ -570,14 +600,17 @@ of [the package guide](../packages/workstation/README.md) do not change.
 - **One writer of the account's key file at a time** holds without the
   operator: every host process takes `flock` on the server.
 
-`test/sshd/setup.sh` gets each step for the account `lab-git`.
+`test/sshd/setup.sh` gets each step for the account `lab-git`. It puts
+the `Match User lab-git` block last in the configuration, and it adds a
+second `ListenAddress` on the runner's own address.
 
 ## Tests
 
 **The OpenSSH tier runs `gitConformance`.** Only a real `sshd` honors the
 options of an `authorized_keys` line. The scripted tier's `ssh2` server
 does not, and a copy of that logic in test support would test the copy.
-The tier also proves:
+Only the `workstation` CI job runs this tier, so a step of G2 merges only
+with that job green. The tier also proves:
 
 - that `ssh lab-git@127.0.0.1` with an agent key opens no shell;
 - that a request outside the pattern of `serve` fails, such as a
@@ -588,6 +621,11 @@ The tier also proves:
   `setup.sh` also listens on the runner's own address, and a connection
   to that address has it as its source;
 - that the reflog of a pushed ref names the agent.
+
+**The OpenSSH harness starts each case with an empty git account.** Before
+each `open()`, it removes `~lab-git/repos` and
+`~lab-git/.ssh/authorized_keys.ambion`, as the harness of the tier already
+removes the files of each agent's home.
 
 **The scripted tier tests the parts without `sshd`.**
 
@@ -604,7 +642,9 @@ The tier also proves:
   lines, and a write drops the expired ones.
 
 **Four hooks of the harness answer the credential cases.** The suite
-calls the hook, and the package of each pair implements it:
+calls the hook, and the package of each pair implements it. The hook for
+the credential reads beside forks also checks that the owner can write
+to its new fork:
 
 | Case                                 | `in-process`, in just-bash      | `ssh`, in the workstation                             |
 | ------------------------------------ | ------------------------------- | ----------------------------------------------------- |
@@ -612,6 +652,12 @@ calls the hook, and the package of each pair implements it:
 | An agent with a reserved name        | `credentialFor` rejects         | `identityFor` rejects                                 |
 | Credential reads beside forks        | A loop of `credentialFor`       | A loop of `identityFor`, which writes the key file    |
 | A credential expires                 | A probe with the token gets 401 | `ssh` with a copy of the old key fails after `keyTtl` |
+
+**The expiry case needs a longer credential life on the workstation.**
+The suite runs the case at `shortestCredentialTtl`, and it skips the case
+when that is above 5 seconds. The just-bash harness names 1 second.
+`expiry-time` has a resolution of one second, and the server renders it,
+so the workstation harness names a key life between 3 and 5 seconds.
 
 ## Alternatives
 
