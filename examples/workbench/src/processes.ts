@@ -16,7 +16,7 @@ export interface ProcessOutput {
 /** The panel reads an output file whole up to this size. */
 const MAX_READ = 1_048_576;
 
-/** The panel shows the last bytes of an output, up to this size. */
+/** The panel shows the last characters of an output, up to this count. */
 const SHOWN = 65_536;
 
 /** The order of the panel: the running processes first, then the newest start first. */
@@ -27,12 +27,16 @@ export function byRecency(processes: readonly ProcessView[]): ProcessView[] {
 	);
 }
 
-/** The end of a text, cut at a line break, so the first shown line is whole. */
-function lastPart(text: string): { text: string; truncated: boolean } {
-	if (text.length <= SHOWN) return { text, truncated: false };
-	const end = text.slice(-SHOWN);
+/**
+ * The end of a text, cut after its first line break, so the first shown line
+ * is whole. An end with no line break before its last character stays whole.
+ */
+export function lastPart(text: string, shown = SHOWN): { text: string; truncated: boolean } {
+	if (text.length <= shown) return { text, truncated: false };
+	const end = text.slice(-shown);
 	const cut = end.indexOf('\n');
-	return { text: cut === -1 ? end : end.slice(cut + 1), truncated: true };
+	const whole = cut === -1 || cut === end.length - 1;
+	return { text: whole ? end : end.slice(cut + 1), truncated: true };
 }
 
 /**

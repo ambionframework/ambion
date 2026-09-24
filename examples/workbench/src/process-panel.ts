@@ -139,14 +139,15 @@ export class ProcessesPanel {
 			return;
 		}
 		const room = process.room ? `, in the room ${process.room}` : '';
+		// The output of the process chosen before stays until the new one loads.
+		const output = browser.output?.handle === process.handle ? browser.output : undefined;
 		this.title.content = new StyledText([
 			fg(palette.accent)(label(process)),
 			fg(palette.dim)(`   ${process.agent}${room}, ${stateText(process, now)}\n`),
 			fg(palette.text)(`$ ${process.command}\n`),
-			fg(palette.dim)(browser.output ? outputNote(browser.output, process) : 'Reading the output.'),
+			fg(palette.dim)(output ? outputNote(output, process) : 'Reading the output.'),
 		]);
-		const text = browser.output?.handle === process.handle ? browser.output.text : '';
-		this.body.content = new StyledText([fg(palette.text)(text)]);
+		this.body.content = new StyledText([fg(palette.text)(output?.text ?? '')]);
 		if (this.shown !== process.handle) this.scroll.scrollTop = this.scroll.scrollHeight;
 		this.shown = process.handle;
 	}

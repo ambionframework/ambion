@@ -113,8 +113,9 @@ export class Keys {
 
 	/** Open the processes panel, and read the processes. A narrow terminal gives it the whole width. */
 	openProcesses(): void {
-		this.openPanel('processes');
+		// The first part of `show` opens the browser, so the first draw shows the panel.
 		void this.processes.show();
+		this.openPanel('processes');
 	}
 
 	private openPanel(mode: 'files' | 'processes'): void {

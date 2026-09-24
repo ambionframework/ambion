@@ -69,23 +69,25 @@ press Ctrl+R to pick a room.
 `/abort` runs at once. Typing the command is the confirmation. Switching
 person leaves the current room, then enters it as the new person.
 
-| Key                   | Effect                                                      |
-| --------------------- | ----------------------------------------------------------- |
-| Enter                 | Send                                                        |
-| Ctrl+J, Alt+Enter     | Add a line to the message                                   |
-| Tab                   | Complete a command, or browse the discussions               |
-| Up, Down, Enter, e, c | While browsing: choose, open or close, open all, close all  |
-| s                     | While browsing: show the steps of the chosen exchange       |
-| r                     | While browsing: choose a ref of a shown message             |
-| Up, Down, Enter       | While choosing a ref: move, open it, or jump to it          |
-| Esc                   | Close the palette, clear the search, or close the panel     |
-| PageUp, PageDown      | Scroll the conversation                                     |
-| Type, Up, Down        | In the files panel: search, and choose a file to read       |
-| PageUp, PageDown      | In the files panel: scroll the file                         |
-| Ctrl+Y                | In the files panel: copy the file to the clipboard          |
-| Up, Down, PageUp      | In the processes panel: choose a process, scroll its output |
-| x, then x             | In the processes panel: cancel the chosen process           |
-| Ctrl+Y                | In the processes panel: copy the output to the clipboard    |
+| Key                   | Effect                                                     |
+| --------------------- | ---------------------------------------------------------- |
+| Enter                 | Send                                                       |
+| Ctrl+J, Alt+Enter     | Add a line to the message                                  |
+| Tab                   | Complete a command, or browse the discussions              |
+| Up, Down, Enter, e, c | While browsing: choose, open or close, open all, close all |
+| s                     | While browsing: show the steps of the chosen exchange      |
+| r                     | While browsing: choose a ref of a shown message            |
+| Up, Down, Enter       | While choosing a ref: move, open it, or jump to it         |
+| Esc                   | Close the palette, clear the search, or close the panel    |
+| PageUp, PageDown      | Scroll the conversation                                    |
+| Type, Up, Down        | In the files panel: search, and choose a file to read      |
+| PageUp, PageDown      | In the files panel: scroll the file                        |
+| Ctrl+Y                | In the files panel: copy the file to the clipboard         |
+| Up, Down, j, k        | In the processes panel: choose a process                   |
+| PageUp, PageDown      | In the processes panel: scroll the output                  |
+| x, then x             | In the processes panel: cancel the chosen process          |
+| Ctrl+Y                | In the processes panel: copy the output to the clipboard   |
+| Esc, q                | In the processes panel: close the panel                    |
 
 The files panel renders Markdown files with headings, lists, and code. It
 shows a SQLite database (`.db`, `.sqlite`, `.sqlite3`, up to 8 MiB) as tables,
@@ -97,15 +99,18 @@ OpenTUI's own terminal image rendering, negotiated to the terminal's protocol.
 `bash`.** The panel lists the running processes first, then the newest
 start. Each row gives the name or the handle, the owner agent, the state,
 and the command. The chosen process shows its room, its whole command, and
-the end of its output, up to 64 KB. A start or an end of a process reads
+the last 65,536 characters of its output. A start or an end of a process reads
 the list again, and the slow poll updates the times.
 
 - **The list holds the agents of this run.** An agent joins it on its first
   process tool call or reminder ([Processes](../../docs/processes.md#the-hosts-view)).
 - **The just-bash backend writes the output when the command ends.** A
   running process shows `No output yet.`
+- **The panel reads an output file up to 1 MiB.** A larger output shows
+  its size and its path. The agent's `status` tool reads the end of any size.
 - **The first `x` chooses the process, and the second `x` cancels it.** The
-  cancel waits up to 10 seconds for the process to end.
+  cancel waits up to 10 seconds for the process to end. The file reads of
+  the terminal do not wait for it.
 
 `/attach <local path>` reads a file from your own machine and copies it into
 the workspace, under `/attachments`. It cites the copy as a ref of your next

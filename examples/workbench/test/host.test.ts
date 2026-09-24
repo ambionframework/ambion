@@ -324,13 +324,15 @@ describe('Workbench host', () => {
 		const [soak, greet] = await workbench.processes();
 		expect(soak).toMatchObject({ name: 'soak', agent: 'assistant', state: 'running' });
 		expect(greet).toMatchObject({ name: 'greet', state: 'exited', exitCode: 0 });
-		expect(await workbench.processOutput(greet?.handle ?? '')).toEqual({
+		expect(await workbench.processOutput(greet?.handle ?? '', 'assistant')).toEqual({
 			handle: greet?.handle,
 			text: 'hello from the bench\n',
 			size: 21,
 			truncated: false,
 		});
-		await expect(workbench.processOutput('bash-000000000000')).rejects.toThrow(/No process/);
+		await expect(workbench.processOutput('bash-000000000000', 'assistant')).rejects.toThrow(
+			/No process/,
+		);
 
 		const cancelled = await workbench.cancelProcess(soak?.handle ?? '');
 		expect(cancelled.state).toBe('cancelled');

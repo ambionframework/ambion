@@ -29,6 +29,8 @@ export class ProcessBrowser {
 	/** A short message for the hint line, such as the result of a cancel. */
 	message: string | undefined;
 	private token = 0;
+	/** Counts each open and each close, so a read that lands after one of them is dropped. */
+	private generation = 0;
 	private unwatch: (() => void) | undefined;
 	private readonly host: ProcessHost;
 	private readonly changed: () => void;
@@ -45,7 +47,10 @@ export class ProcessBrowser {
 	/** Open the panel on the newest process, and read the list again on each start and end. */
 	async show(): Promise<void> {
 		this.open = true;
+		this.generation += 1;
 		this.index = 0;
+		this.processes = [];
+		this.problem = undefined;
 		this.output = undefined;
 		this.confirming = undefined;
 		this.message = undefined;
@@ -56,6 +61,7 @@ export class ProcessBrowser {
 
 	hide(): void {
 		this.open = false;
+		this.generation += 1;
 		this.token += 1;
 		this.unwatch?.();
 		this.unwatch = undefined;
@@ -67,22 +73,36 @@ export class ProcessBrowser {
 		if (last < 0) return;
 		this.index = Math.max(0, Math.min(last, this.index + step));
 		this.confirming = undefined;
+		this.message = undefined;
 		void this.load();
 	}
 
-	/** Read the list again. The selection stays on the same process when it is still listed. */
+	/**
+	 * Read the list again. The selection stays on the process that is chosen
+	 * when the list arrives, so a move during the read holds.
+	 */
 	async refresh(): Promise<void> {
 		if (!this.open) return;
-		const chosen = this.selected?.handle;
+		const generation = this.generation;
+		let listed: ProcessView[] | undefined;
+		let problem: string | undefined;
 		try {
-			this.processes = await this.host.processes();
-			this.problem = undefined;
+			listed = await this.host.processes();
 		} catch (error) {
-			this.problem = errorText(error);
+			problem = errorText(error);
 		}
-		const at = this.processes.findIndex((process) => process.handle === chosen);
-		this.index = at === -1 ? Math.min(this.index, Math.max(0, this.processes.length - 1)) : at;
+		if (generation !== this.generation) return;
+		this.problem = problem;
+		if (listed) this.choose(listed);
 		await this.load();
+	}
+
+	/** Take a new list, and keep the chosen process when the list still holds it. */
+	private choose(listed: ProcessView[]): void {
+		const chosen = this.selected?.handle;
+		this.processes = listed;
+		const at = listed.findIndex((process) => process.handle === chosen);
+		this.index = at === -1 ? Math.min(this.index, Math.max(0, listed.length - 1)) : at;
 	}
 
 	/**
@@ -124,13 +144,14 @@ export class ProcessBrowser {
 		this.token += 1;
 		const mine = this.token;
 		const process = this.selected;
+		if (!this.open) return;
 		if (!process) {
 			this.output = undefined;
 			this.changed();
 			return;
 		}
 		try {
-			const output = await this.host.processOutput(process.handle);
+			const output = await this.host.processOutput(process.handle, process.agent);
 			if (mine !== this.token) return;
 			this.output = output;
 		} catch (error) {
@@ -155,10 +176,18 @@ function span(ms: number): string {
 	return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-/** The state of a process in a few words: `running 2m 14s`, `exit 0 after 3s`, or `cancelled after 1m 2s`. */
+/**
+ * The state of a process in a few words: `running 2m 14s`, `exit 0 after 3s`,
+ * or `cancelled after 1m 2s`. An ended process whose files name no end time
+ * gives the state alone.
+ */
 export function stateText(process: ProcessView, now: number): string {
 	const end = process.endedAt === undefined ? now : Date.parse(process.endedAt);
 	const took = span(end - Date.parse(process.startedAt));
+	if (process.state !== 'running' && process.endedAt === undefined && process.state !== 'failed')
+		return process.state === 'exited'
+			? `exit ${process.exitCode ?? '?'}`
+			: process.state.replace('_', ' ');
 	switch (process.state) {
 		case 'running':
 			return `running ${took}`;

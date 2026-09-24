@@ -75,9 +75,15 @@ export interface Workbench {
 	 * run: the running processes first, then the newest start first.
 	 */
 	processes(): Promise<ProcessView[]>;
-	/** The end of the output of one process. */
-	processOutput(handle: string): Promise<ProcessOutput>;
-	/** Stop one process. It waits up to 10 seconds for the end, then gives the state. */
+	/**
+	 * The end of the output of the process `handle` of `agent`: the last 64 K
+	 * characters. An output over 1 MiB gives its size and no text.
+	 */
+	processOutput(handle: string, agent: string): Promise<ProcessOutput>;
+	/**
+	 * Stop one process. It waits up to 10 seconds for the end, then gives the
+	 * state. It runs outside the queue of the host's file reads.
+	 */
 	cancelProcess(handle: string): Promise<ProcessView>;
 	/** Call `changed` when a process starts and when one ends. The return value ends the watch. */
 	watchProcesses(changed: () => void): () => void;
@@ -195,14 +201,16 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 		attach: (localPath) => rooms.withWorkspace(() => attachFile(rooms.workspace, localPath)),
 		processes: () =>
 			rooms.withWorkspace(async () => byRecency(await rooms.workspace.processes.list())),
-		processOutput: (handle) =>
+		processOutput: (handle, agent) =>
 			rooms.withWorkspace(async () => {
-				const all = await rooms.workspace.processes.list();
-				const process = all.find((candidate) => candidate.handle === handle);
+				const listed = await rooms.workspace.processes.list({ agent });
+				const process = listed.find((candidate) => candidate.handle === handle);
 				if (!process) fail(`No process ${handle}.`);
 				return readOutput(rooms.workspace, process);
 			}),
-		cancelProcess: (handle) => rooms.withWorkspace(() => rooms.workspace.processes.cancel(handle)),
+		// The table orders a stop on the bash owner of the agent, so the cancel
+		// needs no place in the host's queue, and a wait for the end holds no read.
+		cancelProcess: (handle) => rooms.workspace.processes.cancel(handle),
 		watchProcesses: (changed) => rooms.workspace.processes.subscribe(() => changed()),
 		labTables: async () => listLabTables(labPath),
 		labTable: async (uri) => readLabTable(labPath, uri),

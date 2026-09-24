@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { ProcessBrowser, stateText } from '../src/process-browser.ts';
+import { lastPart } from '../src/processes.ts';
 import { scenarios } from '../src/scenarios.ts';
 import { Session } from '../src/session.ts';
 import type { ActivationSteps, OpenOptions, ProcessView, Workbench } from '../src/workbench.ts';
@@ -479,10 +480,71 @@ describe('Session /ps', () => {
 		[{}, 'running 1m 5s'],
 		[{ state: 'exited', exitCode: 2, endedAt: at(3) }, 'exit 2 after 3s'],
 		[{ state: 'timed_out', endedAt: at(59) }, 'timed out after 59s'],
-		[{ state: 'cancelled' }, 'cancelled after 1m 5s'],
+		[{ state: 'cancelled', endedAt: at(20) }, 'cancelled after 20s'],
+		[{ state: 'cancelled' }, 'cancelled'],
+		[{ state: 'exited', exitCode: 0 }, 'exit 0'],
 		[{ state: 'failed', error: 'The backend closed.' }, 'failed: The backend closed.'],
 		[{ startedAt: new Date(Date.UTC(2026, 0, 1, 10, 55)).toISOString() }, 'running 1h 6m'],
 	] as const)('states %o as %s', (extra, text) => {
 		expect(stateText(process('bash-000000000001', extra), Date.parse(at(65)))).toBe(text);
+	});
+
+	it('keeps a move made while a list read runs, and drops a read that lands after a close', async () => {
+		const { host } = await started();
+		host.processTable = [process('bash-000000000001'), process('bash-000000000002')];
+		const panel = new ProcessBrowser(host, () => {});
+		await panel.show();
+		let open = () => {};
+		host.processGate = new Promise<void>((resolve) => {
+			open = resolve;
+		});
+		const reading = panel.refresh();
+		panel.move(1);
+		open();
+		await reading;
+		expect(panel.selected?.handle).toBe('bash-000000000002');
+		await vi.waitFor(() => expect(panel.output?.handle).toBe('bash-000000000002'));
+
+		host.processGate = new Promise<void>((resolve) => {
+			open = resolve;
+		});
+		const late = panel.refresh();
+		panel.hide();
+		host.processTable = [];
+		open();
+		await late;
+		expect(panel.processes).toHaveLength(2);
+		host.processGate = undefined;
+	});
+
+	it('shows a failed list read, a cancel that does not end in time, and a cancel in progress', async () => {
+		const { host } = await started();
+		host.processTable = [process('bash-000000000001')];
+		host.processFailure = 'The workspace is closed.';
+		const panel = new ProcessBrowser(host, () => {});
+		await panel.show();
+		expect(panel.problem).toBe('The workspace is closed.');
+		host.processFailure = undefined;
+		await panel.refresh();
+		expect(panel.problem).toBeUndefined();
+
+		host.cancelState = 'running';
+		await panel.cancel();
+		const cancelling = panel.cancel();
+		// A third press while the cancel runs takes no second cancel.
+		void panel.cancel();
+		expect(panel.message).toBe('Cancelling bash-000000000001.');
+		await cancelling;
+		expect(panel.message).toBe('bash-000000000001 did not end within 10 seconds.');
+		expect(host.calls.filter((call) => call.startsWith('cancel:'))).toHaveLength(1);
+	});
+
+	it.each([
+		['short', 'short', false],
+		['one\ntwo\nthree\n', 'three\n', true],
+		['aaaaaaaaaa\n', 'aaaaaa\n', true],
+		['aaaaaaaaaaa', 'aaaaaaa', true],
+	])('keeps the end of %j as %j', (text, end, truncated) => {
+		expect(lastPart(text, 7)).toEqual({ text: end, truncated });
 	});
 });
