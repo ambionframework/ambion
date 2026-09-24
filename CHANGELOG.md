@@ -7,9 +7,9 @@ object's `name`, `agents`, and `stopped`, and the seat object's activation
 state, live in the `ambion_metadata` table of the object's SQLite. Before,
 each object kept them as a journal of patches under the names
 `ambion/cloudflare/room` and `ambion/cloudflare/seat`, with its own write
-queue and its own recovery of a write in doubt. A Durable Object runs one
-request at a time and commits its SQLite writes whole, so one read and one
-write in the same step replace them. An object that 0.1.0 wrote reads no
+queue and its own recovery of a write in doubt. A change now reads and
+writes with no await between them, so no other request of the object runs
+in between, and SQLite commits the one write whole. An object that 0.1.0 wrote reads no
 metadata: start its room again.
 
 **A journal entry of a known kind with an invalid `seq` throws.** Before,

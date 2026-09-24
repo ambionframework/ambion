@@ -63,7 +63,7 @@ here so that the release names them.
 | The removal of `@ambionframework/cli`               | #273             | Every library package needs only Node `>=22.19.0`                                                                                                          |
 | M1. Kernel decision layers                          | #286             | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts`                    |
 | M2. The rules sweep                                 | #291             | Every exported room rule but `exchangeOutcome` gates a write, and `draftsClose` counts a summary draft by the writer's seat in the fold and in the verdict |
-| M3. One crash-safe append loop                      | this PR          | The journal owns the one append loop: a Cloudflare object keeps its metadata in one table row. A known entry with an invalid seq throws                    |
+| M3. One crash-safe append loop                      | #302             | The journal owns the one append loop: a Cloudflare object keeps its metadata in one table row. A known entry with an invalid seq throws                    |
 | M6. Each doc fact has one home                      | #301             | Seven repeated facts keep one home page, and the other pages link to it. `room.md` no longer says that an activation opens a fresh session                 |
 | The room tools in the hosting entry                 | #287             | `roomTools` and `agentTools` hold the room tool rules once. The Pi, Claude, and Codex executors adapt them and keep no copy                                |
 | `@ambionframework/just-bash`                        | #288, #289       | The workspace installs no just-bash, and the workstation installs 72 fewer packages. Each just-bash shell runs `git`, locked to the agent                  |
@@ -80,17 +80,18 @@ tagged commit.** The phases below deliver them; the items explain them.
 | L Live evidence           | The live tier passes on the release candidate for the Pi, Claude, and Codex harnesses.                                                                        |
 | R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release. The pages that name a release name 0.2.0. |
 
-**The tag waits for the P0 and P1 steps.** A P2 step that is open when the
-last P1 step closes moves to the backlog. It does not hold the tag.
+**The tag waits for the P0 and P1 steps.** No P0 step is open. A P2 step
+that is open when the last P1 step closes moves to the backlog. It does not
+hold the tag.
 
 **Format changes.** The changelog names each change to a stored format.
 
-| Change                                                                                | Item | Kind                        |
-| ------------------------------------------------------------------------------------- | ---- | --------------------------- |
-| The `ambion/pi-session` journals and the Pi transcript audit are gone                 | —    | A stored namespace retires  |
-| The `ambion/trace` journals are gone                                                  | —    | A stored namespace retires  |
-| The `session` on an ended lease names an exchange session, and a failed lease has one | —    | A stored field that changes |
-| The Cloudflare object metadata moves from two journals to the `ambion_metadata` table | M3   | A stored namespace retires  |
+| Change                                                                                | Item | Kind                         |
+| ------------------------------------------------------------------------------------- | ---- | ---------------------------- |
+| The `ambion/pi-session` journals and the Pi transcript audit are gone                 | —    | A stored namespace retires   |
+| The `ambion/trace` journals are gone                                                  | —    | A stored namespace retires   |
+| The `session` on an ended lease names an exchange session, and a failed lease has one | —    | A stored field that changes  |
+| The Cloudflare object metadata moves from two journals to the `ambion_metadata` table | M3   | Two stored namespaces retire |
 
 **Deployment models.** The same rules serve four placements.
 

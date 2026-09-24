@@ -221,7 +221,7 @@ type SeatInternals = {
 			change: (current: Readonly<Record<string, unknown>>) => {
 				patch: Record<string, unknown>;
 			},
-		) => Promise<unknown>;
+		) => unknown;
 	};
 	roomFor: (room: string) => RoomProtocol;
 };
@@ -245,7 +245,7 @@ async function recovering(
 	});
 	onTestFinished(() => configure(configuration));
 	await inside<SeatInternals, void>(seat, async (object, state) => {
-		await object.metadata.change(() => ({
+		object.metadata.change(() => ({
 			patch: { room: name, seat: 'product', activation, phase: 'running' },
 		}));
 		const metadata = seatMetadata(state);
@@ -286,7 +286,7 @@ it('keeps newer metadata when a timed out recovery release replies late', async 
 	onTestFinished(() => late.resolve({ stale: 'late' }));
 	const name = 'seat-recovery-release-late';
 	const { read, timedOut } = await recovering(name, async (metadata) => {
-		await metadata.change(() => ({
+		metadata.change(() => ({
 			patch: { room: name, seat: 'product', activation: newer, phase: 'pending' },
 		}));
 		return late.promise;

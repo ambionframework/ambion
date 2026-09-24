@@ -45,10 +45,10 @@ const METADATA = `CREATE TABLE IF NOT EXISTS ambion_metadata (
 )`;
 
 /**
- * One JSON record in the object's SQLite. The object runs one request at a
- * time, and `change` reads, decides, and writes with no await between them,
- * so no other request lands in between. SQLite commits the write whole, and
- * the object sends no reply before the write is durable.
+ * One JSON record in the object's SQLite. `change` reads, decides, and
+ * writes with no await between them, so no other request of the object runs
+ * in between. SQLite commits the one write whole, and the object sends no
+ * reply before the write is durable.
  */
 function metadataStore<T extends object>(sql: SqlStorage, name: string): MetadataStore<T> {
 	sql.exec(METADATA);
@@ -60,7 +60,7 @@ function metadataStore<T extends object>(sql: SqlStorage, name: string): Metadat
 		read,
 		change(decide) {
 			const current = read();
-			const update = decide(read());
+			const update = decide(current);
 			if (update === undefined) return current;
 			const next: Record<string, unknown> = {
 				...(current as Record<string, unknown>),
@@ -73,7 +73,7 @@ function metadataStore<T extends object>(sql: SqlStorage, name: string): Metadat
 				name,
 				JSON.stringify(next),
 			);
-			return read();
+			return next as T;
 		},
 	};
 }
