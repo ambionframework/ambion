@@ -110,6 +110,14 @@ connects as each agent with its own credential, so the server enforces the
 grants. It passes `sqlConformance`. **Condition:** the lab setup, one workstation and
 one database server, is scheduled.
 
+**A git server on a second machine.** `workstationGitBackend` keeps the
+git account on the workstation, and each agent key works only from the
+loopback address ([Workstation git](../docs/workstation-git.md)). A lab
+with a git server apart from the workstation needs the address that an
+agent's `ssh` uses, the source addresses that `from` names, and an
+OpenSSH tier with two machines. **Condition:** a lab with two or more
+workstations that share one set of repositories.
+
 **A backend profile and concurrent operations.** A backend declares its
 isolation, its network, and whether the owner may run operations from two
 agents at once. The owner then keeps one queue for each agent. The same

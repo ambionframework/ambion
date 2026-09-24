@@ -31,6 +31,7 @@ each page.
 | [Workspace](workspace.md)             | The workspace interface, its backends, and its tools                   |
 | [Workstation](workstation.md)         | A remote server as a workspace over SSH, one account for each agent    |
 | [Git](git.md)                         | A git backend: read-only templates, forks, clones, and pushes          |
+| [Workstation git](workstation-git.md) | Proposed: a git backend on the workstation, reached over SSH           |
 | [Example](example.md)                 | The one runnable example: an agentic lab workspace                     |
 | [Durability](durability.md)           | Journal guarantees, recovery, leases, and failure evidence             |
 | [Formal](formal.md)                   | The verified rules, their proofs, and how the gate runs them           |
