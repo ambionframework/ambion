@@ -93,6 +93,8 @@ interface GitRepository {
   readonly id: string;
   /** The repository this one was forked from. */
   readonly source?: string;
+  /** What the repository holds. The host sets it when it registers a template. */
+  readonly description?: string;
   /** Each branch and the commit it names. */
   readonly branches: Readonly<Record<string, string>>;
 }
@@ -122,7 +124,12 @@ const lab = openWorkspace({
     git: gitBackend({
       storage: sqliteGitStorage('./data/lab-git.db'),
       secret: process.env.LAB_GIT_SECRET,
-      templates: { 'weekly-report': fromDirectory('./templates/weekly-report') },
+      templates: {
+        'weekly-report': {
+          description: 'A weekly status report: numbers, risks, and next steps.',
+          source: fromDirectory('./templates/weekly-report'),
+        },
+      },
     }),
   },
 });
@@ -165,11 +172,17 @@ error: failed to push some refs to 'http://git.ambion.invalid/templates/weekly-r
 ```
 
 **The host declares each template, and the backend writes it.** The
-`templates` option maps a name to a source. `fromDirectory(path)` reads a
-directory on the Ambion host, and a plain object maps paths to text. At
+`templates` option maps a name to a registration: a `description` and a
+`source`. `fromDirectory(path)` reads a directory on the Ambion host, and a
+plain object maps paths to text. At
 open, the backend compares each source with the tip of its template. When
 they differ, it commits the source on top as the host agent. A restart
 with the same source writes nothing.
+
+**A description tells an agent which template to pick.** It is one or two
+sentences of plain text, and `repos` shows it. A person can then name the
+kind of work, and the agent finds the template that fits. The description
+is optional, and a registration with no description shows an empty cell.
 
 **A fork does not follow its template.** A change of a template adds a
 commit to the template. An agent takes it with
@@ -212,14 +225,15 @@ entry for the `fork` call.
 | `namespace` | Optional. `templates` or the name of an agent. Omit it to list every repository. |
 
 **The result is a Markdown table with one line for each repository.** The
-`Branches` column shows each branch with the first seven characters of its
+`Description` column shows the text that the host registered with a
+template, and it is empty for a fork. The `Branches` column shows each branch with the first seven characters of its
 commit. It shows five branches at most, and then the count of the others.
 
 ```text
-| Repository              | Forked from             | Branches                      |
-| ----------------------- | ----------------------- | ----------------------------- |
-| templates/weekly-report |                         | main 5c76d2e                  |
-| analyst/report          | templates/weekly-report | main 5c76d2e, week-39 e5ec80f |
+| Repository              | Description                                             | Forked from             | Branches                      |
+| ----------------------- | ------------------------------------------------------- | ----------------------- | ----------------------------- |
+| templates/weekly-report | A weekly status report: numbers, risks, and next steps. |                         | main 5c76d2e                  |
+| analyst/report          |                                                         | templates/weekly-report | main 5c76d2e, week-39 e5ec80f |
 
 2 repositories. Clone one with git clone http://git.ambion.invalid/<repository>.
 ```
@@ -489,7 +503,8 @@ namespace rule on every backend. The bash backend decides the rest.
 **`gitConformance(harness)` holds the cases of a `GitBackend`.** It lives
 in `@ambionframework/workspace/conformance`, beside `sqlConformance`.
 
-- `repos` shows each template, and each fork with its source.
+- `repos` shows each template with its description, and each fork with
+  its source.
 - `fork` with `clone` gives a working copy whose `origin` is the fork.
 - A second `fork` with the same name is refused and creates nothing.
 - The owner pushes a new branch, and a second clone reads it.
