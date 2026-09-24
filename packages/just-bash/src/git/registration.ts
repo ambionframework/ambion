@@ -14,17 +14,19 @@
  * at the next registration.
  */
 
-import type { GitServer } from 'just-git/server';
-import { SOURCES, TEMPLATES, validName } from './names.ts';
-import type { OpenGitStorage, RegistryRow } from './storage.ts';
 import {
 	changeTo,
 	filesOf,
 	hashesOf,
+	SOURCES,
 	sameFiles,
+	TEMPLATES,
 	type TemplateRegistration,
-	tipHashes,
-} from './templates.ts';
+	validName,
+} from '@ambionframework/workspace/git';
+import { flattenTree, type GitRepo, readCommit, readHead } from 'just-git/repo';
+import type { GitServer } from 'just-git/server';
+import type { OpenGitStorage, RegistryRow } from './storage.ts';
 import type { TokenClaims } from './tokens.ts';
 
 /** The author of every commit that the backend writes. */
@@ -32,6 +34,15 @@ const BACKEND_AUTHOR = { name: 'ambion', email: 'ambion@ambion.invalid' };
 
 /** The default branch of every repository that the backend creates. */
 export const DEFAULT_BRANCH = 'main';
+
+/** Each path at the tip of the default branch of `repo`, with its blob hash. Empty for an unborn branch. */
+async function tipHashes(repo: GitRepo): Promise<ReadonlyMap<string, string>> {
+	const head = await readHead(repo);
+	if (head.hash === null) return new Map();
+	const commit = await readCommit(repo, head.hash);
+	const entries = await flattenTree(repo, commit.tree);
+	return new Map(entries.map((entry) => [entry.path, entry.hash]));
+}
 
 /**
  * The row of `id` after a crash is settled: a `forking` row whose

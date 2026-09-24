@@ -1,24 +1,25 @@
 /**
- * The harnesses of the git conformance cases: `gitBackend` over a temporary
- * SQLite file, beside each just-bash backend. Each `backend` call opens a
- * new git backend over the same file, the way a restart of the host does.
+ * The harnesses of the git conformance cases: `justGitBackend` over a
+ * temporary SQLite file, beside each just-bash backend. Each `backend` call
+ * opens a new git backend over the same file, the way a restart of the host
+ * does.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { directoryBackend, memoryBackend } from '@ambionframework/just-bash';
 import type { BashBackend } from '@ambionframework/workspace';
 import type {
 	GitConformanceBackend,
 	GitConformanceOptions,
 } from '@ambionframework/workspace/conformance';
-import { gitBackend, sqliteGitStorage } from '../../src/index.ts';
+import { justGitBackend, sqliteGitStorage } from '../../src/git/index.ts';
+import { directoryBackend, memoryBackend } from '../../src/index.ts';
 
 export const SECRET = 'conformance-secret';
 
-/** The options of a conformance case, as `gitBackend` options over `file`. */
+/** The options of a conformance case, as `justGitBackend` options over `file`. */
 export function backendOver(file: string, options: GitConformanceOptions) {
-	return gitBackend({
+	return justGitBackend({
 		storage: sqliteGitStorage(file),
 		secret: SECRET,
 		...(options.tokenTtl === undefined ? {} : { tokenTtl: options.tokenTtl }),

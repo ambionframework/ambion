@@ -1,14 +1,17 @@
 /**
- * The package's five entries, and what each one names. `index.ts` opens a
+ * The package's six entries, and what each one names. `index.ts` opens a
  * resource and its logs, over no backend. `./resource`, `./sql`, and
- * `./sqlite` each hold one binding. `./conformance` holds the cases every
- * `BashBackend` and every `SqlBackend` must pass. No entry loads just-bash:
- * the just-bash backends are the package `@ambionframework/just-bash`.
+ * `./sqlite` each hold one binding. `./git` holds the name rules and the
+ * template helpers that every git backend shares. `./conformance` holds
+ * the cases every `BashBackend`, `SqlBackend`, and `GitBackend` must pass.
+ * No entry loads just-bash: the just-bash backends are the package
+ * `@ambionframework/just-bash`.
  */
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 import * as conformance from '../src/conformance.ts';
+import * as git from '../src/git-entry.ts';
 import * as main from '../src/index.ts';
 import { PACKAGE_NAME } from '../src/index.ts';
 import * as resource from '../src/resource-entry.ts';
@@ -30,15 +33,17 @@ const STEMS: Record<string, string> = {
 	'./resource': 'resource-entry',
 	'./sql': 'sql-resource',
 	'./sqlite': 'sqlite-entry',
+	'./git': 'git-entry',
 	'./conformance': 'conformance',
 };
 
-it('holds exactly five entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
+it('holds exactly six entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
 	const { name, exports } = await manifest();
 	expect(PACKAGE_NAME).toBe(name);
 	expect(Object.keys(exports).sort()).toEqual([
 		'.',
 		'./conformance',
+		'./git',
 		'./package.json',
 		'./resource',
 		'./sql',
@@ -51,6 +56,7 @@ it('holds exactly five entries, builds each under the name the manifest gives it
 		'src/resource-entry.ts',
 		'src/sql-resource.ts',
 		'src/sqlite-entry.ts',
+		'src/git-entry.ts',
 		'src/conformance.ts',
 	]);
 	for (const [path, target] of Object.entries(exports)) {
@@ -92,7 +98,24 @@ it.each([
 	['./sql', sql, ['PROVENANCE_COLUMNS', 'openSqlResource']],
 	['./sqlite', sqlite, ['sqliteBackend']],
 	['./conformance', conformance, ['gitConformance', 'sqlConformance', 'workspaceConformance']],
-])('exports exactly its one binding from %s', (_path, entry, names) => {
+	[
+		'./git',
+		git,
+		[
+			'SOURCES',
+			'TEMPLATES',
+			'assertAgent',
+			'changeTo',
+			'filesOf',
+			'fromDirectory',
+			'hashesOf',
+			'namespaceOf',
+			'readOnly',
+			'sameFiles',
+			'validName',
+		],
+	],
+])('exports exactly its bindings from %s', (_path, entry, names) => {
 	expect(Object.keys(entry).sort()).toEqual(names);
 });
 
@@ -148,6 +171,11 @@ it.each([
 	['resource', 'resource-entry.mjs', ['just-bash']],
 	['sql', 'sql-resource.mjs', ['just-bash']],
 	['sqlite', 'sqlite-entry.mjs', ['just-bash']],
+	[
+		'git',
+		'git-entry.mjs',
+		['just-bash', 'just-git', 'just-git/repo', 'just-git/server', 'node:sqlite', 'vitest'],
+	],
 	['conformance', 'conformance.mjs', ['just-bash', 'node:sqlite', 'vitest']],
 ])('keeps the %s build, and every chunk it imports, free of %j', async (_name, entry, banned) => {
 	const chunks = await chunksOf(new URL('../dist/', import.meta.url), entry);

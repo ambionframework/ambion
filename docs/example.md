@@ -102,12 +102,12 @@ workspace resource.
 **The workspace's `sql` tool opens `shared.db`.** The SQLite backend keeps
 this file beside the workspace directory, and the shell does not reach it.
 
-**The workspace has a git backend, with its storage in `git.db`.** It holds
+**The workspace has a git backend, `justGitBackend` of
+`@ambionframework/just-bash/git`, with its storage in `git.db`.** It holds
 one read-only template, `templates/firmware-sketch`: a pin map, an
 Arduino sketch, and a sweep of the LED resistor, from
-`examples/workbench/templates`. An agent forks it with
-`fork`, clones the fork into its home, and pushes a branch with `git` in
-`bash`. A peer finds the fork with `repos` and clones it to review. A push
+`examples/workbench/templates`. An agent forks it with `fork`, clones the
+fork into its home, and pushes a branch with `git` in `bash`. A peer finds the fork with `repos` and clones it to review. A push
 survives a restart of the host. [Git](git.md) holds the contract.
 
 **The template's sweep runs as a background process.** `sweep/sweep.sh`

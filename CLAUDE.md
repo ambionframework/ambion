@@ -22,10 +22,9 @@ floor.
 | `packages/pi`             | The Pi executor: `pi()` and `piExecution()` over Pi's AgentHarness; the kernel imports no model library                                                              |
 | `packages/claude`         | The Claude Agent SDK executor: `claude()` and `claudeExecution()`, tested on a fake executable                                                                       |
 | `packages/codex`          | The Codex SDK executor: `codex()` and `codexExecution()`, over a stdio room tools server; live-tested, no fake                                                       |
-| `packages/workspace`      | A workspace resource and its tools, the helpers a bash backend builds on, and the interface of an optional SQL backend                                               |
-| `packages/just-bash`      | The just-bash workspace backends: `memoryBackend` and `directoryBackend`, a virtual or directory filesystem and shell in process                                     |
+| `packages/workspace`      | A workspace resource and its tools, the helpers a bash backend builds on, an optional SQL backend interface, and the git helpers in `/git`                           |
+| `packages/just-bash`      | The just-bash workspace backends: `memoryBackend` and `directoryBackend`, and `justGitBackend` in `/git`, a `just-git` server in process                             |
 | `packages/workstation`    | A workspace bash backend over SSH: one remote server, one Unix account for each agent. Tested on an in-process server and on OpenSSH in CI                           |
-| `packages/git`            | The git backend: `gitBackend` over a `just-git` server in the process. Tested on the just-bash backends and on a real `git`                                          |
 | `docs/trust.md`           | Design contract for what one owner guarantees another, and what the kernel does not defend — read before exposing a room to untrusted agents                         |
 | `docs/agent.md`           | Design contract for the core — read before changing the runtime                                                                                                      |
 | `docs/assistant.md`       | Design contract for the default assistant package and the `assistant` room option — read with `agent.md`                                                             |

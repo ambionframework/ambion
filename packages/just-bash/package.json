@@ -2,7 +2,7 @@
 	"name": "@ambionframework/just-bash",
 	"version": "0.2.0",
 	"type": "module",
-	"description": "The just-bash backends for an Ambion workspace: a virtual Unix filesystem and shell, in memory or over a directory.",
+	"description": "The just-bash backends for an Ambion workspace: a virtual Unix filesystem and shell, in memory or over a directory, and a git backend in the process.",
 	"license": "Apache-2.0",
 	"homepage": "https://ambionframework.com",
 	"repository": {
@@ -14,7 +14,9 @@
 		"agents",
 		"ambion",
 		"filesystem",
+		"git",
 		"just-bash",
+		"just-git",
 		"sandbox",
 		"workspace"
 	],
@@ -22,6 +24,10 @@
 		".": {
 			"types": "./dist/index.d.mts",
 			"import": "./dist/index.mjs"
+		},
+		"./git": {
+			"types": "./dist/git/index.d.mts",
+			"import": "./dist/git/index.mjs"
 		},
 		"./package.json": "./package.json"
 	},

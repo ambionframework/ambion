@@ -39,6 +39,7 @@ export const alias = [
 	{ find: '@ambionframework/journal', replacement: journal },
 	{ find: '@ambionframework/workspace/resource', replacement: own('resource-entry.ts') },
 	{ find: '@ambionframework/workspace/conformance', replacement: own('conformance.ts') },
+	{ find: '@ambionframework/workspace/git', replacement: own('git-entry.ts') },
 	{ find: '@ambionframework/workspace', replacement: own('index.ts') },
 ];
 
