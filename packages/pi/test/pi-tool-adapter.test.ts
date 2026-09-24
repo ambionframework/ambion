@@ -83,6 +83,7 @@ it('prepares native arguments once per call and validates before execution', asy
 			name: roomName('native-adapter'),
 			agents: [worker],
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted((context, _agent, call) => {
 					results.splice(0, results.length, ...toolResultTexts(context));
 					if (call === 1) return callTool('count', { count: 'invalid' });

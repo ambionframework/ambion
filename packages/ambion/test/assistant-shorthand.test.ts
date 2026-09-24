@@ -32,7 +32,7 @@ async function open(options: Partial<StartRoomOptions> = {}) {
 		assistant,
 		agents: [builder, reviewer],
 		seats: { builder: 'named', reviewer: 'none' },
-		execution: piExecution({ stream: scripted(() => quiet()) }),
+		execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
 		...options,
 	});
 	return { opened, room: stopAtEnd(room) };
@@ -114,6 +114,7 @@ describe('assistant room shorthand', () => {
 			agents: [builder],
 			seats: { builder: 'broadcast' },
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted((context, agent, call) => {
 					if (agent === 'builder' && call === 1) return speak('The answer.');
 					if (agent === 'assistant' && isClosing(context)) {
@@ -148,7 +149,7 @@ describe('assistant room shorthand', () => {
 					name: roomName('assistant-resume'),
 					runtime: createRuntime({
 						storage: opened.storage,
-						execution: piExecution({ stream: scripted(() => quiet()) }),
+						execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
 					}),
 					assistant,
 					agents: [builder, reviewer],
@@ -168,6 +169,7 @@ describe('assistant room shorthand', () => {
 					runtime,
 					agents: [assistant, builder, reviewer],
 					execution: piExecution({
+						sessions: 'memory',
 						stream: scripted((context) =>
 							isClosing(context) ? speak('Resumed summary.') : quiet(),
 						),

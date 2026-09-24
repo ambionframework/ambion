@@ -52,14 +52,20 @@ async function workerRoom(
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			execution: piExecution({ stream }),
+			execution: piExecution({ sessions: 'memory', stream }),
 			...options,
 		}),
 	);
 }
 
 const resume = async (room: Room, runtime: Runtime, stream: Stream, agents = [worker]) =>
-	stopAtEnd(await resumeRoom(room.name, { runtime, agents, execution: piExecution({ stream }) }));
+	stopAtEnd(
+		await resumeRoom(room.name, {
+			runtime,
+			agents,
+			execution: piExecution({ sessions: 'memory', stream }),
+		}),
+	);
 
 /** A stream whose activations of the named seat wait for the test to release them. */
 function holding(seat = worker.name) {

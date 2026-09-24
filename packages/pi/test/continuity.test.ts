@@ -6,7 +6,6 @@
  * on sessions on the local disk.
  */
 import { appendFile, chmod, readdir, stat, symlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentDefinition, AgentExecutor, Message } from '@ambionframework/ambion';
 import type {
@@ -19,10 +18,14 @@ import type {
 	RoomProtocol,
 	ViewResponse,
 } from '@ambionframework/ambion/hosting';
-import { BACKGROUND_CONTEXT, type CompactionSettings } from '@earendil-works/pi-agent-core';
+import {
+	BACKGROUND_CONTEXT,
+	type CompactionSettings,
+	type Session,
+} from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { noTrace } from '../../ambion/test/support/trace.ts';
 import { createExecutionServices, createPiExecutor, stubModel } from '../src/index.ts';
@@ -391,6 +394,64 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		expect(second.session).toEqual(began(2));
 	});
 
+	it('begins a fresh session when the one the room names fails as the lane goes back to its position', async () => {
+		const inner = await store();
+		const sessions: PiSessions = {
+			create: (scope, id, context) => inner.create(scope, id, context),
+			open: async (scope, id, context) => {
+				const opened = await inner.open(scope, id, context);
+				return opened && failing(opened, ['scanBranch'], () => true);
+			},
+		};
+		const { seen, run } = seatOn(new TwoQuestions(), sessions);
+		const first = await run('message:1:product:1');
+		const second = await run('message:2:product:1', { resume: first.session });
+		expect(second.result).toEqual({ failed: false });
+		expect(second.session).toEqual(began(2));
+		expect(texts(seen.at(-1) as Context)).toHaveLength(1);
+	});
+
+	it('records a fresh session when the session fails a write during the run, and the retry reads the whole view', async () => {
+		const inner = await store();
+		let broken = false;
+		const sessions: PiSessions = {
+			create: async (scope, id, context) =>
+				failing(await inner.create(scope, id, context), WRITES, () => broken),
+			open: (scope, id, context) => inner.open(scope, id, context),
+		};
+		const { seen, run } = seatOn(new TwoQuestions(), sessions, (_context, _agent, call) => {
+			broken = call === 1;
+			return quiet();
+		});
+		const failed = await run('message:2:product:1');
+		expect(failed.result).toMatchObject({ failed: true, cause: 'transient' });
+		expect(failed.session?.id).not.toBe('message:2:product:1');
+		const retry = await run('message:2:product:2', { resume: failed.session });
+		expect(retry.result).toEqual({ failed: false });
+		expect(retry.session).toEqual(failed.session);
+		expect(texts(seen.at(-1) as Context)).toHaveLength(1);
+		expect(texts(seen.at(-1) as Context)[0]).toContain("The record of 'memory' so far:");
+	});
+
+	it('records no session when the session fails a write and the store creates no fresh one', async () => {
+		const inner = await store();
+		let broken = false;
+		const sessions: PiSessions = {
+			create: async (scope, id, context) => {
+				if (broken) throw new Error('The store is full.');
+				return failing(await inner.create(scope, id, context), WRITES, () => broken);
+			},
+			open: (scope, id, context) => inner.open(scope, id, context),
+		};
+		const { run } = seatOn(new TwoQuestions(), sessions, () => {
+			broken = true;
+			return quiet();
+		});
+		const failed = await run('message:2:product:1');
+		expect(failed.result).toMatchObject({ failed: true, cause: 'transient' });
+		expect(failed.session).toBeUndefined();
+	});
+
 	it('gives a session a fresh id when the store already holds the id', async () => {
 		const sessions = await store();
 		const scope = { room: 'memory', seat: 'product' };
@@ -402,6 +463,26 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		await two.close(BACKGROUND_CONTEXT);
 	});
 });
+
+/** The methods of a session that write to its store. */
+const WRITES = ['mutate', 'beginMutation', 'setValue', 'appendList'];
+
+/** The session, with each method in `methods` failing while `broken` answers true. */
+function failing(session: Session, methods: readonly string[], broken: () => boolean): Session {
+	return new Proxy(session, {
+		get(target, property, receiver) {
+			const value: unknown = Reflect.get(target, property, receiver);
+			if (typeof value !== 'function') return value;
+			if (typeof property === 'string' && methods.includes(property)) {
+				return (...args: unknown[]) =>
+					broken()
+						? Promise.reject(new Error('The disk failed.'))
+						: Reflect.apply(value, target, args);
+			}
+			return value.bind(target);
+		},
+	});
+}
 
 /** The view the room gives an activation. */
 async function viewOf(id: string) {
@@ -440,10 +521,26 @@ describe('exchange continuity on the local disk', () => {
 		expect(texts(seen.at(-1) as Context)).toHaveLength(1);
 	});
 
-	it('names a directory in the OS temporary directory for this user, with access for the user only', async () => {
+	it('names a directory in the OS temporary directory for this user, and tries again after a refusal', async () => {
+		const temporary = await tempDir('ambion-tmpdir-');
+		await writeFile(join(temporary, 'file'), '');
+		// The OS temporary directory is a file: the disk refuses the directory.
+		vi.stubEnv('TMPDIR', join(temporary, 'file'));
+		onTestFinished(() => {
+			vi.unstubAllEnvs();
+		});
+		await expect(defaultSessionDir()).rejects.toThrow();
+		vi.stubEnv('TMPDIR', temporary);
 		const dir = await defaultSessionDir();
-		expect(dir).toBe(join(tmpdir(), `ambion-pi-sessions-${process.getuid?.()}`));
+		expect(dir).toBe(join(temporary, `ambion-pi-sessions-${process.getuid?.()}`));
 		expect((await stat(dir)).mode & 0o777).toBe(0o700);
+		// With no option, every stream keeps its sessions there.
+		const services = createExecutionServices({ stream: scripted(() => quiet()) });
+		const scope = { room: 'room', seat: 'seat' };
+		await (
+			await services.sessions.create(scope, 'kept', BACKGROUND_CONTEXT)
+		).close(BACKGROUND_CONTEXT);
+		expect(await readdir(dir)).toEqual([expect.stringContaining('room')]);
 	});
 
 	it('takes access from other users on a directory it owns, and refuses a link', async () => {
@@ -470,14 +567,14 @@ describe('exchange continuity on the local disk', () => {
 	});
 
 	it.each([
-		['a custom stream keeps sessions in memory', false, false],
+		['memory keeps sessions for as long as the services live', false, false],
 		['a directory keeps sessions on the local disk', true, true],
 	])('%s', async (_name, named, kept) => {
 		const dir = await tempDir('ambion-services-');
 		const services = () =>
 			createExecutionServices({
 				stream: scripted(() => quiet()),
-				...(named ? { sessionDir: dir } : {}),
+				...(named ? { sessionDir: dir } : { sessions: 'memory' }),
 			});
 		const scope = { room: 'room', seat: 'seat' };
 		const created = await services().sessions.create(scope, 'kept', BACKGROUND_CONTEXT);

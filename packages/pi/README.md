@@ -97,13 +97,13 @@ scripted stream, custom storage, a transport, or limits passes
 | `estimateTokens`       | `Math.ceil(text.length / 4)`  | Counts tokens against the limit. It needs the limit.   |
 | `compaction`           | `DEFAULT_COMPACTION_SETTINGS` | When the harness compacts the session.                 |
 
-`piExecution({ stream, sessionDir })` takes two options. Without a `stream`,
-the Pi registry answers. A scripted `stream` makes a room deterministic, and
-the model then resolves to a stub. `sessionDir` names the directory on the
-local disk for the sessions. Without it, the registry stream keeps them in
-`ambion-pi-sessions-<uid>` in the OS temporary directory, with access for
-its owner only. A custom stream keeps them in memory, two for each room and
-seat.
+`piExecution({ stream, sessions, sessionDir })` takes three options.
+Without a `stream`, the Pi registry answers. A scripted `stream` makes a
+room deterministic, and the model then resolves to a stub. `sessionDir`
+names the directory on the local disk for the sessions. Without it, every
+stream keeps them in `ambion-pi-sessions-<uid>` in the OS temporary
+directory, with access for its owner only. `sessions: 'memory'` keeps them
+in memory, two for each room and seat, as a test does.
 
 ## How an activation runs
 
@@ -124,9 +124,11 @@ lane, and counts when a provider request holds it.
 receives `say` only. The harness adds no built-in tool, no skill, and no
 prompt template.
 
-**The room owns the retries, and the harness compacts.** The harness tries
-each provider request once. It compacts the session when the context nears
-the window of the model.
+**The room owns the retries, and the harness compacts.** The harness does
+not retry a failed request. It compacts the session when the context nears
+the window of the model. A context-overflow error, or a length stop below
+the output limit, makes the harness compact once and send the request
+again. This happens also when compaction is off.
 
 ## Policy and the trust boundary
 
@@ -142,9 +144,9 @@ included, and the executor deletes none of them.
 activation that began the session. The next activation of the seat in the
 same exchange reopens the session and prompts it with the delta. The first
 activation in a new exchange begins a fresh session. A session the store
-cannot open starts fresh, and the activation does not fail. On Node the
-session is a JSONL file under `sessionDir`, so a restart on the same disk
-reopens it. A Cloudflare seat keeps its sessions in memory.
+cannot open, or that fails a write, gives way to a fresh one, and the
+activation does not fail. On Node the session is a JSONL file under
+`sessionDir`, so a restart on the same disk reopens it. A Cloudflare seat keeps its sessions in memory.
 
 ## Steps, usage, and failures
 
@@ -186,7 +188,7 @@ const stream = scripted(
 const room = await startRoom({
   name: 'delivery-test',
   agents: [inventory],
-  execution: piExecution({ stream }),
+  execution: piExecution({ stream, sessions: 'memory' }),
 });
 
 try {
@@ -204,15 +206,15 @@ registry, the price tables, or a real model. The live scenarios of
 
 ## Exports
 
-| Export                                         | Use                                                       |
-| ---------------------------------------------- | --------------------------------------------------------- |
-| `pi(options)`                                  | The executor of an agent definition                       |
-| `fromPiTool(tool)`                             | Adapt a native Pi tool to an Ambion tool                  |
-| `piExecution({ stream, sessionDir })`          | The `execution` value for `startRoom` and `createRuntime` |
-| `createPiExecutor`, `createExecutionServices`  | The parts for a host that runs seats apart from the room  |
-| `memorySessions`, `PiSessions`, `SessionScope` | A store of sessions in memory, and the store contract     |
-| `stubModel`                                    | The model that a custom stream receives                   |
-| `piExecutorHarness` (`/testing`)               | The executor suite on a scripted stream                   |
+| Export                                          | Use                                                       |
+| ----------------------------------------------- | --------------------------------------------------------- |
+| `pi(options)`                                   | The executor of an agent definition                       |
+| `fromPiTool(tool)`                              | Adapt a native Pi tool to an Ambion tool                  |
+| `piExecution({ stream, sessions, sessionDir })` | The `execution` value for `startRoom` and `createRuntime` |
+| `createPiExecutor`, `createExecutionServices`   | The parts for a host that runs seats apart from the room  |
+| `memorySessions`, `PiSessions`, `SessionScope`  | A store of sessions in memory, and the store contract     |
+| `stubModel`                                     | The model that a custom stream receives                   |
+| `piExecutorHarness` (`/testing`)                | The executor suite on a scripted stream                   |
 
 ## Troubleshooting
 

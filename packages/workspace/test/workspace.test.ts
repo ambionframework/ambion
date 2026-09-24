@@ -69,7 +69,7 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 		await startRoom({
 			name: name('workspace'),
 			agents,
-			execution: piExecution({ stream: scripted(byAgent(seats)) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(byAgent(seats)) }),
 		}),
 	);
 	const visit = await enter(session);
@@ -310,6 +310,7 @@ describe('a workspace beside a running room', () => {
 			name: roomId,
 			agents: [agent('worker', { bundles: [site.tools()] })],
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted(
 					byAgent({
 						worker: (_context, _who, call) => {

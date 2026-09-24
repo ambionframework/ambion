@@ -42,6 +42,7 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 				runtime: createRuntime({ storage: opened.storage, transport }),
 				// The seat reads the tool results, so a lost reply makes it speak again.
 				execution: piExecution({
+					sessions: 'memory',
 					stream: scripted((context) =>
 						toolResultTexts(context).includes('delivered') ? quiet() : speak('answer'),
 					),

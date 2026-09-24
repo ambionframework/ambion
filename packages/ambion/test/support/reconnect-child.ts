@@ -39,6 +39,7 @@ const runtime = createRuntime({
 	clock,
 	limits: { lease: { ttl: 100, deadline: 1_000 }, activation: { backoff: () => 0 } },
 	execution: piExecution({
+		sessions: 'memory',
 		stream: scripted(async (_context, _agent, call) => {
 			if (phase === 'resume') return call === 1 ? speak('Recovered answer.') : quiet();
 			started.resolve();

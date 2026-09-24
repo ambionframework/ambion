@@ -13,6 +13,7 @@ export {
 	type ExecutionServices,
 	type ExecutionServicesOptions,
 	type ModelResolver,
+	type SessionPlace,
 	stubModel,
 } from './services.ts';
 export { memorySessions, type PiSessions, type SessionScope } from './sessions.ts';

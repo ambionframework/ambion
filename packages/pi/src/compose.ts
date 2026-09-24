@@ -4,7 +4,7 @@ import type { Execution } from '@ambionframework/ambion/hosting';
 import { composeConnector, registerDefaultExecution } from '@ambionframework/ambion/hosting';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createPiExecutor } from './executor.ts';
-import { createExecutionServices } from './services.ts';
+import { createExecutionServices, type SessionPlace } from './services.ts';
 
 export interface PiExecutionOptions {
 	/**
@@ -14,10 +14,13 @@ export interface PiExecutionOptions {
 	 */
 	readonly stream?: StreamFn;
 	/**
-	 * The directory on the local disk where each seat keeps its Pi harness
-	 * sessions. Absent, a custom stream keeps them in memory, and the
-	 * registry stream keeps them in `ambion-pi-sessions-<uid>` in the OS
-	 * temporary directory.
+	 * Where each seat keeps its Pi harness sessions. Absent, `'disk'`.
+	 * `'memory'` keeps them for as long as the connector lives, as a test does.
+	 */
+	readonly sessions?: SessionPlace;
+	/**
+	 * The directory on the local disk for the sessions. Absent,
+	 * `ambion-pi-sessions-<uid>` in the OS temporary directory.
 	 */
 	readonly sessionDir?: string;
 }
@@ -35,6 +38,7 @@ export function piExecution(options: PiExecutionOptions = {}): Execution {
 				call: host.limits.call,
 				trace: host.limits.trace,
 				...(options.stream === undefined ? {} : { stream: options.stream }),
+				...(options.sessions === undefined ? {} : { sessions: options.sessions }),
 				...(options.sessionDir === undefined ? {} : { sessionDir: options.sessionDir }),
 			});
 			return composeConnector({

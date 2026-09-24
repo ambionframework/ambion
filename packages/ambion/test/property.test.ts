@@ -153,7 +153,7 @@ class Walk {
 			summary: assistant.name,
 			agents: [alpha, beta, gamma, assistant],
 			seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast', [beta.name]: 'named' },
-			execution: piExecution({ stream: scripted(script) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
 		});
 		this.watch();
 		await messagesOf(this.session);
@@ -245,7 +245,7 @@ class Walk {
 				this.session = await resumeRoom(this.name, {
 					runtime: this.runtime,
 					agents: [assistant, alpha, beta, gamma],
-					execution: piExecution({ stream: scripted(script) }),
+					execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
 				});
 				break;
 			} catch (error) {

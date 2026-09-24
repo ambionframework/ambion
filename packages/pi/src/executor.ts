@@ -38,7 +38,6 @@
 import type {
 	ActivationView,
 	AgentDefinition,
-	AgentExecutor,
 	ExecutionEvent,
 	Executor,
 	ExecutorActivation,
@@ -51,19 +50,10 @@ import type {
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
 import { renderActivation, renderDelta, sessionToResume } from '@ambionframework/ambion/hosting';
-import type {
-	AgentMessage,
-	CompactionSettings,
-	HarnessEvent,
-	Session,
-	StreamFn,
-} from '@earendil-works/pi-agent-core';
-import {
-	BACKGROUND_CONTEXT,
-	DEFAULT_COMPACTION_SETTINGS,
-	getOrUndefined,
-} from '@earendil-works/pi-agent-core';
+import type { AgentMessage, HarnessEvent, Session, StreamFn } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT, getOrUndefined } from '@earendil-works/pi-agent-core';
 import type { Api, AssistantMessage, Message, Model } from '@earendil-works/pi-ai';
+import { compactionOf, modelOf } from './define.ts';
 import { passOutcome } from './failure.ts';
 import { Freshness, providerMessages, READ, recordMessage } from './freshness.ts';
 import { type OpenHarness, openHarness } from './harness.ts';
@@ -249,6 +239,7 @@ export class Activation implements ExecutorSession {
 		} catch (error) {
 			// A cut closes the harness under the run. What it throws then is no failure.
 			if (this.stopped) return { failed: false };
+			await this.renew(input.view);
 			return this.broke(error instanceof Error ? error : new Error(String(error)));
 		} finally {
 			this.phase = 'idle';
@@ -285,15 +276,30 @@ export class Activation implements ExecutorSession {
 		if (this.opened !== undefined) return this.opened;
 		const model = await this.options.model(modelOf(def.executor), def.name);
 		if (this.stopped) return undefined;
-		const opened = await this.openSession(view, model);
+		const opened = this.hold(await this.openSession(view, model));
+		if (opened === undefined) return undefined;
+		try {
+			await this.readBase(opened, view);
+			return opened;
+		} catch {
+			// The session is a cache: a session that fails here gives way to a fresh one.
+			this.release();
+			return this.hold(await this.attach(await this.fresh(view), view, model));
+		}
+	}
+
+	/** Take the harness as this activation's, unless the activation closed while it opened. */
+	private hold(opened: Opened): Opened | undefined {
 		this.sessionId = opened.session.metadata.id;
 		this.opened = opened;
-		if (this.closed) {
-			this.release();
-			return undefined;
-		}
-		await this.readBase(opened, view);
-		return opened;
+		if (!this.closed) return opened;
+		this.release();
+		return undefined;
+	}
+
+	/** A fresh session under this activation's id. */
+	private fresh(view: ActivationView): Promise<Session> {
+		return this.seat.sessions.create(scopeOf(view, this.definition), this.id, CONTEXT);
 	}
 
 	/**
@@ -302,13 +308,12 @@ export class Activation implements ExecutorSession {
 	 * harness cannot attach to, closes, and a fresh session takes its place.
 	 */
 	private async openSession(view: ActivationView, model: Model<Api>): Promise<Opened> {
-		const scope = { room: view.context.name, seat: this.definition.name };
-		const resumed = await this.resumed(scope, view);
+		const resumed = await this.resumed(scopeOf(view, this.definition), view);
 		if (resumed !== undefined) {
 			const opened = await this.attach(resumed, view, model).catch(() => undefined);
 			if (opened !== undefined) return opened;
 		}
-		return this.attach(await this.seat.sessions.create(scope, this.id, CONTEXT), view, model);
+		return this.attach(await this.fresh(view), view, model);
 	}
 
 	/** The session `spec.resume` names, once the activation that held it closed it. */
@@ -496,13 +501,33 @@ export class Activation implements ExecutorSession {
 		const opened = this.opened;
 		if (opened === undefined) return;
 		this.opened = undefined;
-		const id = opened.session.metadata.id;
+		this.closing(opened.session.metadata.id, opened.harness.close(CONTEXT));
+	}
+
+	/** Let the seat's next activation wait for the close of the session `id`. */
+	private closing(id: string, close: Promise<void>): void {
 		const { closing } = this.seat;
-		const done = opened.harness.close(CONTEXT).catch(noop);
+		const done = close.catch(noop);
 		closing.set(id, done);
 		void done.then(() => {
 			if (closing.get(id) === done) closing.delete(id);
 		});
+	}
+
+	/**
+	 * A pass broke: the fault is local, such as a session store that fails a
+	 * write, and the harness throws it. The retry must not continue this
+	 * session, so the release records a fresh, empty one. The retry reads
+	 * the whole view. With no fresh session, the release records none.
+	 */
+	private async renew(view: ActivationView): Promise<void> {
+		if (this.sessionId === undefined) return;
+		this.release();
+		this.sessionId = undefined;
+		const fresh = await this.fresh(view).catch(() => undefined);
+		if (fresh === undefined) return;
+		this.sessionId = fresh.metadata.id;
+		this.closing(fresh.metadata.id, fresh.close(CONTEXT));
 	}
 
 	/**
@@ -520,6 +545,11 @@ export class Activation implements ExecutorSession {
 		});
 		return { failed: true, cause: 'transient', message: error.message };
 	}
+}
+
+/** The room and seat a session belongs to. */
+function scopeOf(view: ActivationView, definition: AgentDefinition): SessionScope {
+	return { room: view.context.name, seat: definition.name };
 }
 
 /** Move the lane tip to `target`, the root when null, unless it stands there. */
@@ -541,25 +571,4 @@ function steerMessage(held: Held, now: number): AgentMessage {
 function positionOf(data: unknown): Seq | undefined {
 	if (typeof data !== 'object' || data === null || !('through' in data)) return undefined;
 	return typeof data.through === 'number' ? data.through : undefined;
-}
-
-/** The model identifier `pi()` gave the executor. Another family's executor has none. */
-function modelOf(executor: AgentExecutor): string {
-	if ('model' in executor && typeof executor.model === 'string') return executor.model;
-	throw new Error(`The Pi executor cannot run an executor of kind '${executor.kind}'.`);
-}
-
-/** The compaction settings `pi()` gave the executor, or Pi's defaults. */
-function compactionOf(executor: AgentExecutor): CompactionSettings {
-	if ('compaction' in executor && isCompaction(executor.compaction)) return executor.compaction;
-	return DEFAULT_COMPACTION_SETTINGS;
-}
-
-function isCompaction(value: unknown): value is CompactionSettings {
-	return (
-		typeof value === 'object' &&
-		value !== null &&
-		'enabled' in value &&
-		typeof value.enabled === 'boolean'
-	);
 }

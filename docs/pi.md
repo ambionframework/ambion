@@ -120,20 +120,24 @@ validates the shared fields. Pi adds `model` and `compaction`.
 executor writes `compaction` only when the definition gives it. `pi()`
 throws when a token count is negative or not a safe integer.
 
-**`piExecution(options)` takes two options.**
+**`piExecution(options)` takes three options.**
 
 | Option       | Default                                                  | Meaning                                                                           |
 | ------------ | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | `stream`     | The Pi registry stream                                   | A Pi `StreamFn`. A custom stream makes the model resolve to a stub (see Testing). |
+| `sessions`   | `'disk'`                                                 | Where the seats keep their sessions: `'disk'` or `'memory'`.                      |
 | `sessionDir` | `ambion-pi-sessions-<uid>` in the OS temporary directory | The directory on the local disk for the sessions of the seats.                    |
 
-**A custom stream keeps the sessions in memory.** With a custom `stream`
-and no `sessionDir`, each seat keeps its sessions in memory for as long as
-the room runs, and a scripted room writes nothing to the disk. The memory
-store keeps the two newest sessions of each room and seat: the session of
-the open exchange, and the session of the exchange before it for its
-summary. It deletes the others.
-`createExecutionServices` takes the same two options.
+**Every stream keeps the sessions on the disk by default.** A custom
+`stream` makes the model a stub, and the sessions stay on the disk.
+
+**`sessions: 'memory'` keeps the sessions in memory.** Each seat keeps its
+sessions for as long as the connector lives, and the room writes nothing to
+the disk. A test uses it, so that no room opens a session of another run.
+The memory store keeps the two newest sessions of each room and seat: the
+session of the open exchange, and the session of the exchange before it
+for its summary. It deletes the others.
+`createExecutionServices` takes the same three options.
 
 The runtime supplies the clock, the call limits, the trace limits, the
 logger, and the transport. `pi()` throws at definition time when
@@ -185,7 +189,7 @@ position of the room is past `readThrough`, and the driver runs a pass with
 the delta. A delta with no message in it starts no run. The session takes
 the view as read.
 
-**The harness tries each provider request once.** The executor sets the
+**The harness does not retry a failed request.** The executor sets the
 retry policy of the harness to `{ enabled: false }` and the stream option
 `maxRetries` to `0`, so the provider client does not retry either. A failed
 request fails the pass, and the room owns every retry.
@@ -196,14 +200,17 @@ for a summary. The summary replaces the older messages, and the latest
 `keepRecentTokens` stay whole. The summary request costs tokens, and its
 usage joins the activation. `readThrough` never moves back.
 
-**A length stop below the output limit is an overflow.** The harness reads
-a `length` stop that did not spend the output limit of the model as a
-context overflow, compacts once, and tries again. A `length` stop at the
+**The harness recovers from an overflow once.** A context-overflow error,
+or a `length` stop below the output limit of the model, makes the harness
+compact once and send the request again. This happens also when compaction
+is off, and no setting turns it off. The second request costs tokens, and
+its usage joins the activation. When the second request overflows too, the
+pass fails, and the room classifies the error. A `length` stop at the
 output limit ends the pass with `stop: 'length'`.
 
 **The stub model of a scripted stream reports a window of one million
 tokens.** A scripted room compacts only when its definition sets
-`compaction` to a small window.
+`compaction.reserveTokens` close to the window of one million tokens.
 
 ## How room tools reach the harness
 
@@ -294,6 +301,13 @@ fail, and it reads the whole view. A session the disk refuses to create
 stays in memory. When the harness refuses the setup of a fresh session too,
 the session closes and the activation fails as transient.
 
+**A session that fails after it opens gives way too.** When the session
+fails as the lane goes back to its position, the harness closes, and a
+fresh session takes its place. When the store fails a write during a
+pass, the harness throws a fault, and the pass fails as transient. The
+release then records a fresh, empty session, so the retry of the room does
+not continue the failed one. The retry reads the whole view.
+
 **A continued session goes back to the last position it read.** The lane
 tip moves back to the newest `ambion.read` entry, or to the root when there
 is none. A run that failed or was cut after that entry leaves the provider
@@ -309,9 +323,8 @@ the summary of the exchange before it, and each continues its own session.
   `sessionDir`, through Pi's `JsonlSessionRepo`, in a folder for each room
   and seat. A restart on the same disk reopens it. A session the disk
   refuses stays in memory.
-- **A custom stream with no `sessionDir`.** Pi's `MemorySessionRepo` keeps
-  the two newest sessions of each room and seat in memory. A restart loses
-  them.
+- **`sessions: 'memory'`.** Pi's `MemorySessionRepo` keeps the two newest
+  sessions of each room and seat in memory. A restart loses them.
 - **Cloudflare.** The seat object keeps its sessions in a
   `MemorySessionRepo` on the object instance. An eviction loses them.
 
@@ -391,7 +404,7 @@ const stream = scripted(
 const room = await startRoom({
   name: 'delivery-test',
   agents: [inventory],
-  execution: piExecution({ stream }),
+  execution: piExecution({ stream, sessions: 'memory' }),
 });
 
 try {

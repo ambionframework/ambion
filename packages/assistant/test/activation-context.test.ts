@@ -74,7 +74,7 @@ async function captureActivations(attention: 'reserve' | 'named'): Promise<Captu
 		await startRoom({
 			name: `prompt-review-${attention}`,
 			goal,
-			execution: piExecution({ stream }),
+			execution: piExecution({ sessions: 'memory', stream }),
 			assistant: defineAssistant({ model: 'scripted/assistant', instructions: override }),
 			agents: [agent('writer', 'Customer writer.', 'Draft within the user constraints.')],
 			seats: attention === 'named' ? { writer: 'named' } : {},
@@ -178,7 +178,7 @@ async function requestAfterSteer(): Promise<{ system: string; steered: string }>
 			assistant: defineAssistant({ model: 'scripted/assistant' }),
 			agents: [agent('inventory', 'Checks stock.', 'Report the stock once.')],
 			seats: { inventory: 'named' },
-			execution: piExecution({ stream }),
+			execution: piExecution({ sessions: 'memory', stream }),
 		}),
 	);
 	const exchange = await (

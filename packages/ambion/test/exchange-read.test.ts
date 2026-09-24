@@ -112,6 +112,7 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 				runtime,
 				agents: [scriptedAgent('worker')],
 				execution: piExecution({
+					sessions: 'memory',
 					stream: scripted(async (context) => {
 						if (!contextText(context).includes('What is open?')) return quiet();
 						started.resolve();

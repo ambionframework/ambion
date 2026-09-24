@@ -17,7 +17,7 @@ import type { Clock, ExecutionEvent } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
 import type { Executor, RoomProtocol, Steer, Wake } from '@ambionframework/ambion/hosting';
 import { AgentRunner, seatContext } from '@ambionframework/ambion/hosting';
-import { createPiExecutor, type ExecutionServices, memorySessions } from '@ambionframework/pi';
+import { createPiExecutor, type ExecutionServices } from '@ambionframework/pi';
 import type { SeatEvent } from './configure.ts';
 import { definitionOf, executionFor, seatEvent, traceLogger } from './configure.ts';
 import type { Env } from './room-object.ts';
@@ -203,7 +203,7 @@ export class SeatObject extends DurableObject<Env> {
 			model: execution.model,
 			stream: execution.stream,
 			now: () => execution.clock.now(),
-			sessions: memorySessions(),
+			sessions: execution.sessions,
 		});
 		this.executor = { seat, executor };
 		return executor;

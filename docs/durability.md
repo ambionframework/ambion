@@ -251,9 +251,8 @@ new id. The activation does not fail.
 
 - **The Pi id names the activation that began the session.** Pi keeps the
   session as a JSONL file under `sessionDir` on the local disk. A restart on
-  the same disk resumes it. A session the disk refuses stays in memory. A
-  custom stream with no `sessionDir` keeps it in memory, so a restart loses
-  it.
+  the same disk resumes it. A session the disk refuses stays in memory.
+  `sessions: 'memory'` keeps it in memory, so a restart loses it.
 - **The Claude and Codex ids come from the SDK.** The SDK stores the
   session on the local disk. A restart on the same disk resumes it.
 - **A Cloudflare seat keeps its Pi sessions in memory.** The seat object

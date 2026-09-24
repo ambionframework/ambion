@@ -73,7 +73,7 @@ async function record(setup: Setup): Promise<readonly JournalEntry[]> {
 		agents: setup.agents,
 		...(setup.summary === undefined ? {} : { summary: setup.summary }),
 		seats: setup.seats,
-		execution: piExecution({ stream: scripted(setup.stream) }),
+		execution: piExecution({ sessions: 'memory', stream: scripted(setup.stream) }),
 	});
 	try {
 		await setup.drive(room);
@@ -196,6 +196,7 @@ async function resumed(): Promise<readonly JournalEntry[]> {
 			limits: { activation: { attempts: 3, backoff: () => 0 } },
 		});
 	const execution = piExecution({
+		sessions: 'memory',
 		stream: scripted(byAgent({ worker: says(['Thursday works.']) })),
 	});
 	const first = runtime();

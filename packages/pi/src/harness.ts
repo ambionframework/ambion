@@ -4,8 +4,11 @@
  *
  * - **Tools.** The model holds the tools the activation binds, and no other:
  *   no built-in tool, no skill, no prompt template.
- * - **Retries.** The harness tries each provider request once, and so does
- *   the provider client. The room owns every retry.
+ * - **Retries.** The retry policy of the harness is off, and so is the retry
+ *   of the provider client. The room owns every retry of a failed request.
+ * - **Overflow.** A context-overflow error, or a length stop below the output
+ *   limit, makes the harness compact once and send the request again. This
+ *   happens also when compaction is off. No setting turns it off.
  * - **Compaction.** The harness compacts the session with the settings the
  *   executor gives it.
  * - **Provider input.** The executor turns the session into the messages of
@@ -57,7 +60,9 @@ export interface OpenHarness {
 
 /**
  * Attach a harness to the session and take its lane. A run that a lost
- * process left open is cut before the lane takes a new one. When the lane
+ * process left open is cut before the lane takes a new one. The harness
+ * settles the cut run with recovery events, and the activation reads none
+ * of them. When the lane
  * cannot be set up, the harness closes, and the session with it.
  */
 export async function openHarness(input: HarnessInput): Promise<OpenHarness> {
@@ -78,9 +83,10 @@ export async function openHarness(input: HarnessInput): Promise<OpenHarness> {
 		BACKGROUND_CONTEXT,
 	);
 	try {
-		for (const type of OBSERVED) harness.events.on(type, (event) => input.onEvent(event));
 		const lane = await harness.lane(LANE, BACKGROUND_CONTEXT);
 		if (open.some((operation) => operation.lane === LANE)) await lane.abort(BACKGROUND_CONTEXT);
+		// The events of the cut run belong to no activation: the activation listens from here.
+		for (const type of OBSERVED) harness.events.on(type, (event) => input.onEvent(event));
 		await configure(lane, input);
 		return { harness, lane };
 	} catch (error) {

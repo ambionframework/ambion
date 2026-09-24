@@ -68,7 +68,7 @@ async function open(options: {
 		seats,
 		...(options.summary ? { summary: writer.name } : {}),
 		runtime,
-		execution: piExecution({ stream: scripted(options.script) }),
+		execution: piExecution({ sessions: 'memory', stream: scripted(options.script) }),
 	});
 	return stopAtEnd(session);
 }
@@ -232,7 +232,7 @@ describe('ordinary unseating and host membership', () => {
 		const resumed = await resumeRoom(session.name, {
 			agents: [product, surveyor],
 			runtime,
-			execution: piExecution({ stream: scripted(byAgent({})) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(byAgent({})) }),
 		});
 		expect(await seatNames(stopAtEnd(resumed))).toEqual([product.name]);
 	});

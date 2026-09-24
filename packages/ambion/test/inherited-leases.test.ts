@@ -30,7 +30,7 @@ import { type OpenedStorage, type Storage, storages } from './support/storage.ts
 
 const runner = scriptedAgent('runner', 'Runs on a separate host.');
 const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
-const execution = piExecution({ stream: scripted(() => quiet()) });
+const execution = piExecution({ sessions: 'memory', stream: scripted(() => quiet()) });
 
 interface RecordingTransport {
 	readonly transport: Transport;

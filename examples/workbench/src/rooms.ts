@@ -92,7 +92,12 @@ function familyExecutions(options: RoomsOptions = {}): Execution {
 		);
 	};
 	return composeExecutions({
-		pi: pick('pi', piExecution({ stream }), stream && piExecution({ stream })),
+		pi: pick(
+			'pi',
+			piExecution({ stream }),
+			// A test gives the stream, and its sessions stay in memory.
+			stream && piExecution({ stream, sessions: 'memory' }),
+		),
 		claude: pick('claude', claudeExecution({ env }), executions?.claude),
 		codex: pick('codex', codexExecution({ env }), executions?.codex),
 	});

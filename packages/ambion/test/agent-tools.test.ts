@@ -255,7 +255,7 @@ async function probeRoom(attention: 'broadcast' | 'presence', script: Script, as
 			summary: assistant.name,
 			seats: { worker: attention, [assistant.name]: 'none' },
 			agents: [worker({ tools: [probe], bundles: [bundle] }), assistant],
-			execution: piExecution({ stream: scripted(byAgent({ worker: script })) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(byAgent({ worker: script })) }),
 		}),
 	);
 	const events = collect(room);

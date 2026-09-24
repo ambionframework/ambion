@@ -25,6 +25,7 @@ const agents = [
 
 const pilot = () =>
 	piExecution({
+		sessions: 'memory',
 		stream: scripted((_context, _agent, call) =>
 			call === 1 ? speak('The pour is Saturday, says Pi.') : quiet(),
 		),

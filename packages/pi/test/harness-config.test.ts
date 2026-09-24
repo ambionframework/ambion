@@ -11,10 +11,12 @@ import {
 	type CompactionSettings,
 	convertToLlm,
 	DEFAULT_COMPACTION_SETTINGS,
+	type HarnessEvent,
 	MemorySessionRepo,
 	type StreamFn,
 } from '@earendil-works/pi-agent-core';
 import type { Context, SimpleStreamOptions } from '@earendil-works/pi-ai';
+import { createAssistantMessageEventStream, fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { deferred } from '../../ambion/test/support/room.ts';
@@ -389,7 +391,7 @@ describe('the harness of an activation', () => {
 		const session = await new MemorySessionRepo().create({}, BACKGROUND_CONTEXT);
 		const model = await stubModel('scripted/worker', 'worker');
 		const started = deferred();
-		const setup = (stream: StreamFn) => ({
+		const setup = (stream: StreamFn, onEvent: (event: HarnessEvent) => void = () => {}) => ({
 			session,
 			models: streamModels(model, stream),
 			model,
@@ -397,23 +399,39 @@ describe('the harness of an activation', () => {
 			systemPrompt: () => '',
 			compaction: DEFAULT_COMPACTION_SETTINGS,
 			toProviderMessages: (messages: AgentMessage[]) => convertToLlm(messages),
-			onEvent: () => {},
+			onEvent,
 		});
-		const lost = await openHarness(
-			setup(
-				scripted(async () => {
-					started.resolve();
-					await new Promise(() => {});
-					return quiet();
-				}),
-			),
-		);
+		// The lost run streams part of its answer, and then the process is gone.
+		const partial: StreamFn = () => {
+			const stream = createAssistantMessageEventStream();
+			const message = fauxAssistantMessage('partial words', { stopReason: 'stop' });
+			stream.push({ type: 'start', partial: message });
+			stream.push({ type: 'text_start', contentIndex: 0, partial: message });
+			stream.push({
+				type: 'text_delta',
+				contentIndex: 0,
+				delta: 'partial words',
+				partial: message,
+			});
+			started.resolve();
+			return stream;
+		};
+		const lost = await openHarness(setup(partial));
 		void lost.lane.prompt('Go.', undefined, BACKGROUND_CONTEXT);
 		await started.promise;
 		// A second harness on the same session: the process that ran the first is gone.
-		const next = await openHarness(setup(scripted(() => quiet())));
+		const events: HarnessEvent[] = [];
+		const next = await openHarness(
+			setup(
+				scripted(() => quiet()),
+				(event) => events.push(event),
+			),
+		);
 		expect((await next.lane.inspectExecution(BACKGROUND_CONTEXT)).current).toBeNull();
+		// No event of the lost run reaches the activation that cut it.
+		expect(events).toEqual([]);
 		const result = await next.lane.prompt('Again.', undefined, BACKGROUND_CONTEXT);
 		expect(result.ok && result.value.status).toBe('completed');
+		expect(events.some((event) => 'recovery' in event && event.recovery === true)).toBe(false);
 	});
 });

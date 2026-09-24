@@ -103,14 +103,17 @@ export class Freshness {
 		const steers: Seq[] = [];
 		for (const message of messages) {
 			const range = rangeOf(message);
-			if (range !== undefined) {
-				this.consumed.set(range.through, range);
-				if (range.steer === true) steers.push(range.through);
-			}
+			if (range !== undefined) this.rangeProvided(range, steers);
 			if (message.role === 'toolResult') this.resultProvided(message.toolCallId);
 		}
 		this.join();
 		return steers;
+	}
+
+	/** Hold a range a request held. A range at or below the position read adds nothing. */
+	private rangeProvided(range: Range, steers: Seq[]): void {
+		if (range.through > this.read) this.consumed.set(range.through, range);
+		if (range.steer === true) steers.push(range.through);
 	}
 
 	private resultProvided(callId: string): void {

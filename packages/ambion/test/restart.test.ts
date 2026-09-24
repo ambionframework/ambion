@@ -110,12 +110,16 @@ function open(
 		},
 		agents,
 		runtime,
-		execution: piExecution({ stream: scripted(script) }),
+		execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
 	});
 }
 
 const resume = (name: string, runtime: Runtime, script: Script = byAgent({})) =>
-	resumeRoom(name, { runtime, agents, execution: piExecution({ stream: scripted(script) }) });
+	resumeRoom(name, {
+		runtime,
+		agents,
+		execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+	});
 
 const summaries = async (session: Room) => (await messagesOf(session)).filter(isSummary);
 const seat = async (session: Room, name: string) =>

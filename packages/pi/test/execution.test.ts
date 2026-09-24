@@ -1,5 +1,5 @@
 /**
- * The composition path: a room takes `piExecution({ stream })` as its
+ * The composition path: a room takes `piExecution({ sessions: 'memory', stream })` as its
  * execution, or a runtime takes it as the default for every room.
  */
 import { readdir } from 'node:fs/promises';
@@ -30,7 +30,7 @@ describe('piExecution', () => {
 			await startRoom({
 				name: roomName('pi-execution'),
 				agents: [worker],
-				execution: piExecution({ stream: answering() }),
+				execution: piExecution({ sessions: 'memory', stream: answering() }),
 			}),
 		);
 		expect((await ask(room)).map((message) => [message.from, message.text])).toEqual([
@@ -45,7 +45,7 @@ describe('piExecution', () => {
 		onTestFinished(() => opened.dispose());
 		const runtime = createRuntime({
 			storage: opened.storage,
-			execution: piExecution({ stream: answering() }),
+			execution: piExecution({ sessions: 'memory', stream: answering() }),
 		});
 		const name = roomName('pi-runtime');
 		const first = await startRoom({ name, agents: [worker], runtime });
@@ -62,13 +62,15 @@ describe('piExecution', () => {
 	});
 
 	it('lets a room name its own execution over the runtime default', async () => {
-		const runtime = createRuntime({ execution: piExecution({ stream: scripted(() => quiet()) }) });
+		const runtime = createRuntime({
+			execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+		});
 		const room = stopAtEnd(
 			await startRoom({
 				name: roomName('pi-override'),
 				agents: [worker],
 				runtime,
-				execution: piExecution({ stream: answering() }),
+				execution: piExecution({ sessions: 'memory', stream: answering() }),
 			}),
 		);
 		expect((await ask(room)).map((message) => message.text)).toContain('42');

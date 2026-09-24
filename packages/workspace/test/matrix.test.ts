@@ -56,6 +56,7 @@ const twoWorkspaces: Scenario = {
 			runtime,
 			agents: [alpha, beta, gamma],
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted(
 					byAgent({
 						alpha: async (context, _name, call) => {

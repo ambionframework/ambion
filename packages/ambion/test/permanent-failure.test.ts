@@ -44,6 +44,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 				seats: { [worker.name]: 'named' },
 				runtime,
 				execution: piExecution({
+					sessions: 'memory',
 					stream: scripted(() => {
 						calls += 1;
 						throw new Error(message);

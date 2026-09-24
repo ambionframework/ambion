@@ -33,7 +33,7 @@ const session = await startRoom({
 	summary: assistant.name,
 	seats: { [product.name]: 'broadcast', [colleague.name]: 'broadcast', [assistant.name]: 'none' },
 	agents: [product, colleague, assistant],
-	execution: piExecution({ stream: scripted(slowly(Number(delay ?? 40))) }),
+	execution: piExecution({ sessions: 'memory', stream: scripted(slowly(Number(delay ?? 40))) }),
 });
 
 const [first, second, third] = questions;

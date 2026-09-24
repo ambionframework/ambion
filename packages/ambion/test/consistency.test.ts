@@ -150,7 +150,7 @@ class Cluster {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			execution: piExecution({ stream: scripted(this.cast.script) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }),
 		});
 		this.watch();
 		await messagesOf(this.session);
@@ -235,7 +235,7 @@ class Cluster {
 				this.session = await resumeRoom(this.name, {
 					runtime: this.runtime,
 					agents,
-					execution: piExecution({ stream: scripted(this.cast.script) }),
+					execution: piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }),
 				});
 				break;
 			} catch (error) {

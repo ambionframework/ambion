@@ -131,7 +131,7 @@ async function open(options: {
 			[(options.assistant ?? assistant).name]:
 				options.seats?.[(options.assistant ?? assistant).name] ?? 'none',
 		},
-		execution: piExecution({ stream: scripted(options.script) }),
+		execution: piExecution({ sessions: 'memory', stream: scripted(options.script) }),
 		runtime: options.runtime ?? runtime,
 	});
 	return stopAtEnd(session);
@@ -944,6 +944,7 @@ describe('a room without a summary writer', () => {
 				agents: [product],
 				runtime,
 				execution: piExecution({
+					sessions: 'memory',
 					stream: scripted(byAgent({ product: insists('Thursday is out.') })),
 				}),
 			}),

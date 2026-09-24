@@ -379,7 +379,7 @@ describe('the room runs the verified rules', () => {
 		const runtime = createRuntime({
 			clock: fakeClock(),
 			transport: inProcessTransport(),
-			execution: piExecution({ stream: scripted(() => quiet()) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
 		});
 		const room = stopAtEnd(
 			await startRoom({

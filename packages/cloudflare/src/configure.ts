@@ -84,7 +84,11 @@ export function runtimeFor(
 		throw new Error('Call configure() at module scope before an object runs.');
 	}
 	return createRuntime({
-		execution: piExecution(settings.stream === undefined ? {} : { stream: settings.stream }),
+		// An object has no local disk. A seat object keeps its own sessions.
+		execution: piExecution({
+			sessions: 'memory',
+			...(settings.stream === undefined ? {} : { stream: settings.stream }),
+		}),
 		...(settings.limits === undefined ? {} : { limits: settings.limits }),
 		...options,
 	});
@@ -99,6 +103,7 @@ export function executionFor(
 	}
 	return createExecutionServices({
 		...options,
+		sessions: 'memory',
 		...(settings.stream === undefined ? {} : { stream: settings.stream }),
 		...(settings.limits?.call === undefined ? {} : { call: settings.limits.call }),
 		...(settings.limits?.trace === undefined ? {} : { trace: settings.limits.trace }),

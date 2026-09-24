@@ -50,7 +50,7 @@ const base = (overrides: Options = {}) => ({
 	name: roomName(),
 	seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' } as const,
 	agents: [watcher, assistant],
-	execution: piExecution({ stream: recording }),
+	execution: piExecution({ sessions: 'memory', stream: recording }),
 	...overrides,
 });
 
@@ -117,7 +117,7 @@ describe('presence', () => {
 			await held.promise;
 			return quiet();
 		});
-		const session = await open({ execution: piExecution({ stream: holding }) });
+		const session = await open({ execution: piExecution({ sessions: 'memory', stream: holding }) });
 		const visit = await session.visit(andrei);
 		await visit.send({ text: 'start something long' }); // watcher is now mid-activation
 		await providerStarted.promise;

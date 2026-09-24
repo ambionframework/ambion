@@ -139,8 +139,7 @@ first activation of the seat in the next exchange starts fresh. No session
 crosses an exchange.
 
 **The session is a cache.** On Node, Claude, Codex and Pi keep it on the
-local disk. A Pi seat on a custom stream or on Cloudflare keeps it in
-memory. When it is lost, the next activation reads the record and starts
+local disk. A Pi seat on Cloudflare keeps it in memory. When it is lost, the next activation reads the record and starts
 fresh. The steps of each activation go to the logger that the host passes
 in. See [Exchange continuity](docs/executors.md#exchange-continuity).
 

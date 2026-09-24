@@ -56,7 +56,7 @@ const summaryRoom = async (runtime: Runtime, script: Script, specialists = [alph
 				...Object.fromEntries(specialists.map((agent) => [agent.name, 'broadcast' as const])),
 				[assistant.name]: 'none',
 			},
-			execution: piExecution({ stream: scripted(script) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
 		}),
 	);
 
@@ -83,7 +83,7 @@ const resumeWith = async (room: Room, runtime: Runtime, script: Script) =>
 		await resumeRoom(room.name, {
 			runtime,
 			agents: [alpha, assistant],
-			execution: piExecution({ stream: scripted(script) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
 		}),
 	);
 
@@ -180,7 +180,7 @@ describe('exchange completion handles', () => {
 					storage: faulty.journals,
 					transport: inProcessTransport(),
 				}),
-				execution: piExecution({ stream: scripted(() => quiet()) }),
+				execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
 			}),
 		);
 		const visit = await room.visit(priya);

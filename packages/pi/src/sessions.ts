@@ -142,13 +142,19 @@ let defaultDir: Promise<string> | undefined;
  * user of this process.
  */
 export function defaultSessionDir(): Promise<string> {
-	defaultDir ??= (async () => {
+	if (defaultDir !== undefined) return defaultDir;
+	const found = (async () => {
 		const [{ tmpdir }, { join }] = await Promise.all([import('node:os'), import('node:path')]);
 		// A host with no user ids, such as Windows, names no user.
 		const name = ['ambion-pi-sessions', process.getuid?.()].filter((part) => part !== undefined);
 		return privateDirectory(join(tmpdir(), name.join('-')));
 	})();
-	return defaultDir;
+	defaultDir = found;
+	// The process keeps no refusal: the next session tries the directory again.
+	found.catch(() => {
+		defaultDir = undefined;
+	});
+	return found;
 }
 
 /**

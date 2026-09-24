@@ -90,10 +90,14 @@ async function splitRoom(storage: Storage, gate?: () => Promise<void> | undefine
 			[assistant.name]: 'none',
 		},
 		agents: [product, colleague, assistant],
-		execution: piExecution({ stream: scripted(script) }),
+		execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
 	});
 	const resume = (runtime = host()) =>
-		resumeRoom(name, { runtime, agents, execution: piExecution({ stream: scripted(script) }) });
+		resumeRoom(name, {
+			runtime,
+			agents,
+			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+		});
 	return { opened, clock, first, name, room, events: collect(room), host, resume };
 }
 
@@ -222,7 +226,7 @@ describe('a split: two live hosts over one SQLite database', () => {
 			const session = await resumeRoom(name, {
 				runtime,
 				agents,
-				execution: piExecution({ stream: scripted(script) }),
+				execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
 			});
 			await quietNow(session, clock);
 			const [, second] = questions;

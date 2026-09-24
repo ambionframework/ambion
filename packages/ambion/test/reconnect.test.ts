@@ -36,7 +36,7 @@ const priya = defineHuman({
 });
 const alternatePriya = defineHuman({ name: priya.name, identity: 'A different person.' });
 const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
-const execution = piExecution({ stream: scripted(() => quiet()) });
+const execution = piExecution({ sessions: 'memory', stream: scripted(() => quiet()) });
 
 /** A storage and a clock that stay open until the test ends. */
 async function host(storage: Storage) {
@@ -211,7 +211,7 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 				agents: [watcher],
 				seats: { [watcher.name]: 'broadcast' },
 				runtime: firstRuntime,
-				execution: piExecution({ stream: scripted(holds) }),
+				execution: piExecution({ sessions: 'memory', stream: scripted(holds) }),
 			});
 			const visit = await first.visit(priya);
 			const wakeStarted = started(first, watcher.name);

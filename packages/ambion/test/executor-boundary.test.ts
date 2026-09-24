@@ -48,6 +48,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 		const runtime = createRuntime({
 			transport: mode === 'json' ? serializing(observed) : observed,
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted(() => {
 					defaultCalls += 1;
 					return quiet();
@@ -60,7 +61,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 				agents: [writer],
 				summary: writer.name,
 				runtime,
-				execution: piExecution({ stream: reply('Room override.', true) }),
+				execution: piExecution({ sessions: 'memory', stream: reply('Room override.', true) }),
 			}),
 		);
 		const events = collect(room);
@@ -146,7 +147,7 @@ describe.each(storages)('executor lifecycle on $name', (storage) => {
 			name,
 			agents: [writer],
 			runtime,
-			execution: piExecution({ stream: reply('First run.') }),
+			execution: piExecution({ sessions: 'memory', stream: reply('First run.') }),
 		});
 		let resumed: Awaited<ReturnType<typeof resumeRoom>> | undefined;
 		try {
@@ -160,7 +161,7 @@ describe.each(storages)('executor lifecycle on $name', (storage) => {
 			resumed = await resumeRoom(name, {
 				agents: [writer],
 				runtime,
-				execution: piExecution({ stream: reply('New run.') }),
+				execution: piExecution({ sessions: 'memory', stream: reply('New run.') }),
 			});
 			const current = runningRoom(runtime, name);
 			expect(current).not.toBe(old);

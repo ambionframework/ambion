@@ -32,13 +32,21 @@ export interface ExecutionServicesOptions {
 	readonly call?: Partial<Limits['call']>;
 	readonly trace?: Partial<TraceLimits>;
 	readonly stream?: StreamFn;
+	/** Where each seat keeps its sessions. Absent, `'disk'`. */
+	readonly sessions?: SessionPlace;
 	/**
-	 * The directory on the local disk for the sessions. Absent, a custom
-	 * stream keeps them in memory, and the registry stream keeps them in
+	 * The directory on the local disk for the sessions. Absent,
 	 * `ambion-pi-sessions-<uid>` in the OS temporary directory.
 	 */
 	readonly sessionDir?: string;
 }
+
+/**
+ * Where each seat keeps its Pi harness sessions: JSONL files on the local
+ * disk, or memory for as long as the services live. A test keeps them in
+ * memory, so that no room reads a session of another run.
+ */
+export type SessionPlace = 'disk' | 'memory';
 
 let builtinRegistry: Promise<Models> | undefined;
 
@@ -85,12 +93,12 @@ export function createExecutionServices(options: ExecutionServicesOptions = {}):
 		trace: { ...DEFAULT_TRACE_LIMITS, ...options.trace },
 		stream: options.stream ?? registryStream,
 		model: custom ? stubModel : registryModel,
-		sessions: sessionsOf(options.sessionDir, custom),
+		sessions: sessionsOf(options),
 	};
 }
 
-/** The session store: the named directory, memory for a custom stream, or the default directory. */
-function sessionsOf(dir: string | undefined, custom: boolean): PiSessions {
-	if (dir !== undefined) return diskSessions(dir);
-	return custom ? memorySessions() : diskSessions(defaultSessionDir);
+/** The session store: memory, the named directory, or the default directory. */
+function sessionsOf(options: ExecutionServicesOptions): PiSessions {
+	if (options.sessions === 'memory') return memorySessions();
+	return diskSessions(options.sessionDir ?? defaultSessionDir);
 }

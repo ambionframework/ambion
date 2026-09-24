@@ -47,7 +47,7 @@ async function open(
 			name: roomName(label),
 			seats: { ...seats, [assistant.name]: 'none' },
 			agents: [...Object.keys(seats).map((name) => scriptedAgent(name)), assistant],
-			execution: piExecution({ stream: scripted(script) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
 			...options,
 		}),
 	);
