@@ -35,16 +35,17 @@ export const sqlBackends: readonly SqlConformanceBackend[] = [
 ];
 
 /**
- * A bash backend that connects through a fresh memory backend and names the
- * just-bash layout. `make` replaces or adds members, and gets the inner
- * backend to connect through.
+ * A bash backend that connects through a fresh memory backend, carries its
+ * git transports, and names the just-bash layout. `make` replaces or adds
+ * members, and gets the inner backend to connect through.
  */
 export function wrapped(
 	make: (inner: MemoryBashBackend) => Partial<BashBackend> = () => ({}),
 ): BashBackend {
 	const inner = memoryBackend();
 	return {
-		connect: (agent, signal) => inner.connect(agent, signal),
+		connect: (agent, signal, services) => inner.connect(agent, signal, services),
+		gitTransports: inner.gitTransports,
 		layout: { audit: DEFAULT_AUDIT_LOG, rooms: '/rooms' },
 		...make(inner),
 	};

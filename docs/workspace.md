@@ -340,7 +340,10 @@ The `backend` option holds the backends by kind, as `WorkspaceBackends`.
 `backend.sql` is an optional `SqlBackend`: a shared database that need not
 live on the shell's filesystem. `backend.git` is an optional
 `GitBackend`: the repositories of the workspace, which [Git](git.md)
-describes. With no SQL backend, the workspace has no `sql` tool.
+describes. `openWorkspace` throws when `bash.gitTransports` does not hold
+the transport of the git backend
+([The contract](git.md#the-contract)). With no SQL backend, the
+workspace has no `sql` tool.
 
 **`sqliteBackend` from `@ambionframework/workspace/sqlite` is the default
 SQL backend.** It opens one SQLite database through `node:sqlite`, at a

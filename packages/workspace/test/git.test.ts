@@ -1,7 +1,8 @@
 /**
  * A workspace with a git backend: the `repos` and `fork` tools and their
- * texts, the tool line and the order of the notes, the audit entry of a
- * call, and a room in which a seat forks a template, clones it, edits,
+ * texts, the tool line and the order of the notes, the refusal of a bash
+ * backend that does not carry the transport, the audit entry of a call,
+ * and a room in which a seat forks a template, clones it, edits,
  * commits, and pushes. The backend is `justGitBackend`, reached by
  * relative path the same way as the just-bash source; its own package runs
  * the conformance cases.
@@ -18,7 +19,7 @@ import { gitToolGuidance } from '../src/git-tools.ts';
 import { BACKGROUND_CONTEXT, openWorkspace } from '../src/index.ts';
 import { roomMirrorGuidance } from '../src/mirror.ts';
 import { sqliteBackend } from '../src/sqlite-entry.ts';
-import { callAs, invokeText, toolOf } from './support/backends.ts';
+import { callAs, invokeText, toolOf, wrapped } from './support/backends.ts';
 import { agent, run, toolResults } from './support/room.ts';
 
 const SERVER = 'http://git.ambion.invalid';
@@ -98,6 +99,23 @@ describe('the tools and the guidance', () => {
 		expect(plain.tools().tools.map((tool) => tool.name)).not.toContain('fork');
 		expect(plain.git).toBeUndefined();
 	});
+});
+
+describe('the pair', () => {
+	it.each<[string, readonly string[] | undefined, string]>([
+		["['ssh']", ['ssh'], 'ssh'],
+		['[]', [], 'no git transport'],
+		['absent', undefined, 'no git transport'],
+	])(
+		'refuses justGitBackend beside a bash backend whose gitTransports is %s',
+		(_name, gitTransports, carried) => {
+			const git = justGitBackend({ storage: sqliteGitStorage(':memory:'), secret: 'test-secret' });
+			const bash = wrapped(() => ({ gitTransports }));
+			expect(() => openWorkspace({ name: 'lab', backend: { bash, git } })).toThrow(
+				`The bash backend cannot reach the git backend at ${SERVER}: the git backend uses the transport in-process, and the bash backend carries ${carried}.`,
+			);
+		},
+	);
 });
 
 describe('repos', () => {

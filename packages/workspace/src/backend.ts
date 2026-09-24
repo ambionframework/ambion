@@ -25,7 +25,7 @@ export interface WorkspaceLayout {
 /**
  * What the workspace gives a bash backend when it connects: the other
  * backends that the shell reaches. `git` is set when the workspace has a
- * git backend.
+ * git backend, and its `transport` is one of the backend's `gitTransports`.
  */
 export interface BashServices {
 	readonly git?: GitAccess;
@@ -49,6 +49,12 @@ export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
 	 * when the backend adds none of its own.
 	 */
 	tools?: readonly AgentHarnessTool<ExecutionToolContext>[];
+	/**
+	 * The git transports that the shell of this backend carries, such as
+	 * `in-process` or `ssh`. `openWorkspace` refuses a git backend whose
+	 * `access.transport` is not in the list. Absent, the backend carries none.
+	 */
+	readonly gitTransports?: readonly string[];
 	/** Guidance for the backend's own shell: its commands, its network, and its isolation. */
 	guidance?: string;
 	/** Where this backend keeps the audit log and the room mirrors. */

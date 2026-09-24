@@ -68,6 +68,29 @@ activation starts with a reminder of the seat's processes. See
   `fromDirectory` from there.
 - **The workstation writes no `~/.git-credentials`.** It carries no git
   transport, so a git backend beside it gives each agent's `git` no access.
+- **`GitAccess` holds `transport` alone.** `prefix`, `fetch`, and
+  `credentialFor` move to `JustGitAccess`, and `credentialsFor` goes.
+  `GitFetch` and `GitCredential` leave the root entry of
+  `@ambionframework/workspace`. `@ambionframework/just-bash/git` exports
+  them and `JustGitAccess`. `JustGitBackend.access` is a `JustGitAccess`,
+  whose `transport` is `in-process` and whose `fetch` is always set.
+- **A bash backend lists the git transports it carries in
+  `BashBackend.gitTransports`.** `openWorkspace` throws when the bash
+  backend does not carry the `transport` of the git backend. The error
+  names that transport, the `server` of the git backend, and the
+  transports of the bash backend. A bash backend with no `gitTransports`
+  carries none. `memoryBackend` and `directoryBackend` carry
+  `in-process`, and they refuse an access of another transport at
+  `connect`.
+- **`gitConformance` asks the harness for each credential fact.**
+  `GitConformanceBackend` gets four hooks: `sourcesCredential`,
+  `issueCredentials`, `writeCredential`, and `probeCredential`. Each hook
+  takes the pair that the case opened, a `GitConformancePair`, and
+  `probeCredential` gives a `GitConformanceProbe`. The conformance entry
+  exports both types. `GitConformanceBackend`, `GitConformanceStore`, and
+  `gitConformance` take the type of the git backend as a parameter.
+  `GitConformanceOptions.tokenTtl` is now `credentialTtl`, and
+  `GitConformanceBackend.shortestTokenTtl` is now `shortestCredentialTtl`.
 
 ## 0.2.0 (2026-09-24)
 

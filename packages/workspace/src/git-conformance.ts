@@ -9,6 +9,10 @@
  * is checked by the exit status of `git push`: the text of a refusal
  * differs from one backend to the other.
  *
+ * The suite knows no transport. Four cases touch a credential, and each
+ * asks a hook of the harness for the fact it checks. The package that
+ * pairs the git backend with its bash backend implements the hooks.
+ *
  * ```ts
  * describe.each(harnesses)('$name', (harness) => {
  * 	for (const c of gitConformance(harness)) it(c.name, c.run);
@@ -33,23 +37,53 @@ export interface GitConformanceTemplate {
 export interface GitConformanceOptions {
 	readonly templates: Readonly<Record<string, GitConformanceTemplate>>;
 	/** Seconds a credential lives. */
-	readonly tokenTtl?: number;
+	readonly credentialTtl?: number;
 }
 
 /** One store of repositories, and a bash backend beside it. */
-export interface GitConformanceStore {
+export interface GitConformanceStore<B extends GitBackend = GitBackend> {
 	readonly bash: BashBackend;
 	/** Open a git backend over this store's repositories. */
-	backend(options: GitConformanceOptions): GitBackend;
+	backend(options: GitConformanceOptions): B;
 	dispose(): Promise<void>;
 }
 
-/** A git backend under test. `open` runs inside every case. */
-export interface GitConformanceBackend {
+/** The git backend that a case opened, and the workspace over it. */
+export interface GitConformancePair<B extends GitBackend = GitBackend> {
+	readonly backend: B;
+	readonly workspace: Workspace;
+}
+
+/** One credential under test: when it expires, and whether the server accepts it now. */
+export interface GitConformanceProbe {
+	/** Milliseconds since the epoch. */
+	readonly expiresAt: number;
+	/** Resolves `true` when the server accepts the credential, and `false` when it refuses it. */
+	accepted(): Promise<boolean>;
+}
+
+/**
+ * A git backend under test. `open` runs inside every case. The four hooks
+ * answer the credential facts of the pair, each over the backend and the
+ * workspace that the case opened.
+ */
+export interface GitConformanceBackend<B extends GitBackend = GitBackend> {
 	readonly name: string;
-	/** The shortest `tokenTtl`, in seconds, that the backend takes. */
-	readonly shortestTokenTtl: number;
-	open(): Promise<GitConformanceStore>;
+	/** The shortest `credentialTtl`, in seconds, that the backend takes. */
+	readonly shortestCredentialTtl: number;
+	open(): Promise<GitConformanceStore<B>>;
+	/** Resolves `true` when `agent` holds a credential for `template-sources/blank`. */
+	sourcesCredential(pair: GitConformancePair<B>, agent: WorkspaceAgent): Promise<boolean>;
+	/** Issue the credentials of `agent`, the way its bash backend asks for them. Rejects for a reserved name. */
+	issueCredentials(pair: GitConformancePair<B>, agent: WorkspaceAgent): Promise<void>;
+	/** Resolves `true` when `agent` holds a write credential for the repository at `url`. */
+	writeCredential(
+		pair: GitConformancePair<B>,
+		agent: WorkspaceAgent,
+		url: string,
+	): Promise<boolean>;
+	/** A read credential of `agent` for `templates/blank`, with the shortest life the case asked for. */
+	probeCredential(pair: GitConformancePair<B>, agent: WorkspaceAgent): Promise<GitConformanceProbe>;
 }
 
 const ctx = BACKGROUND_CONTEXT;
@@ -69,15 +103,16 @@ function check(condition: boolean, what: string): void {
 	if (!condition) throw new Error(what);
 }
 
-interface Opened {
-	readonly backend: GitBackend;
-	readonly workspace: Workspace;
-}
+/** One case: the pair it opened, and the harness that answers the credential facts. */
+type Body = <B extends GitBackend>(
+	pair: GitConformancePair<B>,
+	harness: GitConformanceBackend<B>,
+) => Promise<void>;
 
 /** Run `body` over a fresh store and a workspace over it, and dispose both after. */
-async function withWorkspace(
-	harness: GitConformanceBackend,
-	body: (opened: Opened) => Promise<void>,
+async function withWorkspace<B extends GitBackend>(
+	harness: GitConformanceBackend<B>,
+	body: Body,
 	options: GitConformanceOptions = { templates: TEMPLATES },
 ): Promise<void> {
 	const store = await harness.open();
@@ -87,7 +122,7 @@ async function withWorkspace(
 		backend: { bash: store.bash, git: backend },
 	});
 	try {
-		await body({ backend, workspace });
+		await body({ backend, workspace }, harness);
 	} finally {
 		await workspace.dispose();
 		await store.dispose();
@@ -161,8 +196,6 @@ async function forkAs(
 
 // -- the cases ----------------------------------------------------------------
 
-type Body = (opened: Opened) => Promise<void>;
-
 const listsTemplatesAndForks: Body = async ({ workspace }) => {
 	await forkAs(workspace, ANALYST, 'templates/weekly-report', 'report');
 	const all = await git(workspace, ANALYST, (env) => env.list());
@@ -184,7 +217,8 @@ const listsTemplatesAndForks: Body = async ({ workspace }) => {
 	check(templates.length === 2, 'list with a namespace did not keep that namespace alone');
 };
 
-const sourcesStayHidden: Body = async ({ workspace, backend }) => {
+const sourcesStayHidden: Body = async (pair, harness) => {
+	const { workspace } = pair;
 	const all = await git(workspace, ANALYST, (env) => env.list());
 	check(
 		all.every((repository) => !repository.id.startsWith('template-sources/')),
@@ -192,9 +226,8 @@ const sourcesStayHidden: Body = async ({ workspace, backend }) => {
 	);
 	const hidden = await git(workspace, ANALYST, (env) => env.get('template-sources/blank'));
 	check(hidden === undefined, 'get reaches template-sources');
-	const credentials = await backend.access.credentialsFor(ANALYST);
 	check(
-		credentials.every((credential) => !credential.url.includes('template-sources')),
+		!(await harness.sourcesCredential(pair, ANALYST)),
 		'an agent holds a credential for template-sources',
 	);
 };
@@ -235,18 +268,19 @@ const forkOfForkNamesItsSource: Body = async ({ workspace }) => {
 	check(review?.source === 'analyst/report', 'a fork of a fork does not name its direct source');
 };
 
-const reservedNamesAreRefused: Body = async ({ workspace, backend }) => {
+const reservedNamesAreRefused: Body = async (pair, harness) => {
+	const { workspace } = pair;
 	for (const name of ['templates', 'template-sources']) {
 		const refused = await git(workspace, { name }, (env) => env.list()).then(
 			() => false,
 			() => true,
 		);
 		check(refused, `an agent named ${name} was not refused`);
-		const credential = await backend.access.credentialsFor({ name }).then(
+		const credential = await harness.issueCredentials(pair, { name }).then(
 			() => false,
 			() => true,
 		);
-		check(credential, `an agent named ${name} got credentials`);
+		check(credential, `an agent named ${name} got a credential`);
 	}
 };
 
@@ -305,7 +339,8 @@ const pushesOutsideTheNamespaceAreRefused: Body = async ({ workspace }) => {
 	check((await pushAs(workspace, ANALYST, url, '~/mine')) === 0, "the owner's push was refused");
 };
 
-const concurrentForksKeepOneFork: Body = async ({ backend, workspace }) => {
+const concurrentForksKeepOneFork: Body = async (pair, harness) => {
+	const { backend, workspace } = pair;
 	const first = await backend.connect(ANALYST);
 	const second = await backend.connect(ANALYST);
 	try {
@@ -319,10 +354,10 @@ const concurrentForksKeepOneFork: Body = async ({ backend, workspace }) => {
 		await first.cleanup();
 		await second.cleanup();
 	}
-	// A workstation reads the credentials at every connect, beside the forks of other agents.
+	// A bash backend asks for the credentials of an agent beside the forks of other agents.
 	let reading = true;
 	const reader = (async () => {
-		while (reading) await backend.access.credentialsFor(REVIEWER);
+		while (reading) await harness.issueCredentials(pair, REVIEWER);
 	})();
 	const forks = [];
 	for (let index = 0; index < 20; index++) {
@@ -341,9 +376,13 @@ const concurrentForksKeepOneFork: Body = async ({ backend, workspace }) => {
 		listed.length === 21,
 		`the forks beside credential reads left ${listed.length} repositories`,
 	);
-	const credentials = await backend.access.credentialsFor(ANALYST);
-	const twin = credentials.find((credential) => credential.url.endsWith('/analyst/twin'));
-	check(twin?.scope === 'write', 'the owner holds no write credential for its fork');
+	const twin = await git(workspace, ANALYST, (env) => env.get('analyst/twin'));
+	check(twin !== undefined, 'the fork analyst/twin is missing');
+	if (twin === undefined) return;
+	check(
+		await harness.writeCredential(pair, ANALYST, twin.url),
+		'the owner holds no write credential for its fork',
+	);
 };
 
 const abortedForkRejects: Body = async ({ workspace }) => {
@@ -362,7 +401,9 @@ const abortedForkRejects: Body = async ({ workspace }) => {
 	check(again.ok || again.reason === 'name_taken', 'a fork after an abort was refused');
 };
 
-const sameSourceWritesNothing = async (harness: GitConformanceBackend): Promise<void> => {
+const sameSourceWritesNothing = async <B extends GitBackend>(
+	harness: GitConformanceBackend<B>,
+): Promise<void> => {
 	const store = await harness.open();
 	try {
 		const first = openWorkspace({
@@ -395,27 +436,20 @@ const sameSourceWritesNothing = async (harness: GitConformanceBackend): Promise<
 	}
 };
 
-const credentialExpires = async (harness: GitConformanceBackend): Promise<void> => {
-	if (harness.shortestTokenTtl > 5) return;
+const credentialExpires = async <B extends GitBackend>(
+	harness: GitConformanceBackend<B>,
+): Promise<void> => {
+	if (harness.shortestCredentialTtl > 5) return;
 	await withWorkspace(
 		harness,
-		async ({ backend, workspace }) => {
-			await git(workspace, ANALYST, (env) => env.list());
-			const access = backend.access;
-			const url = `${access.prefix}templates/blank`;
-			const credential = await access.credentialFor(ANALYST, url);
-			check(credential?.scope === 'read', 'an agent holds no read credential for a template');
-			if (credential === undefined) return;
-			const fetch = access.fetch ?? globalThis.fetch;
-			const probe = () =>
-				fetch(`${credential.url}/info/refs?service=git-upload-pack`, {
-					headers: { Authorization: `Bearer ${credential.token}` },
-				});
-			check((await probe()).status === 200, 'a fresh credential was refused');
-			await new Promise((resolve) => setTimeout(resolve, credential.expiresAt - Date.now() + 250));
-			check((await probe()).status === 401, 'an expired credential was accepted');
+		async (pair, hooks) => {
+			await git(pair.workspace, ANALYST, (env) => env.list());
+			const probe = await hooks.probeCredential(pair, ANALYST);
+			check(await probe.accepted(), 'a fresh credential was refused');
+			await new Promise((resolve) => setTimeout(resolve, probe.expiresAt - Date.now() + 250));
+			check(!(await probe.accepted()), 'an expired credential was accepted');
 		},
-		{ templates: TEMPLATES, tokenTtl: harness.shortestTokenTtl },
+		{ templates: TEMPLATES, credentialTtl: harness.shortestCredentialTtl },
 	);
 };
 
@@ -443,7 +477,9 @@ const CASES: readonly [string, Body][] = [
 ];
 
 /** The cases of a git backend, as named test bodies. */
-export function gitConformance(harness: GitConformanceBackend): readonly ConformanceCase[] {
+export function gitConformance<B extends GitBackend>(
+	harness: GitConformanceBackend<B>,
+): readonly ConformanceCase[] {
 	return [
 		...CASES.map(([name, body]) => ({ name, run: () => withWorkspace(harness, body) })),
 		{

@@ -35,7 +35,6 @@ import {
 	type BashBackend,
 	type BashServices,
 	DEFAULT_AUDIT_LOG,
-	type GitAccess,
 	type WorkspaceLayout,
 } from '@ambionframework/workspace';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
@@ -43,6 +42,8 @@ import { Bash, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
 import { createGit } from 'just-git';
 import { BashEnv } from './bash-env.ts';
 import { DEV_DIR, withDevices } from './devices.ts';
+// A type import alone: the git module loads `node:sqlite`, and the root entry does not.
+import type { JustGitAccess } from './git/access.ts';
 
 /**
  * Where the just-bash backends keep the audit log and the room mirrors.
@@ -54,6 +55,28 @@ const JUST_BASH_LAYOUT: WorkspaceLayout = {
 };
 
 /**
+ * The git transports that the shell of both backends carries. `openWorkspace`
+ * checks it, so `services.git` is the access of `justGitBackend` when set.
+ */
+const JUST_BASH_TRANSPORTS: readonly string[] = Object.freeze(['in-process']);
+
+/**
+ * The access of `justGitBackend`, narrowed by its transport. `openWorkspace`
+ * refuses a transport outside `JUST_BASH_TRANSPORTS` first. This check
+ * holds the rule for a caller that connects without a workspace.
+ */
+function justGitAccess(services: BashServices | undefined): JustGitAccess | undefined {
+	const access = services?.git;
+	if (access === undefined) return undefined;
+	if (!JUST_BASH_TRANSPORTS.includes(access.transport)) {
+		throw new Error(
+			`The just-bash backends carry the git transport in-process, and the git access uses ${access.transport}.`,
+		);
+	}
+	return access as JustGitAccess;
+}
+
+/**
  * The `git` command of one agent. The identity is locked to the agent's
  * name, so every commit names the seat that made it. With no git backend,
  * `network: false` keeps git inside the same boundary as the shell: a
@@ -61,15 +84,12 @@ const JUST_BASH_LAYOUT: WorkspaceLayout = {
  * backend's prefix alone, and the credential of each request comes from
  * `access`. No file and no variable of the shell holds it.
  */
-function gitFor(agent: WorkspaceAgent, access: GitAccess | undefined) {
+function gitFor(agent: WorkspaceAgent, access: JustGitAccess | undefined) {
 	const identity = { name: agent.name, email: `${agent.name}@ambion.invalid`, locked: true };
 	if (access === undefined) return createGit({ identity, network: false });
 	return createGit({
 		identity,
-		network: {
-			allowed: [access.prefix],
-			...(access.fetch === undefined ? {} : { fetch: access.fetch }),
-		},
+		network: { allowed: [access.prefix], fetch: access.fetch },
 		credentials: async (url) => {
 			const credential = await access.credentialFor(agent, url);
 			return credential === undefined ? null : { type: 'bearer', token: credential.token };
@@ -83,6 +103,7 @@ async function connectOver(
 	agent: WorkspaceAgent,
 	services?: BashServices,
 ): Promise<BashEnv> {
+	const git = gitFor(agent, justGitAccess(services));
 	const home = `/home/${agent.name}`;
 	await fs.mkdir(home, { recursive: true });
 	return new BashEnv(
@@ -92,7 +113,7 @@ async function connectOver(
 			env: { HOME: home },
 			javascript: true,
 			python: true,
-			customCommands: [gitFor(agent, services?.git)],
+			customCommands: [git],
 		}),
 		home,
 	);
@@ -232,6 +253,7 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryBashBac
 		connect: async (agent, _signal, services) => connectOver(await resource.get(), agent, services),
 		dispose: async () => resource.clear(inMemory()),
 		readFiles: async () => listFiles(await resource.get()),
+		gitTransports: JUST_BASH_TRANSPORTS,
 		guidance: JUST_BASH_GUIDANCE,
 		layout: JUST_BASH_LAYOUT,
 	};
@@ -261,6 +283,7 @@ export function directoryBackend(root: string): BashBackend {
 	return {
 		connect: async (agent, _signal, services) => connectOver(await resource.get(), agent, services),
 		dispose: async () => resource.clear(),
+		gitTransports: JUST_BASH_TRANSPORTS,
 		guidance: JUST_BASH_GUIDANCE,
 		layout: JUST_BASH_LAYOUT,
 	};

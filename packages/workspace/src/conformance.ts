@@ -43,6 +43,8 @@ import type {
 export type {
 	GitConformanceBackend,
 	GitConformanceOptions,
+	GitConformancePair,
+	GitConformanceProbe,
 	GitConformanceStore,
 	GitConformanceTemplate,
 } from './git-conformance.ts';
