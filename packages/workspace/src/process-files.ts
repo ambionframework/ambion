@@ -173,30 +173,31 @@ export async function writeExit(env: WorkspaceEnv, dir: string, code: number): P
 
 /** Write `seen` for a process whose end a result or a reminder showed. Best-effort. */
 export async function writeSeen(env: WorkspaceEnv, dir: string): Promise<void> {
-	await env.writeFile(`${dir}/seen`, '', BACKGROUND_CONTEXT);
+	await env.writeFile(`${dir}/seen`, 'seen\n', BACKGROUND_CONTEXT);
 }
 
 /**
  * The script that prints the files of every process under `root`, or of
- * the one process `handle`. It prints one record for each directory with a
- * `spec`, one line for each fact. The liveness check matches the handle in
- * the command line of the pid, so a pid that the system reused for another
- * program does not read as the process.
+ * the one process `handle`. It prints one line for each fact, as
+ * `<handle>/<fact>:<text>`. One `find` hands every small file to one
+ * `grep`, and `/dev/null` makes `grep` print each file name. A glob or a
+ * test for each directory costs a command each on just-bash, so the script
+ * uses none for a finished process. The liveness check runs only where
+ * `ps` exists. It matches the handle in the command line of the pid, so a
+ * pid that the system reused for another program does not read as the
+ * process.
  */
 function listingScript(root: string, handle?: string): string {
+	const from = handle === undefined ? '. -mindepth 2' : quoted(handle);
 	const names = handle === undefined ? '*' : quoted(handle);
 	return [
 		`cd ${quoted(root)} 2>/dev/null || exit 0`,
-		`for h in ${names}; do`,
-		`  [ -f "$h/spec" ] || continue`,
-		`  echo "P $h"`,
-		`  echo "S $(cat "$h/spec")"`,
-		`  [ -f "$h/exit" ] && echo "X $(cat "$h/exit")"`,
-		`  [ -f "$h/stop" ] && echo "T $(cat "$h/stop")"`,
-		`  [ -f "$h/seen" ] && echo "N"`,
-		`  if [ ! -f "$h/exit" ] && [ -f "$h/pid" ]; then`,
-		`    ps -ww -o args= -p "$(cat "$h/pid")" 2>/dev/null | grep -q -- "$h" && echo "L"`,
-		`  fi`,
+		`find ${from} -maxdepth ${handle === undefined ? 2 : 1} -type f \\( -name spec -o -name exit -o -name stop -o -name seen \\) -exec grep '' /dev/null {} + 2>/dev/null`,
+		`command -v ps >/dev/null 2>&1 || exit 0`,
+		`for f in ${names}/pid; do`,
+		`  h="\${f%/pid}"`,
+		`  [ -f "$f" ] && [ ! -f "$h/exit" ] || continue`,
+		`  ps -ww -o args= -p "$(cat "$f")" 2>/dev/null | grep -q -- "$h" && echo "$h/alive:"`,
 		`done`,
 		`exit 0`,
 	].join('\n');
@@ -250,21 +251,23 @@ interface Draft {
 	alive: boolean;
 }
 
-/** Fold one line of the listing into the record it belongs to. */
-function fold(drafts: Draft[], line: string): void {
-	const key = line.slice(0, 1);
-	const rest = line.slice(2);
-	if (key === 'P') {
-		drafts.push({ handle: rest, seen: false, alive: false });
-		return;
-	}
-	const draft = drafts.at(-1);
-	if (draft === undefined) return;
-	if (key === 'S') draft.spec = parseSpec(rest);
-	else if (key === 'X') draft.exit = rest;
-	else if (key === 'T') draft.stop = rest;
-	else if (key === 'N') draft.seen = true;
-	else if (key === 'L') draft.alive = true;
+/** Fold one line of the listing into the record of its handle. */
+function fold(drafts: Map<string, Draft>, text: string): void {
+	const line = text.startsWith('./') ? text.slice(2) : text;
+	const colon = line.indexOf(':');
+	const slash = line.indexOf('/');
+	if (colon < 0 || slash < 0 || slash > colon) return;
+	const handle = line.slice(0, slash);
+	if (!isHandle(handle)) return;
+	const fact = line.slice(slash + 1, colon);
+	const rest = line.slice(colon + 1);
+	const draft = drafts.get(handle) ?? { handle, seen: false, alive: false };
+	drafts.set(handle, draft);
+	if (fact === 'spec') draft.spec = parseSpec(rest);
+	else if (fact === 'exit') draft.exit = rest;
+	else if (fact === 'stop') draft.stop = rest;
+	else if (fact === 'seen') draft.seen = true;
+	else if (fact === 'alive') draft.alive = true;
 }
 
 /** The files of every process of the agent under `root`, or of the one process `handle`. */
@@ -274,11 +277,11 @@ export async function readFiles(
 	handle?: string,
 ): Promise<ProcessFiles[]> {
 	if (handle !== undefined && !isHandle(handle)) return [];
-	const drafts: Draft[] = [];
+	const drafts = new Map<string, Draft>();
 	for (const line of (await printed(env, listingScript(root, handle), LISTING_BYTES)).split('\n')) {
 		fold(drafts, line);
 	}
-	return drafts.flatMap((draft) =>
+	return [...drafts.values()].flatMap((draft) =>
 		draft.spec === undefined || draft.spec.handle !== draft.handle
 			? []
 			: [

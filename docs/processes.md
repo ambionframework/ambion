@@ -123,10 +123,13 @@ the process, or when `ps -ww -o args=` for the pid holds the handle. The
 handle check keeps a pid that the system reused for another program from
 reading as the process.
 
-**One shell command reads the table of an agent.** A POSIX script walks
-`~/.processes`, prints the files of each process, and checks each live
-pid. A read costs one `exec` on every backend. `ps` and the reminder read
-the whole table. `status`, `wait`, and `cancel` read the one process.
+**One shell command reads the table of an agent.** A POSIX script runs
+one `find` that hands `spec`, `exit`, `stop`, and `seen` of every process
+to one `grep`. Where `ps` exists, the script then checks the pid of each
+process with no `exit`. A read costs one `exec` on every backend, and
+just-bash reads a table of 64 processes in about 30 ms. `ps` and the
+reminder read the whole table. `status`, `wait`, and `cancel` read the one
+process.
 
 ## The result
 
