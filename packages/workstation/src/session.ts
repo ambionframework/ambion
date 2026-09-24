@@ -4,7 +4,8 @@
  *
  * The client refuses a server whose host key does not match the pinned
  * fingerprint: `ssh2` accepts every host key when `hostVerifier` is unset,
- * so the session always sets it. The SFTP server starts in the account's
+ * so the session always sets it. The session keeps the key that it
+ * verified, for a `known_hosts` line. The SFTP server starts in the account's
  * home, so `realpath('.')` reads the home once for the client's life.
  *
  * The session listens for `error` on the client, because an `error` event
@@ -42,6 +43,12 @@ export function fingerprint(key: Buffer): string {
 	return `SHA256:${createHash('sha256').update(key).digest('base64').replace(/=+$/, '')}`;
 }
 
+/** A host key as a `known_hosts` line shows it: the key type, a space, and the base64 key. */
+function hostKeyText(key: Buffer): string {
+	const length = key.readUInt32BE(0);
+	return `${key.subarray(4, 4 + length).toString('latin1')} ${key.toString('base64')}`;
+}
+
 /** One live client for one agent. */
 export class Session {
 	private open = true;
@@ -60,6 +67,8 @@ export class Session {
 		private readonly client: Client,
 		readonly sftp: SFTPWrapper,
 		readonly home: string,
+		/** The host key that the client verified, as `hostKeyText` renders it. */
+		readonly hostKey: string,
 	) {
 		// Swallow the rejection here; `guard` hands it to each caller.
 		this.ended.catch(() => undefined);
@@ -78,11 +87,11 @@ export class Session {
 		credential: WorkstationCredential,
 		signal?: AbortSignal,
 	): Promise<Session> {
-		const client = await authenticated(address, credential, signal);
+		const { client, hostKey } = await authenticated(address, credential, signal);
 		try {
 			const sftp = await call<SFTPWrapper>((done) => client.sftp(done));
 			const home = await call<string>((done) => sftp.realpath('.', done));
-			return new Session(client, sftp, home);
+			return new Session(client, sftp, home, hostKeyText(hostKey));
 		} catch (error) {
 			client.end();
 			throw error;
@@ -141,15 +150,22 @@ export class ConnectionClosed extends Error {
 
 const closedError = () => new ConnectionClosed();
 
+/** A client that has authenticated, and the host key it verified. */
+interface Authenticated {
+	readonly client: Client;
+	readonly hostKey: Buffer;
+}
+
 /** A client that has authenticated, or a rejection that names why it did not. */
 function authenticated(
 	address: ServerAddress,
 	credential: WorkstationCredential,
 	signal: AbortSignal | undefined,
-): Promise<Client> {
-	return new Promise<Client>((resolve, reject) => {
+): Promise<Authenticated> {
+	return new Promise<Authenticated>((resolve, reject) => {
 		const client = new Client();
 		let mismatch: string | undefined;
+		let verified: Buffer = Buffer.alloc(0);
 		const abort = () => {
 			client.end();
 			reject(signal?.reason ?? new Error('Connection aborted.'));
@@ -163,7 +179,7 @@ function authenticated(
 			// request until the last one is acknowledged, which adds tens of
 			// milliseconds to every call.
 			client.setNoDelay(true);
-			resolve(client);
+			resolve({ client, hostKey: verified });
 		});
 		client.once('error', (error) => {
 			settle();
@@ -177,7 +193,10 @@ function authenticated(
 			...(credential.passphrase === undefined ? {} : { passphrase: credential.passphrase }),
 			hostVerifier: (key: Buffer) => {
 				const offered = fingerprint(key);
-				if (offered === address.hostKey) return true;
+				if (offered === address.hostKey) {
+					verified = key;
+					return true;
+				}
 				mismatch = `The host key of ${address.host} is ${offered}, and the workstation pins ${address.hostKey}.`;
 				return false;
 			},

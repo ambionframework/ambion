@@ -204,35 +204,15 @@ names the new route.
 **Goal:** an agent on a workstation clones and pushes over SSH to one
 account on its own server, and the host opens no port.
 
-**Each step is one pull request.** Steps 1 and 2 land G2, and step 3
+**Each step is one pull request.** Step 1 lands G2b, and step 2
 documents G2.
 
-- [ ] **1.** G2a, the server side. `workstationGitBackend` prepares the git
-      account, writes `serve`, registers the templates by rename, and runs
-      `list`, `get`, and `fork`. `identityFor` issues the agent keys and
-      writes `authorized_keys.ambion` under `flock`. `workstationBackend`
-      carries no transport yet, so the tests drive the git backend alone.
-      P1. (G2)
-  - **Code:** the backend goes in new files
-    `packages/workstation/src/git-*.ts`, split to keep each file under 600
-    lines and each function under complexity 10.
-    The key generator retries a pair that `ssh2` cannot read. `index.ts`
-    exports the backend and its three types, and
-    `test/package.test.ts` pins them. The workstation override of
-    `biome.jsonc` allows `@ambionframework/workspace/git`, and a probe in
-    `scripts/import-rules.test.mjs` holds it.
-  - **Evidence:** the groups of the scripted tier that
-    [Workstation git](../docs/workstation-git.md#tests) lists: `serve`
-    over a table of requests, the list, fork, and registration commands,
-    and the lines of `authorized_keys.ambion`. The changelog names each
-    export. `pnpm check` and the `workstation` CI job pass.
-- [ ] **2.** G2b, the agent side and the OpenSSH tier. `workstationBackend`
+- [ ] **1.** G2b, the agent side and the OpenSSH tier. `workstationBackend`
       writes the three key files and the `Include` line at each `connect`,
       and declares `gitTransports: ['ssh']`. The OpenSSH tier runs
-      `gitConformance`. Needs 1. P1. (G2)
-  - **Code:** `session.ts` keeps the host key that the client verified,
-    as the key type and the base64 key. `backend.ts` writes the files and
-    keeps the rest of `~/.ssh/config`.
+      `gitConformance`. P1. (G2)
+  - **Code:** `backend.ts` writes the files from the identity that
+    `identityFor` gives, and keeps the rest of `~/.ssh/config`.
     `test/sshd/setup.sh` adds `lab-git` outside the agents' group, with a
     home of mode `0700`, the `Match User lab-git` block last, a second
     `ListenAddress` on the runner's address, and `AllowUsers`.
@@ -244,13 +224,13 @@ documents G2.
     OpenSSH and the checks that
     [Workstation git](../docs/workstation-git.md#tests) lists, and the
     scripted tier tests the key files. `pnpm check` passes.
-- [ ] **3.** The docs of G2. `workstation-git.md` describes what shipped.
+- [ ] **2.** The docs of G2. `workstation-git.md` describes what shipped.
       `workstation.md` states the new credential rule, and its out-of-v1
       list drops credential issuance and rotation. `git.md` states the
       credential decision in its new words and names the backend in its
       file table. The trust row states the reach of a leaked agent key.
       `docs/README.md`, the `CLAUDE.md` row, and the workstation package
-      guide name the backend and the server steps. Needs 2. P1. (G2)
+      guide name the backend and the server steps. Needs 1. P1. (G2)
   - **Evidence:** each statement points at code on `main`.
     `scripts/evidence-links.test.mjs` and Prettier pass.
 
@@ -376,7 +356,7 @@ backend issues one Ed25519 key for each agent, limited by `from` and
 A fork or a template lands with one rename, so the backend keeps no
 registry table.
 
-G2 lands in two steps. G2a builds the server side, and its tests drive
+G2 lands in two steps. G2a built the server side, and its tests drive
 the git backend alone. G2b makes the bash backend write the key files,
 and it adds the OpenSSH tier. Only the `workstation` CI job runs that
 tier, so a step of G2 merges only with that job green. The OpenSSH

@@ -545,10 +545,11 @@
 			}
 		},
 		{
-			// The workstation is a bash backend. It reaches the workspace through
-			// the root entry, which holds the interface and the environment
-			// helpers, and through `/resource` for `WorkspaceAgent`. It loads no
-			// just-bash, no `node:sqlite`, and no part of the core.
+			// The workstation is a bash backend and a git backend. It reaches the
+			// workspace through the root entry, which holds the interface and the
+			// environment helpers, through `/resource` for `WorkspaceAgent`, and
+			// through `/git` for the name rules and the template helpers. It loads
+			// no just-bash, no `node:sqlite`, and no part of the core.
 			"includes": ["packages/workstation/src/**"],
 			"linter": {
 				"rules": {
@@ -569,12 +570,13 @@
 										"group": [
 											"@ambionframework/workspace/*",
 											"!@ambionframework/workspace/resource",
+											"!@ambionframework/workspace/git",
 											"**/packages/workspace/**",
 											"just-bash",
 											"@ambionframework/just-bash",
 											"node:sqlite"
 										],
-										"message": "Reach the workspace through its root entry or `/resource`. A bash backend loads no just-bash and no SQLite."
+										"message": "Reach the workspace through its root entry, `/resource`, or `/git`. The workstation loads no just-bash and no SQLite."
 									}
 								]
 							}

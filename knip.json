@@ -1,6 +1,6 @@
 {
 	"$schema": "https://unpkg.com/knip@6/schema.json",
-	"ignoreBinaries": ["wrangler", "setsid"],
+	"ignoreBinaries": ["wrangler", "setsid", "flock"],
 	"workspaces": {
 		".": {
 			"entry": ["scripts/{version,publish,release,journal-smoke,projection-envelope}.mjs"],
