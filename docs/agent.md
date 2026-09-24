@@ -83,12 +83,10 @@ and [Workspace](workspace.md) state how a resource builds a bundle and how
 the kernel flattens it. [Executors](executors.md#the-prompt-the-driver-renders)
 states how the guidance follows the speaking policy.
 
-**A tool learns where it ran from `ctx`.** `ctx.room` names the room and
-`ctx.activation` holds the id that every event and message of the
-activation carries. `ctx.exchange` holds the `owner` and `from` of the
-exchange that was open when the activation read the record. The value is
-provenance and grants no authority. A tool that needs the current state of
-the room reads the room. All three are absent for a call made outside a
+**A tool learns where it ran from `ctx`.**
+[Resources](resources.md#references-and-provenance) states what `ctx.room`,
+`ctx.activation`, and `ctx.exchange` hold. The value is provenance and grants
+no authority. A tool that needs the current state of the room reads the
 room.
 
 **Spoken contributions require nonblank text.** The room refuses empty or

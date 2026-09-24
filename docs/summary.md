@@ -108,6 +108,8 @@ activations.
 Summary publication wakes no idle agent and does not open another exchange.
 The summary is a room record entry, so replay and response queries use the
 same facts as the live room.
+[`summary.test.ts`](../packages/ambion/test/summary.test.ts) holds the tests
+of the assignment.
 
 ## Completion and reads
 
@@ -141,6 +143,5 @@ or capability framework in the room.
 
 ## History version
 
-Composition entries use version 2. A room refuses a legacy composition and
-does not reinterpret old assistant definitions or opening activation ids.
-Start a new journal or migrate the history outside Ambion before resuming it.
+[Room](room.md#history-and-limits) states the version of composition entries
+and what the room does with a legacy history.

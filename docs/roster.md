@@ -32,11 +32,9 @@ A `seats` entry takes an attention value, or a `SeatOptions` object with
 seats: { editor: { attention: 'broadcast', fixed: true } }
 ```
 
-The optional `assistant` property registers an ordinary agent, seats it at
-`broadcast`, and selects it as the summary writer. With this property,
-`seats: {}` seats only the assistant. Omitted `seats` still seats every defined
-agent at `broadcast`. Explicit seats configure the other agents. See
-[Default assistant](assistant.md) for conflicts and the complete shorthand.
+The optional `assistant` property registers an ordinary agent as the
+summary writer. [Default assistant](assistant.md) states how it changes the
+seats, its conflicts, and the complete shorthand.
 
 On resume, supply definitions for every recorded agent name. Additional
 definitions enter the reserve in the new run. Names outside that run's definitions
@@ -97,5 +95,5 @@ do not contain executable definitions or authority.
 
 `resumeRoom` receives the complete definitions again. It preserves recorded
 membership and attention. Startup seating options do not reset a resumed room.
-Version 2 composition entries reject legacy assistant histories. Start a new
-journal or perform migration outside Ambion.
+[Room](room.md#history-and-limits) states what the room does with a legacy
+history.

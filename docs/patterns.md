@@ -28,21 +28,20 @@ mechanism. The [repository README](../README.md) holds the positioning.
 whose question opened it. The room does not open a second exchange.
 
 **Each person who spoke gets a summary.** The closed exchange view carries
-`summaries`. Summary owns the assignment rules; see
-[the closing activation](summary.md#closing-activation). The tests are in
-`summary.test.ts`.
+`summaries`. [The closing activation](summary.md#closing-activation) states
+the assignment rules.
 
 ## Waiting on a person
 
 **`awaiting` differs from `complete`.** A closed exchange that still waits
-on a person reads `awaiting` and carries the `person`. Exchange owns the
-derivation and the clearing; see
-[the outcome contract](exchange.md#6-the-edges-a-host-sees).
+on a person reads `awaiting` and carries the `person`.
+[The outcome contract](exchange.md#6-the-edges-a-host-sees) states the
+derivation and the clearing.
 
 **`pendingFor` lists the waits.** `pendingFor(read, person)` and
 `room.pendingFor(person)` return the closed exchanges that await one person.
 Both are detached reads. The room derives the outcome from the record, so a
-resumed room reads the same answer. The tests are in `exchange-outcome.test.ts`.
+resumed room reads the same answer.
 
 ## Approve before an agent acts
 
