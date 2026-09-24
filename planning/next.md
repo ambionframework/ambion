@@ -209,18 +209,15 @@ annotation that names the provider error, and runs no test.
 
 **Goal:** the release repeats without the owner's machine.
 
-- [ ] **1.** The changelog entry for 0.2.0: the format changes, each
-      export that changed or went, the three new packages, and the two
-      retired packages. Needs 2. (R1)
-- [ ] **2.** The pages that name a release name 0.2.0 and list its eleven
+- [ ] **1.** The pages that name a release name 0.2.0 and list its eleven
       packages. (R2)
-- [ ] **3.** The live tier passes on the release candidate for Pi,
-      Claude, and Codex. Needs 1 and 2. (L5)
-- [ ] **4.** The dev build stamp derives its base from the last tag.
+- [ ] **2.** The live tier passes on the release candidate for Pi,
+      Claude, and Codex. Needs 1. (L5)
+- [ ] **3.** The dev build stamp derives its base from the last tag.
       (R1)
-- [ ] **5.** An npmjs release that a trusted CI workflow runs with
-      provenance. The retired packages carry an npm deprecation. Needs 3
-      and 4. (R1)
+- [ ] **4.** An npmjs release that a trusted CI workflow runs with
+      provenance. The retired packages carry an npm deprecation. Needs 2
+      and 3. (R1)
 
 **Evidence:** the live run on the tagged commit passes each harness job
 and the package job, and no job skips; a release from CI installs without
@@ -285,7 +282,8 @@ The users of 0.2.0 then install code that a live run tested.
 a passkey and a token, and `DEV_BASE` in `dev-release.yml:40` is a
 literal. A trusted workflow with `id-token: write` publishes with
 provenance and needs no token on a laptop. The dev stamp reads its base
-from the last tag. The changelog entry is the last gate before the tag.
+from the last tag. The changelog holds the entry for 0.2.0. A change
+that lands before the tag updates that entry, and the tag adds the date.
 
 - npmjs holds a trusted publisher setting for each package. Check whether
   npmjs lets a package that is not yet on the registry take one. If not,
@@ -296,9 +294,6 @@ from the last tag. The changelog entry is the last gate before the tag.
   on npmjs. `npm deprecate` gives each one a message. The `pi-journal`
   message names the host's trace logger. The CLI message states that the
   package has no replacement.
-- The Unreleased section describes changes that later changes removed.
-  The `pi-journal` peer dependency entry describes a package that the
-  release does not ship. The entry for 0.2.0 states the end state once.
 
 **R2. The pages that name a release.** Several pages still name 0.1.0 or
 list its packages.

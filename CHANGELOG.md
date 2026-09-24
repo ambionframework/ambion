@@ -1,396 +1,152 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (unreleased)
 
-**The tool-call audit log reports a directory failure to `onError`.** Before,
-the fallback for an entry too large for the backend retried the directory
-step with the write. A transient failure to create the directory then wrote
-a notice that named an entry too large, and `onError` got no call. The
-fallback now retries the write alone.
+**A workspace now has real backends.** A shell on a remote server, a shared
+SQL database, and git repositories plug into one workspace. The Pi executor
+runs on Pi's AgentHarness. A seat keeps its model session for one exchange.
+Every library package needs Node 22.19 or newer.
 
-**A log path must be absolute, normalized, and have no trailing slash.**
-`openLog` and the audit log refuse a doubled slash, a `.` or `..` segment,
-and a trailing slash at open. The audit log's `maxBytes` must be a positive,
-finite number, the same as `rotateBytes` of `openLog`. Before, `Infinity`
-turned rotation off.
+### Packages
 
-**The room mirror ignores a stray file beside its log.** When `mirror()`
-resumes, it reads the log file and the files that rotation made of it. A
-file such as `messages.jsonl.bak` no longer counts. The logs share one core
-in `@ambionframework/workspace`, with no change to its exports.
+| Package                                 | What it gives                                                     |
+| --------------------------------------- | ----------------------------------------------------------------- |
+| `@ambionframework/ambion`               | The kernel: room, journal vocabulary, rules, and hosting          |
+| `@ambionframework/journal`              | The append-only journal                                           |
+| `@ambionframework/assistant`            | The default assistant                                             |
+| `@ambionframework/pi`                   | The Pi executor, on Pi's AgentHarness                             |
+| `@ambionframework/claude`               | The Claude Agent SDK executor                                     |
+| `@ambionframework/codex`                | The Codex SDK executor                                            |
+| `@ambionframework/cloudflare`           | A room and its seats as Durable Objects                           |
+| `@ambionframework/workspace`            | The workspace interface, its tools, and a SQLite backend          |
+| `@ambionframework/just-bash` (new)      | A shell and a filesystem in the process, in memory or on a folder |
+| `@ambionframework/workstation` (new)    | A shell over SSH on one server, with one Unix account per agent   |
+| `@ambionframework/git` (new)            | Git repositories that agents fork, clone, and push                |
+| `@ambionframework/cli` (retired)        | No replacement                                                    |
+| `@ambionframework/pi-journal` (retired) | Pass a `logger` to the runtime to read what a seat did            |
 
-**A Cloudflare object keeps its metadata in one table row.** The room
-object's `name`, `agents`, and `stopped`, and the seat object's activation
-state, live in the `ambion_metadata` table of the object's SQLite. Before,
-each object kept them as a journal of patches under the names
-`ambion/cloudflare/room` and `ambion/cloudflare/seat`, with its own write
-queue and its own recovery of a write in doubt. A change now reads and
-writes with no await between them, so no other request of the object runs
-in between, and SQLite commits the one write whole. An object that 0.1.0 wrote reads no
-metadata: start its room again.
+### New
 
-**A journal entry of a known kind with an invalid `seq` throws.** Before,
-the journal skipped it, which hid a corrupt record. The storage adapters
-report their read position through the verified `scanned` rule, and
-`@ambionframework/journal` no longer exports `scanned`.
+**A workspace takes one backend of each kind.** `bash` is required. `sql`
+and `git` are optional, and each one adds its tools and its guidance.
 
-**A Codex seat with native tools runs with no Codex sandbox by default.**
-With `nativeTools: 'codex'` and no `sandboxMode`, the executor sets
-`danger-full-access`. A command then has write access and the network on
-the host of the `codex` process. Before, the Codex default applied, and on
-Linux it ran each command through bubblewrap, with no network. A host that
-refuses an unprivileged user namespace then ran no command. Run such a seat
-only on an isolated host, or set `sandboxMode`. `codex()` now refuses
-`networkAccessEnabled` under `nativeTools: 'codex'` unless `sandboxMode` is
-`workspace-write`, because Codex reads it only there.
+```ts
+import { openWorkspace } from '@ambionframework/workspace';
+import { sqliteBackend } from '@ambionframework/workspace/sqlite';
+import { directoryBackend } from '@ambionframework/just-bash';
+import { fromDirectory, gitBackend, sqliteGitStorage } from '@ambionframework/git';
 
-**A workspace can have a git backend.** `WorkspaceBackends` gets `git`, a
-`GitBackend`, and `Workspace` gets `git`, its owner. With one, the workspace
-adds the `repos` and `fork` tools and a guidance note. An agent forks a
-read-only template, clones the fork into its home, and pushes with `git` in
-`bash`. A push persists the edits across a restart. The new package
-`@ambionframework/git` exports `gitBackend`, `sqliteGitStorage`, and
-`fromDirectory`: a `just-git` server in the host's process, with its storage
-in one SQLite file. The root entry of `@ambionframework/workspace` exports
-`BashServices`, `GitAccess`, `GitBackend`, `GitCredential`, `GitEnv`,
-`GitFetch`, `GitForkOutcome`, `GitRepository`, and `GitRepositoryId`, and
-its conformance entry exports `gitConformance` and its harness types.
-`BashBackend.connect` takes a third argument, `BashServices`. With a git
-backend, the just-bash `git` reaches the backend's URL prefix alone, and
-the workstation keeps each account's `~/.git-credentials` current. The
-tool line of the guidance now names `sql` in a sentence of its own form.
-See [Git](docs/git.md).
+const lab = openWorkspace({
+  name: 'lab',
+  backend: {
+    bash: directoryBackend('./data/lab'),
+    sql: sqliteBackend('./data/lab.db'),
+    git: gitBackend({
+      storage: sqliteGitStorage('./data/lab-git.db'),
+      secret: process.env.LAB_GIT_SECRET ?? '',
+      templates: { report: { source: fromDirectory('./templates/report') } },
+    }),
+  },
+  audit: {},
+});
+```
 
-**A Claude seat starts outside the Claude Code session of its host.** A
-host that runs inside Claude Code passed its `CLAUDE_CODE_SESSION_ID`, or in
-a remote environment its `CLAUDE_CODE_REMOTE_SESSION_ID`, to every seat.
-Every seat then reported the id of the host's session, and a resume opened
-one transcript for all seats. With or without `env`, the executor now
-removes `CLAUDE_CODE_ENTRYPOINT` and the variables that tie the executable
-to a Claude Code session. A seat in a remote Claude Code environment then
-needs its own key. `@ambionframework/claude` exports no new name.
-
-**A resumed Claude activation gets its own duties.** A resumed Claude
-session keeps the system prompt it began with, and the SDK ignores a new
-`systemPrompt`. A closing activation resumes the session of the exchange it
-summarizes, so it ran without the summary duties and without the reader's
-preferences. The first message of a resumed query now starts with the
-seat's agent part for the activation. `@ambionframework/claude` exports no
-new name.
+- **Workstation.** `workstationBackend({ host, hostKey, layout,
+  credentialFor })` runs each agent's shell as its own Unix account over
+  SSH. Files go over SFTP. A timeout or an abort kills the command's process
+  group. See [Workstation](docs/workstation.md).
+- **SQL.** The `sql` tool runs on the shared database of `backend.sql`. It
+  shows the last result as a table, up to `maxRows` rows, and `export`
+  writes the full result as CSV. Each agent's tables and views are visible
+  to every other agent at once.
+- **Git.** An agent lists templates with `repos`, forks one with `fork`,
+  clones the fork into its home, and pushes with `git` in `bash`. A push
+  keeps the work across a restart. See [Git](docs/git.md).
+- **`git` in every just-bash shell.** It needs no configuration. The
+  author of a commit is the agent's name.
 
 **The Pi executor runs on Pi's AgentHarness.** The harness owns the model
-loop, the session, its persistence and its compaction. The model holds the
-room tools and the tools of the definition only: no built-in tool, no skill
-and no prompt template. Freshness reads each range of the record from the
-exact provider input. Sessions persist as JSONL files under `sessionDir`,
-by default `ambion-pi-sessions-<uid>` in the OS temporary directory, with
-access for its owner only, for every stream. `sessions: 'memory'` keeps
-them in memory, two for each room and seat. A session the disk refuses
-stays in memory, and a session that does not open, restore or write gives
-way to a fresh one: the activation does not fail. `pi()` takes `compaction`, by default Pi's
-`DEFAULT_COMPACTION_SETTINGS`, and refuses token counts the harness
-refuses. `piExecution()` and
-`createExecutionServices()` take `sessions` and `sessionDir`, and
-`ExecutionServices` has `sessions`. `createPiExecutor` takes `sessions`, and `memorySessions`,
-`PiSessions` and `SessionScope` are new. `@ambionframework/pi/testing` adds
-`piExecutorHarness` and `scriptOf`, and the Pi executor runs the executor
-conformance suite. Harness retries and provider client retries are off, so
-the room owns every retry: a transient provider error reaches the room at
-once. A context-overflow error, or a length stop below the output limit,
-makes the harness compact once and send the request again, also when
-compaction is off. A usage step comes from each provider request, a
-compaction summary included. An activation that a provider error failed
-records its session. Its retry continues the session from the last
-position it read, and the failed run leaves the provider input. An
-activation that a session store fault failed records a fresh, empty
-session. The golden journals changed.
+loop, the session, and compaction. `pi({ compaction })` sets compaction.
+`piExecution({ sessions, sessionDir })` keeps sessions on disk by default,
+or in memory. A context overflow makes the harness compact once and send
+the request again. Transient provider errors go to the room, and the room
+owns every retry.
 
-**The trace goes to the host's logger.** `createRuntime({ logger })` and
-Cloudflare `configure({ logger })` take a `TraceLogger`. The sink gives it
-one `TraceRecord` for each step: `room`, `seat`, and the stamped step. With
-no logger, the sink drops the steps. `readActivation`, `ActivationRead` and
-`ActivationPass` are gone from `@ambionframework/ambion`. `traceJournals`
-and `traceOpener` are gone from `@ambionframework/ambion/hosting`, and
-`Hosting.traces` is gone. The `step` and `trace_error` events are gone.
-`createExecutionServices` takes no `storage` and returns no `traces`.
-Storage keeps no `ambion/trace` journals. `@ambionframework/pi` no longer
-depends on `@ambionframework/journal`.
+**A seat keeps its session for one exchange.** Pi, Claude, and Codex each
+resume the seat's session on its next activation in the same exchange. The
+first activation in an exchange starts fresh. A lost session starts fresh
+from the record.
 
-**A seat keeps its harness session for one exchange, and the `memory`
-option is gone.** `pi()`, `claude()` and `codex()` take no `memory`. Every
-executor records its session on the `ended` lease entry. The room hands it
-to the next activation of the same seat in the same exchange as
-`spec.resume`. The first activation of a seat in each exchange starts
-fresh. The session is a cache with best-effort persistence: on Node,
-Claude, Codex and Pi keep it on the local disk, and a Pi seat on
-Cloudflare keeps it in memory.
-A lost session starts fresh from the record. Remove `memory` from
-each executor definition. `resumesForSeat` is gone from
-`@ambionframework/ambion/hosting`. The golden journals changed.
+**The trace goes to your logger.** `createRuntime({ logger })` and the
+Cloudflare `configure({ logger })` take a `TraceLogger`. It gets one
+`TraceRecord` for each step of an activation: the room, the seat, and the
+step.
 
-**`@ambionframework/pi-journal` and the Pi transcript audit are gone.** The
-activation trace, given to the host's logger, shows what a seat did.
-`seatSessionId`, the `transcripts` and `room` options of `createPiExecutor`,
-the `transcripts` service of `createExecutionServices`, and the `audit_error`
-event are gone. Storage keeps no `ambion/pi-session` journals. Pass a `logger`
-to `createRuntime` to read the steps.
+**Executor authors get the room tools from the hosting entry.**
+`roomTools`, `agentTools`, and `toolContext` from
+`@ambionframework/ambion/hosting` hold the rules of `say`, `seat`,
+`unseat`, and a definition's tools. The Pi, Claude, and Codex executors use
+them.
 
-**The executor conformance suite has a case for the fresh start.** An
-executor that declares `memory` starts a fresh session when the view names
-none. The Claude harness takes no `memory` option.
+**Conformance suites for each backend kind.** From
+`@ambionframework/workspace/conformance`: `workspaceConformance` for a bash
+backend, `sqlConformance` for a SQL backend, and `gitConformance` for a git
+backend. The Pi executor now runs the executor conformance suite, as Claude
+and Codex do.
 
-**A second seat alarm returns while a run is live.** `SeatObject.alarm()`
-returns at once while a run is live in the object. Before, a second call
-treated the live run as one that an eviction lost. It released the lease
-as `failed`, and the room refused the run's next say. workerd runs one
-alarm at a time, and a test that calls `alarm()` directly, as
-`runDurableObjectAlarm` does, reached this path. An object that was
-evicted mid-activation holds no live run, and its next alarm still
-releases the lost run.
+### Fixes
 
-**A stall of the workstation host does not cut the output early.** After
-the exit status, the channel closes 1 second after the last output. When
-that timer fires more than half a second late, the process stalled, and
-output can wait unread behind the stall. `SshEnv` then waits one more
-second, up to the 5-second limit. The view ends with the drain notice only
-when output arrived in the last second before the limit.
+- A resumed Claude activation gets the duties of its new activation, such
+  as the summary duties.
+- A Claude seat no longer joins the Claude Code session of its host.
+- A second Cloudflare seat alarm during a live run returns at once. Before,
+  it released the live run as failed.
+- A journal entry of a known kind with an invalid `seq` throws. Before, the
+  journal skipped it.
+- A failed summary draft of another seat no longer counts against the
+  summary writer.
+- The audit log reports a failure to create its directory to `onError`.
+- The room mirror ignores a stray file, such as `messages.jsonl.bak`,
+  beside its log when it resumes.
 
-**The just-bash backends run `git`.** Each agent's shell has `git` from
-`just-git`, with no configuration from the host. The author of every commit
-is the agent's name, and `git config` does not change it. `git` has no
-network access, so a remote is a path on the workspace's filesystem. The
-backend's guidance names the subcommands and these limits.
+### Breaking changes
 
-**New package: `@ambionframework/just-bash`.** It holds `memoryBackend`,
-`directoryBackend`, and their `MemoryBackendFile`, `MemoryBackendOptions`,
-`MemoryBashBackend`, and `SeedWriter` types. The `./just-bash` entry of
-`@ambionframework/workspace` is gone, and the workspace no longer depends
-on `just-bash`. A host that uses the workstation installs no just-bash.
-Import from `@ambionframework/just-bash` where you imported from
-`@ambionframework/workspace/just-bash`.
+There is no compatibility promise before 1.0.0. Some stored formats
+changed, and 0.2.0 has no reader for the old ones. Start each room fresh.
 
-**The workspace root entry exports four more environment helpers.**
-`HomeEnv` is a base class for an `ExecutionEnv` with `cwd`,
-`absolutePath`, `joinPath`, and `readTextLines`. `withDeadline` runs a
-command under a `Deadline` and turns a thrown error into `unknown`.
-`deliverView` hands the output view to `onUpdate` and returns the result.
-`DEFAULT_TIMEOUT_SECONDS` is 30. The just-bash backends and the
-workstation both build on them.
+- **`openWorkspace` takes `backend: { bash }`.** Import `memoryBackend` and
+  `directoryBackend` from `@ambionframework/just-bash`. `WorkspaceBackend`
+  is now `BashBackend`, and it names a `layout`.
+- **The `sql` tool needs `backend.sql`.** Use `sqliteBackend(path)` from
+  `@ambionframework/workspace/sqlite`. The tool no longer runs `sqlite3` in
+  the shell, and it has no `database` or `timeout` parameter.
+- **The `memory` option of `pi()`, `claude()`, and `codex()` is gone.**
+- **The trace journals are gone.** Pass a `logger`. `Hosting.traces` and
+  the `step`, `trace_error`, and `audit_error` events are gone.
+- **The workspace change log is gone.** The audit log records every tool
+  call.
+- **`WorkspaceAgent` is `{ name }`, and a resource has no `destroy()`.**
+- **A Codex seat with `nativeTools: 'codex'` runs with no Codex sandbox by
+  default.** Run it only on an isolated host, or set `sandboxMode`.
 
-**The hosting entry holds the room tools once.** `roomTools(view, binding,
-options?)` returns `say`, `seat`, and `unseat` for one activation, or `say`
-alone for a closing activation. `agentTools(view, agent, signal, current)`
-returns the tools of the definition in the same form, and
-`toolContext(agent, view, call, signal, onUpdate?)` builds the context of
-one call. The entry also exports the `RoomTool`, `RoomToolBinding`,
-`RoomToolContent`, `RoomToolOptions`, and `RoomToolResult` types. The Pi,
-Claude, and Codex executors adapt these tools and keep no copy of their
-rules. A Claude or Codex call of a definition tool now takes its call id
-before `prepareArguments` runs.
+**Removed and moved names, by entry:**
 
-**`@ambionframework/workspace` imports `typebox` and bundles no copy of it.**
-The SQL tools use `typebox` at runtime, and the manifest declared it only for
-development. tsdown then inlined `typebox` 1.3.18 into `dist`, 143 KB of the
-296 KB. `typebox` is now a dependency of the package.
+| Entry                             | Change                                                                                                                                                                                              |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@ambionframework/ambion`         | Gone: `readActivation`, `ActivationRead`, `ActivationPass`                                                                                                                                          |
+| `@ambionframework/ambion/hosting` | Gone: `traceJournals`, `traceOpener`, `TraceOptions`                                                                                                                                                |
+| `@ambionframework/journal`        | Gone: `scanned`                                                                                                                                                                                     |
+| `@ambionframework/pi`             | Gone: `seatSessionId`                                                                                                                                                                               |
+| `@ambionframework/workspace`      | Moved to `@ambionframework/just-bash`: `memoryBackend`, `directoryBackend`, `MemoryBackendFile`, `MemoryBackendOptions`, `SeedWriter`. `MemoryWorkspaceBackend` is `MemoryBashBackend` there        |
+| `@ambionframework/workspace`      | Renamed: `WorkspaceBackend` is `BashBackend`                                                                                                                                                        |
+| `@ambionframework/workspace`      | Root re-export gone, the entry keeps it: `openResource`, `ResourceBackend`, `ResourceEnv`, `WorkspaceAgent`, `WorkspaceResource` on `./resource`; `openSqlResource` and its types on `./sql`        |
+| `@ambionframework/workspace`      | Gone: `openChangeLog`, `ChangeLog`, `ChangeLogOptions`, `ChangeQuery`, `WorkspaceChange`, `DEFAULT_CHANGE_LOG`, `SHARED_DATABASE`, `ROOM_MIRROR_GUIDANCE`, `roomMirrorPath`, `DEFAULT_ROTATE_BYTES` |
+| `@ambionframework/workspace/sql`  | Gone: `SqlValue`. Import it from the root entry                                                                                                                                                     |
 
-**`@ambionframework/pi-journal` takes `@earendil-works/pi-agent-core` as a
-peer dependency.** The package uses only its types. The host that stores Pi
-sessions supplies the one copy that the host and the package share.
-
-**`@ambionframework/claude` and `@ambionframework/codex` no longer install
-`typebox`.** Each package uses only its types, and no built file imports it.
-
-**Package hygiene reads the built files.** `pnpm run check:packages` fails on
-an import in `dist` of a package that the manifest does not declare as a
-runtime or peer dependency. It also fails on bundled code from outside the
-package's own `src`.
-
-**New package: `@ambionframework/workstation`.** `workstationBackend(options)`
-returns a `BashBackend` over SSH to one remote server, with one Unix account
-for each agent. File calls go over SFTP, and each command runs in its own
-process group, which a timeout or an abort kills. The backend pins the
-server's host key, keeps one client for each agent, and closes a client
-after `idleTimeout` seconds unused, 300 by default. `credentialFor` gives
-the key of each agent and of the host account. See
-[Workstation](docs/workstation.md).
-
-**`WorkspaceFiles` writes its temporary file beside the target.** An
-export lands in `<target>.<random>.part` in the target's folder, and the
-rename onto the target stays on one filesystem. It wrote under `/tmp`
-before, and a server that mounts `/tmp` as a filesystem of its own refused
-that rename.
-
-**`openWorkspace` takes its backends by kind.** The `backend` option is
-now `WorkspaceBackends`: `{ bash, sql? }`. Write
-`backend: { bash: memoryBackend() }` where you wrote
-`backend: memoryBackend()`. `WorkspaceBackend` is renamed `BashBackend`,
-and `MemoryWorkspaceBackend` is renamed `MemoryBashBackend`. The root entry
-exports the `WorkspaceBackends`, `SqlBackend`, `SqlEnv`, `SqlOutcome`,
-`SqlRow`, `SqlRunOptions`, `SqlValue`, and `WorkspaceFiles` types.
-
-**The `sql` tool runs on a SQL backend, and a workspace with no SQL
-backend has no `sql` tool.** `backend.sql` takes a `SqlBackend`: a shared
-database that need not live on the shell's filesystem. The new
-`@ambionframework/workspace/sqlite` entry exports `sqliteBackend(location)`,
-the default SQL backend over `node:sqlite`. It refuses a statement that
-opens a host file, rolls back a transaction that a call leaves open,
-detaches every database a call attached,
-refuses a result with two columns of one name, and stops a call after
-`timeout` seconds, 30 by default. The SQL backend runs under an
-owner of its own. `connect(agent, files)` gives it the calling agent's
-`WorkspaceFiles` on the bash backend. `run(sql, { maxRows, export? })`
-gives the last statement's columns, its first `maxRows` rows, and its row
-count, and writes an export as CSV through `files`. The root entry exports
-`sqlResult`, which does the preview, the count, and the streamed export
-for a backend. The `sql` tool takes `sql`, `export`, and `maxRows`, an integer up to 1000.
-`Workspace.sql` exposes the SQL owner, and `dispose()` disposes the SQL
-owner and then the bash owner.
-
-**The `sql` tool no longer runs `sqlite3` through the shell.** The tool
-loses its `database` and `timeout` parameters. `WorkspaceLayout` loses
-`database`, and the root entry no longer exports `SHARED_DATABASE`. The
-just-bash backends hold no shared database at `/workspace/shared.db`. To
-keep a shared database, set `backend.sql` to `sqliteBackend(path)`.
-
-**`./conformance` exports `sqlConformance`,** the cases every
-`SqlBackend` passes.
-
-**`SqlValue` moves from `./sql` to the root entry.** `./sql` no longer
-exports the type.
-
-**The default tool guidance names four tools with no SQL backend, and five
-with one.** The `sql` paragraph names the backend's `database` and adds the
-backend's own guidance.
-
-**A `WorkspaceBackend` now names its own layout.** A new `WorkspaceLayout`
-type, exported from the root, holds three paths: `audit`, the audit log a
-caller sets no `path` for; `database`, the database a `sql` call names none
-for; and `rooms`, the root `mirror()` writes every room's record under.
-`WorkspaceBackend` gains a required `layout` field. `openWorkspace` reads it:
-the audit log opens at `layout.audit` when `options.audit.path` is absent,
-the `sql` tool opens `layout.database` when a call names no `database`, and
-`mirror()` writes under `layout.rooms`. The room-mirror guidance also names
-this actual path, in place of the fixed text it stated before.
-`memoryBackend` and `directoryBackend` both name `/workspace/audit.jsonl`,
-`/workspace/shared.db`, and `/rooms`, so no file moves.
-
-**`openWorkspace` builds one host agent, and `Workspace` exposes it.** The
-identity `mirror()` writes as, `<name>-host`, is now `Workspace.host`. A
-backend with real accounts can give it credentials.
-
-**The root entry of `@ambionframework/workspace` exports the environment
-helpers.** `resolvePath`, `Deadline`, `boundedView`, `spill`, `TMP`,
-`randomName`, `tempDirPath`, `tempFilePath`, `spillPath`, and the
-`MinimalWriter` type move out of `bash-env.ts` into a neutral
-`execution-env.ts` module, which imports no `just-bash`. `bash-env.ts` keeps
-only the just-bash mapping and calls these helpers. A new `ExecutionEnv`
-backend now builds on the same helpers, from the root entry, without a
-dependency on just-bash.
-
-**`destroy()` leaves the workspace resource contract.** `WorkspaceResource`,
-`ResourceBackend`, and `SqlResource` no longer have a `destroy` member. On a
-shared server, a resource's own `destroy()` would delete the files of every
-account. `dispose()` releases local handles and keeps the persisted data. A
-host deletes the data that it owns.
-
-**`@ambionframework/cli` is removed.** It provided `ambion new` and `ambion
-dev`. It also carried its Node 26.4 floor, the OpenTUI floor, onto every
-package, whether or not that package needed it.
-
-**Every library package now needs Node 22.19 or newer, not 26.4.**
-`examples/workbench` keeps the 26.4 floor, because it depends directly on
-`@opentui/core`. CI tests both floors.
-
-**The workspace change log is removed.** It recorded a `write` or an `edit`
-call only. A change through `bash`, `sql`, or a script never reached it, and
-the audit log already records every tool call with its arguments and its
-provenance. `changes.ts` is gone. `@ambionframework/workspace` no longer
-exports `openChangeLog`, `DEFAULT_CHANGE_LOG`, `ChangeLog`,
-`ChangeLogOptions`, `ChangeQuery`, or `WorkspaceChange`. `openWorkspace` no
-longer takes a `changes` option, and `Workspace` no longer has a `changes()`
-method. `WorkspaceBackend` no longer has `changedPaths`, and the just-bash
-backends no longer set it.
-
-**`WorkspaceAgent` loses `identity`.** No backend read the field; each one
-keys on `name` alone. `WorkspaceAgent` is now `{ name }`. The workspace's own
-host agent, for the room mirror, now carries only a name.
-
-**The root entry of `@ambionframework/workspace` loads no backend.** A new
-`./just-bash` entry exports `memoryBackend`, `directoryBackend`,
-`MemoryBackendFile`, `MemoryBackendOptions`, `MemoryWorkspaceBackend`, and
-`SeedWriter`. The root entry no longer exports them. `directoryBackend`
-imports `ReadWriteFs` from `just-bash` at the top of its module now, not
-with a lazy `import()` on first connect.
-
-**The root entry no longer exports the resource contract or the SQL
-resource.** `openResource`, `ResourceBackend`, `ResourceEnv`,
-`WorkspaceAgent`, and `WorkspaceResource` stay on `./resource`.
-`openSqlResource`, `PROVENANCE_COLUMNS`, `SqlProvenance`, `SqlResource`,
-`SqlResourceEnv`, `SqlResourceOptions`, and `SqlValue` stay on `./sql`. Each
-entry held them already; only the root re-export is gone.
-
-**The root entry no longer exports three names with no consumer.**
-`ROOM_MIRROR_GUIDANCE`, `roomMirrorPath`, and `DEFAULT_ROTATE_BYTES` are
-gone from the root. `mirror.ts` still exports `roomMirrorPath`, now
-`roomMirrorPath(root, roomName)`, and the guidance text as a function,
-`roomMirrorGuidance(root)`, for the package's own tests.
-`DEFAULT_ROTATE_BYTES` has no replacement. It stays a local default
-in `log.ts`, unexported.
-
-**A new `@ambionframework/workspace/conformance` entry holds the
-`ExecutionEnv` rules the built-in tools need.** It exports
-`workspaceConformance(harness)` and the `ConformanceBackend` and
-`ConformanceCase` types. The cases cover a rename that replaces an
-existing target, a recursive `createDir`, a forced and a recursive
-`remove`, the file error codes, `~` expansion, an abort apart from a
-timeout, the bounded output view with its spill file, and a distinct
-temporary name under `/tmp`. The memory and directory backends run the
-suite in `test/conformance.test.ts`. The just-bash adapter tests that
-duplicated these rules are gone from `test/workspace.test.ts`. What stays
-just-bash-specific stays adapter-only: the error-code mapping for
-`canonicalPath`, `createDir`, and `remove`; `exec`'s `cwd` option and its
-statelessness across calls; stderr joining stdout in one output stream;
-and a temp file's prefix and suffix.
-
-**The `sql` tool export needs only the `sqlite3` command.** The export path no
-longer calls `xan` to count rows or `readTextLines` to preview them. It reads
-the temporary CSV file once and scans it for RFC 4180 records: a newline
-outside a quoted value ends a record, a newline inside a value stays in the
-value, and a doubled quote is an escaped quote. The row count comes from this
-same scan, and so does the preview, so a quoted newline no longer splits a
-preview row. The tool holds the whole export in memory while it scans, so the
-preview keeps a quoted newline inside its record.
-
-**The neutral layer now owns the five default tools, and a backend adds only
-its own.** `openWorkspace` builds `read`, `write`, `edit`, `bash`, and `sql`
-itself, over the backend's `layout.database`, and binds them before any tool
-the backend adds. `WorkspaceBackend.tools` is now optional: a backend states
-only the tools it adds beyond the five defaults. `justBashTools` is gone from
-`just-bash.ts`, and neither just-bash backend imports `createReadTool`,
-`createWriteTool`, `createEditTool`, `createBashTool`, or `createSqlTool` any
-longer, nor lists a `tools` field of its own.
-
-**Tool guidance now has one owner for its shared part.** The neutral layer
-states the five tools, the shared files, and the `sql` tool's shared
-database, with `ATTACH ':memory:'`, `export`, and the SQLite dialect. A
-just-bash backend's own guidance now states only its shell: the coreutils,
-`jq`, `yq`, `xan`, and `sqlite3`, `js-exec` and `python3`, no network, and no
-wall between one agent's home and another's. `openWorkspace` joins the tool
-guidance, the backend's shell guidance, the audit guidance, and the rooms
-guidance, in that order.
-
-**The assistant's instructions no longer repeat the summary duties.** The
-room renders the summary duties into every closing activation. The
-assistant's summary defaults now add only evidence, artifact paths,
-constraints, unfinished work, and the verification rules.
-
-**A failed draft from another seat no longer counts against the summary
-writer.** The fold counted every closing lease at a close's boundary as an
-attempt of the writer, whatever its seat. A journal that held another seat's
-failed draft moved the writer's next id and could abandon the summary before
-the writer tried. The kernel writes no such journal itself. The new verified
-rule `draftsClose` decides which leases draft a close, for the attempt count
-and for the summary verdict.
+**Stored formats that changed:** the `ambion/trace` and `ambion/pi-session`
+journals are gone. The `session` of an ended lease names the session of the
+exchange. A Cloudflare object keeps its metadata in the `ambion_metadata`
+table.
 
 ## 0.1.0 (2026-09-21)
 
