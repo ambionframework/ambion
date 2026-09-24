@@ -72,14 +72,13 @@ records them here so that the release names them.
 | Exchange continuity, and the trace as host logs     | #294             | A seat keeps its harness session for one exchange. `@ambionframework/pi-journal` and the trace journals go, and each step goes to the host's logger        |
 | The Pi executor on Pi's AgentHarness                | #295             | The harness owns the model loop, the session, and compaction. Pi joins Claude and Codex as a harness adapter, and it runs the executor conformance suite   |
 
-**Three themes stay open, each with the acceptance it must meet on the
+**Two themes stay open, each with the acceptance it must meet on the
 tagged commit.** The phases below deliver them; the items explain them.
 
-| Theme                     | Acceptance                                                                                                                                                    |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M One owner per mechanism | Each duplication that item M5 names has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2.                       |
-| L Live evidence           | The live tier passes on the release candidate for the Pi, Claude, and Codex harnesses.                                                                        |
-| R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release. The pages that name a release name 0.2.0. |
+| Theme                     | Acceptance                                                                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| M One owner per mechanism | Each duplication that item M5 names has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2. |
+| L Live evidence           | The live run on `main` passes on the tagged commit for the Pi, Claude, and Codex harnesses.                                             |
 
 **The tag waits for the P0 and P1 steps.** No P0 step is open. A P2 step
 that is open when the last P1 step closes moves to the backlog. It does not
@@ -207,23 +206,13 @@ annotation that names the provider error, and runs no test.
 
 ### Phase 3. Release (P1)
 
-**Goal:** the release repeats without the owner's machine.
+**Goal:** the tag names a commit that a live run tested.
 
-- [ ] **1.** The pages that name a release name 0.2.0 and list its eleven
-      packages. (R2)
-- [ ] **2.** The live tier passes on the release candidate for Pi,
-      Claude, and Codex. Needs 1. (L5)
-- [ ] **3.** The dev build stamp derives its base from the last tag.
-      (R1)
-- [ ] **4.** An npmjs release that a trusted CI workflow runs with
-      provenance. The retired packages carry an npm deprecation. Needs 2
-      and 3. (R1)
+- [ ] **1.** The live run on `main` after the last merge passes for Pi,
+      Claude, and Codex. (L5)
 
 **Evidence:** the live run on the tagged commit passes each harness job
-and the package job, and no job skips; a release from CI installs without
-a token; the dev stamp after the 0.2.0 tag sorts above 0.2.0; `npm view`
-shows the deprecation on `@ambionframework/cli` and
-`@ambionframework/pi-journal`.
+and the package job, and no job skips.
 
 ## The items
 
@@ -269,41 +258,9 @@ tests, each harness job makes one small request. A billing or
 authentication refusal fails the job with an annotation that names the
 provider error, and the tests do not run.
 
-**L5. Live evidence on the release candidate.** The live tier on `main`
-tests each merged change, and the tag needs a run on the commit that it
-names. The release candidate is the commit that holds the finished
-changelog entry and the release pages, and the tag names it. Dispatch the
-live workflow on it, and link the run in the notes of the GitHub release.
-The users of 0.2.0 then install code that a live run tested.
-
-### R. Release
-
-**R1. A repeatable release.** The 0.1.0 release ran from one machine with
-a passkey and a token, and `DEV_BASE` in `dev-release.yml:40` is a
-literal. A trusted workflow with `id-token: write` publishes with
-provenance and needs no token on a laptop. The dev stamp reads its base
-from the last tag. The changelog holds the entry for 0.2.0. A change
-that lands before the tag updates that entry, and the tag adds the date.
-
-- npmjs holds a trusted publisher setting for each package. Check whether
-  npmjs lets a package that is not yet on the registry take one. If not,
-  `@ambionframework/just-bash`, `@ambionframework/workstation`, and
-  `@ambionframework/git` need a first publish by the owner before the
-  workflow runs.
-- `@ambionframework/cli` and `@ambionframework/pi-journal` stay at 0.1.0
-  on npmjs. `npm deprecate` gives each one a message. The `pi-journal`
-  message names the host's trace logger. The CLI message states that the
-  package has no replacement.
-
-**R2. The pages that name a release.** Several pages still name 0.1.0 or
-list its packages.
-
-- The package table of `technical-facts.md:93` lists eight packages. It
-  lacks `just-bash`, `workstation`, and `git`, and the workspace row names a
-  directory workspace that moved to `just-bash`.
-- `technical-facts.md:4`, `docs/README.md:17`, `example.md:3`,
-  `deployment.md:281`, `deployment.md:303`, and `room.md:8` name 0.1.0.
-- `docs/README.md` calls the workspace "the Pi filesystem binding". The
-  workspace has been an interface since M7.
-- `toolchain.md` §9 shows the 0.1.0 release sequence and states that no
-  package carries provenance. R1 changes both.
+**L5. Live evidence on the release candidate.** The live workflow runs
+on each push to `main`. The tag names the last commit on `main`, and the
+live run on that commit is the evidence. Link the run in the notes of the
+GitHub release. The users of 0.2.0 then install code that a live run
+tested. A change that lands before the tag updates the changelog entry for
+0.2.0, and the tag adds its date.
