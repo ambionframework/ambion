@@ -59,20 +59,32 @@ interface Entry {
 	open: number;
 }
 
-function checked(options: WorkstationOptions): { port: number; idleMs: number } {
+/** The address and the idle timeout that both backends of the package take. */
+interface ServerOptions {
+	readonly host: string;
+	readonly port?: number;
+	readonly hostKey: string;
+	readonly idleTimeout?: number;
+}
+
+/** The port and the idle timeout of `options`, after the checks. `who` names the backend in each error. */
+export function checkedServer(
+	who: string,
+	options: ServerOptions,
+): { port: number; idleMs: number } {
 	if (!/^SHA256:[A-Za-z0-9+/]{43}$/.test(options.hostKey)) {
 		throw new Error(
-			'workstationBackend: hostKey must be a SHA256 fingerprint, as `ssh-keygen -lf` prints it.',
+			`${who}: hostKey must be a SHA256 fingerprint, as \`ssh-keygen -lf\` prints it.`,
 		);
 	}
 	const port = options.port ?? 22;
 	if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-		throw new RangeError('workstationBackend: port must be an integer from 1 to 65535.');
+		throw new RangeError(`${who}: port must be an integer from 1 to 65535.`);
 	}
 	const idle = options.idleTimeout ?? DEFAULT_IDLE_TIMEOUT_SECONDS;
 	if (!(idle > 0 && idle <= MAX_TIMEOUT_SECONDS)) {
 		throw new RangeError(
-			`workstationBackend: idleTimeout must be more than 0 and at most ${MAX_TIMEOUT_SECONDS} seconds.`,
+			`${who}: idleTimeout must be more than 0 and at most ${MAX_TIMEOUT_SECONDS} seconds.`,
 		);
 	}
 	return { port, idleMs: idle * 1000 };
@@ -80,7 +92,7 @@ function checked(options: WorkstationOptions): { port: number; idleMs: number } 
 
 /** A `BashBackend` over SSH to one server, with one account for each agent. */
 export function workstationBackend(options: WorkstationOptions): BashBackend {
-	const { port, idleMs } = checked(options);
+	const { port, idleMs } = checkedServer('workstationBackend', options);
 	const address = { host: options.host, port, hostKey: options.hostKey };
 	const entries = new Map<string, Entry>();
 

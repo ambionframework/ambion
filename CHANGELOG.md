@@ -42,6 +42,18 @@ activation starts with a reminder of the seat's processes. See
 - **The Workbench shows the background processes with `/ps`.** A side
   panel lists the processes of the agents, shows the end of the chosen
   output, and cancels a running process on a second `x`.
+- **`workstationGitBackend` keeps the repositories of a workspace on the
+  workstation.** One account on the server, such as `lab-git`, owns every
+  repository. The backend prepares the account, writes the forced command
+  `~/.ambion/serve`, registers each template by a rename, and runs
+  `list`, `get`, and `fork` as scripts on the server. A fork lands with
+  one rename. `identityFor` issues an Ed25519 key for each agent and
+  writes its line to `~/.ssh/authorized_keys.ambion` under `flock`, with
+  `restrict`, `from`, `expiry-time`, and `command`.
+  `@ambionframework/workstation` exports `workstationGitBackend`,
+  `WorkstationGitOptions`, `WorkstationGitAccess`, and
+  `WorkstationGitIdentity`. `workstationBackend` carries no git transport
+  yet, so no agent reaches the repositories.
 
 ### Breaking changes
 

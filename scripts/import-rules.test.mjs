@@ -36,9 +36,10 @@ const CASES = [
 	['packages/workspace/src', '@ambionframework/ambion/testing', true],
 	['packages/workspace/src', 'just-bash', true],
 	['packages/workspace/src', '@ambionframework/just-bash', true],
-	// The workstation knows the workspace interface and no room.
+	// The workstation knows the workspace interface, the git helpers, and no room.
 	['packages/workstation/src', '@ambionframework/workspace', false],
 	['packages/workstation/src', '@ambionframework/workspace/resource', false],
+	['packages/workstation/src', '@ambionframework/workspace/git', false],
 	['packages/workstation/src', '@ambionframework/workspace/sqlite', true],
 	['packages/workstation/src', '@ambionframework/just-bash', true],
 	['packages/workstation/src', '@ambionframework/ambion', true],

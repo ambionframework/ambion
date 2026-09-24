@@ -1,6 +1,6 @@
 /**
- * The package's one entry, and what it names: the backend, its options and
- * credential types, the default idle timeout, and the fingerprint helper.
+ * The package's one entry, and what it names: the bash backend, the git
+ * backend, the default idle timeout, and the fingerprint helper.
  */
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -23,11 +23,27 @@ it('holds one entry', async () => {
 	expect(Object.keys((await manifest()).exports).sort()).toEqual(['.', './package.json']);
 });
 
-it('exports the backend, its default idle timeout, and the fingerprint helper', () => {
+it('exports the two backends, the default idle timeout, and the fingerprint helper', () => {
 	expect(Object.keys(main).sort()).toEqual([
 		'DEFAULT_IDLE_TIMEOUT_SECONDS',
 		'PACKAGE_NAME',
 		'fingerprint',
 		'workstationBackend',
+		'workstationGitBackend',
 	]);
+});
+
+it('names the types of the git backend', () => {
+	const access: main.WorkstationGitAccess = {
+		transport: 'ssh',
+		identityFor: async (): Promise<main.WorkstationGitIdentity> => {
+			throw new Error('unused');
+		},
+	};
+	const options: main.WorkstationGitOptions = {
+		host: 'lab.internal',
+		hostKey: 'SHA256:unused',
+		account: { username: 'lab-git', privateKey: 'unused' },
+	};
+	expect([access.transport, options.account.username]).toEqual(['ssh', 'lab-git']);
 });
