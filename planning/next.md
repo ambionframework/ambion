@@ -34,39 +34,50 @@ holds on main.
 is new. 0.1.0 makes a room a place that agents and people use when a
 person asks a question. 0.2.0 makes the kernel cheaper to change, and it
 gives each agent a workspace on a real server, where the operating system
-keeps one agent's files apart from another's. 0.3.0 makes a room useful
-between questions ([backlog](backlog.md#030-the-room-works-between-questions)).
+keeps one agent's files apart from another's. In 0.2.0 each executor
+adapts a harness, and a seat keeps its harness session for one exchange.
+0.3.0 makes a room useful between questions
+([backlog](backlog.md#030-the-room-works-between-questions)).
 
 ## The scope
 
-**Five items already landed on main.** The changelog names the export
-changes of each one.
+**Ten changes already landed on main.** The changelog names the export
+changes of each one. Items M1, M2, M7, and S1 came from this plan. The
+other rows landed as their own pull requests, and the plan records them
+here so that the release names them.
 
-| Item                                                | PR         | What it gives 0.2.0                                                                                                                                        |
-| --------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M7. The workspace as an interface                   | #276, #277 | A neutral root entry, a conformance entry, one entry for each binding, and backends by kind: bash and an optional SQL                                      |
-| S1. The workstation, `@ambionframework/workstation` | #280       | A bash backend over SSH with one Unix account for each agent, tested on an in-process server and on OpenSSH                                                |
-| The removal of `@ambionframework/cli`               | #273       | Every library package needs only Node `>=22.19.0`                                                                                                          |
-| M1. Kernel decision layers                          | #286       | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts`                    |
-| M2. The rules sweep                                 | #291       | Every exported room rule but `exchangeOutcome` gates a write, and `draftsClose` counts a summary draft by the writer's seat in the fold and in the verdict |
+| Change                                              | PR               | What it gives 0.2.0                                                                                                                                        |
+| --------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M7. The workspace as an interface                   | #276, #277       | A neutral root entry, a conformance entry, one entry for each binding, and backends by kind: bash and an optional SQL                                      |
+| S1. The workstation, `@ambionframework/workstation` | #280, #283, #284 | A bash backend over SSH with one Unix account for each agent, tested on an in-process server and on OpenSSH                                                |
+| The removal of `@ambionframework/cli`               | #273             | Every library package needs only Node `>=22.19.0`                                                                                                          |
+| M1. Kernel decision layers                          | #286             | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts`                    |
+| M2. The rules sweep                                 | #291             | Every exported room rule but `exchangeOutcome` gates a write, and `draftsClose` counts a summary draft by the writer's seat in the fold and in the verdict |
+| The room tools in the hosting entry                 | #287             | `roomTools` and `agentTools` hold the room tool rules once. The Pi, Claude, and Codex executors adapt them and keep no copy                                |
+| `@ambionframework/just-bash`                        | #288, #289       | The workspace installs no just-bash, and the workstation installs 72 fewer packages. Each just-bash shell runs `git`, locked to the agent                  |
+| Package hygiene reads the built files               | #285             | `check:packages` fails on an undeclared import in `dist` and on bundled code from outside the package's own `src`                                          |
+| Exchange continuity, and the trace as host logs     | #294             | A seat keeps its harness session for one exchange. `@ambionframework/pi-journal` and the trace journals go, and each step goes to the host's logger        |
+| The Pi executor on Pi's AgentHarness                | #295             | The harness owns the model loop, the session, and compaction. Pi joins Claude and Codex as a harness adapter, and it runs the executor conformance suite   |
 
-**Two themes stay open, each with the acceptance it must meet on the
+**Three themes stay open, each with the acceptance it must meet on the
 tagged commit.** The phases below deliver them; the items explain them.
 
 | Theme                     | Acceptance                                                                                                                                                                                                                         |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | M One owner per mechanism | Each duplication that items M3 to M6 name has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2. The journal package owns the one crash-safe append loop. Each doc fact has one home. |
-| R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release.                                                                                                                |
+| L Live evidence           | The live tier passes on the release candidate for the Pi, Claude, and Codex harnesses.                                                                                                                                             |
+| R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release. The pages that name a release name 0.2.0.                                                                      |
 
 **The tag waits for the P0 and P1 steps.** A P2 step that is open when the
 last P1 step closes moves to the backlog. It does not hold the tag.
 
 **Format changes.** The changelog names each change to a stored format.
 
-| Change                                                    | Item | Kind                        |
-| --------------------------------------------------------- | ---- | --------------------------- |
-| `pi-journal` and the Pi transcript audit are gone         | —    | A stored namespace retires  |
-| The `session` on an ended lease names an exchange session | —    | A stored field that changes |
+| Change                                                                                | Item | Kind                        |
+| ------------------------------------------------------------------------------------- | ---- | --------------------------- |
+| The `ambion/pi-session` journals and the Pi transcript audit are gone                 | —    | A stored namespace retires  |
+| The `ambion/trace` journals are gone                                                  | —    | A stored namespace retires  |
+| The `session` on an ended lease names an exchange session, and a failed lease has one | —    | A stored field that changes |
 
 **Deployment models.** The same rules serve four placements.
 
@@ -98,12 +109,15 @@ condition that brings each one back.
   changes the owner, so it waits for a measured need.
 - **A SQL backend over a database server.** The workstation uses
   `sqliteBackend` on the Ambion host.
+- **An `apply_patch` tool for Codex seats.** A live comparison with the
+  `edit` tool decides it.
 
 ## Decisions taken
 
 - **0.2.0 carries no wake source and no delegation.** Phase 1 changes the
   files that W1, W2, and D1 change. A tag between the two lets 0.3.0 start
-  on a stable kernel, and 0.2.0 keeps one format change.
+  on a stable kernel. The 0.2.0 format changes retire two namespaces and
+  change one field, and add no entry kind.
 - **`exchangeOutcome` stays a verified rule until W2.** The M2 sweep
   classifies every other exported rule. The `awaiting` expiry decides this
   one.
@@ -112,7 +126,7 @@ condition that brings each one back.
 - **Two entries.** `@ambionframework/ambion` for applications and
   `@ambionframework/ambion/hosting` for hosts and adapters.
 - **The kernel imports no model library.** The Pi, Claude, and Codex
-  executors are packages.
+  executors are packages, and each one adapts a harness.
 - **Speech enters the record through `say` only**, on every executor.
 - **Two release channels.** CI publishes a dev build of `main` to GitHub
   Packages under `dev`. An official release goes to npmjs.
@@ -120,17 +134,20 @@ condition that brings each one back.
   payload over the Durable Object RPC boundary. `speakOnce` is the minimal
   reference that a transport author needs. A removal of either adds rules
   for callers, so neither is in the release.
+- **The live tier stays off pull requests.** A step that changes a
+  harness path proves it with one live file on that harness before it
+  merges. The CI run on `main` confirms it.
 
 ## The model to preserve
 
-| Concern                                                       | Owner                 | Rule                                                                 |
-| ------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------- |
-| Definitions, executors, tools                                 | Application code      | Fixed per room run; no executable code in the journal                |
-| Membership, presence, messages, exchanges, claims, references | Room journal          | Pure interpretation of confirmed entries                             |
-| Model loops, harness sessions, activation steps               | Executor              | One session per activation; steps to the trace, speech through `say` |
-| Files, tables, instruments, and their change logs             | Application resources | Independent of journal transactions; stamped with provenance         |
-| Timers, runners, subscriptions, live handles                  | Host                  | Armed again from the journal after restart                           |
-| Identity selection, discovery, hosting state, delivery outbox | Application           | Explicit entry and stable retry keys                                 |
+| Concern                                                       | Owner                 | Rule                                                                                                  |
+| ------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------- |
+| Definitions, executors, tools                                 | Application code      | Fixed per room run; no executable code in the journal                                                 |
+| Membership, presence, messages, exchanges, claims, references | Room journal          | Pure interpretation of confirmed entries                                                              |
+| Model loops, harness sessions, activation steps               | Executor              | One harness session for each seat in each exchange, a cache; steps to the trace; speech through `say` |
+| Files, tables, instruments, and their change logs             | Application resources | Independent of journal transactions; stamped with provenance                                          |
+| Timers, runners, subscriptions, live handles, trace logs      | Host                  | Armed again from the journal after restart; the trace logger changes no outcome                       |
+| Identity selection, discovery, hosting state, delivery outbox | Application           | Explicit entry and stable retry keys                                                                  |
 
 **Judge a change by the obligation it removes.** Fewer exports are useful
 when callers need fewer rules. A rename earns its place only when one name
@@ -138,20 +155,22 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Two lanes run at once, and the release closes them.** A step names the
+**Three lanes run at once, and the release closes them.** A step names the
 steps it needs; a step with no "Needs" line starts now. **P0** blocks the
 tag. **P1** carries the release story. **P2** moves to the backlog when it
 is late.
 
-| Lane | Chain                                     | Priority   |
-| ---- | ----------------------------------------- | ---------- |
-| A    | Phase 1: the kernel                       | P0         |
-| B    | Phase 2: the packages                     | P0, P1, P2 |
-| —    | Phase 3: the release, after lanes A and B | P1         |
+| Lane | Chain                                         | Priority   |
+| ---- | --------------------------------------------- | ---------- |
+| A    | Phase 1: the kernel                           | P0         |
+| B    | Phase 2: the packages                         | P0, P1, P2 |
+| C    | Phase 3: live evidence                        | P0, P1, P2 |
+| —    | Phase 4: the release, after lanes A, B, and C | P1         |
 
-**The two lanes edit different files.** Phase 1 edits the room files and
-the docs. Phase 2 edits the journal, adapter, workspace log,
-and conformance files.
+**The lanes edit different files.** Phase 1 edits the docs. Phase 2 edits
+the journal, adapter, workspace log, and conformance files. Phase 3 edits
+the executor that its root cause names, the live tests, and the live
+workflow.
 
 ### Phase 1. Consolidate the kernel (P0)
 
@@ -178,32 +197,53 @@ code keep one copy of each mechanism.
 
 **Evidence:** `pnpm check`; `pnpm chaos` and the restart suite for step 1.
 
-### Phase 3. Release (P1)
+### Phase 3. Live evidence (P0, P1, and P2)
+
+**Goal:** the tag carries live evidence for each harness that 0.2.0
+changed.
+
+- [ ] **1.** A Claude summary writer follows the person's preferences.
+      Find the cause and fix it. P0. (L1)
+- [ ] **2.** The Codex harness runs the live tier. P1. (L2)
+- [ ] **3.** A provider billing or authentication failure reads as that
+      failure in the live run. P2. (L3)
+- [ ] **4.** The live tier passes on the release candidate for Pi,
+      Claude, and Codex. P1. Needs 1 and 2. (L1)
+
+**Evidence:** the run of the live workflow on the release candidate, with
+each harness job green and no job skipped.
+
+### Phase 4. Release (P1)
 
 **Goal:** the release repeats without the owner's machine.
 
 - [ ] **1.** The changelog entry for 0.2.0: the format changes, each
-      export that changed or went, and the workstation package. Needs
-      phase 1 and phase 2 steps 1 and 2. (R1)
-- [ ] **2.** The dev build stamp derives its base from the last tag.
+      export that changed or went, the two new packages, and the two
+      retired packages. Needs 2. Needs phase 1, phase 2 steps 1 and 2,
+      and phase 3 step 4. (R1)
+- [ ] **2.** The pages that name a release name 0.2.0 and list its ten
+      packages. (R2)
+- [ ] **3.** The dev build stamp derives its base from the last tag.
       (R1)
-- [ ] **3.** An npmjs release that a trusted CI workflow runs with
-      provenance. Needs 2. (R1)
+- [ ] **4.** An npmjs release that a trusted CI workflow runs with
+      provenance. The retired packages carry an npm deprecation. Needs 3.
+      (R1)
 
 **Evidence:** a release from CI installs without a token; the dev stamp
-after the 0.2.0 tag sorts above 0.2.0.
+after the 0.2.0 tag sorts above 0.2.0; `npm view` shows the deprecation on
+`@ambionframework/cli` and `@ambionframework/pi-journal`.
 
 ## The items
 
 Each item states the problem, the solution, and the impact. The file and
-line references are from `main` at `d86e803`.
+line references are from `main` at `67ecb72`.
 
 ### M. One owner per mechanism
 
 **M3. One crash-safe append loop.** The `Journal` class and
-`MetadataJournal` (`cloudflare/src/storage.ts`) each write a serial queue,
-a cursor replay, and an in-doubt recovery by hand. The third copy went with
-`pi-journal`.
+`MetadataJournal` (`cloudflare/src/storage.ts:46`) each write a serial
+queue, a cursor replay, and an in-doubt recovery by hand. The third copy
+went with `pi-journal`.
 
 - Extract one append primitive in `packages/journal` with an `apply` and a
   `recover` callback. Rebuild `MetadataJournal` on it, and keep every
@@ -227,15 +267,16 @@ it before the rest, because the rest edits the same code.
   `mirror.ts:136`.
 - One rotated-file match beside `rotatedName` (`log.ts:45`), for
   `isLogFile` (`mirror.ts:100`).
-- One import-free Markdown table module for `sql-tool.ts:160` and
-  `sql-resource.ts:267`.
+- One import-free Markdown table module for `sql-tool.ts:161` and
+  `sql-resource.ts:268`.
 - One private `callEnvelope` for the two copies of the provenance prefix
-  (`tools.ts:50`, `sql-resource.ts:211`).
+  (`tools.ts:43`, `sql-resource.ts:208`).
 
 **M5. The conformance suite.** `conformance.ts` and
 `conformance-executor-room.ts` each hold their own question, participants
 block, and `stale` constant (`conformance.ts:177`,
-`conformance-executor-room.ts:88`).
+`conformance-executor-room.ts:91`). Since #295, all three executors run
+the executor suite, so a fixture change reaches three packages.
 
 - The shared question, participants block, and `stale` constant move to
   `conformance-support.ts`. `until` accepts an async predicate.
@@ -243,22 +284,89 @@ block, and `stale` constant (`conformance.ts:177`,
 **M6. Each doc fact has one home.** The positioning rule in
 [CLAUDE.md](../CLAUDE.md) states that every page states a fact once.
 
-| Fact                                   | Home                 | Where it repeats                    |
-| -------------------------------------- | -------------------- | ----------------------------------- |
-| The legacy-refusal and resume rule     | `room.md`            | `summary.md:144`, `roster.md:100`   |
-| The table of the two spans             | `room.md`            | `exchange.md:14`                    |
-| The list of what is new                | `technical-facts.md` | The claim at `technical-facts.md:3` |
-| The assistant seats normalization      | `assistant.md`       | `roster.md:35`                      |
-| The tool-call provenance subset        | `resources.md`       | `agent.md:86`, `workspace.md:119`   |
-| The owner rules and two test citations | The owning pages     | `patterns.md:33`, `patterns.md:45`  |
+| Fact                                        | Home                                | Where it repeats                    |
+| ------------------------------------------- | ----------------------------------- | ----------------------------------- |
+| The legacy-refusal and resume rule          | `room.md`                           | `summary.md:144`, `roster.md:100`   |
+| The table of the two spans                  | `room.md`                           | `exchange.md:18`                    |
+| The list of what is new                     | `technical-facts.md`                | The claim at `technical-facts.md:3` |
+| The assistant seats normalization           | `assistant.md`                      | `roster.md:35`                      |
+| The tool-call provenance subset             | `resources.md`                      | `agent.md:86`, `workspace.md:120`   |
+| The owner rules and two test citations      | The owning pages                    | `patterns.md:32`, `patterns.md:45`  |
+| Exchange continuity and where sessions live | `executors.md` §Exchange continuity | `README.md:135`, `trust.md:83`      |
 
 The README keeps the headline of what is new. `technical-facts.md` keeps
-the list.
+the list. For exchange continuity, the README keeps one sentence and a
+link. `trust.md` keeps the trust fact and links the rule. Each executor
+page and package README states only where its own harness keeps a session.
+
+### L. Live evidence
+
+**The live tier gave no signal from 2026-09-22 to 2026-09-24.** Runs 340
+to 363 of the live workflow failed on the Anthropic message "Your credit
+balance is too low". Every change from #271 to #294 merged with no live
+run in CI. Run 364, on `67ecb72`, is the first run with credit: Pi and the
+package tiers pass, Claude fails one case, and Codex skips.
+
+**L1. A Claude summary writer that ignores the person.**
+`test/live/exchange.test.ts:87` expects the summary to begin with
+`VERDICT:`, as the person's preferences ask. On the Claude harness the
+summary answers the question and drops the prefix, on both attempts. The
+Pi harness passes the same case. The last green Claude run is 339, on
+`9593b77`. Two changes since then reach the closing activation:
+
+- M1 (#286) removed the duties that the room renders from the assistant's
+  summary defaults.
+- #294 gives the closing activation the session of the exchange it
+  summarizes, so a Claude closing activation resumes the assistant's
+  session.
+
+Find which change causes it, and fix it at the cause. Evidence: the case
+passes on the Claude harness in one live run of `exchange.test.ts`, and a
+scripted test pins the prompt or the resume behavior that the fix changes.
+
+**L2. The Codex harness has no live run in CI.** The `CODEX_API_KEY`
+repository secret is empty, so the Codex harness job and the Codex package
+tier skip on every run. The room tools of #287 and the thread resume of
+#294 reach Codex, and neither has a live run. The owner adds the secret,
+or runs `AMBION_HARNESS=codex pnpm test:live` once on the release
+candidate and links the output.
+
+**L3. A billing failure reads as a billing failure.** Twenty-three red
+runs in a row had one cause, and each run read as a set of test failures.
+A red run that stays red carries no information about the code. Before the
+tests, each harness job makes one small request. A billing or
+authentication refusal fails the job with an annotation that names the
+provider error, and the tests do not run.
 
 ### R. Release
 
 **R1. A repeatable release.** The 0.1.0 release ran from one machine with
-a passkey and a token, and `DEV_BASE` in `dev-release.yml` is a literal. A
-trusted workflow with `id-token: write` publishes with provenance and
-needs no token on a laptop. The dev stamp reads its base from the last
-tag. The changelog entry is the last gate before the tag.
+a passkey and a token, and `DEV_BASE` in `dev-release.yml:40` is a
+literal. A trusted workflow with `id-token: write` publishes with
+provenance and needs no token on a laptop. The dev stamp reads its base
+from the last tag. The changelog entry is the last gate before the tag.
+
+- npmjs holds a trusted publisher setting for each package. Check whether
+  npmjs lets a package that is not yet on the registry take one. If not,
+  `@ambionframework/just-bash` and `@ambionframework/workstation` need a
+  first publish by the owner before the workflow runs.
+- `@ambionframework/cli` and `@ambionframework/pi-journal` stay at 0.1.0
+  on npmjs. `npm deprecate` gives each one a message. The `pi-journal`
+  message names the host's trace logger. The CLI message states that the
+  package has no replacement.
+- The Unreleased section describes changes that later changes removed.
+  The `pi-journal` peer dependency entry describes a package that the
+  release does not ship. The entry for 0.2.0 states the end state once.
+
+**R2. The pages that name a release.** Several pages still name 0.1.0 or
+list its packages.
+
+- The package table of `technical-facts.md:93` lists eight packages. It
+  lacks `just-bash` and `workstation`, and the workspace row names a
+  directory workspace that moved to `just-bash`.
+- `technical-facts.md:4`, `docs/README.md:17`, `example.md:3`,
+  `deployment.md:281`, `deployment.md:303`, and `room.md:8` name 0.1.0.
+- `docs/README.md` calls the workspace "the Pi filesystem binding". The
+  workspace has been an interface since M7.
+- `toolchain.md` §9 shows the 0.1.0 release sequence and states that no
+  package carries provenance. R1 changes both.
