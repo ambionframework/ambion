@@ -138,19 +138,24 @@ async function processCalls(workspace: string) {
 }
 
 /**
- * The answer of the closed exchange `index` to `person`: its summary, or the
- * last message to the person when the exchange closed on a question to them.
+ * The answer of the closed exchange `index` to `person`: its summary once
+ * the room writes it, or the last message of an agent in the exchange when
+ * the room writes none.
  */
 async function answerOf(workbench: Workbench, room: string, index: number, person: string) {
 	const deadline = Date.now() + 150_000;
 	while (Date.now() < deadline) {
 		const { messages, exchanges } = await workbench.read(room, 0);
 		const exchange = exchanges.filter((one) => one.status === 'closed')[index];
-		if (exchange !== undefined && exchange.status === 'closed') {
+		if (exchange?.status === 'closed' && exchange.summary.status !== 'pending') {
 			if (exchange.summary.status === 'published') return exchange.summary.summary.text;
+			const next = exchanges[exchanges.indexOf(exchange) + 1]?.from ?? Number.POSITIVE_INFINITY;
 			const said = messages.filter(
 				(message) =>
-					message.kind === 'said' && message.seq > exchange.from && message.to === person,
+					message.kind === 'said' &&
+					message.seq > exchange.from &&
+					message.seq < next &&
+					message.from !== person,
 			);
 			const last = said.at(-1);
 			return last?.kind === 'said' ? last.text : '';
@@ -231,8 +236,9 @@ describe.skipIf(!hasKey('pi') || !hasKey('claude'))('Workbench sweep', () => {
 					`live · sweep: second answer: ${text}\n`,
 			);
 			expect(text).toContain(handle);
-			expect(text).toMatch(/exited|finished|complete|done/i);
-			expect(text).not.toMatch(/still running|is running/i);
+			// The answer names the end: the exit code or the last line of the sweep.
+			expect(text).toMatch(/exited|finished|complete/i);
+			expect(text).toMatch(/code 0|sweep done/i);
 		} finally {
 			await workbench.close();
 			await rm(directory, { recursive: true, force: true });
