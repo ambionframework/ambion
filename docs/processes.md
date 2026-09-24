@@ -47,13 +47,13 @@ holds a command that runs in the host's process.
 
 ## The tools
 
-| Tool     | Parameters                     | What it does                                                         |
-| -------- | ------------------------------ | -------------------------------------------------------------------- |
-| `bash`   | `command`, `timeout?`, `wait?` | Starts a process, waits up to `wait` seconds, and gives its state    |
-| `ps`     | `agent?`, `all?`               | Lists the running processes of the caller, of one agent, or of all   |
-| `status` | `handle`                       | Gives the state of the process and the end of its output             |
-| `wait`   | `handle`, `timeout?`           | Waits up to `timeout` seconds for the process to end, then as status |
-| `cancel` | `handle`                       | Stops a running process, waits for it to end, then as status         |
+| Tool     | Parameters                              | What it does                                                         |
+| -------- | --------------------------------------- | -------------------------------------------------------------------- |
+| `bash`   | `command`, `name?`, `timeout?`, `wait?` | Starts a process, waits up to `wait` seconds, and gives its state    |
+| `ps`     | `agent?`, `all?`                        | Lists the running processes of the caller, of one agent, or of all   |
+| `status` | `handle`                                | Gives the state of the process and the end of its output             |
+| `wait`   | `handle`, `timeout?`                    | Waits up to `timeout` seconds for the process to end, then as status |
+| `cancel` | `handle`                                | Stops a running process, waits for it to end, then as status         |
 
 | Value                | Default | Range                         |
 | -------------------- | ------- | ----------------------------- |
@@ -61,6 +61,14 @@ holds a command that runs in the host's process.
 | `bash` `wait`        | 10 s    | 0 to 600 s. 0 returns at once |
 | `wait` `timeout`     | 30 s    | 0 to 600 s                    |
 | The wait of `cancel` | 10 s    | Fixed                         |
+
+**`name` gives a process a short name that the agent chooses.** A name is
+1 to 40 characters: lowercase letters, digits, `.`, `_`, and `-`, such as
+`tests` or `dev-server`. The result line, `ps`, and the reminder show it
+beside the handle. A name is a label: the handle stays the key of the
+process, and `status`, `wait`, and `cancel` take the handle alone. Two
+processes can have the same name. A process with no name shows its
+command in the places that show a name.
 
 **`bash` with `wait` is `bash` with a `wait` of 0 and then the `wait`
 tool.** A command that ends inside the window gives its output and its
@@ -85,7 +93,7 @@ slab pour Thu
 ```text
 compiling 14 of 120
 
-[Process bash-3f9a2c1d0b7e is running. Output: /home/writer/.processes/bash-3f9a2c1d0b7e.out. Call status, wait or cancel with its handle.]
+[Process bash-3f9a2c1d0b7e (tests) is running. Output: /home/writer/.processes/bash-3f9a2c1d0b7e.out. Call status, wait or cancel with its handle.]
 ```
 
 | State       | The bracketed line                                     |
@@ -95,6 +103,9 @@ compiling 14 of 120
 | `timed_out` | `Process <h> timed out after <timeout> seconds.`       |
 | `cancelled` | `Process <h> is cancelled.`                            |
 | `failed`    | `Process <h> failed: <message>.`                       |
+
+**A process with a name shows it in brackets after the handle.** The
+table above writes `<h>` for the handle and the name together.
 
 **A process that the close of its exchange cancelled says so.** Its line
 is `Process <h> is cancelled: its exchange closed.`
@@ -107,8 +118,8 @@ the rest from the output file with `read`, which takes an offset and a
 limit.
 
 **`details` holds the status of the process and the truncation.**
-`details.process` is a `ProcessStatus`: the handle, the kind, the owner
-agent, the command, the state, the output path, the timeout, the room and
+`details.process` is a `ProcessStatus`: the handle, the name when the
+agent gave one, the kind, the owner agent, the command, the state, the output path, the timeout, the room and
 the exchange that started it, the start and end times, and the exit code
 or the error.
 
@@ -202,13 +213,14 @@ answers for every backend in the same way.
 | `agent` and `all` | Nothing: the call fails with `Invalid`      |
 
 **Each row states one process.** The rows are in the order the processes
-started. The command shows its first line, cut to 80 characters.
+started. The command shows its first line, cut to 80 characters. A
+process with no name has an empty name cell.
 
 ```text
-| Handle            | Agent  | Runs for | Room  | Command            |
+| Handle            | Name       | Agent  | Runs for | Room  | Command            |
 | ----------------- | ------ | -------- | ----- | ------------------ |
-| bash-3f9a2c1d0b7e | writer | 2m 14s   | lobby | npm test           |
-| bash-9c01d4e2aa31 | writer | 12s      | lobby | tail -f server.log |
+| bash-3f9a2c1d0b7e | tests      | writer | 2m 14s   | lobby | npm test           |
+| bash-9c01d4e2aa31 | server-log | writer | 12s      | lobby | tail -f server.log |
 
 2 running processes.
 ```
@@ -241,11 +253,14 @@ a harness with no session all start with no memory of an earlier
 
 ```text
 Your background processes in the workspace:
-- bash-3f9a2c1d0b7e is running for 2m 14s: npm test
-- bash-5e7b20c4f1d9 is running for 40s in the room review: tail -f server.log
+- tests, bash-3f9a2c1d0b7e, is running for 2m 14s: npm test
+- server-log, bash-5e7b20c4f1d9, is running for 40s in the room review: tail -f server.log
 - bash-9c01d4e2aa31 exited with code 1 at 14:02:11: make build
 Call status, wait or cancel with a handle. Call ps to list processes.
 ```
+
+**Each line starts with the name when the process has one.** The handle
+follows it. A process with no name starts with its handle.
 
 **A seat with no process to name gets no reminder.** The activation text
 then has no line about processes.
@@ -386,6 +401,7 @@ line.**
 
 ```text
 bash starts each command as a background process and returns its handle, such as bash-1a2b3c4d5e6f.
+Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.
 The call waits up to wait seconds, 10 by default, and then gives the state of the process and the end of its output.
 The whole output of a process goes to ~/.processes/<handle>.out. Read it with read.
 status, wait and cancel take a handle. status gives the state of the process, wait waits for it to end,
@@ -438,3 +454,9 @@ review confirms it or changes it.
    seat in two rooms sees the processes it started in each.
    _Recommendation:_ every room, with the room in the row when it is not
    the current room.
+8. **A name is a label, and the handle stays the key.** An agent recalls
+   `tests` more easily than `bash-3f9a2c1d0b7e`, and the reminder gives
+   both. A name that `status`, `wait`, and `cancel` accept needs a rule
+   for two running processes with one name. _Recommendation:_ a label
+   alone, with no uniqueness rule. Accept a name in place of a handle
+   later, if seats pass names to these tools.
