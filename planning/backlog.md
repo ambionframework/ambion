@@ -74,6 +74,39 @@ message opened. **Evidence:** the workbench delegates one question to a
 second room; a restart in the middle keeps the work. Then close PR #151
 with a comment that names the new route.
 
+## Release hygiene
+
+**R1. A repeatable release.** The 0.1.0 release ran from one machine with
+a passkey and a token, and `DEV_BASE` in `dev-release.yml:40` is a
+literal. A trusted workflow with `id-token: write` publishes with
+provenance and needs no token on a laptop. The dev stamp reads its base
+from the last tag. **Condition:** a release that the owner does not run
+from the owner's machine, or a user who asks for provenance.
+
+- npmjs holds a trusted publisher setting for each package. Check whether
+  npmjs lets a package that is not yet on the registry take one. If not,
+  `@ambionframework/just-bash`, `@ambionframework/workstation`, and
+  `@ambionframework/git` need a first publish by the owner before the
+  workflow runs.
+- `@ambionframework/cli` and `@ambionframework/pi-journal` stay at 0.1.0
+  on npmjs. `npm deprecate` gives each one a message. The `pi-journal`
+  message names the host's trace logger. The CLI message states that the
+  package has no replacement.
+
+**R2. The pages that name a release.** Several pages still name 0.1.0 or
+list its packages. The changelog entry for 0.2.0 lists the eleven packages.
+**Condition:** the next change to one of these pages.
+
+- The package table of `technical-facts.md:93` lists eight packages. It
+  lacks `just-bash`, `workstation`, and `git`, and the workspace row names a
+  directory workspace that moved to `just-bash`.
+- `technical-facts.md:4`, `docs/README.md:17`, `example.md:3`,
+  `deployment.md:281`, `deployment.md:303`, and `room.md:8` name 0.1.0.
+- `docs/README.md` calls the workspace "the Pi filesystem binding". The
+  workspace has been an interface since M7.
+- `toolchain.md` §9 shows the 0.1.0 release sequence and states that no
+  package carries provenance. R1 changes both.
+
 ## Designs with a shape
 
 **The checkpoint entry.** A checkpoint entry lets a resume skip settled

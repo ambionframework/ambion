@@ -21,6 +21,7 @@ import {
 	saidBy,
 	saidByAgents,
 	spent,
+	trailOf,
 	untilQuiet,
 } from './support.ts';
 
@@ -79,14 +80,15 @@ live('the exchange', () => {
 			// The configured writer receives the closed exchange.
 			expect(saidByAgents(messages, [andrei.name]).length).toBeGreaterThanOrEqual(2);
 			const summaries = messages.filter(isSummary);
-			expect(summaries).toHaveLength(1);
+			expect(summaries, `assistant: ${trailOf(events, assistant.name)}`).toHaveLength(1);
 			const summary = summaries[0];
 			expect(summary).toMatchObject({ from: 'assistant', to: andrei.name });
 			expect(summary?.covers.from).toBe(question?.seq);
 			expect(summary?.covers.through).toBe(messageBefore(messages, summary?.seq ?? 0));
 			expect(summary?.text.trim()).toMatch(/^VERDICT:/);
 			const summaryText = summary?.text.trim() ?? '';
-			const sentenceCount = summaryText.split(/[.!?](?=\s|$)\s*/).filter(Boolean).length;
+			// A sentence ends at a stop before a capital or at the end, so `vs. 200` stays in one sentence.
+			const sentenceCount = summaryText.split(/[.!?](?=\s+[A-Z]|\s*$)\s*/).filter(Boolean).length;
 			expect(sentenceCount, `summary text: ${JSON.stringify(summaryText)}`).toBeLessThanOrEqual(2);
 
 			const opened = events.filter((e) => e.type === 'exchange_opened');
@@ -123,7 +125,8 @@ live('the exchange', () => {
 			instructions: `
 				Answer a general question with one say, in one sentence. A question
 				about building permits is for the permits liaison: end your turn
-				without calling say.
+				without calling say. Do not call seat or unseat: the assistant
+				decides who takes part.
 			`,
 		});
 		const permits = agent('permits', {

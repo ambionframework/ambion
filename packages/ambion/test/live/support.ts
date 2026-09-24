@@ -123,6 +123,19 @@ export const saidBy = (messages: readonly Message[], name: string) =>
 export const saidByAgents = (messages: readonly Message[], people: string[]) =>
 	messages.filter(isSpoken).filter((m) => !people.includes(m.from));
 
+/** What happened to one seat's activations, for an assertion message: starts, ends, errors, and abandons. */
+export const trailOf = (events: RoomNotification[], name: string): string =>
+	JSON.stringify(
+		events.flatMap((e): Record<string, unknown>[] => {
+			if (!('agent' in e) || e.agent !== name) return [];
+			if (e.type === 'activation_end') return [{ type: e.type, spoke: e.spoke }];
+			if (e.type === 'error' || e.type === 'delivery_error')
+				return [{ type: e.type, error: e.error.message }];
+			if (e.type === 'abandoned') return [{ type: e.type, cause: e.cause }];
+			return [{ type: e.type }];
+		}),
+	);
+
 export const activationsOf = (events: RoomNotification[], name: string) =>
 	events.filter((e) => e.type === 'activation_start' && e.agent === name).length;
 
