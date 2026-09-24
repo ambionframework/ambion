@@ -18,8 +18,54 @@ import type { ClaudeExecutor } from './define.ts';
 export interface ClaudeRuntime {
 	/** A Claude Code executable to run. Absent, the SDK finds the one it ships with. */
 	readonly pathToClaudeCodeExecutable?: string;
-	/** The environment of the executable. Absent, the environment of this process. */
+	/**
+	 * The environment of the executable. Absent, the environment of this
+	 * process. The executor removes the variables that tie the executable to
+	 * a Claude Code session of the host.
+	 */
 	readonly env?: Readonly<Record<string, string | undefined>>;
+}
+
+/**
+ * The variables that tie a Claude executable to the Claude Code session of
+ * the process that starts it. A host that runs inside Claude Code has them.
+ * With `CLAUDE_CODE_SESSION_ID`, or with `CLAUDE_CODE_REMOTE_SESSION_ID` in
+ * a remote Claude Code environment, every seat reports the id of the host's
+ * session, and a resume opens one transcript for all seats. Claude Code
+ * removes most of these names when it starts a fresh session. Without
+ * `CLAUDE_CODE_ENTRYPOINT`, the SDK sets it to `sdk-ts`. The two
+ * `CLAUDE_CODE_QUESTION_` names are the ones the SDK removes when it gets
+ * no `env`.
+ */
+export const PARENT_SESSION = [
+	'CLAUDECODE',
+	'CLAUDE_CODE_ENTRYPOINT',
+	'CLAUDE_CODE_SESSION_ID',
+	'CLAUDE_CODE_REMOTE_SESSION_ID',
+	'CLAUDE_CODE_BRIDGE_SESSION_ID',
+	'CLAUDE_CODE_CHILD_SESSION',
+	'CLAUDE_CODE_SESSION_ATTENDED',
+	'CLAUDE_CODE_EXECPATH',
+	'CLAUDE_CODE_COORDINATOR_MODE',
+	'CLAUDE_CODE_MESSAGING_SOCKET',
+	'CLAUDE_CODE_MESSAGING_TOKEN',
+	'CLAUDE_CODE_SSE_PORT',
+	'CLAUDE_CODE_RESUME_INTERRUPTED_TURN',
+	'CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS',
+	'CLAUDE_CODE_RESUME_PROMPT',
+	'CLAUDE_CODE_RESUME_REASON',
+	'CLAUDE_CODE_RESUME_SOURCE_ALIVE',
+	'CLAUDE_CODE_QUESTION_EXTENDED',
+	'CLAUDE_CODE_QUESTION_OPTIONAL_DESCRIPTIONS',
+] as const;
+
+/** The environment of a seat's executable: the host's, less the variables of its Claude Code session. */
+function seatEnv(
+	env: Readonly<Record<string, string | undefined>>,
+): Record<string, string | undefined> {
+	const seat = { ...env };
+	for (const name of PARENT_SESSION) delete seat[name];
+	return seat;
 }
 
 /** The Claude executor a definition names, or an error that names its kind. */
@@ -118,7 +164,7 @@ export function queryOptions(input: QueryInput): Options {
 			cwd: executor.cwd,
 			additionalDirectories: executor.additionalDirectories && [...executor.additionalDirectories],
 			pathToClaudeCodeExecutable: runtime.pathToClaudeCodeExecutable,
-			env: runtime.env && { ...runtime.env },
 		}),
+		env: seatEnv(runtime.env ?? process.env),
 	};
 }

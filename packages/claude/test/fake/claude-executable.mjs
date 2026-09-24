@@ -68,6 +68,7 @@ const until = async (ready) => {
 };
 
 log({ argv: process.argv.slice(2), cwd: process.cwd() });
+log({ env: { names: Object.keys(process.env), entrypoint: process.env.CLAUDE_CODE_ENTRYPOINT } });
 if (resumed !== undefined && config.rejectResume === true) {
 	process.stderr.write(`No conversation found with session ID: ${resumed}\n`);
 	process.exit(1);
@@ -297,6 +298,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 	}
 	if (message.type !== 'user') return;
 	users.push(message);
+	log({ user: message.message.content });
 	if (!unresumable()) out({ ...message, isReplay: true, session_id: session });
 	wake();
 	if (!running) void run();

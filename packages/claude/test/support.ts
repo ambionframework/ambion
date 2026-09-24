@@ -81,6 +81,7 @@ export function fakeRoom(
 		rejectResumeResult?: boolean;
 	},
 	definition: AgentDefinition = seat(),
+	env: Readonly<Record<string, string>> = {},
 ) {
 	const file = join(mkdtempSync(join(tmpdir(), 'ambion-claude-')), 'fake.log');
 	const steps: Step[] = [];
@@ -121,7 +122,7 @@ export function fakeRoom(
 	const executor = createClaudeExecutor({
 		definition,
 		pathToClaudeCodeExecutable: executable,
-		env: { ...process.env, AMBION_FAKE: JSON.stringify({ ...scenario, log: file }) },
+		env: { ...process.env, ...env, AMBION_FAKE: JSON.stringify({ ...scenario, log: file }) },
 	});
 	/** The lines the fake wrote to its log. */
 	const log = (): Record<string, unknown>[] => {
@@ -151,8 +152,12 @@ export function fakeRoom(
 }
 
 /** Open one activation of `definition` over the fake, with a scenario. */
-export function open(scenario: FakeScenario, definition: AgentDefinition = seat()) {
-	const room = fakeRoom(scenario, definition);
+export function open(
+	scenario: FakeScenario,
+	definition: AgentDefinition = seat(),
+	env: Readonly<Record<string, string>> = {},
+) {
+	const room = fakeRoom(scenario, definition, env);
 	return { ...room, session: room.activate('message:1:sonnet:1') };
 }
 
