@@ -81,6 +81,30 @@ no end file, so each listing runs `ps` for it until a start forgets it. A
 `stop` line that the first read writes ends that cost. **Condition:** the
 next change to a stop path, or a table with many lost processes.
 
+**Four process changes from a comparison with Codex unified exec.** Codex
+gives a model `exec_command` and `write_stdin` over a PTY, with sessions in
+memory ([Processes](../docs/processes.md) holds the Ambion design). Four
+of its mechanisms fit the process table and keep the five tools.
+
+1. **An interactive kind of process.** A `pty-<random>` handle runs its
+   command on a PTY, and an `input` tool writes to it, Ctrl-C included.
+   The workstation gives the PTY. just-bash has none, so it refuses the
+   kind. Today stdin is `/dev/null`, so a command that prompts waits until
+   its timeout.
+2. **An output cursor.** `status` and `wait` give the output since the
+   last read by the same agent. The offset lives in the files of the
+   process, so it survives a restart. Today each read gives the same tail,
+   so each poll of a long build spends the same tokens.
+3. **A graceful cancel.** `cancel` and the timeout send `SIGTERM` to the
+   group, and `SIGKILL` after the grace. Today a stop sends `SIGKILL`, so
+   a server or a database gets no time to flush.
+4. **The head and the tail in a result.** The result shows the first
+   lines of the output beside the last ones. The first lines often hold
+   the error that the last lines report.
+
+**Condition:** an agent that must drive a prompt or a REPL, or a live run
+that shows the cost of repeated polls. The first two come first.
+
 **Tool execution provenance beyond the activation.** `ToolContext` carries
 the activation, the exchange, and the room. A purpose field, a retry-safe
 operation key that the kernel derives, and a domain operation reused across
