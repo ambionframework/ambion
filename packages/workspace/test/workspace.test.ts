@@ -8,50 +8,23 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-	type AgentDefinition,
-	defineTool,
-	isSpoken,
-	type Room,
-	startRoom,
-	type ToolContext,
-} from '@ambionframework/ambion';
-import { type PiOptions, piExecution } from '@ambionframework/pi';
+import { defineTool, isSpoken, startRoom, type ToolContext } from '@ambionframework/ambion';
+import { piExecution } from '@ambionframework/pi';
 import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
-import type { Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { enter, roomName as name, scriptedAgent } from '../../ambion/test/support/room.ts';
-import {
-	byAgent,
-	callTool,
-	quiet,
-	type Script,
-	scripted,
-	speak,
-} from '../../ambion/test/support/scripted.ts';
-import { stopAtEnd } from '../../ambion/test/support/stop.ts';
+import { enter, roomName as name } from '../../ambion/test/support/room.ts';
+import { byAgent, callTool, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { defaultToolGuidance } from '../src/default-tools.ts';
 import { openWorkspace } from '../src/index.ts';
 import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
 import { callAs, toolOf, wrapped } from './support/backends.ts';
+import { agent, run, toolResults } from './support/room.ts';
 
 const ROOM_MIRROR_GUIDANCE = roomMirrorGuidance('/rooms');
 const ctx = BACKGROUND_CONTEXT;
-
-/** Every tool result the model has been shown so far, oldest first. */
-function toolResults(context: Context): { tool: string; text: string; failed: boolean }[] {
-	return context.messages.flatMap((message) => {
-		if (message.role !== 'toolResult') return [];
-		const text = message.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
-		return [{ tool: message.toolName, text, failed: message.isError }];
-	});
-}
-
-const agent = (agentName: string, options: Partial<PiOptions> = {}) =>
-	scriptedAgent(agentName, undefined, options);
 
 /** Every line of one JSONL file, parsed. */
 async function linesOf(env: ExecutionEnv, path: string): Promise<Record<string, unknown>[]> {
@@ -61,21 +34,6 @@ async function linesOf(env: ExecutionEnv, path: string): Promise<Record<string, 
 		.split('\n')
 		.filter((line) => line !== '')
 		.map((line) => JSON.parse(line) as Record<string, unknown>);
-}
-
-/** One room, one question, and the seats' scripts; resolves at the exchange close. */
-async function run(agents: AgentDefinition[], seats: Record<string, Script>): Promise<Room> {
-	const session = stopAtEnd(
-		await startRoom({
-			name: name('workspace'),
-			agents,
-			execution: piExecution({ sessions: 'memory', stream: scripted(byAgent(seats)) }),
-		}),
-	);
-	const visit = await enter(session);
-	const exchange = await visit.send({ text: 'go' });
-	await exchange.waitForClose();
-	return session;
 }
 
 // -- the built-in tools ------------------------------------------------------

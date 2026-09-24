@@ -222,6 +222,28 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/git:
+    dependencies:
+      '@ambionframework/workspace':
+        specifier: workspace:*
+        version: link:../workspace
+      just-git:
+        specifier: ^1.8.2
+        version: 1.8.2
+    devDependencies:
+      '@ambionframework/just-bash':
+        specifier: workspace:*
+        version: link:../just-bash
+      tsdown:
+        specifier: ^0.22.14
+        version: 0.22.14(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/journal:
     devDependencies:
       tsdown:
@@ -327,6 +349,9 @@ importers:
       '@ambionframework/ambion':
         specifier: workspace:*
         version: link:../ambion
+      '@ambionframework/git':
+        specifier: workspace:*
+        version: link:../git
       '@types/ssh2':
         specifier: ^1.15.6
         version: 1.15.6

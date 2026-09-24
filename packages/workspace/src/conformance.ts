@@ -40,6 +40,13 @@ import type {
 	WorkspaceFiles,
 } from './sql-backend.ts';
 
+export type {
+	GitConformanceBackend,
+	GitConformanceOptions,
+	GitConformanceStore,
+	GitConformanceTemplate,
+} from './git-conformance.ts';
+export { gitConformance } from './git-conformance.ts';
 export type { ConformanceCase };
 
 /**

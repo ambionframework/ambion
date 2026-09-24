@@ -25,7 +25,7 @@ import type { WorkspaceEnv } from './backend.ts';
 import type { WorkspaceResource } from './resource.ts';
 import type { SqlEnv, SqlOutcome, SqlRow, SqlValue } from './sql-backend.ts';
 import { csvHeader, csvRecord, NULL_SENTINEL } from './sql-result.ts';
-import { auditEntry } from './tools.ts';
+import { recordedOnShell } from './tools.ts';
 
 /** How many rows the preview shows when the caller names no limit. */
 const PREVIEW_ROWS = 50;
@@ -86,37 +86,17 @@ export function sqlToolGuidance(database: string): string {
 
 /** Build the `sql` tool that runs on the SQL owner. */
 export function createSqlTool(options: SqlToolOptions): AmbionTool {
-	const record = async (params: SqlParams, ctx: ToolContext, outcome: Outcome): Promise<void> => {
-		if (options.audit === undefined) return;
-		const audit = options.audit;
-		try {
-			await options.shell(ctx.agent, (env) =>
-				audit.record(env, auditEntry('sql', params, ctx, outcome), BACKGROUND_CONTEXT),
-			);
-		} catch {
-			// The log is best-effort. A closed bash owner does not replace the call's own outcome.
-		}
-	};
 	return defineTool({
 		name: 'sql',
 		label: 'SQL',
 		description:
 			'Run statements on the shared database. Share a table or a view; it needs no copy. Set export for a CSV file.',
 		parameters: sqlSchema,
-		execute: async (params, ctx) => {
-			try {
-				const result = await run(options, params, ctx);
-				await record(params, ctx, { result });
-				return result;
-			} catch (error) {
-				await record(params, ctx, { error });
-				throw error;
-			}
-		},
+		execute: recordedOnShell('sql', options.shell, options.audit, (params: SqlParams, ctx) =>
+			run(options, params, ctx),
+		),
 	});
 }
-
-type Outcome = { result: unknown } | { error: unknown };
 
 async function run(
 	options: SqlToolOptions,

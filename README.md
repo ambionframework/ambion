@@ -37,12 +37,15 @@ workspace. See the [Workbench repository](https://github.com/fastforwardengine/w
 speak through `say` and work through tools. A message names the artifact it
 cites or changes. A room is a shared journal with rules for taking part.
 
-**A workspace has one bash backend and can have one SQL backend.** The
+**A workspace has one bash backend, and it can have one SQL backend and
+one git backend.** The
 `read`, `write`, `edit`, and `bash` tools run on the bash backend: in memory
 or on a directory with `@ambionframework/just-bash`, or on a remote server
 over SSH with [`@ambionframework/workstation`](docs/workstation.md).
 The `sql` tool exists only when the workspace has a SQL backend. SQLite is the
-default. See [Workspace](docs/workspace.md).
+default. The `repos` and `fork` tools exist only when the workspace has a git
+backend: an agent forks a read-only template, clones it, and pushes with
+[`@ambionframework/git`](docs/git.md). See [Workspace](docs/workspace.md).
 
 ## One team on three harnesses
 

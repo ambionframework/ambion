@@ -3,7 +3,8 @@ import type {
 	ExecutionEnv,
 	ExecutionToolContext,
 } from '@earendil-works/pi-agent-core';
-import type { ResourceBackend, ResourceEnv } from './resource.ts';
+import type { GitAccess, GitBackend } from './git-backend.ts';
+import type { ResourceBackend, ResourceEnv, WorkspaceAgent } from './resource.ts';
 import type { SqlBackend } from './sql-backend.ts';
 
 /** A Pi `ExecutionEnv` whose cleanup the resource owner calls with no context. */
@@ -22,13 +23,29 @@ export interface WorkspaceLayout {
 }
 
 /**
+ * What the workspace gives a bash backend when it connects: the other
+ * backends that the shell reaches. `git` is set when the workspace has a
+ * git backend.
+ */
+export interface BashServices {
+	readonly git?: GitAccess;
+}
+
+/**
  * The bash backend: a shell over a persistent filesystem, with a home for
  * each agent. It also supplies the tools for the Ambion facade.
  */
 export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
+	/** One agent's environment. `services` names the other backends that its shell reaches. */
+	connect(
+		agent: WorkspaceAgent,
+		signal?: AbortSignal,
+		services?: BashServices,
+	): Promise<WorkspaceEnv>;
 	/**
-	 * Tools the backend adds beyond the five defaults every workspace already
-	 * has: read, write, edit, bash and sql. Omit it, or list an empty array,
+	 * Tools the backend adds beyond the tools every workspace already has:
+	 * read, write, edit and bash, and sql, repos and fork when their
+	 * backends are set. Omit it, or list an empty array,
 	 * when the backend adds none of its own.
 	 */
 	tools?: readonly AgentHarnessTool<ExecutionToolContext>[];
@@ -47,4 +64,6 @@ export interface WorkspaceBackends {
 	readonly bash: BashBackend;
 	/** A shared database. Absent, the workspace has no `sql` tool. */
 	readonly sql?: SqlBackend;
+	/** The repositories. Absent, the workspace has no `repos` and no `fork` tool. */
+	readonly git?: GitBackend;
 }

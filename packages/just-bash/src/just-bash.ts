@@ -12,9 +12,10 @@
  * coreutils, `jq`, `yq`, `xan` and `sqlite3`. Each instance also has `git`
  * from just-git, with the agent's name as the locked author. No instance is
  * given a `network` option, so `curl` and every other network command stay
- * absent. `git` runs with `network: false`, so it stays inside the same
- * boundary. That absence is the one exception the workspace contract names,
- * and the boundary this file does not close. The backend's guidance states
+ * absent. With no git backend, `git` runs with `network: false`, so it
+ * stays inside the same boundary. With one, `git` reaches the prefix of the
+ * git backend alone. That absence is the one exception the workspace
+ * contract names, and the boundary this file does not close. The backend's guidance states
  * this same set to a connected agent.
  *
  * `connect` runs one unconditional `mkdir -p` and checks nothing first. Two
@@ -32,7 +33,9 @@ import { mkdir } from 'node:fs/promises';
 import { posix } from 'node:path';
 import {
 	type BashBackend,
+	type BashServices,
 	DEFAULT_AUDIT_LOG,
+	type GitAccess,
 	type WorkspaceLayout,
 } from '@ambionframework/workspace';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
@@ -52,19 +55,34 @@ const JUST_BASH_LAYOUT: WorkspaceLayout = {
 
 /**
  * The `git` command of one agent. The identity is locked to the agent's
- * name, so every commit names the seat that made it. `network: false` keeps
- * git inside the same boundary as the shell: a remote is a path on the
- * workspace's filesystem.
+ * name, so every commit names the seat that made it. With no git backend,
+ * `network: false` keeps git inside the same boundary as the shell: a
+ * remote is a path on the workspace's filesystem. With one, git reaches the
+ * backend's prefix alone, and the credential of each request comes from
+ * `access`. No file and no variable of the shell holds it.
  */
-function gitFor(agent: WorkspaceAgent) {
+function gitFor(agent: WorkspaceAgent, access: GitAccess | undefined) {
+	const identity = { name: agent.name, email: `${agent.name}@ambion.invalid`, locked: true };
+	if (access === undefined) return createGit({ identity, network: false });
 	return createGit({
-		identity: { name: agent.name, email: `${agent.name}@ambion.invalid`, locked: true },
-		network: false,
+		identity,
+		network: {
+			allowed: [access.prefix],
+			...(access.fetch === undefined ? {} : { fetch: access.fetch }),
+		},
+		credentials: async (url) => {
+			const credential = await access.credentialFor(agent, url);
+			return credential === undefined ? null : { type: 'bearer', token: credential.token };
+		},
 	});
 }
 
 /** Build one agent's environment over the workspace's filesystem. */
-async function connectOver(fs: IFileSystem, agent: WorkspaceAgent): Promise<BashEnv> {
+async function connectOver(
+	fs: IFileSystem,
+	agent: WorkspaceAgent,
+	services?: BashServices,
+): Promise<BashEnv> {
 	const home = `/home/${agent.name}`;
 	await fs.mkdir(home, { recursive: true });
 	return new BashEnv(
@@ -74,7 +92,7 @@ async function connectOver(fs: IFileSystem, agent: WorkspaceAgent): Promise<Bash
 			env: { HOME: home },
 			javascript: true,
 			python: true,
-			customCommands: [gitFor(agent)],
+			customCommands: [gitFor(agent, services?.git)],
 		}),
 		home,
 	);
@@ -133,8 +151,8 @@ const JUST_BASH_GUIDANCE = [
 	`git is available: init, clone, add, commit, status, log, diff, show, branch, checkout,`,
 	`switch, merge, rebase, cherry-pick, stash, tag, reset, fetch, pull, push, and more. Each`,
 	`command supports a subset of the flags of real git. Your commits carry your name as the`,
-	`author, and git config does not change it. A remote is a path in this filesystem, such as`,
-	`/home/<other agent>/<repo>; git has no network access.`,
+	`author, and git config does not change it. A remote is a path in this filesystem, or a URL`,
+	`that this guidance names. git reaches no other host.`,
 	``,
 	`The shell has no network: curl and every other network command are disabled. Your home is`,
 	`/home/<your name>, and there is no wall between one agent's home and another's.`,
@@ -211,7 +229,7 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryBashBac
 		return fs;
 	});
 	return {
-		connect: async (agent) => connectOver(await resource.get(), agent),
+		connect: async (agent, _signal, services) => connectOver(await resource.get(), agent, services),
 		dispose: async () => resource.clear(inMemory()),
 		readFiles: async () => listFiles(await resource.get()),
 		guidance: JUST_BASH_GUIDANCE,
@@ -241,7 +259,7 @@ export function directoryBackend(root: string): BashBackend {
 		return new DirectoryFs({ root });
 	});
 	return {
-		connect: async (agent) => connectOver(await resource.get(), agent),
+		connect: async (agent, _signal, services) => connectOver(await resource.get(), agent, services),
 		dispose: async () => resource.clear(),
 		guidance: JUST_BASH_GUIDANCE,
 		layout: JUST_BASH_LAYOUT,

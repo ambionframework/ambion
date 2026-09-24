@@ -1,20 +1,21 @@
 {
-	"name": "@ambionframework/workstation",
+	"name": "@ambionframework/git",
 	"version": "0.1.0",
 	"type": "module",
-	"description": "A workspace bash backend for Ambion over SSH: one remote server, one Unix account for each agent.",
+	"description": "A git backend for an Ambion workspace: read-only templates, forks, and pushes, over an in-process just-git server.",
 	"license": "Apache-2.0",
 	"homepage": "https://ambionframework.com",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/ambionframework/ambion.git",
-		"directory": "packages/workstation"
+		"directory": "packages/git"
 	},
 	"keywords": [
 		"agents",
 		"ambion",
-		"ssh",
-		"sftp",
+		"git",
+		"just-git",
+		"templates",
 		"workspace"
 	],
 	"exports": {
@@ -40,18 +41,14 @@
 		"build": "tsdown",
 		"check:types": "tsc -p tsconfig.check.json --noEmit",
 		"test": "vitest run",
-		"test:sshd": "pnpm --filter '@ambionframework/workstation...' build && vitest run --config vitest.sshd.config.ts",
 		"test:watch": "vitest"
 	},
 	"dependencies": {
 		"@ambionframework/workspace": "workspace:*",
-		"@earendil-works/pi-agent-core": "^0.85.1",
-		"ssh2": "^1.17.0"
+		"just-git": "^1.8.2"
 	},
 	"devDependencies": {
-		"@ambionframework/ambion": "workspace:*",
-		"@ambionframework/git": "workspace:*",
-		"@types/ssh2": "^1.15.6",
+		"@ambionframework/just-bash": "workspace:*",
 		"tsdown": "^0.22.14",
 		"typescript": "^7.0.2",
 		"vitest": "^4.1.11"

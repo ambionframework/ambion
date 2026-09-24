@@ -415,6 +415,15 @@ connects as each agent with its own database credential, so the server
 enforces the grants. `sqliteBackend` gives every agent one handle and one
 set of grants.
 
+## A git backend
+
+**The real `git` on the server reaches the git backend as each agent.**
+With `backend.git` set, each `connect` keeps the account's
+`~/.git-credentials` current, with mode `0600`, and sets a credential
+helper that reads the file alone. The host serves `gitBackend`'s
+`handler` on an address that the server reaches. [Git](git.md#on-a-workstation)
+states the file and the helper.
+
 ## Guidance
 
 **The workspace describes the tools, and the workstation describes its

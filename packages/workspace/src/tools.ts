@@ -40,7 +40,7 @@ function auditError(error: unknown): { name: string; message: string } {
 }
 
 /** One audit entry for a finished call, successful or not. */
-export function auditEntry(
+function auditEntry(
 	tool: string,
 	params: unknown,
 	ctx: ToolContext,
@@ -58,6 +58,44 @@ export function auditEntry(
 		...('result' in outcome
 			? { result: loggedToolResult(outcome.result) }
 			: { error: auditError(outcome.error) }),
+	};
+}
+
+/**
+ * Wrap the `execute` of a tool that runs on an owner other than the bash
+ * owner. After the call ends, its audit entry runs as one more operation on
+ * the bash owner, over `BACKGROUND_CONTEXT`, so a cut call still leaves its
+ * entry. A closed bash owner does not replace the call's own outcome.
+ */
+export function recordedOnShell<P, R>(
+	tool: string,
+	shell: WorkspaceResource<WorkspaceEnv>['use'],
+	audit: AuditLog | undefined,
+	execute: (params: P, ctx: ToolContext) => Promise<R>,
+): (params: P, ctx: ToolContext) => Promise<R> {
+	const record = async (
+		params: P,
+		ctx: ToolContext,
+		outcome: { result: unknown } | { error: unknown },
+	): Promise<void> => {
+		if (audit === undefined) return;
+		try {
+			await shell(ctx.agent, (env) =>
+				audit.record(env, auditEntry(tool, params, ctx, outcome), BACKGROUND_CONTEXT),
+			);
+		} catch {
+			// The log is best-effort. A closed bash owner does not replace the call's own outcome.
+		}
+	};
+	return async (params, ctx) => {
+		try {
+			const result = await execute(params, ctx);
+			await record(params, ctx, { result });
+			return result;
+		} catch (error) {
+			await record(params, ctx, { error });
+			throw error;
+		}
 	};
 }
 

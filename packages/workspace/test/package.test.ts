@@ -91,7 +91,7 @@ it.each([
 	['./resource', resource, ['openResource']],
 	['./sql', sql, ['PROVENANCE_COLUMNS', 'openSqlResource']],
 	['./sqlite', sqlite, ['sqliteBackend']],
-	['./conformance', conformance, ['sqlConformance', 'workspaceConformance']],
+	['./conformance', conformance, ['gitConformance', 'sqlConformance', 'workspaceConformance']],
 ])('exports exactly its one binding from %s', (_path, entry, names) => {
 	expect(Object.keys(entry).sort()).toEqual(names);
 });

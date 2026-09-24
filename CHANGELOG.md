@@ -12,6 +12,23 @@ only on an isolated host, or set `sandboxMode`. `codex()` now refuses
 `networkAccessEnabled` under `nativeTools: 'codex'` unless `sandboxMode` is
 `workspace-write`, because Codex reads it only there.
 
+**A workspace can have a git backend.** `WorkspaceBackends` gets `git`, a
+`GitBackend`, and `Workspace` gets `git`, its owner. With one, the workspace
+adds the `repos` and `fork` tools and a guidance note. An agent forks a
+read-only template, clones the fork into its home, and pushes with `git` in
+`bash`. A push persists the edits across a restart. The new package
+`@ambionframework/git` exports `gitBackend`, `sqliteGitStorage`, and
+`fromDirectory`: a `just-git` server in the host's process, with its storage
+in one SQLite file. The root entry of `@ambionframework/workspace` exports
+`BashServices`, `GitAccess`, `GitBackend`, `GitCredential`, `GitEnv`,
+`GitFetch`, `GitForkOutcome`, `GitRepository`, and `GitRepositoryId`, and
+its conformance entry exports `gitConformance` and its harness types.
+`BashBackend.connect` takes a third argument, `BashServices`. With a git
+backend, the just-bash `git` reaches the backend's URL prefix alone, and
+the workstation keeps each account's `~/.git-credentials` current. The
+tool line of the guidance now names `sql` in a sentence of its own form.
+See [Git](docs/git.md).
+
 **A Claude seat starts outside the Claude Code session of its host.** A
 host that runs inside Claude Code passed its `CLAUDE_CODE_SESSION_ID`, or in
 a remote environment its `CLAUDE_CODE_REMOTE_SESSION_ID`, to every seat.

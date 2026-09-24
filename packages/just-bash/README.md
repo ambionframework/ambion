@@ -49,9 +49,11 @@ and every other network command stay absent.
 **Every instance has `git`**, from [just-git](https://github.com/blindmansion/just-git).
 It supports the common subcommands, each with a subset of the flags of real
 git. The author of a commit is the agent's name, and `git config` does not
-change it. `git` has no network access, so a remote is a path on the
-workspace's filesystem, such as another agent's home. The guidance tells each
-agent the same.
+change it. With no git backend, `git` has no network access, so a remote is a
+path on the workspace's filesystem, such as another agent's home. With a git
+backend ([`@ambionframework/git`](../git/README.md)), `git` reaches the
+backend's URL prefix alone, and the token of each request stays inside the
+`git` command. The guidance tells each agent the same.
 
 ## Tests
 

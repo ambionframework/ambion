@@ -3,9 +3,10 @@
 **The workspace is the Pi binding of the resource contract.** The optional
 `@ambionframework/workspace` package provides a workspace resource and its
 tools. The package `@ambionframework/just-bash` provides the memory and
-directory backends over just-bash. A workspace has one bash backend
-and can have one SQL backend
-([Query the shared database](#query-the-shared-database)). Agents receive access through
+directory backends over just-bash. A workspace has one bash backend,
+and it can have one SQL backend
+([Query the shared database](#query-the-shared-database)) and one git
+backend ([Git](git.md)). Agents receive access through
 ordinary tool bundles. Workspace files remain separate from the
 collaboration journal. [Resources](resources.md) states the contract, the
 SQL binding, and the rules for references and provenance.
@@ -329,8 +330,9 @@ and `jq` filter it uses on its own.
 The `backend` option holds the backends by kind, as `WorkspaceBackends`.
 `backend.bash` is a `BashBackend`, and every workspace has one.
 `backend.sql` is an optional `SqlBackend`: a shared database that need not
-live on the shell's filesystem. A later kind of backend gets its own key.
-With no SQL backend, the workspace has no `sql` tool.
+live on the shell's filesystem. `backend.git` is an optional
+`GitBackend`: the repositories of the workspace, which [Git](git.md)
+describes. With no SQL backend, the workspace has no `sql` tool.
 
 **`sqliteBackend` from `@ambionframework/workspace/sqlite` is the default
 SQL backend.** It opens one SQLite database through `node:sqlite`, at a
