@@ -171,12 +171,12 @@ steps it needs; a step with no "Needs" line starts now. **P0** blocks the
 tag. **P1** carries the release story. **P2** moves to the backlog when it
 is late.
 
-| Lane | Chain                                         | Priority   |
-| ---- | --------------------------------------------- | ---------- |
-| A    | Phase 1: the kernel                           | P0         |
-| B    | Phase 2: the packages                         | P0, P1, P2 |
-| C    | Phase 3: live evidence                        | P1, P2     |
-| —    | Phase 4: the release, after lanes A, B, and C | P1         |
+| Lane | Chain                                     | Priority   |
+| ---- | ----------------------------------------- | ---------- |
+| A    | Phase 1: the kernel                       | P0         |
+| B    | Phase 2: the packages                     | P0, P1, P2 |
+| C    | Phase 3: live evidence                    | P2         |
+| —    | Phase 4: the release, after lanes A and B | P1         |
 
 **The lanes edit different files.** Phase 1 edits the docs. Phase 2 edits
 the journal, adapter, workspace log, and conformance files. Phase 3 edits
@@ -207,19 +207,15 @@ code keep one copy of each mechanism.
 
 **Evidence:** `pnpm check`; `pnpm chaos` and the restart suite for step 1.
 
-### Phase 3. Live evidence (P1 and P2)
+### Phase 3. Live evidence (P2)
 
-**Goal:** the tag carries live evidence for each harness that 0.2.0
-changed.
+**Goal:** a red live run names its cause.
 
-- [ ] **1.** The Codex harness runs the live tier. P1. (L2)
-- [ ] **2.** A provider billing or authentication failure reads as that
+- [ ] **1.** A provider billing or authentication failure reads as that
       failure in the live run. P2. (L3)
-- [ ] **3.** The live tier passes on the release candidate for Pi,
-      Claude, and Codex. P1. Needs 1. (L2)
 
-**Evidence:** the run of the live workflow on the release candidate, with
-each harness job green and no job skipped.
+**Evidence:** a live run on a key that the provider refuses fails with one
+annotation that names the provider error, and runs no test.
 
 ### Phase 4. Release (P1)
 
@@ -227,19 +223,23 @@ each harness job green and no job skipped.
 
 - [ ] **1.** The changelog entry for 0.2.0: the format changes, each
       export that changed or went, the three new packages, and the two
-      retired packages. Needs 2. Needs phase 1, phase 2 steps 1 and 2,
-      and phase 3 step 3. (R1)
+      retired packages. Needs 2. Needs phase 1 and phase 2 steps 1 and 2.
+      (R1)
 - [ ] **2.** The pages that name a release name 0.2.0 and list its eleven
       packages. (R2)
-- [ ] **3.** The dev build stamp derives its base from the last tag.
+- [ ] **3.** The live tier passes on the release candidate for Pi,
+      Claude, and Codex. Needs 1 and 2. (L5)
+- [ ] **4.** The dev build stamp derives its base from the last tag.
       (R1)
-- [ ] **4.** An npmjs release that a trusted CI workflow runs with
-      provenance. The retired packages carry an npm deprecation. Needs 3.
-      (R1)
+- [ ] **5.** An npmjs release that a trusted CI workflow runs with
+      provenance. The retired packages carry an npm deprecation. Needs 3
+      and 4. (R1)
 
-**Evidence:** a release from CI installs without a token; the dev stamp
-after the 0.2.0 tag sorts above 0.2.0; `npm view` shows the deprecation on
-`@ambionframework/cli` and `@ambionframework/pi-journal`.
+**Evidence:** the live run on the tagged commit passes each harness job
+and the package job, and no job skips; a release from CI installs without
+a token; the dev stamp after the 0.2.0 tag sorts above 0.2.0; `npm view`
+shows the deprecation on `@ambionframework/cli` and
+`@ambionframework/pi-journal`.
 
 ## The items
 
@@ -311,26 +311,22 @@ page and package README states only where its own harness keeps a session.
 
 **The live tier gave no signal from 2026-09-22 to 2026-09-24.** Runs 340
 to 363 of the live workflow failed on the Anthropic message "Your credit
-balance is too low", except run 352, which was cancelled. Every change from #271 to #294 merged with no live
-run in CI. Run 364, on `67ecb72`, is the first run with credit: Pi and the
-package tiers pass, Claude fails one case, and Codex skips. The changelog
-records the fix of the Claude case: a resumed Claude session kept the
-system prompt it began with, so a closing activation lost its duties. It
-also records a second Claude fix that a local run found: a seat no
-longer takes the session id of a host that runs inside Claude Code.
-Items L1 and L4 held those two fixes, so they left this file.
+balance is too low", except run 352, which was cancelled. Every change
+from #271 to #294 merged with no live run in CI. Run 364, on `67ecb72`, is
+the first run with credit: Pi and the package tiers pass, Claude fails one
+case, and Codex skips.
 
-**L2. The Codex harness has no live run in CI.** Until 2026-09-24 the
-`CODEX_API_KEY` repository secret was empty, so the Codex harness job and
-the Codex package tier skipped on every run. The room tools of #287 and
-the thread resume of #294 reach Codex, and neither has a live run. The
-owner added the secret. Run 365, the first with the key, passed the Codex
-harness job and failed three Codex package tests. Each needs a native
-command, and none ran. The Codex sandbox runs a command through bubblewrap,
-which needs an unprivileged user namespace, and AppArmor on Ubuntu 24.04
-restricts such namespaces by default. A seat with native tools now runs
-with no Codex sandbox by default. The next run on `main` confirms the cause.
-The item closes when a run on `main` passes both Codex jobs.
+**Three fixes and the Codex key close items L1, L2, and L4.** The
+changelog records each fix.
+
+- **L1.** A resumed Claude session kept the system prompt it began with, so
+  a closing activation lost its duties.
+- **L2.** The `CODEX_API_KEY` secret was empty, so the Codex jobs skipped.
+  With the key, run 365 failed three Codex package tests that need a
+  native command. The changelog states the cause and the fix. Run 367, on
+  `a5b9ff3`, passed all four jobs, with the Codex package tier at 9 of 9.
+- **L4.** A Claude seat took the session id of a host that runs inside
+  Claude Code. A local run found it.
 
 **L3. A billing failure reads as a billing failure.** Twenty-three red
 runs in a row had one cause, and each run read as a set of test failures.
@@ -338,6 +334,13 @@ A red run that stays red carries no information about the code. Before the
 tests, each harness job makes one small request. A billing or
 authentication refusal fails the job with an annotation that names the
 provider error, and the tests do not run.
+
+**L5. Live evidence on the release candidate.** The live tier on `main`
+tests each merged change, and the tag needs a run on the commit that it
+names. The release candidate is the commit that holds the finished
+changelog entry and the release pages, and the tag names it. Dispatch the
+live workflow on it, and link the run in the notes of the GitHub release.
+The users of 0.2.0 then install code that a live run tested.
 
 ### R. Release
 
