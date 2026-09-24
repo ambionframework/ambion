@@ -215,11 +215,10 @@ code keep one copy of each mechanism.
 **Goal:** the tag carries live evidence for each harness that 0.2.0
 changed.
 
-- [ ] **1.** The Codex harness runs the live tier. P1. (L2)
-- [ ] **2.** A provider billing or authentication failure reads as that
+- [ ] **1.** A provider billing or authentication failure reads as that
       failure in the live run. P2. (L3)
-- [ ] **3.** The live tier passes on the release candidate for Pi,
-      Claude, and Codex. P1. Needs 1. (L2)
+- [ ] **2.** The live tier passes on the release candidate for Pi,
+      Claude, and Codex. P1. (L5)
 
 **Evidence:** the run of the live workflow on the release candidate, with
 each harness job green and no job skipped.
@@ -250,7 +249,7 @@ workstation backends; the restart case and the room test for step 3.
 - [ ] **1.** The changelog entry for 0.2.0: the format changes, each
       export that changed or went, the three new packages, and the two
       retired packages. Needs 2. Needs phase 1, phase 2 steps 1 and 2,
-      phase 3 step 3, and phase 4 steps 1 to 4. (R1)
+      phase 3 step 2, and phase 4 steps 1 to 4. (R1)
 - [ ] **2.** The pages that name a release name 0.2.0 and list its eleven
       packages. (R2)
 - [ ] **3.** The dev build stamp derives its base from the last tag.
@@ -333,26 +332,24 @@ page and package README states only where its own harness keeps a session.
 
 **The live tier gave no signal from 2026-09-22 to 2026-09-24.** Runs 340
 to 363 of the live workflow failed on the Anthropic message "Your credit
-balance is too low", except run 352, which was cancelled. Every change from #271 to #294 merged with no live
-run in CI. Run 364, on `67ecb72`, is the first run with credit: Pi and the
-package tiers pass, Claude fails one case, and Codex skips. The changelog
-records the fix of the Claude case: a resumed Claude session kept the
-system prompt it began with, so a closing activation lost its duties. It
-also records a second Claude fix that a local run found: a seat no
-longer takes the session id of a host that runs inside Claude Code.
-Items L1 and L4 held those two fixes, so they left this file.
+balance is too low", except run 352, which was cancelled. Every change
+from #271 to #294 merged with no live run in CI. Run 364, on `67ecb72`, is
+the first run with credit: Pi and the package tiers pass, Claude fails one
+case, and Codex skips.
 
-**L2. The Codex harness has no live run in CI.** Until 2026-09-24 the
-`CODEX_API_KEY` repository secret was empty, so the Codex harness job and
-the Codex package tier skipped on every run. The room tools of #287 and
-the thread resume of #294 reach Codex, and neither has a live run. The
-owner added the secret. Run 365, the first with the key, passed the Codex
-harness job and failed three Codex package tests. Each needs a native
-command, and none ran. The Codex sandbox runs a command through bubblewrap,
-which needs an unprivileged user namespace, and AppArmor on Ubuntu 24.04
-restricts such namespaces by default. A seat with native tools now runs
-with no Codex sandbox by default. The next run on `main` confirms the cause.
-The item closes when a run on `main` passes both Codex jobs.
+**Three fixes and one secret closed items L1, L2, and L4.** The changelog
+records each fix.
+
+- **L1.** A resumed Claude session kept the system prompt it began with, so
+  a closing activation lost its duties.
+- **L4.** A Claude seat took the session id of a host that runs inside
+  Claude Code. A local run found it.
+- **L2.** The `CODEX_API_KEY` secret was empty, so the Codex jobs skipped.
+  With the key, run 365 failed three Codex package tests that need a
+  native command. The Codex sandbox runs a command through bubblewrap, and
+  the runner restricts the user namespace that bubblewrap needs. A seat
+  with native tools now runs with no Codex sandbox by default. Run 367, on
+  `a5b9ff3`, passed all four jobs, with the Codex package tier at 9 of 9.
 
 **L3. A billing failure reads as a billing failure.** Twenty-three red
 runs in a row had one cause, and each run read as a set of test failures.
@@ -360,6 +357,12 @@ A red run that stays red carries no information about the code. Before the
 tests, each harness job makes one small request. A billing or
 authentication refusal fails the job with an annotation that names the
 provider error, and the tests do not run.
+
+**L5. Live evidence on the release candidate.** The live tier on `main`
+tests each merged change. The tag needs one run on the commit that it
+names. Dispatch the live workflow on the release candidate, and link the
+run in the changelog entry for 0.2.0. Each harness job and the package job
+pass, and no job skips.
 
 ### S. Workspace backends
 
