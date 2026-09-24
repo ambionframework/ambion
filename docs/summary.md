@@ -140,8 +140,3 @@ the fixed-seat rule.
 Attention controls which messages wake an idle member. It does not create a
 summary role or restrict an agent's tools. There is no scheduler, role system,
 or capability framework in the room.
-
-## History version
-
-[Room](room.md#history-and-limits) states the version of composition entries
-and what the room does with a legacy history.

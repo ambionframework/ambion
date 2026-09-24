@@ -11,7 +11,7 @@ One room has one open exchange. A close fixes the range of messages it covered;
 it says nothing about answer quality. A summary may later replace that range in
 agent context while human review still sees the original messages.
 
-## 1. Two spans, and both are the room's
+## 1. The spans
 
 [The two spans](room.md#the-two-spans) defines the activation and the
 exchange. This page holds the exchange.

@@ -85,9 +85,8 @@ states how the guidance follows the speaking policy.
 
 **A tool learns where it ran from `ctx`.**
 [Resources](resources.md#references-and-provenance) states what `ctx.room`,
-`ctx.activation`, and `ctx.exchange` hold. The value is provenance and grants
-no authority. A tool that needs the current state of the room reads the
-room.
+`ctx.activation`, and `ctx.exchange` hold, and that the value grants no
+authority.
 
 **Spoken contributions require nonblank text.** The room refuses empty or
 whitespace-only human messages, agent messages, and summaries before writing.

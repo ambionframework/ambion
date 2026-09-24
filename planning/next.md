@@ -63,7 +63,7 @@ here so that the release names them.
 | The removal of `@ambionframework/cli`               | #273             | Every library package needs only Node `>=22.19.0`                                                                                                          |
 | M1. Kernel decision layers                          | #286             | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts`                    |
 | M2. The rules sweep                                 | #291             | Every exported room rule but `exchangeOutcome` gates a write, and `draftsClose` counts a summary draft by the writer's seat in the fold and in the verdict |
-| M6. Each doc fact has one home                      | this PR          | Seven repeated facts keep one home page, and the other pages link to it. `room.md` no longer says that an activation opens a fresh session                 |
+| M6. Each doc fact has one home                      | #301             | Seven repeated facts keep one home page, and the other pages link to it. `room.md` no longer says that an activation opens a fresh session                 |
 | The room tools in the hosting entry                 | #287             | `roomTools` and `agentTools` hold the room tool rules once. The Pi, Claude, and Codex executors adapt them and keep no copy                                |
 | `@ambionframework/just-bash`                        | #288, #289       | The workspace installs no just-bash, and the workstation installs 72 fewer packages. Each just-bash shell runs `git`, locked to the agent                  |
 | Package hygiene reads the built files               | #285             | `check:packages` fails on an undeclared import in `dist` and on bundled code from outside the package's own `src`                                          |
@@ -127,8 +127,8 @@ condition that brings each one back.
 ## Decisions taken
 
 - **0.2.0 stays reactive.** It carries no wake source and no delegation.
-  0.2.0 changes the files that W1, W2, and D1 change. A tag between the
-  two lets 0.3.0 start on a stable kernel. The 0.2.0 format changes retire two namespaces and
+  M1 and M2 changed the room files and the rules file that W1, W2, and D1
+  change. A tag between the two lets 0.3.0 start on a stable kernel. The 0.2.0 format changes retire two namespaces and
   change one field, and add no entry kind.
 - **`exchangeOutcome` stays a verified rule until W2.** The M2 sweep
   classifies every other exported rule. The `awaiting` expiry decides this

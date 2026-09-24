@@ -8,8 +8,8 @@ a release. Nothing here blocks the 0.2.0 tag.
 
 **0.3.0 makes a room useful between questions.** An event or a clock wakes
 it, and it hands work to another room. The work starts on the kernel that
-0.2.0 tags, because 0.2.0 changes the same room files and the same rules
-file. After the 0.2.0 tag, this section moves into [next.md](next.md) with
+0.2.0 tags, because M1 and M2 of 0.2.0 changed the same room files and the
+same rules file. After the 0.2.0 tag, this section moves into [next.md](next.md) with
 phases, steps, and evidence.
 
 | Theme                     | Acceptance                                                                                                                                                                                     |
