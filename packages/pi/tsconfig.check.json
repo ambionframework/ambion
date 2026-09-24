@@ -11,6 +11,7 @@
 		// source tree.
 		"paths": {
 			"@ambionframework/ambion": ["../ambion/src/index.ts"],
+			"@ambionframework/ambion/conformance": ["../ambion/src/conformance.ts"],
 			"@ambionframework/ambion/hosting": ["../ambion/src/hosting.ts"],
 			"@ambionframework/ambion/testing": ["../ambion/src/testing.ts"]
 		}

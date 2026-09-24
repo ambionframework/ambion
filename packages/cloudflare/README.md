@@ -32,8 +32,9 @@ What is built:
   activation metadata and sets no alarm. Unread messages remain recoverable
   from the room journal. `cut` stops the activation the room ended. The seat
   gives the steps of each activation to the `logger` that `configure` takes.
-  Absent, it drops them. The Pi executor lives on the object instance, so an
-  eviction loses the kept transcript, and the next activation starts fresh. It
+  Absent, it drops them. The Pi executor lives on the object instance, and it
+  keeps the Pi harness sessions of the seat in a `MemorySessionRepo` there. An
+  eviction loses the sessions, and the next activation starts fresh. It
   composes `AgentRunner` services directly from the worker configuration. It
   does not create a room runtime.
 - **`configure`** names the complete agent definitions the objects resolve by

@@ -10,11 +10,12 @@ for agents and humans.
 
 ## When to use it
 
-- **The loop runs in the host process.** Pi owns the model loop and the tools.
+- **The loop runs in the host process.** Pi's `AgentHarness` owns the model
+  loop, the session, its persistence and its compaction.
 - **Any provider that the Pi registry lists.** The model id is
   `provider/model-id`.
 - **Steering during a pass.** A line that lands mid-activation reaches the
-  model through `agent.steer`.
+  model through the steer queue of the harness lane.
 - **Deterministic tests.** A scripted stream replaces the provider.
 
 Use [`@ambionframework/claude`](https://github.com/ambionframework/ambion/blob/main/docs/claude.md)
@@ -86,54 +87,70 @@ scripted stream, custom storage, a transport, or limits passes
 
 ## Options
 
-| Option                 | Default                      | Meaning                                                |
-| ---------------------- | ---------------------------- | ------------------------------------------------------ |
-| `instructions`         | Required                     | The private guidance of the agent.                     |
-| `model`                | Required                     | A Pi model id, `provider/model-id`.                    |
-| `tools`, `bundles`     | None                         | The tools of the agent and the bundles that add tools. |
-| `speaking`             | `DEFAULT_GUIDANCE`           | The speaking policy. It replaces the default.          |
-| `activationTokenLimit` | The whole record             | The token limit of the record one activation reads.    |
-| `estimateTokens`       | `Math.ceil(text.length / 4)` | Counts tokens against the limit. It needs the limit.   |
+| Option                 | Default                       | Meaning                                                |
+| ---------------------- | ----------------------------- | ------------------------------------------------------ |
+| `instructions`         | Required                      | The private guidance of the agent.                     |
+| `model`                | Required                      | A Pi model id, `provider/model-id`.                    |
+| `tools`, `bundles`     | None                          | The tools of the agent and the bundles that add tools. |
+| `speaking`             | `DEFAULT_GUIDANCE`            | The speaking policy. It replaces the default.          |
+| `activationTokenLimit` | The whole record              | The token limit of the record one activation reads.    |
+| `estimateTokens`       | `Math.ceil(text.length / 4)`  | Counts tokens against the limit. It needs the limit.   |
+| `compaction`           | `DEFAULT_COMPACTION_SETTINGS` | When the harness compacts the session.                 |
 
-`piExecution({ stream })` takes one option. Without a `stream`, the Pi
-registry answers. A scripted `stream` makes a room deterministic, and the
-model then resolves to a stub.
+`piExecution({ stream, sessionDir })` takes two options. Without a `stream`,
+the Pi registry answers. A scripted `stream` makes a room deterministic, and
+the model then resolves to a stub. `sessionDir` names the directory on the
+local disk for the sessions. Without it, the registry stream keeps them in
+`ambion-pi-sessions` in the OS temporary directory, and a custom stream
+keeps them in memory.
 
 ## How an activation runs
 
-**One Pi agent serves each activation.** The first pass builds the agent from
-the whole view. A later pass prompts the same agent with the messages that
-landed beyond what it has read.
+**One Pi `AgentHarness` serves each activation.** The first pass opens the
+session and attaches the harness, and prompts it with the whole view. A
+later pass prompts the same harness with the messages that landed beyond
+what it has read.
 
-**Freshness follows the provider request.** `readThrough` advances when a
-provider request holds the record, so the room refuses a say against a stale
-draft with the messages it missed. A line that lands mid-activation joins
-Pi's steering queue through `agent.steer`.
+**Freshness follows the exact provider input.** Each range of the record
+goes into the session as a custom message that carries its positions. The
+`toProviderMessages` hook reads them from the messages of each provider
+request, so the room refuses a say against a stale draft with the messages
+it missed. A line that lands mid-activation joins the steer queue of the
+lane, and counts when a provider request holds it.
 
-**Room tools are Pi tools.** An ordinary activation receives `say`, `seat`,
-and `unseat`, and then the tools of the agent. A closing activation receives
-`say` only.
+**Room tools are harness tools.** An ordinary activation receives `say`,
+`seat`, and `unseat`, and then the tools of the agent. A closing activation
+receives `say` only. The harness adds no built-in tool, no skill, and no
+prompt template.
+
+**The room owns the retries, and the harness compacts.** The harness tries
+each provider request once. It compacts the session when the context nears
+the window of the model.
 
 ## Policy and the trust boundary
 
 **Every tool runs on the host.** Pi has no permission layer and no sandbox.
 The definition is the whole policy. The model sees no environment variable and
-no key. The registry stream reads the key in the host process.
+no key. The registry stream reads the key in the host process. On Node, the
+session files under `sessionDir` hold the whole transcript, tool output
+included, and the executor deletes none of them.
 
 ## Exchange continuity
 
-**The seat keeps the transcript of the last activation that did not fail,**
-and the next activation of the seat in the same exchange prompts it with the
-delta. The first activation in a new exchange builds a fresh agent. The
-release records `{ harness: 'pi', id }`. The kept transcript lives in the
-process, so a restart reads the whole view once.
+**The release records `{ harness: 'pi', id }`,** where the id names the
+activation that began the session. The next activation of the seat in the
+same exchange reopens the session and prompts it with the delta. The first
+activation in a new exchange begins a fresh session. A session the store
+cannot open starts fresh, and the activation does not fail. On Node the
+session is a JSONL file under `sessionDir`, so a restart on the same disk
+reopens it. A Cloudflare seat keeps its sessions in memory.
 
 ## Steps, usage, and failures
 
 **Steps.** The executor records `thinking`, `text`, `tool_call`,
 `tool_result`, `steer`, and `usage`. It records no `approval`.
 
-**Usage.** One `usage` step follows each assistant message, with the cost from
+**Usage.** One `usage` step follows each provider request, with the cost from
 the price table of the model.
 
 **Failures.** Credit or authentication text, and a diagnostic status of 400,
@@ -144,7 +161,9 @@ transient.
 
 `@ambionframework/pi/testing` exports a scripted stream and its helpers:
 `scripted`, `byAgent`, `speak`, `quiet`, `callTool`, `seat`, `isClosing`,
-`contextText`, `toolNames`, and `toolResultTexts`.
+`contextText`, `toolNames`, and `toolResultTexts`. `piExecutorHarness()`
+runs the executor suite of `@ambionframework/ambion/conformance` on a
+scripted stream, and `scriptOf` maps each plan of the suite to a script.
 
 ```ts
 import { defineAgent, defineHuman, isSpoken, startRoom } from '@ambionframework/ambion';
@@ -184,13 +203,15 @@ registry, the price tables, or a real model. The live scenarios of
 
 ## Exports
 
-| Export                                        | Use                                                       |
-| --------------------------------------------- | --------------------------------------------------------- |
-| `pi(options)`                                 | The executor of an agent definition                       |
-| `fromPiTool(tool)`                            | Adapt a native Pi tool to an Ambion tool                  |
-| `piExecution({ stream })`                     | The `execution` value for `startRoom` and `createRuntime` |
-| `createPiExecutor`, `createExecutionServices` | The parts for a host that runs seats apart from the room  |
-| `stubModel`                                   | The model that a custom stream receives                   |
+| Export                                         | Use                                                       |
+| ---------------------------------------------- | --------------------------------------------------------- |
+| `pi(options)`                                  | The executor of an agent definition                       |
+| `fromPiTool(tool)`                             | Adapt a native Pi tool to an Ambion tool                  |
+| `piExecution({ stream, sessionDir })`          | The `execution` value for `startRoom` and `createRuntime` |
+| `createPiExecutor`, `createExecutionServices`  | The parts for a host that runs seats apart from the room  |
+| `memorySessions`, `PiSessions`, `SessionScope` | A store of sessions in memory, and the store contract     |
+| `stubModel`                                    | The model that a custom stream receives                   |
+| `piExecutorHarness` (`/testing`)               | The executor suite on a scripted stream                   |
 
 ## Troubleshooting
 

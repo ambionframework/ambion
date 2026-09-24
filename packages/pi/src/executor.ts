@@ -2,44 +2,36 @@
  * The Pi executor: one activation's session, from the pass the driver hands
  * it until the activation stops.
  *
- * A seat is seated for as long as the room runs. An activation lasts seconds,
- * and it owns what belongs to one:
+ * Pi's `AgentHarness` owns the model loop, the session, its persistence and
+ * its compaction. The driver's contract is pass in and result out, so the
+ * first pass of an activation opens one harness over the seat's session,
+ * and each pass prompts its lane once and resolves when the run ends.
  *
- * - **Its id.** Derived from the record: the message that woke the seat and
- *   the seat's name, or the close it answers and the attempt. Every call it
- *   makes carries it.
- * - **What it acknowledged.** `readThrough` is the highest contiguous
- *   position in provider input. A provider request or an accepted ordinary
- *   say advances it. Freshness refuses a draft against a newer record.
- * - **What arrived while it worked.** A message that lands mid-activation is steered
- *   in. It reaches the provider after the request it lands during. PiContext
- *   records the structured range only when that later request receives it.
+ * - **Freshness.** `readThrough` is the highest contiguous position that a
+ *   provider request held. Each range of the record goes into the session
+ *   as a custom message that carries its positions. The harness hook that
+ *   builds the provider input reads them from the exact messages of each
+ *   request. An accepted ordinary say also advances it. Freshness refuses a
+ *   draft against a newer record.
+ * - **Steer.** A line that lands during a run goes to the lane as a steer.
+ *   It counts as consumed when a provider request holds it. A line that
+ *   lands before the run starts joins the prompt. A line that finds no pass
+ *   waits for the record: the next delta carries it.
+ * - **Cut.** `abort` aborts the run. `close` closes the harness and the
+ *   session, and the driver calls it when the activation is over.
+ * - **Exchange continuity.** A session carries the id of the activation
+ *   that began it, and the release records that id. The activation reopens
+ *   the session that `spec.resume` names, which the room hands back inside
+ *   one exchange, and prompts it with the record beyond the position the
+ *   session read through. A session the store cannot open starts fresh.
  *
- * The driver hands a session a first pass over the whole view. The session
- * renders the prompt, resolves the model, binds the tools, and builds one Pi
- * agent. The session keeps that agent for every later pass of the activation.
- * A later pass prompts it with the delta: what the record holds beyond
- * `readThrough`. The transcript of the activation stays whole.
- *
- * **Three spans, and only two are ours.** Pi has a *turn* — one request to a
- * provider and the tools it calls — and a *run*, which is one `prompt()` and
- * the turns inside it. An activation is wider than both: it is one or more
- * runs, because a message landing mid-activation starts another run over the
- * record as it now stands. The word for what a room does to a seat is
- * `activation` ([`agent.md`](../../../docs/agent.md), Execution boundary), and the
- * lease entries and the trace of each one carry that word.
- *
- * **Exchange continuity.** The executor keeps a transcript through its last
- * pass that did not fail, under the id of the activation that began it. An
- * activation continues a kept transcript only when the room names its id in
- * `spec.resume`, which it does inside one exchange. It then builds its agent
- * over the transcript and prompts with what the record holds beyond the
- * position the transcript read through. Any other activation begins a fresh
- * transcript. The seat keeps the two latest transcripts: the open exchange
- * may run beside the summary of the exchange before it. The kept transcripts
- * live in this process, so a restart begins a fresh one. Freshness still governs
- * speech: `readThrough` starts at the position the kept transcript read, and
- * a say against newer record is refused.
+ * **Three spans, and only two are ours.** Pi has a *turn*, which is one
+ * request to a provider and the tools it calls, and a *run*, which is one
+ * prompt and the turns inside it. An activation is wider than both: it is
+ * one or more runs, because a message landing mid-activation starts another
+ * run over the record as it now stands. The word for what a room does to a
+ * seat is `activation` ([`agent.md`](../../../docs/agent.md), Execution
+ * boundary), and the lease entries and the trace of each one carry that word.
  */
 import type {
 	ActivationView,
@@ -49,7 +41,6 @@ import type {
 	Executor,
 	ExecutorActivation,
 	ExecutorSession,
-	FailureCause,
 	HarnessSession,
 	PassInput,
 	PassResult,
@@ -57,61 +48,72 @@ import type {
 	Seq,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
-import {
-	classifyCause,
-	renderActivation,
-	renderDelta,
-	sessionToResume,
-} from '@ambionframework/ambion/hosting';
+import { renderActivation, renderDelta, sessionToResume } from '@ambionframework/ambion/hosting';
 import type {
-	AgentEvent,
 	AgentMessage,
-	Agent as PiAgent,
+	CompactionSettings,
+	HarnessEvent,
+	Session,
 	StreamFn,
 } from '@earendil-works/pi-agent-core';
-import { Agent } from '@earendil-works/pi-agent-core';
-import { PiContext } from './context.ts';
+import {
+	BACKGROUND_CONTEXT,
+	DEFAULT_COMPACTION_SETTINGS,
+	getOrUndefined,
+} from '@earendil-works/pi-agent-core';
+import type { Api, AssistantMessage, Message, Model } from '@earendil-works/pi-ai';
+import { passOutcome } from './failure.ts';
+import { Freshness, providerMessages, READ, recordMessage } from './freshness.ts';
+import { type OpenHarness, openHarness } from './harness.ts';
+import { streamModels } from './models.ts';
 import { PiSteps } from './pi-trace.ts';
 import type { ModelResolver } from './services.ts';
+import { memorySessions, type PiSessions } from './sessions.ts';
 import { binding, toolsFor } from './tools.ts';
+
+const CONTEXT = BACKGROUND_CONTEXT;
 
 /** What builds a Pi executor for one seat: its definition, and the room's model services. */
 export interface PiExecutorOptions {
 	readonly definition: AgentDefinition;
 	readonly model: ModelResolver;
 	readonly stream: StreamFn;
-	/** The room's clock. Pi stamps every message it is handed with it. */
+	/** The room's clock. The session stamps every range of the record with it. */
 	readonly now: () => number;
+	/** Where the seat keeps its sessions. Absent, in memory for as long as the executor lives. */
+	readonly sessions?: PiSessions;
 }
 
-/** What a seat keeps between the activations of one exchange. */
-interface SeatMemory {
-	/** The id of the activation that began the transcript. The release records it. */
-	id: string;
-	/** The transcript of the last activation that did not fail. */
-	messages: AgentMessage[];
-	/** The position the transcript read through. */
-	through: Seq;
+/** What the activations of one seat share. */
+export interface Seat {
+	readonly sessions: PiSessions;
+	/** The close of each session an ended activation still holds, by id. */
+	readonly closing: Map<string, Promise<void>>;
 }
-
-/**
- * The transcripts a seat keeps, by id, oldest first. Two cover the open
- * exchange and the summary of the exchange before it.
- */
-type MemoryHolder = Map<string, SeatMemory>;
-
-/** How many transcripts a seat keeps. */
-const KEPT = 2;
 
 /** The Pi executor. One instance per seat, for as long as the room runs. */
 export function createPiExecutor(options: PiExecutorOptions): Executor {
-	const memory: MemoryHolder = new Map();
+	const seat: Seat = { sessions: options.sessions ?? memorySessions(), closing: new Map() };
 	return {
 		open(activation: ExecutorActivation): ExecutorSession {
-			return new Activation(activation, options, memory);
+			return new Activation(activation, options, seat);
 		},
 	};
 }
+
+/** A steered line held until its pass prompts the lane. */
+interface Held {
+	readonly after: Seq;
+	readonly seq: Seq;
+	readonly line: string;
+}
+
+/** The harness of an activation, and the session under it. */
+interface Opened extends OpenHarness {
+	readonly session: Session;
+}
+
+const noop = () => {};
 
 /** One activation, from the moment the room wakes a seat until it stops. */
 export class Activation implements ExecutorSession {
@@ -119,61 +121,64 @@ export class Activation implements ExecutorSession {
 	private readonly room: RoomProtocol;
 	private readonly emit: (event: ExecutionEvent) => void;
 	private readonly definition: AgentDefinition;
-	private readonly model: ModelResolver;
-	private readonly stream: StreamFn;
-	private readonly now: () => number;
-	/** The seat's memory across the activations of one exchange. */
-	private readonly memory: MemoryHolder;
-	/** The id of the transcript this activation continues or begins. Set on the first pass. */
-	private transcript: string | undefined;
+	private readonly options: PiExecutorOptions;
+	private readonly seat: Seat;
 	/** The sink for the steps this executor owns. The driver closes it. */
 	private readonly trace: TraceSink;
 	private readonly steps = new PiSteps();
-	/** How much record context the provider consumed. */
-	private readonly context = new PiContext();
-	/** The steers held before Pi first polls its queue. */
-	private held: { after: Seq; seq: Seq; line: string }[] = [];
-	private providerStarted = false;
-	/** The Pi agent of this activation. Built on the first pass, kept for the rest. */
-	private agent: PiAgent | undefined;
+	private readonly freshness = new Freshness();
+	/** The harness of this activation. The first pass opens it, and `close` closes it. */
+	private opened: Opened | undefined;
+	/** The id of the session this activation opened. */
+	private sessionId: string | undefined;
+	/** The position a continued session read through, when the activation continues one. */
+	private base: Seq | undefined;
+	private systemPrompt = '';
 	/** The view of the running pass. The tools read the room and exchange from it. */
 	private view: ActivationView | undefined;
+	/**
+	 * Where the pass stands: no pass, a pass that prepares its run, or a run.
+	 * A steer takes a different path in each.
+	 */
+	private phase: 'idle' | 'starting' | 'running' = 'idle';
+	/** How many passes began. */
+	private passes = 0;
+	/** The steers that landed before the first pass. */
+	private early: Seq[] = [];
+	/** The steers that landed while a pass prepared its run. */
+	private held: Held[] = [];
+	/** The steered lines no provider request has held yet, by position, with their queue entry. */
+	private readonly steered = new Map<Seq, Promise<string | undefined>>();
+	/** The last assistant message of the running run. */
+	private last: AssistantMessage | undefined;
 	private stopped = false;
+	private closed = false;
+	/** Resolves when the activation is cut. */
+	private readonly cut: Promise<void>;
+	private cutNow: () => void = noop;
 
-	constructor(
-		activation: ExecutorActivation,
-		options: PiExecutorOptions,
-		memory: MemoryHolder = new Map(),
-	) {
+	constructor(activation: ExecutorActivation, options: PiExecutorOptions, seat: Seat) {
 		this.id = activation.id;
 		this.room = activation.room;
 		this.emit = activation.emit;
 		this.trace = activation.trace;
 		this.definition = options.definition;
-		this.model = options.model;
-		this.stream = options.stream;
-		this.now = options.now;
-		this.memory = memory;
+		this.options = options;
+		this.seat = seat;
+		this.cut = new Promise((resolve) => {
+			this.cutNow = resolve;
+		});
 	}
 
-	/**
-	 * The transcript to record with the release: the one this activation
-	 * continued or began, when the seat keeps it. Absent when the activation
-	 * ran no pass, or a fresh transcript failed before the seat kept it.
-	 */
+	/** The session to record with the release. Absent until a pass opens one. */
 	get session(): HarnessSession | undefined {
-		const kept = this.kept;
-		return kept === undefined ? undefined : { harness: 'pi', id: kept.id };
-	}
-
-	/** The kept transcript this activation continues or began, when the seat keeps it. */
-	private get kept(): SeatMemory | undefined {
-		return this.transcript === undefined ? undefined : this.memory.get(this.transcript);
+		const id = this.sessionId;
+		return id === undefined ? undefined : { harness: 'pi', id };
 	}
 
 	/** The seq this activation may commit against: the freshness boundary `readThrough`. */
 	get readThrough(): Seq {
-		return this.context.readThrough;
+		return this.freshness.readThrough;
 	}
 
 	/** Whether `abort` was called. The driver checks this before another room round trip. */
@@ -183,105 +188,236 @@ export class Activation implements ExecutorSession {
 
 	/** An accepted ordinary say confirms this activation consumed the record through here. */
 	acknowledgeThrough(seq: Seq): void {
-		this.context.acknowledgeThrough(seq);
+		this.freshness.acknowledgeThrough(seq);
 	}
 
-	/** A rejected commit placed this context in Pi's next tool-result input. */
+	/** A rejected commit placed this record in the next tool result the model reads. */
 	toolResultExpected(toolCallId: string, seq: Seq): void {
-		this.context.toolResultExpected(toolCallId, seq);
+		this.freshness.toolResultExpected(toolCallId, seq);
 	}
 
 	/**
-	 * A message landed while this activation was working. It reaches the model as a
-	 * steer. PiContext records its range without parsing rendered text.
+	 * A line landed while this activation worked. A run takes it as a steer.
+	 * A pass that prepares its run adds it to the prompt. With no pass, it
+	 * waits for the record: the next delta has it.
 	 */
 	steer(after: Seq, seq: Seq, line: string): void {
-		const context = { after, seq, line };
-		if (this.providerStarted && this.agent !== undefined) {
-			this.context.steer(this.agent, context, this.now());
-			this.trace.record({ type: 'steer', seq, consumed: true });
+		if (this.stopped) return;
+		if (this.phase === 'idle' && this.passes === 0) {
+			// The first pass reads the record as it stands then.
+			this.early.push(seq);
+		} else if (this.phase === 'idle') {
+			this.trace.record({ type: 'steer', seq, consumed: false });
+		} else if (this.phase === 'starting' || this.opened === undefined) {
+			this.held.push({ after, seq, line });
 		} else {
-			this.held.push(context);
+			this.send(this.opened, { after, seq, line });
 		}
 	}
 
-	/** Pi's abort ends the run but not its queues; the driver stops running passes too. */
-	abort(): void {
-		this.stopped = true;
-		this.agent?.abort();
+	/** Whether the record moved past what the model read. */
+	shouldRefresh(lastSeq: Seq): boolean {
+		return !this.stopped && lastSeq > this.readThrough;
 	}
 
-	/**
-	 * Whether the record moved past acknowledged context. A queued steer or a
-	 * newer room position requires a fresh pass. A dropped steer stays on the
-	 * record and is delivered again by that later pass's delta. A cancelled
-	 * session always answers no, though the driver checks `cancelled` itself
-	 * first, before it ever renews on this session's behalf.
-	 */
-	shouldRefresh(lastSeq: Seq): boolean {
-		if (this.stopped) return false;
-		const agent = this.agent;
-		if (!(agent?.hasQueuedMessages() ?? false) && lastSeq <= this.readThrough) return false;
-		agent?.clearAllQueues();
-		return true;
+	/** Abort the run. The pass in flight ends, and the driver runs no other. */
+	abort(): void {
+		this.stopped = true;
+		this.cutNow();
+		this.opened?.lane.abort(CONTEXT).catch(noop);
+	}
+
+	/** Close the harness and its session. The driver calls this once the activation is over. */
+	close(): void {
+		this.stopped = true;
+		this.closed = true;
+		this.cutNow();
+		this.release();
 	}
 
 	/** One pass: read, act, and report where this session left off. */
 	async pass(input: PassInput): Promise<PassResult> {
+		if (this.stopped) return { failed: false };
+		this.passes += 1;
+		this.drop(this.early.splice(0));
+		this.phase = 'starting';
+		this.view = input.view;
 		try {
-			if (this.stopped) return { failed: false };
-			// The fresh view becomes acknowledged only when Pi sends it to a provider.
-			// A steer held past its pass never reached the model as a steer.
-			for (const dropped of this.held.splice(0)) {
-				this.trace.record({ type: 'steer', seq: dropped.seq, consumed: false });
-			}
-			this.providerStarted = false;
-			this.view = input.view;
-			this.adopt(input.view);
-			const agent = await this.agentFor(input.view);
-			if (this.stopped) return { failed: false };
-			const prompt = this.promptFor(input);
-			if (prompt === undefined) return this.nothingNew(input.view);
-			await agent.prompt(prompt);
-			const failure = this.executionFailure(agent);
-			if (failure === undefined) this.keep(agent);
-			if (failure !== undefined) {
-				return { failed: true, cause: failure.cause, message: failure.error.message };
-			}
-			return endedForLength(agent) ? { failed: false, stop: 'length' } : { failed: false };
+			return await this.runPass(input);
 		} catch (error) {
+			// A cut closes the harness under the run. What it throws then is no failure.
+			if (this.stopped) return { failed: false };
 			return this.broke(error instanceof Error ? error : new Error(String(error)));
+		} finally {
+			this.phase = 'idle';
+			this.drop(this.held.splice(0).map((held) => held.seq));
 		}
+	}
+
+	/** Open the harness, and prompt it with what the pass has to read. */
+	private async runPass(input: PassInput): Promise<PassResult> {
+		const opened = await this.prepare(input.view);
+		if (opened === undefined || this.stopped) return { failed: false };
+		const prompt = [...this.promptFor(input), ...this.flush(input.view.through)];
+		if (prompt.length === 0) return this.nothingNew(opened, input.view);
+		return this.run(opened, prompt);
+	}
+
+	/** Steers that reached no model. The record holds them for the next pass. */
+	private drop(seqs: readonly Seq[]): void {
+		for (const seq of seqs) this.trace.record({ type: 'steer', seq, consumed: false });
 	}
 
 	/**
-	 * On the first pass, continue the kept transcript that the room names in
-	 * `spec.resume`. Otherwise this activation begins a fresh one.
+	 * The harness of this activation. The first pass renders the system
+	 * prompt, resolves the definition's model, opens the session, and binds
+	 * the permitted tools. Later passes keep it, and give it the system prompt
+	 * of the view now in hand.
 	 */
-	private adopt(view: ActivationView): void {
-		if (this.transcript !== undefined) return;
-		const resume = sessionToResume(view, 'pi');
-		const kept = resume === undefined ? undefined : this.memory.get(resume);
-		if (kept === undefined) {
-			this.transcript = this.id;
-			return;
+	private async prepare(view: ActivationView): Promise<Opened | undefined> {
+		const def = this.definition;
+		if (view.spec.seat !== def.name)
+			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
+		const { mechanism, agent } = renderActivation(view, def);
+		this.systemPrompt = `${mechanism}\n\n${agent}`;
+		if (this.opened !== undefined) return this.opened;
+		const model = await this.options.model(modelOf(def.executor), def.name);
+		if (this.stopped) return undefined;
+		const session = await this.openSession(view);
+		this.sessionId = session.metadata.id;
+		const opened = await this.attach(session, view, model);
+		this.opened = opened;
+		if (this.closed) {
+			this.release();
+			return undefined;
 		}
-		this.context.acknowledgeThrough(kept.through);
-		this.transcript = kept.id;
+		await this.readBase(opened, view);
+		return opened;
 	}
 
-	/** Keep the transcript for the seat's next activation. A failed pass keeps nothing. */
-	private keep(agent: PiAgent): void {
-		if (this.stopped || this.transcript === undefined) return;
-		this.memory.delete(this.transcript);
-		this.memory.set(this.transcript, {
-			id: this.transcript,
-			messages: [...agent.state.messages],
-			through: this.readThrough,
+	/** Reopen the session `spec.resume` names, or begin one under this activation's id. */
+	private async openSession(view: ActivationView): Promise<Session> {
+		const scope = { room: view.context.name, seat: this.definition.name };
+		const { sessions, closing } = this.seat;
+		const resume = sessionToResume(view, 'pi');
+		let session: Session | undefined;
+		if (resume !== undefined) {
+			// An ended activation may still close the session, and a session opens once.
+			// A cut ends the wait.
+			await Promise.race([closing.get(resume), this.cut]);
+			session = await sessions.open(scope, resume, CONTEXT);
+		}
+		return session ?? (await sessions.create(scope, this.id, CONTEXT));
+	}
+
+	/** A harness over the session, with the tools of this activation. */
+	private async attach(session: Session, view: ActivationView, model: Model<Api>): Promise<Opened> {
+		const def = this.definition;
+		const tools = toolsFor(view, def, binding(this, this.room), () => this.view ?? view);
+		const opened = await openHarness({
+			session,
+			models: streamModels(model, this.options.stream),
+			model,
+			tools,
+			systemPrompt: () => this.systemPrompt,
+			compaction: compactionOf(def.executor),
+			toProviderMessages: (messages) => this.provide(messages),
+			onEvent: (event) => this.note(event),
 		});
-		for (const id of this.memory.keys()) {
-			if (this.memory.size <= KEPT) break;
-			this.memory.delete(id);
+		return { ...opened, session };
+	}
+
+	/** In a continued session, start from the position it read through. */
+	private async readBase(opened: Opened, view: ActivationView): Promise<void> {
+		if (sessionToResume(view, 'pi') === undefined) return;
+		const entry = await opened.lane.findEntry(
+			{ type: 'custom', customType: READ, order: 'newestFirst' },
+			CONTEXT,
+		);
+		const through = entry?.type === 'custom' ? positionOf(entry.data) : undefined;
+		if (through === undefined) return;
+		this.base = through;
+		this.freshness.acknowledgeThrough(through);
+	}
+
+	/**
+	 * The ranges of the record that start a run. The first pass hands the
+	 * model the whole view. A later pass, and a response in a continued
+	 * session, hand it the delta, and none when nothing is new. A closing
+	 * activation reads the whole view.
+	 */
+	private promptFor(input: PassInput): AgentMessage[] {
+		const { view } = input;
+		const now = this.options.now();
+		const after = input.kind === 'delta' ? input.since : this.base;
+		if (after !== undefined && (input.kind === 'delta' || view.spec.purpose.kind === 'respond')) {
+			const text = renderDelta(view, after);
+			return text === undefined ? [] : [recordMessage({ after, through: view.through }, text, now)];
+		}
+		const text = renderActivation(view, this.definition).context;
+		return [recordMessage({ after: 0, through: view.through }, text, now)];
+	}
+
+	/**
+	 * The steers held while the pass prepared its run. A line the view holds
+	 * reached the model with it. Any other joins the prompt.
+	 */
+	private flush(through: Seq): AgentMessage[] {
+		const now = this.options.now();
+		return this.held.splice(0).flatMap((held) => {
+			if (held.seq <= through) {
+				this.trace.record({ type: 'steer', seq: held.seq, consumed: true });
+				return [];
+			}
+			this.steered.set(held.seq, Promise.resolve(undefined));
+			return [steerMessage(held, now)];
+		});
+	}
+
+	/** Queue a steer on the running lane. */
+	private send(opened: Opened, held: Held): void {
+		const queued = opened.lane
+			.steer(steerMessage(held, this.options.now()), undefined, CONTEXT)
+			.then((result) => getOrUndefined(result)?.entryId)
+			.catch(() => undefined);
+		this.steered.set(held.seq, queued);
+	}
+
+	/** One run over the prompt, and what it means for the pass. */
+	private async run(opened: Opened, prompt: AgentMessage[]): Promise<PassResult> {
+		this.last = undefined;
+		this.phase = 'running';
+		const result = await opened.lane.prompt(prompt, CONTEXT);
+		this.phase = 'idle';
+		await this.settle(opened);
+		// A cut run is no failure, whatever the closed harness answers.
+		if (this.stopped) return { failed: false };
+		const outcome = passOutcome(result, this.last);
+		if (outcome.failed) {
+			this.emit({
+				type: 'error',
+				agent: this.definition.name,
+				activation: this.id,
+				error: outcome.error,
+				cause: outcome.cause,
+			});
+			return { failed: true, cause: outcome.cause, message: outcome.error.message };
+		}
+		await this.remember(opened);
+		return outcome.stop === undefined ? { failed: false } : { failed: false, stop: outcome.stop };
+	}
+
+	/**
+	 * The steers no provider request held once the run ended. Each leaves the
+	 * lane queue, and the record holds it for the next delta.
+	 */
+	private async settle(opened: Opened): Promise<void> {
+		const left = [...this.steered];
+		this.steered.clear();
+		for (const [seq, queued] of left) {
+			const entryId = await queued;
+			if (entryId !== undefined) await opened.lane.cancelQueued(entryId, CONTEXT).catch(noop);
+			this.trace.record({ type: 'steer', seq, consumed: false });
 		}
 	}
 
@@ -289,65 +425,54 @@ export class Activation implements ExecutorSession {
 	 * The record moved, but not in a way a model reads: a delta with no
 	 * message in it. The session takes the view as read, and no run starts.
 	 */
-	private nothingNew(view: ActivationView): PassResult {
-		this.context.acknowledgeThrough(view.through);
+	private async nothingNew(opened: Opened, view: ActivationView): Promise<PassResult> {
+		this.freshness.acknowledgeThrough(view.through);
+		await this.remember(opened);
 		return { failed: false };
 	}
 
-	/**
-	 * The message that starts a run. The first pass hands the model the whole
-	 * view. A later pass, and a response over a kept transcript, hand it the
-	 * delta, and none when nothing is new. A closing activation reads the
-	 * whole view.
-	 */
-	private promptFor(input: PassInput): AgentMessage | undefined {
-		const kept = this.kept;
-		if (input.kind === 'view' && kept !== undefined && input.view.spec.purpose.kind === 'respond') {
-			const text = renderDelta(input.view, kept.through);
-			if (text === undefined) return undefined;
-			return this.context.delta(kept.through, input.view.through, text, this.now());
-		}
-		if (input.kind === 'view') {
-			const context = renderActivation(input.view, this.definition).context;
-			return this.context.initial(input.view.through, context, this.now());
-		}
-		const text = renderDelta(input.view, input.since);
-		if (text === undefined) return undefined;
-		return this.context.delta(input.since, input.view.through, text, this.now());
+	/** Write the position the session read through, for the activation that continues it. */
+	private async remember(opened: Opened): Promise<void> {
+		await opened.lane.appendCustomEntry(READ, { through: this.readThrough }, CONTEXT);
 	}
 
-	/**
-	 * Tool events are room-visible. Pi context consumption is recorded at the
-	 * provider request boundary by `PiContext`, not by transcript event text.
-	 */
-	private note(event: AgentEvent): void {
+	/** The provider messages of one request, and what they hold of the record. */
+	private provide(messages: AgentMessage[]): Message[] {
+		for (const seq of this.freshness.provided(messages)) {
+			if (this.steered.delete(seq)) this.trace.record({ type: 'steer', seq, consumed: true });
+		}
+		return providerMessages(messages);
+	}
+
+	/** One harness event: its steps, and the room-visible tool events. */
+	private note(event: HarnessEvent): void {
 		for (const step of this.steps.steps(event)) this.trace.record(step);
-		if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
-			// `say` is the room's own event, not a tool's.
-			if (event.toolName !== 'say') {
-				this.emit({
-					type: event.type,
-					agent: this.definition.name,
-					activation: this.id,
-					toolName: event.toolName,
-				});
-			}
-			return;
+		if (event.type === 'message_end' && event.message.role === 'assistant') {
+			this.last = event.message;
 		}
-	}
-
-	/** Record the provider outcome and notify the host. */
-	private executionFailure(agent: PiAgent): { error: Error; cause: FailureCause } | undefined {
-		const failure = failureOf(agent);
-		if (failure === undefined) return undefined;
+		if (event.type !== 'tool_start' && event.type !== 'tool_end') return;
+		// `say` is the room's own event, not a tool's.
+		if (event.toolName === 'say') return;
 		this.emit({
-			type: 'error',
+			type: event.type === 'tool_start' ? 'tool_execution_start' : 'tool_execution_end',
 			agent: this.definition.name,
 			activation: this.id,
-			error: failure.error,
-			cause: failure.cause,
+			toolName: event.toolName,
 		});
-		return failure;
+	}
+
+	/** Close the harness and its session, and let the seat's next activation wait for it. */
+	private release(): void {
+		const opened = this.opened;
+		if (opened === undefined) return;
+		this.opened = undefined;
+		const id = opened.session.metadata.id;
+		const { closing } = this.seat;
+		const done = opened.harness.close(CONTEXT).catch(noop);
+		closing.set(id, done);
+		void done.then(() => {
+			if (closing.get(id) === done) closing.delete(id);
+		});
 	}
 
 	/**
@@ -365,62 +490,21 @@ export class Activation implements ExecutorSession {
 		});
 		return { failed: true, cause: 'transient', message: error.message };
 	}
+}
 
-	/**
-	 * The Pi agent of this activation. The first pass builds it: the executor
-	 * renders the system prompt, resolves the definition's model, and binds
-	 * the permitted tools. Later passes keep it, and give it the system
-	 * prompt of the view now in hand. The stream function tells the activation
-	 * when the model is asked, so a steer never joins the request it lands during.
-	 */
-	private async agentFor(view: ActivationView): Promise<PiAgent> {
-		const def = this.definition;
-		if (view.spec.seat !== def.name)
-			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
-		const { mechanism, agent: seat } = renderActivation(view, def);
-		const systemPrompt = `${mechanism}\n\n${seat}`;
-		if (this.agent !== undefined) {
-			this.agent.state.systemPrompt = systemPrompt;
-			return this.agent;
-		}
-		const agent = new Agent({
-			streamFn: (model, context, options) => {
-				this.providerRequestStarted(context.messages);
-				return this.stream(model, context, options);
-			},
-			initialState: {
-				systemPrompt,
-				model: await this.model(modelOf(def.executor), def.name),
-				thinkingLevel: 'off',
-				tools: toolsFor(view, def, binding(this, this.room), () => this.currentView(view)),
-				messages: [...(this.kept?.messages ?? [])],
-			},
-		});
-		if (this.stopped) return agent;
-		agent.subscribe((event) => this.note(event));
-		this.agent = agent;
-		return agent;
-	}
+/** A steered line as a range of the record. */
+function steerMessage(held: Held, now: number): AgentMessage {
+	return recordMessage(
+		{ after: held.after, through: held.seq, steer: true },
+		`[new] ${held.line}`,
+		now,
+	);
+}
 
-	/** The view of the running pass, or the one the agent was built from. */
-	private currentView(built: ActivationView): ActivationView {
-		return this.view ?? built;
-	}
-
-	/**
-	 * A provider request begins after Pi chose its input. A steer queued from
-	 * here follows that request and cannot advance this request's progress.
-	 * The seat side calls this from the stream function it hands Pi.
-	 */
-	private providerRequestStarted(messages: readonly object[]): void {
-		this.context.providerRequestStarted(messages);
-		this.providerStarted = true;
-		for (const context of this.held.splice(0)) {
-			if (this.agent === undefined) continue;
-			this.context.steer(this.agent, context, this.now());
-			this.trace.record({ type: 'steer', seq: context.seq, consumed: true });
-		}
-	}
+/** The position a read entry holds. */
+function positionOf(data: unknown): Seq | undefined {
+	if (typeof data !== 'object' || data === null || !('through' in data)) return undefined;
+	return typeof data.through === 'number' ? data.through : undefined;
 }
 
 /** The model identifier `pi()` gave the executor. Another family's executor has none. */
@@ -429,77 +513,17 @@ function modelOf(executor: AgentExecutor): string {
 	throw new Error(`The Pi executor cannot run an executor of kind '${executor.kind}'.`);
 }
 
-/** Whether the last model message stopped at a length limit. */
-function endedForLength(agent: PiAgent): boolean {
-	const last = agent.state.messages.at(-1);
-	return last !== undefined && 'stopReason' in last && last.stopReason === 'length';
+/** The compaction settings `pi()` gave the executor, or Pi's defaults. */
+function compactionOf(executor: AgentExecutor): CompactionSettings {
+	if ('compaction' in executor && isCompaction(executor.compaction)) return executor.compaction;
+	return DEFAULT_COMPACTION_SETTINGS;
 }
 
-/** A failed provider message: name it in the error, and classify its cause. */
-function failureOf(agent: PiAgent): { error: Error; cause: FailureCause } | undefined {
-	const last = agent.state.messages.at(-1);
-	if (last && 'stopReason' in last && last.stopReason === 'error') {
-		const message = ('errorMessage' in last && last.errorMessage) || 'The activation failed.';
-		return { error: new Error(message), cause: providerCause(last) };
-	}
-	return undefined;
+function isCompaction(value: unknown): value is CompactionSettings {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		'enabled' in value &&
+		typeof value.enabled === 'boolean'
+	);
 }
-
-/**
- * Whether a failed provider message is permanent or transient. A credit or an
- * authentication refusal in the text, or a permanent HTTP status a diagnostic
- * reports, is permanent. Every other failure is transient, so an uncertain
- * message retries rather than gives up: a wasted retry costs less than a
- * question the room drops.
- */
-function providerCause(message: AgentMessage): FailureCause {
-	const text = 'errorMessage' in message ? message.errorMessage : undefined;
-	return classifyCause({ text, status: statusOf(message), permanent: PERMANENT_TEXT });
-}
-
-/** One provider diagnostic, as the classifier reads it. */
-type Diagnostic = { error?: { code?: unknown }; details?: Record<string, unknown> };
-
-/**
- * The HTTP status a diagnostic reports, or nothing. The classifier reads a
- * status only from a diagnostic, never from free error text, because a rate
- * limit names a token count that reads like a status. The last diagnostic
- * with a status wins, so a final attempt speaks for the failure.
- */
-function statusOf(message: AgentMessage): number | undefined {
-	const diagnostics: Diagnostic[] = 'diagnostics' in message ? (message.diagnostics ?? []) : [];
-	let status: number | undefined;
-	for (const diagnostic of diagnostics) {
-		const found = diagnosticStatus(diagnostic);
-		if (found !== undefined) status = found;
-	}
-	return status;
-}
-
-/** A status code one diagnostic reports, on its error code or its details. */
-function diagnosticStatus(diagnostic: Diagnostic): number | undefined {
-	const code = httpStatus(diagnostic.error?.code);
-	if (code !== undefined) return code;
-	const details = diagnostic.details ?? {};
-	for (const key of ['status', 'statusCode', 'httpStatus']) {
-		const value = httpStatus(details[key]);
-		if (value !== undefined) return value;
-	}
-	return undefined;
-}
-
-/** A whole HTTP status, from a number or a fully numeric string, in the 4xx or 5xx range. */
-function httpStatus(value: unknown): number | undefined {
-	const parsed =
-		typeof value === 'number'
-			? value
-			: typeof value === 'string' && /^\d+$/.test(value.trim())
-				? Number(value.trim())
-				: undefined;
-	if (parsed === undefined || !Number.isInteger(parsed)) return undefined;
-	return parsed >= 400 && parsed <= 599 ? parsed : undefined;
-}
-
-/** Error text that names a credit or an authentication refusal, in phrases a retry cannot clear. */
-const PERMANENT_TEXT =
-	/credit balance|authentication_error|permission_error|invalid_request_error|invalid[_\s]?api[_\s]?key|unauthorized|permission denied/i;

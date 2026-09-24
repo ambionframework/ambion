@@ -13,6 +13,13 @@ export interface PiExecutionOptions {
 	 * resolves to a stub, because a custom stream never reads it.
 	 */
 	readonly stream?: StreamFn;
+	/**
+	 * The directory on the local disk where each seat keeps its Pi harness
+	 * sessions. Absent, a custom stream keeps them in memory, and the
+	 * registry stream keeps them in `ambion-pi-sessions` in the OS temporary
+	 * directory.
+	 */
+	readonly sessionDir?: string;
 }
 
 /**
@@ -28,6 +35,7 @@ export function piExecution(options: PiExecutionOptions = {}): Execution {
 				call: host.limits.call,
 				trace: host.limits.trace,
 				...(options.stream === undefined ? {} : { stream: options.stream }),
+				...(options.sessionDir === undefined ? {} : { sessionDir: options.sessionDir }),
 			});
 			return composeConnector({
 				host,
@@ -38,6 +46,7 @@ export function piExecution(options: PiExecutionOptions = {}): Execution {
 						model: services.model,
 						stream: services.stream,
 						now: () => host.clock.now(),
+						sessions: services.sessions,
 					}),
 			});
 		},

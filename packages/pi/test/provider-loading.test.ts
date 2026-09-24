@@ -44,7 +44,7 @@ function runFreshProcess(code: string): Promise<{ code: number | null; stderr: s
 
 describe('provider loading', () => {
 	it(
-		'does not load the provider catalog while importing the Pi entry, reading a room, or running a scripted room',
+		'loads neither the provider catalog nor the Node harness file system while importing the Pi entry, reading a room, or running a scripted room',
 		async () => {
 			const result = await runFreshProcess(
 				`const { readRoom, startRoom, defineAgent, defineHuman } = await import('@ambionframework/ambion');
@@ -70,6 +70,7 @@ describe('provider loading', () => {
 			);
 			expect(result.code).toBe(0);
 			expect(result.stderr).not.toContain('AMBION_PROVIDER_IMPORT:');
+			expect(result.stderr).not.toContain('AMBION_NODE_HARNESS_IMPORT:');
 		},
 		testLimit,
 	);

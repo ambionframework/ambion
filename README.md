@@ -138,8 +138,8 @@ the new entries, and a Claude or Codex seat reads the whole view again. The
 first activation of the seat in the next exchange starts fresh. No session
 crosses an exchange.
 
-**The session is a cache.** Claude and Codex keep it on the local disk, and Pi
-keeps it in the process. When it is lost, the next activation reads the record
+**The session is a cache.** Claude, Codex and Pi keep it on the local disk.
+When it is lost, the next activation reads the record
 and starts fresh. The steps of each activation go to the logger that the host
 passes in. See [Exchange continuity](docs/executors.md#exchange-continuity).
 

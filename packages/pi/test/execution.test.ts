@@ -2,6 +2,9 @@
  * The composition path: a room takes `piExecution({ stream })` as its
  * execution, or a runtime takes it as the default for every room.
  */
+import { mkdtemp, readdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createRuntime, isSpoken, type Room, resumeRoom, startRoom } from '@ambionframework/ambion';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { andrei, roomName, scriptedAgent, waitForRoom } from '../../ambion/test/support/room.ts';
@@ -69,5 +72,21 @@ describe('piExecution', () => {
 			}),
 		);
 		expect((await ask(room)).map((message) => message.text)).toContain('42');
+	});
+
+	it('keeps the sessions of its seats on the local disk under the directory it names', async () => {
+		const sessionDir = await mkdtemp(join(tmpdir(), 'ambion-execution-'));
+		const name = roomName('pi-disk');
+		const room = stopAtEnd(
+			await startRoom({
+				name,
+				agents: [worker],
+				execution: piExecution({ stream: answering(), sessionDir }),
+			}),
+		);
+		expect((await ask(room)).map((message) => message.text)).toContain('42');
+		const [folder] = await readdir(sessionDir);
+		expect(folder).toContain(name);
+		expect(await readdir(join(sessionDir, folder as string))).toHaveLength(1);
 	});
 });

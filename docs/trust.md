@@ -41,12 +41,12 @@ does not restrict who may address or steer whom.
 
 ## What the kernel does not defend
 
-| Not defended                   | Why it is the application's concern                                                                | Where it is stated                                     |
-| ------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Prompt injection               | The `text` of a message is data that a model may act on. The room screens emptiness and size only. | [Definitions and tools](agent.md)                      |
-| Tool and provider side effects | The room does not run an effect once. A call can repeat after a timeout or a cancel.               | [Durability](durability.md) section 5                  |
-| Secrets in transcripts         | The record keeps every token. The logger receives tool output. The byte cap limits size only.      | [Durability](durability.md), [Executors](executors.md) |
-| A shell on a workstation       | An agent runs a real shell with network access. The account permissions on the server contain it.  | [Workstation](workstation.md#trust)                    |
+| Not defended                   | Why it is the application's concern                                                                                                                                                               | Where it is stated                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Prompt injection               | The `text` of a message is data that a model may act on. The room screens emptiness and size only.                                                                                                | [Definitions and tools](agent.md)                                                                 |
+| Tool and provider side effects | The room does not run an effect once. A call can repeat after a timeout or a cancel.                                                                                                              | [Durability](durability.md) section 5                                                             |
+| Secrets in transcripts         | The record keeps every token. The logger receives tool output. The byte cap limits size only. Pi writes each session, tool output included, to a JSONL file under `sessionDir` on the local disk. | [Durability](durability.md), [Executors](executors.md), [Pi](pi.md#policy-and-the-trust-boundary) |
+| A shell on a workstation       | An agent runs a real shell with network access. The account permissions on the server contain it.                                                                                                 | [Workstation](workstation.md#trust)                                                               |
 
 ## What each harness exposes
 
@@ -91,7 +91,7 @@ session on the `ended` lease entry, and the exchange view lists it as
 `ExchangeActivation.session`. [Durability](durability.md) owns the entry
 format.
 
-Evidence: [`pi/test/memory.test.ts`](../packages/pi/test/memory.test.ts),
+Evidence: [`pi/test/continuity.test.ts`](../packages/pi/test/continuity.test.ts),
 [`claude/test/memory.test.ts`](../packages/claude/test/memory.test.ts), and
 the `session.*` files in
 [`golden`](../packages/ambion/test/golden.test.ts).

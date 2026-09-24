@@ -7,30 +7,38 @@
 import type { AgentExecutor, AmbionTool } from '@ambionframework/ambion';
 import { defineTool } from '@ambionframework/ambion';
 import { type AgentExecutorBaseOptions, describeExecutor } from '@ambionframework/ambion/hosting';
-import type { AgentTool } from '@earendil-works/pi-agent-core';
+import type { AgentTool, CompactionSettings } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
 
 export interface PiOptions extends AgentExecutorBaseOptions {
 	/** A Pi model identifier, `provider/model-id`. */
 	model: string;
+	/**
+	 * When the harness compacts the session. Absent, the harness uses Pi's
+	 * `DEFAULT_COMPACTION_SETTINGS`.
+	 */
+	compaction?: CompactionSettings;
 }
 
 /**
- * An agent's Pi executor: Pi's agent loop, model, instructions, and tools.
- * Built by `pi()`. The room reads none of the fields Pi adds; the Pi
+ * An agent's Pi executor: Pi's `AgentHarness`, model, instructions, and
+ * tools. Built by `pi()`. The room reads none of the fields Pi adds; the Pi
  * executor does.
  */
 export interface PiExecutor extends AgentExecutor {
 	readonly kind: 'pi';
 	readonly model: string;
+	readonly compaction?: CompactionSettings;
 }
 
-/** The Pi executor: Pi's agent loop, model, instructions, and tools. */
+/** The Pi executor: Pi's `AgentHarness`, model, instructions, and tools. */
 export function pi(options: PiOptions): PiExecutor {
+	const { compaction, ...rest } = options;
 	return Object.freeze({
-		...describeExecutor({ ...options, kind: 'pi' }),
+		...describeExecutor({ ...rest, kind: 'pi' }),
 		kind: 'pi' as const,
 		model: options.model,
+		...(compaction === undefined ? {} : { compaction: Object.freeze({ ...compaction }) }),
 	});
 }
 

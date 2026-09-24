@@ -6,9 +6,10 @@
  * steering is forwarded separately to the exact live activation. A cut is
  * handed to the runner the same way. The seat gives the steps of each
  * activation to the logger that `configure` takes. The Pi executor lives on
- * the object instance, so a seat keeps its transcript inside one exchange
- * while the object stays in memory. An eviction loses it, and the next
- * activation starts fresh.
+ * the object instance, and it keeps the seat's Pi harness sessions in a
+ * `MemorySessionRepo` there. A seat continues its session inside one
+ * exchange while the object stays in memory. An eviction loses the
+ * sessions, and the next activation starts fresh.
  */
 
 import { DurableObject } from 'cloudflare:workers';
@@ -16,7 +17,7 @@ import type { Clock, ExecutionEvent } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
 import type { Executor, RoomProtocol, Steer, Wake } from '@ambionframework/ambion/hosting';
 import { AgentRunner, seatContext } from '@ambionframework/ambion/hosting';
-import { createPiExecutor, type ExecutionServices } from '@ambionframework/pi';
+import { createPiExecutor, type ExecutionServices, memorySessions } from '@ambionframework/pi';
 import type { SeatEvent } from './configure.ts';
 import { definitionOf, executionFor, seatEvent, traceLogger } from './configure.ts';
 import type { Env } from './room-object.ts';
@@ -50,7 +51,7 @@ function seatLine(room: string, seat: string, event: ExecutionEvent): SeatEvent 
 
 export class SeatObject extends DurableObject<Env> {
 	private runner: AgentRunner | undefined;
-	/** The Pi executor of the seat, kept while the object stays in memory. */
+	/** The Pi executor of the seat and its sessions, kept while the object stays in memory. */
 	private executor: { readonly seat: string; readonly executor: Executor } | undefined;
 	/** Whether an alarm runs in this object now. */
 	private alarming = false;
@@ -202,6 +203,7 @@ export class SeatObject extends DurableObject<Env> {
 			model: execution.model,
 			stream: execution.stream,
 			now: () => execution.clock.now(),
+			sessions: memorySessions(),
 		});
 		this.executor = { seat, executor };
 		return executor;

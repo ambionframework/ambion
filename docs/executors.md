@@ -282,12 +282,13 @@ every executor works this way.
 **An executor resumes only the session that `spec.resume` names.** It
 uses the session only when the harness name is its own. With no
 `spec.resume` it starts a fresh session. [Pi](pi.md#exchange-continuity)
-keeps its two latest transcripts in the process.
+keeps each session of a seat apart, so the open exchange runs beside the
+summary of the exchange before it.
 
 **The session is a cache, and its persistence is best effort.** The
-harness keeps the session where it keeps it: Claude and Codex keep it in
-their stores on the local disk, and Pi keeps it in the process. A restart,
-a new disk or a host with no disk loses it. The next activation then
+harness keeps the session where it keeps it: Pi, Claude and Codex keep it
+on the local disk, and a Cloudflare seat keeps its Pi sessions in memory. A
+new disk, a host with no disk, or an evicted seat object loses it. The next activation then
 starts fresh from the room record. The activation does not fail, and the
 release records the new id. The record is the only state the room
 promises to keep.
@@ -330,7 +331,7 @@ anticipated family. No package for it exists yet.
 
 | Family                    | Package                   | Loop owner | Steer during a pass                 | Status      |
 | ------------------------- | ------------------------- | ---------- | ----------------------------------- | ----------- |
-| Pi agent core             | `@ambionframework/pi`     | Caller     | Yes, through `agent.steer`          | Shipped     |
+| Pi `AgentHarness`         | `@ambionframework/pi`     | Harness    | Yes, through `lane.steer`           | Shipped     |
 | Claude Agent SDK          | `@ambionframework/claude` | Harness    | Yes, on the SDK `user` echo         | Shipped     |
 | Codex SDK                 | `@ambionframework/codex`  | Harness    | None; the next `run` takes the line | Shipped     |
 | Anthropic SDK tool runner | None                      | Caller     | Between turns                       | Anticipated |
@@ -412,12 +413,14 @@ executable. `can` is an `ExecutorCapabilities` value with `steer`, `usage`,
 and `permanentFailure`. The suite drops each case that a false capability
 gates.
 
-Two runs exist as evidence. The scripted executor runs the suite in
-`packages/ambion/test/executor-conformance.test.ts`. The Claude executor
-runs it against a fake Claude Code executable in
+Three runs exist as evidence. The scripted executor runs the suite in
+`packages/ambion/test/executor-conformance.test.ts`. The Pi executor runs
+it on a scripted stream in `packages/pi/test/executor-conformance.test.ts`,
+through `piExecutorHarness` from `@ambionframework/pi/testing`. The Claude
+executor runs it against a fake Claude Code executable in
 `packages/claude/test/executor-conformance.test.ts`, through
-`claudeExecutorHarness` from `@ambionframework/claude/testing`. Neither run
-needs a key or a network. The Pi executor has no run of the suite.
+`claudeExecutorHarness` from `@ambionframework/claude/testing`. No run
+needs a key or a network.
 
 The Codex executor does not run the suite. A real model cannot follow a
 scripted plan, and a fake `codex` proves only that the adapter agrees with
