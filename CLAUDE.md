@@ -33,6 +33,7 @@ floor.
 | `docs/summary.md`      | Design contract for optional summaries of closed exchanges                                                                                   |
 | `docs/workspace.md`    | Design contract for the workspace an agent's tools reach into — read with `agent.md`                                                         |
 | `docs/workstation.md`  | Design contract for the workspace backend over SSH to one remote server, one Unix account for each agent — read with `workspace.md`          |
+| `docs/git.md`          | Design for a git backend: read-only templates, forks, credentials, and a deploy ref that starts a job — not implemented yet                  |
 | `docs/example.md`      | The one runnable example, an agentic lab workspace, and what it must show                                                                    |
 | `docs/roster.md`       | Design contract for a roster that changes while the room runs — read with `agent.md`                                                         |
 | `docs/durability.md`   | What the record promises under failure, and how the tiers prove it — read with `agent.md`                                                    |
