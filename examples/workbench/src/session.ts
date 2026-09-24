@@ -12,7 +12,7 @@ import { type Block, buildTimeline } from './timeline.ts';
 import type { Approval, FileEntry, Person, RoomAction, RoomView, Workbench } from './workbench.ts';
 
 /** What the terminal does after a command, beyond what the session already changed. */
-export type Intent = { type: 'quit' } | { type: 'files' } | { type: 'compose'; text: string };
+export type Intent = { type: 'quit' | 'files' | 'processes' } | { type: 'compose'; text: string };
 
 /**
  * Everything the terminal does that is not drawing. It holds who the person is,
@@ -305,7 +305,7 @@ export class Session {
 			case 'help':
 				return void this.say(HELP);
 			default:
-				return { type: 'quit' };
+				return { type: name === 'ps' ? 'processes' : 'quit' };
 		}
 	}
 

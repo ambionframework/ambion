@@ -4,6 +4,7 @@ import type {
 	ActivationSteps,
 	Approval,
 	FileContent,
+	ProcessView,
 	RoomView,
 	Workbench,
 } from '../src/workbench.ts';
@@ -51,6 +52,15 @@ export class FakeHost implements Workbench {
 	pendingApprovals: Approval[] = [];
 	/** Every path the session asked the host to read. */
 	readonly reads: string[] = [];
+	/** The processes the host lists. A cancel moves one to `cancelled`. */
+	processTable: ProcessView[] = [];
+	readonly processWatchers = new Set<() => void>();
+	/** While set, a process list waits for it. */
+	processGate: Promise<void> | undefined;
+	/** While set, a process list fails with it. */
+	processFailure: string | undefined;
+	/** The state a cancel gives. `running` stands for a process that did not end in time. */
+	cancelState: ProcessView['state'] = 'cancelled';
 
 	async rooms() {
 		return [...this.table.values()];
@@ -112,6 +122,31 @@ export class FakeHost implements Workbench {
 		this.calls.push(`attach:${localPath}`);
 		if (this.attachGate) await this.attachGate;
 		return { path: `/attachments/${localPath.split('/').at(-1)}`, size: 42 };
+	}
+	async processes() {
+		const table = [...this.processTable];
+		if (this.processGate) await this.processGate;
+		if (this.processFailure) throw new Error(this.processFailure);
+		return table;
+	}
+	async processOutput(handle: string) {
+		this.reads.push(handle);
+		return { handle, text: `output of ${handle}\n`, size: 20, truncated: false };
+	}
+	async cancelProcess(handle: string) {
+		this.calls.push(`cancel:${handle}`);
+		this.processTable = this.processTable.map((process) =>
+			process.handle === handle ? { ...process, state: this.cancelState } : process,
+		);
+		const found = this.processTable.find((process) => process.handle === handle);
+		if (!found) throw new Error(`No process ${handle}.`);
+		return found;
+	}
+	watchProcesses(changed: () => void) {
+		this.processWatchers.add(changed);
+		return () => {
+			this.processWatchers.delete(changed);
+		};
 	}
 	async labTables() {
 		return ['runs', 'results'];

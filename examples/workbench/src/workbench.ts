@@ -14,6 +14,7 @@ import {
 	readLabTable,
 } from './files.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
+import { byRecency, type ProcessOutput, type ProcessView, readOutput } from './processes.ts';
 import {
 	fail,
 	liveRoom,
@@ -28,6 +29,7 @@ import type { ActivationSteps } from './steps.ts';
 export type { Approval } from './approvals.ts';
 export type { Person } from './definitions.ts';
 export type { FileContent, FileEntry, ImageContent, TableView } from './files.ts';
+export type { ProcessOutput, ProcessView } from './processes.ts';
 export type { RoomAction, RoomView } from './rooms.ts';
 export type { ActivationSteps } from './steps.ts';
 
@@ -68,6 +70,23 @@ export interface Workbench {
 	file(path: string): Promise<FileContent>;
 	/** Copy a local file into the workspace, so it can go with a message as a `file:///` ref. */
 	attach(localPath: string): Promise<FileEntry>;
+	/**
+	 * The background processes of the agents that used the workspace in this
+	 * run: the running processes first, then the newest start first.
+	 */
+	processes(): Promise<ProcessView[]>;
+	/**
+	 * The end of the output of the process `handle` of `agent`: the last 64 K
+	 * characters. An output over 1 MiB gives its size and no text.
+	 */
+	processOutput(handle: string, agent: string): Promise<ProcessOutput>;
+	/**
+	 * Stop one process. It waits up to 10 seconds for the end, then gives the
+	 * state. It runs outside the queue of the host's file reads.
+	 */
+	cancelProcess(handle: string): Promise<ProcessView>;
+	/** Call `changed` when a process starts and when one ends. The return value ends the watch. */
+	watchProcesses(changed: () => void): () => void;
 	/** The names of the tables of the lab database. */
 	labTables(): Promise<string[]>;
 	/** One table of the lab database. `uri` is `lab:///<table>`. */
@@ -180,6 +199,19 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 		files: () => rooms.withWorkspace(() => listFiles(rooms.workspace)),
 		file: (path) => rooms.withWorkspace(() => readFile(rooms.workspace, path)),
 		attach: (localPath) => rooms.withWorkspace(() => attachFile(rooms.workspace, localPath)),
+		processes: () =>
+			rooms.withWorkspace(async () => byRecency(await rooms.workspace.processes.list())),
+		processOutput: (handle, agent) =>
+			rooms.withWorkspace(async () => {
+				const listed = await rooms.workspace.processes.list({ agent });
+				const process = listed.find((candidate) => candidate.handle === handle);
+				if (!process) fail(`No process ${handle}.`);
+				return readOutput(rooms.workspace, process);
+			}),
+		// The table orders a stop on the bash owner of the agent, so the cancel
+		// needs no place in the host's queue, and a wait for the end holds no read.
+		cancelProcess: (handle) => rooms.workspace.processes.cancel(handle),
+		watchProcesses: (changed) => rooms.workspace.processes.subscribe(() => changed()),
 		labTables: async () => listLabTables(labPath),
 		labTable: async (uri) => readLabTable(labPath, uri),
 		close() {

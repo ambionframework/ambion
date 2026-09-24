@@ -166,7 +166,8 @@ interface.
   on disk. The next start resumes them.
 - **Terminal.** `src/tui.ts` is an OpenTUI application on a dark theme. It has
   a multi-line composer with a room chip, and slash commands to switch person
-  or room, create a room, search workspace files in a side panel, and stop, resume, or abort. It shows
+  or room, create a room, search workspace files in a side panel, watch and cancel the agents'
+  background processes with `/ps`, and stop, resume, or abort. It shows
   the refs of each message and opens a file, a lab table, or a message from
   one (see the [Workbench README](../examples/workbench/README.md)).
   `/attach` copies a local picture into the workspace and cites it as a ref
@@ -244,7 +245,7 @@ examples/workbench/
     repositories.ts    the git backend and its firmware-sketch template
     instrument.ts      the simulated instruments and their approval step
     rooms.ts           the host lifecycle and the room catalog
-    workbench.ts       the host: open, read, watch, send, control, create, files
+    workbench.ts       the host: open, read, watch, send, control, create, files, processes
     names.ts           the room name and goal rules
     files.ts           the workspace list, one file preview, one lab table preview, and /attach
     attachments.ts     what /attach does, and what a pasted path names
@@ -263,6 +264,9 @@ examples/workbench/
     palette.ts         the palette state: rows, the picked row, and dismissal
     browser.ts         the files panel state: search and the chosen file
     files-panel.ts     the files panel beside the conversation
+    processes.ts       the order of the processes, and the end of an output
+    process-browser.ts the processes panel state: list, choice, and cancel
+    process-panel.ts   the processes panel beside the conversation
     database.ts        the SQLite preview: tables and their first rows
     draw.ts            the painter: header, conversation, and composer chrome
     keys.ts            the input: mode, browse selection, and key routing

@@ -14,7 +14,7 @@ import { tui as palette } from './brand.ts';
 import type { FileBrowser } from './browser.ts';
 import type { FileContent, ImageContent, TableView } from './workbench.ts';
 
-const LIST_ROWS = 8;
+export const LIST_ROWS = 8;
 const HINT = 'Type to search   Up/Down choose   PgUp/PgDn scroll   Ctrl+Y copy   Esc close';
 const TABLE_HINT = 'Left/Right table   ';
 const MAX_COLUMN = 40;
@@ -84,8 +84,24 @@ function tabsText(tables: readonly TableView[], shown: number): StyledText {
 const bytes = (size: number): string =>
 	size < 1024 ? `${size} B` : `${(size / 1024).toFixed(1)} KB`;
 
+/** The box of a side panel: beside the conversation, and hidden until it opens. */
+export function sidePanel(renderer: CliRenderer): BoxRenderable {
+	return new BoxRenderable(renderer, {
+		flexDirection: 'column',
+		width: '55%',
+		flexShrink: 0,
+		minWidth: 40,
+		border: true,
+		borderColor: palette.line,
+		backgroundColor: palette.panel,
+		paddingLeft: 1,
+		paddingRight: 1,
+		visible: false,
+	});
+}
+
 /** The rows to show: a window of the matches that keeps the chosen row in view. */
-function windowStart(index: number, count: number): number {
+export function windowStart(index: number, count: number): number {
 	return Math.max(0, Math.min(index - Math.floor(LIST_ROWS / 2), count - LIST_ROWS));
 }
 
@@ -108,18 +124,7 @@ export class FilesPanel {
 
 	constructor(renderer: CliRenderer) {
 		this.renderer = renderer;
-		this.root = new BoxRenderable(renderer, {
-			flexDirection: 'column',
-			width: '55%',
-			flexShrink: 0,
-			minWidth: 40,
-			border: true,
-			borderColor: palette.line,
-			backgroundColor: palette.panel,
-			paddingLeft: 1,
-			paddingRight: 1,
-			visible: false,
-		});
+		this.root = sidePanel(renderer);
 		this.search = new TextRenderable(renderer, { content: '', flexShrink: 0, wrapMode: 'none' });
 		this.list = new TextRenderable(renderer, {
 			content: '',
