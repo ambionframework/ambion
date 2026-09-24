@@ -14,13 +14,18 @@ import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { people, team } from '../src/definitions.ts';
 import { openInstrument } from '../src/instrument.ts';
+import { labRepositories } from '../src/repositories.ts';
 import { instruments, labSchema, labWritable } from '../src/scenarios.ts';
 
 /** The Workbench team over an in-memory workspace and lab. The test disposes them. */
 function build() {
 	const workspace = openWorkspace({
 		name: 'workbench',
-		backend: { bash: memoryBackend(), sql: sqliteBackend(':memory:') },
+		backend: {
+			bash: memoryBackend(),
+			sql: sqliteBackend(':memory:'),
+			git: labRepositories(':memory:'),
+		},
 	});
 	const lab = openSqlResource({
 		name: 'lab',
@@ -52,6 +57,8 @@ describe('the Workbench tool set', () => {
 				'edit',
 				'bash',
 				'sql',
+				'repos',
+				'fork',
 				'query',
 				'record',
 				'operate',
@@ -123,4 +130,65 @@ describe('the Workbench filesystem', () => {
 			said.some((message) => message.from === 'experiments' && message.text.includes(marker)),
 		).toBe(true);
 	});
+});
+
+describe('the Workbench repositories', () => {
+	it('lets the Design seat fork the firmware template and push a branch that the Experiments seat reviews', async () => {
+		const built = build();
+		const theo = people[1];
+		if (!theo) throw new Error('No person.');
+		const pin = /\| LED +\| 13 +\|/;
+		const script = byAgent({
+			assistant: (_step, _seat, call) =>
+				call === 1 ? speak('Start the firmware.', 'design') : quiet(),
+			design: (step, _seat, call) => {
+				const steps = [
+					callTool('fork', {
+						source: 'templates/firmware-sketch',
+						name: 'firmware',
+						clone: '~/firmware',
+					}),
+					callTool('bash', {
+						command:
+							"cd ~/firmware && git switch -c sensing && sed -i 's/^| LED \\( *\\)| TBD /| LED \\1| 13  /' pins.md && git commit -am 'Set the LED pin' && git push origin sensing",
+					}),
+				];
+				if (call <= steps.length) return steps[call - 1] ?? quiet();
+				if (call === steps.length + 1)
+					return speak(`Pushed: ${step.results.at(-1)?.text}`, 'experiments');
+				return quiet();
+			},
+			experiments: (step, _seat, call) => {
+				if (call === 1) return callTool('repos', { namespace: 'design' });
+				if (call === 2)
+					return callTool('bash', {
+						command:
+							'git clone http://git.ambion.invalid/design/firmware ~/review && cd ~/review && git checkout sensing && cat pins.md',
+					});
+				if (call === 3) return speak(`Review: ${step.results.at(-1)?.text}`, 'assistant');
+				return quiet();
+			},
+		});
+		const room = await startRoom({
+			name: 'firmware',
+			goal: 'Start the firmware.',
+			agents: built.specialists,
+			assistant: built.assistant,
+			runtime: createRuntime(),
+			execution: scripted(script),
+			seats: { design: 'named', experiments: 'named' },
+		});
+		onTestFinished(() => room.stop());
+		await (await room.visit(theo)).send({ text: 'Start the firmware.' });
+		await settled(room);
+		const said = (await room.read()).messages.filter((message) => message.kind === 'said');
+		const review = said.find((message) => message.from === 'experiments');
+		expect(review?.text).toMatch(pin);
+		const fork = await built.workspace.git?.use({ name: 'design' }, (env) =>
+			env.get('design/firmware'),
+		);
+		expect(fork?.source).toBe('templates/firmware-sketch');
+		expect(Object.keys(fork?.branches ?? {}).sort()).toEqual(['main', 'sensing']);
+		expect(fork?.branches.sensing).not.toBe(fork?.branches.main);
+	}, 20_000);
 });

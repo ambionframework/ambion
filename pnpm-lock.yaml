@@ -50,6 +50,9 @@ importers:
       '@ambionframework/codex':
         specifier: workspace:*
         version: link:../../packages/codex
+      '@ambionframework/git':
+        specifier: workspace:*
+        version: link:../../packages/git
       '@ambionframework/journal':
         specifier: workspace:*
         version: link:../../packages/journal

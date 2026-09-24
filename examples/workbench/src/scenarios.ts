@@ -35,6 +35,14 @@ export const scenarios: {
 			'Add up the current for the Uno, one LED at 10 mA, and the HC-SR04. Confirm USB power is enough and state the margin.',
 		seats: { datasheets: 'named', design: 'named' },
 	},
+	{
+		name: 'firmware',
+		goal: 'Start the kit firmware from the firmware-sketch template. Set the LED and HC-SR04 pins, and push the work on a branch.',
+		pattern: 'Template → fork → pushed branch',
+		prompt:
+			'Fork the firmware-sketch template, set the LED and HC-SR04 pins in pins.md and in the sketch, and push the work on a branch named sensing.',
+		seats: { design: 'named', experiments: 'named' },
+	},
 ];
 
 const libraryDirectory = fileURLToPath(new URL('../library/', import.meta.url));

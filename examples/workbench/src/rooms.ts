@@ -27,6 +27,7 @@ import {
 	unavailableSeats,
 } from './families.ts';
 import { openInstrument } from './instrument.ts';
+import { labRepositories } from './repositories.ts';
 import { instruments, labSchema, labWritable, scenarios, seedWorkspace } from './scenarios.ts';
 import { stepLog } from './steps.ts';
 import { unavailable } from './unavailable.ts';
@@ -143,6 +144,7 @@ export async function openRooms(
 		backend: {
 			bash: directoryBackend(workspacePath),
 			sql: sqliteBackend(resolve(directory, 'shared.db')),
+			git: labRepositories(resolve(directory, 'git.db')),
 		},
 		audit: {},
 	});
