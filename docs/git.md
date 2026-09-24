@@ -1,9 +1,8 @@
 # The git backend
 
-**No package implements this page yet.** It is the design of a git backend
-for a workspace, proposed for 0.2.0, and it is ready for implementation.
-[The plan](../planning/next.md) does not list it yet. The examples show
-the proposed API.
+**No package implements this page yet.** This page is the design of a git
+backend for a workspace. [The plan](../planning/next.md) holds the work as
+item S2, in phase 3. The examples show the proposed API.
 
 **A git backend hosts the repositories of one workspace.** A host
 registers read-only templates on it. A person asks an agent to start from
@@ -99,6 +98,8 @@ interface GitRepository {
   readonly source?: GitRepositoryId;
   /** What the repository holds. The host sets it when it registers a template. */
   readonly description?: string;
+  /** The branch that a clone checks out. */
+  readonly defaultBranch: string;
   /** Each branch and the full hash of the commit it names. */
   readonly branches: Readonly<Record<string, string>>;
 }
@@ -118,7 +119,7 @@ interface GitAccess {
   /** Every clone URL starts with this prefix. The just-bash `git` reaches it alone. */
   readonly prefix: string;
   /** Carries a git request in process. Absent, the bash backend uses the network. */
-  readonly fetch?: (request: Request) => Promise<Response>;
+  readonly fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
   /** The credential of `agent` for one clone URL, or `undefined` for a URL outside the prefix. */
   credentialFor(agent: WorkspaceAgent, url: string): Promise<GitCredential | undefined>;
   /** Every credential that `agent` holds now, for a client that reads them from a file. */
@@ -134,6 +135,8 @@ type GitForkOutcome =
 interface GitEnv extends ResourceEnv {
   /** The repositories, in ID order. `namespace` limits the list to one namespace. */
   list(namespace?: string, signal?: AbortSignal): Promise<readonly GitRepository[]>;
+  /** One repository, or `undefined` when it does not exist. */
+  get(id: GitRepositoryId, signal?: AbortSignal): Promise<GitRepository | undefined>;
   /** Fork `source` to `<agent>/<name>`. Resolves when a clone of the fork succeeds. */
   fork(source: GitRepositoryId, name: string, signal?: AbortSignal): Promise<GitForkOutcome>;
 }
@@ -149,6 +152,18 @@ interface GitBackend extends ResourceBackend<GitEnv> {
 exist, a name that is taken, and a name that the provider refuses are
 `ok: false` outcomes. A fault of the storage or of the provider, and an
 abort, reject. `SqlEnv.run` follows the same rule.
+
+**A `name_taken` outcome also waits until the fork can be cloned.** A
+`fork` call that repeats after a timeout finds the fork of the first call.
+It resolves when that fork can be cloned, the same as a new fork.
+
+**The backend registers its templates before its first operation.**
+`openWorkspace` is synchronous, and a backend has no open step. The first
+`connect` of the git owner, and the first call of `credentialFor` or
+`credentialsFor`, await one registration. A failed registration rejects
+that operation with an error that names the template. The next operation
+tries again. Host code that wants the error at start calls
+`lab.git.use(lab.host, (env) => env.list())`.
 
 **A bash backend receives `GitAccess` when it connects.**
 `BashBackend.connect` gets a third, optional argument, `BashServices`,
@@ -174,21 +189,22 @@ the same as `Workspace.sql`.
 **A repository ID has two parts: a namespace and a name.** Agents and the
 host use IDs. Each implementation maps an ID to a URL of its own.
 
-| Namespace     | Holds                                            | Who can push            |
-| ------------- | ------------------------------------------------ | ----------------------- |
-| `templates`   | The read-only templates                          | Nobody                  |
-| `<agent>`     | The forks of that agent                          | That agent              |
-| `<name>-host` | The source of each template, which the host owns | The host agent, in code |
+| Namespace          | Holds                       | Who can push         |
+| ------------------ | --------------------------- | -------------------- |
+| `templates`        | The read-only templates     | Nobody               |
+| `<agent>`          | The forks of that agent     | That agent           |
+| `template-sources` | The source of each template | The backend, in code |
 
-**A name has 1 to 64 characters.** It starts with a letter or a digit, and
-the rest are letters, digits, `.`, `_`, and `-`. An agent name matches
-`^[a-z][a-z0-9-]*$`, so it holds no `.`.
+**A name has 1 to 64 characters.** It starts with a lowercase letter or a
+digit, and the rest are lowercase letters, digits, `.`, `_`, and `-`. An
+agent name matches `^[a-z][a-z0-9-]*$`, so it holds no `.`.
 
-**`templates` is a reserved name.** The backend refuses an agent whose name
-is `templates`.
+**`templates` and `template-sources` are reserved names.** The backend
+refuses an agent with either name, in `connect` and in each credential
+call.
 
-**`repos` does not list the host's namespace.** An agent forks a template.
-The source of a template is the host's own record.
+**No agent reaches `template-sources`.** `repos` does not list it, and no
+agent holds a credential for it. An agent forks a template.
 
 ## Templates
 
@@ -210,21 +226,32 @@ templates: {
 
 - **`source`** is `fromDirectory(path)`, which reads a directory on the
   Ambion host, or a plain object that maps paths to text.
+  [Registration](#templates) states what each one reads.
 - **`description`** is optional. It is one or two sentences of plain text,
   and `repos` shows it. A person names the kind of work, and the agent
   finds the template that fits.
 
-**Registration runs at open, and it is idempotent.** For each template,
-the backend builds the git tree of the source in memory with `just-git`.
+**Registration is idempotent, and it resumes after a crash.** For each
+template, the backend builds the git tree of the source in memory with
+`just-git`. It then takes the first case that holds.
 
-1. When the template does not exist, the backend commits the source to
-   `<name>-host/<template>` as the host agent. It then forks that
-   repository to `templates/<template>`, read-only.
-2. When the template exists and the tree at its tip equals the source
-   tree, the backend writes nothing.
-3. When the trees differ, open fails with an error that names the
-   template. The host registers the change under a new name, such as
-   `weekly-report-2`.
+1. The template exists, and the tree at its tip equals the source tree.
+   The backend writes nothing.
+2. The template exists, and the trees differ. Registration fails with an
+   error that names the template. The host registers the change under a
+   new name, such as `weekly-report-2`.
+3. The template does not exist. The backend makes
+   `template-sources/<template>` hold the source tree at its tip: it
+   creates the repository when it is absent, and it commits the source
+   when the tip differs. It then forks that repository to
+   `templates/<template>`, read-only, and waits until the fork can be
+   cloned.
+
+A crash between the steps of case 3 leaves a state that case 3 finishes
+at the next registration.
+
+**`fromDirectory(path)` reads every file as bytes.** It skips `.git` and
+every symbolic link. A plain object maps each path to text.
 
 **A template with forks stays.** A fork can read the objects of its
 template. Removal of a registration from the options deletes nothing. The
@@ -246,9 +273,9 @@ can fill them in for the other action. The file is
 | `fork`  | Fork a repository into your own namespace on the git server. Set clone to put a working copy of the fork in your workspace. |
 
 **The audit log records each call.** `openWorkspace` binds both tools
-through the audit log, the same as `sql`. The clone inside a `fork` call
-runs as one more operation on the bash owner, and the log records one
-entry for the `fork` call.
+through the audit log, the same as `sql`. The clone of a `fork` call runs
+as one more operation on the bash owner, and the log records one entry
+for the `fork` call.
 
 ### repos
 
@@ -285,7 +312,7 @@ const forkSchema = Type.Object({
     description: 'The repository to fork, such as templates/weekly-report.',
   }),
   name: Type.String({
-    pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$',
+    pattern: '^[a-z0-9][a-z0-9._-]{0,63}$',
     description: 'The name of the fork. The fork is <your name>/<name>.',
   }),
   clone: Type.Optional(
@@ -297,8 +324,9 @@ const forkSchema = Type.Object({
 ```
 
 **`clone` resolves the same as a file tool's path.** `~` and a relative
-path resolve under the agent's home. The tool runs `git clone <url>
-<path>` through the bash owner as the calling agent, so the clone sets
+path resolve under the agent's home. The tool runs `env.fork` on the git
+owner, and that operation ends. The tool then runs `git clone <url>
+<path>` on the bash owner as the calling agent, so the clone sets
 `origin` to the fork.
 
 **Each outcome has one text.** `<url>` is the fork's clone URL.
@@ -306,14 +334,15 @@ path resolve under the agent's home. The tool runs `git clone <url>
 | Outcome           | The result text                                                                                                |
 | ----------------- | -------------------------------------------------------------------------------------------------------------- |
 | Forked            | `Forked templates/weekly-report to analyst/report. Clone URL: <url>`                                           |
-| Forked and cloned | The line above, then `Cloned it into /home/analyst/report on branch main. origin is the fork.`                 |
+| Forked and cloned | The line above, then `Cloned it into /home/analyst/report on branch <default branch>. origin is the fork.`     |
 | No such source    | `templates/weekly-report does not exist. Call repos to list the repositories.`                                 |
-| Name taken        | `analyst/report exists. Clone URL: <url>. Clone it, or pick another name.`                                     |
+| Name taken        | `analyst/report exists. Clone URL: <url>.` With `clone`, the tool then clones it, the same as a new fork       |
 | Refused           | `The git server refused the fork: <message>`                                                                   |
 | Clone failed      | The forked line, then `The clone into /home/analyst/report failed: <git output>. The fork stays; clone <url>.` |
 
 **A taken name makes a repeated call safe.** A `fork` call that repeats
-after a timeout finds its own fork, and the result gives its URL. The
+after a timeout finds its own fork, and the result gives its URL. With
+`clone`, the tool clones the fork when the path does not exist yet. The
 call creates nothing twice.
 
 **The `details` hold `repository`, `source`, `url`, and `clone` when it is
@@ -380,12 +409,21 @@ or its API token. An agent holds this set:
 | Each template              | `read`  |
 | Each fork of another agent | `read`  |
 
+**An agent holds one credential for each repository.** Its own fork gets
+the `write` credential alone, which also reads. No agent holds a
+credential for `template-sources`.
+
 **The one-pusher rule rests on the set.** No agent holds a write
 credential for a repository outside its namespace. `gitBackend` also
 checks the namespace in its pre-receive hook.
 
 **A credential lives for `tokenTtl`, 1 hour by default.** A client asks
 again before it expires. A new fork adds a write credential at once.
+
+**A credential counts as missing when little of its life is left.** The
+margin is the smaller of 10 minutes and half of `tokenTtl`. A backend
+issues a new credential in place of one inside the margin, so a command
+that starts with a credential keeps it for the length of the margin.
 
 ### On the just-bash backends
 
@@ -414,11 +452,18 @@ git config --global credential.useHttpPath true
 ```
 
 **Each `connect` keeps `~/.git-credentials` current.** It reads
-`credentialsFor(agent)` and renders one line for each credential. It
-reads the file over SFTP, and it writes the file with mode `0600` when
-the two differ. A credential with less than 10 minutes left counts as
-missing, so the backend asks again. The home has mode `0700`, so no other
-account reads the file.
+`credentialsFor(agent)` and renders one line for each credential, in this
+form:
+
+```text
+<protocol>://ambion:<token>@<host>/<path>
+```
+
+The username is always `ambion`, and each backend ignores it. The path is
+the path of the clone URL, so `credential.useHttpPath` matches one line
+to one repository. The backend reads the file over SFTP, and it writes
+the file with mode `0600` when the two differ. The home has mode `0700`,
+so no other account reads the file.
 
 **`git` can erase a line after a refused request.** The `store` helper
 erases a credential that the server refused. The next `connect` writes it
@@ -467,27 +512,33 @@ path of the URL to the ID.
 **The name `git.ambion.invalid` never resolves.** `.invalid` is a
 top-level domain that DNS never answers
 ([RFC 6761](https://www.rfc-editor.org/rfc/rfc6761#section-6.4)). On the
-just-bash backends, `access.fetch` passes each web `Request` to the server
-in the same process, so no DNS lookup and no socket take part.
+just-bash backends, `access.fetch` is `server.asNetwork(url).fetch`. It
+passes each request to the server in the same process, so no DNS lookup
+and no socket take part. It passes no identity, so the server's
+`auth.http` checks the token of every request.
 
-**A workstation reaches the server over HTTP.** `gitBackend` returns a
-Node request handler, `handler`. The host listens on an address that the
-server reaches, and sets `url` to it. A host with no inbound route from
-the server can forward a port on the server's loopback over the SSH
-client of each agent (`ssh2` `forwardIn`).
+**A workstation reaches the git server over HTTP.** `gitBackend` returns
+a Node request handler, `handler`. The host listens on an address that
+the workstation reaches, and sets `url` to it.
 
 **A token is signed and stateless.** It holds the agent, the repository,
 the scope, and the expiry, as base64url JSON, then a `.`, then the
 HMAC-SHA256 of that text under `secret`. The server accepts it as a
-bearer token or as the password of HTTP basic authentication. The
+bearer token, or as the password of HTTP basic authentication with any
+username. The
 server's `auth.http` checks the signature and the expiry. Its hooks check
 the repository and the scope.
 
 **A registry table holds what `just-git` storage does not.** `just-git`
 storage lists no repositories and holds no description. The backend keeps
 one table, `ambion_repositories`, in the same SQLite file: the ID, the
-source, and the description. A fork writes its row and its refs in one
-transaction.
+source, the description, and a state, `forking` or `ready`.
+
+**A fork writes its row first.** The backend inserts the row as
+`forking`, calls `forkRepo`, then marks the row `ready`. `forkRepo` runs
+its own transactions, so one transaction cannot hold both writes. `list`
+and `get` settle a `forking` row that a crash left: `storage.hasRepo`
+true marks it `ready`, and false deletes it.
 
 **A fork shares the objects of its source.** `just-git` copies the refs
 and reads each object from the root repository, so a fork costs a few
@@ -536,17 +587,19 @@ const git = artifactsBackend({
 takes no target namespace, so a fork stays in the namespace of its
 source. The backend encodes an ID as one Artifacts repository name.
 
-| ID                        | Artifacts repository name |
-| ------------------------- | ------------------------- |
-| `templates/weekly-report` | `templates.weekly-report` |
-| `analyst/report`          | `analyst.report`          |
-| `lab-host/weekly-report`  | `lab-host.weekly-report`  |
+| ID                               | Artifacts repository name        |
+| -------------------------------- | -------------------------------- |
+| `templates/weekly-report`        | `templates.weekly-report`        |
+| `analyst/report`                 | `analyst.report`                 |
+| `template-sources/weekly-report` | `template-sources.weekly-report` |
 
 **The encoding reverses at the first `.`.** An agent name holds no `.`,
 so the part before the first `.` is the namespace. The backend skips an
 Artifacts repository whose name does not decode.
 
-**A clone URL is the Artifacts remote.** It has the form
+**A clone URL is the Artifacts remote.** The backend takes it from the
+`remote` field that the API returns, and it does not build it. It has the
+form
 `https://<account>.artifacts.cloudflare.net/git/<namespace>/<repository>.git`,
 and `access.prefix` is that URL up to `<namespace>/`. `access.fetch` is
 absent, so the just-bash `git` uses the network of the host's process.
@@ -562,24 +615,36 @@ absent, so the just-bash `git` uses the network of the host's process.
 | `credentialFor`    | `POST /tokens` with `repo`, `scope`, and `ttl`, cached until near expiry    |
 
 **`fork` waits for `ready`.** Artifacts reports a fork as `forking` until
-it is ready, and a clone before then fails. The backend reads the status
-until it is `ready`, the signal aborts, or `forkTimeout` passes. A timeout
-is a `refused` outcome that says the fork is still in progress.
+it is ready, and a request to it before then fails with status 409. The
+backend reads the status until it is `ready`, the signal aborts, or
+`forkTimeout` passes. A timeout is a `refused` outcome that says the fork
+is still in progress. A repeated call finds the fork as `name_taken`, and
+it waits for `ready` the same way. Registration of a template also waits
+for `ready`.
 
 **The backend caches one read token for each repository.** Every agent
 reads every repository, so one read token serves them all. The owner's
-write token is its own. The cache keeps a token until it has less than 10
-minutes left.
+write token is its own. The cache keeps a token until it enters the
+margin of [Credentials](#credentials).
+
+**A token's secret is the part before `?expires=`.** Artifacts returns a
+token as `art_v1_<40 hex>?expires=<seconds>`. The credential holds the
+secret, and `expiresAt` holds the expiry.
 
 **The backend pushes a template's source with the `just-git` client.** It
-builds the commit in memory and pushes it with a write token of the
-host's repository. It then forks that repository to the template, with
-`read_only: true` and the description. An Artifacts repository that is
+builds the commit in memory and pushes it with a write token of
+`template-sources.<template>`. It then forks that repository to the
+template, with `read_only: true` and the description. An Artifacts repository that is
 read-only takes no push, so the template never changes.
 
 **The limits of Artifacts apply.** A repository holds 10 GB at most. The
-control plane takes 2,000 requests in 10 seconds for each namespace.
-Artifacts serves no SSH, and it takes a push over protocol v1 alone.
+control plane takes 2,000 requests in 10 seconds for each namespace. A
+push goes over protocol v1 alone. The documentation names no SSH
+transport.
+
+**One `repos` call costs one request for each repository, and one more.**
+`GET /repos` gives the list, and one ref advertisement for each repository
+gives its branches.
 
 ## Persistence
 
@@ -610,12 +675,13 @@ recovers each one on its own.
 
 **The git backend has its own resource owner.** The `repos` and `fork`
 tools and host code reach it. A `fork` does not wait for a long `bash`
-command.
+command, and a long clone does not delay another agent's `fork`.
 
-**A git operation may wait on the bash owner, and a bash operation never
-waits on the git owner.** `fork` with `clone` runs its clone on the bash
-owner. A `git push` in `bash` calls the server directly, and
-`credentialFor` reads a cache and issues a token. It takes no owner.
+**Neither owner waits on the other.** A git operation holds no bash
+operation: the `fork` tool ends its git operation before it runs the
+clone on the bash owner. A `git push` in `bash` calls the server
+directly, and `credentialFor` reads a cache and issues a token. Neither
+takes the git owner.
 
 **The server orders the pushes to one repository.** Each ref update
 compares the old commit and the new one, and a push that lost the race
@@ -628,9 +694,11 @@ template, every other agent's file tools wait. The backlog item
 [A backend profile and concurrent operations](../planning/backlog.md#designs-with-a-shape)
 removes this wait.
 
-**Disposal runs in order.** The SQL owner goes first, then the git owner,
-then the bash owner. Then `gitBackend` closes its server, which waits for
-the pushes in flight. `artifactsBackend` holds no connection.
+**Disposal runs in order.** The SQL owner goes first, then the bash owner,
+then the git owner. The bash owner waits for its active operation, so a
+push in flight ends before the git owner disposes the backend. The
+`dispose` of `gitBackend` closes its server. `artifactsBackend` holds no
+connection.
 
 ## Trust
 
@@ -638,15 +706,16 @@ the pushes in flight. `artifactsBackend` holds no connection.
 enforces the one-pusher rule on every backend. The bash backend decides
 the rest.
 
-| Attempt                                       | just-bash backends              | Workstation                               |
-| --------------------------------------------- | ------------------------------- | ----------------------------------------- |
-| Push to another agent's repository            | Refused: no write credential    | Refused: no write credential              |
-| Push to a template                            | Refused: read-only              | Refused: read-only                        |
-| Use another agent's credential                | Not possible: no file holds it  | Needs that agent's file, mode `0600`      |
-| Read another agent's repository on the server | Allowed                         | Allowed                                   |
-| Read another agent's working copy             | Possible: no wall between homes | Refused by the account permissions        |
-| Reach a host outside the prefix               | Refused by the allow-list       | Possible: the shell has network access    |
-| Copy its own token into the record            | Not possible: no file holds it  | Possible; the token expires in `tokenTtl` |
+| Attempt                                       | just-bash backends                          | Workstation                               |
+| --------------------------------------------- | ------------------------------------------- | ----------------------------------------- |
+| Push to another agent's repository            | Refused: no write credential                | Refused: no write credential              |
+| Push to a template                            | Refused: read-only                          | Refused: read-only                        |
+| Use another agent's credential                | Not possible: no file holds it              | Needs that agent's file, mode `0600`      |
+| Read another agent's repository on the server | Allowed                                     | Allowed                                   |
+| Read or change another agent's working copy   | Possible: no wall between homes             | Refused by the account permissions        |
+| Reach a host outside the prefix               | Refused by the allow-list                   | Possible: the shell has network access    |
+| Copy its own token into the record            | Not possible: no file holds it              | Possible; the token expires in `tokenTtl` |
+| Set `GIT_HTTP_BEARER_TOKEN` to another token  | No effect: the client's own credential wins | Not read by the real `git`                |
 
 **Every commit names its agent on the just-bash backends.** The just-bash
 `git` locks the author to the agent's name. On a workstation, the agent
@@ -656,6 +725,10 @@ can change `user.name`, and the server knows which credential pushed.
 
 **The work lands in five steps, in this order.** Each step passes
 `pnpm check` before the next one starts.
+
+**The steps match phase 3 of [the plan](../planning/next.md).** Step 1
+waits for phase 2 step 2 there, because both edit the binding of the
+workspace's tools.
 
 1. **The contract, in `packages/workspace`.**
    - `git-backend.ts`: the types of [The contract](#the-contract).
@@ -669,8 +742,8 @@ can change `user.name`, and the server knows which credential pushed.
 2. **The just-bash wiring, in `packages/just-bash`.** `gitFor(agent,
 access)`, and the one sentence of the guidance.
 3. **`gitBackend`, in the new package `packages/git`.** The server, the
-   tokens, the registry table, the templates, `sqliteGitStorage`, and
-   `fromDirectory`. The scripted tier and the room test run here.
+   tokens, the reserved names, the registry table, the templates,
+   `sqliteGitStorage`, and `fromDirectory`. The scripted tier and the room test run here.
 4. **The workstation, in `packages/workstation`.** The two `git config`
    lines and the credential file. The OpenSSH tier runs a real `git`
    against `gitBackend`'s handler.
@@ -684,21 +757,37 @@ in `@ambionframework/workspace/conformance`, beside `sqlConformance`. The
 harness opens a git backend and a bash backend together.
 
 - `repos` shows each template with its description, and each fork with
-  its source and its URL.
-- `repos` does not show the host's namespace.
+  its source, its default branch, and its URL.
+- `repos` with `namespace` shows that namespace alone.
+- `repos` does not show `template-sources`, and no agent holds a
+  credential for it.
 - `fork` with `clone` gives a working copy whose `origin` is the fork.
   The clone runs at once after `fork` returns.
 - A second `fork` with the same name is a `name_taken` outcome, and it
-  creates nothing.
+  creates nothing. With `clone`, it clones when the path does not exist.
+- A `fork` with a `clone` path that holds files gives the fork and a
+  failed clone, and the fork stays.
 - A `fork` of a source that does not exist is a `no_source` outcome.
+- A fork of a fork names its direct source.
+- An abort during `fork` rejects. A repeated call then finds the fork as
+  `name_taken`, or makes it.
+- An agent named `templates` or `template-sources` is refused.
 - The owner pushes a new branch, and a second clone reads it.
 - A push to a template is refused, and so is a push to another agent's
   fork. The case checks the exit status of `git push`. The text of a
   refusal differs from one backend to the other.
 - A peer clones another agent's fork.
 - A registration with the same source writes nothing, and one with a
-  changed source fails open.
-- A credential is refused after it expires.
+  changed source rejects the first operation with an error that names
+  the template.
+- A registration that stopped after the commit to `template-sources`
+  ends with the template at the next registration.
+- A credential is refused after it expires. The harness opens the
+  backend with a `tokenTtl` of 1 second. The case skips a backend whose
+  shortest `tokenTtl` is longer than 5 seconds, such as
+  `artifactsBackend`.
+- A `GIT_HTTP_BEARER_TOKEN` that an agent sets on the just-bash backends
+  pushes nothing to another agent's fork.
 
 **Unit tests hold the texts.** Each outcome of `fork` and the `repos` table
 has a case. One case checks the tool line and the order of the notes, with
@@ -716,8 +805,8 @@ pushed branch through `lab.git.use`. It needs no model.
 
 **The workstation tier runs a real `git` against `gitBackend`.** It joins
 the OpenSSH job of [Workstation](workstation.md#tests). It proves the
-credential file, its mode, its refresh after an erase, and that one
-account cannot push to another account's fork.
+credential file, its line format, its mode, its refresh after an erase,
+and that one account cannot push to another account's fork.
 
 **The Artifacts tier runs on request.** It needs `CF_ACCOUNT_ID` and
 `CF_ARTIFACTS_API_TOKEN`, and it skips without them. It runs the cases on
@@ -736,8 +825,3 @@ the memory backend and on a workstation. Its first case checks that the
 - Import of a template from an external remote, and a mirror of a
   repository to an external host.
 - Garbage collection, and retention of forks.
-
-## Open decisions
-
-- **The plan.** The item for 0.2.0 in [next.md](../planning/next.md), and
-  its place in the lanes.
