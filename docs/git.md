@@ -10,12 +10,11 @@ a template. The agent forks the template, clones the fork into its home,
 edits the files, commits, and pushes. The push persists the edits across a
 restart of the host.
 
-**Two implementations meet one contract.** `gitBackend` runs a
+**`gitBackend` implements the contract.** It runs a
 [`just-git`](https://github.com/blindmansion/just-git) server in the host's
-process. `artifactsBackend` uses
-[Cloudflare Artifacts](https://developers.cloudflare.com/artifacts/). Each
-one serves the just-bash backends and the [workstation](workstation.md).
-`gitConformance` holds both to the same behavior.
+process, and it serves the just-bash backends and the
+[workstation](workstation.md). `gitConformance` holds the contract, so a
+later implementation meets the same behavior.
 
 **This page covers the repositories and the access to them.** A deploy
 ref that starts a job is a later design, and it builds on this one.
@@ -149,8 +148,8 @@ interface GitBackend extends ResourceBackend<GitEnv> {
 ```
 
 **A refusal is an outcome, and a fault rejects.** A source that does not
-exist, a name that is taken, and a name that the provider refuses are
-`ok: false` outcomes. A fault of the storage or of the provider, and an
+exist, a name that is taken, and a name that the server refuses are
+`ok: false` outcomes. A fault of the storage or of the server, and an
 abort, reject. `SqlEnv.run` follows the same rule.
 
 **A `name_taken` outcome also waits until the fork can be cloned.** A
@@ -181,8 +180,7 @@ the same as `Workspace.sql`.
 - The root entry exports the types above.
 - The conformance entry exports `gitConformance`.
 - The new package `@ambionframework/git` exports `gitBackend`,
-  `sqliteGitStorage`, and `fromDirectory`, and its entry
-  `@ambionframework/git/artifacts` exports `artifactsBackend`.
+  `sqliteGitStorage`, and `fromDirectory`.
 
 ## Repositories and their names
 
@@ -210,8 +208,7 @@ agent holds a credential for it. An agent forks a template.
 
 **A template is a repository that nobody changes after registration.** No
 credential grants write on it. `gitBackend` also refuses every push to a
-template in its pre-receive hook, and `artifactsBackend` makes each
-template a read-only repository.
+template in its pre-receive hook.
 
 **The host registers each template with a description and a source.**
 
@@ -400,8 +397,8 @@ need no git commands, no URL, and no rule about pushes.
 ## Credentials
 
 **A credential grants one scope on one repository, and it expires.** The
-backend issues the credentials, and the host gives the backend its secret
-or its API token. An agent holds this set:
+backend issues the credentials, and the host gives the backend its
+secret. An agent holds this set:
 
 | Repository                 | Scope   |
 | -------------------------- | ------- |
@@ -550,108 +547,12 @@ wraps `just-git`'s `BetterSqlite3Storage` with a `transaction()` that
 `node:sqlite` does not have. The git file stays apart from the SQL
 backend's file, so the `sql` tool does not reach it.
 
-## artifactsBackend: Cloudflare Artifacts
-
-**`@ambionframework/git/artifacts` implements the backend over the
-Artifacts REST API.** It calls the API with `fetch` from the Ambion host.
-It needs no Worker. Artifacts is in closed beta, so the details below come
-from its documentation, and the conformance suite checks them.
-
-```ts
-import { fromDirectory } from '@ambionframework/git';
-import { artifactsBackend } from '@ambionframework/git/artifacts';
-
-const git = artifactsBackend({
-  accountId: process.env.CF_ACCOUNT_ID,
-  apiToken: process.env.CF_ARTIFACTS_API_TOKEN,
-  namespace: 'lab',
-  templates: {
-    'weekly-report': {
-      description: 'A weekly status report: numbers, risks, and next steps.',
-      source: fromDirectory('./templates/weekly-report'),
-    },
-  },
-});
-```
-
-| Option        | Meaning                                                                 |
-| ------------- | ----------------------------------------------------------------------- |
-| `accountId`   | The Cloudflare account                                                  |
-| `apiToken`    | A Cloudflare API token with the Artifacts edit permission               |
-| `namespace`   | The Artifacts namespace of this workspace. One workspace, one namespace |
-| `templates`   | The registrations, by template name                                     |
-| `tokenTtl`    | Seconds a repository token lives, from 60. The default is 3600          |
-| `forkTimeout` | Seconds `fork` waits for a fork to become ready. The default is 60      |
-
-**One workspace uses one Artifacts namespace.** The Artifacts fork API
-takes no target namespace, so a fork stays in the namespace of its
-source. The backend encodes an ID as one Artifacts repository name.
-
-| ID                               | Artifacts repository name        |
-| -------------------------------- | -------------------------------- |
-| `templates/weekly-report`        | `templates.weekly-report`        |
-| `analyst/report`                 | `analyst.report`                 |
-| `template-sources/weekly-report` | `template-sources.weekly-report` |
-
-**The encoding reverses at the first `.`.** An agent name holds no `.`,
-so the part before the first `.` is the namespace. The backend skips an
-Artifacts repository whose name does not decode.
-
-**A clone URL is the Artifacts remote.** The backend takes it from the
-`remote` field that the API returns, and it does not build it. It has the
-form
-`https://<account>.artifacts.cloudflare.net/git/<namespace>/<repository>.git`,
-and `access.prefix` is that URL up to `<namespace>/`. `access.fetch` is
-absent, so the just-bash `git` uses the network of the host's process.
-
-**Each operation maps to one API call.**
-
-| Contract           | Artifacts                                                                   |
-| ------------------ | --------------------------------------------------------------------------- |
-| `list`             | `GET /repos`, every page, with the description and the default branch       |
-| Branches of `list` | The ref advertisement of each repository over smart HTTP, with a read token |
-| `fork`             | `POST /repos/<source>/fork`, then wait until the fork's status is `ready`   |
-| A template         | `POST /repos` for the source, a push, then a fork with `read_only: true`    |
-| `credentialFor`    | `POST /tokens` with `repo`, `scope`, and `ttl`, cached until near expiry    |
-
-**`fork` waits for `ready`.** Artifacts reports a fork as `forking` until
-it is ready, and a request to it before then fails with status 409. The
-backend reads the status until it is `ready`, the signal aborts, or
-`forkTimeout` passes. A timeout is a `refused` outcome that says the fork
-is still in progress. A repeated call finds the fork as `name_taken`, and
-it waits for `ready` the same way. Registration of a template also waits
-for `ready`.
-
-**The backend caches one read token for each repository.** Every agent
-reads every repository, so one read token serves them all. The owner's
-write token is its own. The cache keeps a token until it enters the
-margin of [Credentials](#credentials).
-
-**A token's secret is the part before `?expires=`.** Artifacts returns a
-token as `art_v1_<40 hex>?expires=<seconds>`. The credential holds the
-secret, and `expiresAt` holds the expiry.
-
-**The backend pushes a template's source with the `just-git` client.** It
-builds the commit in memory and pushes it with a write token of
-`template-sources.<template>`. It then forks that repository to the
-template, with `read_only: true` and the description. An Artifacts repository that is
-read-only takes no push, so the template never changes.
-
-**The limits of Artifacts apply.** A repository holds 10 GB at most. The
-control plane takes 2,000 requests in 10 seconds for each namespace. A
-push goes over protocol v1 alone. The documentation names no SSH
-transport.
-
-**One `repos` call costs one request for each repository, and one more.**
-`GET /repos` gives the list, and one ref advertisement for each repository
-gives its branches.
-
 ## Persistence
 
 **A push is the point where an edit persists.** The git storage holds
 every pushed commit. With `gitBackend` it is one SQLite file on the host.
-With `artifactsBackend` it is off the host. A restart of the host, a new
-activation, and a new exchange all find the same branches.
+A restart of the host, a new activation, and a new exchange all find the
+same branches.
 
 **The working copy persists with the bash backend.** A commit that the
 agent has not pushed lives in the clone, in the agent's home.
@@ -697,8 +598,7 @@ removes this wait.
 **Disposal runs in order.** The SQL owner goes first, then the bash owner,
 then the git owner. The bash owner waits for its active operation, so a
 push in flight ends before the git owner disposes the backend. The
-`dispose` of `gitBackend` closes its server. `artifactsBackend` holds no
-connection.
+`dispose` of `gitBackend` closes its server.
 
 ## Trust
 
@@ -723,7 +623,7 @@ can change `user.name`, and the server knows which credential pushed.
 
 ## Implementation
 
-**The work lands in five steps, in this order.** Each step passes
+**The work lands in four steps, in this order.** Each step passes
 `pnpm check` before the next one starts.
 
 **The steps match phase 3 of [the plan](../planning/next.md).** Step 1
@@ -747,8 +647,6 @@ access)`, and the one sentence of the guidance.
 4. **The workstation, in `packages/workstation`.** The two `git config`
    lines and the credential file. The OpenSSH tier runs a real `git`
    against `gitBackend`'s handler.
-5. **`artifactsBackend`, in `packages/git/src/artifacts`.** It needs an
-   Artifacts account, so its tier runs on request.
 
 ## Tests
 
@@ -784,8 +682,7 @@ harness opens a git backend and a bash backend together.
   ends with the template at the next registration.
 - A credential is refused after it expires. The harness opens the
   backend with a `tokenTtl` of 1 second. The case skips a backend whose
-  shortest `tokenTtl` is longer than 5 seconds, such as
-  `artifactsBackend`.
+  shortest `tokenTtl` is longer than 5 seconds.
 - A `GIT_HTTP_BEARER_TOKEN` that an agent sets on the just-bash backends
   pushes nothing to another agent's fork.
 
@@ -808,20 +705,17 @@ the OpenSSH job of [Workstation](workstation.md#tests). It proves the
 credential file, its line format, its mode, its refresh after an erase,
 and that one account cannot push to another account's fork.
 
-**The Artifacts tier runs on request.** It needs `CF_ACCOUNT_ID` and
-`CF_ARTIFACTS_API_TOKEN`, and it skips without them. It runs the cases on
-the memory backend and on a workstation. Its first case checks that the
-`just-git` client clones from and pushes to Artifacts.
-
 ## Out of v1
 
 - A deploy ref that starts a job, and the result of the job. A later page
   designs them over this backend.
 - A ref scheme for commits, and a check that a cited commit exists.
 - A template that continues the history of an earlier template.
+- A git backend over a hosted service, such as
+  [Cloudflare Artifacts](https://developers.cloudflare.com/artifacts/).
+  This is future work.
 - A git backend inside workerd. `just-git` has a Durable Object storage,
-  and Artifacts has a Workers binding. The Cloudflare adapter has no
-  workspace yet.
+  and the Cloudflare adapter has no workspace yet.
 - Import of a template from an external remote, and a mirror of a
   repository to an external host.
 - Garbage collection, and retention of forks.

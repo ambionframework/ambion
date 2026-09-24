@@ -127,9 +127,6 @@ condition that brings each one back.
 - **Speech enters the record through `say` only**, on every executor.
 - **Two release channels.** CI publishes a dev build of `main` to GitHub
   Packages under `dev`. An official release goes to npmjs.
-- **The git backend gates the tag with one implementation.**
-  `gitBackend` carries S2. `artifactsBackend` is a P2 step, because
-  Cloudflare Artifacts is in closed beta and its tier needs an account.
 - **Two public names stay.** `RoomObject.exchange` saves the snapshot
   payload over the Durable Object RPC boundary. `speakOnce` is the minimal
   reference that a transport author needs. A removal of either adds rules
@@ -161,7 +158,7 @@ is late.
 | ---- | --------------------------------------------- | ---------- |
 | A    | Phase 1: the kernel                           | P0         |
 | B    | Phase 2: the packages                         | P0, P1, P2 |
-| C    | Phase 3: the git backend                      | P1, P2     |
+| C    | Phase 3: the git backend                      | P1         |
 | —    | Phase 4: the release, after lanes A, B, and C | P1         |
 
 **The lanes edit different files.** Phase 1 edits the room files and
@@ -194,7 +191,7 @@ code keep one copy of each mechanism.
 
 **Evidence:** `pnpm check`; `pnpm chaos` and the restart suite for step 1.
 
-### Phase 3. The git backend (P1 and P2)
+### Phase 3. The git backend (P1)
 
 **Goal:** an agent forks a template, clones the fork, and pushes, on every
 bash backend. [docs/git.md](../docs/git.md) holds the design.
@@ -209,12 +206,9 @@ bash backend. [docs/git.md](../docs/git.md) holds the design.
       (S2)
 - [ ] **4.** The workstation credential file, and the OpenSSH tier with a
       real `git` against `gitBackend`. P1. Needs 3. (S2)
-- [ ] **5.** `artifactsBackend`, with its tier on request. P2. Needs 3.
-      (S2)
 
 **Evidence:** `pnpm check`; `gitConformance` on the memory, directory, and
-workstation backends; the restart case and the room test for step 3; the
-Artifacts tier for step 5.
+workstation backends; the restart case and the room test for step 3.
 
 ### Phase 4. Release (P1)
 
@@ -309,12 +303,10 @@ restart.
 - A template never changes after registration, and `fork` returns when
   the fork can be cloned.
 - Ship `gitBackend` over the `just-git` server, with its storage in one
-  SQLite file. `artifactsBackend` over Cloudflare Artifacts meets the same
-  contract.
+  SQLite file.
 
 An agent starts from a template with one tool call, and a push persists
-its work on every bash backend. The one contract lets a host move its
-repositories to Artifacts with no change to its agents.
+its work on every bash backend.
 
 ### R. Release
 
