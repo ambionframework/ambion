@@ -286,9 +286,10 @@ keeps each session of a seat apart, so the open exchange runs beside the
 summary of the exchange before it.
 
 **The session is a cache, and its persistence is best effort.** The
-harness keeps the session where it keeps it: Pi, Claude and Codex keep it
-on the local disk, and a Cloudflare seat keeps its Pi sessions in memory. A
-new disk, a host with no disk, or an evicted seat object loses it. The next activation then
+harness keeps the session where it keeps it. On Node, Pi, Claude and Codex
+keep it on the local disk. A Pi seat on a custom stream, and a Cloudflare
+seat, keep their Pi sessions in memory. A new disk, a host with no disk,
+or an evicted seat object loses the session. The next activation then
 starts fresh from the room record. The activation does not fail, and the
 release records the new id. The record is the only state the room
 promises to keep.

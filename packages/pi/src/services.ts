@@ -35,7 +35,7 @@ export interface ExecutionServicesOptions {
 	/**
 	 * The directory on the local disk for the sessions. Absent, a custom
 	 * stream keeps them in memory, and the registry stream keeps them in
-	 * `ambion-pi-sessions` in the OS temporary directory.
+	 * `ambion-pi-sessions-<uid>` in the OS temporary directory.
 	 */
 	readonly sessionDir?: string;
 }

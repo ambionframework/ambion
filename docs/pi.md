@@ -117,18 +117,22 @@ validates the shared fields. Pi adds `model` and `compaction`.
 
 **Pi's default compaction is on.** `DEFAULT_COMPACTION_SETTINGS` is
 `{ enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 }`. The
-executor writes `compaction` only when the definition gives it.
+executor writes `compaction` only when the definition gives it. `pi()`
+throws when a token count is negative or not a safe integer.
 
 **`piExecution(options)` takes two options.**
 
-| Option       | Default                                            | Meaning                                                                           |
-| ------------ | -------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `stream`     | The Pi registry stream                             | A Pi `StreamFn`. A custom stream makes the model resolve to a stub (see Testing). |
-| `sessionDir` | `ambion-pi-sessions` in the OS temporary directory | The directory on the local disk for the sessions of the seats.                    |
+| Option       | Default                                                  | Meaning                                                                           |
+| ------------ | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `stream`     | The Pi registry stream                                   | A Pi `StreamFn`. A custom stream makes the model resolve to a stub (see Testing). |
+| `sessionDir` | `ambion-pi-sessions-<uid>` in the OS temporary directory | The directory on the local disk for the sessions of the seats.                    |
 
 **A custom stream keeps the sessions in memory.** With a custom `stream`
 and no `sessionDir`, each seat keeps its sessions in memory for as long as
-the room runs, and a scripted room writes nothing to the disk.
+the room runs, and a scripted room writes nothing to the disk. The memory
+store keeps the two newest sessions of each room and seat: the session of
+the open exchange, and the session of the exchange before it for its
+summary. It deletes the others.
 `createExecutionServices` takes the same two options.
 
 The runtime supplies the clock, the call limits, the trace limits, the
@@ -256,9 +260,15 @@ narrowest reach that the job needs, and use a workspace backend for files.
 
 **The session files hold the whole transcript.** On Node, the harness
 writes each session to a JSONL file under `sessionDir`: every prompt, every
-answer, and every tool result. The default directory is in the OS temporary
-directory, and the executor deletes no file. A host that keeps secrets out
-of the disk names a managed `sessionDir` and removes old files itself.
+answer, and every tool result. The executor deletes no file. A host that
+keeps secrets out of the disk names a managed `sessionDir` and removes old
+files itself.
+
+**The default directory is in the shared temporary directory.** It is
+`ambion-pi-sessions-<uid>` in the OS temporary directory, which every local
+user shares. The executor creates it with access for its owner only. It
+refuses a link, and a directory that another user owns. The sessions then
+stay in memory.
 
 ## Exchange continuity
 
@@ -274,11 +284,21 @@ starts at the position the session read through.
 
 **A custom entry holds the position the session read through.** After each
 pass that did not fail, the executor appends an `ambion.read` entry with
-`readThrough`. The entry never reaches the model.
+`readThrough`. The entry never reaches the model. When the write fails,
+the activation runs on, and the next activation reads the whole view.
 
 **A session that cannot open starts fresh.** A session the store does not
-hold, or cannot read, gives way to a fresh session under the id of the
-activation. The activation does not fail, and it reads the whole view.
+hold, cannot read, or that the harness cannot restore, closes and gives way
+to a fresh session under the id of the activation. The activation does not
+fail, and it reads the whole view. A session the disk refuses to create
+stays in memory. When the harness refuses the setup of a fresh session too,
+the session closes and the activation fails as transient.
+
+**A continued session goes back to the last position it read.** The lane
+tip moves back to the newest `ambion.read` entry, or to the root when there
+is none. A run that failed or was cut after that entry leaves the provider
+input. A retry of a failed activation therefore gives the model each range
+of the record once.
 
 **The sessions of a seat stay apart.** The open exchange can run beside
 the summary of the exchange before it, and each continues its own session.
@@ -287,9 +307,11 @@ the summary of the exchange before it, and each continues its own session.
 
 - **Node.** The harness writes each session to a JSONL file under
   `sessionDir`, through Pi's `JsonlSessionRepo`, in a folder for each room
-  and seat. A restart on the same disk reopens it.
+  and seat. A restart on the same disk reopens it. A session the disk
+  refuses stays in memory.
 - **A custom stream with no `sessionDir`.** Pi's `MemorySessionRepo` keeps
-  each session in memory. A restart loses it.
+  the two newest sessions of each room and seat in memory. A restart loses
+  them.
 - **Cloudflare.** The seat object keeps its sessions in a
   `MemorySessionRepo` on the object instance. An eviction loses them.
 

@@ -7,9 +7,13 @@ loop, the session, its persistence and its compaction. The model holds the
 room tools and the tools of the definition only: no built-in tool, no skill
 and no prompt template. Freshness reads each range of the record from the
 exact provider input. Sessions persist as JSONL files under `sessionDir`,
-by default `ambion-pi-sessions` in the OS temporary directory; a custom
-stream keeps them in memory. `pi()` takes `compaction`, by default Pi's
-`DEFAULT_COMPACTION_SETTINGS`. `piExecution()` and
+by default `ambion-pi-sessions-<uid>` in the OS temporary directory, with
+access for its owner only. A custom stream keeps them in memory, two for
+each room and seat. A session the disk refuses stays in memory, and a
+session that does not open or restore gives way to a fresh one: the
+activation does not fail. `pi()` takes `compaction`, by default Pi's
+`DEFAULT_COMPACTION_SETTINGS`, and refuses token counts the harness
+refuses. `piExecution()` and
 `createExecutionServices()` take `sessionDir`, and `ExecutionServices` has
 `sessions`. `createPiExecutor` takes `sessions`, and `memorySessions`,
 `PiSessions` and `SessionScope` are new. `@ambionframework/pi/testing` adds
@@ -17,8 +21,9 @@ stream keeps them in memory. `pi()` takes `compaction`, by default Pi's
 conformance suite. Harness retries and provider client retries are off, so
 the room owns every retry: a transient provider error reaches the room at
 once. A usage step comes from each provider request, a compaction summary
-included. A failed activation records its session. The golden journals
-changed.
+included. A failed activation records its session. Its retry continues
+the session from the last position it read, and the failed run leaves the
+provider input. The golden journals changed.
 
 **The trace goes to the host's logger.** `createRuntime({ logger })` and
 Cloudflare `configure({ logger })` take a `TraceLogger`. The sink gives it
@@ -36,8 +41,9 @@ option is gone.** `pi()`, `claude()` and `codex()` take no `memory`. Every
 executor records its session on the `ended` lease entry. The room hands it
 to the next activation of the same seat in the same exchange as
 `spec.resume`. The first activation of a seat in each exchange starts
-fresh. The session is a cache with best-effort persistence: Claude, Codex
-and Pi keep it on the local disk, and a Cloudflare seat keeps it in memory.
+fresh. The session is a cache with best-effort persistence: on Node,
+Claude, Codex and Pi keep it on the local disk, and a Pi seat on a custom
+stream or on Cloudflare keeps it in memory.
 A lost session starts fresh from the record. Remove `memory` from
 each executor definition. `resumesForSeat` is gone from
 `@ambionframework/ambion/hosting`. The golden journals changed.

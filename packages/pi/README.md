@@ -101,8 +101,9 @@ scripted stream, custom storage, a transport, or limits passes
 the Pi registry answers. A scripted `stream` makes a room deterministic, and
 the model then resolves to a stub. `sessionDir` names the directory on the
 local disk for the sessions. Without it, the registry stream keeps them in
-`ambion-pi-sessions` in the OS temporary directory, and a custom stream
-keeps them in memory.
+`ambion-pi-sessions-<uid>` in the OS temporary directory, with access for
+its owner only. A custom stream keeps them in memory, two for each room and
+seat.
 
 ## How an activation runs
 

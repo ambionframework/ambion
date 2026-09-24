@@ -31,9 +31,19 @@ export interface PiExecutor extends AgentExecutor {
 	readonly compaction?: CompactionSettings;
 }
 
+const isCount = (value: unknown): boolean => Number.isSafeInteger(value) && Number(value) >= 0;
+
+/** Refuse compaction settings the harness refuses, when the agent is defined. */
+function checkCompaction(settings: CompactionSettings): void {
+	if (!isCount(settings.reserveTokens) || !isCount(settings.keepRecentTokens)) {
+		throw new RangeError('Compaction token counts must be non-negative safe integers.');
+	}
+}
+
 /** The Pi executor: Pi's `AgentHarness`, model, instructions, and tools. */
 export function pi(options: PiOptions): PiExecutor {
 	const { compaction, ...rest } = options;
+	if (compaction !== undefined) checkCompaction(compaction);
 	return Object.freeze({
 		...describeExecutor({ ...rest, kind: 'pi' }),
 		kind: 'pi' as const,

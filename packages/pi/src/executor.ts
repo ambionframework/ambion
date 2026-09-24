@@ -24,6 +24,8 @@
  *   the session that `spec.resume` names, which the room hands back inside
  *   one exchange, and prompts it with the record beyond the position the
  *   session read through. A session the store cannot open starts fresh.
+ *   The lane goes back to the last position the session read, so a failed
+ *   run leaves the provider input.
  *
  * **Three spans, and only two are ours.** Pi has a *turn*, which is one
  * request to a provider and the tools it calls, and a *run*, which is one
@@ -68,7 +70,7 @@ import { type OpenHarness, openHarness } from './harness.ts';
 import { streamModels } from './models.ts';
 import { PiSteps } from './pi-trace.ts';
 import type { ModelResolver } from './services.ts';
-import { memorySessions, type PiSessions } from './sessions.ts';
+import { memorySessions, type PiSessions, type SessionScope } from './sessions.ts';
 import { binding, toolsFor } from './tools.ts';
 
 const CONTEXT = BACKGROUND_CONTEXT;
@@ -283,9 +285,8 @@ export class Activation implements ExecutorSession {
 		if (this.opened !== undefined) return this.opened;
 		const model = await this.options.model(modelOf(def.executor), def.name);
 		if (this.stopped) return undefined;
-		const session = await this.openSession(view);
-		this.sessionId = session.metadata.id;
-		const opened = await this.attach(session, view, model);
+		const opened = await this.openSession(view, model);
+		this.sessionId = opened.session.metadata.id;
 		this.opened = opened;
 		if (this.closed) {
 			this.release();
@@ -295,39 +296,60 @@ export class Activation implements ExecutorSession {
 		return opened;
 	}
 
-	/** Reopen the session `spec.resume` names, or begin one under this activation's id. */
-	private async openSession(view: ActivationView): Promise<Session> {
+	/**
+	 * A harness over the session `spec.resume` names, or over a fresh session
+	 * under this activation's id. A session that does not open, or that the
+	 * harness cannot attach to, closes, and a fresh session takes its place.
+	 */
+	private async openSession(view: ActivationView, model: Model<Api>): Promise<Opened> {
 		const scope = { room: view.context.name, seat: this.definition.name };
-		const { sessions, closing } = this.seat;
-		const resume = sessionToResume(view, 'pi');
-		let session: Session | undefined;
-		if (resume !== undefined) {
-			// An ended activation may still close the session, and a session opens once.
-			// A cut ends the wait.
-			await Promise.race([closing.get(resume), this.cut]);
-			session = await sessions.open(scope, resume, CONTEXT);
+		const resumed = await this.resumed(scope, view);
+		if (resumed !== undefined) {
+			const opened = await this.attach(resumed, view, model).catch(() => undefined);
+			if (opened !== undefined) return opened;
 		}
-		return session ?? (await sessions.create(scope, this.id, CONTEXT));
+		return this.attach(await this.seat.sessions.create(scope, this.id, CONTEXT), view, model);
 	}
 
-	/** A harness over the session, with the tools of this activation. */
+	/** The session `spec.resume` names, once the activation that held it closed it. */
+	private async resumed(scope: SessionScope, view: ActivationView): Promise<Session | undefined> {
+		const resume = sessionToResume(view, 'pi');
+		if (resume === undefined) return undefined;
+		// An ended activation may still close the session, and a session opens once.
+		// A cut ends the wait.
+		await Promise.race([this.seat.closing.get(resume), this.cut]);
+		return this.seat.sessions.open(scope, resume, CONTEXT);
+	}
+
+	/** A harness over the session, with the tools of this activation. A failed attach closes the session. */
 	private async attach(session: Session, view: ActivationView, model: Model<Api>): Promise<Opened> {
 		const def = this.definition;
 		const tools = toolsFor(view, def, binding(this, this.room), () => this.view ?? view);
-		const opened = await openHarness({
-			session,
-			models: streamModels(model, this.options.stream),
-			model,
-			tools,
-			systemPrompt: () => this.systemPrompt,
-			compaction: compactionOf(def.executor),
-			toProviderMessages: (messages) => this.provide(messages),
-			onEvent: (event) => this.note(event),
-		});
-		return { ...opened, session };
+		try {
+			const opened = await openHarness({
+				session,
+				models: streamModels(model, this.options.stream),
+				model,
+				tools,
+				systemPrompt: () => this.systemPrompt,
+				compaction: compactionOf(def.executor),
+				toProviderMessages: (messages) => this.provide(messages),
+				onEvent: (event) => this.note(event),
+			});
+			return { ...opened, session };
+		} catch (error) {
+			await session.close(CONTEXT).catch(noop);
+			throw error;
+		}
 	}
 
-	/** In a continued session, start from the position it read through. */
+	/**
+	 * In a continued session, start from the position it read through. The
+	 * lane goes back to the entry that holds that position: a run that
+	 * failed or was cut after it leaves the provider input, and the record it
+	 * held comes again in the delta. With no such entry, the lane goes back
+	 * to the root, and the activation reads the whole view once.
+	 */
 	private async readBase(opened: Opened, view: ActivationView): Promise<void> {
 		if (sessionToResume(view, 'pi') === undefined) return;
 		const entry = await opened.lane.findEntry(
@@ -335,7 +357,11 @@ export class Activation implements ExecutorSession {
 			CONTEXT,
 		);
 		const through = entry?.type === 'custom' ? positionOf(entry.data) : undefined;
-		if (through === undefined) return;
+		if (entry === undefined || through === undefined) {
+			await rewind(opened, null);
+			return;
+		}
+		await rewind(opened, entry.id);
 		this.base = through;
 		this.freshness.acknowledgeThrough(through);
 	}
@@ -431,9 +457,13 @@ export class Activation implements ExecutorSession {
 		return { failed: false };
 	}
 
-	/** Write the position the session read through, for the activation that continues it. */
+	/**
+	 * Write the position the session read through, for the activation that
+	 * continues it. The session is a cache: when the write fails, the next
+	 * activation reads the whole view, and this one runs on.
+	 */
 	private async remember(opened: Opened): Promise<void> {
-		await opened.lane.appendCustomEntry(READ, { through: this.readThrough }, CONTEXT);
+		await opened.lane.appendCustomEntry(READ, { through: this.readThrough }, CONTEXT).catch(noop);
 	}
 
 	/** The provider messages of one request, and what they hold of the record. */
@@ -490,6 +520,12 @@ export class Activation implements ExecutorSession {
 		});
 		return { failed: true, cause: 'transient', message: error.message };
 	}
+}
+
+/** Move the lane tip to `target`, the root when null, unless it stands there. */
+async function rewind(opened: Opened, target: string | null): Promise<void> {
+	if ((await opened.lane.getTipId(CONTEXT)) === target) return;
+	await opened.lane.navigateTree(target, { summarize: false }, CONTEXT);
 }
 
 /** A steered line as a range of the record. */

@@ -8,11 +8,13 @@
  * begins a fresh one.
  *
  * - **Memory.** `memorySessions()` keeps each session in a Pi
- *   `MemorySessionRepo`. The sessions live as long as the store.
+ *   `MemorySessionRepo`. It keeps the two newest sessions of each room and
+ *   seat, as long as the store lives.
  * - **Disk.** `diskSessions(dir)` keeps each session as a JSONL file under
  *   `dir`, in a folder for each room and seat. A restart on the same disk
- *   reopens it. The store loads the Node file system on first use, so the
- *   entry of this package loads on a host with no disk.
+ *   reopens it. A session the disk refuses stays in memory. The store loads
+ *   the Node file system on first use, so the entry of this package loads
+ *   on a host with no disk.
  */
 import type {
 	Context,
@@ -65,26 +67,64 @@ async function openListed<T extends SessionMetadata>(
 	}
 }
 
-/** Sessions in memory, one Pi repository for each room and seat. */
-export function memorySessions(): PiSessions {
-	const repos = new Map<string, MemorySessionRepo>();
-	const repoOf = (scope: SessionScope): MemorySessionRepo => {
-		const key = `${scope.room}\u0000${scope.seat}`;
-		let repo = repos.get(key);
-		if (repo === undefined) {
-			repo = new MemorySessionRepo();
-			repos.set(key, repo);
+/**
+ * How many sessions the memory store keeps for each room and seat: the
+ * session of the exchange that runs, and the session of the exchange before
+ * it, which its summary can still continue.
+ */
+const KEPT_IN_MEMORY = 2;
+
+/** The sessions of one room and seat in memory, newest last. */
+interface MemorySeat {
+	readonly repo: MemorySessionRepo;
+	readonly created: SessionMetadata[];
+}
+
+/**
+ * Delete each session older than the newest `KEPT_IN_MEMORY`. A session that
+ * is still open stays, and the next create deletes it.
+ */
+async function prune(seat: MemorySeat, context: Context): Promise<void> {
+	const old = seat.created.slice(0, -KEPT_IN_MEMORY);
+	for (const metadata of old) {
+		try {
+			await seat.repo.delete(metadata, context);
+			seat.created.splice(seat.created.indexOf(metadata), 1);
+		} catch {
+			// The session is still open. The next create tries again.
 		}
-		return repo;
+	}
+}
+
+/**
+ * Sessions in memory, one Pi repository for each room and seat. The store
+ * keeps the two newest sessions of each room and seat, and deletes the
+ * rest: no later activation continues them.
+ */
+export function memorySessions(): PiSessions {
+	const seats = new Map<string, MemorySeat>();
+	const seatOf = (scope: SessionScope): MemorySeat => {
+		const key = `${scope.room}\u0000${scope.seat}`;
+		let seat = seats.get(key);
+		if (seat === undefined) {
+			seat = { repo: new MemorySessionRepo(), created: [] };
+			seats.set(key, seat);
+		}
+		return seat;
 	};
 	return {
-		create: (scope, id, context) =>
-			createWithFallback(
-				(wanted) => repoOf(scope).create(wanted === undefined ? {} : { id: wanted }, context),
+		create: async (scope, id, context) => {
+			const seat = seatOf(scope);
+			const session = await createWithFallback(
+				(wanted) => seat.repo.create(wanted === undefined ? {} : { id: wanted }, context),
 				id,
-			),
+			);
+			seat.created.push(session.metadata);
+			await prune(seat, context);
+			return session;
+		},
 		open: (scope, id, context) => {
-			const repo = repoOf(scope);
+			const { repo } = seatOf(scope);
 			return openListed(
 				() => repo.list(undefined, context),
 				(metadata) => repo.open(metadata, context),
@@ -94,10 +134,38 @@ export function memorySessions(): PiSessions {
 	};
 }
 
-/** The directory for sessions when the host names none: `ambion-pi-sessions` in the OS temporary directory. */
-export async function defaultSessionDir(): Promise<string> {
-	const [{ tmpdir }, { join }] = await Promise.all([import('node:os'), import('node:path')]);
-	return join(tmpdir(), 'ambion-pi-sessions');
+let defaultDir: Promise<string> | undefined;
+
+/**
+ * The directory for sessions when the host names none:
+ * `ambion-pi-sessions-<uid>` in the OS temporary directory, private to the
+ * user of this process.
+ */
+export function defaultSessionDir(): Promise<string> {
+	defaultDir ??= (async () => {
+		const [{ tmpdir }, { join }] = await Promise.all([import('node:os'), import('node:path')]);
+		// A host with no user ids, such as Windows, names no user.
+		const name = ['ambion-pi-sessions', process.getuid?.()].filter((part) => part !== undefined);
+		return privateDirectory(join(tmpdir(), name.join('-')));
+	})();
+	return defaultDir;
+}
+
+/**
+ * Create the directory `path` with access for its owner only, and answer
+ * it. A path that is no directory, or that another user owns, is refused:
+ * the transcripts must not land where another user reads or writes them.
+ */
+export async function privateDirectory(path: string): Promise<string> {
+	const { chmod, lstat, mkdir } = await import('node:fs/promises');
+	await mkdir(path, { recursive: true, mode: 0o700 });
+	const stats = await lstat(path);
+	const uid = process.getuid?.();
+	if (!stats.isDirectory() || (uid !== undefined && stats.uid !== uid)) {
+		throw new Error(`The session directory '${path}' is not a directory this user owns.`);
+	}
+	if ((stats.mode & 0o077) !== 0) await chmod(path, 0o700);
+	return path;
 }
 
 /** One file store for each directory in this process. A session file opens once. */
@@ -126,9 +194,12 @@ async function storeFor(dir: string): Promise<DiskStore> {
 
 /**
  * Sessions as JSONL files under `dir`, a folder for each room and seat. A
- * function names the directory on first use.
+ * function names the directory on first use. The store is a cache: when
+ * the disk refuses a session, the store keeps it in memory, and the
+ * activation runs on.
  */
 export function diskSessions(dir: string | (() => Promise<string>)): PiSessions {
+	const fallback = memorySessions();
 	const store = async (): Promise<DiskStore> => {
 		const resolved = typeof dir === 'string' ? dir : await dir();
 		let found = stores.get(resolved);
@@ -138,25 +209,27 @@ export function diskSessions(dir: string | (() => Promise<string>)): PiSessions 
 		}
 		return found;
 	};
+	const onDisk = async (scope: SessionScope, id: string, context: Context): Promise<Session> => {
+		const { repo, cwd } = await store();
+		return createWithFallback(
+			(wanted) =>
+				repo.create({ cwd: cwd(scope), ...(wanted === undefined ? {} : { id: wanted }) }, context),
+			id,
+		);
+	};
 	return {
-		create: async (scope, id, context) => {
-			const { repo, cwd } = await store();
-			return createWithFallback(
-				(wanted) =>
-					repo.create(
-						{ cwd: cwd(scope), ...(wanted === undefined ? {} : { id: wanted }) },
-						context,
-					),
-				id,
-			);
-		},
+		create: (scope, id, context) =>
+			onDisk(scope, id, context).catch(() => fallback.create(scope, id, context)),
 		open: async (scope, id, context) => {
-			const { repo, cwd } = await store();
-			return openListed<JsonlSessionMetadata>(
-				() => repo.list({ cwd: cwd(scope) }, context),
-				(metadata) => repo.open(metadata, context),
+			const found = await openListed<JsonlSessionMetadata>(
+				async () => {
+					const { repo, cwd } = await store();
+					return repo.list({ cwd: cwd(scope) }, context);
+				},
+				async (metadata) => (await store()).repo.open(metadata, context),
 				id,
 			);
+			return found ?? fallback.open(scope, id, context);
 		},
 	};
 }

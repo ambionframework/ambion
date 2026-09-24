@@ -5,10 +5,10 @@
  * cannot open, begins a fresh one. Every case runs on sessions in memory and
  * on sessions on the local disk.
  */
-import { appendFile, mkdtemp, readdir } from 'node:fs/promises';
+import { appendFile, chmod, readdir, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Message } from '@ambionframework/ambion';
+import type { AgentDefinition, AgentExecutor, Message } from '@ambionframework/ambion';
 import type {
 	ActivationSpec,
 	CommitRequest,
@@ -19,7 +19,7 @@ import type {
 	RoomProtocol,
 	ViewResponse,
 } from '@ambionframework/ambion/hosting';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT, type CompactionSettings } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
@@ -31,8 +31,10 @@ import {
 	diskSessions,
 	memorySessions,
 	type PiSessions,
+	privateDirectory,
 } from '../src/sessions.ts';
 import { contextText, quiet, type Script, scripted, speak } from '../src/testing.ts';
+import { tempDir } from './support/temp.ts';
 
 const said = (seq: number, text: string): Message => ({
 	kind: 'said',
@@ -93,6 +95,12 @@ class TwoQuestions implements RoomProtocol {
 	}
 }
 
+/** The seat on compaction settings that `pi()` refuses, as a host could build it by hand. */
+const withCompaction = (compaction: CompactionSettings): AgentDefinition => {
+	const definition = scriptedAgent('product');
+	return { ...definition, executor: { ...definition.executor, compaction } as AgentExecutor };
+};
+
 /** The session that the activation `message:<seq>:product:1` began. */
 const began = (seq: number): HarnessSession => ({ harness: 'pi', id: `message:${seq}:product:1` });
 
@@ -139,7 +147,7 @@ function seatOn(room: TwoQuestions, sessions: PiSessions, script: Script = () =>
 
 const stores: [string, () => Promise<PiSessions>][] = [
 	['memory', async () => memorySessions()],
-	['disk', async () => diskSessions(await mkdtemp(join(tmpdir(), 'ambion-continuity-')))],
+	['disk', async () => diskSessions(await tempDir('ambion-continuity-'))],
 ];
 
 const summary = {
@@ -300,6 +308,89 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		expect(texts(seen.at(-1) as Context).at(-1)).toContain("The record of 'memory' so far:");
 	});
 
+	it('reads the whole view once when the room retries a failed activation on its session', async () => {
+		const { seen, run } = seatOn(new TwoQuestions(), await store(), (_context, _agent, call) => {
+			if (call === 1) throw new Error('overloaded 529');
+			return quiet();
+		});
+		const failed = await run('message:2:product:1');
+		expect(failed.result).toMatchObject({ failed: true, cause: 'transient' });
+		expect(failed.session).toEqual(began(2));
+		const retry = await run('message:2:product:2', { resume: failed.session });
+		expect(retry.result).toEqual({ failed: false });
+		expect(retry.session).toEqual(began(2));
+		// The failed run left the provider input. The retry holds the view once.
+		expect(texts(seen.at(-1) as Context)).toHaveLength(1);
+		expect(texts(seen.at(-1) as Context)[0]).toContain("The record of 'memory' so far:");
+	});
+
+	it('prompts the delta once when the room retries a failed activation that continued a session', async () => {
+		const { seen, run } = seatOn(new TwoQuestions(), await store(), (_context, _agent, call) => {
+			if (call === 2) throw new Error('overloaded 529');
+			return quiet();
+		});
+		const first = await run('message:1:product:1');
+		const failed = await run('message:2:product:1', { resume: first.session });
+		expect(failed.result).toMatchObject({ failed: true, cause: 'transient' });
+		const retry = await run('message:2:product:2', { resume: failed.session });
+		expect(retry.readThrough).toBe(2);
+		const prompts = texts(seen.at(-1) as Context);
+		expect(prompts.filter((text) => text === '[new] [andrei] And the pump?')).toHaveLength(1);
+		expect(prompts.at(-1)).toBe('[new] [andrei] And the pump?');
+	});
+
+	it('closes the session, records none, and fails as transient when the harness refuses the settings', async () => {
+		const sessions = await store();
+		await seatOn(new TwoQuestions(), sessions).run('message:1:product:1');
+		const executor = createPiExecutor({
+			definition: withCompaction({ enabled: true, reserveTokens: -1, keepRecentTokens: 1 }),
+			model: stubModel,
+			stream: scripted(() => quiet()),
+			now: () => 0,
+			sessions,
+		});
+		const session = executor.open({
+			id: 'message:2:product:1',
+			room: new TwoQuestions(),
+			emit: () => {},
+			trace: noTrace,
+		});
+		const view = await viewOf('message:2:product:1');
+		const result = await session.pass({
+			kind: 'view',
+			view: { ...view, spec: { ...view.spec, resume: began(1) } },
+		});
+		expect(result).toMatchObject({ failed: true, cause: 'transient' });
+		expect(session.session).toBeUndefined();
+		// The continued session and the fresh one both closed, so each opens again.
+		for (const id of ['message:1:product:1', 'message:2:product:1']) {
+			const reopened = await sessions.open(
+				{ room: 'memory', seat: 'product' },
+				id,
+				BACKGROUND_CONTEXT,
+			);
+			expect(reopened?.metadata.id).toBe(id);
+			await reopened?.close(BACKGROUND_CONTEXT);
+		}
+	});
+
+	it('begins a fresh session when the one the room names opens but does not restore', async () => {
+		const store0 = await store();
+		const sessions: PiSessions = {
+			create: (scope, id, context) => store0.create(scope, id, context),
+			open: async (scope, id, context) => {
+				const opened = await store0.open(scope, id, context);
+				await opened?.close(context);
+				return opened;
+			},
+		};
+		const { run } = seatOn(new TwoQuestions(), sessions);
+		const first = await run('message:1:product:1');
+		const second = await run('message:2:product:1', { resume: first.session });
+		expect(second.result).toEqual({ failed: false });
+		expect(second.session).toEqual(began(2));
+	});
+
 	it('gives a session a fresh id when the store already holds the id', async () => {
 		const sessions = await store();
 		const scope = { room: 'memory', seat: 'product' };
@@ -321,7 +412,7 @@ async function viewOf(id: string) {
 
 describe('exchange continuity on the local disk', () => {
 	it('continues a session after a restart, from the position the session read', async () => {
-		const dir = await mkdtemp(join(tmpdir(), 'ambion-restart-'));
+		const dir = await tempDir('ambion-restart-');
 		const before = seatOn(new TwoQuestions(), diskSessions(dir));
 		const first = await before.run('message:1:product:1');
 		// A new executor on the same directory: the process restarted.
@@ -335,7 +426,7 @@ describe('exchange continuity on the local disk', () => {
 	});
 
 	it('keeps a session file for each room and seat, and begins fresh over a corrupt one', async () => {
-		const dir = await mkdtemp(join(tmpdir(), 'ambion-corrupt-'));
+		const dir = await tempDir('ambion-corrupt-');
 		const { run, seen } = seatOn(new TwoQuestions(), diskSessions(dir));
 		const first = await run('message:1:product:1');
 		const [folder] = await readdir(dir);
@@ -349,15 +440,40 @@ describe('exchange continuity on the local disk', () => {
 		expect(texts(seen.at(-1) as Context)).toHaveLength(1);
 	});
 
-	it('names a directory in the OS temporary directory when the host names none', async () => {
-		expect(await defaultSessionDir()).toBe(join(tmpdir(), 'ambion-pi-sessions'));
+	it('names a directory in the OS temporary directory for this user, with access for the user only', async () => {
+		const dir = await defaultSessionDir();
+		expect(dir).toBe(join(tmpdir(), `ambion-pi-sessions-${process.getuid?.()}`));
+		expect((await stat(dir)).mode & 0o777).toBe(0o700);
+	});
+
+	it('takes access from other users on a directory it owns, and refuses a link', async () => {
+		const dir = await tempDir('ambion-private-');
+		await chmod(dir, 0o755);
+		expect(await privateDirectory(dir)).toBe(dir);
+		expect((await stat(dir)).mode & 0o777).toBe(0o700);
+		// A link can point another user's writes at the directory.
+		const link = join(dir, 'link');
+		await symlink(dir, link);
+		await expect(privateDirectory(link)).rejects.toThrow('is not a directory this user owns');
+	});
+
+	it('keeps a session in memory when the disk refuses it, and the activation runs on', async () => {
+		const dir = await tempDir('ambion-refused-');
+		await writeFile(join(dir, 'file'), '');
+		// A directory under a file: the disk refuses every session.
+		const { run } = seatOn(new TwoQuestions(), diskSessions(join(dir, 'file', 'sessions')));
+		const first = await run('message:1:product:1');
+		expect(first.result).toEqual({ failed: false });
+		const second = await run('message:2:product:1', { resume: first.session });
+		expect(second.session).toEqual(began(1));
+		expect(second.readThrough).toBe(2);
 	});
 
 	it.each([
 		['a custom stream keeps sessions in memory', false, false],
 		['a directory keeps sessions on the local disk', true, true],
 	])('%s', async (_name, named, kept) => {
-		const dir = await mkdtemp(join(tmpdir(), 'ambion-services-'));
+		const dir = await tempDir('ambion-services-');
 		const services = () =>
 			createExecutionServices({
 				stream: scripted(() => quiet()),
@@ -369,5 +485,27 @@ describe('exchange continuity on the local disk', () => {
 		const opened = await services().sessions.open(scope, 'kept', BACKGROUND_CONTEXT);
 		expect(opened !== undefined).toBe(kept);
 		await opened?.close(BACKGROUND_CONTEXT);
+	});
+});
+
+describe('exchange continuity on sessions in memory', () => {
+	it('keeps the two newest sessions of a seat, and deletes an older one once it closes', async () => {
+		const sessions = memorySessions();
+		const scope = { room: 'memory', seat: 'product' };
+		const ids = ['one', 'two', 'three', 'four'];
+		const held = await sessions.create(scope, 'one', BACKGROUND_CONTEXT);
+		for (const id of ids.slice(1, 3)) {
+			await (await sessions.create(scope, id, BACKGROUND_CONTEXT)).close(BACKGROUND_CONTEXT);
+		}
+		// An open session stays until it closes.
+		await held.close(BACKGROUND_CONTEXT);
+		await (await sessions.create(scope, 'four', BACKGROUND_CONTEXT)).close(BACKGROUND_CONTEXT);
+		const kept = [];
+		for (const id of ids) {
+			const opened = await sessions.open(scope, id, BACKGROUND_CONTEXT);
+			if (opened !== undefined) kept.push(opened.metadata.id);
+			await opened?.close(BACKGROUND_CONTEXT);
+		}
+		expect(kept).toEqual(['three', 'four']);
 	});
 });

@@ -5,8 +5,7 @@
  * fail one, and answers every stream and the `scripted` provider with a
  * scripted stream. A real stream needs a key and a network.
  */
-import { readdir } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isSpoken, startRoom, systemClock } from '@ambionframework/ambion';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
@@ -20,6 +19,7 @@ import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.
 import { quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { stubModel } from '../src/services.ts';
+import { defaultSessionDir } from '../src/sessions.ts';
 
 const catalog = vi.hoisted(() => ({
 	builds: 0,
@@ -52,7 +52,7 @@ async function freshServices(count: number) {
 }
 
 describe('default provider runtime', () => {
-	it('runs a room of Pi agents with no execution option, and keeps its sessions in the OS temporary directory', async () => {
+	it('runs a room of Pi agents with no execution option, and keeps its sessions in the OS temporary directory of the user', async () => {
 		catalog.stream = scripted((_context, _agent, call) => (call === 1 ? speak('42') : quiet()));
 		const name = roomName('pi-default');
 		const room = stopAtEnd(await startRoom({ name, agents: [scriptedAgent('worker')] }));
@@ -63,8 +63,12 @@ describe('default provider runtime', () => {
 			['andrei', 'What is the answer?'],
 			['worker', '42'],
 		]);
-		const folders = await readdir(join(tmpdir(), 'ambion-pi-sessions'));
-		expect(folders.some((folder) => folder.includes(name) && folder.includes('worker'))).toBe(true);
+		const dir = await defaultSessionDir();
+		const folders = (await readdir(dir)).filter((folder) => folder.includes(name));
+		onTestFinished(async () => {
+			for (const folder of folders) await rm(join(dir, folder), { recursive: true, force: true });
+		});
+		expect(folders.some((folder) => folder.includes('worker'))).toBe(true);
 	});
 
 	it('builds one catalog for concurrent first model uses, resolves real ids, and streams through it', async () => {

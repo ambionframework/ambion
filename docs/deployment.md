@@ -59,9 +59,9 @@ receive the steps of each activation. A restart keeps no trace.
 **A harness session is not part of the recovery.** A restart on a new
 disk, or on a host with no disk, loses the session, and the next activation
 reads the record again. Pi keeps its sessions under `sessionDir` on the
-local disk; the default is `ambion-pi-sessions` in the OS temporary
-directory. The executor deletes no session file, so a host removes old
-files itself. See [Exchange continuity](executors.md#exchange-continuity).
+local disk. The default is `ambion-pi-sessions-<uid>` in the OS temporary
+directory, with access for its owner only. The executor deletes no session
+file, so a host removes old files itself. See [Exchange continuity](executors.md#exchange-continuity).
 
 Workspace files and application data have separate lifecycles. The journal
 cannot recover JavaScript functions, credentials, or external data.

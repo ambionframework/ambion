@@ -185,6 +185,15 @@ describe('the harness of an activation', () => {
 	});
 
 	it.each([
+		['a negative reserve', { enabled: true, reserveTokens: -1, keepRecentTokens: 2 }],
+		['a fractional recent count', { enabled: true, reserveTokens: 1, keepRecentTokens: 0.5 }],
+	])('refuses compaction settings with %s when the agent is defined', (_name, settings) => {
+		expect(() => workerWith(settings)).toThrow(
+			'Compaction token counts must be non-negative safe integers.',
+		);
+	});
+
+	it.each([
 		['the settings it is given', { enabled: false, reserveTokens: 1, keepRecentTokens: 2 }],
 		["Pi's defaults", DEFAULT_COMPACTION_SETTINGS],
 	] as const)('sets the harness up with %s, and with retries off', async (_name, settings) => {
@@ -207,6 +216,38 @@ describe('the harness of an activation', () => {
 		expect(await harness.getRetryPolicy(BACKGROUND_CONTEXT)).toMatchObject({ enabled: false });
 		expect(await harness.getStreamOptions(BACKGROUND_CONTEXT)).toEqual({ maxRetries: 0 });
 		await harness.close(BACKGROUND_CONTEXT);
+	});
+
+	it('closes the harness and its session when the lane cannot be set up', async () => {
+		const repo = new MemorySessionRepo();
+		const session = await repo.create({}, BACKGROUND_CONTEXT);
+		const model = await stubModel('scripted/worker', 'worker');
+		// The harness restores the session, and then the session refuses every write.
+		let writes = 0;
+		const refusing = new Proxy(session, {
+			get: (target, key, receiver) => {
+				const value = Reflect.get(target, key, receiver);
+				if (key !== 'mutate' || ++writes === 1) return value;
+				return () => Promise.reject(new Error('The disk is full.'));
+			},
+		});
+		await expect(
+			openHarness({
+				session: refusing,
+				models: streamModels(
+					model,
+					scripted(() => quiet()),
+				),
+				model,
+				tools: [],
+				systemPrompt: () => '',
+				compaction: DEFAULT_COMPACTION_SETTINGS,
+				toProviderMessages: () => [],
+				onEvent: () => {},
+			}),
+		).rejects.toThrow();
+		// A closed session opens again.
+		await expect(repo.open(session.metadata, BACKGROUND_CONTEXT)).resolves.toBeDefined();
 	});
 
 	it.each([

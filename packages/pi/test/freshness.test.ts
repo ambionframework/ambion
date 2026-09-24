@@ -3,15 +3,13 @@
  * the record from the exact messages of each provider request, and joins
  * them into the position the activation read through.
  */
-import { mkdtemp } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { AgentMessage, MessageEntry } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, createCustomMessage } from '@earendil-works/pi-agent-core';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { Freshness, providerMessages, RECORD, recordMessage } from '../src/freshness.ts';
 import { diskSessions } from '../src/sessions.ts';
+import { tempDir } from './support/temp.ts';
 
 const mark = (after: number, through: number, steer = false) =>
 	recordMessage(
@@ -125,7 +123,7 @@ describe('freshness', () => {
 	});
 
 	it('reads the ranges back from a session file after it closes', async () => {
-		const sessions = diskSessions(await mkdtemp(join(tmpdir(), 'ambion-freshness-')));
+		const sessions = diskSessions(await tempDir('ambion-freshness-'));
 		const scope = { room: 'room', seat: 'seat' };
 		const written = await sessions.create(scope, 'message:1:seat:1', BACKGROUND_CONTEXT);
 		const branch = await written.createBranch('main', null, BACKGROUND_CONTEXT);

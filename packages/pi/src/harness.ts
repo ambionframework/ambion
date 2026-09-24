@@ -57,7 +57,8 @@ export interface OpenHarness {
 
 /**
  * Attach a harness to the session and take its lane. A run that a lost
- * process left open is cut before the lane takes a new one.
+ * process left open is cut before the lane takes a new one. When the lane
+ * cannot be set up, the harness closes, and the session with it.
  */
 export async function openHarness(input: HarnessInput): Promise<OpenHarness> {
 	const { harness, open } = await Harness.create<undefined>(
@@ -76,11 +77,17 @@ export async function openHarness(input: HarnessInput): Promise<OpenHarness> {
 		},
 		BACKGROUND_CONTEXT,
 	);
-	for (const type of OBSERVED) harness.events.on(type, (event) => input.onEvent(event));
-	const lane = await harness.lane(LANE, BACKGROUND_CONTEXT);
-	if (open.some((operation) => operation.lane === LANE)) await lane.abort(BACKGROUND_CONTEXT);
-	await configure(lane, input);
-	return { harness, lane };
+	try {
+		for (const type of OBSERVED) harness.events.on(type, (event) => input.onEvent(event));
+		const lane = await harness.lane(LANE, BACKGROUND_CONTEXT);
+		if (open.some((operation) => operation.lane === LANE)) await lane.abort(BACKGROUND_CONTEXT);
+		await configure(lane, input);
+		return { harness, lane };
+	} catch (error) {
+		// The harness closes the session with it.
+		await Promise.allSettled([harness.close(BACKGROUND_CONTEXT)]);
+		throw error;
+	}
 }
 
 /**

@@ -16,8 +16,8 @@ export interface PiExecutionOptions {
 	/**
 	 * The directory on the local disk where each seat keeps its Pi harness
 	 * sessions. Absent, a custom stream keeps them in memory, and the
-	 * registry stream keeps them in `ambion-pi-sessions` in the OS temporary
-	 * directory.
+	 * registry stream keeps them in `ambion-pi-sessions-<uid>` in the OS
+	 * temporary directory.
 	 */
 	readonly sessionDir?: string;
 }
