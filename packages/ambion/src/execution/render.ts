@@ -7,12 +7,15 @@
  * the record it reads at each activation, and the one line that tells it what
  * this activation is for. All of that is here.
  *
- * Every function is pure. It takes an activation view, not the room, and
- * returns text, so what a participant reads can be built,
+ * Every function is pure but one call. It takes an activation view, not the
+ * room, and returns text, so what a participant reads can be built,
  * diffed and tested without starting anything. The room's mechanics hold no
- * sentences, and this file holds no state.
+ * sentences, and this file holds no state. The one call out is to the
+ * reminders of the agent's tool bundles: each gives the same text for the
+ * same activation, so a second render reads the same prompt.
  */
 
+import type { Reminder, ReminderSeat } from '../bundle.ts';
 import type { ActivationView, ContextParticipant } from '../protocol.ts';
 import { messageUri, roomUri } from '../refs.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
@@ -389,8 +392,34 @@ function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
 			context.omitted,
 		),
 		``,
+		...renderReminders(view, def),
 		askOf(view, def),
 	].join('\n');
+}
+
+/**
+ * What the agent's tool bundles remind this seat of, each text as a
+ * paragraph. A summarize activation has no tools of the agent, so it gets
+ * none. A reminder that throws gives no text.
+ */
+function renderReminders(view: ActivationView, def: AgentDefinition): string[] {
+	const reminders = def.executor.reminders;
+	if (reminders === undefined || view.spec.purpose.kind !== 'respond') return [];
+	const seat = { agent: def.name, room: view.context.name, activation: view.spec.id };
+	return reminders.flatMap((remind) => {
+		const text = reminderText(remind, seat);
+		return text === undefined ? [] : [text, ``];
+	});
+}
+
+function reminderText(remind: Reminder, seat: ReminderSeat): string | undefined {
+	try {
+		const text = remind(seat)?.trim();
+		return text === '' ? undefined : text;
+	} catch {
+		// A reminder is a courtesy of a bundle: the activation runs without it.
+		return undefined;
+	}
 }
 
 /** The agents that are available to seat. Every ordinary activation may read this list. */

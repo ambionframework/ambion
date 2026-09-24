@@ -2,9 +2,12 @@
  * The rendered prompt of one ordinary and one closing activation, part by
  * part. The snapshots put the prompt text in the diff of every change to it.
  * The speaking policy of a definition replaces the default in the agent part.
+ * The reminders of the definition's bundles join the context of a respond
+ * activation, before its ask line.
  */
 import { describe, expect, it } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
+import type { ReminderSeat } from '../src/bundle.ts';
 import { DEFAULT_GUIDANCE, renderActivation } from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
 import { defineAgent } from '../src/index.ts';
@@ -88,5 +91,42 @@ describe('the rendered prompt', () => {
 		const policy = renderActivation(respond, other).agent;
 		expect(policy).toContain('Be brief.');
 		expect(policy).not.toContain(DEFAULT_GUIDANCE);
+	});
+
+	it('places each bundle reminder before the ask line of a respond activation, and skips a closing activation, a throw, and blank text', () => {
+		const seats: ReminderSeat[] = [];
+		const reminded = defineAgent({
+			name: 'worker',
+			identity: 'Works.',
+			executor: pi({
+				instructions: 'Work carefully.',
+				model: 'scripted/worker',
+				bundles: [
+					{
+						tools: [],
+						remind: (seat) => {
+							seats.push(seat);
+							return 'Your process p1 runs.';
+						},
+					},
+					{
+						tools: [],
+						remind: () => {
+							throw new Error('The reminder broke.');
+						},
+					},
+					{ tools: [], remind: () => '  ' },
+					{ tools: [] },
+				],
+			}),
+		});
+		const plain = renderActivation(respond, worker).context.split('\n');
+		const lines = renderActivation(respond, reminded).context.split('\n');
+		expect(lines).toEqual([...plain.slice(0, -1), 'Your process p1 runs.', '', plain.at(-1)]);
+		expect(seats).toEqual([{ agent: 'worker', room: 'site', activation: 'a' }]);
+		expect(renderActivation(summarize, reminded).context).toBe(
+			renderActivation(summarize, worker).context,
+		);
+		expect(seats).toHaveLength(1);
 	});
 });

@@ -9,13 +9,13 @@
  */
 import { IsSchema, type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
+import type { Reminder, ToolBundle } from './bundle.ts';
 import { AmbionError } from './errors.ts';
 import type {
 	AgentDefinition,
 	AgentExecutor,
 	AmbionTool,
 	HumanDefinition,
-	ToolBundle,
 	ToolContext,
 	ToolExecutionMode,
 	ToolResult,
@@ -94,12 +94,14 @@ export function executorOfKind<T extends AgentExecutor & { readonly model: strin
 export function describeExecutor(options: ExecutorOptions): AgentExecutor {
 	const input = flattenTools(options.tools, options.bundles);
 	const guidance = guidanceOf(options.bundles);
+	const reminders = remindersOf(options.bundles);
 	const tools = Object.freeze(input.map((tool) => captureTool(tool)));
 	return Object.freeze({
 		kind: options.kind,
 		instructions: options.instructions,
 		tools,
 		...(guidance === undefined ? {} : { guidance }),
+		...(reminders === undefined ? {} : { reminders }),
 		...(options.speaking === undefined ? {} : { speaking: options.speaking }),
 		...recordLimit(options.activationTokenLimit, options.estimateTokens),
 	});
@@ -161,6 +163,7 @@ function captureExecutor(executor: AgentExecutor): AgentExecutor {
 		}),
 	);
 	recordLimit(executor.activationTokenLimit, executor.estimateTokens);
+	assertReminders(executor.reminders);
 	return capture({ ...executor, tools });
 }
 
@@ -349,6 +352,22 @@ function captureTool(tool: AmbionTool): AmbionTool {
 		...(tool.executionMode === undefined ? {} : { executionMode: tool.executionMode }),
 		invoke: tool.invoke,
 	});
+}
+
+/** The reminder of each bundle that has one, in bundle order, or undefined for none. */
+function remindersOf(bundles: readonly ToolBundle[] | undefined): readonly Reminder[] | undefined {
+	const reminders = (bundles ?? []).flatMap((bundle) =>
+		bundle.remind === undefined ? [] : [bundle.remind],
+	);
+	assertReminders(reminders);
+	return reminders.length === 0 ? undefined : Object.freeze(reminders);
+}
+
+function assertReminders(reminders: readonly unknown[] | undefined): void {
+	if (reminders === undefined) return;
+	if (!Array.isArray(reminders) || reminders.some((one) => typeof one !== 'function')) {
+		throw new Error('A bundle remind must be a function.');
+	}
 }
 
 function guidanceOf(bundles: readonly ToolBundle[] | undefined): string | undefined {

@@ -5,7 +5,7 @@
  * The resource owner calls `connect()` and `cleanup()` once for each
  * operation, and a handshake on each would add network round trips to every
  * tool call. The backend keeps one session for each agent: `connect()`
- * builds it on the first call, and later calls reuse it. A background job
+ * builds it on the first call, and later calls reuse it. A background process
  * holds an env of its own over the same session. A session with no open
  * env for `idleTimeout` seconds closes, and a session that errs closes too.
  * The next `connect()` for that agent builds a new one.
@@ -62,7 +62,7 @@ const GUIDANCE = [
 interface Entry {
 	readonly session: Promise<Session>;
 	timer: NodeJS.Timeout | undefined;
-	/** The envs over this session that are not yet cleaned up. A background job holds one. */
+	/** The envs over this session that are not yet cleaned up. A background process holds one. */
 	open: number;
 	readonly git: GitCredentialState;
 }

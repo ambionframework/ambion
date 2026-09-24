@@ -44,7 +44,7 @@ export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
 	): Promise<WorkspaceEnv>;
 	/**
 	 * Tools the backend adds beyond the tools every workspace already has:
-	 * read, write, edit, bash, status, wait and cancel, and sql, repos and
+	 * read, write, edit, bash, ps, status, wait and cancel, and sql, repos and
 	 * fork when their backends are set. Omit it, or list an empty array,
 	 * when the backend adds none of its own.
 	 */
@@ -60,7 +60,7 @@ export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
  * backend. Every other kind is optional.
  */
 export interface WorkspaceBackends {
-	/** The shell and its filesystem. The file tools, the jobs, the audit log, and the room mirrors run on it. */
+	/** The shell and its filesystem. The file tools, the processes, the audit log, and the room mirrors run on it. */
 	readonly bash: BashBackend;
 	/** A shared database. Absent, the workspace has no `sql` tool. */
 	readonly sql?: SqlBackend;

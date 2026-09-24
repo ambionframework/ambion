@@ -66,6 +66,7 @@ describe('the tools and the guidance', () => {
 			'write',
 			'edit',
 			'bash',
+			'ps',
 			'status',
 			'wait',
 			'cancel',
@@ -76,7 +77,7 @@ describe('the tools and the guidance', () => {
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance.startsWith(defaultToolGuidance(['sql', 'repos', 'fork']))).toBe(true);
 		expect(guidance).toContain(
-			'ten tools: read, write, edit, bash, status, wait, cancel, sql, repos and fork.',
+			'eleven tools: read, write, edit, bash, ps, status, wait, cancel, sql, repos and fork.',
 		);
 		const git = guidance.indexOf(gitToolGuidance(SERVER));
 		expect(git).toBeGreaterThan(guidance.indexOf('sql runs statements'));
@@ -84,11 +85,11 @@ describe('the tools and the guidance', () => {
 		expect(guidance.endsWith(roomMirrorGuidance('/rooms'))).toBe(true);
 	});
 
-	it('counts nine tools with no SQL backend, and states the shell sentence that holds with a git backend', async () => {
+	it('counts ten tools with no SQL backend, and states the shell sentence that holds with a git backend', async () => {
 		const { workspace } = await lab();
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance).toContain(
-			'nine tools: read, write, edit, bash, status, wait, cancel, repos and fork.',
+			'ten tools: read, write, edit, bash, ps, status, wait, cancel, repos and fork.',
 		);
 		expect(guidance).toContain('or a URL\nthat this guidance names. git reaches no other host.');
 		expect(guidance).toContain(`repos and fork reach the git server of this workspace, ${SERVER}.`);

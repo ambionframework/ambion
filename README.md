@@ -38,17 +38,23 @@ speak through `say` and work through tools. A message names the artifact it
 cites or changes. A room is a shared journal with rules for taking part.
 
 **A workspace has one bash backend, and it can have one SQL backend and
-one git backend.** The
-`read`, `write`, `edit`, and `bash` tools run on the bash backend: in memory
-or on a directory with `@ambionframework/just-bash`, or on a remote server
-over SSH with [`@ambionframework/workstation`](docs/workstation.md).
-`bash` starts each command as a background job, with its output in a file,
-and returns a handle for the `status`, `wait`, and `cancel` tools
+one git backend.** Eight tools run on the bash backend: in memory or on a
+directory with `@ambionframework/just-bash`, or on a remote server over SSH
+with [`@ambionframework/workstation`](docs/workstation.md). `read`, `write`,
+and `edit` work on files. `bash` starts each command as a background
+process, with its output in a file, and returns a handle for `status`,
+`wait`, and `cancel`. `ps` lists the running processes, and each activation
+starts with a reminder of the seat's processes
 ([Processes](docs/processes.md)).
 The `sql` tool exists only when the workspace has a SQL backend. SQLite is the
 default. The `repos` and `fork` tools exist only when the workspace has a git
 backend: an agent forks a read-only template, clones it, and pushes with
 [`@ambionframework/git`](docs/git.md). See [Workspace](docs/workspace.md).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-workspace-backends-dark.svg">
+  <img alt="Workspace backends. Every workspace has eight tools: read, write, and edit for files, and bash, ps, status, wait, and cancel for background processes, which the host lists, follows, and cancels through workspace.processes. memoryBackend and directoryBackend run just-bash in the host's process, as one user with no network, and write a process's output when it ends. workstationBackend runs real bash over SSH on one server, with one Unix account for each agent, and streams a process's output to its file. A SQL backend adds sql, and a git backend adds repos and fork." src="docs/assets/ambion-workspace-backends.svg">
+</picture>
 
 ## One team on three harnesses
 

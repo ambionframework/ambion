@@ -17,7 +17,7 @@ workerd cannot load it.
 ## Use
 
 `workstationBackend(options)` returns a `BashBackend`. Pass it as
-`backend.bash`, and the file tools and the job tools of the workspace run
+`backend.bash`, and the file tools and the process tools of the workspace run
 on the server as the calling agent.
 
 ```ts
@@ -43,13 +43,13 @@ const lab = openWorkspace({
 });
 ```
 
-| Option          | What it is                                                                                                                   |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `host`, `port`  | The address of the server. The port is 22 by default                                                                         |
-| `hostKey`       | The SHA-256 fingerprint of the server's host key. The backend refuses any other                                              |
-| `layout`        | The path of the audit log and the folder of the room mirror on the server                                                    |
-| `idleTimeout`   | Seconds a connection may stay with no open environment before the backend closes it. A running job holds one. 300 by default |
-| `credentialFor` | The username and private key of an agent, or of the host account `<name>-host`                                               |
+| Option          | What it is                                                                                                                       |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `host`, `port`  | The address of the server. The port is 22 by default                                                                             |
+| `hostKey`       | The SHA-256 fingerprint of the server's host key. The backend refuses any other                                                  |
+| `layout`        | The path of the audit log and the folder of the room mirror on the server                                                        |
+| `idleTimeout`   | Seconds a connection may stay with no open environment before the backend closes it. A running process holds one. 300 by default |
+| `credentialFor` | The username and private key of an agent, or of the host account `<name>-host`                                                   |
 
 ## Prepare the server
 

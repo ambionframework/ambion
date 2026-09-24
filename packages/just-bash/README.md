@@ -14,7 +14,7 @@ pnpm add @ambionframework/workspace @ambionframework/just-bash
 
 ## Use
 
-Pass a backend as `backend.bash`, and the file tools and the job tools of
+Pass a backend as `backend.bash`, and the file tools and the process tools of
 the workspace run on it. Each agent's home is `/home/<agent name>`.
 
 ```ts

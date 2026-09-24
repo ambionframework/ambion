@@ -95,7 +95,8 @@ adapter places it where it caches best.
   speaking policy, the identity, and the instructions. A closing seat reads
   its summary duties here.
 - `context` depends on the activation. It holds the clock, the room, the
-  roster, the record, and the ask line.
+  roster, the record, the reminders of the tool bundles, and the ask line.
+  A summarize activation gets no reminder.
 
 `renderDelta(view, since)` renders the later passes. It marks each message
 beyond `since` with the `[new]` prefix, and returns `undefined` when nothing
@@ -105,7 +106,10 @@ refusal for the model.
 **A definition can replace the speaking policy.** The main entry exports
 `DEFAULT_GUIDANCE`. An executor takes a `speaking` option that replaces it.
 Tool bundle guidance stays in the `guidance` field and follows the policy.
-The rendering helpers stay pure and stateless.
+The rendering helpers stay pure and stateless, with one call out: the
+`reminders` of the executor. A reminder gives the same text for the same
+activation, so a second render of one activation reads the same prompt. A
+reminder that throws gives no text.
 
 ## How an activation runs
 
