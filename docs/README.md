@@ -29,6 +29,7 @@ each page.
 | [Summaries](summary.md)               | Optional closing work and context replacement                          |
 | [Resources](resources.md)             | The resource contract, references, and provenance                      |
 | [Workspace](workspace.md)             | The workspace interface, its backends, and its tools                   |
+| [Bash](bash.md)                       | The `bash` tool, background jobs, handles, and their output files      |
 | [Workstation](workstation.md)         | A remote server as a workspace over SSH, one account for each agent    |
 | [Git](git.md)                         | A git backend: read-only templates, forks, clones, and pushes          |
 | [Workstation git](workstation-git.md) | Proposed: a git backend on the workstation, reached over SSH           |
@@ -45,7 +46,8 @@ Read `patterns.md` to find which primitive represents a human pattern.
 
 Read `resources.md` for the resource contract and `workspace.md` for the
 filesystem binding and the just-bash backends of
-`@ambionframework/just-bash`. `workstation.md` is the bash backend for a
+`@ambionframework/just-bash`. `bash.md` is the `bash` tool and the jobs it
+starts. `workstation.md` is the bash backend for a
 workspace on a remote server over SSH. `git.md` is the git backend of
 `@ambionframework/git`: read-only templates, forks, clones, and pushes.
 

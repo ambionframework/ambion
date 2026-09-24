@@ -42,6 +42,9 @@ one git backend.** The
 `read`, `write`, `edit`, and `bash` tools run on the bash backend: in memory
 or on a directory with `@ambionframework/just-bash`, or on a remote server
 over SSH with [`@ambionframework/workstation`](docs/workstation.md).
+`bash` starts each command as a background job, with its output in a file,
+and returns a handle for the `status`, `wait`, and `cancel` tools
+([Bash](docs/bash.md)).
 The `sql` tool exists only when the workspace has a SQL backend. SQLite is the
 default. The `repos` and `fork` tools exist only when the workspace has a git
 backend: an agent forks a read-only template, clones it, and pushes with

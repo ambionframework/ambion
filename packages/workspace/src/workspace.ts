@@ -5,6 +5,8 @@ import { createFileTools, defaultToolGuidance } from './default-tools.ts';
 import { workspaceFiles } from './files.ts';
 import type { GitBackend, GitEnv } from './git-backend.ts';
 import { createGitTools, GIT_TOOL_NAMES, gitToolGuidance } from './git-tools.ts';
+import { createJobTools, jobToolGuidance } from './job-tools.ts';
+import { type JobTable, openJobTable } from './jobs.ts';
 import {
 	mirrorRoom,
 	type RoomMirror,
@@ -97,25 +99,27 @@ function gitPart(
 }
 
 /**
- * Bind the four file tools, `sql` when the workspace has a SQL backend,
- * `repos` and `fork` when it has a git backend, and the bash backend's own
- * tools. The guidance names the tools, then the SQL notes, the git note,
- * the bash backend's note, the audit note when one is set, and the rooms
- * note, in that order.
+ * Bind the three file tools, the four job tools, `sql` when the workspace
+ * has a SQL backend, `repos` and `fork` when it has a git backend, and the
+ * bash backend's own tools. The guidance names the tools, then the job
+ * note, the SQL notes, the git note, the bash backend's note, the audit
+ * note when one is set, and the rooms note, in that order.
  */
 function workspaceTools(
 	bash: BashBackend,
 	shell: WorkspaceResource<WorkspaceEnv>,
-	backends: { sql?: SqlBinding; git?: GitBinding },
+	backends: { sql?: SqlBinding; git?: GitBinding; jobs: JobTable },
 	audit: AuditLog | undefined,
 ): ToolBundle {
 	const { layout, tools: own = [], guidance } = bash;
 	const files = bindTools(createFileTools(), shell.use, undefined, audit).tools;
+	const jobs = createJobTools({ shell: shell.use, jobs: backends.jobs, audit });
 	const extra = bindTools(own, shell.use, undefined, audit).tools;
 	const sql = sqlPart(backends.sql, shell, audit);
 	const git = gitPart(backends.git, shell, audit);
 	const notes = [
 		defaultToolGuidance([...sql.names, ...git.names]),
+		jobToolGuidance(),
 		...sql.notes,
 		...git.notes,
 		guidance,
@@ -123,7 +127,7 @@ function workspaceTools(
 		roomMirrorGuidance(layout.rooms),
 	];
 	return Object.freeze({
-		tools: Object.freeze([...files, ...sql.tools, ...git.tools, ...extra]),
+		tools: Object.freeze([...files, ...jobs, ...sql.tools, ...git.tools, ...extra]),
 		guidance: joinNotes(notes),
 	});
 }
@@ -142,6 +146,25 @@ function bashUnderOwner(
 	return {
 		connect: (agent, signal) => bash.connect(agent, signal, services),
 		dispose: async () => bash.dispose?.(),
+	};
+}
+
+/**
+ * The bash backend with the job table in its disposal. The bash owner
+ * calls `dispose` once its queue drains: the jobs stop and end first, and
+ * the backend then releases its handles. A job can reach the git backend,
+ * and the git owner disposes after the bash owner.
+ */
+function withJobs(
+	backend: ResourceBackend<WorkspaceEnv>,
+	jobs: JobTable,
+): ResourceBackend<WorkspaceEnv> {
+	return {
+		connect: (agent, signal) => backend.connect(agent, signal),
+		dispose: async () => {
+			await jobs.close();
+			await backend.dispose?.();
+		},
 	};
 }
 
@@ -199,9 +222,12 @@ export function openWorkspace(options: {
 	audit?: AuditLogOptions;
 }): Workspace {
 	const { bash, sql: sqlBackend, git: gitBackend } = options.backend;
+	const shellBackend = bashUnderOwner(bash, gitBackend);
+	// Each job connects its own environment, outside the queue of the bash owner.
+	const jobs = openJobTable((agent) => shellBackend.connect(agent));
 	const resource = openResource<WorkspaceEnv>({
 		name: options.name,
-		backend: bashUnderOwner(bash, gitBackend),
+		backend: withJobs(shellBackend, jobs),
 	});
 	const sql =
 		sqlBackend === undefined
@@ -219,7 +245,7 @@ export function openWorkspace(options: {
 		options.audit === undefined
 			? undefined
 			: openAuditLog({ ...options.audit, path: options.audit.path ?? layout.audit });
-	const toolBundle = workspaceTools(bash, resource, { sql, git }, audit);
+	const toolBundle = workspaceTools(bash, resource, { sql, git, jobs }, audit);
 	const tools = (): ToolBundle => toolBundle;
 	// The workspace's own name for a mirror: one agent it owns, so a caller
 	// names only the room.

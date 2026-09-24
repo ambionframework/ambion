@@ -5,9 +5,10 @@
  * The resource owner calls `connect()` and `cleanup()` once for each
  * operation, and a handshake on each would add network round trips to every
  * tool call. The backend keeps one session for each agent: `connect()`
- * builds it on the first call, and later calls reuse it. A session that runs
- * no operation for `idleTimeout` seconds closes, and a session that errs
- * closes too. The next `connect()` for that agent builds a new one.
+ * builds it on the first call, and later calls reuse it. A background job
+ * holds an env of its own over the same session. A session with no open
+ * env for `idleTimeout` seconds closes, and a session that errs closes too.
+ * The next `connect()` for that agent builds a new one.
  *
  * The host owns every credential. The backend awaits `credentialFor` each
  * time it builds a session, and it stores, issues, and rotates no
@@ -61,6 +62,8 @@ const GUIDANCE = [
 interface Entry {
 	readonly session: Promise<Session>;
 	timer: NodeJS.Timeout | undefined;
+	/** The envs over this session that are not yet cleaned up. A background job holds one. */
+	open: number;
 	readonly git: GitCredentialState;
 }
 
@@ -98,6 +101,7 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 		const entry: Entry = {
 			session: (async () => Session.connect(address, await options.credentialFor(agent), signal))(),
 			timer: undefined,
+			open: 0,
 			git: freshGitState(),
 		};
 		entries.set(agent.name, entry);
@@ -108,8 +112,10 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 		return entry;
 	};
 
-	/** Close the session once it has run no operation for `idleMs`. */
+	/** Close the session once no env is open over it for `idleMs`. */
 	const idle = (name: string, entry: Entry, session: Session) => {
+		entry.open -= 1;
+		if (entry.open > 0) return;
 		clearTimeout(entry.timer);
 		entry.timer = setTimeout(() => {
 			forget(name, entry);
@@ -134,6 +140,7 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 				return this.connect(agent, signal, services);
 			}
 			clearTimeout(entry.timer);
+			entry.open += 1;
 			const env = new SshEnv(session, () => idle(agent.name, entry, session));
 			if (services?.git === undefined) return env;
 			try {

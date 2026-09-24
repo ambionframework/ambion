@@ -81,13 +81,16 @@ function holdShell(workspace: Workspace) {
 }
 
 describe('a workspace with a SQL backend', () => {
-	it('keeps the five default tools, names no database file in sql, and states the backend database', () => {
+	it('keeps the seven default tools, names no database file in sql, and states the backend database', () => {
 		const { workspace } = withSql();
 		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual([
 			'read',
 			'write',
 			'edit',
 			'bash',
+			'status',
+			'wait',
+			'cancel',
 			'sql',
 		]);
 		const properties = Object.keys(
@@ -314,9 +317,12 @@ describe('a workspace with no SQL backend and no audit log', () => {
 			'write',
 			'edit',
 			'bash',
+			'status',
+			'wait',
+			'cancel',
 		]);
 		const guidance = workspace.tools().guidance ?? '';
-		expect(guidance).toContain('four tools: read, write, edit and bash');
+		expect(guidance).toContain('seven tools: read, write, edit, bash, status, wait and cancel.');
 		expect(guidance).not.toMatch(/\bsql\b/);
 		expect(guidance).not.toContain('audit');
 	});

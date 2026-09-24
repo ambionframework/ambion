@@ -60,6 +60,15 @@ measurement of 0.3.0 item W2 comes near the default
 `limits.lease.ttl` of 60 seconds ([envelope.md](../docs/envelope.md)). Past
 that point, replay sets the recovery time.
 
+**More kinds of job, and the end of a job as a notice.**
+[Bash](../docs/bash.md) names a job by a handle, `<kind>-<random>`, and
+`bash` is the one kind. A clone that runs past its call and a SQL export
+are candidate kinds. The end of a job wakes no seat: the seat calls `wait`
+or `status`. The notice of 0.3.0 item W1 can carry the end of a job. The
+job table lives in the host's memory, so a restart of the host loses every
+handle. **Condition:** a second kind of work that outlives its call, or a
+seat that must wake when a job ends.
+
 **Tool execution provenance beyond the activation.** `ToolContext` carries
 the activation, the exchange, and the room. A purpose field, a retry-safe
 operation key that the kernel derives, and a domain operation reused across

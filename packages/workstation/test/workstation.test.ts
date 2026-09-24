@@ -137,10 +137,17 @@ describe.skipIf(!hasSetsid)('a workstation session', () => {
 		expect(started.logins.get('bob')).toBe(1);
 	});
 
-	it('closes a session after its idle timeout, and the next connect logs in again', async () => {
+	it('keeps a session open while an env is open over it, closes it after its idle timeout, and the next connect logs in again', async () => {
 		const started = await server();
 		const backend = backendFor({ ...started.options, idleTimeout: 0.05 });
+		// A background job holds an env past the operations that start and end beside it.
+		const held = await backend.connect({ name: 'ada' });
 		await withEnv(backend, 'ada', async () => undefined);
+		await new Promise((resolve) => setTimeout(resolve, 200));
+		const ran = await held.exec('true', undefined, ctx);
+		await held.cleanup();
+		expect(ran).toMatchObject({ ok: true, value: { exitCode: 0 } });
+		expect(started.logins.get('ada')).toBe(1);
 		await new Promise((resolve) => setTimeout(resolve, 200));
 		await withEnv(backend, 'ada', async () => undefined);
 		expect(started.logins.get('ada')).toBe(2);
@@ -316,6 +323,33 @@ function toolOf(workspace: Workspace, name: string): AmbionTool {
 }
 
 describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
+	it("writes a running job's output to its file in the home, and cancel kills the job", async () => {
+		const started = await server(['ada']);
+		const workspace = openWorkspace({
+			name: 'lab',
+			backend: { bash: workstationBackend(started.options) },
+		});
+		cleanups.push(() => workspace.dispose());
+		const job = async (tool: string, params: unknown) => {
+			const result = await toolOf(workspace, tool).invoke(params, context('ada'));
+			if (typeof result === 'string') throw new Error('A job tool gives a structured result.');
+			const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+			return {
+				text,
+				job: (result.details as { job: { handle: string; state: string; output: string } }).job,
+			};
+		};
+		const running = await job('bash', { command: 'echo first; exec sleep 30', wait: 1 });
+		expect(running.job.state).toBe('running');
+		expect(running.text.startsWith('first\n\n[Job')).toBe(true);
+		expect(running.job.output).toBe(
+			join(started.homes.get('ada') ?? '', '.jobs', `${running.job.handle}.out`),
+		);
+		const cancelled = await job('cancel', { handle: running.job.handle });
+		expect(cancelled.job.state).toBe('cancelled');
+		expect(await readFile(running.job.output, 'utf8')).toBe('first\n');
+	});
+
 	it('runs the file tools as the agent, audits them at the layout path, and lands a sql export in the home', async () => {
 		const started = await server(['ada', 'lab-host']);
 		const workspace = openWorkspace({

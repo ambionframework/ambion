@@ -63,13 +63,14 @@ workspace supplies everything that holds on every backend
 | `SshEnv`, the transport of each call  | The workstation                                 |
 | `layout`: the audit log and the rooms | The workstation, from its options               |
 | `guidance` about the shell            | The workstation                                 |
-| `read`, `write`, `edit`, `bash`       | The workspace: the four file tools              |
+| `read`, `write`, `edit`               | The workspace: the three file tools             |
+| `bash`, `status`, `wait`, `cancel`    | The workspace: the job tools ([Bash](bash.md))  |
 | `sql`                                 | The workspace, when `backend.sql` is set        |
 | Path rule, deadline, output view      | The workspace: the environment helpers          |
 | Audit log and room mirror             | The workspace, at the paths that `layout` names |
 
-**The workstation adds no tools.** The four file tools cover every file
-and shell operation on a server, so `tools` stays unset.
+**The workstation adds no tools.** The file tools and the job tools cover
+every file and shell operation on a server, so `tools` stays unset.
 
 ## The SSH client
 
@@ -375,8 +376,11 @@ call adds network round trips to every tool call.
   file call answers `unknown`, and a command answers `ExecutionError`
   `unknown` with no exit code. An append that the connection lost can have
   landed or not, and the caller cannot tell which.
-- **`idleTimeout` closes an unused client.** A client that runs no
-  operation for `idleTimeout` seconds closes, and the default is 300. The
+- **`idleTimeout` closes an unused client.** A client with no open
+  environment for `idleTimeout` seconds closes, and the default is 300.
+  A background job holds an environment of its own for its whole run
+  ([Bash](bash.md#backends)), so a job keeps its client open. The timer
+  starts when the last environment is cleaned up. The
   next `connect()` for that agent builds a new client. A long workspace
   run holds a client only for an agent that works.
 - **`dispose()` closes every client.** The backend deletes no data on the
@@ -384,13 +388,18 @@ call adds network round trips to every tool call.
 
 **The channels stay under the server's limit.** OpenSSH allows 10 sessions
 on one connection by default (`MaxSessions`). The bash owner runs one
-operation at a time, so a client holds at most three channels: SFTP, one
-command, and one abort.
+operation at a time, so the owner's work holds at most three channels of
+a client: SFTP, one command, and one abort. Each running job of the agent
+holds one command channel, and the job table allows 4. The table stops
+the jobs of one agent one at a time, so the stops hold at most one abort
+channel. A client then holds at most 8 channels
+([Bash](bash.md#handles)).
 
-**The bash owner serializes every agent's file and shell work.** A
-workstation keeps one queue in v1, and each operation now waits on the
-network. A long command from one agent delays every other agent's file
-tool. A query runs on the SQL owner, so a command delays no query.
+**The bash owner serializes every agent's file work and the start of each
+job.** A workstation keeps one queue in v1, and each operation now waits
+on the network. A `bash` job runs off the owner, so a long command delays
+no file tool of another agent ([Bash](bash.md#the-job)). A query runs on
+the SQL owner, so a command delays no query.
 
 ## The shared database
 
@@ -459,7 +468,7 @@ and spill file has mode `0600`, and each temporary directory has mode
 
 **Both tiers run `workspaceConformance`.** A `ConformanceBackend` harness
 opens a fresh `workstationBackend` and disposes of it. The cases check the
-`ExecutionEnv` rules that the four file tools need. The scripted harness
+`ExecutionEnv` rules that the file tools and the job tools need. The scripted harness
 starts an `ssh2` server for each case
 (`packages/workstation/test/conformance.test.ts`).
 
