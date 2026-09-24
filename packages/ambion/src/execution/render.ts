@@ -10,7 +10,8 @@
  * Every function is pure. It takes an activation view, not the room, and
  * returns text, so what a participant reads can be built,
  * diffed and tested without starting anything. The room's mechanics hold no
- * sentences, and this file holds no state.
+ * sentences, and this file holds no state. The text of the bundle reminders
+ * comes in resolved (`reminders.ts`).
  */
 
 import type { ActivationView, ContextParticipant } from '../protocol.ts';
@@ -291,12 +292,20 @@ export const DEFAULT_GUIDANCE = [
 	`it, and speak again only if your reply still adds something.`,
 ].join('\n');
 
-/** Render the three prompt parts from one detached activation view. */
-export function renderActivation(view: ActivationView, def: AgentDefinition): RenderedPrompt {
+/**
+ * Render the three prompt parts from one detached activation view.
+ * `reminders` is the resolved text of the bundle reminders; a respond
+ * activation shows it before the ask line.
+ */
+export function renderActivation(
+	view: ActivationView,
+	def: AgentDefinition,
+	reminders?: string,
+): RenderedPrompt {
 	return {
 		mechanism: MECHANISM,
 		agent: renderAgent(view, def),
-		context: renderTurnContext(view, def),
+		context: renderTurnContext(view, def, reminders),
 	};
 }
 
@@ -357,7 +366,11 @@ function renderSetting(view: ActivationView): string[] {
 	return lines;
 }
 
-function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
+function renderTurnContext(
+	view: ActivationView,
+	def: AgentDefinition,
+	reminders: string | undefined,
+): string {
 	const { context } = view;
 	const people = context.participants.filter(
 		(participant): participant is HumanContextParticipant => participant.kind === 'human',
@@ -389,8 +402,14 @@ function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
 			context.omitted,
 		),
 		``,
+		...paragraph(view.spec.purpose.kind === 'respond' ? reminders : undefined),
 		askOf(view, def),
 	].join('\n');
+}
+
+/** A text and the blank line after it, or nothing. */
+function paragraph(text: string | undefined): string[] {
+	return text === undefined ? [] : [text, ``];
 }
 
 /** The agents that are available to seat. Every ordinary activation may read this list. */

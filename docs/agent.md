@@ -75,8 +75,10 @@ from its definition. A closing activation receives only `say`. `say` accepts
 facts. `seat` and `unseat` accept an agent name. The room validates operations
 at the commit boundary.
 
-**A bundle adds tools and guidance.** `bundles: [shared.tools()]` adds the
-tools of a resource, such as the workspace.
+**A bundle adds tools, guidance, and a reminder.** `bundles: [shared.tools()]`
+adds the tools of a resource, such as the workspace. A bundle's `remind`
+gives text for each respond activation of a seat, such as the handles of
+its running processes ([Processes](processes.md#reminders)).
 
 **The kernel rejects two tools with one name.** [Resources](resources.md)
 and [Workspace](workspace.md) state how a resource builds a bundle and how

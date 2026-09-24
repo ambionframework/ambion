@@ -20,6 +20,7 @@ import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { defaultToolGuidance } from '../src/default-tools.ts';
 import { openWorkspace } from '../src/index.ts';
 import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
+import { processToolGuidance } from '../src/process-tools.ts';
 import { callAs, toolOf, wrapped } from './support/backends.ts';
 import { agent, run, toolResults } from './support/room.ts';
 
@@ -73,9 +74,11 @@ describe('the built-in tools', () => {
 		const writer = results.writer ?? [];
 		expect(writer[0]).toMatchObject({ tool: 'write', failed: false });
 		expect(writer[1]?.tool).toBe('bash');
-		// Only the writer's home exists yet: nothing calls connect before an
-		// activation's first tool asks for it, and the reader is still waiting.
-		expect(writer[1]?.text).toBe('/home/writer\nslab pour Thu\nwriter\n');
+		// Both homes exist: the reminder reads each seat's processes at the
+		// start of its activation, and that connect creates the reader's home.
+		expect(writer[1]?.text).toMatch(
+			/^\/home\/writer\nslab pour Thu\nreader\nwriter\n\n\[Process bash-[0-9a-f]{12} exited with code 0\. Output: \/home\/writer\/\.processes\/bash-[0-9a-f]{12}\/out\.\]$/,
+		);
 		const reader = results.reader ?? [];
 		expect(reader[0]).toMatchObject({ tool: 'read', text: 'slab pour Thu\n', failed: false });
 		expect((await session.read()).messages.filter(isSpoken).map((m) => m.text)).toContain(
@@ -145,7 +148,7 @@ describe('the built-in tools', () => {
 });
 
 describe('the workspace bundle', () => {
-	it('gives a backend with no tools of its own the four file tools, and the /rooms guidance', async () => {
+	it('gives a backend with no tools of its own the three file tools and the five process tools, and the /rooms guidance', async () => {
 		const workspace = openWorkspace({
 			name: name('empty-tools'),
 			backend: { bash: wrapped(() => ({ tools: [] })) },
@@ -156,9 +159,15 @@ describe('the workspace bundle', () => {
 			'write',
 			'edit',
 			'bash',
+			'ps',
+			'status',
+			'wait',
+			'cancel',
 		]);
 		// The /rooms guidance names no room, so a workspace states it with no other guidance.
-		expect(workspace.tools().guidance).toBe(`${defaultToolGuidance()}\n\n${ROOM_MIRROR_GUIDANCE}`);
+		expect(workspace.tools().guidance).toBe(
+			`${defaultToolGuidance()}\n\n${processToolGuidance()}\n\n${ROOM_MIRROR_GUIDANCE}`,
+		);
 		await workspace.dispose();
 	});
 
@@ -183,13 +192,17 @@ describe('the workspace bundle', () => {
 		});
 		const bundle = workspace.tools();
 		expect(bundle.guidance).toBe(
-			`${defaultToolGuidance()}\n\nCustom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`,
+			`${defaultToolGuidance()}\n\n${processToolGuidance()}\n\nCustom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`,
 		);
 		expect(bundle.tools.map((tool) => tool.name)).toEqual([
 			'read',
 			'write',
 			'edit',
 			'bash',
+			'ps',
+			'status',
+			'wait',
+			'cancel',
 			'inspect',
 		]);
 		const result = await toolOf(workspace, 'inspect').invoke({}, callAs('alpha'));

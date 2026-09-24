@@ -37,7 +37,12 @@ import type {
 	Seq,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
-import { renderActivation, renderDelta, sessionToResume } from '@ambionframework/ambion/hosting';
+import {
+	renderActivation,
+	renderDelta,
+	resolveReminders,
+	sessionToResume,
+} from '@ambionframework/ambion/hosting';
 import {
 	Codex,
 	type CodexOptions,
@@ -206,7 +211,7 @@ class Activation implements ExecutorSession {
 		try {
 			if (this.stopped) return { failed: false };
 			this.view = input.view;
-			const prompt = this.promptFor(input);
+			const prompt = await this.promptFor(input);
 			if (prompt === undefined) {
 				this.advance(input.view.through);
 				return { failed: false };
@@ -244,11 +249,14 @@ class Activation implements ExecutorSession {
 	}
 
 	/** The prompt of a pass: the mechanism, the agent and the whole view first, then the delta, or none when nothing is new. */
-	private promptFor(input: PassInput): string | undefined {
+	private async promptFor(input: PassInput): Promise<string | undefined> {
 		if (input.kind === 'delta') return renderDelta(input.view, input.since);
-		if (this.thread !== undefined) return renderActivation(input.view, this.definition).context;
+		const reminders = await resolveReminders(input.view, this.definition);
+		if (this.thread !== undefined) {
+			return renderActivation(input.view, this.definition, reminders).context;
+		}
 		// The thread has no system prompt of its own, so the first prompt carries it.
-		const { mechanism, agent, context } = renderActivation(input.view, this.definition);
+		const { mechanism, agent, context } = renderActivation(input.view, this.definition, reminders);
 		return `${HARNESS_NOTE}\n\n${mechanism}\n\n${agent}\n\n${context}`;
 	}
 

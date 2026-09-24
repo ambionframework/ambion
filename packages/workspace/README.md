@@ -19,11 +19,13 @@ from GitHub Packages; see [the toolchain guide](https://github.com/ambionframewo
 
 ## Use
 
-`drive.tools()` returns four file tools — `read`, `write`, `edit`, and
-`bash` — plus `sql` when the workspace has a SQL backend, plus any tool the
-bash backend adds of its own, and their guidance. Pass it in `bundles`; each
-file tool reaches the environment the backend built for that agent, rooted
-at `/home/<agent name>`.
+`drive.tools()` returns three file tools — `read`, `write`, and `edit` —
+and five process tools — `bash`, `ps`, `status`, `wait`, and `cancel` — plus `sql`
+when the workspace has a SQL backend, plus any tool the bash backend adds of
+its own, and their guidance. Pass it in `bundles`; each tool reaches the
+environment the backend built for that agent, rooted at
+`/home/<agent name>`. `bash` starts each command as a background process and
+returns its handle, and `drive.processes` lists them for the host; see [Processes](https://github.com/ambionframework/ambion/blob/main/docs/processes.md).
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';

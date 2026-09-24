@@ -104,11 +104,18 @@ this file beside the workspace directory, and the shell does not reach it.
 
 **The workspace has a git backend, `justGitBackend` of
 `@ambionframework/just-bash/git`, with its storage in `git.db`.** It holds
-one read-only template, `templates/firmware-sketch`: a pin map and an
-Arduino sketch, from `examples/workbench/templates`. An agent forks it with
-`fork`, clones the fork into its home, and pushes a branch with `git` in
-`bash`. A peer finds the fork with `repos` and clones it to review. A push
+one read-only template, `templates/firmware-sketch`: a pin map, an
+Arduino sketch, and a sweep of the LED resistor, from
+`examples/workbench/templates`. An agent forks it with `fork`, clones the
+fork into its home, and pushes a branch with `git` in `bash`. A peer finds the fork with `repos` and clones it to review. A push
 survives a restart of the host. [Git](git.md) holds the contract.
+
+**The template's sweep runs as a background process.** `sweep/sweep.sh`
+steps the series resistor of the LED through ten values, one every 3
+seconds, and writes `sweep/results.csv`. An agent starts it with `bash`
+and a `name`, and the sweep runs past the exchange. A later exchange in the
+same room reads its state with `ps`, `status`, or `wait`, and the reminder
+of each activation names it ([Processes](processes.md)).
 
 The datasheets are simplified summaries for a runnable example. They are not
 the manufacturer datasheets.
@@ -217,6 +224,7 @@ automated test yet.
 | An exchange ends on a message to a person                       | `awaiting` reads as waiting on that person | Scripted: the discussion flag, and a note for the person named                                                                                                                |
 | An instrument request waits for its owner                       | The terminal shows an approval             | Scripted: the host lists the request, and drops it once a later row answers                                                                                                   |
 | The Design specialist starts the firmware from a template       | A fork, a clone, and a pushed branch       | Scripted: Design forks `templates/firmware-sketch`, sets a pin, and pushes `sensing`. Experiments clones the fork and reads the pin                                           |
+| A sweep runs in the background past its exchange                | A later exchange reads the sweep's state   | Scripted: Design starts `sweep/sweep.sh`, and the next exchange finds it with `ps` and waits on its handle. Live: the second summary names the handle, and the sweep exits 0  |
 
 The kernel chaos tier covers a kill during work. This example does not.
 

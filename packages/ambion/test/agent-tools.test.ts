@@ -14,6 +14,7 @@ import {
 	defineAgent,
 	defineHuman,
 	defineTool,
+	type ReminderSeat,
 	startRoom,
 	type ToolBundle,
 	type ToolContext,
@@ -114,10 +115,15 @@ describe('the definition of agent tools', () => {
 		expect(Object.isFrozen(agent.executor.tools)).toBe(true);
 	});
 
-	it('flattens and captures bundle tools and guidance at definition time', () => {
-		const bundle = { tools: [tool('inspect')], guidance: 'Use inspect for this domain.' };
-		const bundles = [bundle];
+	it('flattens and captures bundle tools, guidance, and reminders at definition time', () => {
+		const remind = () => 'Remember.';
+		const bundle = { tools: [tool('inspect')], guidance: 'Use inspect for this domain.', remind };
+		const bundles: ToolBundle[] = [bundle];
 		const agent = worker({ bundles });
+		expect(agent.executor.reminders).toEqual([remind]);
+		expect(() => worker({ bundles: [{ tools: [], remind: 'late' as never }] })).toThrow(
+			'A bundle remind must be a function.',
+		);
 
 		bundles.push({ tools: [tool('later')], guidance: 'Later guidance.' });
 		bundle.tools.length = 0;
@@ -245,9 +251,14 @@ async function probeRoom(attention: 'broadcast' | 'presence', script: Script, as
 		frozen.push(Object.isFrozen(ctx));
 		return 'probed';
 	});
+	const reminded: ReminderSeat[] = [];
 	const bundle: ToolBundle = {
 		tools: [tool('inspect')],
 		guidance: 'Backend guidance: inspect records before writing.',
+		remind: (seat) => {
+			reminded.push(seat);
+			return 'Reminder: the probe is warm.';
+		},
 	};
 	const room = stopAtEnd(
 		await startRoom({
@@ -262,16 +273,18 @@ async function probeRoom(attention: 'broadcast' | 'presence', script: Script, as
 	const visit = await enter(room);
 	if (ask) await visit.send({ text: 'go' });
 	await waitForRoom(room);
-	return { room, seen, frozen, events };
+	return { room, seen, frozen, events, reminded };
 }
 
 describe('a running tool', () => {
-	it('reads the agent, the call signal, the room, the activation, the open exchange, and the bundle guidance', async () => {
+	it('reads the agent, the call signal, the room, the activation, the open exchange, the bundle guidance, and the bundle reminder', async () => {
 		const prompts: string[] = [];
-		const { room, seen, frozen, events } = await probeRoom(
+		const reads: string[] = [];
+		const { room, seen, frozen, events, reminded } = await probeRoom(
 			'broadcast',
 			(context, _who, call) => {
 				prompts.push(context.systemPrompt ?? '');
+				reads.push(JSON.stringify(context.messages));
 				if (call <= 2) return callTool('probe', {});
 				return call === 3 ? speak('done') : quiet();
 			},
@@ -298,6 +311,8 @@ describe('a running tool', () => {
 		expect(starts.map((event) => 'activation' in event && event.activation)).toEqual([activation]);
 		expect(frozen).toEqual([true, true]);
 		expect(prompts[0]).toContain('Backend guidance: inspect records before writing.');
+		expect(reads[0]).toContain('Reminder: the probe is warm.');
+		expect(reminded).toContainEqual({ agent: 'worker', room: room.name, activation });
 	});
 
 	it('passes no exchange to a tool called in an activation that no question opened', async () => {

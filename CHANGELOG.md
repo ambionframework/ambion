@@ -2,8 +2,54 @@
 
 ## Unreleased
 
+**A shell command runs in the background.** `bash` starts every command as
+a background process and returns a handle. A process outlives the call and
+the activation that started it. The files of the bash backend hold the
+process table, so a new run of the host reads the same table. Each
+activation starts with a reminder of the seat's processes. See
+[Processes](docs/processes.md).
+
+### New
+
+- **`ps`, `status`, `wait`, and `cancel` join `bash`.** `ps` lists the
+  running processes of the caller. The handle tools take a handle of the
+  caller. `bash` takes an optional `name`, a label that `ps` and the
+  reminder show. Each process is a directory,
+  `~/.processes/<handle>/`, that holds the spec, the whole output in
+  `out`, the process id, and the end.
+- **A new run of the host adopts the live processes of an earlier run.**
+  The table re-arms the timeout of each one, and `cancel` stops it through
+  its process id. A process that ended with the earlier run, with no exit
+  file, is `failed` with the message "The host run ended before the
+  process did."
+- **`Workspace.processes` is the host's view.** `list`, `subscribe`, and
+  `cancel` reach the processes of the agents that used the workspace in
+  this run. `list` returns a promise. The root entry of
+  `@ambionframework/workspace` exports `ProcessEvent`, `ProcessKind`,
+  `ProcessQuery`, `ProcessState`, `ProcessStatus`, and
+  `WorkspaceProcesses`.
+- **A tool bundle can remind a seat.** `ToolBundle.remind` gives text, or a
+  promise of text, for each respond activation, and `AgentExecutor.reminders`
+  holds the reminders of the bundles. The executor resolves them once for each
+  activation, with a bound of 5 seconds for each, and aborts the signal of a
+  reminder at the bound. `renderActivation` takes the resolved text as its
+  third argument and adds it before the ask line. The main entry exports
+  `Reminder` and `ReminderSeat`. The hosting entry exports `resolveReminders`
+  and `REMINDER_TIMEOUT_MS`. The Pi executor sends a continued session the
+  reminders before the delta.
+- **The workstation keeps a session open while any environment is open
+  over it.** A process holds an environment for its whole run.
+
 ### Breaking changes
 
+- **`bash` returns a handle, and waits up to `wait` seconds, 10 by
+  default.** A command that runs longer keeps running, and the result
+  says so. A process can run for `timeout` seconds, 600 by default. Before,
+  a command held the bash owner and stopped after 30 seconds by default.
+- **Every workspace has eight tools before the tools of its other
+  backends.** The tool line of the guidance counts them.
+- **`dispose()` stops every running process of this run** before the bash
+  backend releases its handles.
 - **`@ambionframework/git` is gone.** Its git backend moves into the new
   entry `@ambionframework/just-bash/git`. That entry exports
   `justGitBackend`, `sqliteGitStorage`, `JustGitBackend`,

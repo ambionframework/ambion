@@ -60,6 +60,27 @@ measurement of 0.3.0 item W2 comes near the default
 `limits.lease.ttl` of 60 seconds ([envelope.md](../docs/envelope.md)). Past
 that point, replay sets the recovery time.
 
+**Processes linked to the room, more kinds of process, and the end of a
+process as a notice.** A process runs until it ends, times out, or gets a
+cancel ([Processes](../docs/processes.md)). An exchange closes when no
+activation is live, so a cancel at the close stops a process at the first
+quiet moment. A link to the room needs its own design. The handle is
+`<kind>-<random>`, and `bash` is the one kind. A clone that runs past its
+call and a SQL export are candidate kinds. The end of a process wakes no
+seat: the seat calls `wait` or `status`. The notice of 0.3.0 item W1 can
+carry it. The table has no fence: two runs of the host over one account
+adopt the same processes. **Condition:** a seat that must wake when a
+process ends, a process that must stop with its exchange, or a second
+kind of work that outlives its call.
+
+**One record for a live process in the table.** The table keeps a process
+of this run and an adopted process in two maps, with two stop paths and two
+end paths. One record with an optional controller removes about 50 lines,
+and each fix to a stop then lands once. A lost process keeps its `pid` and
+no end file, so each listing runs `ps` for it until a start forgets it. A
+`stop` line that the first read writes ends that cost. **Condition:** the
+next change to a stop path, or a table with many lost processes.
+
 **Tool execution provenance beyond the activation.** `ToolContext` carries
 the activation, the exchange, and the room. A purpose field, a retry-safe
 operation key that the kernel derives, and a domain operation reused across

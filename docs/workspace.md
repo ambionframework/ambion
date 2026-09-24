@@ -69,7 +69,11 @@ console.log(drive.host); // { name: 'town-host' }
 ## Give the resource to an agent
 
 `workspace.tools()` returns an ordinary Ambion `ToolBundle`. The neutral layer
-binds four file tools first: `read`, `write`, `edit`, and `bash`. A workspace
+binds three file tools first: `read`, `write`, and `edit`. The five process
+tools come next: `bash`, `ps`, `status`, `wait`, and `cancel`. `bash` starts
+each command as a background process and returns its handle
+([Processes](processes.md)). The bundle also reminds each seat of its
+processes at the start of an activation. A workspace
 with a SQL backend adds `sql`
 ([Query the shared database](#query-the-shared-database)). A workspace with
 no SQL backend has no `sql` tool. The bash backend then adds its own tools,
@@ -458,9 +462,11 @@ a row iterator, the options, and `files`. It reads the rows once, and
 streams the CSV to `files` in chunks. A backend with a native export writes
 through `files` itself.
 
-**Each backend gets its own resource owner.** A long `bash` command does
-not delay a query. `workspace.use` and `mirror()` reach the bash owner.
-`workspace.sql` is the SQL owner, for host code.
+**Each backend gets its own resource owner.** A long `bash` command does not
+delay a query. A process runs off the bash owner, so it does not delay a file
+tool either ([Processes](processes.md#a-process)). `workspace.use` and
+`mirror()` reach the bash owner. `workspace.sql` is the SQL owner, for host
+code.
 
 **A SQL operation may wait on the bash owner, and a bash operation never
 waits on the SQL owner.** An export waits for the running shell operation
@@ -487,21 +493,23 @@ entry.
 The contract lives in [Resources](resources.md).
 
 The memory and directory backends are the Pi binding. They export from the
-package `@ambionframework/just-bash`, which depends on the workspace. The
-root entry names `WorkspaceEnv`, the Pi
-`ExecutionEnv` that has a zero-argument `cleanup()`. `BashBackend`
-extends `ResourceBackend<WorkspaceEnv>` and adds optional Pi harness tools
-beyond the four file tools, optional guidance about the backend's own shell,
-and a required `layout` (see
-[The layout and the host identity](#the-layout-and-the-host-identity)).
-`openWorkspace` creates the resource owner, builds the four file tools, and
-binds them, and any tool the backend adds, to its `use` method. `Workspace` adds `tools()`, `host`, and `mirror()` to the
-resource surface. Direct operations and tool calls share one queue and one
-lifecycle.
+package `@ambionframework/just-bash`, which depends on the workspace. The root
+entry names `WorkspaceEnv`, the Pi `ExecutionEnv` that has a zero-argument
+`cleanup()`. `BashBackend` extends `ResourceBackend<WorkspaceEnv>` and adds
+optional Pi harness tools beyond the eight tools every workspace has, optional
+guidance about the backend's own shell, and a required `layout` (see [The
+layout and the host identity](#the-layout-and-the-host-identity)).
+`openWorkspace` creates the resource owner, builds the three file tools, and
+binds them, and any tool the backend adds, to its `use` method. It also opens
+the process table and builds the five process tools over it
+([Processes](processes.md)). `workspace.processes` gives the host the
+processes of this run ([The host's view](processes.md#the-hosts-view)).
+`Workspace` adds `tools()`, `host`, and `mirror()` to the resource surface.
+Direct operations and tool calls share one queue and one lifecycle.
 
 **A new backend implements `connect()` and an `ExecutionEnv`, over the
 shared helpers below, and names its own `layout`.** It adds only the tools
-and the guidance beyond the four file tools, passes
+and the guidance beyond the eight tools every workspace has, passes
 `@ambionframework/workspace/conformance`, and loads no just-bash.
 
 **The root entry also exports the environment helpers a new `ExecutionEnv`
@@ -565,9 +573,11 @@ await drive.dispose();
 ```
 
 Disposal immediately revokes new and queued work. It waits for an active
-operation and its cleanup, then asks the backend to release its local
-handles once. Concurrent calls join that release. A successful disposal is
-terminal. A failed disposal leaves the resource active and retryable.
+operation and its cleanup, stops every background process of this run and
+waits for it to end ([Processes](processes.md#life-and-disposal)), then asks
+the backend to release its local handles once. Concurrent calls join that
+release. A successful disposal is terminal. A failed disposal leaves the
+resource active and retryable.
 
 Disposal keeps the persisted workspace. A directory resource keeps its
 files, and an in-memory resource releases its cached filesystem. A host
@@ -605,7 +615,7 @@ second operation queue.
 **A new backend follows one recipe.** It implements `connect()` and an
 `ExecutionEnv` over the shared helpers (see [The resource
 contract](#the-resource-contract)), names its own `layout`, and adds only
-the tools and the shell guidance beyond the four file tools every workspace
+the tools and the shell guidance beyond the eight tools every workspace
 already has. It passes `@ambionframework/workspace/conformance` and loads
 no just-bash.
 

@@ -3,9 +3,11 @@ import {
 	byAgent,
 	callTool,
 	quiet,
+	type Step,
 	scripted,
 	settled,
 	speak,
+	type Turn,
 } from '@ambionframework/ambion/testing';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { openWorkspace } from '@ambionframework/workspace';
@@ -190,5 +192,76 @@ describe('the Workbench repositories', () => {
 		expect(fork?.source).toBe('templates/firmware-sketch');
 		expect(Object.keys(fork?.branches ?? {}).sort()).toEqual(['main', 'sensing']);
 		expect(fork?.branches.sensing).not.toBe(fork?.branches.main);
+	}, 20_000);
+
+	it('starts a parameter sweep from the fork in the background, and a later exchange in the room reads its end', async () => {
+		const built = build();
+		const theo = people[1];
+		if (!theo) throw new Error('No person.');
+		// The text of the latest spoken message: each seat answers the latest ask.
+		const latest = (step: Step) => {
+			const said = step.view.context.messages.filter((message) => message.kind === 'said');
+			return said.at(-1);
+		};
+		// Each list holds the turns of one ask, by the count of results so far.
+		const start = (step: Step): Turn | undefined =>
+			[
+				callTool('fork', {
+					source: 'templates/firmware-sketch',
+					name: 'firmware',
+					clone: '~/firmware',
+				}),
+				callTool('bash', {
+					command: 'cd ~/firmware && bash sweep/sweep.sh 0.2',
+					name: 'sweep',
+					wait: 0,
+				}),
+				speak(`Started: ${step.results[1]?.text}`, 'assistant'),
+			][step.results.length];
+		const check = (step: Step): Turn | undefined => {
+			const handle = step.results[0]?.text.match(/bash-[0-9a-f]{12}/)?.[0];
+			return [
+				callTool('ps'),
+				callTool('wait', { handle, timeout: 30 }),
+				speak(`${step.results[0]?.text}\n${step.results[1]?.text}`, 'assistant'),
+			][step.results.length];
+		};
+		const script = byAgent({
+			assistant: (step) => {
+				const ask = latest(step);
+				return ask?.from === theo.name && step.results.length === 0
+					? speak(ask.text, 'design')
+					: quiet();
+			},
+			design: (step) =>
+				(latest(step)?.text.startsWith('Start') ? start(step) : check(step)) ?? quiet(),
+		});
+		const room = await startRoom({
+			name: 'sweep',
+			goal: 'Sweep the LED resistor.',
+			agents: built.specialists,
+			assistant: built.assistant,
+			runtime: createRuntime(),
+			execution: scripted(script),
+			seats: { design: 'named' },
+		});
+		onTestFinished(() => room.stop());
+		const visit = await room.visit(theo);
+		await visit.send({ text: 'Start the resistor sweep.' });
+		await settled(room);
+		await visit.send({ text: 'Check the sweep.' });
+		await settled(room);
+		const said = (await room.read()).messages.filter(
+			(message) => message.kind === 'said' && message.from === 'design',
+		);
+		const [started, checked] = said.map((message) => (message.kind === 'said' ? message.text : ''));
+		const handle = started?.match(/bash-[0-9a-f]{12}/)?.[0] ?? 'none';
+		expect(started).toContain(`[Process ${handle} (sweep) is running.`);
+		// The second exchange finds the sweep with ps, and waits on its handle.
+		expect(checked).toMatch(new RegExp(`\\| ${handle} \\| sweep \\|`));
+		expect(checked).toContain('sweep done: 10 rows in sweep/results.csv');
+		expect(checked).toContain(`[Process ${handle} (sweep) exited with code 0.`);
+		const { exchanges } = await room.read();
+		expect(exchanges).toHaveLength(2);
 	}, 20_000);
 });

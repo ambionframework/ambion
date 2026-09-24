@@ -24,7 +24,7 @@ const templatesDirectory = fileURLToPath(new URL('../templates/', import.meta.ur
 const templates = {
 	'firmware-sketch': {
 		description:
-			'Arduino Uno firmware for the kit: a pin map and a sketch that blinks the LED and reads the HC-SR04.',
+			'Arduino Uno firmware for the kit: a pin map, a sketch that blinks the LED and reads the HC-SR04, and a sweep of the LED resistor.',
 		source: fromDirectory(resolve(templatesDirectory, 'firmware-sketch')),
 	},
 };

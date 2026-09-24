@@ -1,4 +1,4 @@
-import type { Room, ToolBundle } from '@ambionframework/ambion';
+import type { ReminderSeat, Room, ToolBundle } from '@ambionframework/ambion';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, BashServices, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
 import { createFileTools, defaultToolGuidance } from './default-tools.ts';
@@ -11,6 +11,14 @@ import {
 	type RoomMirrorOptions,
 	roomMirrorGuidance,
 } from './mirror.ts';
+import type { ProcessStatus } from './process-files.ts';
+import { createProcessTools, processToolGuidance } from './process-tools.ts';
+import {
+	openProcessTable,
+	type ProcessEvent,
+	type ProcessQuery,
+	type ProcessTable,
+} from './processes.ts';
 import {
 	openResource,
 	type ResourceBackend,
@@ -20,6 +28,25 @@ import {
 import type { SqlBackend, SqlEnv } from './sql-backend.ts';
 import { createSqlTool, sqlToolGuidance } from './sql-tool.ts';
 import { bindTools } from './tools.ts';
+
+/**
+ * The host's view of the processes of a workspace. A host shows a person
+ * what runs, and stops a process that an agent left running.
+ */
+export interface WorkspaceProcesses {
+	/**
+	 * The processes of the agents that used the workspace in this run of the
+	 * host, read from each agent's files, in the order they started.
+	 */
+	list(query?: ProcessQuery): Promise<readonly ProcessStatus[]>;
+	/** Call `listener` when a process starts and when it ends. Returns the unsubscribe. */
+	subscribe(listener: (event: ProcessEvent) => void): () => void;
+	/**
+	 * Stop the process `handle` of any agent, and give its status once it
+	 * ends, or after 10 seconds, when it can still read `running`.
+	 */
+	cancel(handle: string): Promise<ProcessStatus>;
+}
 
 /** A workspace resource with an ordinary Ambion tool bundle. */
 export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
@@ -41,6 +68,11 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	 * lists and forks repositories through its `use`.
 	 */
 	readonly git?: WorkspaceResource<GitEnv>;
+	/**
+	 * The processes of the agents of this run. Read the output of one through
+	 * `use`, as its owner agent, at `ProcessStatus.output`.
+	 */
+	readonly processes: WorkspaceProcesses;
 	/**
 	 * Start mirroring `room`'s messages under the backend's layout, at
 	 * `<layout.rooms>/<room.name>/messages.jsonl`. Call once the room has
@@ -97,25 +129,28 @@ function gitPart(
 }
 
 /**
- * Bind the four file tools, `sql` when the workspace has a SQL backend,
- * `repos` and `fork` when it has a git backend, and the bash backend's own
- * tools. The guidance names the tools, then the SQL notes, the git note,
- * the bash backend's note, the audit note when one is set, and the rooms
- * note, in that order.
+ * Bind the three file tools, the five process tools, `sql` when the
+ * workspace has a SQL backend, `repos` and `fork` when it has a git
+ * backend, and the bash backend's own tools. The guidance names the tools,
+ * then the process note, the SQL notes, the git note, the bash backend's
+ * note, the audit note when one is set, and the rooms note, in that order.
+ * The bundle's reminder names each seat's processes.
  */
 function workspaceTools(
 	bash: BashBackend,
 	shell: WorkspaceResource<WorkspaceEnv>,
-	backends: { sql?: SqlBinding; git?: GitBinding },
+	backends: { sql?: SqlBinding; git?: GitBinding; processes: ProcessTable },
 	audit: AuditLog | undefined,
 ): ToolBundle {
 	const { layout, tools: own = [], guidance } = bash;
 	const files = bindTools(createFileTools(), shell.use, undefined, audit).tools;
+	const processes = createProcessTools({ shell: shell.use, processes: backends.processes, audit });
 	const extra = bindTools(own, shell.use, undefined, audit).tools;
 	const sql = sqlPart(backends.sql, shell, audit);
 	const git = gitPart(backends.git, shell, audit);
 	const notes = [
 		defaultToolGuidance([...sql.names, ...git.names]),
+		processToolGuidance(),
 		...sql.notes,
 		...git.notes,
 		guidance,
@@ -123,8 +158,9 @@ function workspaceTools(
 		roomMirrorGuidance(layout.rooms),
 	];
 	return Object.freeze({
-		tools: Object.freeze([...files, ...sql.tools, ...git.tools, ...extra]),
+		tools: Object.freeze([...files, ...processes, ...sql.tools, ...git.tools, ...extra]),
 		guidance: joinNotes(notes),
+		remind: (seat: ReminderSeat, signal: AbortSignal) => backends.processes.remind(seat, signal),
 	});
 }
 
@@ -142,6 +178,25 @@ function bashUnderOwner(
 	return {
 		connect: (agent, signal) => bash.connect(agent, signal, services),
 		dispose: async () => bash.dispose?.(),
+	};
+}
+
+/**
+ * The bash backend with the process table in its disposal. The bash owner
+ * calls `dispose` once its queue drains: the processes stop and end first,
+ * and the backend then releases its handles. A process can reach the git
+ * backend, and the git owner disposes after the bash owner.
+ */
+function withProcesses(
+	backend: ResourceBackend<WorkspaceEnv>,
+	processes: ProcessTable,
+): ResourceBackend<WorkspaceEnv> {
+	return {
+		connect: (agent, signal) => backend.connect(agent, signal),
+		dispose: async () => {
+			await processes.close();
+			await backend.dispose?.();
+		},
 	};
 }
 
@@ -199,9 +254,16 @@ export function openWorkspace(options: {
 	audit?: AuditLogOptions;
 }): Workspace {
 	const { bash, sql: sqlBackend, git: gitBackend } = options.backend;
+	const shellBackend = bashUnderOwner(bash, gitBackend);
+	// Each process connects its own environment, outside the queue of the bash owner.
+	const table = openProcessTable({
+		connect: (agent) => shellBackend.connect(agent),
+		// The owner opens below. The table calls it only after the workspace opens.
+		shell: (agent, operation, signal) => resource.use(agent, operation, signal),
+	});
 	const resource = openResource<WorkspaceEnv>({
 		name: options.name,
-		backend: bashUnderOwner(bash, gitBackend),
+		backend: withProcesses(shellBackend, table),
 	});
 	const sql =
 		sqlBackend === undefined
@@ -219,7 +281,12 @@ export function openWorkspace(options: {
 		options.audit === undefined
 			? undefined
 			: openAuditLog({ ...options.audit, path: options.audit.path ?? layout.audit });
-	const toolBundle = workspaceTools(bash, resource, { sql, git }, audit);
+	const toolBundle = workspaceTools(bash, resource, { sql, git, processes: table }, audit);
+	const processes: WorkspaceProcesses = Object.freeze({
+		list: (query?: ProcessQuery) => table.hostList(query),
+		subscribe: (listener: (event: ProcessEvent) => void) => table.subscribe(listener),
+		cancel: (handle: string) => table.hostCancel(handle),
+	});
 	const tools = (): ToolBundle => toolBundle;
 	// The workspace's own name for a mirror: one agent it owns, so a caller
 	// names only the room.
@@ -238,6 +305,7 @@ export function openWorkspace(options: {
 		dispose,
 		tools,
 		host,
+		processes,
 		mirror,
 		...(sql === undefined ? {} : { sql: sql.owner }),
 		...(git === undefined ? {} : { git: git.owner }),
