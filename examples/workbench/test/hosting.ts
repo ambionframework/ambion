@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { byAgent, type Script, scripted } from '@ambionframework/ambion/testing';
 import type { PiExecutionOptions } from '@ambionframework/pi';
-import { createAssistantMessageEventStream, fauxAssistantMessage } from '@earendil-works/pi-ai';
+import {
+	type AssistantMessage,
+	createAssistantMessageEventStream,
+	fauxAssistantMessage,
+} from '@earendil-works/pi-ai';
 import { onTestFinished } from 'vitest';
 import { type OpenOptions, openWorkbench, type Workbench } from '../src/workbench.ts';
 
@@ -26,6 +30,42 @@ export function quietStream(counter = { calls: 0 }): PiExecutionOptions['stream'
 		queueMicrotask(() => {
 			output.push({ type: 'start', partial: response });
 			output.push({ type: 'done', reason: 'stop', message: response });
+		});
+		return output;
+	};
+}
+
+/** What a scripted stream answers: the seat, its request count from 1, and whether the exchange closes. */
+type Respond = (agent: string, call: number, closing: boolean) => AssistantMessage;
+
+/**
+ * A model stream that answers each request of each Pi seat from `respond`. A
+ * request whose signal has aborted ends with an abort.
+ */
+export function scriptedStream(respond: Respond): PiExecutionOptions['stream'] {
+	const calls = new Map<string, number>();
+	return (_model, context, options) => {
+		const output = createAssistantMessageEventStream();
+		const closing = context.systemPrompt?.includes('The exchange is over.') ?? false;
+		const agent = context.systemPrompt?.match(/You are '([^']+)'/)?.[1] ?? 'assistant';
+		const call = (calls.get(agent) ?? 0) + 1;
+		calls.set(agent, call);
+		const response = respond(agent, call, closing);
+		queueMicrotask(() => {
+			if (options?.signal?.aborted) {
+				output.push({
+					type: 'error',
+					reason: 'aborted',
+					error: fauxAssistantMessage('', { stopReason: 'aborted', errorMessage: 'aborted' }),
+				});
+				return;
+			}
+			output.push({ type: 'start', partial: response });
+			output.push({
+				type: 'done',
+				reason: response.stopReason as 'stop' | 'toolUse',
+				message: response,
+			});
 		});
 		return output;
 	};

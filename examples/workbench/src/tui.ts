@@ -7,6 +7,8 @@ import { FilesPanel } from './files-panel.ts';
 import { Header } from './header.ts';
 import { Keys } from './keys.ts';
 import { Palette } from './palette.ts';
+import { ProcessBrowser } from './process-browser.ts';
+import { ProcessesPanel } from './process-panel.ts';
 import { type Intent, Session } from './session.ts';
 import { Transcript } from './transcript.ts';
 import { type OpenOptions, openWorkbench, type Person, type Workbench } from './workbench.ts';
@@ -32,6 +34,7 @@ class WorkbenchTui {
 	private readonly painter: Painter;
 	private readonly palette: Palette;
 	private readonly keys: Keys;
+	private readonly processes: ProcessBrowser;
 	private stopped = false;
 
 	constructor(renderer: CliRenderer, host: Workbench, identity: Person | undefined) {
@@ -40,6 +43,8 @@ class WorkbenchTui {
 		const header = new Header(renderer);
 		const transcript = new Transcript(renderer);
 		const panel = new FilesPanel(renderer);
+		const processPanel = new ProcessesPanel(renderer);
+		this.processes = new ProcessBrowser(host, () => this.render());
 		const body = new BoxRenderable(renderer, {
 			flexDirection: 'row',
 			flexGrow: 1,
@@ -55,6 +60,8 @@ class WorkbenchTui {
 			transcript,
 			composer: this.composer,
 			panel,
+			processPanel,
+			processes: this.processes,
 			header,
 			width: () => renderer.width - 2 * PADDING,
 		});
@@ -66,6 +73,8 @@ class WorkbenchTui {
 			palette: this.palette,
 			painter: this.painter,
 			panel,
+			processPanel,
+			processes: this.processes,
 			transcript,
 			render: () => this.render(),
 		});
@@ -80,6 +89,7 @@ class WorkbenchTui {
 		root.add(header.root);
 		body.add(transcript.root);
 		body.add(panel.root);
+		body.add(processPanel.root);
 		root.add(body);
 		root.add(this.composer.root);
 		renderer.root.add(root);
@@ -94,7 +104,12 @@ class WorkbenchTui {
 
 	/** Run until the renderer is destroyed. */
 	async run(): Promise<void> {
-		const slow = setInterval(() => void this.session.poll(), SLOW_MS);
+		// The poll also reads the open processes panel: a running process writes
+		// output that no event reports, and its time grows.
+		const slow = setInterval(() => {
+			void this.session.poll();
+			void this.processes.refresh();
+		}, SLOW_MS);
 		await new Promise<void>((resolve) => {
 			this.renderer.once('destroy', () => {
 				this.stopped = true;
@@ -149,6 +164,7 @@ class WorkbenchTui {
 	private apply(intent: Intent): void {
 		if (intent.type === 'quit') this.renderer.destroy();
 		else if (intent.type === 'compose') this.composer.setText(intent.text);
+		else if (intent.type === 'processes') this.keys.openProcesses();
 		else this.keys.openFiles();
 	}
 }

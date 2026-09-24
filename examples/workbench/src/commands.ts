@@ -12,6 +12,7 @@ const COMMANDS: readonly Command[] = [
 	{ name: 'user', summary: 'Switch to another person', argument: 'person' },
 	{ name: 'files', summary: 'Search the workspace files' },
 	{ name: 'open', summary: 'Open a workspace file in the side panel', argument: 'file' },
+	{ name: 'ps', summary: 'Show the background processes of the agents' },
 	{ name: 'attach', summary: 'Attach a local file to your next message', argument: 'text' },
 	{ name: 'try', summary: 'Fill the composer with the room’s suggested question' },
 	{ name: 'abort', summary: 'Cancel the open exchange' },

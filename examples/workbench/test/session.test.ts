@@ -1,9 +1,10 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { ProcessBrowser, stateText } from '../src/process-browser.ts';
 import { scenarios } from '../src/scenarios.ts';
 import { Session } from '../src/session.ts';
-import type { ActivationSteps, OpenOptions, Workbench } from '../src/workbench.ts';
+import type { ActivationSteps, OpenOptions, ProcessView, Workbench } from '../src/workbench.ts';
 import { started, view } from './fake-host.ts';
 import { freshDirectory, idleStream, openHost } from './hosting.ts';
 
@@ -418,5 +419,70 @@ describe('Session awaiting and approval', () => {
 		host.pendingApprovals = [];
 		await session.submit('/user mira');
 		expect(session.attention).toEqual([]);
+	});
+});
+
+describe('Session /ps', () => {
+	const at = (seconds: number) => new Date(Date.UTC(2026, 0, 1, 12, 0, seconds)).toISOString();
+	const process = (handle: string, extra: Partial<ProcessView> = {}): ProcessView => ({
+		handle,
+		kind: 'bash',
+		agent: 'design',
+		command: 'npm test',
+		state: 'running',
+		output: `/home/design/.processes/${handle}/out`,
+		timeout: 600,
+		startedAt: at(0),
+		...extra,
+	});
+
+	it('opens on the processes, reads the chosen output, cancels on the second x, and stops reading on close', async () => {
+		const { host, session } = await started();
+		host.processTable = [
+			process('bash-000000000001', { name: 'soak' }),
+			process('bash-000000000002', { state: 'exited', exitCode: 0, endedAt: at(3) }),
+		];
+		expect(await session.submit('/ps')).toEqual({ type: 'processes' });
+		const panel = new ProcessBrowser(host, () => {});
+		await panel.show();
+		expect(panel.open).toBe(true);
+		expect(host.processWatchers.size).toBe(1);
+		await vi.waitFor(() => expect(panel.output?.handle).toBe('bash-000000000001'));
+		panel.move(1);
+		await vi.waitFor(() => expect(panel.output?.text).toBe('output of bash-000000000002\n'));
+		await panel.cancel();
+		expect(panel.message).toBe('bash-000000000002 is not running.');
+
+		panel.move(-1);
+		await panel.cancel();
+		expect(panel.message).toBe('Press x again to cancel soak (bash-000000000001).');
+		expect(host.calls).not.toContain('cancel:bash-000000000001');
+		await panel.cancel();
+		expect(host.calls).toContain('cancel:bash-000000000001');
+		expect(panel.message).toBe('soak (bash-000000000001) is cancelled.');
+		expect(panel.selected?.state).toBe('cancelled');
+
+		// A start or an end reads the list again, and keeps the chosen process.
+		host.processTable = [process('bash-000000000003'), ...host.processTable];
+		for (const changed of host.processWatchers) changed();
+		await vi.waitFor(() => expect(panel.processes).toHaveLength(3));
+		expect(panel.selected?.handle).toBe('bash-000000000001');
+
+		panel.hide();
+		expect(host.processWatchers.size).toBe(0);
+		host.processTable = [];
+		await panel.refresh();
+		expect(panel.processes).toHaveLength(3);
+	});
+
+	it.each([
+		[{}, 'running 1m 5s'],
+		[{ state: 'exited', exitCode: 2, endedAt: at(3) }, 'exit 2 after 3s'],
+		[{ state: 'timed_out', endedAt: at(59) }, 'timed out after 59s'],
+		[{ state: 'cancelled' }, 'cancelled after 1m 5s'],
+		[{ state: 'failed', error: 'The backend closed.' }, 'failed: The backend closed.'],
+		[{ startedAt: new Date(Date.UTC(2026, 0, 1, 10, 55)).toISOString() }, 'running 1h 6m'],
+	] as const)('states %o as %s', (extra, text) => {
+		expect(stateText(process('bash-000000000001', extra), Date.parse(at(65)))).toBe(text);
 	});
 });

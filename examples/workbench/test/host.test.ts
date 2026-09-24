@@ -2,15 +2,16 @@ import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join as joinPath } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { byAgent, callTool, quiet, speak } from '@ambionframework/ambion/testing';
-import type { PiExecutionOptions } from '@ambionframework/pi';
-import {
-	createAssistantMessageEventStream,
-	fauxAssistantMessage,
-	fauxToolCall,
-} from '@earendil-works/pi-ai';
+import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
 import type { Workbench } from '../src/workbench.ts';
-import { freshDirectory, idleStream, openHost, scriptedFamilies } from './hosting.ts';
+import {
+	freshDirectory,
+	idleStream,
+	openHost,
+	scriptedFamilies,
+	scriptedStream,
+} from './hosting.ts';
 
 const PLAN = 'LED plan: 330 ohm series resistor at 10 mA.\n';
 
@@ -45,38 +46,13 @@ const designScript = byAgent({
 	},
 });
 
-const makeStream = (): PiExecutionOptions['stream'] => {
-	const calls = new Map<string, number>();
-	return (_model, context, options) => {
-		const output = createAssistantMessageEventStream();
-		const closing = context.systemPrompt?.includes('The exchange is over.') ?? false;
-		const agent = context.systemPrompt?.match(/You are '([^']+)'/)?.[1] ?? 'assistant';
-		const call = (calls.get(agent) ?? 0) + 1;
-		calls.set(agent, call);
-		const response = scriptedResponse(agent, call, closing);
-		queueMicrotask(() => {
-			if (options?.signal?.aborted) {
-				output.push({
-					type: 'error',
-					reason: 'aborted',
-					error: fauxAssistantMessage('', { stopReason: 'aborted', errorMessage: 'aborted' }),
-				});
-				return;
-			}
-			output.push({ type: 'start', partial: response });
-			output.push({
-				type: 'done',
-				reason: response.stopReason as 'stop' | 'toolUse',
-				message: response,
-			});
-		});
-		return output;
-	};
-};
-
 /** A host whose assistant asks the design seat, which writes a plan, then a summary closes the exchange. */
 const open = (directory?: string) =>
-	openHost({ directory, stream: makeStream(), executions: scriptedFamilies(designScript) });
+	openHost({
+		directory,
+		stream: scriptedStream(scriptedResponse),
+		executions: scriptedFamilies(designScript),
+	});
 
 async function messagesOf(workbench: Workbench, room: string) {
 	return (await workbench.read(room, 0)).messages;
@@ -319,5 +295,51 @@ describe('Workbench host', () => {
 		await workbench.join('bringup', 'mira');
 		await vi.waitFor(() => expect(counts.bringup).toBeGreaterThan(settled));
 		expect(counts.ended).toBe(ended);
+	}, 20_000);
+
+	it('lists the processes that an agent starts with bash, reads an output, and cancels a running one', async () => {
+		// The assistant starts a short process that ends in its window, then a long one that it leaves running.
+		const stream = scriptedStream((agent, call, closing) => {
+			const start = (command: string, name: string, wait: number) =>
+				fauxAssistantMessage([fauxToolCall('bash', { command, name, wait })], {
+					stopReason: 'toolUse',
+				});
+			if (agent !== 'assistant' || closing) return fauxAssistantMessage('quiet');
+			if (call === 1) return start('echo hello from the bench', 'greet', 5);
+			if (call === 2) return start('sleep 60', 'soak', 0);
+			return fauxAssistantMessage('quiet');
+		});
+		const workbench = await openHost({ stream });
+		let events = 0;
+		const end = workbench.watchProcesses(() => {
+			events += 1;
+		});
+		expect(await workbench.processes()).toEqual([]);
+		await workbench.join('bringup', 'mira');
+		await workbench.send('bringup', 'mira', 'ps-1', 'Start the soak.');
+		await vi.waitFor(async () => expect(await workbench.processes()).toHaveLength(2), {
+			timeout: 5_000,
+		});
+		// The running process comes first, then the newest start.
+		const [soak, greet] = await workbench.processes();
+		expect(soak).toMatchObject({ name: 'soak', agent: 'assistant', state: 'running' });
+		expect(greet).toMatchObject({ name: 'greet', state: 'exited', exitCode: 0 });
+		expect(await workbench.processOutput(greet?.handle ?? '')).toEqual({
+			handle: greet?.handle,
+			text: 'hello from the bench\n',
+			size: 21,
+			truncated: false,
+		});
+		await expect(workbench.processOutput('bash-000000000000')).rejects.toThrow(/No process/);
+
+		const cancelled = await workbench.cancelProcess(soak?.handle ?? '');
+		expect(cancelled.state).toBe('cancelled');
+		expect((await workbench.processes()).map((process) => process.state)).toEqual([
+			'cancelled',
+			'exited',
+		]);
+		// One start and one end for each process.
+		await vi.waitFor(() => expect(events).toBe(4));
+		end();
 	}, 20_000);
 });

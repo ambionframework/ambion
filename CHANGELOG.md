@@ -39,6 +39,9 @@ activation starts with a reminder of the seat's processes. See
   reminders before the delta.
 - **The workstation keeps a session open while any environment is open
   over it.** A process holds an environment for its whole run.
+- **The Workbench shows the background processes with `/ps`.** A side
+  panel lists the processes of the agents, shows the end of the chosen
+  output, and cancels a running process on a second `x`.
 
 ### Breaking changes
 

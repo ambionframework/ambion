@@ -4,16 +4,24 @@ import type { Composer } from './composer.ts';
 import type { FilesPanel } from './files-panel.ts';
 import type { Header } from './header.ts';
 import type { Mode } from './keys.ts';
+import type { ProcessBrowser } from './process-browser.ts';
+import type { ProcessesPanel } from './process-panel.ts';
 import type { RefItem } from './refs.ts';
 import type { Session } from './session.ts';
 import { emptyText } from './session-text.ts';
 import type { Marks, Transcript } from './transcript.ts';
 
-const HINTS = {
+const HINTS: Partial<Record<Mode, string>> = {
 	compose: 'Enter sends   Ctrl+J newline   / commands   Ctrl+R rooms   Tab discussions',
 	browse: 'Up/Down choose   Enter open or close   e open all   c close all   r refs   Esc back',
 	refs: 'Up/Down choose a ref   Enter opens it   Esc back',
-} as const;
+};
+
+/** What the status line says while a side panel is open. */
+const PANEL_STATUS: Partial<Record<Mode, string>> = {
+	files: 'Browsing the workspace files. Esc closes the panel.',
+	processes: 'Watching the background processes. Esc closes the panel.',
+};
 
 /** At this width or wider, the composer shows its hint line. */
 const ROOMY = 96;
@@ -24,6 +32,8 @@ export interface DrawParts {
 	transcript: Transcript;
 	composer: Composer;
 	panel: FilesPanel;
+	processPanel: ProcessesPanel;
+	processes: ProcessBrowser;
 	header: Header;
 	/**
 	 * The width the conversation has when the files panel is closed. A widget gets
@@ -43,6 +53,8 @@ export class Painter {
 	private readonly transcript: Transcript;
 	private readonly composer: Composer;
 	private readonly panel: FilesPanel;
+	private readonly processPanel: ProcessesPanel;
+	private readonly processes: ProcessBrowser;
 	private readonly header: Header;
 	private readonly width: () => number;
 	private drawn = '';
@@ -53,6 +65,8 @@ export class Painter {
 		this.transcript = parts.transcript;
 		this.composer = parts.composer;
 		this.panel = parts.panel;
+		this.processPanel = parts.processPanel;
+		this.processes = parts.processes;
 		this.header = parts.header;
 		this.width = parts.width;
 	}
@@ -77,6 +91,7 @@ export class Painter {
 		this.drawTranscript(mode, browsing, picking);
 		this.drawChrome(mode, picking);
 		if (mode === 'files') this.panel.draw(this.session.browser);
+		if (mode === 'processes') this.processPanel.draw(this.processes);
 	}
 
 	private marks(picking: string | undefined): Marks {
@@ -123,8 +138,9 @@ export class Painter {
 		this.composer.setPlaceholder(this.placeholder());
 		this.composer.setStatus(new StyledText(this.statusChunks(mode, picking)));
 		const roomy = this.width() >= ROOMY;
-		const quiet = session.error || session.offline || !roomy || mode === 'files';
-		this.composer.setHints(quiet ? '' : HINTS[mode]);
+		// A side panel draws its own hints, so its mode has none here.
+		const quiet = session.error || session.offline || !roomy;
+		this.composer.setHints(quiet ? '' : (HINTS[mode] ?? ''));
 	}
 
 	/** What the status line says about the chosen ref: why it does not open, or what Enter does. */
@@ -153,8 +169,8 @@ export class Painter {
 		const session = this.session;
 		if (session.error) return [fg(palette.red)(`Error: ${session.error}`)];
 		if (session.offline) return [fg(palette.red)(`Cannot read the rooms: ${session.offline}`)];
-		if (mode === 'files')
-			return [fg(palette.muted)('Browsing the workspace files. Esc closes the panel.')];
+		const panel = PANEL_STATUS[mode];
+		if (panel) return [fg(palette.muted)(panel)];
 		if (mode === 'refs') return [fg(palette.muted)(this.refStatus(picking))];
 		if (session.awaitingGoal)
 			return [

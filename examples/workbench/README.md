@@ -57,6 +57,7 @@ press Ctrl+R to pick a room.
 | `/user <person>`       | Act as another person                                 |
 | `/files`               | Search the workspace files in a side panel            |
 | `/open <path>`         | Open the files panel on one file                      |
+| `/ps`                  | Show the background processes of the agents           |
 | `/attach <local path>` | Copy a local file into the workspace, ref it next     |
 | `/try`                 | Fill the composer with the room's suggested prompt    |
 | `/abort`               | Cancel the open exchange                              |
@@ -68,26 +69,43 @@ press Ctrl+R to pick a room.
 `/abort` runs at once. Typing the command is the confirmation. Switching
 person leaves the current room, then enters it as the new person.
 
-| Key                   | Effect                                                     |
-| --------------------- | ---------------------------------------------------------- |
-| Enter                 | Send                                                       |
-| Ctrl+J, Alt+Enter     | Add a line to the message                                  |
-| Tab                   | Complete a command, or browse the discussions              |
-| Up, Down, Enter, e, c | While browsing: choose, open or close, open all, close all |
-| s                     | While browsing: show the steps of the chosen exchange      |
-| r                     | While browsing: choose a ref of a shown message            |
-| Up, Down, Enter       | While choosing a ref: move, open it, or jump to it         |
-| Esc                   | Close the palette, clear the search, or close the panel    |
-| PageUp, PageDown      | Scroll the conversation                                    |
-| Type, Up, Down        | In the files panel: search, and choose a file to read      |
-| PageUp, PageDown      | In the files panel: scroll the file                        |
-| Ctrl+Y                | In the files panel: copy the file to the clipboard         |
+| Key                   | Effect                                                      |
+| --------------------- | ----------------------------------------------------------- |
+| Enter                 | Send                                                        |
+| Ctrl+J, Alt+Enter     | Add a line to the message                                   |
+| Tab                   | Complete a command, or browse the discussions               |
+| Up, Down, Enter, e, c | While browsing: choose, open or close, open all, close all  |
+| s                     | While browsing: show the steps of the chosen exchange       |
+| r                     | While browsing: choose a ref of a shown message             |
+| Up, Down, Enter       | While choosing a ref: move, open it, or jump to it          |
+| Esc                   | Close the palette, clear the search, or close the panel     |
+| PageUp, PageDown      | Scroll the conversation                                     |
+| Type, Up, Down        | In the files panel: search, and choose a file to read       |
+| PageUp, PageDown      | In the files panel: scroll the file                         |
+| Ctrl+Y                | In the files panel: copy the file to the clipboard          |
+| Up, Down, PageUp      | In the processes panel: choose a process, scroll its output |
+| x, then x             | In the processes panel: cancel the chosen process           |
+| Ctrl+Y                | In the processes panel: copy the output to the clipboard    |
 
 The files panel renders Markdown files with headings, lists, and code. It
 shows a SQLite database (`.db`, `.sqlite`, `.sqlite3`, up to 8 MiB) as tables,
 with the first 50 rows of each. The panel opens the database read-only. It
 shows a picture (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, up to 8 MiB) with
 OpenTUI's own terminal image rendering, negotiated to the terminal's protocol.
+
+**`/ps` shows the background processes that the agents started with
+`bash`.** The panel lists the running processes first, then the newest
+start. Each row gives the name or the handle, the owner agent, the state,
+and the command. The chosen process shows its room, its whole command, and
+the end of its output, up to 64 KB. A start or an end of a process reads
+the list again, and the slow poll updates the times.
+
+- **The list holds the agents of this run.** An agent joins it on its first
+  process tool call or reminder ([Processes](../../docs/processes.md#the-hosts-view)).
+- **The just-bash backend writes the output when the command ends.** A
+  running process shows `No output yet.`
+- **The first `x` chooses the process, and the second `x` cancels it.** The
+  cancel waits up to 10 seconds for the process to end.
 
 `/attach <local path>` reads a file from your own machine and copies it into
 the workspace, under `/attachments`. It cites the copy as a ref of your next
@@ -260,30 +278,33 @@ workspace resources.
 
 ## Files
 
-| File                  | What                                                  |
-| --------------------- | ----------------------------------------------------- |
-| `src/definitions.ts`  | The assistant, the three specialists, and the people  |
-| `src/scenarios.ts`    | The rooms, and the workspace seed                     |
-| `src/repositories.ts` | The git backend and its firmware-sketch template      |
-| `src/rooms.ts`        | The host lifecycle and the room catalog               |
-| `src/workbench.ts`    | The host API the terminal calls in process            |
-| `src/files.ts`        | The workspace list, one file preview, and `/attach`   |
-| `src/names.ts`        | The room name and goal rules                          |
-| `src/session.ts`      | The terminal state and commands, without OpenTUI      |
-| `src/feed.ts`         | The room feed: one read at a time                     |
-| `src/commands.ts`     | The slash commands and their suggestions              |
-| `src/timeline.ts`     | The record grouped into questions, threads, summaries |
-| `src/steps.ts`        | The steps of an activation, and the cost of a run     |
-| `src/approvals.ts`    | The instrument operations that wait for an answer     |
-| `src/transcript.ts`   | The conversation, with open and closed threads        |
-| `src/composer.ts`     | The composer, room chip, palette, and paste detection |
-| `src/browser.ts`      | The files panel state: search, matches, chosen file   |
-| `src/files-panel.ts`  | The files panel beside the conversation               |
-| `src/database.ts`     | The SQLite preview: tables and their first rows       |
-| `src/refs.ts`         | The refs of a message: parse, resolve, and one chip   |
-| `src/tui.ts`          | The terminal: layout, keys, and the run loop          |
-| `src/families.ts`     | The family, model, and key of each seat               |
-| `src/unavailable.ts`  | The execution of a family that has no key             |
-| `src/main.ts`         | The entry point                                       |
-| `src/brand.ts`        | The product name and the terminal palette             |
-| `library/`            | The datasheets                                        |
+| File                     | What                                                  |
+| ------------------------ | ----------------------------------------------------- |
+| `src/definitions.ts`     | The assistant, the three specialists, and the people  |
+| `src/scenarios.ts`       | The rooms, and the workspace seed                     |
+| `src/repositories.ts`    | The git backend and its firmware-sketch template      |
+| `src/rooms.ts`           | The host lifecycle and the room catalog               |
+| `src/workbench.ts`       | The host API the terminal calls in process            |
+| `src/files.ts`           | The workspace list, one file preview, and `/attach`   |
+| `src/names.ts`           | The room name and goal rules                          |
+| `src/session.ts`         | The terminal state and commands, without OpenTUI      |
+| `src/feed.ts`            | The room feed: one read at a time                     |
+| `src/commands.ts`        | The slash commands and their suggestions              |
+| `src/timeline.ts`        | The record grouped into questions, threads, summaries |
+| `src/steps.ts`           | The steps of an activation, and the cost of a run     |
+| `src/approvals.ts`       | The instrument operations that wait for an answer     |
+| `src/transcript.ts`      | The conversation, with open and closed threads        |
+| `src/composer.ts`        | The composer, room chip, palette, and paste detection |
+| `src/browser.ts`         | The files panel state: search, matches, chosen file   |
+| `src/files-panel.ts`     | The files panel beside the conversation               |
+| `src/processes.ts`       | The order of the processes, and the end of an output  |
+| `src/process-browser.ts` | The processes panel state: list, choice, and cancel   |
+| `src/process-panel.ts`   | The processes panel beside the conversation           |
+| `src/database.ts`        | The SQLite preview: tables and their first rows       |
+| `src/refs.ts`            | The refs of a message: parse, resolve, and one chip   |
+| `src/tui.ts`             | The terminal: layout, keys, and the run loop          |
+| `src/families.ts`        | The family, model, and key of each seat               |
+| `src/unavailable.ts`     | The execution of a family that has no key             |
+| `src/main.ts`            | The entry point                                       |
+| `src/brand.ts`           | The product name and the terminal palette             |
+| `library/`               | The datasheets                                        |
