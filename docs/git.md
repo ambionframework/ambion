@@ -17,8 +17,8 @@ ref that starts a job is a later design, and it builds on this one.
 
 | Operation                   | How the agent does it                                                 |
 | --------------------------- | --------------------------------------------------------------------- |
-| Find a template             | The `repo` tool: `list`                                               |
-| Fork a template             | The `repo` tool: `fork` a template into the agent's own namespace     |
+| Find a template             | The `repos` tool                                                      |
+| Fork a template             | The `fork` tool: a fork in the agent's own namespace                  |
 | Clone into the home         | `fork` with `clone`, or `git clone <url>/<agent>/<name>` in `bash`    |
 | Edit                        | The `read`, `write`, and `edit` tools, or `bash`                      |
 | Work on a branch            | Ordinary `git` in `bash`: `switch -c`, `add`, `commit`, `merge`       |
@@ -28,16 +28,17 @@ ref that starts a job is a later design, and it builds on this one.
 ## Prompt an agent
 
 **A person names the template and the result, and the agent does the
-rest.** The tool guidance states the URL, the namespaces, and the rule
-that a push persists the edits. An instruction needs no git commands.
+rest.** [The guidance](#the-guidance) states the URL, the namespaces, and
+the rule that a push persists the edits. An instruction needs no git
+commands.
 
 > Start a report from the `weekly-report` template. Fill in this week's
 > numbers from `~/data/week.csv`, and push it on a branch named `week-39`.
 
 **The agent then makes five calls.**
 
-1. `repo` `fork`, with source `templates/weekly-report`, name `report`,
-   and clone `~/report`. The tool forks the template to `analyst/report`
+1. `fork`, with source `templates/weekly-report`, name `report`, and
+   clone `~/report`. The tool forks the template to `analyst/report`
    and clones the fork into `~/report`.
 2. `bash` with `cd ~/report && git switch -c week-39`.
 3. `edit` on `~/report/report.md`, one call or more.
@@ -49,23 +50,12 @@ or it uses the working copy that is still in the home
 ([Persistence](#persistence)). A peer reviews the work with
 `git clone <url>/analyst/report`.
 
-**The guidance holds these lines.** The URL in them is the `url` of the
-backend.
-
-```text
-Repositories live on the git server at http://git.ambion.invalid.
-templates/<name> is a read-only template. <agent>/<name> belongs to that agent.
-Fork a template with the repo tool, then work in the clone in your home.
-You can push only to repositories in your own namespace.
-An edit persists only after you commit it and push it. Push before you finish.
-```
-
 ## The name and the packages
 
 **`git` is a third backend kind, beside `bash` and `sql`.** The
 `WorkspaceBackends` of [Workspace](workspace.md#query-the-shared-database)
-gets an optional `git` key. A workspace with no git backend has no `repo`
-tool, and its shell keeps the local `git` it has today.
+gets an optional `git` key. A workspace with no git backend has no `repos`
+and no `fork` tool, and its shell keeps the local `git` it has today.
 
 **Hosting is a backend kind of its own.** The repositories live longer
 than any one agent's shell, and they have their own storage. One git
@@ -117,7 +107,7 @@ and the bash backend reaches the git backend through `GitAccess`.
 **`@ambionframework/git` implements the backend over `just-git/server`.**
 `just-git` already gives the just-bash shell its `git` command. Its server
 has forks that share objects, push hooks, and a ref policy. The package
-adds the namespaces, the templates, the `repo` tool, and the storage over
+adds the namespaces, the templates, the two tools, and the storage over
 `node:sqlite`.
 
 ```ts
@@ -190,33 +180,148 @@ then `git fetch template` and `git merge template/main`.
 that has forks, because the forks read its objects. How long a template
 and its forks stay is the host's decision.
 
-## Forks and the repo tool
+## The tools
 
-**The git backend adds one tool, `repo`.** It has two actions.
+**The git backend adds two tools: `repos` and `fork`.** Each tool does one
+thing, the same as `read`, `bash`, and `sql`. A single tool with an
+`action` field has parameters that apply to one action only, and a model
+can fill them in for the other action.
 
-| Action | Parameters                 | What it does                                         |
-| ------ | -------------------------- | ---------------------------------------------------- |
-| `list` | none                       | The repositories the agent can read, with their tips |
-| `fork` | `source`, `name`, `clone?` | Forks `source` to `<agent>/<name>`, and can clone it |
+**The model reads each tool's description in its tool list.**
+
+| Tool    | Description                                                                                                                 |
+| ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `repos` | List the repositories on the workspace's git server: the read-only templates and every agent's repositories.                |
+| `fork`  | Fork a repository into your own namespace on the git server. Set clone to put a working copy of the fork in your workspace. |
+
+**A refusal is text, and a fault rejects.** A source that does not exist,
+a name that is taken, and a clone that fails come back as text that tells
+the agent what to do next. A fault of the git storage or of the bash
+owner, and an abort by the caller, reject. The `sql` tool follows the same
+rule.
+
+**The audit log records each call.** `openWorkspace` binds both tools
+through the audit log, the same as `sql`. The clone inside a `fork` call
+runs as one more operation on the bash owner, and the log records one
+entry for the `fork` call.
+
+### repos
+
+| Parameter   | Meaning                                                                          |
+| ----------- | -------------------------------------------------------------------------------- |
+| `namespace` | Optional. `templates` or the name of an agent. Omit it to list every repository. |
+
+**The result is a Markdown table with one line for each repository.** The
+`Branches` column shows each branch with the first seven characters of its
+commit. It shows five branches at most, and then the count of the others.
+
+```text
+| Repository              | Forked from             | Branches                      |
+| ----------------------- | ----------------------- | ----------------------------- |
+| templates/weekly-report |                         | main 5c76d2e                  |
+| analyst/report          | templates/weekly-report | main 5c76d2e, week-39 e5ec80f |
+
+2 repositories. Clone one with git clone http://git.ambion.invalid/<repository>.
+```
+
+**An empty result is one line.** `No repositories on
+http://git.ambion.invalid.` The `details` hold `url` and the count of
+`repositories`, for logs and UI.
+
+### fork
+
+```ts
+const forkSchema = Type.Object({
+  source: Type.String({
+    description: 'The repository to fork, such as templates/weekly-report.',
+  }),
+  name: Type.String({
+    pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$',
+    description: 'The name of the fork. The fork is <your name>/<name>.',
+  }),
+  clone: Type.Optional(
+    Type.String({
+      description: 'A path for a working copy of the fork, such as ~/report. Omit it to fork only.',
+    }),
+  ),
+});
+```
+
+**`clone` resolves the same as a file tool's path.** `~` and a relative
+path resolve under the agent's home. The tool runs `git clone` through the
+bash owner as the calling agent, so the clone sets `origin` to the fork.
+
+**Each outcome has one text.** The URL is the backend's `url`.
+
+| Outcome           | The result text                                                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Forked            | `Forked templates/weekly-report to analyst/report at http://git.ambion.invalid/analyst/report.`                                       |
+| Forked and cloned | The line above, then `Cloned it into /home/analyst/report on branch main. origin is the fork.`                                        |
+| No such source    | `templates/weekly-report does not exist. Call repos to list the repositories.`                                                        |
+| Name taken        | `analyst/report exists. Clone it with git clone http://git.ambion.invalid/analyst/report, or pick another name.`                      |
+| Clone failed      | The forked line, then `The clone into /home/analyst/report failed: <git output>. The fork stays. Clone it with git clone <fork URL>.` |
+
+**A refused name makes a repeated call safe.** A `fork` call that repeats
+after a timeout finds its own fork, and the result names it. The call
+creates nothing twice.
+
+**The `details` hold `repository`, `source`, `url`, and `clone` when it is
+set.**
 
 **A fork shares the objects of its source.** `just-git` copies the refs
 and reads each object from the root repository, so a fork costs a few
 rows. A fork of a fork records the root as its source.
 
-**`fork` refuses a name that the agent already uses.** The tool result
-names the existing repository, so the agent clones it or picks another
-name. A repeated `fork` call after a timeout therefore creates nothing
-twice.
-
-**`clone` puts the fork in the agent's home in the same call.** It names a
-path, such as `~/report`. The tool runs `git clone` through `bash` as the
-calling agent, so the clone sets `origin` to the fork. A path that already
-holds files fails the clone, and the fork stays.
-
 **The host can prepare a fork before the first activation.** Host code
 calls `lab.git.use(agent, (env) => env.fork('templates/weekly-report',
 'report'))`, then clones through `lab.use`. The agent then starts with a
 working copy.
+
+## The guidance
+
+**The workspace gives one guidance text to every agent.** `tools()`
+returns one `ToolBundle` for every seat, so the guidance names no agent.
+It says `<your name>`. The text enters every activation of every seat that
+holds the bundle, so the git note stays at six lines.
+
+**`openWorkspace` joins the notes in this order.**
+
+1. The tool line, which counts the tools. With a git backend it names six:
+   read, write, edit, bash, repos and fork. With a SQL backend as well, it
+   names seven.
+2. The SQL note, when the workspace has a SQL backend.
+3. The git note.
+4. The bash backend's note about its shell.
+5. The audit note, when `audit` is set.
+6. The rooms note.
+
+**The git note states the server, the namespaces, and the rule that
+persists an edit.** The backend writes its `url` into the first line.
+
+```text
+repos and fork reach the git server of this workspace at http://git.ambion.invalid.
+templates/<name> is a read-only template. <agent>/<name> belongs to that agent.
+You push only to <your name>/<name>, and you can read every repository.
+To start from a template, fork it and set clone. Then use git in bash in the clone:
+make a branch, commit, and push to origin. git already reaches the server as you.
+An edit persists only after you commit it and push it. Push before you finish.
+```
+
+**The just-bash note changes one sentence.** Today it says: `A remote is
+a path in this filesystem, such as /home/<other agent>/<repo>; git has no
+network access.` With a git backend the second half is false. A bash
+backend's guidance is one string, set before any agent connects, so the
+sentence changes to a form that holds in both cases: `A remote is a path
+in this filesystem, or a URL that this guidance names. git reaches no
+other host.` With no git backend, the guidance names no URL.
+
+**The workstation note stays.** It already states that the shell has
+network access. The git note does not name the credential file, so the
+guidance does not point an agent at its token.
+
+**The prompt of a seat adds the task alone.** The seat's instructions
+need no git commands, no URL, and no rule about pushes. The guidance
+holds them for every seat.
 
 ## How the URL works
 
@@ -329,7 +434,7 @@ its text, so a reader finds the work the message describes.
 
 ## Owners and order
 
-**The git backend has its own resource owner.** The `repo` tool and host
+**The git backend has its own resource owner.** The `fork` tool and host
 code reach it. A `fork` does not wait for a long `bash` command.
 
 **A git operation may wait on the bash owner, and a bash operation never
@@ -384,13 +489,18 @@ namespace rule on every backend. The bash backend decides the rest.
 **`gitConformance(harness)` holds the cases of a `GitBackend`.** It lives
 in `@ambionframework/workspace/conformance`, beside `sqlConformance`.
 
-- `list` shows each template, and each fork with its source.
+- `repos` shows each template, and each fork with its source.
 - `fork` with `clone` gives a working copy whose `origin` is the fork.
 - A second `fork` with the same name is refused and creates nothing.
 - The owner pushes a new branch, and a second clone reads it.
 - A push to a template and to another agent's namespace is refused, and
   the agent's `git push` output names the reason.
 - A peer clones another agent's fork.
+
+**Unit tests hold the texts.** Each outcome of `fork` and the `repos` table
+has a case. One case checks the tool line and the order of the notes, with
+and without a SQL backend. One case checks the just-bash note with and
+without a git backend.
 
 **The scripted tier runs in process.** It runs the cases on the memory
 and the directory backends, with no network. A restart case pushes a
