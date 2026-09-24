@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+No change yet.
+
 ## 0.2.0 (2026-09-24)
 
 **A workspace now has real backends.** A shell on a remote server, a shared

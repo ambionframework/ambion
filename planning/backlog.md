@@ -1,78 +1,25 @@
-# Backlog: after 0.2.0
+# Backlog: after 0.3.0
 
-Everything that is not in [next.md](next.md). The first section is the
-scope for 0.3.0. Every other item names the condition that brings it into
-a release. Nothing here blocks the 0.2.0 tag.
+Everything that is not in [next.md](next.md). Each item names the
+condition that brings it into a release. Nothing here blocks the 0.3.0
+tag.
 
-## 0.3.0: the room works between questions
+## Known defects
 
-**0.3.0 makes a room useful between questions.** An event or a clock wakes
-it, and it hands work to another room. The work starts on the kernel that
-0.2.0 tags, because M1 and M2 of 0.2.0 changed the same room files and the
-same rules file. After the 0.2.0 tag, this section moves into [next.md](next.md) with
-phases, steps, and evidence.
-
-| Theme                     | Acceptance                                                                                                                                                                                     |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                      |
-| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database. |
-
-**Three format changes.** Each change lands with a golden journal of the
-new shape, and the changelog names each one.
-
-| Change                                  | Item | Kind                       |
-| --------------------------------------- | ---- | -------------------------- |
-| The notice message kind                 | W1   | A new message union member |
-| The timer entry                         | W2   | A new entry kind           |
-| An `awaiting` outcome that names a room | D1   | A new outcome union member |
-
-**The order is the notice, the timer, then the delegation.** The notice
-host call needs the notice kind, the timer needs the host call, and the
-delegating message needs the notice. The Cloudflare adapter runs a timer
-through its alarm after the timer lands.
-
-**Decisions taken for 0.3.0.**
-
-- **A notice is the scheduler ingress.** The application owns its
-  schedule and delivers a notice through one host call. The kernel adds no
-  scheduler.
-- **The journal records a timer, and the host runs it.** The host owns the
-  clock. A restart reads the timer entries and arms them again.
-- **Delegation has no task database.** A working room is a room, and a ref
-  connects the two.
-- **W2 decides `exchangeOutcome`.** If the `awaiting` expiry writes on the
-  `awaiting` outcome, the rule gates a write and stays verified. Otherwise
-  it leaves the rules file, as the 0.2.0 M2 sweep states for read views.
-
-**W1. A notice from a resource.** A room wakes only when a person speaks,
-so an agent cannot react when a brief changes or a run completes. Add a
-message kind with a ref and no author, routed by attention. One host call
-delivers it with a stable key, so a retried delivery lands once. An
-application scheduler calls the same host call, so the kernel needs no
-scheduler of its own. A notice opens no exchange by itself and arrives
-through no hidden timeout. **Evidence:** a scripted test and a chaos case
-for the kind and for the host call, with its durable start and its restart
-semantics.
-
-**W2. A timer that the journal records.** Nothing wakes a room on a clock,
-and an `awaiting` exchange waits for ever. A timer entry records the due
-time and the wake it owes. The host arms it and writes the wake when it is
-due. A restart reads the open timer entries and arms them again, so a
-crash loses no timer. The `awaiting` expiry is a timer that the close
-schedules. The Cloudflare adapter runs a timer through its alarm, and a
-measurement records the resume cost of a room with many timer wakes.
-**Evidence:** a kill between the timer entry and the wake keeps the wake;
-the docs that call timers future work say what shipped.
-
-**D1. Delegation by reference.** PR #151 stored tasks in the journal and
-scanned every task on each reconcile pass. Use a ref and the `awaiting`
-outcome. The delegating message carries a ref to
-`ambion://room/<working>/message/<from>`. The origin exchange closes as
-`awaiting` that room. The working room closes with one message that
-carries a ref back. Status is a read of the exchange that the referenced
-message opened. **Evidence:** the workbench delegates one question to a
-second room; a restart in the middle keeps the work. Then close PR #151
-with a comment that names the new route.
+**K1. `python3` in a just-bash shell can abort at exit on Node 26.9.** On
+macOS with Node 26.9.0 and `just-bash` 3.4.2, `python3` prints its output,
+then can abort with "Fatal Python error: gilstate_tss_clear" and "python3:
+Security violation: webassembly". The command exits 1, and the error text
+joins the output. On 2026-09-24 it failed two gate runs in a row on the
+owner's machine and passed the next one. The two tests that show it are
+"runs js-exec and python3, and has no curl" in
+`packages/just-bash/test/just-bash.test.ts` and the RFC 4180 export case in
+`packages/workspace/test/sql.test.ts`. CI runs Node 22.19 and 26.4, and
+both pass. The 0.2.0 release ran with `--skip-gate` for this reason. Find
+how often it fails, and whether Linux on Node 26.9 fails too. Report it to
+`just-bash` with the smallest command that fails. **Condition:** a user
+report, a CI Node version at 26.9 or later, or the next release gate on
+the owner's machine.
 
 ## Carried from 0.2.0
 
