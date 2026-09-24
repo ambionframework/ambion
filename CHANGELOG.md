@@ -4,11 +4,13 @@
 
 **A Codex seat with native tools runs with no Codex sandbox by default.**
 With `nativeTools: 'codex'` and no `sandboxMode`, the executor sets
-`danger-full-access`. Before, the Codex default applied, and on Linux it ran
-each command through bubblewrap. A host that refuses an unprivileged user
-namespace, such as the Ubuntu 24.04 runner of GitHub Actions, then ran no
-command. The host isolates a seat. Set `sandboxMode` to keep the Codex
-sandbox.
+`danger-full-access`. A command then has write access and the network on
+the host of the `codex` process. Before, the Codex default applied, and on
+Linux it ran each command through bubblewrap, with no network. A host that
+refuses an unprivileged user namespace then ran no command. Run such a seat
+only on an isolated host, or set `sandboxMode`. `codex()` now refuses
+`networkAccessEnabled` under `nativeTools: 'codex'` unless `sandboxMode` is
+`workspace-write`, because Codex reads it only there.
 
 **A Claude seat starts outside the Claude Code session of its host.** A
 host that runs inside Claude Code passed its `CLAUDE_CODE_SESSION_ID`, or in

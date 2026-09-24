@@ -3,6 +3,9 @@
  * The next pass reads it, and no say commits against a record the seat has
  * not read.
  */
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import {
 	activationsOf,
@@ -27,6 +30,8 @@ live('a message during a turn', () => {
 					instructions:
 						'Do what the newest message asks. Report with one say when the record is read to its end.',
 					nativeTools: 'codex',
+					// Codex runs the command with no sandbox, so keep it out of the checkout.
+					workingDirectory: mkdtempSync(join(tmpdir(), 'ambion-codex-steer-')),
 				}),
 			],
 		});

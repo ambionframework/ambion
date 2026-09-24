@@ -103,9 +103,9 @@ The executor passes each policy field to the Codex SDK unchanged.
 | `sandboxMode`           | No sandbox         | `read-only`, `workspace-write`, or `danger-full-access`      |
 | `approvalPolicy`        | Codex default      | `never`, `on-request`, `on-failure`, or `untrusted`          |
 | `modelReasoningEffort`  | Codex default      | `minimal` up to `ultra`, as the SDK lists them               |
-| `networkAccessEnabled`  | Codex default      | Whether a command may use the network                        |
+| `networkAccessEnabled`  | Codex default      | The network of a command, under `workspace-write` only       |
 | `workingDirectory`      | Process directory  | The directory where Codex works                              |
-| `additionalDirectories` | None               | More directories that Codex may write                        |
+| `additionalDirectories` | None               | More writable directories, under `workspace-write` only      |
 
 **`nativeTools: 'none'` fixes the policy.** The executor then sets
 `sandboxMode` to `read-only`, `approvalPolicy` to `never`,
@@ -114,13 +114,25 @@ temporary directory. It ignores those four options and
 `additionalDirectories`.
 They apply only with `nativeTools: 'codex'`.
 
-**`nativeTools: 'codex'` runs with no Codex sandbox by default.** The host
-isolates a seat, for example with the workstation's Unix account for each
-agent. An absent `sandboxMode` is `danger-full-access`, so Codex runs each
-command directly. On Linux the Codex sandbox runs each command through
-bubblewrap, which needs an unprivileged user namespace. A host that refuses
-one, such as the Ubuntu 24.04 runner of GitHub Actions, then runs no
-command. Set `sandboxMode` to use the Codex sandbox on a host that allows it.
+**`nativeTools: 'codex'` runs with no Codex sandbox by default.** An absent
+`sandboxMode` is `danger-full-access`. Codex then runs each command
+directly on the host of the `codex` process, as the user of that process,
+with write access and the network. Run such a seat only on an isolated
+host, such as a container or a dedicated account. The workstation backend
+does not confine it: the workstation serves the workspace tools, and a
+native command never reaches it.
+
+**The Codex sandbox needs a user namespace on Linux.** It runs each command
+through bubblewrap, which needs an unprivileged user namespace. A host that
+refuses one runs no command. AppArmor on Ubuntu 24.04 restricts such
+namespaces by default. Set `sandboxMode` to use the Codex sandbox on a host
+that allows it.
+
+**`networkAccessEnabled` needs `workspace-write`.** Codex reads it, and
+`additionalDirectories`, only under that sandbox. `codex()` refuses
+`networkAccessEnabled` with any other `sandboxMode` under
+`nativeTools: 'codex'`, so a seat that turns the network off does not get
+it back.
 
 **`codexExecution(options)` takes the runtime of the executable.**
 
@@ -373,9 +385,10 @@ accident. Use a model that `codex debug models` lists, or set
 
 **`nativeTools: 'codex'` opens the host.** The seat keeps the tools of the
 model. A seat with Code Mode reads host files whatever `sandboxMode` says.
-`sandboxMode`, `approvalPolicy`, `networkAccessEnabled`, and
-`workingDirectory` then set what a command may do, and Code Mode is outside
-their reach. Use it only for a seat that may read the host.
+With no `sandboxMode`, a command runs with no sandbox, with write access
+and the network. A `sandboxMode` and `approvalPolicy` set what a command
+may do, and Code Mode is outside their reach. Use it only for a seat that
+may use the host.
 
 **The version pin guards the recipe.** The package pins `@openai/codex-sdk`
 0.155.1, which brings `codex` 0.155.1. The feature names and the catalog

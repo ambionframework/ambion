@@ -316,9 +316,10 @@ the thread resume of #294 reach Codex, and neither has a live run. The
 owner added the secret. Run 365, the first with the key, passed the Codex
 harness job and failed three Codex package tests. Each needs a native
 command, and none ran. The Codex sandbox runs a command through bubblewrap,
-and the runner refuses the user namespace that bubblewrap needs. A seat with
-native tools now runs with no Codex sandbox by default. The item closes when
-a run on `main` passes both Codex jobs.
+which needs an unprivileged user namespace, and AppArmor on Ubuntu 24.04
+restricts such namespaces by default. A seat with native tools now runs
+with no Codex sandbox by default. The next run on `main` confirms the cause.
+The item closes when a run on `main` passes both Codex jobs.
 
 **L3. A billing failure reads as a billing failure.** Twenty-three red
 runs in a row had one cause, and each run read as a set of test failures.

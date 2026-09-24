@@ -65,7 +65,7 @@ export function threadOptions(executor: CodexExecutor, scratch?: Scratch): Threa
 		model: executor.model,
 		// A room seat runs where the application puts it, which is often no git repository.
 		skipGitRepoCheck: true,
-		// The host isolates a seat, so Codex runs its commands with no sandbox of its own.
+		// Codex runs its commands with no sandbox of its own. Isolate such a seat on the host.
 		// On Linux the Codex sandbox needs user namespaces, and a host can refuse them.
 		sandboxMode: executor.sandboxMode ?? 'danger-full-access',
 		...present({

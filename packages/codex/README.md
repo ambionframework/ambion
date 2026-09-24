@@ -77,9 +77,11 @@ answers `Method not found`, so they read nothing. A unit test proves it.
 
 **`nativeTools: 'codex'` opens the host.** The seat keeps the tools of the
 model, and a seat with Code Mode reads host files whatever `sandboxMode`
-says. Codex runs its commands with no sandbox of its own unless you set
-`sandboxMode`. The policy options apply only under `'codex'`: `sandboxMode`,
-`approvalPolicy`, `networkAccessEnabled`, and `workingDirectory`. The
+says. Codex runs its commands with no sandbox of its own, with write
+access and the network, unless you set `sandboxMode`. Run such a seat only
+on an isolated host. The policy options apply only under `'codex'`:
+`sandboxMode`, `approvalPolicy`, `networkAccessEnabled`, and
+`workingDirectory`. `networkAccessEnabled` needs `workspace-write`. The
 environment of the process, key included, reaches the binary unless you pass
 `env` to `codexExecution()`.
 
