@@ -53,6 +53,7 @@ it, and `lab.dispose()` closes it and keeps the file.
 | `url`       | The base of every clone URL. The default is `http://git.ambion.invalid` |
 | `templates` | The registrations, by template name                                     |
 | `tokenTtl`  | Seconds a token lives. The default is 3600                              |
+| `onError`   | Called with a fault of the server. Absent, the backend reports nothing  |
 
 **A template never changes after registration.** The backend registers
 each template before its first operation. A registration with a changed

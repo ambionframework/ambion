@@ -105,7 +105,11 @@ function git<T>(
 	return owner.use(agent, operation);
 }
 
-/** Run one shell command as `agent`, and give its exit status and its output. */
+/**
+ * Run one shell command as `agent`, and give its exit status and its output.
+ * The author variables let a real `git` commit. The just-bash `git` locks
+ * the author to the agent, and ignores them.
+ */
 async function sh(
 	workspace: Workspace,
 	agent: WorkspaceAgent,
@@ -118,12 +122,28 @@ async function sh(
 	const ran = await workspace.use(agent, (env) =>
 		env.exec(
 			command,
-			{ timeout: 120, capture: { limits: { maxBytes: 100_000, maxLines: 1000 } }, onUpdate },
+			{
+				timeout: 120,
+				env: authorOf(agent),
+				capture: { limits: { maxBytes: 100_000, maxLines: 1000 } },
+				onUpdate,
+			},
 			ctx,
 		),
 	);
 	if (!ran.ok) throw ran.error;
 	return { code: ran.value.exitCode, output };
+}
+
+/** The author and committer variables of `agent`. */
+function authorOf(agent: WorkspaceAgent): Record<string, string> {
+	const email = `${agent.name}@ambion.invalid`;
+	return {
+		GIT_AUTHOR_NAME: agent.name,
+		GIT_AUTHOR_EMAIL: email,
+		GIT_COMMITTER_NAME: agent.name,
+		GIT_COMMITTER_EMAIL: email,
+	};
 }
 
 /** Fork `source` to `<agent>/<name>`, and give the fork's clone URL. */
@@ -285,6 +305,47 @@ const pushesOutsideTheNamespaceAreRefused: Body = async ({ workspace }) => {
 	check((await pushAs(workspace, ANALYST, url, '~/mine')) === 0, "the owner's push was refused");
 };
 
+const concurrentForksKeepOneFork: Body = async ({ backend, workspace }) => {
+	const first = await backend.connect(ANALYST);
+	const second = await backend.connect(ANALYST);
+	try {
+		const outcomes = await Promise.all([
+			first.fork('templates/blank', 'twin'),
+			second.fork('templates/blank', 'twin'),
+		]);
+		const kinds = outcomes.map((outcome) => (outcome.ok ? 'ok' : outcome.reason)).sort();
+		check(JSON.stringify(kinds) === '["name_taken","ok"]', `two forks of one name gave ${kinds}`);
+	} finally {
+		await first.cleanup();
+		await second.cleanup();
+	}
+	// A workstation reads the credentials at every connect, beside the forks of other agents.
+	let reading = true;
+	const reader = (async () => {
+		while (reading) await backend.access.credentialsFor(REVIEWER);
+	})();
+	const forks = [];
+	for (let index = 0; index < 20; index++) {
+		forks.push(
+			await git(workspace, ANALYST, (env) => env.fork('templates/blank', `busy-${index}`)),
+		);
+	}
+	reading = false;
+	await reader;
+	check(
+		forks.every((outcome) => outcome.ok),
+		'a fork beside credential reads was refused',
+	);
+	const listed = await git(workspace, ANALYST, (env) => env.list('analyst'));
+	check(
+		listed.length === 21,
+		`the forks beside credential reads left ${listed.length} repositories`,
+	);
+	const credentials = await backend.access.credentialsFor(ANALYST);
+	const twin = credentials.find((credential) => credential.url.endsWith('/analyst/twin'));
+	check(twin?.scope === 'write', 'the owner holds no write credential for its fork');
+};
+
 const abortedForkRejects: Body = async ({ workspace }) => {
 	const controller = new AbortController();
 	controller.abort();
@@ -316,6 +377,7 @@ const sameSourceWritesNothing = async (harness: GitConformanceBackend): Promise<
 		});
 		const after = await git(second, ANALYST, (env) => env.get('templates/blank'));
 		await second.dispose();
+		check(typeof before?.branches.main === 'string', 'the first registration made no template');
 		check(after?.branches.main === before?.branches.main, 'a second registration wrote a commit');
 		const changed = { ...TEMPLATES, blank: { files: { 'README.md': 'changed\n' } } };
 		const third = openWorkspace({
@@ -374,6 +436,10 @@ const CASES: readonly [string, Body][] = [
 		pushesOutsideTheNamespaceAreRefused,
 	],
 	['an aborted fork rejects, and a repeated call is safe', abortedForkRejects],
+	[
+		'two forks of one name keep one fork, and credential reads beside forks lose none',
+		concurrentForksKeepOneFork,
+	],
 ];
 
 /** The cases of a git backend, as named test bodies. */

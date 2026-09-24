@@ -1,8 +1,9 @@
 /**
  * A workstation with a git backend: each account's real `git` reaches
  * `gitBackend` over HTTP with the credentials that `~/.git-credentials`
- * holds. The file has mode `0600`, a line that `git` erased comes back at
- * the next `connect`, the owner pushes its fork, and a peer cannot.
+ * holds. The git conformance cases run here, and the file has mode `0600`,
+ * `git` leaves it unchanged, a removed line comes back at the next
+ * `connect`, the owner pushes its fork, and a peer cannot.
  */
 
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -10,8 +11,9 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { gitBackend, sqliteGitStorage } from '@ambionframework/git';
+import { gitBackend, type JustGitBackend, sqliteGitStorage } from '@ambionframework/git';
 import { openWorkspace, type Workspace } from '@ambionframework/workspace';
+import { type GitConformanceBackend, gitConformance } from '@ambionframework/workspace/conformance';
 import { BACKGROUND_CONTEXT, type ShellOutputUpdate } from '@earendil-works/pi-agent-core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { workstationBackend } from '../src/index.ts';
@@ -69,6 +71,54 @@ async function lab() {
 	cleanups.push(() => workspace.dispose());
 	return { workspace, homes: server.homes };
 }
+
+/** Each store: a scripted SSH server, and an HTTP server for the git backend that the store opens last. */
+const harness: GitConformanceBackend = {
+	name: 'workstation',
+	shortestTokenTtl: 1,
+	async open() {
+		const dir = await mkdtemp(join(tmpdir(), 'ambion-ws-git-conformance-'));
+		const http = createServer();
+		const port = await new Promise<number>((resolve) =>
+			http.listen(0, '127.0.0.1', () => resolve((http.address() as AddressInfo).port)),
+		);
+		let current: JustGitBackend | undefined;
+		http.on('request', (request, response) => current?.handler(request, response));
+		const server = await startSshServer(['analyst', 'reviewer']);
+		return {
+			bash: workstationBackend(server.options),
+			backend: (options) => {
+				current = gitBackend({
+					storage: sqliteGitStorage(join(dir, 'git.db')),
+					secret: 'workstation-conformance',
+					url: `http://127.0.0.1:${port}`,
+					...(options.tokenTtl === undefined ? {} : { tokenTtl: options.tokenTtl }),
+					templates: Object.fromEntries(
+						Object.entries(options.templates).map(([name, template]) => [
+							name,
+							{
+								source: template.files,
+								...(template.description === undefined
+									? {}
+									: { description: template.description }),
+							},
+						]),
+					),
+				});
+				return current;
+			},
+			dispose: async () => {
+				await server.stop();
+				await new Promise((resolve) => http.close(resolve));
+				await rm(dir, { recursive: true, force: true });
+			},
+		};
+	},
+};
+
+describe.skipIf(!hasSetsid)('the git conformance cases on a workstation', () => {
+	for (const c of gitConformance(harness)) it(c.name, c.run);
+});
 
 describe.skipIf(!hasSetsid)('a workstation with a git backend', () => {
 	it('writes the credential file with mode 0600, and the owner clones and pushes its fork', async () => {

@@ -22,15 +22,19 @@ const SERVICE = /\/(info\/refs|git-upload-pack|git-receive-pack)$/;
 
 /**
  * The repository ID that a URL path names below `basePath`, or `undefined`
- * for a path outside it. It drops a service suffix and a `.git` suffix.
+ * for a path outside it. It decodes the path and drops a service suffix.
+ * The server resolves each request with this same function, so a token and
+ * the server name one repository.
  */
 export function repositoryOfPath(pathname: string, basePath: string): string | undefined {
 	if (!pathname.startsWith(`${basePath}/`)) return undefined;
-	const rest = pathname
-		.slice(basePath.length + 1)
-		.replace(SERVICE, '')
-		.replace(/\/+$/, '');
-	return rest.replace(/\.git$/, '');
+	try {
+		return decodeURIComponent(pathname.slice(basePath.length + 1))
+			.replace(SERVICE, '')
+			.replace(/\/+$/, '');
+	} catch {
+		return undefined;
+	}
 }
 
 function challenge(status: 401 | 403, message: string): Response {
@@ -45,10 +49,13 @@ export function openServer(options: {
 	storage: Storage;
 	secret: string;
 	basePath: string;
+	onError?: (error: unknown) => void;
 }): GitServer<TokenClaims> {
 	const { storage, secret, basePath } = options;
 	return createServer<TokenClaims>({
 		storage,
+		// The package writes nothing to stdout: a host that wants the faults passes `onError`.
+		onError: options.onError ?? false,
 		...(basePath === '' ? {} : { basePath }),
 		auth: {
 			http: (request) => {

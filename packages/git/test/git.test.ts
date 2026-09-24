@@ -151,13 +151,75 @@ describe('gitBackend', () => {
 			scope: 'write',
 			expiresAt: Date.now() + 60_000,
 		});
-		await sh(workspace, REVIEWER, `git clone ${forked.repository.url} ~/theirs`);
+		const clone = await sh(workspace, REVIEWER, `git clone ${forked.repository.url} ~/theirs`);
+		expect(clone.code, clone.output).toBe(0);
+		const commit = await sh(
+			workspace,
+			REVIEWER,
+			'cd ~/theirs && echo y > y && git add y && git commit -m y',
+		);
+		expect(commit.code, commit.output).toBe(0);
 		const pushed = await sh(
 			workspace,
 			REVIEWER,
-			`cd ~/theirs && echo y > y && git add y && git commit -m y && GIT_HTTP_BEARER_TOKEN=${stolen} git push origin main`,
+			`cd ~/theirs && GIT_HTTP_BEARER_TOKEN=${stolen} git push origin main`,
 		);
 		expect(pushed.code).not.toBe(0);
+		const after = await workspace.git?.use(ANALYST, (env) => env.get('analyst/mine'));
+		expect(after?.branches.main).toBe(forked.repository.branches.main);
+	});
+
+	it('refuses a fork name outside the rule, and a tokenTtl that is not finite', async () => {
+		const { workspace } = workspaceOver(join(await tempDir(), 'git.db'));
+		const refused = await workspace.git?.use(ANALYST, (env) =>
+			env.fork('templates/blank', 'Bad Name'),
+		);
+		expect(refused).toEqual({
+			ok: false,
+			reason: 'refused',
+			message: "'Bad Name' is not a valid name.",
+		});
+		for (const tokenTtl of [Number.POSITIVE_INFINITY, 0, Number.NaN]) {
+			expect(() =>
+				gitBackend({ storage: sqliteGitStorage(':memory:'), secret: SECRET, tokenTtl }),
+			).toThrow('tokenTtl must be a finite number above 0.');
+		}
+	});
+
+	it('opens nothing after dispose, and answers 503 on its handler', async () => {
+		const { git, workspace } = workspaceOver(join(await tempDir(), 'git.db'));
+		await workspace.git?.use(ANALYST, (env) => env.list());
+		await workspace.dispose();
+		await expect(git.access.credentialsFor(ANALYST)).rejects.toThrow(
+			'The git backend is disposed.',
+		);
+		const http = createServer(git.handler);
+		const port = await new Promise<number>((resolve) =>
+			http.listen(0, '127.0.0.1', () => resolve((http.address() as AddressInfo).port)),
+		);
+		cleanup.push(() => new Promise((resolve) => http.close(resolve)));
+		expect((await fetch(`http://127.0.0.1:${port}/templates/blank/info/refs`)).status).toBe(503);
+	});
+
+	it('refuses a token on a path that names another repository', async () => {
+		const { git, workspace } = workspaceOver(join(await tempDir(), 'git.db'));
+		await workspace.git?.use(ANALYST, (env) => env.fork('templates/blank', 'mine'));
+		const credential = await git.access.credentialFor(
+			ANALYST,
+			'http://git.ambion.invalid/analyst/mine',
+		);
+		const fetch = git.access.fetch ?? globalThis.fetch;
+		const probe = (path: string) =>
+			fetch(`http://git.ambion.invalid/${path}/info/refs?service=git-upload-pack`, {
+				headers: { Authorization: `Bearer ${credential?.token}` },
+			});
+		// The token check and the server decode a path the same way, so both name one repository.
+		for (const path of ['analyst/mine', 'analyst/%6Dine']) {
+			expect((await probe(path)).status).toBe(200);
+		}
+		for (const path of ['analyst/mine.git', 'templates/blank', 'analyst/mine%2Fx']) {
+			expect((await probe(path)).status).toBe(403);
+		}
 	});
 
 	it('registers a template from a directory, and skips .git', async () => {

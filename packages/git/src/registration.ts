@@ -36,12 +36,10 @@ export const DEFAULT_BRANCH = 'main';
 /**
  * The row of `id` after a crash is settled: a `forking` row whose
  * repository exists becomes `ready`, and one whose repository does not
- * exist goes.
+ * exist goes. Only a caller that knows no fork of `id` is in flight calls
+ * it: registration, and `settleAll` before the first operation.
  */
-export async function settledRow(
-	store: OpenGitStorage,
-	id: string,
-): Promise<RegistryRow | undefined> {
+async function settledRow(store: OpenGitStorage, id: string): Promise<RegistryRow | undefined> {
 	const row = store.registry.get(id);
 	if (row === undefined || row.state === 'ready') return row;
 	if (await store.storage.hasRepo(id)) {
@@ -50,6 +48,16 @@ export async function settledRow(
 	}
 	store.registry.remove(id);
 	return undefined;
+}
+
+/**
+ * Settle every `forking` row that a crash left. It runs once, before the
+ * first operation of the backend, when no fork is in flight.
+ */
+export async function settleAll(store: OpenGitStorage): Promise<void> {
+	for (const row of store.registry.all()) {
+		if (row.state === 'forking') await settledRow(store, row.id);
+	}
 }
 
 /** Register every template, in name order. */

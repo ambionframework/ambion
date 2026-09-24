@@ -419,10 +419,11 @@ checks the namespace in its pre-receive hook.
 **A credential lives for `tokenTtl`, 1 hour by default.** A client asks
 again before it expires. A new fork adds a write credential at once.
 
-**A credential counts as missing when little of its life is left.** The
-margin is the smaller of 10 minutes and half of `tokenTtl`. A backend
-issues a new credential in place of one inside the margin, so a command
-that starts with a credential keeps it for the length of the margin.
+**`gitBackend` signs a new credential at each call.** A client that keeps
+a credential counts it as missing when little of its life is left. The
+margin is the smaller of 10 minutes and half of the credential's life. The
+workstation keeps each credential until its margin, so a command that
+starts with a credential keeps it for the length of the margin.
 
 ### On the just-bash backends
 
@@ -477,6 +478,10 @@ differ. Each write sets the two git settings again, since a home that lost
 the file can have lost them too. A tool call is one operation, so the next
 `bash` call has the file.
 
+**Each `connect` costs one SFTP read and one credential call.** The
+credential call covers every repository that the agent reaches, and it
+signs one token for each.
+
 ## gitBackend: a server in the host's process
 
 **`@ambionframework/git` implements the backend over `just-git/server`.**
@@ -494,7 +499,7 @@ const lab = openWorkspace({
     bash: directoryBackend('./data/lab'),
     git: gitBackend({
       storage: sqliteGitStorage('./data/lab-git.db'),
-      secret: process.env.LAB_GIT_SECRET,
+      secret: process.env.LAB_GIT_SECRET ?? '',
       templates: {
         'weekly-report': {
           description: 'A weekly status report: numbers, risks, and next steps.',
@@ -513,9 +518,12 @@ const lab = openWorkspace({
 | `url`       | The base of every clone URL. The default is `http://git.ambion.invalid` |
 | `templates` | The registrations, by template name                                     |
 | `tokenTtl`  | Seconds a token lives. The default is 3600                              |
+| `onError`   | Called with a fault of the server. Absent, the backend reports nothing  |
 
-**A clone URL is `<url>/<namespace>/<name>`.** The server resolves the
-path of the URL to the ID.
+**A clone URL is `<url>/<namespace>/<name>`.** The server and the token
+check resolve a request path with one function: they decode it, and they
+drop the service suffix. Both then name one repository. A `.git` suffix
+is part of the name, so `<url>.git` names no repository.
 
 **The name `git.ambion.invalid` never resolves.** `.invalid` is a
 top-level domain that DNS never answers
@@ -533,9 +541,8 @@ the workstation reaches, and sets `url` to it.
 the scope, and the expiry, as base64url JSON, then a `.`, then the
 HMAC-SHA256 of that text under `secret`. The server accepts it as a
 bearer token, or as the password of HTTP basic authentication with any
-username. The
-server's `auth.http` checks the signature and the expiry. Its hooks check
-the repository and the scope.
+username. The server's `auth.http` checks the signature, the expiry, and
+the repository of the path. Its hooks check the repository and the scope.
 
 **A registry table holds what `just-git` storage does not.** `just-git`
 storage lists no repositories and holds no description. The backend keeps
@@ -544,9 +551,21 @@ source, the description, and a state, `forking` or `ready`.
 
 **A fork writes its row first.** The backend inserts the row as
 `forking`, calls `forkRepo`, then marks the row `ready`. `forkRepo` runs
-its own transactions, so one transaction cannot hold both writes. `list`
-and `get` settle a `forking` row that a crash left: `storage.hasRepo`
-true marks it `ready`, and false deletes it.
+its own transactions, so one transaction cannot hold both writes.
+
+**A read changes no row.** `list`, `get`, and the credential calls skip a
+`forking` row: it is a fork in flight. Before the first operation, the
+backend settles each `forking` row that a crash left: `storage.hasRepo`
+true marks it `ready`, and false deletes it. A second fork of a target in
+flight waits for the first, and it gets `name_taken`.
+
+**A disposed backend opens nothing.** After `dispose`, each call rejects,
+and `handler` answers status 503. The server drains the requests in flight
+before the storage closes.
+
+**The backend writes nothing to stdout.** `onError` receives a fault of
+the server that the client sees as status 500. Absent, the backend
+reports nothing.
 
 **A fork shares the objects of its source.** `just-git` copies the refs
 and reads each object from the root repository, so a fork costs a few
@@ -592,8 +611,8 @@ command, and a long clone does not delay another agent's `fork`.
 **Neither owner waits on the other.** A git operation holds no bash
 operation: the `fork` tool ends its git operation before it runs the
 clone on the bash owner. A `git push` in `bash` calls the server
-directly, and `credentialFor` reads a cache and issues a token. Neither
-takes the git owner.
+directly, and `credentialFor` reads the registry and signs a token.
+Neither takes the git owner, and neither changes a row.
 
 **The server orders the pushes to one repository.** Each ref update
 compares the old commit and the new one, and a push that lost the race
@@ -670,6 +689,8 @@ backend over the same repositories each time it is called.
   `git push`. The text of a refusal differs from one backend to the
   other.
 - An aborted `fork` rejects, and a repeated call is safe.
+- Two forks of one name at once give one `ok` and one `name_taken`, and
+  forks beside a loop of credential calls lose no repository.
 - A registration with the same source writes nothing, and one with a
   changed source rejects the first operation with an error that names
   the template.
@@ -678,10 +699,16 @@ backend over the same repositories each time it is called.
   `tokenTtl` is longer than 5 seconds.
 
 **`packages/git` runs the cases on the memory and the directory
-backends.** Its own tests add the tokens, a registration that stopped
-after the commit to `template-sources`, a restart over one git file, a
-`GIT_HTTP_BEARER_TOKEN` that an agent sets, a template from a directory,
-and a real `git` that clones and pushes over HTTP through `handler`.
+backends.** Its own tests add:
+
+- the tokens, and a `tokenTtl` that is not finite;
+- a registration that stopped after the commit to `template-sources`;
+- a restart over one git file;
+- a `GIT_HTTP_BEARER_TOKEN` that an agent sets;
+- a token on a path that names another repository;
+- a backend after `dispose`;
+- a template from a directory;
+- a real `git` that clones and pushes over HTTP through `handler`.
 
 **`packages/workspace` holds the texts and a room test.** Each outcome of
 `fork` and the `repos` table has a case, and so do the tool line and the
@@ -690,8 +717,9 @@ order of the notes. The room test drives the five calls of
 the pushed branch through `lab.git.use`. No test needs a model.
 
 **The workstation runs a real `git` on both of its tiers.** The scripted
-tier proves the credential file, its line format, its mode, that `git`
-leaves it unchanged, and that a removed line comes back. The OpenSSH tier
+tier runs `gitConformance` over SSH, with `gitBackend` over HTTP. It also
+proves the credential file, its line format, its mode, that `git` leaves
+it unchanged, and that a removed line comes back. The OpenSSH tier
 of [Workstation](workstation.md#tests) proves that another account cannot
 read the file, and cannot push to another account's fork.
 

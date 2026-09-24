@@ -30,7 +30,7 @@ import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import { listBranches, readHead } from 'just-git/repo';
 import type { GitServer } from 'just-git/server';
 import { assertAgent, namespaceOf, SOURCES, validName } from './names.ts';
-import { DEFAULT_BRANCH, registerTemplates, settledRow } from './registration.ts';
+import { DEFAULT_BRANCH, registerTemplates, settleAll } from './registration.ts';
 import { openServer, repositoryOfPath } from './server.ts';
 import type { GitStorage, OpenGitStorage, RegistryRow } from './storage.ts';
 import type { TemplateRegistration } from './templates.ts';
@@ -53,6 +53,8 @@ export interface GitBackendOptions {
 	readonly templates?: Readonly<Record<string, TemplateRegistration>>;
 	/** Seconds a token lives. The default is 3600. */
 	readonly tokenTtl?: number;
+	/** Called with a fault of the server that the client sees as status 500. Absent, the backend reports nothing. */
+	readonly onError?: (error: unknown) => void;
 }
 
 /** The git backend over `just-git`, and the Node request handler that serves it over HTTP. */
@@ -70,7 +72,8 @@ interface Opened {
 function checked(options: GitBackendOptions): { base: string; ttl: number } {
 	if (options.secret === '') throw new Error('gitBackend needs a secret.');
 	const ttl = options.tokenTtl ?? DEFAULT_TOKEN_TTL;
-	if (!(ttl > 0)) throw new Error('tokenTtl must be above 0.');
+	if (!Number.isFinite(ttl) || ttl <= 0)
+		throw new Error('tokenTtl must be a finite number above 0.');
 	const base = (options.url ?? DEFAULT_URL).replace(/\/+$/, '');
 	const url = new URL(base);
 	if (url.protocol !== 'http:' && url.protocol !== 'https:') {
@@ -85,26 +88,37 @@ export function gitBackend(options: GitBackendOptions): JustGitBackend {
 	const basePath = new URL(base).pathname.replace(/\/+$/, '');
 	let opened: Opened | undefined;
 	let registering: Promise<void> | undefined;
+	let closed = false;
 
 	const open = (): Opened => {
+		if (closed) throw new Error('The git backend is disposed.');
 		if (opened !== undefined) return opened;
 		const store = options.storage.open();
-		const server = openServer({ storage: store.storage, secret: options.secret, basePath });
+		const server = openServer({
+			storage: store.storage,
+			secret: options.secret,
+			basePath,
+			...(options.onError === undefined ? {} : { onError: options.onError }),
+		});
 		const network = server.asNetwork(base);
 		const fetch: GitFetch = (input, init) => (network.fetch ?? globalThis.fetch)(input, init);
 		opened = { store, server, fetch };
 		return opened;
 	};
 
-	/** One registration, shared by every caller. A failure lets the next caller try again. */
+	/**
+	 * One registration, shared by every caller, then one settle of the rows
+	 * that a crash left. A failure lets the next caller try again.
+	 */
 	const ready = (): Promise<Opened> => {
 		const current = open();
-		registering ??= registerTemplates(current.store, current.server, options.templates ?? {}).catch(
-			(error: unknown) => {
-				registering = undefined;
-				throw error;
-			},
-		);
+		registering ??= (async () => {
+			await registerTemplates(current.store, current.server, options.templates ?? {});
+			await settleAll(current.store);
+		})().catch((error: unknown) => {
+			registering = undefined;
+			throw error;
+		});
 		return registering.then(() => current);
 	};
 
@@ -148,15 +162,21 @@ export function gitBackend(options: GitBackendOptions): JustGitBackend {
 			return repositories.envFor(agent);
 		},
 		dispose: async () => {
+			closed = true;
 			const current = opened;
-			opened = undefined;
-			registering = undefined;
 			if (current === undefined) return;
+			// The server drains the requests in flight before the storage closes.
 			await current.server.close();
 			current.store.close();
+			opened = undefined;
 		},
-		handler: (request: IncomingMessage, response: ServerResponse) =>
-			open().server.nodeHandler(request, response),
+		handler: (request: IncomingMessage, response: ServerResponse) => {
+			if (closed) {
+				response.writeHead(503).end('The git backend is disposed.\n');
+				return;
+			}
+			open().server.nodeHandler(request, response);
+		},
 	});
 }
 
@@ -167,23 +187,27 @@ class Repositories {
 		private readonly ready: () => Promise<Opened>,
 	) {}
 
-	/** Every ready repository that an agent reaches, in ID order. */
+	/** The forks in flight, by target ID. A second fork of one target waits for the first. */
+	private readonly forking = new Map<string, Promise<GitForkOutcome>>();
+
+	/**
+	 * Every ready repository that an agent reaches, in ID order. A read
+	 * changes no row: a `forking` row is a fork in flight, and `ready()`
+	 * settled every row that a crash left before the first operation.
+	 */
 	async rows(): Promise<RegistryRow[]> {
 		const { store } = await this.ready();
-		const rows: RegistryRow[] = [];
-		for (const row of store.registry.all()) {
-			if (namespaceOf(row.id) === SOURCES) continue;
-			const settled = await settledRow(store, row.id);
-			if (settled !== undefined) rows.push(settled);
-		}
-		return rows;
+		return store.registry
+			.all()
+			.filter((row) => row.state === 'ready' && namespaceOf(row.id) !== SOURCES);
 	}
 
-	/** The row of `id`, when an agent reaches it. */
+	/** The ready row of `id`, when an agent reaches it. */
 	async row(id: string): Promise<RegistryRow | undefined> {
 		const namespace = namespaceOf(id);
 		if (namespace === undefined || namespace === SOURCES) return undefined;
-		return settledRow((await this.ready()).store, id);
+		const row = (await this.ready()).store.registry.get(id);
+		return row?.state === 'ready' ? row : undefined;
 	}
 
 	/** The repository of `row`, or `undefined` when the storage no longer holds it. */
@@ -235,21 +259,61 @@ class Repositories {
 		if (!validName(name)) {
 			return { ok: false, reason: 'refused', message: `'${name}' is not a valid name.` };
 		}
+		const target = `${agent.name}/${name}`;
+		const inFlight = this.forking.get(target);
+		if (inFlight !== undefined) return this.taken(await inFlight.catch(() => undefined), target);
+		// The fork takes its place before its first await, so a second fork of one target waits for it.
+		const made = this.forkChecked(source, target, signal);
+		this.forking.set(target, made);
+		try {
+			return await made;
+		} finally {
+			this.forking.delete(target);
+		}
+	}
+
+	/** Check the source and the target, then fork. */
+	private async forkChecked(
+		source: string,
+		target: string,
+		signal?: AbortSignal,
+	): Promise<GitForkOutcome> {
 		const sourceRow = await this.row(source);
 		const from = sourceRow === undefined ? undefined : await this.describe(sourceRow);
 		if (from === undefined) return { ok: false, reason: 'no_source', source };
-		const target = `${agent.name}/${name}`;
 		const existing = await this.row(target);
 		const taken = existing === undefined ? undefined : await this.describe(existing);
 		if (taken !== undefined) return { ok: false, reason: 'name_taken', repository: taken };
 		signal?.throwIfAborted();
+		return this.forkOnce(source, target);
+	}
+
+	/** The outcome for a second fork of `target` after the first ends. */
+	private async taken(first: GitForkOutcome | undefined, target: string): Promise<GitForkOutcome> {
+		const row = await this.row(target);
+		const repository = row === undefined ? undefined : await this.describe(row);
+		if (repository !== undefined) return { ok: false, reason: 'name_taken', repository };
+		return first?.ok === false
+			? first
+			: { ok: false, reason: 'refused', message: `The fork ${target} failed.` };
+	}
+
+	/** Write the row as `forking`, fork, and mark it `ready`. A failure removes a row whose repository is absent. */
+	private async forkOnce(source: string, target: string): Promise<GitForkOutcome> {
 		const { store, server } = await this.ready();
-		if (existing !== undefined) store.registry.remove(target);
+		if (store.registry.get(target) !== undefined) {
+			// A row that is not ready, with no fork in flight: a fork that failed after its repository landed.
+			if (await store.storage.hasRepo(target)) {
+				store.registry.ready(target);
+				return this.taken(undefined, target);
+			}
+			store.registry.remove(target);
+		}
 		store.registry.begin(target, source, undefined);
 		try {
 			await server.forkRepo(source, target);
 		} catch (error) {
-			store.registry.remove(target);
+			if (!(await store.storage.hasRepo(target))) store.registry.remove(target);
 			throw error;
 		}
 		store.registry.ready(target);

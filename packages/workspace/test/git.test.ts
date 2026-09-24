@@ -110,6 +110,26 @@ describe('repos', () => {
 			`No repositories on ${SERVER}.`,
 		);
 	});
+
+	it('shows five branches of a repository, and counts the others', async () => {
+		const { workspace } = await lab();
+		await text(workspace, 'fork', {
+			source: 'templates/weekly-report',
+			name: 'report',
+			clone: '~/report',
+		});
+		const branches = ['b1', 'b2', 'b3', 'b4', 'b5', 'b6'].map(
+			(name) => `git branch ${name} && git push origin ${name}`,
+		);
+		const pushed = await workspace.use({ name: 'analyst' }, (env) =>
+			env.exec(`cd ~/report && ${branches.join(' && ')}`, undefined, BACKGROUND_CONTEXT),
+		);
+		expect(pushed.ok && pushed.value.exitCode).toBe(0);
+		const line = (await text(workspace, 'repos', { namespace: 'analyst' })).split('\n')[2] ?? '';
+		expect(line).toMatch(
+			/\| main [0-9a-f]{7}, b1 [0-9a-f]{7}, b2 [0-9a-f]{7}, b3 [0-9a-f]{7}, b4 [0-9a-f]{7}, and 2 more \|/,
+		);
+	});
 });
 
 describe('fork', () => {

@@ -11,7 +11,12 @@ import {
 	type RoomMirrorOptions,
 	roomMirrorGuidance,
 } from './mirror.ts';
-import { openResource, type WorkspaceAgent, type WorkspaceResource } from './resource.ts';
+import {
+	openResource,
+	type ResourceBackend,
+	type WorkspaceAgent,
+	type WorkspaceResource,
+} from './resource.ts';
 import type { SqlBackend, SqlEnv } from './sql-backend.ts';
 import { createSqlTool, sqlToolGuidance } from './sql-tool.ts';
 import { bindTools } from './tools.ts';
@@ -126,13 +131,15 @@ function workspaceTools(
 /**
  * The bash backend under its owner. With a git backend, each `connect`
  * passes the backend's access, so the shell of each agent reaches the
- * repositories.
+ * repositories. The owner reads `connect` and `dispose` alone.
  */
-function bashUnderOwner(bash: BashBackend, git: GitBackend | undefined): BashBackend {
+function bashUnderOwner(
+	bash: BashBackend,
+	git: GitBackend | undefined,
+): ResourceBackend<WorkspaceEnv> {
 	if (git === undefined) return bash;
 	const services: BashServices = { git: git.access };
 	return {
-		...bash,
 		connect: (agent, signal) => bash.connect(agent, signal, services),
 		dispose: async () => bash.dispose?.(),
 	};

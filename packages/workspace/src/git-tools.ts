@@ -153,7 +153,8 @@ function reposTable(repositories: readonly GitRepository[]): string {
 	);
 	const count = repositories.length;
 	const footer = `${count} ${count === 1 ? 'repository' : 'repositories'}.`;
-	return [header, rule, ...body.map((line) => `| ${line} |`)].join('\n') + `\n\n${footer}`;
+	const table = [header, rule, ...body.map((line) => `| ${line} |`)].join('\n');
+	return `${table}\n\n${footer}`;
 }
 
 /** The default branch first, then the others by name, each with its short commit. */
