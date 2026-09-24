@@ -41,6 +41,7 @@ export {
 	renderActivation,
 	renderDelta,
 	renderLine,
+	renderReminders,
 	summaryToolDescription,
 } from './execution/render.ts';
 export type {

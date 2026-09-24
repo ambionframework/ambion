@@ -104,7 +104,7 @@ export const MAX_RUNNING_PROCESSES = 4;
 /** The most finished processes the table keeps for one agent. It forgets the oldest first. */
 export const MAX_FINISHED_PROCESSES = 64;
 
-/** The longest a stop waits for a process to end after the abort. */
+/** The longest a stop waits for a process to end after the abort. A process that has not ended stays `running`. */
 const STOP_GRACE_MS = 10_000;
 
 /**
@@ -159,16 +159,19 @@ export interface ProcessTable {
 	shown(handle: string): void;
 	/** The reminder of one activation. The same activation gets the same text. */
 	remind(seat: { agent: string; room: string; activation: string }): string | undefined;
-	/** Refuse new processes, stop every running process, and wait for each one to end. */
+	/** Refuse new processes, stop every running process, and wait up to the grace for each one to end. */
 	close(): Promise<void>;
 }
+
+/** Why the table stops a process: a cancel of an agent, of the host, or of `close`, or the timeout. */
+type StopCause = 'cancel' | 'timeout';
 
 interface Entry {
 	status: ProcessStatus;
 	readonly controller: AbortController;
 	ended: Promise<void>;
-	/** The table's own timeout fired, so an abort ends as `timed_out`. */
-	timedOut: boolean;
+	/** Why the first stop aborted the process. A timeout ends as `timed_out`. */
+	cause?: StopCause;
 	/** A result or a reminder showed the final state. */
 	shown: boolean;
 }
@@ -232,7 +235,7 @@ async function runBash(
 	} catch (thrown) {
 		return { thrown };
 	} finally {
-		await env.cleanup();
+		await env.cleanup().catch(() => undefined);
 	}
 }
 
@@ -275,10 +278,11 @@ function within(until: Promise<void>, ms: number, signal?: AbortSignal): Promise
 			resolve();
 		}, ms);
 		signal?.addEventListener('abort', abort, { once: true });
-		until.then(() => {
+		const settled = () => {
 			done();
 			resolve();
-		});
+		};
+		until.then(settled, settled);
 	});
 }
 
@@ -303,16 +307,20 @@ export function openProcessTable(connect: ProcessConnect): ProcessTable {
 	};
 
 	/**
-	 * Abort `entry` after every earlier stop of its agent, and wait for it to
-	 * end: up to `graceMs`, or with no bound when `graceMs` is absent.
+	 * Abort `entry` after every earlier stop of its agent, and wait up to
+	 * `STOP_GRACE_MS` for it to end. The first stop that aborts names the
+	 * cause, so a cancel and a timeout that meet end as the one that came
+	 * first. A stop that fails does not stop the next one.
 	 */
-	const stop = (entry: Entry, graceMs?: number): Promise<void> => {
+	const stop = (entry: Entry, cause: StopCause): Promise<void> => {
 		const agent = entry.status.agent;
-		const next = (stops.get(agent) ?? Promise.resolve()).then(async () => {
+		const run = async () => {
 			if (entry.status.state !== 'running') return;
+			entry.cause ??= cause;
 			entry.controller.abort();
-			await (graceMs === undefined ? entry.ended : within(entry.ended, graceMs));
-		});
+			await within(entry.ended, STOP_GRACE_MS);
+		};
+		const next = (stops.get(agent) ?? Promise.resolve()).then(run, run);
 		stops.set(agent, next);
 		return next;
 	};
@@ -343,17 +351,35 @@ export function openProcessTable(connect: ProcessConnect): ProcessTable {
 
 	/** Run the process, stop it at its timeout, and record its end. */
 	const launch = (entry: Entry, env: WorkspaceEnv, spec: BashProcessSpec): void => {
-		const timer = setTimeout(() => {
-			entry.timedOut = true;
-			void stop(entry, STOP_GRACE_MS);
-		}, spec.timeout * 1000);
+		const timer = setTimeout(() => void stop(entry, 'timeout'), spec.timeout * 1000);
 		timer.unref();
-		entry.ended = runBash(env, spec, entry.status.output, entry.controller.signal).then((run) => {
+		const end = (ending: Ending) => {
 			clearTimeout(timer);
-			const end = endingOf(run, entry.timedOut);
-			entry.status = Object.freeze({ ...entry.status, ...end, endedAt: new Date().toISOString() });
+			entry.status = Object.freeze({
+				...entry.status,
+				...ending,
+				endedAt: new Date().toISOString(),
+			});
 			emit({ type: 'ended', process: entry.status });
-		});
+		};
+		entry.ended = runBash(env, spec, entry.status.output, entry.controller.signal).then(
+			(run) => end(endingOf(run, entry.cause === 'timeout')),
+			(thrown: unknown) => end(endingOf({ thrown }, false)),
+		);
+	};
+
+	/** Connect the process's own environment. A failed connect removes the output file it leaves. */
+	const connectOrRemove = async (
+		agent: WorkspaceAgent,
+		env: WorkspaceEnv,
+		output: string,
+	): Promise<WorkspaceEnv> => {
+		try {
+			return await connect(agent);
+		} catch (error) {
+			await env.remove(output, { force: true }, BACKGROUND_CONTEXT);
+			throw error;
+		}
 	};
 
 	const refuseOverLimit = (agent: WorkspaceAgent): void => {
@@ -370,9 +396,10 @@ export function openProcessTable(connect: ProcessConnect): ProcessTable {
 		await forget(agent, env);
 		const handle = `bash-${randomName()}`;
 		const output = await prepareOutput(env, handle, BACKGROUND_CONTEXT);
-		const own = await connect(agent);
+		const own = await connectOrRemove(agent, env, output);
 		if (closed) {
-			await own.cleanup();
+			await own.cleanup().catch(() => undefined);
+			await env.remove(output, { force: true }, BACKGROUND_CONTEXT);
 			throw new Error(CLOSED);
 		}
 		const status: ProcessStatus = Object.freeze({
@@ -391,7 +418,6 @@ export function openProcessTable(connect: ProcessConnect): ProcessTable {
 			status,
 			controller: new AbortController(),
 			ended: Promise.resolve(),
-			timedOut: false,
 			shown: false,
 		};
 		entries.set(handle, entry);
@@ -407,7 +433,7 @@ export function openProcessTable(connect: ProcessConnect): ProcessTable {
 	};
 
 	const stopped = async (entry: Entry): Promise<ProcessStatus> => {
-		await stop(entry, STOP_GRACE_MS);
+		await stop(entry, 'cancel');
 		return entry.status;
 	};
 
@@ -421,7 +447,9 @@ export function openProcessTable(connect: ProcessConnect): ProcessTable {
 
 	/** The processes a reminder names for `agent`, and the finished ones it marks as shown. */
 	const remind: ProcessTable['remind'] = (seat) => {
-		if (reminders.has(seat.activation)) return reminders.get(seat.activation);
+		// An activation id names a seat and a position, and no room: two rooms can share one.
+		const key = `${seat.room}\n${seat.activation}`;
+		if (reminders.has(key)) return reminders.get(key);
 		const own = ofAgent(seat.agent);
 		const unseen = own.filter((entry) => entry.status.state !== 'running' && !entry.shown);
 		const text = reminderText(
@@ -431,16 +459,21 @@ export function openProcessTable(connect: ProcessConnect): ProcessTable {
 			Date.now(),
 		);
 		for (const entry of unseen.slice(-FINISHED_IN_REMINDER)) entry.shown = true;
-		reminders.set(seat.activation, text);
+		reminders.set(key, text);
 		// A Map iterates in insertion order, so the first key is the oldest activation.
 		if (reminders.size > REMEMBERED_ACTIVATIONS)
 			reminders.delete(reminders.keys().next().value ?? '');
 		return text;
 	};
 
+	/**
+	 * Refuse new processes and stop every running one. A process that does
+	 * not end within its grace no longer holds the close: the backend then
+	 * releases its handles under it.
+	 */
 	const close = async (): Promise<void> => {
 		closed = true;
-		await Promise.allSettled([...entries.values()].map((entry) => stop(entry)));
+		await Promise.allSettled([...entries.values()].map((entry) => stop(entry, 'cancel')));
 	};
 
 	return Object.freeze({

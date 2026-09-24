@@ -49,7 +49,12 @@ import type {
 	Seq,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
-import { renderActivation, renderDelta, sessionToResume } from '@ambionframework/ambion/hosting';
+import {
+	renderActivation,
+	renderDelta,
+	renderReminders,
+	sessionToResume,
+} from '@ambionframework/ambion/hosting';
 import type { AgentMessage, HarnessEvent, Session, StreamFn } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, getOrUndefined } from '@earendil-works/pi-agent-core';
 import type { Api, AssistantMessage, Message, Model } from '@earendil-works/pi-ai';
@@ -374,16 +379,21 @@ export class Activation implements ExecutorSession {
 	/**
 	 * The ranges of the record that start a run. The first pass hands the
 	 * model the whole view. A later pass, and a response in a continued
-	 * session, hand it the delta, and none when nothing is new. A closing
-	 * activation reads the whole view.
+	 * session, hand it the delta, and none when nothing is new. The first
+	 * pass of a response in a continued session also hands it the reminders
+	 * of the tool bundles, which the whole view holds. A closing activation
+	 * reads the whole view.
 	 */
 	private promptFor(input: PassInput): AgentMessage[] {
 		const { view } = input;
 		const now = this.options.now();
 		const after = input.kind === 'delta' ? input.since : this.base;
 		if (after !== undefined && (input.kind === 'delta' || view.spec.purpose.kind === 'respond')) {
-			const text = renderDelta(view, after);
-			return text === undefined ? [] : [recordMessage({ after, through: view.through }, text, now)];
+			const delta = renderDelta(view, after);
+			if (delta === undefined) return [];
+			const reminders = input.kind === 'delta' ? undefined : renderReminders(view, this.definition);
+			const text = reminders === undefined ? delta : `${reminders}\n\n${delta}`;
+			return [recordMessage({ after, through: view.through }, text, now)];
 		}
 		const text = renderActivation(view, this.definition).context;
 		return [recordMessage({ after: 0, through: view.through }, text, now)];

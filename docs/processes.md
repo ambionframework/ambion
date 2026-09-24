@@ -150,7 +150,8 @@ interleave. The owner gives no order between them.
 The command stands on lines of its own, so a comment or a here-document
 at its end does not reach the brace. Standard input is empty. The shell
 can write before the redirect applies, for example on a syntax error. The
-process table adds that output to the end of the file, up to 16 KB.
+process table adds that output to the end of the file, up to 16 KB or 200
+lines.
 
 **Each tool reads the end of the output file as one more operation on the
 bash owner.** No tool holds the owner while it waits for a process. A
@@ -200,8 +201,15 @@ process that the table's stop did not end.
 the workstation opens a channel of its own for the kill. A stop waits for
 the stops of the same agent before it, so the stops of one agent hold at
 most one kill channel. A cancel, a timeout, a cancel by the host, and
-`dispose()` all stop a process this way. An agent's SSH client then holds
-at most 8 channels ([Workstation](workstation.md#the-ssh-client)).
+`dispose()` all stop a process this way. The first stop that aborts a
+process names its cause, so a cancel and a timeout that meet end as the
+one that came first.
+
+**An agent's SSH client holds at most 8 channels while each stop ends
+within its grace.** A process that does not end within 10 seconds of its
+stop lets the next stop run, and the backend's own deadline kills it
+later through a channel of its own
+([Workstation](workstation.md#the-ssh-client)).
 
 ## ps
 
@@ -236,7 +244,9 @@ name has an empty name cell.
 time.** Its command cell is empty, since a command line can hold a token.
 The output of the process stays with the owner agent: `status`, `wait`,
 and `cancel` take the caller's own handles. The host's view shows every
-command.
+command. On just-bash, every home is readable, so another agent can read
+the output file itself. The wall is the workstation's
+([Backends](#backends)).
 
 **`ps` lists running processes alone.** A finished process stays in the
 table ([Handles and limits](#handles-and-limits)), and `status` reaches it
@@ -361,6 +371,19 @@ cache of the agent part stays valid.
 of the same activation adds no reminder. Every result of a process tool
 states the process, and `ps` gives the whole list.
 
+**A continued session reads the reminder before the delta.** An adapter
+that sends a continued session the delta alone sends the reminder first,
+on the first pass of the activation. `renderReminders` from
+`@ambionframework/ambion/hosting` gives the text. The Pi executor does
+this. The Claude and Codex executors send the whole context, which holds
+the reminder.
+
+**A reminder can mark a finished process as shown that no model read.**
+The table marks it when the room renders the activation. An activation
+that fails before its first request to the provider, and a retry of it
+under a new id, then lose that one notice. `ps` and `status` still reach
+the process.
+
 ## Life and disposal
 
 **A process outlives the call, the activation, and the exchange that
@@ -374,13 +397,15 @@ the wait, and the process keeps running.
 
 **`cancel` aborts the process and waits up to 10 seconds for it to end.**
 The backend's abort path stops the command, and the state becomes
-`cancelled`. A `cancel` of a process in a final state gives that state
-again.
+`cancelled`. A process that has not ended after 10 seconds still reads
+`running`, and a later `status` gives its end. A `cancel` of a process in
+a final state gives that state again.
 
 **`dispose()` stops every process before the bash backend releases its
 handles.** The bash owner refuses new work and drains its queue. The
 process table then refuses new processes, stops every running process,
-and waits for each one to end. The bash backend then disposes. The git
+and waits up to 10 seconds for each one to end. The bash backend then
+disposes. The git
 owner disposes after the bash owner, so a push in a process still
 reaches the git backend.
 
@@ -405,7 +430,9 @@ The idle timeout starts when the last one is cleaned up
 
 **Each call of the five tools has one audit entry.** The entry runs on
 the bash owner after the call ends. The entry of a `bash` call holds the
-state at the end of the call, which can be `running`. The end of a
+state at the end of the call, which can be `running`. A `bash` call that
+an abort cuts while it waits records an error with no handle, and the
+process keeps running. The reminder and `ps` name it. The end of a
 process has no entry of its own, and a cancel by the host has none. The
 output file is the record.
 

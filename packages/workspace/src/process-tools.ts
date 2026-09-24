@@ -187,7 +187,8 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 		defineTool({
 			name: 'cancel',
 			label: 'Cancel a process',
-			description: 'Stop a running process, and give its state and the end of its output.',
+			description:
+				'Stop a running process, and give its state and the end of its output. A process that takes over 10 seconds to stop still shows running.',
 			parameters: handleSchema,
 			execute: recorded('cancel', async (params: HandleParams, ctx) =>
 				described(options, await table.cancel(ctx.agent, params.handle), ctx),
@@ -325,7 +326,8 @@ async function wholeOf(env: WorkspaceEnv, path: string): Promise<string> {
 async function tailOf(env: WorkspaceEnv, path: string): Promise<string> {
 	let view: ShellOutputView | undefined;
 	await env.exec(
-		`tail -c ${DEFAULT_MAX_BYTES} -- ${quoted(path)}`,
+		// just-bash's tail refuses `--`. The path is absolute, so it cannot read as an option.
+		`tail -c ${DEFAULT_MAX_BYTES} ${quoted(path)}`,
 		{
 			capture: { limits: { maxBytes: 2 * DEFAULT_MAX_BYTES, maxLines: 2 * DEFAULT_MAX_LINES } },
 			onUpdate: (update) => {

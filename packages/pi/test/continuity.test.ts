@@ -7,7 +7,12 @@
  */
 import { appendFile, chmod, readdir, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { AgentDefinition, AgentExecutor, Message } from '@ambionframework/ambion';
+import type {
+	AgentDefinition,
+	AgentExecutor,
+	Message,
+	ReminderSeat,
+} from '@ambionframework/ambion';
 import type {
 	ActivationSpec,
 	CommitRequest,
@@ -115,11 +120,16 @@ const texts = (context: Context) =>
  * runs its first pass over the view the room gives with the spec changes it
  * names, and closes it as the driver does.
  */
-function seatOn(room: TwoQuestions, sessions: PiSessions, script: Script = () => quiet()) {
+function seatOn(
+	room: TwoQuestions,
+	sessions: PiSessions,
+	script: Script = () => quiet(),
+	definition: AgentDefinition = scriptedAgent('product'),
+) {
 	const seen: Context[] = [];
 	const errors: string[] = [];
 	const executor = createPiExecutor({
-		definition: scriptedAgent('product'),
+		definition,
 		model: stubModel,
 		stream: scripted((context, agent, call) => {
 			seen.push({ ...context, messages: [...context.messages] });
@@ -162,8 +172,11 @@ const summary = {
 } as const;
 
 describe.each(stores)('exchange continuity on sessions in %s', (_name, store) => {
-	it('continues the session the room names, prompts the delta, and records it', async () => {
-		const { seen, run } = seatOn(new TwoQuestions(), await store());
+	it('continues the session the room names, prompts the reminders and the delta, and records it', async () => {
+		// A bundle reminder reaches the model on a continued session too, before the delta.
+		const remind = (seat: ReminderSeat) => `Reminder for ${seat.activation}.`;
+		const definition = scriptedAgent('product', 'Product.', { bundles: [{ tools: [], remind }] });
+		const { seen, run } = seatOn(new TwoQuestions(), await store(), undefined, definition);
 		const first = await run('message:1:product:1');
 		const second = await run('message:2:product:1', { resume: first.session });
 		expect(first.session).toEqual(began(1));
@@ -172,7 +185,10 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		const prompts = texts(seen.at(-1) as Context);
 		// The first activation stays in the session. The second adds the delta alone.
 		expect(prompts[0]).toContain("The record of 'memory' so far:");
-		expect(prompts.at(-1)).toBe('[new] [andrei] And the pump?');
+		expect(prompts[0]).toContain('Reminder for message:1:product:1.');
+		expect(prompts.at(-1)).toBe(
+			'Reminder for message:2:product:1.\n\n[new] [andrei] And the pump?',
+		);
 		// The position the session read never reaches the model.
 		expect(prompts.join('\n')).not.toContain('through');
 	});

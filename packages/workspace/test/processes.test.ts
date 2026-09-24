@@ -5,7 +5,7 @@ import { FINISHED_IN_REMINDER } from '../src/process-text.ts';
 import type { ProcessDetails, PsDetails } from '../src/process-tools.ts';
 import { MAX_FINISHED_PROCESSES, MAX_RUNNING_PROCESSES } from '../src/processes.ts';
 import { openWorkspace, type Workspace } from '../src/workspace.ts';
-import { callAs, invokeText, toolOf } from './support/backends.ts';
+import { callAs, invokeText, toolOf, wrapped } from './support/backends.ts';
 
 let serial = 0;
 
@@ -112,16 +112,23 @@ describe('bash', () => {
 		expect(waited.details.process.state).toBe('running');
 	});
 
-	it('shows the end of a long output and keeps the whole output in the file', async () => {
-		const workspace = site();
-		const { text, details } = await call(workspace, 'bash', { command: 'seq 1 5000' });
-		expect(details.truncation).toMatchObject({ truncated: true, outputLines: 2000 });
-		expect(text.startsWith('3001\n')).toBe(true);
-		expect(text).toContain('5000\n\n[Process');
-		expect(text).toContain('The text above is the last 2000 lines');
-		const whole = await fileOf(workspace, 'alpha', details.process.output);
-		expect(whole.split('\n').length).toBe(5001);
-	});
+	it.each([
+		['read whole', 5000],
+		['read with tail, past 200 KB', 60000],
+	])(
+		'shows the end of a long output, %s, and keeps the whole output in the file',
+		async (_case, lines) => {
+			const workspace = site();
+			const { text, details } = await call(workspace, 'bash', { command: `seq 1 ${lines}` });
+			expect(details.truncation).toMatchObject({ truncated: true, outputLines: 2000 });
+			expect(text.startsWith(`${lines - 1999}\n`)).toBe(true);
+			expect(text).toContain(`${lines}\n\n[Process`);
+			expect(text).toContain('The text above is the last 2000 lines');
+			const whole = await fileOf(workspace, 'alpha', details.process.output);
+			expect(whole.split('\n').length).toBe(lines + 1);
+			expect(details.truncation?.totalBytes).toBe(whole.length);
+		},
+	);
 
 	it.each([
 		['a code other than 0', { command: 'echo partial; exit 3' }, 'exited with code 3', 'partial'],
@@ -330,6 +337,11 @@ describe('the reminder', () => {
 		]);
 		expect(text).not.toContain(shown);
 		expect(remind(seat('a2'))).toBe(text);
+		// An activation id names no room, so the same id in another room gets its own text.
+		expect(remind({ ...seat('a2'), room: 'review' })).toContain(
+			`${tests.details.process.handle}, is running for`,
+		);
+		expect(remind({ ...seat('a2'), room: 'review' })).toContain('in the room lobby');
 		expect(remind(seat('a3'))).not.toContain(failed);
 		expect(remind({ ...seat('a4'), agent: 'beta' })).toBeUndefined();
 	});
@@ -343,5 +355,54 @@ describe('the reminder', () => {
 		expect(lines).toHaveLength(FINISHED_IN_REMINDER + 3);
 		expect(lines[1]).toContain(handles[2]);
 		expect(lines.at(-2)).toBe('- and 2 more finished processes');
+	});
+});
+
+describe('a process on a backend that misbehaves', () => {
+	it('ends a process whose environment throws on cleanup, and keeps the table usable', async () => {
+		const workspace = openWorkspace({
+			name: 'processes-cleanup',
+			backend: {
+				bash: wrapped((inner) => ({
+					connect: async (agent, signal) => {
+						const env = await inner.connect(agent, signal);
+						const exec = env.exec.bind(env);
+						let ran = false;
+						env.exec = (...args) => {
+							ran = true;
+							return exec(...args);
+						};
+						env.cleanup = async () => {
+							if (ran) throw new Error('The cleanup broke.');
+						};
+						return env;
+					},
+				})),
+			},
+		});
+		onTestFinished(() => workspace.dispose());
+		for (const text of ['one', 'two']) {
+			const { details } = await call(workspace, 'bash', { command: `echo ${text}` });
+			expect(details.process).toMatchObject({ state: 'exited', exitCode: 0 });
+		}
+		expect(workspace.processes.list({ running: true })).toEqual([]);
+	});
+});
+
+describe('an aborted wait', () => {
+	it('rejects the call, and the process keeps running', async () => {
+		const workspace = site();
+		const { handle } = (await call(workspace, 'bash', { command: 'sleep 30', wait: 0 })).details
+			.process;
+		const controller = new AbortController();
+		const waiting = Promise.resolve(
+			toolOf(workspace, 'wait').invoke(
+				{ handle, timeout: 30 },
+				callAs('alpha', { signal: controller.signal }),
+			),
+		);
+		controller.abort(new Error('The activation ended.'));
+		await expect(waiting).rejects.toThrow('The activation ended.');
+		expect(workspace.processes.list({ running: true }).map((one) => one.handle)).toEqual([handle]);
 	});
 });

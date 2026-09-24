@@ -38,7 +38,10 @@ export interface WorkspaceProcesses {
 	list(query?: ProcessQuery): readonly ProcessStatus[];
 	/** Call `listener` when a process starts and when it ends. Returns the unsubscribe. */
 	subscribe(listener: (event: ProcessEvent) => void): () => void;
-	/** Stop the process `handle` of any agent, and give its final status. */
+	/**
+	 * Stop the process `handle` of any agent, and give its status once it
+	 * ends, or after 10 seconds, when it can still read `running`.
+	 */
 	cancel(handle: string): Promise<ProcessStatus>;
 }
 

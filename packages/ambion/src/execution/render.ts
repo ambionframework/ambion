@@ -392,24 +392,32 @@ function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
 			context.omitted,
 		),
 		``,
-		...renderReminders(view, def),
+		...paragraph(renderReminders(view, def)),
 		askOf(view, def),
 	].join('\n');
 }
 
+/** A text and the blank line after it, or nothing. */
+function paragraph(text: string | undefined): string[] {
+	return text === undefined ? [] : [text, ``];
+}
+
 /**
- * What the agent's tool bundles remind this seat of, each text as a
- * paragraph. A summarize activation has no tools of the agent, so it gets
- * none. A reminder that throws gives no text.
+ * What the agent's tool bundles remind this seat of, as paragraphs, or
+ * undefined for nothing. A summarize activation has no tools of the agent,
+ * so it gets none. A reminder that throws gives no text. The context holds
+ * it. An adapter that sends a continued session the delta alone sends it
+ * before the delta, on the first pass of the activation.
  */
-function renderReminders(view: ActivationView, def: AgentDefinition): string[] {
+export function renderReminders(view: ActivationView, def: AgentDefinition): string | undefined {
 	const reminders = def.executor.reminders;
-	if (reminders === undefined || view.spec.purpose.kind !== 'respond') return [];
+	if (reminders === undefined || view.spec.purpose.kind !== 'respond') return undefined;
 	const seat = { agent: def.name, room: view.context.name, activation: view.spec.id };
-	return reminders.flatMap((remind) => {
+	const texts = reminders.flatMap((remind) => {
 		const text = reminderText(remind, seat);
-		return text === undefined ? [] : [text, ``];
+		return text === undefined ? [] : [text];
 	});
+	return texts.length === 0 ? undefined : texts.join('\n\n');
 }
 
 function reminderText(remind: Reminder, seat: ReminderSeat): string | undefined {

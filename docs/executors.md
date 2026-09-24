@@ -109,7 +109,10 @@ Tool bundle guidance stays in the `guidance` field and follows the policy.
 The rendering helpers stay pure and stateless, with one call out: the
 `reminders` of the executor. A reminder gives the same text for the same
 activation, so a second render of one activation reads the same prompt. A
-reminder that throws gives no text.
+reminder that throws gives no text, and the bundle bounds the length of
+its own text. `renderReminders` gives the reminder text alone. An adapter
+that sends a continued session the delta alone sends that text before the
+delta, on the first pass of an activation.
 
 ## How an activation runs
 

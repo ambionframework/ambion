@@ -392,7 +392,10 @@ operation at a time, so the owner's work holds at most three channels of
 a client: SFTP, one command, and one abort. Each running process of the
 agent holds one command channel, and the process table allows 4. The table
 stops the processes of one agent one at a time, and a timeout stops a
-process the same way, so the stops hold at most one abort channel. A client then holds at most 8 channels
+process the same way, so the stops hold at most one abort channel. A
+client then holds at most 8 channels, while each stop ends within its
+grace of 10 seconds. A process that outlives its grace meets the
+backend's own deadline later, and that kill opens one more channel
 ([Processes](processes.md#handles-and-limits)).
 
 **The bash owner serializes every agent's file work and the start of each
@@ -468,7 +471,7 @@ and spill file has mode `0600`, and each temporary directory has mode
 
 **Both tiers run `workspaceConformance`.** A `ConformanceBackend` harness
 opens a fresh `workstationBackend` and disposes of it. The cases check the
-`ExecutionEnv` rules that the file tools and the job tools need. The scripted harness
+`ExecutionEnv` rules that the file tools and the process tools need. The scripted harness
 starts an `ssh2` server for each case
 (`packages/workstation/test/conformance.test.ts`).
 
