@@ -204,33 +204,15 @@ names the new route.
 **Goal:** an agent on a workstation clones and pushes over SSH to one
 account on its own server, and the host opens no port.
 
-**Each step is one pull request.** Step 1 lands G2b, and step 2
-documents G2.
+**Each step is one pull request.** Step 1 documents G2.
 
-- [ ] **1.** G2b, the agent side and the OpenSSH tier. `workstationBackend`
-      writes the three key files and the `Include` line at each `connect`,
-      and declares `gitTransports: ['ssh']`. The OpenSSH tier runs
-      `gitConformance`. P1. (G2)
-  - **Code:** `backend.ts` writes the files from the identity that
-    `identityFor` gives, and keeps the rest of `~/.ssh/config`.
-    `test/sshd/setup.sh` adds `lab-git` outside the agents' group, with a
-    home of mode `0700`, the `Match User lab-git` block last, a second
-    `ListenAddress` on the runner's address, and `AllowUsers`.
-  - **Harness:** the hooks for `ssh`, with a key life between 3 and 5
-    seconds, since `expiry-time` has a resolution of one second and the
-    server renders it. The OpenSSH harness removes `~lab-git/repos` and
-    `authorized_keys.ambion` between cases.
-  - **Evidence:** the `workstation` CI job runs `gitConformance` on
-    OpenSSH and the checks that
-    [Workstation git](../docs/workstation-git.md#tests) lists, and the
-    scripted tier tests the key files. `pnpm check` passes.
-- [ ] **2.** The docs of G2. `workstation-git.md` describes what shipped.
+- [ ] **1.** The docs of G2. `workstation-git.md` describes what shipped.
       `workstation.md` states the new credential rule, and its out-of-v1
       list drops credential issuance and rotation. `git.md` states the
       credential decision in its new words and names the backend in its
       file table. The trust row states the reach of a leaked agent key.
       `docs/README.md`, the `CLAUDE.md` row, and the workstation package
-      guide name the backend and the server steps. Needs 1. P1. (G2)
+      guide name the backend and the server steps. P1. (G2)
   - **Evidence:** each statement points at code on `main`.
     `scripts/evidence-links.test.mjs` and Prettier pass.
 
@@ -357,8 +339,8 @@ A fork or a template lands with one rename, so the backend keeps no
 registry table.
 
 G2 lands in two steps. G2a built the server side, and its tests drive
-the git backend alone. G2b makes the bash backend write the key files,
-and it adds the OpenSSH tier. Only the `workstation` CI job runs that
+the git backend alone. G2b made the bash backend write the key files,
+and it added the OpenSSH tier. Only the `workstation` CI job runs that
 tier, so a step of G2 merges only with that job green. The OpenSSH
 harness removes the repositories and the agent keys of the git account
 between cases. **Evidence:** `gitConformance` and the checks of the

@@ -7,10 +7,8 @@
  * channel limit, the spill file, and the permissions between accounts.
  */
 
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { ToolContext } from '@ambionframework/ambion';
-import { openWorkspace, type WorkspaceEnv } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
 import {
 	type ConformanceBackend,
 	workspaceConformance,
@@ -19,49 +17,9 @@ import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type WorkstationOptions, workstationBackend } from '../../src/index.ts';
+import { type Backend, configPath, options, WIPE, withEnv } from '../support/sshd.ts';
 
 const ctx = BACKGROUND_CONTEXT;
-const configPath = process.env.AMBION_WORKSTATION_SSHD;
-
-interface SetupFile {
-	readonly host: string;
-	readonly port: number;
-	readonly hostKey: string;
-	readonly keys: string;
-	readonly layout: WorkstationOptions['layout'];
-}
-
-async function options(): Promise<WorkstationOptions> {
-	const setup = JSON.parse(await readFile(configPath ?? '', 'utf8')) as SetupFile;
-	return {
-		host: setup.host,
-		port: setup.port,
-		hostKey: setup.hostKey,
-		layout: setup.layout,
-		credentialFor: async (agent) => ({
-			username: agent.name,
-			privateKey: await readFile(join(setup.keys, agent.name), 'utf8'),
-		}),
-	};
-}
-
-type Backend = ReturnType<typeof workstationBackend>;
-
-async function withEnv<T>(
-	backend: Backend,
-	agent: string,
-	body: (env: WorkspaceEnv) => Promise<T>,
-): Promise<T> {
-	const env = await backend.connect({ name: agent });
-	try {
-		return await body(env);
-	} finally {
-		await env.cleanup();
-	}
-}
-
-/** Remove everything in the agent's home but `.ssh`, so each case starts clean. */
-const WIPE = 'find ~ -mindepth 1 -maxdepth 1 ! -name .ssh -exec rm -rf -- {} +';
 
 const harness: ConformanceBackend = {
 	name: 'workstation on OpenSSH',

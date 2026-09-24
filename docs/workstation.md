@@ -431,8 +431,9 @@ set of grants.
 
 ## A git backend
 
-**The workstation carries no git transport until G2 of
-[the plan](../planning/next.md#g-git-on-the-workstation).**
+**The workstation carries the git transport `ssh` of
+`workstationGitBackend`.** [Workstation git](workstation-git.md) describes
+the backend.
 
 ## Guidance
 

@@ -104,12 +104,13 @@ export class GitAccount {
 	}
 }
 
-/** Run `script` over `env`, and give its output. */
+/** Run `script` over `env`, and give its output. `label` names the script in each error. */
 export async function runIn(
 	env: SshEnv,
 	script: string,
 	variables: ScriptVariables,
 	signal?: AbortSignal,
+	label = 'A script of the git account',
 ): Promise<string> {
 	let text = '';
 	const onUpdate = (update: ShellOutputUpdate) => {
@@ -124,12 +125,10 @@ export async function runIn(
 	);
 	if (!ran.ok) throw ran.error;
 	if (ran.value.truncation.truncated) {
-		throw new Error('The output of a script of the git account is too long.');
+		throw new Error(`${label} gave an output that is too long.`);
 	}
 	if (ran.value.exitCode !== 0) {
-		throw new Error(
-			`A script of the git account exited with ${ran.value.exitCode}: ${text.trim()}`,
-		);
+		throw new Error(`${label} exited with ${ran.value.exitCode}: ${text.trim()}`);
 	}
 	return text;
 }
