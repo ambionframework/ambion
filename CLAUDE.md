@@ -42,7 +42,7 @@ floor.
 | `docs/formal.md`       | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                                  |
 | `docs/toolchain.md`    | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                                               |
 | `examples/workbench`   | Runnable example: rooms and an OpenTUI terminal in one process                                                                               |
-| `planning/`            | `next.md`: the scope and plan for 0.2.0; `backlog.md`: the scope for 0.3.0, then everything after                                            |
+| `planning/`            | `next.md`: the scope and plan for 0.3.0; `backlog.md`: everything after 0.3.0                                                                |
 
 ## Positioning
 
@@ -61,9 +61,9 @@ holds the rule.
 Ambient means a room remains available between interactions. Native timers,
 external event subscriptions, and scheduler ingress remain future work.
 
-[`planning/next.md`](planning/next.md) defines the 0.2.0 scope and owns the
+[`planning/next.md`](planning/next.md) defines the 0.3.0 scope and owns the
 work and its evidence. [`planning/backlog.md`](planning/backlog.md) holds
-everything after 0.2.0. `docs/` document current capabilities and label
+everything after 0.3.0. `docs/` document current capabilities and label
 pending release changes explicitly. Keep the examples in `docs/` on the
 implemented API until the corresponding change lands.
 

@@ -1,9 +1,9 @@
-# Next: the scope for 0.2.0
+# Next: the scope for 0.3.0
 
-> **No compatibility promise before 1.0.0.** 0.1.0 shipped on 2026-09-21
-> from commit 4026bdf, with ten packages on npmjs. Until 1.0.0, any release
-> may change any export, entry point, journal body, stored format, or
-> package API.
+> **No compatibility promise before 1.0.0.** 0.2.0 shipped on 2026-09-24
+> from commit 10a4f44, with eleven packages on npmjs. Until 1.0.0, any
+> release may change any export, entry point, journal body, stored format,
+> or package API.
 >
 > - **A change carries no compatibility path.** Add no re-export, no
 >   deprecated alias, no reader for an older format, no upgrade step, and
@@ -16,11 +16,10 @@
 >   that nobody intended. A deliberate change updates them in the same
 >   commit.
 
-This file holds the open work for 0.2.0: the scope, the order of the work,
+This file holds the open work for 0.3.0: the scope, the order of the work,
 the evidence each step needs, and the reason for each item. What landed
 leaves the phases, and the [changelog](../CHANGELOG.md) records it.
-[backlog.md](backlog.md) holds everything after 0.2.0, and its first
-section holds the scope for 0.3.0.
+[backlog.md](backlog.md) holds everything after 0.3.0.
 
 **An item lands with its evidence or stays open.** Every checkbox names an
 item in [the items](#the-items). A phase closes when its evidence line
@@ -31,61 +30,33 @@ holds on main.
 **Ambion is a collaboration kernel for agents and humans.** The
 [README](../README.md) holds the statement, and
 [Technical facts](../docs/technical-facts.md) holds the key facts and what
-is new. 0.1.0 makes a room a place that agents and people use when a
-person asks a question. 0.2.0 makes the kernel cheaper to change, and it
-gives each agent a workspace on a real server, where the operating system
-keeps one agent's files apart from another's. It also gives a workspace a
-git backend: an agent forks a template, clones it, and pushes its work.
-In 0.2.0 each executor adapts a harness, and a seat keeps its harness
-session for one exchange.
+is new. Through 0.2.0, Ambion is reactive: a seat acts when a person
+speaks, or when a seat addresses it.
 
-**0.3.0 makes Ambion responsive to environment events.** Through 0.2.0,
-Ambion is reactive: a seat acts when a person speaks, or when a seat
-addresses it. An environment event is a change outside the room, such as
-a push to a repository, a job that ends, or a timer that comes due. In
-0.3.0, an environment event reaches the room as a notice, and the room
-wakes the seats that attend to it. The notice (W1), the timer (W2), and
-delegation by reference (D1) carry the change
-([backlog](backlog.md#030-the-room-works-between-questions)).
+**0.3.0 makes Ambion responsive to environment events.** An environment
+event is a change outside the room, such as a push to a repository, a job
+that ends, or a timer that comes due. In 0.3.0, an environment event
+reaches the room as a notice, and the room wakes the seats that attend to
+it. A room also hands work to another room and waits for the result.
 
 ## The scope
 
-**Fourteen changes already landed on main.** The changelog names the export
-changes of each one. Items M1, M2, M3, M4, M6, M7, S1, and S2 came from
-this plan. The other rows landed as their own pull requests, and the plan
-records them here so that the release names them.
+**Two themes, each with the acceptance it must meet on the tagged
+commit.** The phases below deliver them; the items explain them.
 
-| Change                                              | PR               | What it gives 0.2.0                                                                                                                                        |
-| --------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M7. The workspace as an interface                   | #276, #277       | A neutral root entry, a conformance entry, one entry for each binding, and backends by kind: bash and an optional SQL                                      |
-| S1. The workstation, `@ambionframework/workstation` | #280, #283, #284 | A bash backend over SSH with one Unix account for each agent, tested on an in-process server and on OpenSSH                                                |
-| S2. The git backend, `@ambionframework/git`         | #299             | Read-only templates, forks, clones into the home, and pushes, on the just-bash backends and the workstation, tested on a real `git` and on OpenSSH         |
-| The removal of `@ambionframework/cli`               | #273             | Every library package needs only Node `>=22.19.0`                                                                                                          |
-| M1. Kernel decision layers                          | #286             | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts`                    |
-| M2. The rules sweep                                 | #291             | Every exported room rule but `exchangeOutcome` gates a write, and `draftsClose` counts a summary draft by the writer's seat in the fold and in the verdict |
-| M3. One crash-safe append loop                      | #302             | The journal owns the one append loop: a Cloudflare object keeps its metadata in one table row. A known entry with an invalid seq throws                    |
-| M4. The workspace logs                              | #304             | The audit log reports a directory failure to `onError`. The logs share one record path, one path check, and one file match. SQL output uses one table      |
-| M6. Each doc fact has one home                      | #301             | Seven repeated facts keep one home page, and the other pages link to it. `room.md` no longer says that an activation opens a fresh session                 |
-| The room tools in the hosting entry                 | #287             | `roomTools` and `agentTools` hold the room tool rules once. The Pi, Claude, and Codex executors adapt them and keep no copy                                |
-| `@ambionframework/just-bash`                        | #288, #289       | The workspace installs no just-bash, and the workstation installs 72 fewer packages. Each just-bash shell runs `git`, locked to the agent                  |
-| Package hygiene reads the built files               | #285             | `check:packages` fails on an undeclared import in `dist` and on bundled code from outside the package's own `src`                                          |
-| Exchange continuity, and the trace as host logs     | #294             | A seat keeps its harness session for one exchange. `@ambionframework/pi-journal` and the trace journals go, and each step goes to the host's logger        |
-| The Pi executor on Pi's AgentHarness                | #295             | The harness owns the model loop, the session, and compaction. Pi joins Claude and Codex as a harness adapter, and it runs the executor conformance suite   |
+| Theme                     | Acceptance                                                                                                                                                                                     |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                      |
+| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database. |
 
-**0.2.0 is ready to tag.** No step stays open. Live run 376, on `742f59d`,
-passed the Pi, Claude, and Codex jobs. Its package job failed one
-judgment case of the assistant, "honors an application override of
-default silence". The owner accepts that instability for 0.2.0. Items M5
-and L3 are P2, and they move to the [backlog](backlog.md#carried-from-020).
+**Three format changes.** Each change lands with a golden journal of the
+new shape, and the changelog names each one.
 
-**Format changes.** The changelog names each change to a stored format.
-
-| Change                                                                                | Item | Kind                         |
-| ------------------------------------------------------------------------------------- | ---- | ---------------------------- |
-| The `ambion/pi-session` journals and the Pi transcript audit are gone                 | —    | A stored namespace retires   |
-| The `ambion/trace` journals are gone                                                  | —    | A stored namespace retires   |
-| The `session` on an ended lease names an exchange session, and a failed lease has one | —    | A stored field that changes  |
-| The Cloudflare object metadata moves from two journals to the `ambion_metadata` table | M3   | Two stored namespaces retire |
+| Change                                  | Item | Kind                       |
+| --------------------------------------- | ---- | -------------------------- |
+| The notice message kind                 | W1   | A new message union member |
+| The timer entry                         | W2   | A new entry kind           |
+| An `awaiting` outcome that names a room | D1   | A new outcome union member |
 
 **Deployment models.** The same rules serve four placements.
 
@@ -101,21 +72,19 @@ and L3 are P2, and they move to the [backlog](backlog.md#carried-from-020).
 **These wait in the [backlog](backlog.md).** The backlog states the
 condition that brings each one back.
 
-- **The wake sources and the delegation.** The notice (W1), the timer
-  (W2), and delegation by reference (D1) make Ambion responsive to
-  environment events in 0.3.0.
-  [Decisions taken](#decisions-taken) states the reason.
 - **The checkpoint entry.** The W2 resume measurement decides it.
+- **The conformance fixtures (M5) and the billing annotation (L3).** Both
+  carry over from 0.2.0 with a condition each.
+- **A repeatable release from CI (R1).** The owner runs the release.
 - **A generated API reference.** It adds a build step and a CI check, and
   the typed README examples already hold the surface.
 - **The evals package.** PR #153 is a draft, conflicts with main, and
   carries its own list of open work.
 - **The open proofs.** The stop-loop and pass measures, unique roster
   names, `seatLive`, and `storedIdAccepted` remove no defect today.
-- **A backend profile and concurrent operations.** The workstation ships
-  with the one queue that the workspace owner keeps for every agent
-  (`resource.ts:80`). A profile that lets the owner run two agents at once
-  changes the owner, so it waits for a measured need.
+- **A backend profile and concurrent operations.** A profile that lets the
+  workspace owner run two agents at once changes the owner, so it waits
+  for a measured need.
 - **A SQL backend over a database server.** The workstation uses
   `sqliteBackend` on the Ambion host.
 - **An `apply_patch` tool for Codex seats.** A live comparison with the
@@ -123,14 +92,16 @@ condition that brings each one back.
 
 ## Decisions taken
 
-- **0.2.0 stays reactive.** It carries no wake source and no delegation.
-  M1 and M2 changed the room files and the rules file that W1, W2, and D1
-  change. A tag between the two lets 0.3.0 start on a stable kernel. The
-  0.2.0 format changes retire four namespaces and change one field, and
-  add no entry kind.
-- **`exchangeOutcome` stays a verified rule until W2.** The M2 sweep
-  classifies every other exported rule. The `awaiting` expiry decides this
-  one.
+- **A notice is the scheduler ingress.** The application owns its
+  schedule and delivers a notice through one host call. The kernel adds no
+  scheduler.
+- **The journal records a timer, and the host runs it.** The host owns the
+  clock. A restart reads the timer entries and arms them again.
+- **Delegation has no task database.** A working room is a room, and a ref
+  connects the two.
+- **W2 decides `exchangeOutcome`.** If the `awaiting` expiry writes on the
+  `awaiting` outcome, the rule gates a write and stays verified. Otherwise
+  it leaves the rules file, as the 0.2.0 sweep states for read views.
 - **One example.** The agentic lab workspace in
   [docs/example.md](../docs/example.md) stays the one example.
 - **Two entries.** `@ambionframework/ambion` for applications and
@@ -139,11 +110,8 @@ condition that brings each one back.
   executors are packages, and each one adapts a harness.
 - **Speech enters the record through `say` only**, on every executor.
 - **Two release channels.** CI publishes a dev build of `main` to GitHub
-  Packages under `dev`. An official release goes to npmjs.
-- **Two public names stay.** `RoomObject.exchange` saves the snapshot
-  payload over the Durable Object RPC boundary. `speakOnce` is the minimal
-  reference that a transport author needs. A removal of either adds rules
-  for callers, so neither is in the release.
+  Packages under `dev`. An official release goes to npmjs from the
+  owner's machine.
 - **The live tier stays off pull requests.** A step that changes a
   harness path proves it with one live file on that harness before it
   merges. The CI run on `main` confirms it.
@@ -165,40 +133,102 @@ means two things or two names mean one.
 
 ## The order of work
 
-**No phase stays open.** The release steps are in
-[Toolchain](../docs/toolchain.md#9-release-and-publishing): the version is
-0.2.0, the changelog entry has its date, and the owner tags the commit and
-runs `scripts/release.mjs`. The notes of the GitHub release link the live
-run on the tagged commit and name any case that failed.
+**The order is the notice, the timer, then the delegation.** The notice
+host call needs the notice kind, the timer needs the host call, and the
+delegating message needs the notice. A step names the steps it needs; a
+step with no "Needs" line starts now. **P0** blocks the tag. **P1**
+carries the release story. **P2** moves to the backlog when it is late.
+
+### Phase 1. The notice (P1)
+
+**Goal:** an event outside the room wakes the seats that attend to it.
+
+- [ ] **1.** The notice message kind, its routing by attention, and the
+      host call that delivers it with a stable key. P1. (W1)
+
+**Evidence:** a scripted test and a chaos case for the kind and for the
+host call, with its durable start and its restart semantics.
+
+### Phase 2. The timer (P1)
+
+**Goal:** a clock wakes a room, and a restart loses no timer.
+
+- [ ] **1.** The timer entry, armed by the host and armed again after a
+      restart. Needs phase 1 step 1. P1. (W2)
+- [ ] **2.** The `awaiting` expiry as a timer that the close schedules,
+      and the decision on `exchangeOutcome`. Needs 1. P1. (W2)
+- [ ] **3.** The Cloudflare adapter runs a timer through its alarm, and a
+      measurement records the resume cost of a room with many timer
+      wakes. Needs 1. P1. (W2)
+
+**Evidence:** a kill between the timer entry and the wake keeps the wake;
+the docs that call timers future work say what shipped.
+
+### Phase 3. Delegation (P1)
+
+**Goal:** a room hands work to another room and waits for the result.
+
+- [ ] **1.** A delegating message with a ref to a working room, the
+      `awaiting` outcome that names the room, and the message that returns
+      the result. Needs phase 1 step 1. P1. (D1)
+
+**Evidence:** the workbench delegates one question to a second room; a
+restart in the middle keeps the work. PR #151 closes with a comment that
+names the new route.
+
+### Phase 4. Release (P1)
+
+**Goal:** the tag names a commit that a live run tested.
+
+- [ ] **1.** The changelog entry for 0.3.0 names each format change and
+      each export that changed. Needs phases 1, 2, and 3. P1. (R0)
+- [ ] **2.** The live run on `main` after the last merge passes for Pi,
+      Claude, and Codex. Needs 1. P1. (R0)
+
+**Evidence:** the notes of the GitHub release link the live run on the
+tagged commit and name any case that failed.
 
 ## The items
 
-Each item states the problem, the solution, and the impact. The file and
-line references are from `main` at `67ecb72`.
+Each item states the problem, the solution, and the impact.
 
-### L. Live evidence
+### W. Wake sources
 
-**The live tier gave no signal from 2026-09-22 to 2026-09-24.** Runs 340
-to 363 of the live workflow failed on the Anthropic message "Your credit
-balance is too low", except run 352, which was cancelled. Every change
-from #271 to #294 merged with no live run in CI. Run 364, on `67ecb72`, is
-the first run with credit: Pi and the package tiers pass, Claude fails one
-case, and Codex skips.
+**W1. A notice from a resource.** A room wakes only when a person speaks,
+so an agent cannot react when a brief changes or a run completes. Add a
+message kind with a ref and no author, routed by attention. One host call
+delivers it with a stable key, so a retried delivery lands once. An
+application scheduler calls the same host call, so the kernel needs no
+scheduler of its own. A notice opens no exchange by itself and arrives
+through no hidden timeout. **Evidence:** a scripted test and a chaos case
+for the kind and for the host call, with its durable start and its restart
+semantics.
 
-**Three fixes and the Codex key close items L1, L2, and L4.** The
-changelog records each fix.
+**W2. A timer that the journal records.** Nothing wakes a room on a clock,
+and an `awaiting` exchange waits for ever. A timer entry records the due
+time and the wake it owes. The host arms it and writes the wake when it is
+due. A restart reads the open timer entries and arms them again, so a
+crash loses no timer. The `awaiting` expiry is a timer that the close
+schedules. The Cloudflare adapter runs a timer through its alarm, and a
+measurement records the resume cost of a room with many timer wakes.
+**Evidence:** a kill between the timer entry and the wake keeps the wake;
+the docs that call timers future work say what shipped.
 
-- **L1.** A resumed Claude session kept the system prompt it began with, so
-  a closing activation lost its duties.
-- **L2.** The `CODEX_API_KEY` secret was empty, so the Codex jobs skipped.
-  With the key, run 365 failed three Codex package tests that need a
-  native command. The changelog states the cause and the fix. Run 367, on
-  `a5b9ff3`, passed all four jobs, with the Codex package tier at 9 of 9.
-- **L4.** A Claude seat took the session id of a host that runs inside
-  Claude Code. A local run found it.
+### D. Delegation by reference
 
-**L5. Live evidence on the release candidate.** The live workflow runs
-on each push to `main`. Run 376, on `742f59d`, is the evidence for the
-tag. Runs 368, 374, and 375 each failed one case, and each cause is
-recorded: two defects of the live tests, which #306 fixed, and a missing
-Codex summary that did not recur in run 376.
+**D1. Delegation by reference.** PR #151 stored tasks in the journal and
+scanned every task on each reconcile pass. Use a ref and the `awaiting`
+outcome. The delegating message carries a ref to
+`ambion://room/<working>/message/<from>`. The origin exchange closes as
+`awaiting` that room. The working room closes with one message that
+carries a ref back. Status is a read of the exchange that the referenced
+message opened. **Evidence:** the workbench delegates one question to a
+second room; a restart in the middle keeps the work. Then close PR #151
+with a comment that names the new route.
+
+### R. Release
+
+**R0. The release.** The owner tags the commit and runs
+`scripts/release.mjs`, as [Toolchain](../docs/toolchain.md#9-release-and-publishing)
+describes. The changelog entry states the end state once, and the live
+run on the tagged commit is the evidence.

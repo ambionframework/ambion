@@ -5,3 +5,6 @@ pnpm-lock.yaml
 CHANGELOG.md
 # Local Workbench workspace artifacts are runtime data.
 examples/workbench/.data/
+
+# Local agent worktrees are copies of the repository, with their own state.
+.claude/worktrees/
