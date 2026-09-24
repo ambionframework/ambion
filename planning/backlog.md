@@ -73,6 +73,14 @@ adopt the same processes. **Condition:** a seat that must wake when a
 process ends, a process that must stop with its exchange, or a second
 kind of work that outlives its call.
 
+**One record for a live process in the table.** The table keeps a process
+of this run and an adopted process in two maps, with two stop paths and two
+end paths. One record with an optional controller removes about 50 lines,
+and each fix to a stop then lands once. A lost process keeps its `pid` and
+no end file, so each listing runs `ps` for it until a start forgets it. A
+`stop` line that the first read writes ends that cost. **Condition:** the
+next change to a stop path, or a table with many lost processes.
+
 **Tool execution provenance beyond the activation.** `ToolContext` carries
 the activation, the exchange, and the room. A purpose field, a retry-safe
 operation key that the kernel derives, and a domain operation reused across

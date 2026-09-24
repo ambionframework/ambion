@@ -28,15 +28,15 @@ activation starts with a reminder of the seat's processes. See
   `@ambionframework/workspace` exports `ProcessEvent`, `ProcessKind`,
   `ProcessQuery`, `ProcessState`, `ProcessStatus`, and
   `WorkspaceProcesses`.
-- **A tool bundle can remind a seat.** `ToolBundle.remind` gives text, or
-  a promise of text, for each respond activation, and
-  `AgentExecutor.reminders` holds the reminders of the bundles. The
-  executor resolves them once for each activation, with a bound of 5
-  seconds for each, and aborts the signal of a reminder at the bound. `renderActivation` takes the resolved text as its
+- **A tool bundle can remind a seat.** `ToolBundle.remind` gives text, or a
+  promise of text, for each respond activation, and `AgentExecutor.reminders`
+  holds the reminders of the bundles. The executor resolves them once for each
+  activation, with a bound of 5 seconds for each, and aborts the signal of a
+  reminder at the bound. `renderActivation` takes the resolved text as its
   third argument and adds it before the ask line. The main entry exports
-  `Reminder` and `ReminderSeat`. The hosting entry exports
-  `resolveReminders` and `REMINDER_TIMEOUT_MS`. The Pi executor sends a
-  continued session the reminders before the delta.
+  `Reminder` and `ReminderSeat`. The hosting entry exports `resolveReminders`
+  and `REMINDER_TIMEOUT_MS`. The Pi executor sends a continued session the
+  reminders before the delta.
 - **The workstation keeps a session open while any environment is open
   over it.** A process holds an environment for its whole run.
 

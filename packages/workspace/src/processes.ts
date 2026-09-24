@@ -190,6 +190,8 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	const stops = new Map<string, Promise<void>>();
 	const listeners = new Set<(event: ProcessEvent) => void>();
 	let closed = false;
+	/** Set when `close` has returned: the backend may release, so no new environment opens. */
+	let released = false;
 
 	const emit = (event: ProcessEvent): void => {
 		for (const listener of listeners) {
@@ -203,6 +205,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 
 	/** Run `fn` on an environment of its own for `agent`, outside the bash owner's queue. */
 	const detached = async <T>(agent: string, fn: (env: WorkspaceEnv) => Promise<T>): Promise<T> => {
+		if (released) throw new Error(CLOSED);
 		const env = await connect({ name: agent });
 		try {
 			return await fn(env);
@@ -222,8 +225,16 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		emit({ type: 'ended', process: status });
 	};
 
-	/** Adopt a live process of an earlier run: arm its timeout from its spec. */
-	const adopt = (agent: string, files: ProcessFiles): void => {
+	/**
+	 * Adopt a live process: arm its timeout from its spec. A process of an
+	 * earlier run comes from a read. A process of this run whose shell outlived
+	 * its run comes with the cause of its stop.
+	 */
+	const adopt = (
+		agent: string,
+		files: Pick<ProcessFiles, 'spec' | 'dir'>,
+		stopping?: StopCause,
+	): void => {
 		const { spec, dir } = files;
 		if (adopted.has(spec.handle)) return;
 		const due = Date.parse(spec.startedAt) + spec.timeout * 1000 - Date.now();
@@ -232,7 +243,13 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 			Math.min(Math.max(0, due), MAX_TIMER_SECONDS * 1000),
 		);
 		timer.unref();
-		adopted.set(spec.handle, { agent, spec, dir, timer });
+		adopted.set(spec.handle, {
+			agent,
+			spec,
+			dir,
+			timer,
+			...(stopping === undefined ? {} : { stopping }),
+		});
 	};
 
 	/**
@@ -373,15 +390,18 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	/**
 	 * After the run: record the end the files lack, read the final status, and
 	 * tell the host. The process leaves this run's memory after the read, so a
-	 * start in between counts it as running and does not remove its files.
+	 * start in between counts it as running and does not remove its files. A
+	 * shell that outlived the run, as after a kill it did not obey, becomes
+	 * adopted, and its one `ended` event comes when a read sees the end.
 	 */
 	const settleOwned = async (own: Owned, run: Run): Promise<void> => {
 		clearTimeout(own.timer);
 		await recordEnd(own, run).catch(() => undefined);
 		const status = await finalStatus(own);
+		if (status.state === 'running') adopt(own.agent, own, own.stopping);
 		owned.delete(own.spec.handle);
 		await own.env.cleanup().catch(() => undefined);
-		emit({ type: 'ended', process: status });
+		if (status.state !== 'running') emit({ type: 'ended', process: status });
 	};
 
 	const launch = (own: Owned): void => {
@@ -500,19 +520,11 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		return find(agent, handle);
 	};
 
-	/** The agent whose table holds `handle`: from memory, or from a read of each agent of this run. */
-	const ownerOf = async (handle: string): Promise<string | undefined> => {
-		const known = owned.get(handle)?.agent ?? adopted.get(handle)?.agent;
-		if (known !== undefined) return known;
-		for (const agent of agents) {
-			const hit = await find({ name: agent }, handle).then(
-				() => true,
-				() => false,
-			);
-			if (hit) return agent;
-		}
-		return undefined;
-	};
+	/** The agent whose table holds `handle`: from memory, or from the host's list. */
+	const ownerOf = async (handle: string): Promise<string | undefined> =>
+		owned.get(handle)?.agent ??
+		adopted.get(handle)?.agent ??
+		(await hostList()).find((process) => process.handle === handle)?.agent;
 
 	const hostCancel: ProcessTable['hostCancel'] = async (handle) => {
 		const agent = isHandle(handle) ? await ownerOf(handle) : undefined;
@@ -565,6 +577,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		const running = [...owned.values(), ...adopted.values()];
 		await Promise.allSettled(running.map((one) => stop(one.agent, one.spec.handle, 'cancelled')));
 		for (const adoptee of adopted.values()) clearTimeout(adoptee.timer);
+		released = true;
 	};
 
 	return Object.freeze({

@@ -157,9 +157,16 @@ export function stopLine(cause: StopCause, message?: string): string {
 	return `${cause} ${at}${text}\n`;
 }
 
-/** Write `stop` for a process. Best-effort: a failed write leaves the files to name the end. */
+/**
+ * Write `stop` for a process that has no `exit`. One shell command checks
+ * and writes, so a stop that meets the natural end of the command leaves
+ * the end as the command gave it.
+ */
 export async function writeStop(env: WorkspaceEnv, dir: string, line: string): Promise<void> {
-	await env.writeFile(`${dir}/stop`, line, BACKGROUND_CONTEXT);
+	const at = quoted(dir);
+	const script = `[ -f ${at}/exit ] || printf '%s' ${quoted(line)} > ${at}/stop`;
+	const result = await env.exec(script, undefined, BACKGROUND_CONTEXT);
+	if (!result.ok) throw result.error;
 }
 
 /**
@@ -317,15 +324,15 @@ function exitEnding(exit: string): Ending {
 }
 
 /**
- * The end that the files give. `exit` alone is the end the command chose.
- * `stop` names the cause of a stop, and it wins over `exit`: the table
- * writes it before it aborts. A process whose shell still runs stays
+ * The end that the files give. `exit` is the end the command chose, and
+ * a stop writes no `stop` after it. `stop` names the cause of a stop: the
+ * table writes it before it aborts. A process whose shell still runs stays
  * `running` until the stop ends it. With no file of an end, the process
  * runs while this run of the host owns it or its shell still runs, and it
  * is lost otherwise.
  */
 function endingOf(files: ProcessFiles, live: boolean): Ending {
-	if (files.stop === undefined && files.exit !== undefined) return exitEnding(files.exit);
+	if (files.exit !== undefined) return exitEnding(files.exit);
 	if (live) return { state: 'running' };
 	if (files.stop !== undefined) return stopEnding(files.stop);
 	return { state: 'failed', error: LOST };

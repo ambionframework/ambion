@@ -4,7 +4,7 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { tempDir } from '../../just-bash/test/support/backends.ts';
-import { LOST, type ProcessFiles, statusOf } from '../src/process-files.ts';
+import { LOST, type ProcessFiles, statusOf, stopLine, writeStop } from '../src/process-files.ts';
 import { FINISHED_IN_REMINDER } from '../src/process-text.ts';
 import type { ProcessDetails, PsDetails } from '../src/process-tools.ts';
 import { MAX_FINISHED_PROCESSES, MAX_RUNNING_PROCESSES } from '../src/processes.ts';
@@ -423,8 +423,8 @@ describe('the files as the source of truth', () => {
 	const STOP = 'cancelled 2026-01-01T00:00:30.000Z';
 	it.each([
 		{ files: { exit: EXIT }, live: false, state: 'exited' },
-		{ files: { exit: EXIT, stop: STOP }, live: false, state: 'cancelled' },
-		{ files: { exit: EXIT, stop: STOP }, live: true, state: 'running' },
+		{ files: { exit: EXIT, stop: STOP }, live: false, state: 'exited' },
+		{ files: { exit: EXIT, stop: STOP }, live: true, state: 'exited' },
 		{ files: { stop: STOP }, live: true, state: 'running' },
 		{
 			files: { stop: 'failed 2026-01-01T00:00:30.000Z The run broke.' },
@@ -474,6 +474,13 @@ describe('the files as the source of truth', () => {
 			command,
 		});
 		expect(status.text.startsWith('kept\n\n[Process')).toBe(true);
+		// A stop that meets the end of the command writes no stop, and the end stays exited.
+		const doneDir = done.output.slice(0, done.output.lastIndexOf('/'));
+		await second.use({ name: 'alpha' }, (env) => writeStop(env, doneDir, stopLine('cancelled')));
+		expect((await call(second, 'status', { handle: done.handle })).details.process.state).toBe(
+			'exited',
+		);
+		await expect(fileOf(second, 'alpha', `${doneDir}/stop`)).rejects.toThrow();
 		const reminded =
 			(await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a1' }, live)) ?? '';
 		expect(reminded).toContain(`- ${lost} failed: sleep 99`);

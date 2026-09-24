@@ -111,14 +111,15 @@ or 200 lines, and records the shell's exit code in `exit`.
 
 | Files                            | State                                                     |
 | -------------------------------- | --------------------------------------------------------- |
-| `exit`, no `stop`                | `exited`, with the code                                   |
+| `exit`                           | `exited`, with the code                                   |
 | The shell still runs the command | `running`, also while a stop waits for the end            |
 | `stop`, the shell gone           | `cancelled`, `timed_out`, or `failed`, as `stop` names it |
 | Neither, the shell gone          | `failed`: `The host run ended before the process did.`    |
 
-**`stop` names the cause, and it wins over `exit`.** The table writes it
-before it aborts, so a cancel that meets the natural end of a command
-reads `cancelled`. The shell "still runs the command" when this run owns
+**`exit` wins, and `stop` names the cause of a stop.** The table writes
+`stop` before it aborts, in one shell command that writes it only when no
+`exit` exists. A cancel or a timeout that meets the natural end of a
+command reads the exit code. The shell "still runs the command" when this run owns
 the process, or when `ps -ww -o args=` for the pid holds the handle. The
 handle check keeps a pid that the system reused for another program from
 reading as the process.
@@ -411,10 +412,16 @@ The state becomes `cancelled`. A process that has not ended after 10
 seconds still reads `running`, and a later `status` gives its end. A
 `cancel` of a process in a final state gives that state again.
 
+**A shell that outlives its run becomes adopted.** A process can ignore a
+kill, for example in an uninterruptible wait. When its run ends while its
+shell still runs, the table adopts it. The host's one `ended` event for
+it comes when a read sees its end.
+
 **`dispose()` stops every running process of this run, and every adopted
 one.** The bash owner refuses new work and drains its queue. The table
-then refuses new processes and stops each running process, one agent's at
-a time, with a grace of 10 seconds for each. The bash backend then
+then refuses new processes and stops each running process, with a grace
+of 10 seconds for each. The stops of one agent run one at a time, and the
+agents run in parallel. The bash backend then
 disposes. The git owner disposes after the bash owner, so a push in a
 process still reaches the git backend.
 
@@ -491,6 +498,7 @@ the three handle tools stay as they are.
 | The host's list covers this run's agents                       | The workspace keeps no roster                                           |
 | The reminder resolves once per activation, and can read I/O    | Every render of one activation reads the same text                      |
 | The table holds the timeout, and adopts a live process         | A kill goes through the stops of its agent, in every run                |
+| A stop writes no `stop` after `exit`                           | A command that ended reads its own end, whatever stop came late         |
 | The default timeout is 600 seconds, and the agent can raise it | An adopted process needs a bound from its spec                          |
 | A name is a label, and the handle is the key                   | Two processes can have one name with no rule for which one a call takes |
 | `ps` writes an audit entry                                     | The audit log records every tool call                                   |

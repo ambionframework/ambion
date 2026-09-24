@@ -18,7 +18,13 @@ import {
 	withAbortSignal,
 } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
-import { type ProcessSpec, type ProcessStatus, stopLine, wrapped } from './process-files.ts';
+import {
+	type ProcessSpec,
+	type ProcessStatus,
+	statusOf,
+	stopLine,
+	wrapped,
+} from './process-files.ts';
 
 /**
  * Seconds past its own timeout that the table gives the backend's deadline.
@@ -110,17 +116,9 @@ export function endOfRun(run: Exclude<Run, { ok: true }>): string {
 /** The status of a process whose files could not be read: a failure, from its spec. */
 export function unreadable(spec: ProcessSpec, dir: string, error: unknown): ProcessStatus {
 	const message = error instanceof Error ? error.message : String(error);
+	const lost = statusOf({ dir, spec, seen: false, alive: false }, false);
 	return Object.freeze({
-		handle: spec.handle,
-		...(spec.name === undefined ? {} : { name: spec.name }),
-		kind: spec.kind,
-		agent: spec.agent,
-		command: spec.command,
-		output: `${dir}/out`,
-		timeout: spec.timeout,
-		...(spec.room === undefined ? {} : { room: spec.room }),
-		startedAt: spec.startedAt,
-		state: 'failed',
+		...lost,
 		error: `The files of the process could not be read: ${message}`,
 	});
 }
