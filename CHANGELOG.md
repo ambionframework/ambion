@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**A Codex seat with native tools runs with no Codex sandbox by default.**
+With `nativeTools: 'codex'` and no `sandboxMode`, the executor sets
+`danger-full-access`. A command then has write access and the network on
+the host of the `codex` process. Before, the Codex default applied, and on
+Linux it ran each command through bubblewrap, with no network. A host that
+refuses an unprivileged user namespace then ran no command. Run such a seat
+only on an isolated host, or set `sandboxMode`. `codex()` now refuses
+`networkAccessEnabled` under `nativeTools: 'codex'` unless `sandboxMode` is
+`workspace-write`, because Codex reads it only there.
+
 **A workspace can have a git backend.** `WorkspaceBackends` gets `git`, a
 `GitBackend`, and `Workspace` gets `git`, its owner. With one, the workspace
 adds the `repos` and `fork` tools and a guidance note. An agent forks a
