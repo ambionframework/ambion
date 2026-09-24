@@ -10,6 +10,7 @@ import type {
 	HarnessSession,
 } from '@ambionframework/ambion/hosting';
 import { describe, expect, it } from 'vitest';
+import { RESUMED_NOTE } from '../src/executor.ts';
 import { fakeRoom, viewOf } from './support.ts';
 
 const SAY = { turns: [[{ say: 'Saturday.' }]] };
@@ -41,11 +42,38 @@ describe('exchange continuity', () => {
 		const second = await run(room.activate('message:2:sonnet:1'), viewWith(1, first));
 		expect(second).toEqual(first);
 		await run(room.activate('message:3:sonnet:1'), viewWith(1));
-		const [one, two, three] = room.argvs();
+		// A closing activation resumes the session of the exchange it summarizes.
+		const closing = viewWith(1, first);
+		await run(room.activate('closed:1:sonnet:1'), {
+			...closing,
+			spec: {
+				...closing.spec,
+				id: 'closed:1:sonnet:1',
+				purpose: { kind: 'summarize', exchange: 1, person: 'priya', through: 1, people: ['priya'] },
+			},
+			context: { ...closing.context, preferences: 'Start with VERDICT.' },
+		});
+		const [one, two, three, four] = room.argvs();
 		for (const argv of room.argvs()) expect(argv).not.toContain('--no-session-persistence');
 		expect(resumeOf(one)).toBeUndefined();
 		expect(resumeOf(two)).toBe('sess-1');
 		expect(resumeOf(three)).toBeUndefined();
+		expect(resumeOf(four)).toBe('sess-1');
+		// A resumed session keeps its first system prompt, so only the resumed
+		// query's first message restates the seat's part.
+		const [fresh, resumed, again, summary] = room
+			.log()
+			.flatMap((line) => ('user' in line ? [String(line.user)] : []));
+		for (const message of [resumed, summary]) {
+			expect(message?.startsWith(RESUMED_NOTE)).toBe(true);
+			expect(message).toContain('Your instructions:');
+		}
+		expect(summary).toContain('The exchange is over.');
+		expect(summary).toContain('Start with VERDICT.');
+		for (const message of [fresh, again]) {
+			expect(message).not.toContain(RESUMED_NOTE);
+			expect(message).not.toContain('Your instructions:');
+		}
 	});
 
 	it('ignores a session of another harness', async () => {
@@ -74,6 +102,9 @@ describe('exchange continuity', () => {
 			const [first, second] = room.argvs();
 			expect(resumeOf(first)).toBe('lost');
 			expect(resumeOf(second)).toBeUndefined();
+			// The fresh session gets the same waiting message, with the seat's part once more.
+			const sent = room.log().flatMap((line) => ('user' in line ? [String(line.user)] : []));
+			expect(sent.at(-1)?.startsWith(RESUMED_NOTE)).toBe(true);
 		},
 	);
 

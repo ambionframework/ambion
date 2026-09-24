@@ -2,7 +2,7 @@
 
 **No package implements this page yet.** This page is the design of a git
 backend for a workspace. [The plan](../planning/next.md) holds the work as
-item S2, in phase 3. The examples show the proposed API.
+item S2, in phase 4. The examples show the proposed API.
 
 **A git backend hosts the repositories of one workspace.** A host
 registers read-only templates on it. A person asks an agent to start from
@@ -626,7 +626,7 @@ can change `user.name`, and the server knows which credential pushed.
 **The work lands in four steps, in this order.** Each step passes
 `pnpm check` before the next one starts.
 
-**The steps match phase 3 of [the plan](../planning/next.md).** Step 1
+**The steps match phase 4 of [the plan](../planning/next.md).** Step 1
 waits for phase 2 step 2 there, because both edit the binding of the
 workspace's tools.
 
