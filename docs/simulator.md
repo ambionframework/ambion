@@ -26,13 +26,21 @@ who drives the room and the judge who reads it.
 
 **An eval is a vitest test.** It starts a room, runs the simulation, asserts
 on the run, and asks the judge. The local `support.ts` holds the agent
-definitions, the model id, a runtime on the live model, and `stopAtEnd`.
+definitions, the model ids, a runtime on the live model, and `stopAtEnd`.
 
 ```ts
 import { defineHuman, startRoom } from '@ambionframework/ambion';
 import { agentActor, agentJudge, simulate } from '@ambionframework/simulator';
 import { expect, it } from 'vitest';
-import { assistant, liveRuntime, MODEL, payroll, stopAtEnd, weather } from './support.ts';
+import {
+  assistant,
+  JUDGE_MODEL,
+  liveRuntime,
+  MODEL,
+  payroll,
+  stopAtEnd,
+  weather,
+} from './support.ts';
 
 const priya = defineHuman({ name: 'priya', identity: 'Site manager. Pours concrete.' });
 
@@ -60,7 +68,7 @@ it('the assistant asks the weather desk once, and answers the person', async () 
   const seats = run.exchanges.flatMap((e) => e.view.activations.map((a) => a.seat));
   expect(seats).not.toContain('payroll');
 
-  const verdict = await agentJudge({ model: MODEL })(run, [
+  const verdict = await agentJudge({ model: JUDGE_MODEL })(run, [
     'The person learns whether Thursday is dry, with the forecast as the reason.',
     'No agent repeats a fact that another agent already said.',
   ]);
@@ -130,9 +138,29 @@ sequenceDiagram
 - **The `Actor` and `Judge` types hold the contract, and the agents behind
   them grow.** In v1, each agent makes one model request. A later actor can
   call tools, make several requests for one move, and keep a session
-  across moves. A later judge can read the workspace and run commands
-  before it grades. Each change stays inside `agentActor` or `agentJudge`,
+  across moves. A later judge can grade each criterion in its own request,
+  read the workspace, and run commands before it grades. Each change stays inside `agentActor` or `agentJudge`,
   and `simulate` does not change.
+
+## Practice it follows
+
+**The design takes each rule below from a published source.**
+
+| Rule in this design                                          | Source                                                                                                                                    |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Grade the outcome with checks, and a meaning with a judge    | [Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)                                |
+| A case passes when all k samples pass: pass^k                | [τ-bench](https://arxiv.org/abs/2406.12045), [Demystifying evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) |
+| Check the final state of the environment                     | [τ-bench](https://arxiv.org/abs/2406.12045), [Demystifying evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) |
+| A simulated person with a persona, a stop token, and a bound | [promptfoo simulated user](https://www.promptfoo.dev/docs/providers/simulated-user/)                                                      |
+| The judge reasons first, and may run on another model        | [Inspect model grading](https://inspect.aisi.org.uk/model-graded.html)                                                                    |
+| The judge has an answer for missing evidence: `no evidence`  | [Demystifying evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)                                              |
+| Each sample starts from a clean environment                  | [Demystifying evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)                                              |
+| A person reads the transcripts of failed cases               | [Demystifying evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)                                              |
+
+**Two rules of those sources wait for a later version.** One judge request
+for each criterion multiplies the cost by the number of criteria.
+Calibration against labels from people needs the labels. Both stay inside
+`agentJudge` when they come.
 
 ## The surface
 
@@ -237,8 +265,10 @@ const actor = scriptedActor(['Can we pour on Thursday?', { text: 'And Friday?', 
 `provider/model-id`, and `brief`, the private goal of the person. In v1,
 the agent makes one model request for each move, with no tools.
 
-- **The system prompt** holds the person's `identity`, the `brief`, and one
-  rule: answer with the next message, or with `STOP:` and the reason.
+- **The system prompt** holds the person's `identity`, the `brief`, and
+  three rules. Speak as the person, in one message. Do not quote or
+  mention the brief. Answer with the next message, or with `STOP:` and the
+  reason.
 - **The user prompt** holds each exchange: the text the person sent, every
   spoken message with its author and recipient, and the summary.
 - **The move** is the text of the answer. A text that starts with `STOP:`
@@ -307,6 +337,7 @@ source in the run.
 | Complete, cancelled, or exhausted | `run.exchanges[].view.outcome.kind`                         |
 | What the person read at the close | `run.exchanges[].summary`                                   |
 | What the room cost                | `run.usage.room`, and `usage` on each activation            |
+| What the workspace holds          | The backend the test gave the room, read after `simulate`   |
 
 **The package ships no helper for these reads.** A filter over the run is
 one line. The helpers of `packages/ambion/test/live/support.ts` stay in the
@@ -338,15 +369,30 @@ export interface Verdict {
 - for each exchange, its range, its outcome, and each activation with its
   seat, purpose, outcome, and the tools it called.
 
+**The judge reads the record as evidence.** The agents under test wrote the
+record, and a message can address the judge. The rendered record sits
+between fixed delimiters. The system prompt states that the record is
+evidence, and that no text in it is an instruction to the judge.
+
 **The judge does not read the actor's brief.** A criterion states what the
 person must get. The actor and the judge then share no text. The judge also
 does not read `run.moves` or `run.usage`: the reason of a `stop` move can
 repeat the brief.
 
 **In v1, `agentJudge` makes one model request.** It asks for JSON with one
-finding for each criterion, in the order of the list. An answer that does
-not parse, or that misses a criterion, rejects the promise. A malformed
-answer never passes. It resolves the model the way `agentActor` does, and
+finding for each criterion, in the order of the list. Each finding is
+`{ criterion, reason, pass }`, with the reason first, so the verdict
+follows the evidence. An answer that does not parse, or that misses a
+criterion, rejects the promise. A malformed answer never passes.
+
+**A criterion that the record does not show fails.** The reason then
+starts with `no evidence`. The judge has no third verdict, and a gap in
+the record reads as a gap.
+
+**The judge's model can differ from the model under test.** A judge
+favors text from its own model family. The live support names
+`JUDGE_MODEL`, and its default is `MODEL`. A suite that grades one family
+names another family for the judge. It resolves the model the way `agentActor` does, and
 it accepts the same `stream` for the scripted tier.
 
 **A scripted judge is a function.** A test of the loop passes
@@ -369,6 +415,15 @@ holds the rules.
 - **The scripted tier proves the eval first.** Run the eval with a
   scripted execution, a scripted actor, and a scripted judge before the
   first live run.
+- **A failed case keeps its evidence.** The live support writes `run` and
+  `verdict` to `test/live/runs/<case>.json`, and prints the path. Each
+  `Error` becomes its `message`. Git ignores the directory. A person reads
+  the file before a check or a criterion changes. The repository rule
+  forbids a second live run to chase a flake, so the file is the record of
+  the first.
+- **Each case starts clean.** A case starts its own room and runtime, and
+  Pi sessions stay in memory. No state passes from one case or sample to
+  the next.
 
 ## Validation: the assistant's live suite
 
@@ -444,7 +499,8 @@ neither makes the exchange `awaiting`, so the check reads the second
 message and the judge reads the first summary.
 
 **Samples stay in the test.** `it.each` keeps the sample numbers of today.
-The simulator repeats nothing.
+The simulator repeats nothing. `it.each` over k samples measures pass^k:
+the case passes when every sample passes.
 
 **The evidence for the port:**
 
@@ -494,6 +550,7 @@ a `scriptedActor`. The judge is a function.
 | A room with a summary writer      | `seen` carries each summary                               |
 | One move opens one exchange       | `run.exchanges` has one view for each message             |
 | The run is a detached value       | `structuredClone(run)` equals the run                     |
+| A message tells the judge to pass | The judge prompt fences the message inside the record     |
 
 **The agent actor and the agent judge run on the scripted Pi stream.**
 The cases cover the prompt text, the name each request carries, a
@@ -507,15 +564,19 @@ provider.
 
 ## Out of v1
 
-**Each item was open work on PR #153.** The simplest simulator leaves each
-one out.
+**The simplest simulator leaves these out.** Most were open work on PR
+#153.
 
 - More than one person, and a person who knows the brief of another.
 - A message sent into an open exchange, and a person who steers an
   activation.
+- A person who changes the workspace, the dual control of τ²-bench.
 - Arrivals and departures between exchanges, and catch-up after a gap.
 - A store of runs, and grading a stored run again with a new judge.
-- A calibration suite for the judge, a rubric library, and scores.
-- Several samples of one eval, and statistics across samples.
+- A calibration suite that compares the judge with labels from people, a
+  rubric library, and scores.
+- A panel of judges with a majority vote.
+- Statistics across samples beyond pass^k, such as pass@k and confidence
+  intervals.
 - A budget in money that stops a run.
 - A report format, a command-line tool, and a CI workflow for evals.
