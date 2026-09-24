@@ -192,8 +192,9 @@ const beside = (kind: string, body: unknown, seq: Seq, key?: string, run?: strin
 /**
  * The envelope a stored entry folds to, or nothing when it is not one this
  * journal takes. An unknown kind is foreign storage and is skipped. A known
- * kind with an invalid body is malformed storage and throws. This distinction
- * keeps a reader extensible and keeps malformed history visible.
+ * kind with an invalid body or an invalid seq is malformed storage and
+ * throws. This distinction keeps a reader extensible and keeps malformed
+ * history visible.
  */
 function envelope<TKind extends string>(
 	words: Vocabulary<TKind>,
@@ -208,8 +209,8 @@ function envelope<TKind extends string>(
 	const candidate = detached(stored.body);
 	if (!words.accepts(kind, candidate)) return undefined;
 	const seq = positionOf(stored.seq);
-	// Every entry takes a place on the record; one without is not an entry.
-	if (seq === undefined) return undefined;
+	// Every entry takes a place on the record. A known kind without one is corrupt.
+	if (seq === undefined) throw new Error(`The stored '${kind}' entry has no valid seq.`);
 	return {
 		kind,
 		// Storage owns its returned snapshot; take another copy before the

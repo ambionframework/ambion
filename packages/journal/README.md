@@ -31,6 +31,11 @@ entries. The journal writes each stored value as a nested envelope:
 { kind, body, seq, key?, run? }
 ```
 
+**A read skips foreign entries and refuses corrupt ones.** An entry of a
+kind that the vocabulary does not know is foreign storage, and the journal
+skips it. An entry of a known kind with an invalid body or an invalid `seq`
+throws, and every later read throws at the same position.
+
 The nested body keeps JSON fields named `seq`, `key`, and `run` unchanged.
 All journal payloads must be JSON data. Functions, resources, and cyclic
 objects are not journal payloads.

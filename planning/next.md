@@ -50,8 +50,8 @@ delegation by reference (D1) carry the change
 
 ## The scope
 
-**Twelve changes already landed on main.** The changelog names the export
-changes of each one. Items M1, M2, M6, M7, S1, and S2 came from this plan. The
+**Thirteen changes already landed on main.** The changelog names the export
+changes of each one. Items M1, M2, M3, M6, M7, S1, and S2 came from this plan. The
 other rows landed as their own pull requests, and the plan records them
 here so that the release names them.
 
@@ -63,6 +63,7 @@ here so that the release names them.
 | The removal of `@ambionframework/cli`               | #273             | Every library package needs only Node `>=22.19.0`                                                                                                          |
 | M1. Kernel decision layers                          | #286             | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts`                    |
 | M2. The rules sweep                                 | #291             | Every exported room rule but `exchangeOutcome` gates a write, and `draftsClose` counts a summary draft by the writer's seat in the fold and in the verdict |
+| M3. One crash-safe append loop                      | this PR          | The journal owns the one append loop: a Cloudflare object keeps its metadata in one table row. A known entry with an invalid seq throws                    |
 | M6. Each doc fact has one home                      | #301             | Seven repeated facts keep one home page, and the other pages link to it. `room.md` no longer says that an activation opens a fresh session                 |
 | The room tools in the hosting entry                 | #287             | `roomTools` and `agentTools` hold the room tool rules once. The Pi, Claude, and Codex executors adapt them and keep no copy                                |
 | `@ambionframework/just-bash`                        | #288, #289       | The workspace installs no just-bash, and the workstation installs 72 fewer packages. Each just-bash shell runs `git`, locked to the agent                  |
@@ -73,11 +74,11 @@ here so that the release names them.
 **Three themes stay open, each with the acceptance it must meet on the
 tagged commit.** The phases below deliver them; the items explain them.
 
-| Theme                     | Acceptance                                                                                                                                                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| M One owner per mechanism | Each duplication that items M3 to M5 name has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2. The journal package owns the one crash-safe append loop. |
-| L Live evidence           | The live tier passes on the release candidate for the Pi, Claude, and Codex harnesses.                                                                                                                 |
-| R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release. The pages that name a release name 0.2.0.                                          |
+| Theme                     | Acceptance                                                                                                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M One owner per mechanism | Each duplication that items M4 and M5 name has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2.                |
+| L Live evidence           | The live tier passes on the release candidate for the Pi, Claude, and Codex harnesses.                                                                        |
+| R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release. The pages that name a release name 0.2.0. |
 
 **The tag waits for the P0 and P1 steps.** A P2 step that is open when the
 last P1 step closes moves to the backlog. It does not hold the tag.
@@ -89,6 +90,7 @@ last P1 step closes moves to the backlog. It does not hold the tag.
 | The `ambion/pi-session` journals and the Pi transcript audit are gone                 | —    | A stored namespace retires  |
 | The `ambion/trace` journals are gone                                                  | —    | A stored namespace retires  |
 | The `session` on an ended lease names an exchange session, and a failed lease has one | —    | A stored field that changes |
+| The Cloudflare object metadata moves from two journals to the `ambion_metadata` table | M3   | A stored namespace retires  |
 
 **Deployment models.** The same rules serve four placements.
 
@@ -128,8 +130,9 @@ condition that brings each one back.
 
 - **0.2.0 stays reactive.** It carries no wake source and no delegation.
   M1 and M2 changed the room files and the rules file that W1, W2, and D1
-  change. A tag between the two lets 0.3.0 start on a stable kernel. The 0.2.0 format changes retire two namespaces and
-  change one field, and add no entry kind.
+  change. A tag between the two lets 0.3.0 start on a stable kernel. The
+  0.2.0 format changes retire four namespaces and change one field, and
+  add no entry kind.
 - **`exchangeOutcome` stays a verified rule until W2.** The M2 sweep
   classifies every other exported rule. The `awaiting` expiry decides this
   one.
@@ -172,29 +175,28 @@ steps it needs; a step with no "Needs" line starts now. **P0** blocks the
 tag. **P1** carries the release story. **P2** moves to the backlog when it
 is late.
 
-| Lane | Chain                              | Priority   |
-| ---- | ---------------------------------- | ---------- |
-| A    | Phase 1: the packages              | P0, P1, P2 |
-| B    | Phase 2: live evidence             | P2         |
-| —    | Phase 3: the release, after lane A | P1         |
+| Lane | Chain                              | Priority |
+| ---- | ---------------------------------- | -------- |
+| A    | Phase 1: the packages              | P1, P2   |
+| B    | Phase 2: live evidence             | P2       |
+| —    | Phase 3: the release, after lane A | P1       |
 
-**The lanes edit different files.** Phase 1 edits the journal, adapter,
-workspace log, and conformance files. Phase 2 edits the live tests and the
+**The lanes edit different files.** Phase 1 edits the workspace log and
+the conformance files. Phase 2 edits the live tests and the
 live workflow.
 
-### Phase 1. Package hygiene (P0, P1, and P2)
+### Phase 1. Package hygiene (P1 and P2)
 
-**Goal:** the journal, adapter, workspace, and conformance
-code keep one copy of each mechanism.
+**Goal:** the workspace and conformance code keep one copy of each
+mechanism.
 
-- [ ] **1.** One crash-safe append loop in `packages/journal`. P0. (M3)
-- [ ] **2.** The workspace logs: carry PR #171 onto main and land it,
+- [ ] **1.** The workspace logs: carry PR #171 onto main and land it,
       then one record path, one file match, one table, and one call
       envelope. P1. (M4)
-- [ ] **3.** One set of scripted room fixtures in the conformance suite.
+- [ ] **2.** One set of scripted room fixtures in the conformance suite.
       P2. (M5)
 
-**Evidence:** `pnpm check`; `pnpm chaos` and the restart suite for step 1.
+**Evidence:** `pnpm check`.
 
 ### Phase 2. Live evidence (P2)
 
@@ -212,7 +214,7 @@ annotation that names the provider error, and runs no test.
 
 - [ ] **1.** The changelog entry for 0.2.0: the format changes, each
       export that changed or went, the three new packages, and the two
-      retired packages. Needs 2. Needs phase 1 steps 1 and 2.
+      retired packages. Needs 2. Needs phase 1 step 1.
       (R1)
 - [ ] **2.** The pages that name a release name 0.2.0 and list its eleven
       packages. (R2)
@@ -236,22 +238,6 @@ Each item states the problem, the solution, and the impact. The file and
 line references are from `main` at `67ecb72`.
 
 ### M. One owner per mechanism
-
-**M3. One crash-safe append loop.** The `Journal` class and
-`MetadataJournal` (`cloudflare/src/storage.ts:46`) each write a serial
-queue, a cursor replay, and an in-doubt recovery by hand. The third copy
-went with `pi-journal`.
-
-- Extract one append primitive in `packages/journal` with an `apply` and a
-  `recover` callback. Rebuild `MetadataJournal` on it, and keep every
-  stored record byte-identical.
-- Replace `positionRead` (`journal/src/storage.ts:52`) with the verified
-  `scanned` rule at its two callers.
-- Retire the random mutation `id` and the `mutations` map of
-  `MetadataJournal`. The caller's `source.id` answers the in-doubt
-  question.
-- Make `envelope` (`journal/src/journal.ts:198`) throw for a known kind
-  with a malformed seq. A skip hides corruption.
 
 **M4. The workspace logs.** PR #171 fixes a regression: when a directory
 failure clears on retry, the audit log writes the entry as an oversized

@@ -343,37 +343,55 @@ describe('the envelope and storage cursor', () => {
 		expect('entry' in other && other.entry.seq).toBe(2);
 	});
 
-	it('fails repeatedly at a malformed known entry without advancing the cursor', async () => {
-		const id = `journal-malformed-${++names}`;
-		const strict: Vocabulary<Kind> = {
-			run: 'run',
-			accepts: (kind, value): kind is Kind => {
-				if (!known(kind)) return false;
-				if (kind === 'note' && typeof value === 'object' && value !== null && 'text' in value)
-					return true;
-				throw new Error(`malformed ${kind}`);
-			},
-		};
-		await store(id, { kind: 'note', body: { wrong: true }, seq: 1 });
-		const journal = new Journal<Kind, Bodies>(journals.open(id), strict);
-		await expect(journal.ready).rejects.toThrow(/malformed note/);
-		await expect(journal.append('note', { decide: () => body(note('later')) })).rejects.toThrow(
-			/malformed note/,
-		);
-	});
+	const strict: Vocabulary<Kind> = {
+		run: 'run',
+		accepts: (kind, value): kind is Kind => {
+			if (!known(kind)) return false;
+			if (kind === 'note' && typeof value === 'object' && value !== null && 'text' in value)
+				return true;
+			throw new Error(`malformed ${kind}`);
+		},
+	};
+
+	it.each([
+		{
+			what: 'body',
+			words: strict,
+			stored: { kind: 'note', body: { wrong: true }, seq: 1 },
+			error: /malformed note/,
+		},
+		{
+			what: 'seq',
+			words: WORDS,
+			stored: { kind: 'note', body: note('x'), seq: 'one' },
+			error: /no valid seq/,
+		},
+		{
+			what: 'missing seq',
+			words: WORDS,
+			stored: { kind: 'note', body: note('x') },
+			error: /no valid seq/,
+		},
+		{
+			what: 'seq past the last place',
+			words: WORDS,
+			stored: { kind: 'note', body: note('x'), seq: Number.MAX_SAFE_INTEGER },
+			error: /no valid seq/,
+		},
+	])(
+		'fails repeatedly at a known entry with a malformed $what, without advancing the cursor',
+		async ({ words, stored, error }) => {
+			const id = `journal-malformed-${++names}`;
+			await store(id, stored);
+			const journal = new Journal<Kind, Bodies>(journals.open(id), words);
+			await expect(journal.ready).rejects.toThrow(error);
+			await expect(journal.append('note', { decide: () => body(note('later')) })).rejects.toThrow(
+				error,
+			);
+		},
+	);
 
 	it('keeps every seq below the largest safe integer, so its successor is exact', async () => {
-		const id = `journal-bound-${++names}`;
-		await store(id, {
-			kind: 'note',
-			body: note('past the last place'),
-			seq: Number.MAX_SAFE_INTEGER,
-		});
-		const journal = await open(id);
-		expect(journal.entries).toEqual([]);
-		expect(await journal.append('note', { decide: () => body(note('first')) })).toMatchObject({
-			entry: { seq: 1 },
-		});
 		const full = `journal-full-${++names}`;
 		await store(full, {
 			kind: 'note',

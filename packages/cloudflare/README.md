@@ -13,7 +13,8 @@ What is built:
 
 - **`sqlStorage(state)`** opens one native journal backend over the object's
   SQLite. The runtime derives room journals from it.
-  Room and seat objects store their durable metadata under their own names.
+  Room and seat objects keep their durable metadata in one row each of the
+  `ambion_metadata` table, beside the room journals.
   This package only wraps `ctx.storage.sql` in `run` and `all` (`sqlOver`).
 - **`RoomObject`** runs the room. Its constructor resumes an initialized room
   unless explicitly stopped; an uninitialized named record waits for

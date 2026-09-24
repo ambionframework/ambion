@@ -339,7 +339,7 @@ it('retains the stopped handle when saving stop metadata fails', async () => {
 	const stub = roomOf('room-stop-retry');
 	await stub.start({ name: 'room-stop-retry', agents: [] });
 	type Stoppable = {
-		metadata: { change: (...args: never[]) => Promise<unknown> };
+		metadata: { change: (...args: never[]) => unknown };
 		stop(): Promise<void>;
 	};
 	await inside<Stoppable, void>(stub, async (object) => {
@@ -348,7 +348,7 @@ it('retains the stopped handle when saving stop metadata fails', async () => {
 		object.metadata.change = (...args) => {
 			if (!fail) return original(...args);
 			fail = false;
-			return Promise.reject(new Error('metadata write failed'));
+			throw new Error('metadata write failed');
 		};
 		await expect(object.stop()).rejects.toThrow('metadata write failed');
 		await object.stop();

@@ -248,7 +248,7 @@ async function recovering(
 		await object.metadata.change(() => ({
 			patch: { room: name, seat: 'product', activation, phase: 'running' },
 		}));
-		const metadata = seatMetadata(sqlStorage(state));
+		const metadata = seatMetadata(state);
 		object.roomFor = () => ({
 			view: async () => ({ stale: 'unused' }),
 			commit: async () => ({ stale: 'unused' }),
@@ -258,8 +258,7 @@ async function recovering(
 	});
 	await runDurableObjectAlarm(seat);
 	await new Promise((resolve) => setTimeout(resolve, 25));
-	const read = () =>
-		runInDurableObject(seat, (_instance, state) => seatMetadata(sqlStorage(state)).read());
+	const read = () => runInDurableObject(seat, (_instance, state) => seatMetadata(state).read());
 	const timedOut = () =>
 		expect(events).toContainEqual(
 			expect.objectContaining({
@@ -310,7 +309,7 @@ it.each(['idle', 'pending'] as const)(
 		}
 		const snapshot = () =>
 			runInDurableObject(seat, async (_instance, state) => ({
-				metadata: await seatMetadata(sqlStorage(state)).read(),
+				metadata: seatMetadata(state).read(),
 				alarm: await state.storage.getAlarm(),
 			}));
 		const before = await snapshot();
