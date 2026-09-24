@@ -50,10 +50,10 @@ delegation by reference (D1) carry the change
 
 ## The scope
 
-**Thirteen changes already landed on main.** The changelog names the export
-changes of each one. Items M1, M2, M3, M6, M7, S1, and S2 came from this plan. The
-other rows landed as their own pull requests, and the plan records them
-here so that the release names them.
+**Fourteen changes already landed on main.** The changelog names the export
+changes of each one. Items M1, M2, M3, M4, M6, M7, S1, and S2 came from
+this plan. The other rows landed as their own pull requests, and the plan
+records them here so that the release names them.
 
 | Change                                              | PR               | What it gives 0.2.0                                                                                                                                        |
 | --------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -64,6 +64,7 @@ here so that the release names them.
 | M1. Kernel decision layers                          | #286             | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts`                    |
 | M2. The rules sweep                                 | #291             | Every exported room rule but `exchangeOutcome` gates a write, and `draftsClose` counts a summary draft by the writer's seat in the fold and in the verdict |
 | M3. One crash-safe append loop                      | #302             | The journal owns the one append loop: a Cloudflare object keeps its metadata in one table row. A known entry with an invalid seq throws                    |
+| M4. The workspace logs                              | #304             | The audit log reports a directory failure to `onError`. The logs share one record path, one path check, and one file match. SQL output uses one table      |
 | M6. Each doc fact has one home                      | #301             | Seven repeated facts keep one home page, and the other pages link to it. `room.md` no longer says that an activation opens a fresh session                 |
 | The room tools in the hosting entry                 | #287             | `roomTools` and `agentTools` hold the room tool rules once. The Pi, Claude, and Codex executors adapt them and keep no copy                                |
 | `@ambionframework/just-bash`                        | #288, #289       | The workspace installs no just-bash, and the workstation installs 72 fewer packages. Each just-bash shell runs `git`, locked to the agent                  |
@@ -76,7 +77,7 @@ tagged commit.** The phases below deliver them; the items explain them.
 
 | Theme                     | Acceptance                                                                                                                                                    |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M One owner per mechanism | Each duplication that items M4 and M5 name has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2.                |
+| M One owner per mechanism | Each duplication that item M5 names has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2.                       |
 | L Live evidence           | The live tier passes on the release candidate for the Pi, Claude, and Codex harnesses.                                                                        |
 | R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release. The pages that name a release name 0.2.0. |
 
@@ -176,25 +177,20 @@ steps it needs; a step with no "Needs" line starts now. **P0** blocks the
 tag. **P1** carries the release story. **P2** moves to the backlog when it
 is late.
 
-| Lane | Chain                              | Priority |
-| ---- | ---------------------------------- | -------- |
-| A    | Phase 1: the packages              | P1, P2   |
-| B    | Phase 2: live evidence             | P2       |
-| —    | Phase 3: the release, after lane A | P1       |
+| Lane | Chain                  | Priority |
+| ---- | ---------------------- | -------- |
+| A    | Phase 1: the packages  | P2       |
+| B    | Phase 2: live evidence | P2       |
+| —    | Phase 3: the release   | P1       |
 
-**The lanes edit different files.** Phase 1 edits the workspace log and
-the conformance files. Phase 2 edits the live tests and the
-live workflow.
+**The lanes edit different files.** Phase 1 edits the conformance files.
+Phase 2 edits the live tests and the live workflow.
 
-### Phase 1. Package hygiene (P1 and P2)
+### Phase 1. Package hygiene (P2)
 
-**Goal:** the workspace and conformance code keep one copy of each
-mechanism.
+**Goal:** the conformance code keeps one copy of each fixture.
 
-- [ ] **1.** The workspace logs: carry PR #171 onto main and land it,
-      then one record path, one file match, one table, and one call
-      envelope. P1. (M4)
-- [ ] **2.** One set of scripted room fixtures in the conformance suite.
+- [ ] **1.** One set of scripted room fixtures in the conformance suite.
       P2. (M5)
 
 **Evidence:** `pnpm check`.
@@ -215,8 +211,7 @@ annotation that names the provider error, and runs no test.
 
 - [ ] **1.** The changelog entry for 0.2.0: the format changes, each
       export that changed or went, the three new packages, and the two
-      retired packages. Needs 2. Needs phase 1 step 1.
-      (R1)
+      retired packages. Needs 2. (R1)
 - [ ] **2.** The pages that name a release name 0.2.0 and list its eleven
       packages. (R2)
 - [ ] **3.** The live tier passes on the release candidate for Pi,
@@ -239,22 +234,6 @@ Each item states the problem, the solution, and the impact. The file and
 line references are from `main` at `67ecb72`.
 
 ### M. One owner per mechanism
-
-**M4. The workspace logs.** PR #171 fixes a regression: when a directory
-failure clears on retry, the audit log writes the entry as an oversized
-entry. The fix is not on main. PR #171 branches from a history that main
-no longer shares, so its one commit goes onto main as a new change. Land
-it before the rest, because the rest edits the same code.
-
-- One best-effort record path and one `reportError` in
-  `workspace/src/log.ts`, for the workspace audit log (`audit.ts:133`) and
-  `mirror.ts:136`.
-- One rotated-file match beside `rotatedName` (`log.ts:45`), for
-  `isLogFile` (`mirror.ts:100`).
-- One import-free Markdown table module for `sql-tool.ts:161` and
-  `sql-resource.ts:268`.
-- One private `callEnvelope` for the two copies of the provenance prefix
-  (`tools.ts:43`, `sql-resource.ts:208`).
 
 **M5. The conformance suite.** `conformance.ts` and
 `conformance-executor-room.ts` each hold their own question, participants

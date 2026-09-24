@@ -8,6 +8,7 @@ import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { backends } from '../../just-bash/test/support/backends.ts';
 import { BACKGROUND_CONTEXT, openAuditLog, openLog } from '../src/index.ts';
+import { isLogFile } from '../src/log.ts';
 
 const ctx = BACKGROUND_CONTEXT;
 
@@ -78,6 +79,8 @@ describe.each(backends)('a workspace log on $name', (backend) => {
 			const names = listed.value.map((entry) => entry.name);
 			expect(names).toContain('j.jsonl');
 			expect(names.length).toBeGreaterThan(1);
+			// The match that the mirror reads by knows every name a rotation makes.
+			expect(names.every((name) => isLogFile(name, 'j.jsonl'))).toBe(true);
 			const rotated = listed.value.filter((entry) => entry.name !== 'j.jsonl');
 			expect(Math.min(...rotated.map((entry) => entry.size))).toBeGreaterThanOrEqual(24);
 			const records = await recordsIn(
@@ -93,15 +96,36 @@ describe('a log path', () => {
 		['openLog', (path: string) => openLog({ path })],
 		['openAuditLog', (path: string) => openAuditLog({ path })],
 	])(
-		'%s refuses a relative path, since it would resolve inside the home that connects first',
+		'%s refuses a relative, trailing-slash, or unnormalized path, which names a different file per home or backend',
 		(_name, open) => {
-			expect(() => open('journal.jsonl')).toThrow(/absolute/i);
-			expect(() => open('')).toThrow(/absolute/i);
+			for (const path of [
+				'journal.jsonl',
+				'',
+				'/logs/',
+				'/logs//j.jsonl',
+				'/logs/./j.jsonl',
+				'/logs/../j.jsonl',
+			])
+				expect(() => open(path)).toThrow(/absolute file path/i);
 		},
 	);
 
-	it('refuses a non-positive rotateBytes', () => {
-		expect(() => openLog({ path: '/logs/j.jsonl', rotateBytes: 0 })).toThrow(/rotateBytes/);
-		expect(() => openLog({ path: '/logs/j.jsonl', rotateBytes: -1 })).toThrow(/rotateBytes/);
+	it.each([
+		['rotateBytes', (bytes: number) => openLog({ path: '/logs/j.jsonl', rotateBytes: bytes })],
+		['maxBytes', (bytes: number) => openAuditLog({ maxBytes: bytes })],
+	])('refuses a non-positive or infinite %s', (option, open) => {
+		for (const bytes of [0, -1, Number.NaN, Number.POSITIVE_INFINITY])
+			expect(() => open(bytes)).toThrow(option);
+	});
+
+	it.each([
+		['messages.jsonl', true],
+		['messages.jsonl.2026-09-24T15-38-30-123Z-a1b2c3', true],
+		['messages.jsonl.bak', false],
+		['messages.jsonl.2026-09-24T15-38-30-123Z-a1b2c3.tmp', false],
+		['messages.jsonl2', false],
+		['other.jsonl', false],
+	])('knows %s as the log messages.jsonl or one of its rotations: %s', (name, known) => {
+		expect(isLogFile(name, 'messages.jsonl')).toBe(known);
 	});
 });

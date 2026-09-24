@@ -13,6 +13,7 @@ import type {
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import type { AuditEntry, AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
+import { callEnvelope } from './call-envelope.ts';
 import type { WorkspaceResource } from './resource.ts';
 
 type HarnessTool = AgentHarnessTool<ExecutionToolContext>;
@@ -46,14 +47,14 @@ function auditEntry(
 	ctx: ToolContext,
 	outcome: { result: unknown } | { error: unknown },
 ): AuditEntry {
+	const { agent, room = '', ...placed } = callEnvelope(ctx);
 	return {
 		time: new Date().toISOString(),
-		room: ctx.room ?? '',
-		agent: ctx.agent.name,
+		room,
+		agent,
 		tool,
 		callId: ctx.callId,
-		...(ctx.activation === undefined ? {} : { activation: ctx.activation }),
-		...(ctx.exchange === undefined ? {} : { exchange: ctx.exchange }),
+		...placed,
 		arguments: params,
 		...('result' in outcome
 			? { result: loggedToolResult(outcome.result) }

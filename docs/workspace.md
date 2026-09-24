@@ -147,9 +147,13 @@ await drive.use(host, (env) =>
 **A log names one absolute path, not a directory.** `path` must be
 absolute: a relative path would resolve against whichever agent's home
 connects first, splitting the log one way for that agent and another way
-for every other. A caller scopes two logs apart by giving them two paths; a
-room's full record, an audit trail, and a metrics feed each open one log at
-its own path, over one shared workspace, with no collision.
+for every other. `path` must also be normalized, with no trailing slash. A
+doubled slash, a `.` or `..` segment, or a trailing slash can name one file
+on one backend and a different file on another. `openLog` and the audit log
+refuse each of these at open. A caller scopes two logs apart by giving
+them two paths; a room's full record, an audit trail, and a metrics feed
+each open one log at its own path, over one shared workspace, with no
+collision.
 
 **A log carries no state of its own.** `openLog` does no I/O and holds no
 count: every fact rotation needs — whether the active file exists, and how
@@ -163,11 +167,13 @@ file past the threshold stays in the file it landed in, and the next record
 starts the fresh one. A log does not delete a rotated file; a host that
 wants retention lists the directory and prunes its own way.
 
-**`append` must run one call at a time over one log.** Concurrent calls
-racing the same rotation decision could both decide to rotate, or neither.
-A caller inside `resource.use()` gets serialization for free from the
-owner's queue (see [Open one resource](#open-one-resource)); a caller
-holding `env` directly serializes its own calls.
+**`append` must run one call at a time over one log.** Two calls that race
+over one rotation can both see the file past the threshold. Both try to
+rename it aside, and the second rename fails. That call reports a failure
+for a record that the file already holds, so a caller that retries writes a
+duplicate. A caller inside `resource.use()` gets serialization from the
+owner's queue (see [Open one resource](#open-one-resource)). A caller that
+holds `env` directly serializes its own calls.
 
 ## Record every tool call
 
@@ -190,7 +196,8 @@ const drive = openWorkspace({
 
 **The log is an ordinary file an agent reads.** The default path is the
 backend's `layout.audit`. Set `path` to open it somewhere else, and
-`maxBytes` to change the 5 MiB rotation threshold. An agent reads the log
+`maxBytes` to change the 5 MiB rotation threshold. `maxBytes` must be a
+positive, finite number. An agent reads the log
 with `read` or `bash cat`, the same as any file a peer wrote, and sees every
 call any agent in any room made, including its own past calls. `jq` filters
 one entry out of many, by `room`, `tool`, `agent`, or `activation`.
@@ -213,12 +220,14 @@ still leaves a trace of what that call was doing.
 
 **An entry too large for the backend to hold falls back to a short notice.**
 A `write` call whose content the filesystem has no room for still leaves one
-line naming the call and the failure, in place of the full entry.
+line naming the call and the failure, in place of the full entry. The
+fallback retries the write alone. A failure to create the log's directory
+goes to `onError` and never becomes this notice.
 
-**A write or rotation failure calls `onError`.** The tool call itself keeps
-its own result. The log is best-effort: a full disk delays the record. It
-does not delay the agent. A throwing `onError` callback is caught inside the
-log, so it never reaches the tool call's own outcome.
+**A directory, write, or rotation failure calls `onError`.** The tool call
+itself keeps its own result. The log is best-effort: a full disk delays the
+record. It does not delay the agent. A throwing `onError` callback is
+caught inside the log, so it never reaches the tool call's own outcome.
 
 **Only a call through `workspace.tools()` is recorded.** A direct
 `workspace.use` call reaches the backend with no entry. It is host code, and

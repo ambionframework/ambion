@@ -15,7 +15,14 @@
  */
 
 import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
-import { appendLine, checkedLogPath, rotateIfDue } from './log.ts';
+import {
+	appendOnly,
+	bestEffort,
+	checkedByteThreshold,
+	checkedLogPath,
+	ensureDir,
+	rotateIfDue,
+} from './log.ts';
 
 /** Where the log lives when the caller names no path. */
 export const DEFAULT_AUDIT_LOG = '/workspace/audit.jsonl';
@@ -55,7 +62,7 @@ export interface AuditLogOptions {
 	readonly path?: string;
 	/** Bytes the file may hold before the next entry rotates it. Default 5 MiB. */
 	readonly maxBytes?: number;
-	/** Told about a write or rotation failure. The call that triggered it still returns. */
+	/** Told about a directory, write, or rotation failure. The call that triggered it still returns. */
 	readonly onError?: (error: Error) => void;
 }
 
@@ -93,7 +100,9 @@ function line(entry: AuditEntry): string {
  * Append one line, falling back to a short notice when the filesystem
  * refuses the full entry (an oversized `write` call's content, past the
  * room left on a bounded backend), so the call still leaves a trace. Rotates
- * past `maxBytes` once whichever line landed.
+ * past `maxBytes` once whichever line landed. The fallback retries the write
+ * alone: a directory failure goes to `onError`, and it never reads as an
+ * entry that is too large.
  */
 async function recordEntry(
 	env: ExecutionEnv,
@@ -102,11 +111,12 @@ async function recordEntry(
 	entry: AuditEntry,
 	context: Context,
 ): Promise<void> {
+	await ensureDir(env, path, context);
 	try {
-		await appendLine(env, path, line(entry), context);
+		await appendOnly(env, path, line(entry), context);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		await appendLine(env, path, notice(entry, 'RecordTooLarge', message), context);
+		await appendOnly(env, path, notice(entry, 'RecordTooLarge', message), context);
 	}
 	await rotateIfDue(env, path, maxBytes, context);
 }
@@ -118,25 +128,10 @@ async function recordEntry(
  */
 export function openAuditLog(options: AuditLogOptions = {}): AuditLog {
 	const path = checkedLogPath(options.path ?? DEFAULT_AUDIT_LOG, 'An audit log path');
-	const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
-	const record = async (env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void> => {
-		try {
-			await recordEntry(env, path, maxBytes, entry, context);
-		} catch (error) {
-			reportError(options.onError, error);
-		}
-	};
+	const maxBytes = checkedByteThreshold(options.maxBytes ?? DEFAULT_MAX_BYTES, 'maxBytes');
+	const record = (env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void> =>
+		bestEffort(() => recordEntry(env, path, maxBytes, entry, context), options.onError);
 	return Object.freeze({ path, maxBytes, record });
-}
-
-/** Tell `onError`, if one was given. A throwing callback must not replace the tool's own outcome. */
-function reportError(onError: ((error: Error) => void) | undefined, error: unknown): void {
-	try {
-		onError?.(error instanceof Error ? error : new Error(String(error)));
-	} catch {
-		// Best-effort: the log already failed once for this call; a broken
-		// onError callback does not get a second chance to break the call itself.
-	}
 }
 
 /** `maxBytes` as whole mebibytes or kibibytes when it divides evenly, bytes otherwise. */

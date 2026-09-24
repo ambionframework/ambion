@@ -22,8 +22,9 @@ import {
 import { type Static, Type } from 'typebox';
 import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
+import { markdownTable } from './markdown-table.ts';
 import type { WorkspaceResource } from './resource.ts';
-import type { SqlEnv, SqlOutcome, SqlRow, SqlValue } from './sql-backend.ts';
+import type { SqlEnv, SqlOutcome } from './sql-backend.ts';
 import { csvHeader, csvRecord, NULL_SENTINEL } from './sql-result.ts';
 import { recordedOnShell } from './tools.ts';
 
@@ -140,23 +141,11 @@ function exported(database: string, outcome: Rows, exportPath: string): SqlResul
 /** Render the preview rows as a GitHub Markdown table, with a footer that counts every row. */
 function table(outcome: Rows): string {
 	const { columns, rows, rowCount } = outcome;
-	const header = `| ${columns.map(cell).join(' | ')} |`;
-	const rule = `| ${columns.map(() => '---').join(' | ')} |`;
-	const body = rows.map(
-		(row: SqlRow) => `| ${columns.map((name) => cell(row[name])).join(' | ')} |`,
-	);
 	const footer =
 		rowCount > rows.length
 			? `\n\nShows ${rows.length} of ${rowCount} rows. Add a LIMIT, or set export for the full result.`
 			: `\n\n${rowCount} ${plural(rowCount)}.`;
-	return `${[header, rule, ...body].join('\n')}${footer}`;
-}
-
-/** One table cell: NULL for a missing value, a byte count for a blob, and pipes and newlines made safe. */
-function cell(value: SqlValue | undefined): string {
-	if (value === null || value === undefined) return 'NULL';
-	if (value instanceof Uint8Array) return `(${value.length} bytes)`;
-	return String(value).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+	return `${markdownTable(columns, rows)}${footer}`;
 }
 
 function plural(count: number): string {
