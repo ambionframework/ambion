@@ -21,6 +21,7 @@ import {
 	saidBy,
 	saidByAgents,
 	spent,
+	trailOf,
 	untilQuiet,
 } from './support.ts';
 
@@ -79,7 +80,7 @@ live('the exchange', () => {
 			// The configured writer receives the closed exchange.
 			expect(saidByAgents(messages, [andrei.name]).length).toBeGreaterThanOrEqual(2);
 			const summaries = messages.filter(isSummary);
-			expect(summaries).toHaveLength(1);
+			expect(summaries, `assistant: ${trailOf(events, assistant.name)}`).toHaveLength(1);
 			const summary = summaries[0];
 			expect(summary).toMatchObject({ from: 'assistant', to: andrei.name });
 			expect(summary?.covers.from).toBe(question?.seq);
