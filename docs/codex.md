@@ -100,7 +100,7 @@ The executor passes each policy field to the Codex SDK unchanged.
 | `activationTokenLimit`  | The whole record   | The token limit for the record one activation reads          |
 | `estimateTokens`        | Length estimate    | How the agent counts tokens against its limit                |
 | `nativeTools`           | `'none'`           | `'none'` turns off every native tool; `'codex'` keeps them   |
-| `sandboxMode`           | Codex default      | `read-only`, `workspace-write`, or `danger-full-access`      |
+| `sandboxMode`           | No sandbox         | `read-only`, `workspace-write`, or `danger-full-access`      |
 | `approvalPolicy`        | Codex default      | `never`, `on-request`, `on-failure`, or `untrusted`          |
 | `modelReasoningEffort`  | Codex default      | `minimal` up to `ultra`, as the SDK lists them               |
 | `networkAccessEnabled`  | Codex default      | Whether a command may use the network                        |
@@ -113,6 +113,14 @@ The executor passes each policy field to the Codex SDK unchanged.
 temporary directory. It ignores those four options and
 `additionalDirectories`.
 They apply only with `nativeTools: 'codex'`.
+
+**`nativeTools: 'codex'` runs with no Codex sandbox by default.** The host
+isolates a seat, for example with the workstation's Unix account for each
+agent. An absent `sandboxMode` is `danger-full-access`, so Codex runs each
+command directly. On Linux the Codex sandbox runs each command through
+bubblewrap, which needs an unprivileged user namespace. A host that refuses
+one, such as the Ubuntu 24.04 runner of GitHub Actions, then runs no
+command. Set `sandboxMode` to use the Codex sandbox on a host that allows it.
 
 **`codexExecution(options)` takes the runtime of the executable.**
 

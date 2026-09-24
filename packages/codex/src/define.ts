@@ -10,7 +10,7 @@ import type { ApprovalMode, ModelReasoningEffort, SandboxMode } from '@openai/co
 
 /** What the harness may do. The executor passes each field to the Codex SDK unchanged. */
 export interface CodexPolicy {
-	/** What a command may touch. Absent uses the Codex default. */
+	/** What a command may touch. Absent, `danger-full-access`: Codex runs no sandbox of its own. */
 	readonly sandboxMode?: SandboxMode;
 	/** When Codex asks before it acts. A headless run cannot answer, so `never` is the usual choice. */
 	readonly approvalPolicy?: ApprovalMode;

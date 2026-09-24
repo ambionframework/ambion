@@ -65,7 +65,6 @@ export function seat(
 			model: MODEL,
 			modelReasoningEffort: 'medium',
 			approvalPolicy: 'never',
-			sandboxMode: 'read-only',
 			...rest,
 		}),
 	});

@@ -97,12 +97,21 @@ describe('native tools', () => {
 		expect(existsSync(config.model_catalog_json)).toBe(false);
 	});
 
-	it('leaves the client config alone with nativeTools codex', async () => {
-		const room = open([plain], seat({ nativeTools: 'codex', sandboxMode: 'workspace-write' }));
-		await run(room.activate());
-		expect(Object.keys(room.seen.clients[0]?.config ?? {})).toEqual(['mcp_servers']);
-		expect(room.seen.threads[0]?.sandboxMode).toBe('workspace-write');
-	});
+	it.each([
+		{ sandboxMode: undefined, expected: 'danger-full-access' },
+		{ sandboxMode: 'workspace-write', expected: 'workspace-write' },
+	] as const)(
+		'leaves the client config alone with nativeTools codex, and runs the sandbox $expected',
+		async ({ sandboxMode, expected }) => {
+			const room = open(
+				[plain],
+				seat({ nativeTools: 'codex', ...(sandboxMode && { sandboxMode }) }),
+			);
+			await run(room.activate());
+			expect(Object.keys(room.seen.clients[0]?.config ?? {})).toEqual(['mcp_servers']);
+			expect(room.seen.threads[0]?.sandboxMode).toBe(expected);
+		},
+	);
 
 	it('does not start a model that the catalog lacks, and fails as permanent', async () => {
 		const room = open([plain], seat({ model: 'gpt-unknown' }));
