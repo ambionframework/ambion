@@ -34,7 +34,8 @@ holds on main.
 is new. 0.1.0 makes a room a place that agents and people use when a
 person asks a question. 0.2.0 makes the kernel cheaper to change, and it
 gives each agent a workspace on a real server, where the operating system
-keeps one agent's files apart from another's. 0.3.0 makes a room useful
+keeps one agent's files apart from another's. It also gives a workspace a
+git backend: an agent forks a template, clones it, and pushes its work. 0.3.0 makes a room useful
 between questions ([backlog](backlog.md#030-the-room-works-between-questions)).
 
 ## The scope
@@ -50,13 +51,14 @@ changes of each one.
 | M1. Kernel decision layers                          | #286       | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts`                    |
 | M2. The rules sweep                                 | #291       | Every exported room rule but `exchangeOutcome` gates a write, and `draftsClose` counts a summary draft by the writer's seat in the fold and in the verdict |
 
-**Two themes stay open, each with the acceptance it must meet on the
+**Three themes stay open, each with the acceptance it must meet on the
 tagged commit.** The phases below deliver them; the items explain them.
 
 | Theme                     | Acceptance                                                                                                                                                                                                                         |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | M One owner per mechanism | Each duplication that items M3 to M6 name has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2. The journal package owns the one crash-safe append loop. Each doc fact has one home. |
 | R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release.                                                                                                                |
+| S Repositories for agents | An agent forks a read-only template, clones the fork into its home, and pushes. The push survives a restart. `gitBackend` passes `gitConformance` on the memory, directory, and workstation backends.                              |
 
 **The tag waits for the P0 and P1 steps.** A P2 step that is open when the
 last P1 step closes moves to the backlog. It does not hold the tag.
@@ -116,6 +118,9 @@ condition that brings each one back.
 - **Speech enters the record through `say` only**, on every executor.
 - **Two release channels.** CI publishes a dev build of `main` to GitHub
   Packages under `dev`. An official release goes to npmjs.
+- **The git backend gates the tag with one implementation.**
+  `gitBackend` carries S2. `artifactsBackend` is a P2 step, because
+  Cloudflare Artifacts is in closed beta and its tier needs an account.
 - **Two public names stay.** `RoomObject.exchange` saves the snapshot
   payload over the Durable Object RPC boundary. `speakOnce` is the minimal
   reference that a transport author needs. A removal of either adds rules
@@ -138,20 +143,22 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Two lanes run at once, and the release closes them.** A step names the
+**Three lanes run at once, and the release closes them.** A step names the
 steps it needs; a step with no "Needs" line starts now. **P0** blocks the
 tag. **P1** carries the release story. **P2** moves to the backlog when it
 is late.
 
-| Lane | Chain                                     | Priority   |
-| ---- | ----------------------------------------- | ---------- |
-| A    | Phase 1: the kernel                       | P0         |
-| B    | Phase 2: the packages                     | P0, P1, P2 |
-| —    | Phase 3: the release, after lanes A and B | P1         |
+| Lane | Chain                                         | Priority   |
+| ---- | --------------------------------------------- | ---------- |
+| A    | Phase 1: the kernel                           | P0         |
+| B    | Phase 2: the packages                         | P0, P1, P2 |
+| C    | Phase 3: the git backend                      | P1, P2     |
+| —    | Phase 4: the release, after lanes A, B, and C | P1         |
 
-**The two lanes edit different files.** Phase 1 edits the room files and
+**The lanes edit different files.** Phase 1 edits the room files and
 the docs. Phase 2 edits the journal, adapter, workspace log,
-and conformance files.
+and conformance files. Phase 3 edits the workspace's binding of tools
+after phase 2 step 2 lands, and it adds the package `packages/git`.
 
 ### Phase 1. Consolidate the kernel (P0)
 
@@ -178,13 +185,36 @@ code keep one copy of each mechanism.
 
 **Evidence:** `pnpm check`; `pnpm chaos` and the restart suite for step 1.
 
-### Phase 3. Release (P1)
+### Phase 3. The git backend (P1 and P2)
+
+**Goal:** an agent forks a template, clones the fork, and pushes, on every
+bash backend. [docs/git.md](../docs/git.md) holds the design.
+
+- [ ] **1.** The git contract in `packages/workspace`: the types, the
+      `repos` and `fork` tools, the guidance, the git owner, and
+      `gitConformance`. P1. Needs phase 2 step 2. (S2)
+- [ ] **2.** The just-bash wiring: `gitFor(agent, access)` and the one
+      sentence of the guidance. P1. Needs 1. (S2)
+- [ ] **3.** `gitBackend` in the new package `packages/git`, with the
+      scripted tier, the restart case, and the room test. P1. Needs 2.
+      (S2)
+- [ ] **4.** The workstation credential file, and the OpenSSH tier with a
+      real `git` against `gitBackend`. P1. Needs 3. (S2)
+- [ ] **5.** `artifactsBackend`, with its tier on request. P2. Needs 3.
+      (S2)
+
+**Evidence:** `pnpm check`; `gitConformance` on the memory, directory, and
+workstation backends; the restart case and the room test for step 3; the
+Artifacts tier for step 5.
+
+### Phase 4. Release (P1)
 
 **Goal:** the release repeats without the owner's machine.
 
 - [ ] **1.** The changelog entry for 0.2.0: the format changes, each
-      export that changed or went, and the workstation package. Needs
-      phase 1 and phase 2 steps 1 and 2. (R1)
+      export that changed or went, and the workstation and git packages.
+      Needs phase 1, phase 2 steps 1 and 2, and phase 3 steps 1 to 4.
+      (R1)
 - [ ] **2.** The dev build stamp derives its base from the last tag.
       (R1)
 - [ ] **3.** An npmjs release that a trusted CI workflow runs with
@@ -254,6 +284,28 @@ block, and `stale` constant (`conformance.ts:177`,
 
 The README keeps the headline of what is new. `technical-facts.md` keeps
 the list.
+
+### S. Workspace backends
+
+**S2. A git backend.** A task whose best start is a known file tree has no
+home today. The just-bash `git` has no network, so a remote is a path in a
+shared filesystem, and no template stays read-only. A workstation has no
+git server at all. An edit that the memory backend holds is lost on a
+restart.
+
+- Add `git` as a third backend kind, with the `repos` and `fork` tools and
+  a guidance note ([docs/git.md](../docs/git.md#the-contract)).
+- A credential grants one scope on one repository and expires. Only the
+  owner of a repository holds a write credential for it.
+- A template never changes after registration, and `fork` returns when
+  the fork can be cloned.
+- Ship `gitBackend` over the `just-git` server, with its storage in one
+  SQLite file. `artifactsBackend` over Cloudflare Artifacts meets the same
+  contract.
+
+An agent starts from a template with one tool call, and a push persists
+its work on every bash backend. The one contract lets a host move its
+repositories to Artifacts with no change to its agents.
 
 ### R. Release
 
