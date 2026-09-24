@@ -14,14 +14,17 @@ import {
 	person,
 	saidBy,
 	seat,
-	stepsOf,
 	untilQuiet,
 } from './support.ts';
 
 live('command and file change', () => {
 	it('shows both as tool steps, and cites the changed path in the next say', async () => {
 		const directory = realpathSync(mkdtempSync(join(tmpdir(), 'ambion-codex-live-')));
-		const { room, name, runtime, events } = await open('tools', {
+		const {
+			room,
+			steps: stepsOf,
+			events,
+		} = await open('tools', {
 			agents: [
 				seat('writer', {
 					instructions:
@@ -42,7 +45,7 @@ live('command and file change', () => {
 			await untilQuiet(room);
 
 			const [activation] = activationsOf(events, 'writer');
-			const steps = await stepsOf(name, activation ?? '', runtime);
+			const steps = stepsOf(activation ?? '');
 			const calls = steps.filter((step) => step.type === 'tool_call');
 			const names = calls.map((step) => step.name);
 			expect(names).toContain('file_change');

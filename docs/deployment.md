@@ -52,11 +52,13 @@ A host must:
 5. Recreate subscriptions, read durable messages, and reacquire exchange handles.
 6. Restore domain resources under their own persistence contracts.
 
-**Room history and Pi audits use separate journal names.** They can share
-one database. An `audit_error` reports exhausted transcript persistence without
-changing the execution outcome. In-process subscribers receive this event;
-Cloudflare reports it through `onSeatEvent`. Inspect audit storage when it occurs.
-Unconfirmed transcript data can be lost on process failure.
+**The trace goes to the host's logs.** Room history lives in the journal.
+Pass a `logger` to `createRuntime`, or to `configure` on Cloudflare, to
+receive the steps of each activation. A restart keeps no trace.
+
+**A harness session is not part of the recovery.** A restart loses a
+session that lived in the process, and the next activation reads the record
+again. See [Exchange continuity](executors.md#exchange-continuity).
 
 Workspace files and application data have separate lifecycles. The journal
 cannot recover JavaScript functions, credentials, or external data.

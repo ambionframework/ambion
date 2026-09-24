@@ -1,8 +1,8 @@
 /**
  * The storages every scenario runs on.
  *
- * Every storage gives room journals and Pi transcripts their own namespace.
- * Memory keeps both in process. SQLite keeps both in one database. A second
+ * Every storage gives room journals and traces their own namespace. Memory
+ * keeps both in process. SQLite keeps both in one database. A second
  * runtime reads either record.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -17,12 +17,10 @@ import {
 	type SqlValue,
 	sqliteJournals,
 } from '@ambionframework/journal';
-import { piSessions, type SessionOpener } from '@ambionframework/pi-journal';
 
 export interface OpenedStorage {
 	readonly storage: JournalOpener;
 	readonly journals: JournalOpener;
-	readonly transcripts: SessionOpener;
 	readonly dir?: string;
 	dispose(): Promise<void>;
 }
@@ -39,7 +37,6 @@ export const memory: Storage = {
 		return {
 			storage,
 			journals: namespaced(storage, 'ambion/room'),
-			transcripts: piSessions(storage),
 			dispose: async () => {},
 		};
 	},
@@ -68,7 +65,6 @@ export const sqlite: Storage = {
 		return {
 			storage,
 			journals: namespaced(storage, 'ambion/room'),
-			transcripts: piSessions(storage),
 			dir,
 			async dispose() {
 				database.close();
@@ -109,22 +105,16 @@ export type AppendHook = (
 /** When a write fails: before it lands, or after it landed and before the writer hears. */
 export type FailMode = false | 'before' | 'after';
 
-/** The room namespace is the only part of a raw storage that a room fault may break. */
-function roomId(name: string): string | undefined {
+/** The room of a journal name: the name inside the room namespace, or the raw name. */
+function roomId(name: string): string {
 	try {
 		const parsed: unknown = JSON.parse(name);
-		if (
-			Array.isArray(parsed) &&
-			parsed.length === 2 &&
-			parsed[0] === 'ambion/room' &&
-			typeof parsed[1] === 'string'
-		) {
+		if (Array.isArray(parsed) && parsed[0] === 'ambion/room' && typeof parsed[1] === 'string')
 			return parsed[1];
-		}
-		return undefined;
 	} catch {
-		return name;
+		// A raw name is the name of its room.
 	}
+	return name;
 }
 
 /** A journal opener whose appends report around their durable boundary. */
@@ -137,7 +127,6 @@ export function tappedJournals(journals: JournalOpener, hook: AppendHook): Journ
 			return {
 				read: storage.read.bind(storage),
 				async append(entry, expectedPosition) {
-					if (id === undefined) return storage.append(entry, expectedPosition);
 					const n = (counts.get(id) ?? 0) + 1;
 					counts.set(id, n);
 					const kind =
@@ -184,11 +173,9 @@ export function gatedJournals(
 	return {
 		async open(name) {
 			const storage = await journals.open(name);
-			const id = roomId(name);
 			return {
 				read: storage.read.bind(storage),
 				async append(entry, expectedPosition) {
-					if (id === undefined) return storage.append(entry, expectedPosition);
 					const kind =
 						typeof entry === 'object' && entry !== null && 'kind' in entry
 							? String((entry as { kind: unknown }).kind)

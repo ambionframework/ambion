@@ -1,6 +1,6 @@
 /**
  * The executor over a client that replays recorded events: the first
- * prompt, the memory modes, and the recipe that turns native tools off.
+ * prompt, exchange continuity, and the recipe that turns native tools off.
  */
 import { existsSync, readdirSync } from 'node:fs';
 import type { ExecutorSession, HarnessSession, PassInput } from '@ambionframework/ambion/hosting';
@@ -25,31 +25,23 @@ async function run(session: ExecutorSession, resume?: HarnessSession) {
 	return { result, session: session.session };
 }
 
-describe('memory activation', () => {
-	it('opens a fresh thread for each activation, records no session, and starts the first prompt with the harness note', async () => {
-		const room = open([plain, plain]);
+describe('exchange continuity', () => {
+	it('records the thread id, resumes only the thread the view names, and starts the first prompt with the harness note', async () => {
+		const room = open([plain, plain, plain]);
 		const first = await run(room.activate('a1'));
-		const second = await run(room.activate('a2'));
 		expect(first.result).toEqual({ failed: false });
-		expect(first.session).toBeUndefined();
-		expect(second.session).toBeUndefined();
-		expect(room.seen.opened).toEqual([{ resume: undefined }, { resume: undefined }]);
-		expect(room.seen.prompts).toHaveLength(2);
+		expect(first.session).toEqual({ harness: 'codex', id: ID });
+		await run(room.activate('a2'), first.session);
+		await run(room.activate('a3'));
+		expect(room.seen.opened).toEqual([
+			{ resume: undefined },
+			{ resume: ID },
+			{ resume: undefined },
+		]);
 		expect(room.seen.prompts[0]?.startsWith(HARNESS_NOTE)).toBe(true);
 		expect(room.seen.prompts[0]?.length).toBeGreaterThan(HARNESS_NOTE.length);
 		expect(HARNESS_NOTE).toContain('`say`');
 		expect(HARNESS_NOTE).toContain('reaches no one');
-	});
-});
-
-describe('memory seat', () => {
-	const definition = seat({ memory: 'seat' });
-
-	it('records the thread id of the first activation, and resumes that thread in the next', async () => {
-		const room = open([plain, plain], definition);
-		expect((await run(room.activate('a1'))).session).toEqual({ harness: 'codex', id: ID });
-		await run(room.activate('a2'));
-		expect(room.seen.opened).toEqual([{ resume: undefined }, { resume: ID }]);
 	});
 
 	it.each([
@@ -64,13 +56,13 @@ describe('memory seat', () => {
 			resume: undefined,
 		},
 	])('$what', async ({ harness, resume }) => {
-		const room = open([plain], definition);
+		const room = open([plain]);
 		await run(room.activate(), { harness, id: 'saved' });
 		expect(room.seen.opened).toEqual([{ resume }]);
 	});
 
 	it('starts a fresh thread when the resume fails before the thread starts', async () => {
-		const room = open([new Error('Codex Exec exited with code 1: no session'), plain], definition);
+		const room = open([new Error('Codex Exec exited with code 1: no session'), plain]);
 		const session = room.activate();
 		const result = await session.pass(input({ harness: 'codex', id: 'bogus' }));
 		session.close?.();
@@ -83,7 +75,7 @@ describe('memory seat', () => {
 	});
 
 	it('reports a failure of a fresh thread and does not try again', async () => {
-		const room = open([new Error('connection reset')], definition);
+		const room = open([new Error('connection reset')]);
 		const { result } = await run(room.activate());
 		expect(result).toMatchObject({ failed: true, cause: 'transient', message: 'connection reset' });
 		expect(room.seen.opened).toEqual([{ resume: undefined }]);

@@ -1,8 +1,9 @@
 /**
- * Memory modes on the real SDK. Under `seat` a second activation resumes the
- * SDK session and answers from what the first read. Under `activation` it
- * starts fresh. A resume the SDK cannot honor falls back to a fresh session
- * and the seat still speaks.
+ * Exchange continuity on the real SDK. Each activation records its session.
+ * The first activation in a new exchange starts fresh, so it reads the file
+ * again. A resume the SDK cannot honor falls back to a fresh session and the
+ * seat still speaks. The fake executable proves the resume inside one
+ * exchange (`../memory.test.ts`).
  */
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,7 +12,6 @@ import { expect, it } from 'vitest';
 import type { CommitRequest, RoomProtocol, TraceSink } from '../../../ambion/src/hosting.ts';
 import { isSpoken, type Step } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
-import { traceOf } from '../../../ambion/test/support/trace.ts';
 import { createClaudeExecutor } from '../../src/index.ts';
 import { viewOf } from '../support.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
@@ -24,7 +24,7 @@ async function directory(): Promise<string> {
 	return cwd;
 }
 
-const definition = (memory: 'activation' | 'seat', cwd: string) =>
+const definition = (cwd: string) =>
 	seat('keeper', 'Reads the code file when asked.', {
 		instructions: `
 			When somebody asks you to read code.txt, read it with the Read tool and
@@ -35,13 +35,12 @@ const definition = (memory: 'activation' | 'seat', cwd: string) =>
 		`,
 		allowedTools: ['Read'],
 		cwd,
-		memory,
 	});
 
 /** Two exchanges with one seat. Returns the steps of each activation and the said texts. */
-async function twoQuestions(memory: 'activation' | 'seat') {
+async function twoQuestions() {
 	const cwd = await directory();
-	const { session, runtime, name } = await open(`memory-${memory}`, [definition(memory, cwd)]);
+	const { session, steps: stepsOf } = await open('memory', [definition(cwd)]);
 	try {
 		const visit = await enter(session, person);
 		const ids: string[] = [];
@@ -62,8 +61,8 @@ async function twoQuestions(memory: 'activation' | 'seat') {
 			.map((m) => m.text);
 		const exchanges = (await session.read()).exchanges;
 		return {
-			firstSteps: await traceOf(runtime, name, first ?? ''),
-			secondSteps: await traceOf(runtime, name, second ?? ''),
+			firstSteps: stepsOf(first ?? ''),
+			secondSteps: stepsOf(second ?? ''),
 			said,
 			sessions: exchanges.flatMap((x) => x.activations.map((a) => a.session)),
 		};
@@ -77,20 +76,14 @@ const reads = (steps: Parameters<typeof stepsOfType>[0]) =>
 	stepsOfType(steps, 'tool_call').filter((s) => s.name === 'Read');
 
 live('memory', () => {
-	it("'seat' memory resumes the session, and the second activation answers from what it read", async () => {
-		const run = await twoQuestions('seat');
+	it('records a session for each activation, and starts fresh in a new exchange', async () => {
+		const run = await twoQuestions();
 		expect(reads(run.firstSteps).length).toBeGreaterThanOrEqual(1);
-		expect(reads(run.secondSteps)).toEqual([]);
-		expect(run.said.at(-1)).toContain(CODE);
-		expect(run.said[0] ?? '').not.toContain(CODE);
-		// Each activation recorded the SDK session it ended in.
-		expect(run.sessions.filter((s) => s?.harness === 'claude').length).toBeGreaterThanOrEqual(2);
-	});
-
-	it("'activation' memory starts each activation fresh, so the second reads the file again", async () => {
-		const run = await twoQuestions('activation');
 		expect(reads(run.secondSteps).length).toBeGreaterThanOrEqual(1);
-		expect(run.sessions.filter((s) => s !== undefined)).toEqual([]);
+		expect(run.said.at(-1)).toContain(CODE);
+		const ids = run.sessions.flatMap((s) => (s?.harness === 'claude' ? [s.id] : []));
+		expect(ids.length).toBeGreaterThanOrEqual(2);
+		expect(new Set(ids).size).toBe(ids.length);
 	});
 
 	it('a resume the SDK cannot honor falls back to a fresh session, and the seat still speaks', async () => {
@@ -125,7 +118,6 @@ live('memory', () => {
 		const executor = createClaudeExecutor({
 			definition: seat('sonnet', 'Answers what is asked.', {
 				instructions: 'Answer the question with one say, in one sentence. Guess if you must.',
-				memory: 'seat',
 			}),
 		});
 		const view = viewOf();

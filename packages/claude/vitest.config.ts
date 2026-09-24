@@ -23,7 +23,6 @@ export default defineConfig({
 			{ find: '@ambionframework/ambion/testing', replacement: source('../ambion/src/testing.ts') },
 			{ find: '@ambionframework/ambion/hosting', replacement: source('../ambion/src/hosting.ts') },
 			{ find: '@ambionframework/ambion', replacement: source('../ambion/src/index.ts') },
-			{ find: '@ambionframework/pi-journal', replacement: source('../pi-journal/src/index.ts') },
 			{ find: '@ambionframework/journal', replacement: source('../journal/src/index.ts') },
 			// The mixed-room test is the one place that reads Pi, as a test dependency.
 			{ find: '@ambionframework/pi', replacement: source('../pi/src/index.ts') },

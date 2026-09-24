@@ -149,6 +149,17 @@ describe('settled', () => {
 		expect(read.exchange).toBeUndefined();
 		expect(read.participants.every((p) => p.kind !== 'agent' || p.status === 'idle')).toBe(true);
 		expect(reads).toBeGreaterThan(0);
+		// A notification and the first read both find the room settled: it resolves once.
+		await expect(
+			settled({
+				name: room.name,
+				read: (options) => room.read(options),
+				subscribe: (listener) => {
+					listener();
+					return () => {};
+				},
+			}),
+		).resolves.toMatchObject({ exchange: undefined });
 	});
 
 	it('rejects with the seat named while a backoff runs, and resolves after the clock moves', async () => {

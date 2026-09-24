@@ -1,7 +1,8 @@
 /**
- * Memory modes. `activation` opens a session per activation. `seat` persists
- * one session, records its id on the release, and resumes it. The fake
- * executable reports a `session` and honors or refuses a `--resume`.
+ * Exchange continuity. Every query persists its session, and the release
+ * records its id. An activation resumes the session its view names, and
+ * starts fresh when the view names none. The fake executable reports a
+ * `session` and honors or refuses a `--resume`.
  */
 import type {
 	ActivationView,
@@ -9,11 +10,9 @@ import type {
 	HarnessSession,
 } from '@ambionframework/ambion/hosting';
 import { describe, expect, it } from 'vitest';
-import { claude } from '../src/index.ts';
-import { fakeRoom, seat, viewOf } from './support.ts';
+import { fakeRoom, viewOf } from './support.ts';
 
 const SAY = { turns: [[{ say: 'Saturday.' }]] };
-const seatMemory = seat({ memory: 'seat' });
 
 const resumeOf = (argv: string[] = []) =>
 	argv.find((arg) => arg.startsWith('--resume='))?.slice('--resume='.length);
@@ -34,28 +33,29 @@ const viewWith = (through: number, resume?: HarnessSession): ActivationView => {
 	return resume === undefined ? view : { ...view, spec: { ...view.spec, resume } };
 };
 
-describe('seat memory', () => {
-	it('persists the session, records its id, and resumes it in the next activation', async () => {
-		const room = fakeRoom({ ...SAY, session: 'sess-1' }, seatMemory);
+describe('exchange continuity', () => {
+	it('persists the session, records its id, and resumes only the session the view names', async () => {
+		const room = fakeRoom({ ...SAY, session: 'sess-1' });
 		const first = await run(room.activate('message:1:sonnet:1'), viewWith(1));
 		expect(first).toEqual({ harness: 'claude', id: 'sess-1' });
-		const second = await run(room.activate('message:2:sonnet:1'), viewWith(1));
+		const second = await run(room.activate('message:2:sonnet:1'), viewWith(1, first));
 		expect(second).toEqual(first);
-		const [one, two] = room.argvs();
-		expect(one).not.toContain('--no-session-persistence');
+		await run(room.activate('message:3:sonnet:1'), viewWith(1));
+		const [one, two, three] = room.argvs();
+		for (const argv of room.argvs()) expect(argv).not.toContain('--no-session-persistence');
 		expect(resumeOf(one)).toBeUndefined();
-		expect(two).not.toContain('--no-session-persistence');
 		expect(resumeOf(two)).toBe('sess-1');
+		expect(resumeOf(three)).toBeUndefined();
 	});
 
-	it('resumes the session the room recorded when the executor is fresh, and ignores one of another harness', async () => {
-		const room = fakeRoom(SAY, seatMemory);
+	it('ignores a session of another harness', async () => {
+		const room = fakeRoom(SAY);
 		const recorded = await run(
 			room.activate('message:3:sonnet:1'),
 			viewWith(1, { harness: 'claude', id: 'from-journal' }),
 		);
 		expect(recorded).toEqual({ harness: 'claude', id: 'from-journal' });
-		const other = fakeRoom(SAY, seatMemory);
+		const other = fakeRoom(SAY);
 		await run(other.activate('message:3:sonnet:1'), viewWith(1, { harness: 'pi', id: 'other' }));
 		expect(resumeOf(room.argvs()[0])).toBe('from-journal');
 		expect(resumeOf(other.argvs()[0])).toBeUndefined();
@@ -64,7 +64,7 @@ describe('seat memory', () => {
 	it.each(['rejectResume', 'rejectResumeResult'] as const)(
 		'starts a fresh session when the SDK cannot resume (%s), and records the new id',
 		async (refusal) => {
-			const room = fakeRoom({ ...SAY, [refusal]: true, session: 'fresh' }, seatMemory);
+			const room = fakeRoom({ ...SAY, [refusal]: true, session: 'fresh' });
 			const recorded = await run(
 				room.activate('message:3:sonnet:1'),
 				viewWith(1, { harness: 'claude', id: 'lost' }),
@@ -93,7 +93,7 @@ describe('seat memory', () => {
 			starts: 1,
 		},
 	])('$what', async ({ fail, rejectResumeResult, result, starts }) => {
-		const room = fakeRoom({ turns: [[{ fail }]], rejectResumeResult }, seatMemory);
+		const room = fakeRoom({ turns: [[{ fail }]], rejectResumeResult });
 		const activation = room.activate('message:3:sonnet:1');
 		const answer = await activation.pass({
 			kind: 'view',
@@ -105,7 +105,7 @@ describe('seat memory', () => {
 	});
 
 	it('refuses a say against a record that moved, as activation memory does', async () => {
-		const room = fakeRoom({ ...SAY, session: 'sess-1' }, seatMemory);
+		const room = fakeRoom({ ...SAY, session: 'sess-1' });
 		await run(room.activate('message:1:sonnet:1'), viewWith(1));
 		room.moveRecordTo(3);
 		await run(
@@ -114,21 +114,5 @@ describe('seat memory', () => {
 		);
 		expect(room.commits.at(-1)?.readThrough).toBe(2);
 		expect(room.answers.at(-1)).toBe('missed');
-	});
-});
-
-describe('activation memory', () => {
-	it('persists nothing, resumes nothing, and records no session', async () => {
-		const room = fakeRoom({ ...SAY, session: 'sess-1' });
-		expect(await run(room.activate('message:1:sonnet:1'), viewWith(1))).toBeUndefined();
-		expect(
-			await run(room.activate('message:2:sonnet:1'), viewWith(1, { harness: 'claude', id: 'x' })),
-		).toBeUndefined();
-		for (const argv of room.argvs()) {
-			expect(argv).toContain('--no-session-persistence');
-			expect(resumeOf(argv)).toBeUndefined();
-		}
-		expect(claude({ instructions: '', model: 'm' }).memory).toBeUndefined();
-		expect(claude({ instructions: '', model: 'm', memory: 'seat' }).memory).toBe('seat');
 	});
 });

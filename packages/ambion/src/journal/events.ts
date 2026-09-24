@@ -18,7 +18,7 @@ export type LeaseChange =
 			cause?: FailureCause;
 			/** What the activation spent, on an end its driver wrote. */
 			usage?: Usage;
-			/** The harness session the activation ended with, when the harness keeps memory. */
+			/** The harness session the activation ended with, when the harness reports one. */
 			session?: HarnessSession;
 	  };
 

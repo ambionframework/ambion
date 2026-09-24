@@ -45,8 +45,9 @@ export interface ActivationSpec {
 	readonly attempt: number;
 	readonly purpose: ActivationPurpose;
 	/**
-	 * The session the seat's latest ended activation recorded. A harness that
-	 * keeps memory across activations resumes from it. The room only carries it.
+	 * The session that the seat's latest ended activation in the same exchange
+	 * recorded. The harness resumes it, and starts fresh when it is absent.
+	 * The room only carries it.
 	 */
 	readonly resume?: HarnessSession;
 }

@@ -10,7 +10,7 @@ import { andrei, collect, roomName, scriptedAgent, storedOf, waitForRoom } from 
 import { quiet, scripted } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
-import { traceOf } from './support/trace.ts';
+import { collectSteps } from './support/trace.ts';
 
 const product = scriptedAgent('product', 'Answers questions.');
 
@@ -44,7 +44,8 @@ describe.each(storages)('usage on $name storage', (storage) => {
 	it('carries the activation total to the event, the release entry, and the closed exchange', async () => {
 		const opened = await storage.open();
 		onTestFinished(() => opened.dispose());
-		const runtime = createRuntime({ storage: opened.storage });
+		const log = collectSteps();
+		const runtime = createRuntime({ storage: opened.storage, logger: log.logger });
 		const name = roomName(`usage-${storage.name}`);
 		const room = stopAtEnd(
 			await startRoom({
@@ -62,9 +63,9 @@ describe.each(storages)('usage on $name storage', (storage) => {
 		const ends = events.filter(isEnd);
 		const worked = ends.find((event) => event.agent === 'product');
 		if (worked?.usage === undefined) throw new Error('Expected usage on activation_end.');
-		const steps = (await traceOf(runtime, name, worked.activation)).flatMap((step) =>
-			step.type === 'usage' ? [step] : [],
-		);
+		const steps = log
+			.of(worked.activation)
+			.flatMap((step) => (step.type === 'usage' ? [step] : []));
 		expect(steps.length).toBeGreaterThan(0);
 		expect(worked.usage).toEqual(sum(steps));
 		expect(worked.usage).toEqual({ input: 7, output: 3, cacheRead: 2, cacheWrite: 1, cost: 0.5 });

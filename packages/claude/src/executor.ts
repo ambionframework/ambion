@@ -16,10 +16,10 @@
  *   pass in flight waits for the record: the next delta carries it.
  * - **Cut.** `abort` interrupts the query. `close` ends the input and the
  *   process, and the driver calls it when the activation is over.
- * - **Memory.** With `memory: 'seat'` the query persists its session and
- *   the executor keeps the id the SDK reports. The next activation resumes
- *   it. After a restart the id comes from `spec.resume`, which the room
- *   read off the journal. A resume the SDK cannot honor starts a fresh
+ * - **Exchange continuity.** The query persists its session on the local
+ *   disk, and the release records the id the SDK reports. The activation
+ *   resumes the session that `spec.resume` names, which the room hands back
+ *   inside one exchange. A resume the SDK cannot honor starts a fresh
  *   session, and the release records the new id.
  */
 import type {
@@ -35,12 +35,7 @@ import type {
 	Seq,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
-import {
-	renderActivation,
-	renderDelta,
-	resumesForSeat,
-	sessionToResume,
-} from '@ambionframework/ambion/hosting';
+import { renderActivation, renderDelta, sessionToResume } from '@ambionframework/ambion/hosting';
 import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps, plainName } from './claude-trace.ts';
@@ -59,19 +54,11 @@ export interface ClaudeExecutorOptions extends ClaudeRuntime {
 	readonly query?: (params: { prompt: AsyncIterable<SDKUserMessage>; options?: Options }) => Query;
 }
 
-/** What a seat with memory keeps between activations: the session the SDK reported last. */
-interface SeatMemory {
-	id?: string;
-}
-
 /** The Claude executor. One instance per seat, for as long as the room runs. */
 export function createClaudeExecutor(options: ClaudeExecutorOptions): Executor {
-	const memory: SeatMemory | undefined = resumesForSeat(options.definition.executor)
-		? {}
-		: undefined;
 	return {
 		open(activation: ExecutorActivation): ExecutorSession {
-			return new Activation(activation, options, memory);
+			return new Activation(activation, options);
 		},
 	};
 }
@@ -105,8 +92,8 @@ class Activation implements ExecutorSession {
 	private held: Held[] = [];
 	/** The messages sent and not yet echoed. A restart of the query sends them again. */
 	private readonly outbox = new Map<string, SDKUserMessage>();
-	/** The seat's memory across activations. Absent when the seat keeps none. */
-	private readonly memory: SeatMemory | undefined;
+	/** The session the SDK reported last. */
+	private reported: string | undefined;
 	/** The session this activation asked the SDK to resume. */
 	private resuming: string | undefined;
 	/** Whether the query has sent any message. */
@@ -122,7 +109,7 @@ class Activation implements ExecutorSession {
 	private serial = 0;
 	private stopped = false;
 
-	constructor(activation: ExecutorActivation, options: ClaudeExecutorOptions, memory?: SeatMemory) {
+	constructor(activation: ExecutorActivation, options: ClaudeExecutorOptions) {
 		this.id = activation.id;
 		this.room = activation.room;
 		this.emit = activation.emit;
@@ -130,12 +117,11 @@ class Activation implements ExecutorSession {
 		this.definition = options.definition;
 		this.runtime = options;
 		this.open = options.query ?? query;
-		this.memory = memory;
 	}
 
-	/** The Claude session to record with the release. Absent until the SDK reports one, and when the seat keeps no memory. */
+	/** The Claude session to record with the release. Absent until the SDK reports one. */
 	get session(): HarnessSession | undefined {
-		const id = this.memory?.id;
+		const id = this.reported;
 		return id === undefined ? undefined : { harness: 'claude', id };
 	}
 
@@ -248,8 +234,7 @@ class Activation implements ExecutorSession {
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
 		const { mechanism, agent } = renderActivation(view, this.definition);
 		const executor = claudeOf(this.definition.executor);
-		this.resuming =
-			this.memory === undefined ? undefined : (this.memory.id ?? sessionToResume(view, 'claude'));
+		this.resuming = sessionToResume(view, 'claude');
 		this.begin = () => {
 			// Each query takes its own room server. A server serves one connection.
 			const { server, names } = roomServer(view, this.definition, this.binding(), () =>
@@ -280,7 +265,7 @@ class Activation implements ExecutorSession {
 	 */
 	private restart(begin: () => Query): void {
 		this.resuming = undefined;
-		if (this.memory !== undefined) this.memory.id = undefined;
+		this.reported = undefined;
 		this.inbox.end();
 		this.inbox = new Inbox();
 		for (const message of this.outbox.values()) this.inbox.push(message);
@@ -352,7 +337,7 @@ class Activation implements ExecutorSession {
 	private handle(message: SDKMessage): void {
 		this.heard = true;
 		const session = sessionOf(message);
-		if (session !== undefined && this.memory !== undefined) this.memory.id = session.id;
+		if (session !== undefined) this.reported = session.id;
 		for (const step of this.steps.steps(message)) {
 			this.trace.record(step);
 			if (step.type === 'tool_call') this.started(step.call, step.name);

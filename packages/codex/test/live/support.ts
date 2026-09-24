@@ -1,6 +1,7 @@
 /**
  * What every live file shares: the model, the key, a room on real storage in
- * memory, a deadline on the room going quiet, and the trace of an activation.
+ * memory, a deadline on the room going quiet, and the logged steps of an
+ * activation.
  *
  * A live file needs `CODEX_API_KEY`. Without it the file skips. Every seat
  * runs `gpt-5.6-luna` at medium reasoning effort, so a run is the same
@@ -18,9 +19,9 @@ import {
 	type Message,
 	type Room,
 	type RoomNotification,
-	readActivation,
 	type StartRoomOptions,
 	startRoom,
+	type TraceRecord,
 	type TraceStep,
 } from '@ambionframework/ambion';
 import { settled } from '@ambionframework/ambion/testing';
@@ -72,18 +73,23 @@ export function seat(
 
 type RoomOptions = Omit<StartRoomOptions, 'name' | 'runtime' | 'execution'>;
 
-/** A live room on fresh storage, with the events it emits. */
+/** A live room on fresh storage, with the events it emits and the steps it logs. */
 export async function open(prefix: string, options: RoomOptions & { execution?: Execution } = {}) {
 	const { execution, ...rest } = options;
+	const records: TraceRecord[] = [];
 	const runtime = createRuntime({
 		storage: memoryJournals(),
 		execution: execution ?? codexExecution(),
+		logger: (record) => void records.push(record),
 	});
 	const name = roomName(prefix);
 	const room = await startRoom({ ...rest, name, runtime });
 	const events: RoomNotification[] = [];
 	room.subscribe((event) => void events.push(event));
-	return { room, name, runtime, events };
+	/** Every step of every pass of one activation, as the logger received them. */
+	const steps = (activation: string): TraceStep[] =>
+		records.flatMap((record) => (record.step.activation === activation ? [record.step] : []));
+	return { room, name, runtime, events, steps };
 }
 
 /** A promise that fails after `ms`, naming what did not happen. */
@@ -114,16 +120,6 @@ export const activationsOf = (events: readonly RoomNotification[], agent: string
 	events.flatMap((event) =>
 		event.type === 'activation_start' && event.agent === agent ? [event.activation] : [],
 	);
-
-/** Every step of every pass of one activation. */
-export async function stepsOf(
-	name: string,
-	activation: string,
-	runtime: Awaited<ReturnType<typeof open>>['runtime'],
-): Promise<TraceStep[]> {
-	const read = await readActivation(name, activation, { runtime });
-	return read?.passes.flatMap((pass) => [...pass.steps]) ?? [];
-}
 
 /** The failures a room reported. A live claim holds only when the list is empty. */
 export const errorsIn = (events: readonly RoomNotification[]) =>

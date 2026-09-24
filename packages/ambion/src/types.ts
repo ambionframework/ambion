@@ -383,15 +383,6 @@ export type ExecutionEvent =
 			operation: 'wake' | 'steer' | 'cut' | 'view' | 'commit' | 'claim' | 'renew' | 'release';
 			error: Error;
 	  }
-	/** Transcript persistence failed independently of the execution outcome. */
-	| { type: 'audit_error'; agent: string; activation: string; error: Error }
-	/** The trace journal failed to take a step. The activation and its lease are unaffected. */
-	| { type: 'trace_error'; agent: string; activation: string; error: Error }
-	/**
-	 * One step of an activation, as the trace journal holds it. The steps of
-	 * one activation arrive in the order of `pass`, then `index`.
-	 */
-	| { type: 'step'; agent: string; activation: string; step: TraceStep }
 	/**
 	 * The room gave up: a permanent failure, or every attempt at a wake or a
 	 * draft came to nothing and the cap is reached. `activation` names the
@@ -402,11 +393,6 @@ export type ExecutionEvent =
 
 // -- steps --------------------------------------------------------------------
 
-/**
- * One thing an activation did, in a vocabulary every executor family shares.
- * The trace journal holds each step once, and the event stream carries the
- * same step live. A step is plain JSON.
- */
 /**
  * What an activation spent, or the sum of what activations spent. `cost` is
  * present when at least one contributing step carried it.
@@ -437,6 +423,10 @@ export function addUsage(total: Usage | undefined, step: Usage): Usage {
 	};
 }
 
+/**
+ * One thing an activation did, in a vocabulary every executor family shares.
+ * The trace gives each step to the host's logger once. A step is plain JSON.
+ */
 export type Step =
 	/** A pass begins. `view` reads the whole record; `delta` follows a record that moved. */
 	| { type: 'pass'; pass: number; input: 'view' | 'delta'; through: Seq }
@@ -465,7 +455,7 @@ export type Step =
 			failure?: { cause: FailureCause; message: string };
 	  };
 
-/** A step as the trace holds it: stamped with where and when it happened. */
+/** A step as the trace logs it: stamped with where and when it happened. */
 export type TraceStep = Step & {
 	readonly activation: string;
 	readonly pass: number;
@@ -474,6 +464,23 @@ export type TraceStep = Step & {
 	/** The place in the pass, from zero. One counter per pass. */
 	readonly index: number;
 };
+
+/** One step of one activation, as the trace gives it to the host's logger. */
+export interface TraceRecord {
+	/** The room the activation ran in. */
+	readonly room: string;
+	/** The seat that ran the activation. */
+	readonly seat: string;
+	/** The step, stamped with `activation`, `pass`, `index` and `at`. */
+	readonly step: TraceStep;
+}
+
+/**
+ * Where the steps of each activation go. The host passes one in. The trace
+ * calls it once for each step, in order, on the path of the activation, so
+ * it must not block. A logger that throws or rejects changes nothing.
+ */
+export type TraceLogger = (record: TraceRecord) => void;
 
 /** What the trace keeps of an agent's work. */
 export interface TracePolicy {

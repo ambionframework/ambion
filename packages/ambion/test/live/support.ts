@@ -77,7 +77,7 @@ export const person = defineHuman({
 
 type RoomOptions = Omit<StartRoomOptions, 'name' | 'stream' | 'runtime'>;
 
-/** A live room with explicit participants and fresh storage for its record and transcripts. */
+/** A live room with explicit participants and fresh storage for its record and traces. */
 export async function open(prefix: string, options: RoomOptions) {
 	const runtime = createRuntime({ storage: memoryJournals(), execution: executionFor() });
 	const session = await startRoom({

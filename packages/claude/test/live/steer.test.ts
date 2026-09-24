@@ -7,7 +7,6 @@ import { Type } from 'typebox';
 import { expect, it } from 'vitest';
 import { defineTool, isSpoken } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
-import { traceOf } from '../../../ambion/test/support/trace.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
 const HOLD_MS = 8_000;
@@ -33,7 +32,7 @@ live('steer', () => {
 			`,
 			tools: [hold],
 		});
-		const { session, runtime, name, events } = await open('steer', [clerk]);
+		const { session, events, steps: stepsOf } = await open('steer', [clerk]);
 		try {
 			const visit = await enter(session, person);
 			const started = new Promise<string>((resolve) => {
@@ -50,7 +49,7 @@ live('steer', () => {
 			const messages = await messagesOf(session);
 			const second = messages.filter(isSpoken).filter((m) => m.from === person.name)[1];
 			expect(second).toBeDefined();
-			const steps = await traceOf(runtime, name, activation);
+			const steps = stepsOf(activation);
 			expect(stepsOfType(steps, 'steer')).toContainEqual(
 				expect.objectContaining({ seq: second?.seq, consumed: true }),
 			);

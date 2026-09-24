@@ -1,11 +1,9 @@
 /** Public room facade that composes collaboration and execution services. */
 
-import { decodeActivationId } from './activation-id.ts';
 import { assertRoomName, captureAgent } from './define.ts';
 import { AmbionError } from './errors.ts';
 import { composeConnector } from './execution/connector.ts';
 import type { Executor } from './execution/executor.ts';
-import { readTrace } from './execution/trace.ts';
 import {
 	defaultConnectorOf,
 	defaultRuntime,
@@ -34,7 +32,6 @@ import type {
 	RoomRead,
 	SeatOptions,
 	Seq,
-	TraceStep,
 } from './types.ts';
 
 export type { ExchangeHandle, Room, RoomRead, Visit } from './room-host/room.ts';
@@ -217,51 +214,6 @@ export async function readExchange(
 		messages: discussionMessages(snapshot.messages, from, through),
 		watermark: snapshot.watermark,
 	};
-}
-
-/** One pass of an activation: what it read and the steps it took. */
-export interface ActivationPass {
-	readonly pass: number;
-	/** Whether the pass read the whole view or only what changed. */
-	readonly input: 'view' | 'delta';
-	/** The last seq the pass read. */
-	readonly through: Seq;
-	readonly steps: readonly TraceStep[];
-}
-
-/** What the trace journal holds of one activation. */
-export interface ActivationRead {
-	readonly activation: string;
-	readonly passes: readonly ActivationPass[];
-}
-
-/**
- * Read the trace of one activation without starting a room and without
- * waiting. A running activation returns the steps written so far. A
- * malformed id returns nothing. An activation without a trace returns no
- * passes.
- */
-export async function readActivation(
-	name: string,
-	activation: string,
-	options: { runtime?: Runtime } = {},
-): Promise<ActivationRead | undefined> {
-	assertRoomName(name);
-	if (decodeActivationId(activation) === undefined) return undefined;
-	const runtime = options.runtime ?? defaultRuntime();
-	const steps = await readTrace(hostingOf(runtime).traces, name, activation);
-	return { activation, passes: passesOf(steps) };
-}
-
-/** Group steps, already in pass and index order, into passes. A `pass` step opens each one. */
-function passesOf(steps: readonly TraceStep[]): ActivationPass[] {
-	const passes: { pass: number; input: 'view' | 'delta'; through: Seq; steps: TraceStep[] }[] = [];
-	for (const step of steps) {
-		if (step.type === 'pass')
-			passes.push({ pass: step.pass, input: step.input, through: step.through, steps: [] });
-		passes.at(-1)?.steps.push(step);
-	}
-	return passes;
 }
 
 function assertFree(runtime: Runtime, name: string): void {

@@ -89,10 +89,6 @@ describe.each(backends)('$name', (backend) => {
 });
 ```
 
-Pi transcript storage lives in
-[`@ambionframework/pi-journal`](https://github.com/ambionframework/ambion/tree/main/packages/pi-journal).
-It uses the same storage backends and keeps each session in a separate journal.
-
 See the [durability contract](https://github.com/ambionframework/ambion/blob/main/docs/durability.md)
 for failure guarantees. The journal stores ordered facts; applications own
 domain data, credentials, and external transactions.

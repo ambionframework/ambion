@@ -3,62 +3,31 @@
  *
  * The driver opens one sink for each activation. The driver and the executor
  * record raw steps into it. The sink applies the trace policy and the
- * runtime limits, stamps each step, writes it to the trace journal, and
- * emits it on the event stream. One counter per pass gives every step its
- * place, so the journal and the live stream hold the same steps in the same
- * order.
+ * runtime limits, stamps each step, and gives it to the logger that the host
+ * passes in. With no logger, the sink drops the steps. One counter per pass
+ * gives every step its place, so the logger receives the steps in order.
  *
- * The trace journal is a second journal beside the record. Its write is
- * best effort: a failed write surfaces as a `trace_error` event and never
- * changes the outcome of the activation or its lease. One journal holds one
- * activation, so each attempt has its own trace.
+ * The trace is not part of the record. A logger that throws or rejects does
+ * not change the outcome of the activation or its lease. The sink sums the
+ * usage steps in memory, so the release keeps the usage with or without a
+ * logger.
  */
-import { Journal, type JournalOpener, namespaced } from '@ambionframework/journal';
 import type { Limits } from '../host/runtime.ts';
 import {
 	addUsage,
-	type ExecutionEvent,
 	type Seq,
 	type Step,
+	type TraceLogger,
 	type TracePolicy,
 	type TraceStep,
 	type Usage,
 } from '../types.ts';
-
-/** The entry kinds of a trace journal. */
-type TraceKind = 'run' | 'step';
-
-interface TraceBodies {
-	run: { at: string };
-	step: TraceStep;
-}
 
 /** How many characters of a thinking block the `summary` policy keeps. */
 const THINKING_SUMMARY_CHARS = 280;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null;
-
-/** The trace journal reads a step by its stamps, and a run entry by its time. */
-const WORDS = {
-	run: 'run' as const,
-	accepts(kind: string, body: unknown): kind is TraceKind {
-		if (!isRecord(body)) return false;
-		if (kind === 'run') return typeof body.at === 'string';
-		return (
-			kind === 'step' &&
-			typeof body.type === 'string' &&
-			typeof body.activation === 'string' &&
-			Number.isSafeInteger(body.pass) &&
-			Number.isSafeInteger(body.index)
-		);
-	},
-};
-
-type TraceJournal = Journal<TraceKind, TraceBodies>;
-
-/** The name of the trace journal for one activation. */
-const nameOf = (room: string, activation: string): string => JSON.stringify([room, activation]);
 
 /** What the driver and the executor write to. One sink serves one activation. */
 export interface TraceSink {
@@ -72,10 +41,10 @@ export interface TraceSink {
 	record(step: Step): void;
 	/**
 	 * The sum of every `usage` step recorded so far, or nothing when none came.
-	 * The sum counts steps the pass cap dropped and writes the journal failed.
+	 * The sum counts steps the pass cap dropped, and steps with no logger.
 	 */
 	usage(): Usage | undefined;
-	/** Write the block in progress, wait for every write, and close the trace journal. */
+	/** Give the block in progress to the logger. */
 	close(): Promise<void>;
 }
 
@@ -86,20 +55,15 @@ export interface TraceOpener {
 
 export interface TraceOptions {
 	readonly room: string;
-	readonly agent: string;
-	readonly traces: JournalOpener;
+	readonly seat: string;
+	/** Where the steps go. Absent, the sink drops them. */
+	readonly logger?: TraceLogger;
 	readonly limits: Limits['trace'];
 	readonly policy: TracePolicy;
-	readonly emit: (event: ExecutionEvent) => void;
 	readonly now: () => number;
 }
 
-/** The trace journals over one storage: one journal for each activation. */
-export function traceJournals(storage: JournalOpener): JournalOpener {
-	return namespaced(storage, 'ambion/trace');
-}
-
-/** A sink for one activation. It opens the trace journal on the first write. */
+/** A sink for one activation. */
 export function openTrace(options: TraceOptions & { readonly activation: string }): TraceSink {
 	return new Trace(options);
 }
@@ -109,7 +73,7 @@ export function traceOpener(options: TraceOptions): TraceOpener {
 	return { open: (activation) => openTrace({ ...options, activation }) };
 }
 
-/** A step value as plain JSON, so it survives the wire and the journal. */
+/** A step value as plain JSON, so it survives the wire and the log. */
 function plain(value: unknown): unknown {
 	if (value === undefined) return null;
 	try {
@@ -142,8 +106,8 @@ function base64Bytes(base64: string): number {
  * unchanged, and so does every other content part.
  *
  * A tool result can carry an image inline as base64
- * (`ToolResult.content`, `types.ts`). Writing that image whole into the trace
- * or an audit log bloats the record for no reader: nothing here decodes an
+ * (`ToolResult.content`, `types.ts`). Writing that image whole into the log
+ * bloats every record for no reader: nothing here decodes an
  * image back into a picture. This keeps the shape and the size, and drops
  * the bytes.
  */
@@ -162,13 +126,10 @@ class Trace implements TraceSink {
 	private readonly options: TraceOptions & { readonly activation: string };
 	private pass = 0;
 	private index = 0;
-	/** The steps written in this pass, against `stepsPerPass`. */
+	/** The steps logged in this pass, against `stepsPerPass`. */
 	private written = 0;
 	private total: Usage | undefined;
 	private pending: { type: 'thinking' | 'text'; text: string } | undefined;
-	private journal: TraceJournal | undefined;
-	private fence: Promise<unknown> | undefined;
-	private tail: Promise<void> = Promise.resolve();
 
 	constructor(options: TraceOptions & { readonly activation: string }) {
 		this.options = options;
@@ -188,6 +149,7 @@ class Trace implements TraceSink {
 
 	record(step: Step): void {
 		if (step.type === 'usage') this.total = addUsage(this.total, step);
+		if (this.options.logger === undefined) return;
 		if (step.type === 'thinking' || step.type === 'text') {
 			this.block(step);
 			return;
@@ -198,8 +160,6 @@ class Trace implements TraceSink {
 
 	async close(): Promise<void> {
 		this.flush();
-		await this.tail;
-		this.journal?.close();
 	}
 
 	/** Join a delta to the block in progress. A `final` step ends the block. */
@@ -210,7 +170,7 @@ class Trace implements TraceSink {
 		if (step.final) this.flush();
 	}
 
-	/** Write the block in progress as one final step. */
+	/** Log the block in progress as one final step. */
 	private flush(): void {
 		const block = this.pending;
 		this.pending = undefined;
@@ -237,86 +197,25 @@ class Trace implements TraceSink {
 		}
 	}
 
-	/** Stamp a step, emit it, and queue its write. A pass past its cap drops all but `end`. */
+	/** Stamp a step and log it. A pass past its cap drops all but `end`. */
 	private stamp(step: Step): void {
-		if (this.written >= this.options.limits.stepsPerPass && step.type !== 'end') return;
+		const { logger, limits, room, seat, activation } = this.options;
+		if (logger === undefined) return;
+		if (this.written >= limits.stepsPerPass && step.type !== 'end') return;
 		const traced: TraceStep = {
 			...step,
-			activation: this.options.activation,
+			activation,
 			pass: this.pass,
 			at: new Date(this.options.now()).toISOString(),
 			index: this.index,
 		};
 		this.index += 1;
 		this.written += 1;
-		this.emit({
-			type: 'step',
-			agent: this.options.agent,
-			activation: this.options.activation,
-			step: traced,
-		});
-		this.tail = this.tail.then(() => this.append(traced)).catch((error) => this.fail(error));
-	}
-
-	private open(): TraceJournal {
-		if (this.journal === undefined) {
-			const { traces, room, activation } = this.options;
-			this.journal = new Journal<TraceKind, TraceBodies>(
-				traces.open(nameOf(room, activation)),
-				WORDS,
-				undefined,
-				crypto.randomUUID(),
-			);
-		}
-		return this.journal;
-	}
-
-	/** One step into the journal, once: the key names the pass and the place. */
-	private async append(step: TraceStep): Promise<void> {
-		const journal = this.open();
-		this.fence ??= journal.append('run', {
-			decide: () => ({ body: { at: new Date(this.options.now()).toISOString() } }),
-		});
 		try {
-			await this.fence;
-		} catch (error) {
-			this.fence = undefined;
-			throw error;
-		}
-		await journal.append('step', {
-			key: `${step.pass}:${step.index}`,
-			decide: () => ({ body: step }),
-		});
-	}
-
-	private fail(error: unknown): void {
-		this.emit({
-			type: 'trace_error',
-			agent: this.options.agent,
-			activation: this.options.activation,
-			error: error instanceof Error ? error : new Error(String(error)),
-		});
-	}
-
-	/** A diagnostic listener cannot strand a write. */
-	private emit(event: ExecutionEvent): void {
-		try {
-			this.options.emit(event);
+			const result: unknown = logger({ room, seat, step: traced });
+			if (result instanceof Promise) result.catch(() => {});
 		} catch {
 			// The trace never fails an activation.
 		}
 	}
-}
-
-/** The steps of one activation, in the order of pass and then index. */
-export async function readTrace(
-	traces: JournalOpener,
-	room: string,
-	activation: string,
-): Promise<TraceStep[]> {
-	const journal = new Journal<TraceKind, TraceBodies>(traces.open(nameOf(room, activation)), WORDS);
-	await journal.ready;
-	return journal.entries
-		.flatMap((entry) => (entry.kind === 'step' ? [entry.body] : []))
-		.sort((a, b) => a.pass - b.pass || a.index - b.index);
 }

@@ -77,7 +77,7 @@ export interface QueryInput {
 	readonly names: readonly string[];
 	readonly canUseTool: CanUseTool;
 	readonly runtime: ClaudeRuntime;
-	/** The session to resume. Read only when the executor keeps `seat` memory. */
+	/** The session to resume, when the room named one in `spec.resume`. */
 	readonly resume?: string;
 }
 
@@ -93,8 +93,7 @@ export function queryOptions(input: QueryInput): Options {
 	// The approver answers for the room tools. A mode that never asks needs them listed.
 	const listed = executor.permissionMode === 'dontAsk' ? input.names : [];
 	const allowed = [...listed, ...(executor.allowedTools ?? [])];
-	const seat = executor.memory === 'seat';
-	const resume = seat ? input.resume : undefined;
+	const { resume } = input;
 	return {
 		model: executor.model,
 		systemPrompt: input.systemPrompt,
@@ -102,8 +101,8 @@ export function queryOptions(input: QueryInput): Options {
 		// The echo of each user message is what advances `readThrough`.
 		extraArgs: { 'replay-user-messages': null },
 		includePartialMessages: true,
-		// `activation` memory keeps no session. `seat` memory persists one and resumes it by id.
-		persistSession: seat,
+		// The session persists on the local disk, so the next activation of the exchange resumes it by id.
+		persistSession: true,
 		mcpServers: { [ROOM_SERVER]: input.server },
 		strictMcpConfig: true,
 		tools: builtinNames(executor.allowedTools ?? []),

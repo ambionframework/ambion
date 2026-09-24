@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import { core, hosting, journal, piJournal } from './vitest.config.ts';
+import { core, hosting, journal } from './vitest.config.ts';
 
 /**
  * The live tier: the same room, on a real model, with a real key. Each file
@@ -19,7 +19,6 @@ export default defineConfig({
 		alias: [
 			{ find: '@ambionframework/ambion/hosting', replacement: hosting },
 			{ find: '@ambionframework/ambion', replacement: core },
-			{ find: '@ambionframework/pi-journal', replacement: piJournal },
 			{ find: '@ambionframework/journal', replacement: journal },
 		],
 	},

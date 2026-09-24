@@ -1,9 +1,7 @@
 import { defineAgent } from '@ambionframework/ambion';
-import { memoryJournals } from '@ambionframework/journal';
 import { pi } from '@ambionframework/pi';
-import { piSessions } from '@ambionframework/pi-journal';
 import { describe, expect, it } from 'vitest';
-import { configure, definitionOf, executionFor, runtimeFor } from '../src/configure.ts';
+import { configure, definitionOf, executionFor, traceLogger } from '../src/configure.ts';
 import { scripted } from './scripted.ts';
 
 const agent = (name: string) =>
@@ -30,17 +28,13 @@ describe('configure', () => {
 		expect(() => configure({ agents: [first, second] })).toThrow(/repeat agent 'duplicate'/);
 	});
 
-	it('composes the configured stream and transcripts over supplied storage', async () => {
+	it('composes the configured stream and logger', () => {
 		const stream = scripted;
-		configure({ agents: [agent('execution')], stream });
-		const storage = memoryJournals();
-		const services = executionFor({ storage });
-		const id = 'configured-execution';
-		const transcript = await services.transcripts.open(id, 'room');
-		const runtimeTranscript = await piSessions(runtimeFor({ storage }).storage).open(id);
-
-		expect(services.stream).toBe(stream);
-		expect(await transcript.getMetadata()).toMatchObject({ id, parentSessionId: 'room' });
-		expect(await runtimeTranscript.getMetadata()).toMatchObject({ id, parentSessionId: 'room' });
+		const logger = () => {};
+		configure({ agents: [agent('execution')], stream, logger });
+		expect(executionFor({}).stream).toBe(stream);
+		expect(traceLogger()).toBe(logger);
+		configure({ agents: [agent('execution')] });
+		expect(traceLogger()).toBeUndefined();
 	});
 });

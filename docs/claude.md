@@ -2,8 +2,8 @@
 
 `@ambionframework/claude` runs Ambion agents on the Claude Agent SDK. This
 page holds what is specific to the Claude adapter. [Executors](executors.md)
-holds the shared contract: the activation flow, the room tools, seat
-memory, failure classification, the step vocabulary, and the trace. [The
+holds the shared contract: the activation flow, the room tools, exchange
+continuity, failure classification, the step vocabulary, and the trace. [The
 Pi guide](pi.md) covers a second shipped family, and [the
 Codex guide](codex.md) a third. [The
 README](../README.md) holds the positioning.
@@ -22,8 +22,8 @@ Use the Claude executor when the agent needs:
   `Bash`, under a policy that the definition states.
 - **The agent loop of Claude Code**, with its own context handling, on a
   Claude model.
-- **A session that survives between activations.** `memory: 'seat'` resumes
-  one SDK session for the seat.
+- **A session that survives between the activations of one exchange.** The
+  seat resumes its SDK session when the room wakes it again.
 - **Steering during a pass.** A line that lands mid-activation joins the
   streaming input.
 
@@ -79,7 +79,6 @@ const reviewer = defineAgent({
     permissionMode: 'default',
     maxBudgetUsd: 1,
     cwd: '/work/plans',
-    memory: 'seat',
   }),
 });
 
@@ -129,7 +128,6 @@ unchanged.
 | `speaking`              | No       | `DEFAULT_GUIDANCE`                | The speaking policy. It replaces the default.                                    |
 | `activationTokenLimit`  | No       | The whole record                  | The token limit of the record one activation reads. A positive integer.          |
 | `estimateTokens`        | No       | `Math.ceil(text.length / 4)`      | Counts tokens against the limit. It needs `activationTokenLimit`.                |
-| `memory`                | No       | `'activation'`                    | `'activation'` or `'seat'`. See [Memory modes](#memory-modes).                   |
 | `permissionMode`        | No       | The SDK default, `default`        | The SDK permission mode. The executor passes it unchanged.                       |
 | `allowedTools`          | No       | None                              | Tools that run with no request. It also names the built-in tools the model sees. |
 | `disallowedTools`       | No       | None                              | Tools the model never sees.                                                      |
@@ -146,7 +144,7 @@ unchanged.
 | `pathToClaudeCodeExecutable` | The executable of the SDK           | The Claude Code executable to spawn.                                                            |
 | `env`                        | The environment of the host process | The environment of the executable. A value **replaces** the environment. See the trust section. |
 
-The runtime supplies the clock, the storage, the call limits, and the
+The runtime supplies the clock, the call limits, the logger, and the
 transport. The Claude execution does not read `limits.trace` from the host.
 It applies the default trace limits, 65,536 bytes of tool output and 1,000
 steps for each pass. `createClaudeExecutor` builds one executor for a seat,
@@ -275,15 +273,16 @@ needs it. The tests check `acceptEdits` only.
 **`maxBudgetUsd` caps one activation.** The SDK enforces it for the query.
 A spent budget is a permanent failure.
 
-## Memory modes
+## Exchange continuity
 
-[Executors](executors.md#seat-memory) states the two modes, the recorded
-session, and the resume rule.
+[Executors](executors.md#exchange-continuity) states the rule, the recorded
+session, and the fresh start.
 
-**`memory: 'seat'` resumes one session for the seat.** The query persists
-its session. The executor keeps the id that the SDK reports in a `system`
-message or a `result`. The next activation passes it as `resume`, with
-`forkSession` off.
+**Every query persists its session on the local disk.** The release records
+the id that the SDK reports in a `system` message or a `result`. An
+activation whose `spec.resume` names a Claude session passes it as
+`resume`, with `forkSession` off. The SDK writes one session file for each
+activation to its store, and the executor removes none.
 
 **The first pass of a resumed activation sends the whole view.** The Claude
 executor sends no delta on resume. The resumed session holds the earlier
@@ -372,13 +371,9 @@ import { describe, it } from 'vitest';
 // The path of a fake Claude Code executable that the caller supplies.
 const executable = fileURLToPath(new URL('./fake/claude-executable.mjs', import.meta.url));
 
-for (const memory of ['activation', 'seat'] as const) {
-  describe(`claude executor with ${memory} memory`, () => {
-    for (const c of executorConformance(claudeExecutorHarness({ executable, memory }))) {
-      it(c.name, c.run);
-    }
-  });
-}
+describe('claude executor', () => {
+  for (const c of executorConformance(claudeExecutorHarness({ executable }))) it(c.name, c.run);
+});
 ```
 
 **The fake ships in the repository only.** The package publishes `dist`,
@@ -390,7 +385,7 @@ Claude seat on a fake.
 
 **What the fake proves.** It proves the arguments the SDK passes to the
 executable, and the initialize request. It proves the echo and steer path,
-seat memory and the resume fallback, the approval steps, the step mapping, the
+exchange continuity and the resume fallback, the approval steps, the step mapping, the
 usage arithmetic, and the failure classes.
 
 **What it cannot prove.** The fake does not enforce anything. It cannot show

@@ -61,12 +61,12 @@ tagged commit.** The phases below deliver them; the items explain them.
 **The tag waits for the P0 and P1 steps.** A P2 step that is open when the
 last P1 step closes moves to the backlog. It does not hold the tag.
 
-**One format change.** The release changes one stored format. The
-changelog names it.
+**Format changes.** The changelog names each change to a stored format.
 
-| Change                                             | Item | Kind                        |
-| -------------------------------------------------- | ---- | --------------------------- |
-| One idempotency key in the pi-journal session file | M3   | A stored field that retires |
+| Change                                                    | Item | Kind                        |
+| --------------------------------------------------------- | ---- | --------------------------- |
+| `pi-journal` and the Pi transcript audit are gone         | —    | A stored namespace retires  |
+| The `session` on an ended lease names an exchange session | —    | A stored field that changes |
 
 **Deployment models.** The same rules serve four placements.
 
@@ -150,7 +150,7 @@ is late.
 | —    | Phase 3: the release, after lanes A and B | P1         |
 
 **The two lanes edit different files.** Phase 1 edits the room files and
-the docs. Phase 2 edits the journal, pi-journal, adapter, workspace log,
+the docs. Phase 2 edits the journal, adapter, workspace log,
 and conformance files.
 
 ### Phase 1. Consolidate the kernel (P0)
@@ -166,11 +166,10 @@ page only.
 
 ### Phase 2. Package hygiene (P0, P1, and P2)
 
-**Goal:** the journal, pi-journal, adapter, workspace, and conformance
+**Goal:** the journal, adapter, workspace, and conformance
 code keep one copy of each mechanism.
 
-- [ ] **1.** One crash-safe append loop in `packages/journal`, and one
-      idempotency key in pi-journal. P0. (M3)
+- [ ] **1.** One crash-safe append loop in `packages/journal`. P0. (M3)
 - [ ] **2.** The workspace logs: carry PR #171 onto main and land it,
       then one record path, one file match, one table, and one call
       envelope. P1. (M4)
@@ -183,7 +182,7 @@ code keep one copy of each mechanism.
 
 **Goal:** the release repeats without the owner's machine.
 
-- [ ] **1.** The changelog entry for 0.2.0: the M3 format change, each
+- [ ] **1.** The changelog entry for 0.2.0: the format changes, each
       export that changed or went, and the workstation package. Needs
       phase 1 and phase 2 steps 1 and 2. (R1)
 - [ ] **2.** The dev build stamp derives its base from the last tag.
@@ -201,22 +200,19 @@ line references are from `main` at `d86e803`.
 
 ### M. One owner per mechanism
 
-**M3. One crash-safe append loop.** The `Journal` class,
-`JournalAuditSession` (`pi-journal/src/index.ts`), and `MetadataJournal`
-(`cloudflare/src/storage.ts`) each write a serial queue, a cursor replay,
-and an in-doubt recovery by hand.
+**M3. One crash-safe append loop.** The `Journal` class and
+`MetadataJournal` (`cloudflare/src/storage.ts`) each write a serial queue,
+a cursor replay, and an in-doubt recovery by hand. The third copy went with
+`pi-journal`.
 
 - Extract one append primitive in `packages/journal` with an `apply` and a
-  `recover` callback. Rebuild the two other classes on it, and keep every
+  `recover` callback. Rebuild `MetadataJournal` on it, and keep every
   stored record byte-identical.
-- Delete `entryMutations` and `usedIds` (`pi-journal/src/index.ts:58`),
-  which hold a dead index and a copy of `entriesById`.
 - Replace `positionRead` (`journal/src/storage.ts:52`) with the verified
   `scanned` rule at its two callers.
-- Retire the random mutation `id` (`pi-journal/src/index.ts:226`) and the
-  `mutations` map. The caller's `source.id` answers the in-doubt question.
-  Keep `sameEntry`, which refuses a colliding id with other content. Take
-  the same decision for `MetadataJournal`.
+- Retire the random mutation `id` and the `mutations` map of
+  `MetadataJournal`. The caller's `source.id` answers the in-doubt
+  question.
 - Make `envelope` (`journal/src/journal.ts:198`) throw for a known kind
   with a malformed seq. A skip hides corruption.
 
@@ -226,8 +222,9 @@ entry. The fix is not on main. PR #171 branches from a history that main
 no longer shares, so its one commit goes onto main as a new change. Land
 it before the rest, because the rest edits the same code.
 
-- One best-effort record path and one `reportError` in `log.ts`, for
-  `audit.ts:133` and `mirror.ts:136`.
+- One best-effort record path and one `reportError` in
+  `workspace/src/log.ts`, for the workspace audit log (`audit.ts:133`) and
+  `mirror.ts:136`.
 - One rotated-file match beside `rotatedName` (`log.ts:45`), for
   `isLogFile` (`mirror.ts:100`).
 - One import-free Markdown table module for `sql-tool.ts:160` and
@@ -241,8 +238,7 @@ block, and `stale` constant (`conformance.ts:177`,
 `conformance-executor-room.ts:88`).
 
 - The shared question, participants block, and `stale` constant move to
-  `conformance-support.ts`. `until` accepts an async predicate, and
-  `traceWhenEnded` uses it.
+  `conformance-support.ts`. `until` accepts an async predicate.
 
 **M6. Each doc fact has one home.** The positioning rule in
 [CLAUDE.md](../CLAUDE.md) states that every page states a fact once.

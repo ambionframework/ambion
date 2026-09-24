@@ -25,12 +25,6 @@ export interface CodexOptions extends AgentExecutorBaseOptions, CodexPolicy {
 	/** A Codex model identifier. */
 	model: string;
 	/**
-	 * What the agent remembers between activations. `activation` opens a
-	 * Codex thread per activation. `seat` resumes one thread per seat and
-	 * records its id with each release. Absent means `activation`.
-	 */
-	memory?: 'activation' | 'seat';
-	/**
 	 * The native tools of Codex. `none`, the default, turns off every one: the
 	 * seat reaches the world only through the room tools and `tools`. The
 	 * executor then sets the sandbox, the approval policy, the network, and
@@ -46,7 +40,6 @@ export interface CodexOptions extends AgentExecutorBaseOptions, CodexPolicy {
 export interface CodexExecutor extends AgentExecutor, CodexPolicy {
 	readonly kind: 'codex';
 	readonly model: string;
-	readonly memory?: 'activation' | 'seat';
 	readonly nativeTools?: 'none' | 'codex';
 }
 
@@ -73,7 +66,6 @@ export function codex(options: CodexOptions): CodexExecutor {
 		...policyOf(options),
 		kind: 'codex' as const,
 		model: options.model,
-		...(options.memory === undefined ? {} : { memory: options.memory }),
 		nativeTools: options.nativeTools ?? 'none',
 	});
 }

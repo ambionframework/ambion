@@ -6,9 +6,9 @@
  */
 
 import { runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
+import type { TraceRecord } from '@ambionframework/ambion';
 import type { LeaseResponse, RoomProtocol, Steer } from '@ambionframework/ambion/hosting';
 import { namespaced } from '@ambionframework/journal';
-import { piSessions } from '@ambionframework/pi-journal';
 import { expect, it, onTestFinished } from 'vitest';
 import { configure, type SeatEvent } from '../src/configure.ts';
 import { seatMetadata, sqlStorage } from '../src/storage.ts';
@@ -38,6 +38,9 @@ async function asked(name: string) {
 }
 
 it('wakes, runs the activation on its alarm, and the room sends an untaken wake again', async () => {
+	const records: TraceRecord[] = [];
+	configure({ ...configuration, logger: (record) => void records.push(record) });
+	onTestFinished(() => configure(configuration));
 	const { room, seat } = await asked('seat-test');
 
 	// the seat's alarm runs the activation: a lease claimed, a say, the lease renewed at the
@@ -63,15 +66,13 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	);
 	expect(leases.map((lease) => lease?.phase)).toEqual(['running', 'running', 'ended']);
 	expect(leases.at(-1)).toMatchObject({ id: 'message:4:product:1', reason: 'released' });
-	// the seat's audit session holds the activation's turns, in the seat's own storage
-	const audited = await runInDurableObject(seat, async (_instance, state) => {
-		const piSession = await piSessions(sqlStorage(state)).open(
-			JSON.stringify(['ambion/seat-session', 'seat-test', 'product']),
-		);
-		return (await piSession.findEntries({ order: 'oldestFirst' })).map((entry) => entry.type);
-	});
-	expect(audited[0]).toBe('custom');
-	expect(audited.filter((type) => type === 'message').length).toBeGreaterThanOrEqual(3);
+	// the seat gives the activation's steps to the configured logger
+	const traced = records.filter(
+		(record) => record.room === 'seat-test' && record.step.activation === 'message:4:product:1',
+	);
+	expect(traced.length).toBeGreaterThanOrEqual(3);
+	expect(traced.every((record) => record.seat === 'product')).toBe(true);
+	expect(traced.some((record) => record.step.type === 'end')).toBe(true);
 
 	// a seat on hold keeps the next wake and runs nothing: the room's alarm sends it again
 	await seat.hold(true);

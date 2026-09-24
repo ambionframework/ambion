@@ -1,7 +1,6 @@
-import { piSessions } from '@ambionframework/pi-journal';
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { piExecution, seatSessionId } from '../../pi/src/index.ts';
+import { piExecution } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/host/runtime.ts';
 import { inProcessTransport } from '../src/hosting.ts';
 import {
@@ -244,10 +243,9 @@ describe('startRoom', () => {
 		await orderedVisit.send({ text: 'say hi' });
 		await waitForRoom(ordered);
 		// one event per message on the record, whoever wrote it, and the exchange
-		// that message opened around it. The `step` events have their own tests
-		// in trace.test.ts. One answer needs no summary, so the room goes quiet
-		// in the same tick the exchange closes.
-		expect(events.filter((e) => e.type !== 'step').map((e) => e.type)).toEqual([
+		// that message opened around it. One answer needs no summary, so the
+		// room goes quiet in the same tick the exchange closes.
+		expect(events.map((e) => e.type)).toEqual([
 			'message',
 			'exchange_opened',
 			'activation_start',
@@ -369,34 +367,6 @@ describe('startRoom', () => {
 		expect(spoken(await messagesOf(session))).toHaveLength(2);
 		const end = events.find((e) => e.type === 'activation_end' && e.agent === 'second');
 		expect(end).toMatchObject({ spoke: false });
-	});
-
-	it("keeps each seat's turns in a Pi session with a stable id, parented to the room", async () => {
-		const runtime = createRuntime({ storage: (await memory.open()).storage });
-		const name = roomName('downstream');
-		const session = await open(
-			'downstream',
-			{ solo: 'broadcast' },
-			(_context, _agent, call) => (call === 1 ? speak('hi') : quiet()),
-			{ name, runtime },
-		);
-		await (await enter(session)).send({ text: 'say hi' });
-		await waitForRoom(session);
-		await session.stop();
-
-		const id = seatSessionId(name, 'solo');
-		expect(id).toBe(JSON.stringify(['ambion/seat-session', name, 'solo']));
-		const piSeat = await piSessions(runtime.storage).open(id);
-		expect(await piSeat.getMetadata()).toMatchObject({ id, parentSessionId: name });
-		const entries = await piSeat.findEntries();
-		// an activation boundary plus the run's turns: context, say call, tool result, close
-		expect(entries.some((e) => e.type === 'custom' && e.customType === 'ambion/activation')).toBe(
-			true,
-		);
-		const turns = entries.filter((e) => e.type === 'message');
-		expect(turns.length).toBeGreaterThanOrEqual(3);
-		expect(JSON.stringify(turns)).toContain('"say"');
-		expect(JSON.stringify(turns)).toContain('hi');
 	});
 
 	it('refuses a delivery to the assistant, lands a repeated key once, and leaves no mark of a decline', async () => {

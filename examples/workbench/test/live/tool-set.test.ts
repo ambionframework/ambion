@@ -19,8 +19,8 @@ import {
 	type Message,
 	type Room,
 	type RoomNotification,
-	readActivation,
 	startRoom,
+	type TraceRecord,
 } from '@ambionframework/ambion';
 import { composeExecutions } from '@ambionframework/ambion/hosting';
 import { settled } from '@ambionframework/ambion/testing';
@@ -97,8 +97,10 @@ async function openRoom(seats: readonly string[]) {
 		writable: labWritable,
 	});
 	const built = team(workspace, lab, openInstrument({ lab, instruments }));
+	const records: TraceRecord[] = [];
 	const runtime = createRuntime({
 		storage: memoryJournals(),
+		logger: (record) => void records.push(record),
 		execution: composeExecutions({
 			pi: piExecution({}),
 			claude: claudeExecution({}),
@@ -121,7 +123,7 @@ async function openRoom(seats: readonly string[]) {
 		await lab.dispose().catch(() => undefined);
 		await rm(directory, { recursive: true, force: true });
 	};
-	return { room, name, runtime, events, close };
+	return { room, name, runtime, events, records, close };
 }
 
 async function untilQuiet(room: Room): Promise<void> {
@@ -146,20 +148,11 @@ async function ask(room: Room, seat: string, text: string): Promise<string> {
 		.join('\n');
 }
 
-/** The names of the tools that one seat called, from the trace of its activations. */
-async function calledBy(
-	opened: Awaited<ReturnType<typeof openRoom>>,
-	seat: string,
-): Promise<string[]> {
-	const activations = opened.events.flatMap((event) =>
-		event.type === 'activation_start' && event.agent === seat ? [event.activation] : [],
+/** The names of the tools that one seat called, from the steps the logger received. */
+function calledBy(opened: Awaited<ReturnType<typeof openRoom>>, seat: string): string[] {
+	return opened.records.flatMap(({ seat: by, step }) =>
+		by === seat && step.type === 'tool_call' ? [bare(step.name)] : [],
 	);
-	const reads = await Promise.all(
-		activations.map((id) => readActivation(opened.name, id, { runtime: opened.runtime })),
-	);
-	return reads
-		.flatMap((read) => read?.passes.flatMap((pass) => [...pass.steps]) ?? [])
-		.flatMap((step) => (step.type === 'tool_call' ? [bare(step.name)] : []));
 }
 
 const namesIn = (text: string): string[] =>
@@ -227,7 +220,7 @@ describe.skipIf(available.length === 0)('Workbench tool set on every family', ()
 					seat,
 					'Read the file /etc/hosts and say its first line. If you cannot, say so.',
 				);
-				const called = (await calledBy(opened, seat)).filter((tool) => !HELPERS.includes(tool));
+				const called = calledBy(opened, seat).filter((tool) => !HELPERS.includes(tool));
 				for (const tool of HOST_READERS) expect(called, seat).not.toContain(tool);
 			}
 			const errors = opened.events.filter(

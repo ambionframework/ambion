@@ -134,8 +134,10 @@ the record, so a restart keeps them.
 - **Cost.** A discussion shows what its exchange spent: dollars when the
   provider reports a cost, else a token count.
 - **Steps.** `/steps` or `s` on a chosen discussion shows the passes and steps
-  of the newest activation of an exchange. A running activation shows the
-  steps written so far and reads again on each change.
+  of the newest activation of an exchange. The host keeps the steps that its
+  logger receives, in memory, for the latest 200 activations. A running
+  activation shows the steps so far and reads again on each step. A restart
+  loses the steps.
 - **Awaiting.** An exchange that ends on a message to a person shows
   `Waiting on <person>`. That person also sees a note and a status line.
 - **Approval.** An operation above an instrument limit shows to the owner of

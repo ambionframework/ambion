@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import type { Close } from '../src/journal/events.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { validateRoomBody } from '../src/journal/validate.ts';
-import { summaryCompletion } from '../src/room/exchange.ts';
+import { exchangeSession, summaryCompletion } from '../src/room/exchange.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import { projectState, replay } from '../src/room/projection.ts';
@@ -407,5 +407,48 @@ describe('cancellation fold', () => {
 				close: { ...closeBody(3, 3, 'writer'), at: cancelledAt },
 			}),
 		).toThrow();
+	});
+});
+
+describe('exchange session', () => {
+	/** An ended lease that recorded session `id`, and ended at `until`. */
+	const ended = (lease: string, id: string, until: number): LeaseHold => ({
+		id: lease,
+		phase: 'ended',
+		at,
+		claimedAt: at,
+		since: until - 1,
+		readThrough: until - 1,
+		reason: 'released',
+		until,
+		session: { harness: 'pi', id },
+	});
+	const closes: Close[] = [{ owner: 'priya', from: 4, through: 9, at, summary: 'writer' }];
+	const open = { owner: 'priya', from: 12, at };
+	const leases = new Map(
+		[
+			ended('message:4:worker:1', 'first', 6),
+			ended('message:7:worker:1', 'second', 8),
+			ended('message:7:writer:1', 'writer', 8),
+			ended('message:12:worker:1', 'open', 14),
+			ended('message:10:worker:1', 'between', 11),
+		].map((lease) => [lease.id, lease]),
+	);
+
+	it.each([
+		['the latest session of the seat in the same closed exchange', 'message:8:worker:2', 'second'],
+		['the session of the exchange a closing activation summarizes', 'closed:9:worker:1', 'second'],
+		['the own session of a seat beside another seat', 'message:8:writer:2', 'writer'],
+		['the session of the open exchange', 'message:15:worker:1', 'open'],
+		[
+			'nothing for the first activation of a seat in a new exchange',
+			'message:16:checker:1',
+			undefined,
+		],
+		['nothing for a message outside every exchange', 'message:10:worker:2', undefined],
+		['nothing for a malformed id', 'message:x', undefined],
+	])('answers %s', (_, id, expected) => {
+		const session = exchangeSession(id, closes, open, leases);
+		expect(session?.id).toBe(expected);
 	});
 });

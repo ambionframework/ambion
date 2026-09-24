@@ -14,8 +14,8 @@ kernel for agents and humans.
   under a policy that the definition states.
 - **The Claude Code loop.** The executable owns the loop, and the executor
   feeds it.
-- **A session that survives between activations.** `memory: 'seat'` resumes
-  one SDK session for the seat.
+- **A session that survives between the activations of one exchange.** The
+  seat resumes its SDK session when the room wakes it again.
 
 The executor spawns a process, so the host needs to run one. The Cloudflare
 adapter builds its seats on Pi. Use
@@ -65,7 +65,6 @@ const reviewer = defineAgent({
     permissionMode: 'default',
     maxBudgetUsd: 1,
     cwd: '/work/plans',
-    memory: 'seat',
   }),
 });
 
@@ -111,7 +110,6 @@ family package is loaded.
 | `speaking`              | `DEFAULT_GUIDANCE`                | The speaking policy. It replaces the default.                |
 | `activationTokenLimit`  | The whole record                  | The token limit of the record one activation reads.          |
 | `estimateTokens`        | `Math.ceil(text.length / 4)`      | Counts tokens against the limit. It needs the limit.         |
-| `memory`                | `'activation'`                    | `'activation'` or `'seat'`.                                  |
 | `permissionMode`        | The SDK default, `default`        | The SDK permission mode.                                     |
 | `allowedTools`          | None                              | Tools that run with no request. It names the built-in tools. |
 | `disallowedTools`       | None                              | Tools the model never sees.                                  |
@@ -161,14 +159,14 @@ becomes an `approval` step with the answer. The executor denies a request when
 **`env` replaces the environment.** The value is not merged with
 `process.env`. Pass `PATH`, `HOME`, and the key that the executable needs.
 
-## Memory
+## Exchange continuity
 
-**`memory: 'activation'` opens one SDK session for each activation** and
-persists nothing. **`memory: 'seat'` persists the session and resumes it in the
-next activation.** The release records `{ harness: 'claude', id }`, and the
-room hands the id back after a restart. A host that loses the SDK session
-store starts a fresh session, and the next release records the new id. Each
-resumed activation sends the whole view in its first pass.
+**Every query persists its SDK session on the local disk.** The release
+records `{ harness: 'claude', id }`. The next activation of the seat in the
+same exchange resumes that session, and the first activation in a new
+exchange starts a fresh one. A host that loses the SDK session store starts
+a fresh session, and the next release records the new id. Each resumed
+activation sends the whole view in its first pass.
 
 ## Steps, usage, and failures
 
@@ -198,13 +196,9 @@ import { describe, it } from 'vitest';
 // The path of a fake Claude Code executable that the caller supplies.
 const executable = fileURLToPath(new URL('./fake/claude-executable.mjs', import.meta.url));
 
-for (const memory of ['activation', 'seat'] as const) {
-  describe(`claude executor with ${memory} memory`, () => {
-    for (const c of executorConformance(claudeExecutorHarness({ executable, memory }))) {
-      it(c.name, c.run);
-    }
-  });
-}
+describe('claude executor', () => {
+  for (const c of executorConformance(claudeExecutorHarness({ executable }))) it(c.name, c.run);
+});
 ```
 
 The published package holds no fake. The repository keeps one at

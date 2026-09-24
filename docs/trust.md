@@ -45,7 +45,7 @@ does not restrict who may address or steer whom.
 | ------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | Prompt injection               | The `text` of a message is data that a model may act on. The room screens emptiness and size only. | [Definitions and tools](agent.md)                      |
 | Tool and provider side effects | The room does not run an effect once. A call can repeat after a timeout or a cancel.               | [Durability](durability.md) section 5                  |
-| Secrets in transcripts         | The record keeps every token. The trace holds tool output. The byte cap limits size only.          | [Durability](durability.md), [Executors](executors.md) |
+| Secrets in transcripts         | The record keeps every token. The logger receives tool output. The byte cap limits size only.      | [Durability](durability.md), [Executors](executors.md) |
 | A shell on a workstation       | An agent runs a real shell with network access. The account permissions on the server contain it.  | [Workstation](workstation.md#trust)                    |
 
 ## What each harness exposes
@@ -80,14 +80,16 @@ contract that all three meet.
 
 ## Harness memory
 
-**A seat with `memory: 'seat'` holds state the record does not show.** It
-resumes one harness session across activations. With `memory: 'activation'`
-the harness opens a fresh session each time. The default is `activation`.
+**A seat holds state the record does not show, for one exchange.** It
+resumes its harness session across the activations of an exchange, so a
+tool result it read in one activation shapes the next. The first activation
+of a seat in each exchange starts fresh. No session crosses an exchange.
+[Exchange continuity](executors.md#exchange-continuity) states the rule.
 
-**Freshness governs speech in both modes.** The room never reads the
-option. The driver records the resumed session on the `ended` lease entry,
-and the exchange view lists it as `ExchangeActivation.session`.
-[Durability](durability.md) owns the entry format.
+**Freshness governs speech in a kept session.** The driver records the
+session on the `ended` lease entry, and the exchange view lists it as
+`ExchangeActivation.session`. [Durability](durability.md) owns the entry
+format.
 
 Evidence: [`pi/test/memory.test.ts`](../packages/pi/test/memory.test.ts),
 [`claude/test/memory.test.ts`](../packages/claude/test/memory.test.ts), and

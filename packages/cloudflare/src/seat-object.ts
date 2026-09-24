@@ -4,18 +4,21 @@
  * to its end and releases the lease, all inside one alarm handler. A wake
  * that arrives while an activation runs is handed to the runner to queue;
  * steering is forwarded separately to the exact live activation. A cut is
- * handed to the runner the same way. The seat's audit transcript lives in the
- * object's own SQLite.
+ * handed to the runner the same way. The seat gives the steps of each
+ * activation to the logger that `configure` takes. The Pi executor lives on
+ * the object instance, so a seat keeps its transcript inside one exchange
+ * while the object stays in memory. An eviction loses it, and the next
+ * activation starts fresh.
  */
 
 import { DurableObject } from 'cloudflare:workers';
 import type { Clock, ExecutionEvent } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
-import type { RoomProtocol, Steer, Wake } from '@ambionframework/ambion/hosting';
+import type { Executor, RoomProtocol, Steer, Wake } from '@ambionframework/ambion/hosting';
 import { AgentRunner, seatContext } from '@ambionframework/ambion/hosting';
 import { createPiExecutor, type ExecutionServices } from '@ambionframework/pi';
 import type { SeatEvent } from './configure.ts';
-import { definitionOf, executionFor, seatEvent } from './configure.ts';
+import { definitionOf, executionFor, seatEvent, traceLogger } from './configure.ts';
 import type { Env } from './room-object.ts';
 import { seatMetadata, sqlStorage } from './storage.ts';
 
@@ -47,6 +50,8 @@ function seatLine(room: string, seat: string, event: ExecutionEvent): SeatEvent 
 
 export class SeatObject extends DurableObject<Env> {
 	private runner: AgentRunner | undefined;
+	/** The Pi executor of the seat, kept while the object stays in memory. */
+	private executor: { readonly seat: string; readonly executor: Executor } | undefined;
 	/** Whether an alarm runs in this object now. */
 	private alarming = false;
 	private readonly metadata;
@@ -142,10 +147,7 @@ export class SeatObject extends DurableObject<Env> {
 		const { activation, room, seat } = state;
 		if (activation === undefined || room === undefined || seat === undefined) return;
 		const protocol = this.roomFor(room);
-		const execution = executionFor({
-			storage: this.storage,
-			clock: systemClock(),
-		});
+		const execution = executionFor({ clock: systemClock() });
 		if (state.phase === 'running') {
 			// A run that never came back: the object was evicted mid-activation.
 			try {
@@ -164,18 +166,8 @@ export class SeatObject extends DurableObject<Env> {
 		}
 		await this.metadata.change(() => ({ patch: { phase: 'running' } }));
 		const definition = definitionOf(seat);
-		const executor = createPiExecutor({
-			definition,
-			model: execution.model,
-			stream: execution.stream,
-			transcripts: execution.transcripts,
-			room,
-			now: () => execution.clock.now(),
-		});
-		// The trace journal holds each step. The log line stays for the coarse events.
-		const emit = (event: ExecutionEvent) => {
-			if (event.type !== 'step') seatEvent(seatLine(room, seat, event));
-		};
+		const executor = this.executorFor(seat, definition, execution);
+		const emit = (event: ExecutionEvent) => seatEvent(seatLine(room, seat, event));
 		this.runner = new AgentRunner(
 			protocol,
 			seatContext({
@@ -186,7 +178,7 @@ export class SeatObject extends DurableObject<Env> {
 				seat,
 				executor,
 				emit,
-				traces: execution.traces,
+				logger: traceLogger(),
 				limits: execution.trace,
 			}),
 		);
@@ -196,6 +188,23 @@ export class SeatObject extends DurableObject<Env> {
 			this.runner = undefined;
 			await this.clear(activation);
 		}
+	}
+
+	/** The seat's Pi executor: the one this object holds, or a new one. */
+	private executorFor(
+		seat: string,
+		definition: ReturnType<typeof definitionOf>,
+		execution: ExecutionServices,
+	): Executor {
+		if (this.executor?.seat === seat) return this.executor.executor;
+		const executor = createPiExecutor({
+			definition,
+			model: execution.model,
+			stream: execution.stream,
+			now: () => execution.clock.now(),
+		});
+		this.executor = { seat, executor };
+		return executor;
 	}
 
 	/** Release a recovered activation within the configured call budget. */

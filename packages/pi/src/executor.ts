@@ -26,18 +26,20 @@
  * the turns inside it. An activation is wider than both: it is one or more
  * runs, because a message landing mid-activation starts another run over the
  * record as it now stands. The word for what a room does to a seat is
- * `activation` ([`agent.md`](../../../docs/agent.md), Execution boundary), and the record
- * has called it that all along: every one lands in the seat's downstream
- * session as an `ambion/activation` entry.
+ * `activation` ([`agent.md`](../../../docs/agent.md), Execution boundary), and the
+ * lease entries and the trace of each one carry that word.
  *
- * **Memory.** With `memory: 'seat'` the executor keeps the transcript of the
- * last activation that did not fail. The next activation builds its agent
- * over that transcript and prompts with what the record holds beyond the
- * position the transcript read through. The kept transcript lives in this
- * process; a restart begins a fresh transcript that appends to the same
- * seat session. Freshness still governs speech: `readThrough` starts at the
- * position the kept transcript read, and a say against newer record is
- * refused.
+ * **Exchange continuity.** The executor keeps a transcript through its last
+ * pass that did not fail, under the id of the activation that began it. An
+ * activation continues a kept transcript only when the room names its id in
+ * `spec.resume`, which it does inside one exchange. It then builds its agent
+ * over the transcript and prompts with what the record holds beyond the
+ * position the transcript read through. Any other activation begins a fresh
+ * transcript. The seat keeps the two latest transcripts: the open exchange
+ * may run beside the summary of the exchange before it. The kept transcripts
+ * live in this process, so a restart begins a fresh one. Freshness still governs
+ * speech: `readThrough` starts at the position the kept transcript read, and
+ * a say against newer record is refused.
  */
 import type {
 	ActivationView,
@@ -59,9 +61,8 @@ import {
 	classifyCause,
 	renderActivation,
 	renderDelta,
-	resumesForSeat,
+	sessionToResume,
 } from '@ambionframework/ambion/hosting';
-import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/pi-journal';
 import type {
 	AgentEvent,
 	AgentMessage,
@@ -69,10 +70,9 @@ import type {
 	StreamFn,
 } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
-import { asError, persistTurns } from './audit.ts';
 import { PiContext } from './context.ts';
 import { PiSteps } from './pi-trace.ts';
-import { type ModelResolver, seatSessionId } from './services.ts';
+import type { ModelResolver } from './services.ts';
 import { binding, toolsFor } from './tools.ts';
 
 /** What builds a Pi executor for one seat: its definition, and the room's model services. */
@@ -80,50 +80,35 @@ export interface PiExecutorOptions {
 	readonly definition: AgentDefinition;
 	readonly model: ModelResolver;
 	readonly stream: StreamFn;
-	readonly transcripts: SessionOpener;
-	readonly room: string;
 	/** The room's clock. Pi stamps every message it is handed with it. */
 	readonly now: () => number;
 }
 
-/** What a seat with memory keeps between activations. */
+/** What a seat keeps between the activations of one exchange. */
 interface SeatMemory {
+	/** The id of the activation that began the transcript. The release records it. */
+	id: string;
 	/** The transcript of the last activation that did not fail. */
 	messages: AgentMessage[];
 	/** The position the transcript read through. */
 	through: Seq;
-	/** How many messages of the transcript the audit holds. */
-	audited: number;
 }
 
-/** The holder of a seat's memory, present only when the executor asks for `seat` memory. */
-interface MemoryHolder {
-	kept?: SeatMemory;
-}
+/**
+ * The transcripts a seat keeps, by id, oldest first. Two cover the open
+ * exchange and the summary of the exchange before it.
+ */
+type MemoryHolder = Map<string, SeatMemory>;
+
+/** How many transcripts a seat keeps. */
+const KEPT = 2;
 
 /** The Pi executor. One instance per seat, for as long as the room runs. */
 export function createPiExecutor(options: PiExecutorOptions): Executor {
-	const memory: MemoryHolder | undefined = resumesForSeat(options.definition.executor)
-		? {}
-		: undefined;
-	let audit: Promise<PiSession> | undefined;
-	const openAudit = (): Promise<PiSession> => {
-		if (audit !== undefined) return audit;
-		const id = seatSessionId(options.room, options.definition.name);
-		const opening = options.transcripts.open(id, options.room);
-		const retained: Promise<PiSession> = opening.then(
-			(session) => session,
-			(error: unknown) => {
-				if (audit === retained) audit = undefined;
-				throw error;
-			},
-		);
-		audit = retained;
-		return retained;
-	};
+	const memory: MemoryHolder = new Map();
 	return {
 		open(activation: ExecutorActivation): ExecutorSession {
-			return new Activation(activation, options, openAudit, memory);
+			return new Activation(activation, options, memory);
 		},
 	};
 }
@@ -137,10 +122,10 @@ export class Activation implements ExecutorSession {
 	private readonly model: ModelResolver;
 	private readonly stream: StreamFn;
 	private readonly now: () => number;
-	private readonly openAudit: () => Promise<PiSession>;
-	private readonly seatSession: string;
-	/** The seat's memory across activations. Absent when the seat keeps none. */
-	private readonly memory: MemoryHolder | undefined;
+	/** The seat's memory across the activations of one exchange. */
+	private readonly memory: MemoryHolder;
+	/** The id of the transcript this activation continues or begins. Set on the first pass. */
+	private transcript: string | undefined;
 	/** The sink for the steps this executor owns. The driver closes it. */
 	private readonly trace: TraceSink;
 	private readonly steps = new PiSteps();
@@ -153,15 +138,12 @@ export class Activation implements ExecutorSession {
 	private agent: PiAgent | undefined;
 	/** The view of the running pass. The tools read the room and exchange from it. */
 	private view: ActivationView | undefined;
-	/** How many messages of the agent's transcript the audit holds. */
-	private audited = 0;
 	private stopped = false;
 
 	constructor(
 		activation: ExecutorActivation,
 		options: PiExecutorOptions,
-		openAudit: () => Promise<PiSession>,
-		memory?: MemoryHolder,
+		memory: MemoryHolder = new Map(),
 	) {
 		this.id = activation.id;
 		this.room = activation.room;
@@ -171,19 +153,22 @@ export class Activation implements ExecutorSession {
 		this.model = options.model;
 		this.stream = options.stream;
 		this.now = options.now;
-		this.openAudit = openAudit;
-		this.seatSession = seatSessionId(options.room, options.definition.name);
 		this.memory = memory;
-		const kept = memory?.kept;
-		if (kept !== undefined) {
-			this.context.acknowledgeThrough(kept.through);
-			this.audited = kept.audited;
-		}
 	}
 
-	/** The seat session to record with the release. Absent when the seat keeps no memory. */
+	/**
+	 * The transcript to record with the release: the one this activation
+	 * continued or began, when the seat keeps it. Absent when the activation
+	 * ran no pass, or a fresh transcript failed before the seat kept it.
+	 */
 	get session(): HarnessSession | undefined {
-		return this.memory === undefined ? undefined : { harness: 'pi', id: this.seatSession };
+		const kept = this.kept;
+		return kept === undefined ? undefined : { harness: 'pi', id: kept.id };
+	}
+
+	/** The kept transcript this activation continues or began, when the seat keeps it. */
+	private get kept(): SeatMemory | undefined {
+		return this.transcript === undefined ? undefined : this.memory.get(this.transcript);
 	}
 
 	/** The seq this activation may commit against: the freshness boundary `readThrough`. */
@@ -252,31 +237,52 @@ export class Activation implements ExecutorSession {
 			}
 			this.providerStarted = false;
 			this.view = input.view;
+			this.adopt(input.view);
 			const agent = await this.agentFor(input.view);
 			if (this.stopped) return { failed: false };
 			const prompt = this.promptFor(input);
 			if (prompt === undefined) return this.nothingNew(input.view);
 			await agent.prompt(prompt);
 			const failure = this.executionFailure(agent);
-			await this.audit(agent);
 			if (failure === undefined) this.keep(agent);
 			if (failure !== undefined) {
 				return { failed: true, cause: failure.cause, message: failure.error.message };
 			}
 			return endedForLength(agent) ? { failed: false, stop: 'length' } : { failed: false };
 		} catch (error) {
-			return this.broke(asError(error));
+			return this.broke(error instanceof Error ? error : new Error(String(error)));
 		}
+	}
+
+	/**
+	 * On the first pass, continue the kept transcript that the room names in
+	 * `spec.resume`. Otherwise this activation begins a fresh one.
+	 */
+	private adopt(view: ActivationView): void {
+		if (this.transcript !== undefined) return;
+		const resume = sessionToResume(view, 'pi');
+		const kept = resume === undefined ? undefined : this.memory.get(resume);
+		if (kept === undefined) {
+			this.transcript = this.id;
+			return;
+		}
+		this.context.acknowledgeThrough(kept.through);
+		this.transcript = kept.id;
 	}
 
 	/** Keep the transcript for the seat's next activation. A failed pass keeps nothing. */
 	private keep(agent: PiAgent): void {
-		if (this.memory === undefined || this.stopped) return;
-		this.memory.kept = {
+		if (this.stopped || this.transcript === undefined) return;
+		this.memory.delete(this.transcript);
+		this.memory.set(this.transcript, {
+			id: this.transcript,
 			messages: [...agent.state.messages],
 			through: this.readThrough,
-			audited: this.audited,
-		};
+		});
+		for (const id of this.memory.keys()) {
+			if (this.memory.size <= KEPT) break;
+			this.memory.delete(id);
+		}
 	}
 
 	/**
@@ -290,11 +296,17 @@ export class Activation implements ExecutorSession {
 
 	/**
 	 * The message that starts a run. The first pass hands the model the whole
-	 * view. A later pass hands it the delta, and none when nothing is new.
+	 * view. A later pass, and a response over a kept transcript, hand it the
+	 * delta, and none when nothing is new. A closing activation reads the
+	 * whole view.
 	 */
 	private promptFor(input: PassInput): AgentMessage | undefined {
-		const resumed = this.resumedPrompt(input);
-		if (resumed !== undefined) return resumed;
+		const kept = this.kept;
+		if (input.kind === 'view' && kept !== undefined && input.view.spec.purpose.kind === 'respond') {
+			const text = renderDelta(input.view, kept.through);
+			if (text === undefined) return undefined;
+			return this.context.delta(kept.through, input.view.through, text, this.now());
+		}
 		if (input.kind === 'view') {
 			const context = renderActivation(input.view, this.definition).context;
 			return this.context.initial(input.view.through, context, this.now());
@@ -302,20 +314,6 @@ export class Activation implements ExecutorSession {
 		const text = renderDelta(input.view, input.since);
 		if (text === undefined) return undefined;
 		return this.context.delta(input.since, input.view.through, text, this.now());
-	}
-
-	/**
-	 * The prompt of the first pass of an activation over a kept transcript:
-	 * the record beyond what the transcript read. A closing activation and a
-	 * pass with nothing new read the whole view.
-	 */
-	private resumedPrompt(input: PassInput): AgentMessage | undefined {
-		const kept = this.memory?.kept;
-		if (input.kind !== 'view' || kept === undefined) return undefined;
-		if (input.view.spec.purpose.kind !== 'respond') return undefined;
-		const text = renderDelta(input.view, kept.through);
-		if (text === undefined) return undefined;
-		return this.context.delta(kept.through, input.view.through, text, this.now());
 	}
 
 	/**
@@ -338,7 +336,7 @@ export class Activation implements ExecutorSession {
 		}
 	}
 
-	/** Record the provider outcome before audit I/O can delay a lease release. */
+	/** Record the provider outcome and notify the host. */
 	private executionFailure(agent: PiAgent): { error: Error; cause: FailureCause } | undefined {
 		const failure = failureOf(agent);
 		if (failure === undefined) return undefined;
@@ -350,26 +348,6 @@ export class Activation implements ExecutorSession {
 			cause: failure.cause,
 		});
 		return failure;
-	}
-
-	/** Audit failure is diagnostic only. It never changes the provider outcome. */
-	private async audit(agent: PiAgent): Promise<void> {
-		const total = agent.state.messages.length;
-		try {
-			await persistTurns(this.openAudit, agent, new Date(this.now()).toISOString(), this.audited);
-			this.audited = total;
-		} catch (error) {
-			try {
-				this.emit({
-					type: 'audit_error',
-					agent: this.definition.name,
-					activation: this.id,
-					error: asError(error),
-				});
-			} catch {
-				// Audit diagnostics must never change the execution outcome.
-			}
-		}
 	}
 
 	/**
@@ -415,7 +393,7 @@ export class Activation implements ExecutorSession {
 				model: await this.model(modelOf(def.executor), def.name),
 				thinkingLevel: 'off',
 				tools: toolsFor(view, def, binding(this, this.room), () => this.currentView(view)),
-				messages: [...(this.memory?.kept?.messages ?? [])],
+				messages: [...(this.kept?.messages ?? [])],
 			},
 		});
 		if (this.stopped) return agent;

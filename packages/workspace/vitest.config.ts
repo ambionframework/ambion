@@ -27,7 +27,6 @@ const core = fileURLToPath(new URL('../ambion/src/index.ts', import.meta.url));
 const hosting = fileURLToPath(new URL('../ambion/src/hosting.ts', import.meta.url));
 /** The core's source names the journal; one module, the way the core's own suite reads it. */
 const journal = fileURLToPath(new URL('../journal/src/index.ts', import.meta.url));
-const piJournal = fileURLToPath(new URL('../pi-journal/src/index.ts', import.meta.url));
 /** The Pi executor, which names the core; one module, the way the core's own suite reads it. */
 const pi = fileURLToPath(new URL('../pi/src/index.ts', import.meta.url));
 /** This package's own entries, for the just-bash source that names them. */
@@ -36,7 +35,6 @@ const own = (entry: string) => fileURLToPath(new URL(`./src/${entry}`, import.me
 export const alias = [
 	{ find: '@ambionframework/ambion/hosting', replacement: hosting },
 	{ find: '@ambionframework/ambion', replacement: core },
-	{ find: '@ambionframework/pi-journal', replacement: piJournal },
 	{ find: '@ambionframework/pi', replacement: pi },
 	{ find: '@ambionframework/journal', replacement: journal },
 	{ find: '@ambionframework/workspace/resource', replacement: own('resource-entry.ts') },

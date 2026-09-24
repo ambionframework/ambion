@@ -55,9 +55,9 @@ export interface ExecutorSession {
 	readonly readThrough: Seq;
 	/**
 	 * The harness session to record with the release, read after the last
-	 * pass beside `readThrough`. A session that keeps no memory across
-	 * activations leaves it out. The room records the id and hands it to the
-	 * seat's next activation as `spec.resume`; it never reads the id.
+	 * pass beside `readThrough`. A harness with no session leaves it out. The
+	 * room records the id and hands it to the seat's next activation in the
+	 * same exchange as `spec.resume`; it never reads the id.
 	 */
 	readonly session?: HarnessSession;
 	/**

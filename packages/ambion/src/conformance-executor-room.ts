@@ -1,7 +1,8 @@
 /**
  * The scripted room the executor suite runs an executor against. It answers
  * `missed`, holds a commit, moves the record, and serves more than one
- * activation of the seat, handing each the session the last release recorded.
+ * activation of the seat. It hands each the session the last release
+ * recorded, as the room does inside one exchange.
  */
 import { type Call, LEASE_MS } from './conformance-support.ts';
 import {
@@ -22,6 +23,8 @@ export interface RoomScript {
 	readonly misses?: boolean;
 	/** The first renewal after a landed say finds a new message from the person. */
 	readonly advances?: boolean;
+	/** The room hands no session to a later activation, as the room does in a new exchange. */
+	readonly forgets?: boolean;
 }
 
 export interface ExecutorRoom {
@@ -94,7 +97,7 @@ export function executorRoom(name: string, seat: string, script: RoomScript): Ex
 				seat,
 				attempt: 1,
 				purpose: { kind: 'respond', message: Number(id.split(':')[1]) },
-				...(recorded === undefined ? {} : { resume: recorded }),
+				...(recorded === undefined || script.forgets === true ? {} : { resume: recorded }),
 			},
 			through: lastSeq(),
 			context: {

@@ -150,11 +150,12 @@ export class AgentRunner implements AgentPort {
 			const claimed = await this.claim(id);
 			if (claimed !== undefined) await this.runClaimed(id, current, claimed);
 		} finally {
-			if (this.current === current) this.current = undefined;
-			// A trace that never took a step opens no journal. A failed write is a
-			// `trace_error`, and it never reaches the lease.
+			// The sink logs each step as it comes. Close logs the block in progress.
+			// The activation holds the seat until its sink closes, so a wake that
+			// lands during the close queues behind it.
 			await trace.close();
 			closeQuietly(session);
+			if (this.current === current) this.current = undefined;
 			await this.next();
 		}
 	}
