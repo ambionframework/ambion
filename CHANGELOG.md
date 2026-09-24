@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**A resumed Claude activation gets its own duties.** A resumed Claude
+session keeps the system prompt it began with, and the SDK ignores a new
+`systemPrompt`. A closing activation resumes the session of the exchange it
+summarizes, so it ran without the summary duties and without the reader's
+preferences. The first message of a resumed query now starts with the
+seat's agent part for the activation. `@ambionframework/claude` exports no
+new name.
+
 **The Pi executor runs on Pi's AgentHarness.** The harness owns the model
 loop, the session, its persistence and its compaction. The model holds the
 room tools and the tools of the definition only: no built-in tool, no skill

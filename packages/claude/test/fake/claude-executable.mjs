@@ -297,6 +297,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 	}
 	if (message.type !== 'user') return;
 	users.push(message);
+	log({ user: message.message.content });
 	if (!unresumable()) out({ ...message, isReplay: true, session_id: session });
 	wake();
 	if (!running) void run();

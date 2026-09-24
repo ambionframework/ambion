@@ -289,6 +289,13 @@ executor sends no delta on resume. The resumed session holds the earlier
 record and the view again. `readThrough` starts at zero in each activation,
 and a say against newer record gets a `missed` answer.
 
+**The first message of a resumed query restates the seat's part.** A
+resumed session keeps the system prompt it began with, and the SDK ignores
+a new `systemPrompt`. The seat's duties and instructions for the
+activation, its agent part, therefore go at the head of the first message.
+A closing activation resumes the session of the exchange it summarizes.
+This message gives it the summary duties and the reader's preferences.
+
 **A resume that fails starts a fresh session.** The SDK cannot resume when
 the session store is gone, such as after a move to a new disk. The real SDK
 sends an init message, then an error result whose text says `No conversation

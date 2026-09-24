@@ -19,8 +19,9 @@
  * - **Exchange continuity.** The query persists its session on the local
  *   disk, and the release records the id the SDK reports. The activation
  *   resumes the session that `spec.resume` names, which the room hands back
- *   inside one exchange. A resume the SDK cannot honor starts a fresh
- *   session, and the release records the new id.
+ *   inside one exchange. A resumed session keeps its first system prompt,
+ *   so the first message restates the seat's part. A resume the SDK cannot
+ *   honor starts a fresh session, and the release records the new id.
  */
 import type {
 	ActivationView,
@@ -43,6 +44,10 @@ import { approver, type ClaudeRuntime, claudeOf, queryOptions } from './options.
 import { passResultOf, sessionOf, unresumableResult } from './services.ts';
 import { Echoes, Inbox, userMessage } from './steer.ts';
 import { type Binding, roomServer } from './tools.ts';
+
+/** The head of the first message of a resumed query. The system prompt of the session is older. */
+export const RESUMED_NOTE =
+	'Your duties and instructions for this activation follow. Where they differ from the start of this session, follow these.';
 
 /** How long a finished result waits for an echo the SDK owes, in milliseconds. */
 const ECHO_GRACE = 5_000;
@@ -197,10 +202,19 @@ class Activation implements ExecutorSession {
 		}
 	}
 
-	/** The message that starts a pass: the whole view first, then the delta, or none when nothing is new. */
+	/**
+	 * The message that starts a pass: the whole view first, then the delta,
+	 * or none when nothing is new. A resumed session keeps the system prompt
+	 * it began with, so the first message of a resumed query restates the
+	 * seat's part for this activation. A closing activation gets its duties
+	 * and the reader's preferences this way.
+	 */
 	private promptFor(input: PassInput): string | undefined {
-		if (input.kind === 'view') return renderActivation(input.view, this.definition).context;
-		return renderDelta(input.view, input.since);
+		if (input.kind === 'delta') return renderDelta(input.view, input.since);
+		const { agent, context } = renderActivation(input.view, this.definition);
+		const resumes =
+			this.stream === undefined && sessionToResume(input.view, 'claude') !== undefined;
+		return resumes ? `${RESUMED_NOTE}\n\n${agent}\n\n${context}` : context;
 	}
 
 	/**

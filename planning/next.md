@@ -164,13 +164,12 @@ is late.
 | ---- | --------------------------------------------- | ---------- |
 | A    | Phase 1: the kernel                           | P0         |
 | B    | Phase 2: the packages                         | P0, P1, P2 |
-| C    | Phase 3: live evidence                        | P0, P1, P2 |
+| C    | Phase 3: live evidence                        | P1, P2     |
 | —    | Phase 4: the release, after lanes A, B, and C | P1         |
 
 **The lanes edit different files.** Phase 1 edits the docs. Phase 2 edits
 the journal, adapter, workspace log, and conformance files. Phase 3 edits
-the executor that its root cause names, the live tests, and the live
-workflow.
+the Claude executor options, the live tests, and the live workflow.
 
 ### Phase 1. Consolidate the kernel (P0)
 
@@ -197,18 +196,18 @@ code keep one copy of each mechanism.
 
 **Evidence:** `pnpm check`; `pnpm chaos` and the restart suite for step 1.
 
-### Phase 3. Live evidence (P0, P1, and P2)
+### Phase 3. Live evidence (P1 and P2)
 
 **Goal:** the tag carries live evidence for each harness that 0.2.0
 changed.
 
-- [ ] **1.** A Claude summary writer follows the person's preferences.
-      Find the cause and fix it. P0. (L1)
-- [ ] **2.** The Codex harness runs the live tier. P1. (L2)
+- [ ] **1.** The Codex harness runs the live tier. P1. (L2)
+- [ ] **2.** A Claude seat opens no session of the process that hosts
+      it. P1. (L4)
 - [ ] **3.** A provider billing or authentication failure reads as that
       failure in the live run. P2. (L3)
 - [ ] **4.** The live tier passes on the release candidate for Pi,
-      Claude, and Codex. P1. Needs 1 and 2. (L1)
+      Claude, and Codex. P1. Needs 1 and 2. (L2)
 
 **Evidence:** the run of the live workflow on the release candidate, with
 each harness job green and no job skipped.
@@ -305,31 +304,16 @@ page and package README states only where its own harness keeps a session.
 to 363 of the live workflow failed on the Anthropic message "Your credit
 balance is too low". Every change from #271 to #294 merged with no live
 run in CI. Run 364, on `67ecb72`, is the first run with credit: Pi and the
-package tiers pass, Claude fails one case, and Codex skips.
+package tiers pass, Claude fails one case, and Codex skips. The changelog
+records the fix of the Claude case: a resumed Claude session kept the
+system prompt it began with, so a closing activation lost its duties.
 
-**L1. A Claude summary writer that ignores the person.**
-`test/live/exchange.test.ts:87` expects the summary to begin with
-`VERDICT:`, as the person's preferences ask. On the Claude harness the
-summary answers the question and drops the prefix, on both attempts. The
-Pi harness passes the same case. The last green Claude run is 339, on
-`9593b77`. Two changes since then reach the closing activation:
-
-- M1 (#286) removed the duties that the room renders from the assistant's
-  summary defaults.
-- #294 gives the closing activation the session of the exchange it
-  summarizes, so a Claude closing activation resumes the assistant's
-  session.
-
-Find which change causes it, and fix it at the cause. Evidence: the case
-passes on the Claude harness in one live run of `exchange.test.ts`, and a
-scripted test pins the prompt or the resume behavior that the fix changes.
-
-**L2. The Codex harness has no live run in CI.** The `CODEX_API_KEY`
-repository secret is empty, so the Codex harness job and the Codex package
-tier skip on every run. The room tools of #287 and the thread resume of
-#294 reach Codex, and neither has a live run. The owner adds the secret,
-or runs `AMBION_HARNESS=codex pnpm test:live` once on the release
-candidate and links the output.
+**L2. The Codex harness has no live run in CI.** Until 2026-09-24 the
+`CODEX_API_KEY` repository secret was empty, so the Codex harness job and
+the Codex package tier skipped on every run. The room tools of #287 and
+the thread resume of #294 reach Codex, and neither has a live run. The
+owner added the secret. The item closes when a run on `main` shows both
+Codex jobs run their tests.
 
 **L3. A billing failure reads as a billing failure.** Twenty-three red
 runs in a row had one cause, and each run read as a set of test failures.
@@ -337,6 +321,15 @@ A red run that stays red carries no information about the code. Before the
 tests, each harness job makes one small request. A billing or
 authentication refusal fails the job with an annotation that names the
 provider error, and the tests do not run.
+
+**L4. A Claude seat inherits the session of its host.** With no `env`
+option, the SDK starts the Claude executable with the environment of the
+host process. A host that runs inside Claude Code passes its
+`CLAUDE_CODE_SESSION_ID`. Every seat then reports that one id, and a
+resumed activation opens a transcript that holds the work of every seat.
+A local live run in a Claude Code session showed four seats with one
+session id. `queryOptions` removes the variables that bind the child to a
+parent session. A fake test pins that the child does not receive them.
 
 ### R. Release
 

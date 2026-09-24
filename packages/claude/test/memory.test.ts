@@ -10,6 +10,7 @@ import type {
 	HarnessSession,
 } from '@ambionframework/ambion/hosting';
 import { describe, expect, it } from 'vitest';
+import { RESUMED_NOTE } from '../src/executor.ts';
 import { fakeRoom, viewOf } from './support.ts';
 
 const SAY = { turns: [[{ say: 'Saturday.' }]] };
@@ -46,6 +47,17 @@ describe('exchange continuity', () => {
 		expect(resumeOf(one)).toBeUndefined();
 		expect(resumeOf(two)).toBe('sess-1');
 		expect(resumeOf(three)).toBeUndefined();
+		// A resumed session keeps its first system prompt, so only the resumed
+		// query's first message restates the seat's part.
+		const [fresh, resumed, again] = room
+			.log()
+			.flatMap((line) => ('user' in line ? [line.user] : []));
+		expect(resumed).toMatch(new RegExp(`^${RESUMED_NOTE}`));
+		expect(resumed).toContain('Your instructions:');
+		for (const message of [fresh, again]) {
+			expect(message).not.toContain(RESUMED_NOTE);
+			expect(message).not.toContain('Your instructions:');
+		}
 	});
 
 	it('ignores a session of another harness', async () => {
