@@ -5,10 +5,14 @@
  * answers it, and the step carries the answer.
  */
 import { expect, it } from 'vitest';
+import { PARENT_SESSION } from '../src/options.ts';
 import { open, seat, viewOf } from './support.ts';
 
-async function argvOf(options: Parameters<typeof seat>[0] = {}) {
-	const run = open({ turns: [[]] }, seat(options));
+async function argvOf(
+	options: Parameters<typeof seat>[0] = {},
+	host: Readonly<Record<string, string>> = {},
+) {
+	const run = open({ turns: [[]] }, seat(options), host);
 	await run.session.pass({ kind: 'view', view: viewOf() });
 	run.session.close?.();
 	const lines = run.log();
@@ -17,7 +21,8 @@ async function argvOf(options: Parameters<typeof seat>[0] = {}) {
 		string,
 		unknown
 	>;
-	return { argv, initialize, cwd: lines.find((line) => 'cwd' in line)?.cwd };
+	const env = lines.find((line) => 'env' in line)?.env as { names: string[]; entrypoint?: string };
+	return { argv, initialize, env, cwd: lines.find((line) => 'cwd' in line)?.cwd };
 }
 
 const flagValue = (argv: string[], flag: string) => argv[argv.indexOf(flag) + 1];
@@ -107,4 +112,15 @@ it('denies a request when canUseTool throws', async () => {
 	await run.session.pass({ kind: 'view', view: viewOf() });
 	expect(approvals(run.steps)).toMatchObject([{ name: 'Read', decision: 'deny' }]);
 	run.session.close?.();
+});
+
+it('starts the executable outside the Claude Code session of its host', async () => {
+	// A host that runs inside Claude Code holds the variables of that session.
+	const host = Object.fromEntries(PARENT_SESSION.map((name) => [name, `host-${name}`]));
+	const { env } = await argvOf({}, { ...host, AMBION_KEPT: 'yes' });
+	// The SDK sets its own entrypoint in place of the host's.
+	expect(env.entrypoint).toBe('sdk-ts');
+	for (const name of PARENT_SESSION.filter((name) => name !== 'CLAUDE_CODE_ENTRYPOINT'))
+		expect(env.names).not.toContain(name);
+	expect(env.names).toContain('AMBION_KEPT');
 });

@@ -255,6 +255,14 @@ whole environment of the host, and `Bash` can print it. With `env`, the value
 Pass the variables that the executable needs, as the example does. A seat
 that runs `Bash` should get no more than that.
 
+**A seat starts outside the Claude Code session of its host.** A host that
+runs inside Claude Code holds variables such as `CLAUDE_CODE_SESSION_ID`
+and `CLAUDE_CODE_REMOTE_SESSION_ID`. With them, every seat reports the id of
+the host's session, and a resume opens one transcript for all seats. The
+executor removes these variables from the environment, with or without
+`env`. It also removes `CLAUDE_CODE_ENTRYPOINT`, so the SDK marks the
+executable as its own. A test on the fake executable holds the list.
+
 **A permission request goes to `canUseTool`.** A tool call that the allow
 list does not cover asks. The executor answers it in this order:
 

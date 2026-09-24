@@ -169,7 +169,7 @@ is late.
 
 **The lanes edit different files.** Phase 1 edits the docs. Phase 2 edits
 the journal, adapter, workspace log, and conformance files. Phase 3 edits
-the Claude executor options, the live tests, and the live workflow.
+the live tests and the live workflow.
 
 ### Phase 1. Consolidate the kernel (P0)
 
@@ -202,12 +202,10 @@ code keep one copy of each mechanism.
 changed.
 
 - [ ] **1.** The Codex harness runs the live tier. P1. (L2)
-- [ ] **2.** A Claude seat opens no session of the process that hosts
-      it. P1. (L4)
-- [ ] **3.** A provider billing or authentication failure reads as that
+- [ ] **2.** A provider billing or authentication failure reads as that
       failure in the live run. P2. (L3)
-- [ ] **4.** The live tier passes on the release candidate for Pi,
-      Claude, and Codex. P1. Needs 1 and 2. (L2)
+- [ ] **3.** The live tier passes on the release candidate for Pi,
+      Claude, and Codex. P1. Needs 1. (L2)
 
 **Evidence:** the run of the live workflow on the release candidate, with
 each harness job green and no job skipped.
@@ -219,7 +217,7 @@ each harness job green and no job skipped.
 - [ ] **1.** The changelog entry for 0.2.0: the format changes, each
       export that changed or went, the two new packages, and the two
       retired packages. Needs 2. Needs phase 1, phase 2 steps 1 and 2,
-      and phase 3 step 4. (R1)
+      and phase 3 step 3. (R1)
 - [ ] **2.** The pages that name a release name 0.2.0 and list its ten
       packages. (R2)
 - [ ] **3.** The dev build stamp derives its base from the last tag.
@@ -306,7 +304,9 @@ balance is too low". Every change from #271 to #294 merged with no live
 run in CI. Run 364, on `67ecb72`, is the first run with credit: Pi and the
 package tiers pass, Claude fails one case, and Codex skips. The changelog
 records the fix of the Claude case: a resumed Claude session kept the
-system prompt it began with, so a closing activation lost its duties.
+system prompt it began with, so a closing activation lost its duties. It
+also records a second Claude fix that a local run found: a seat no
+longer takes the session id of a host that runs inside Claude Code.
 
 **L2. The Codex harness has no live run in CI.** Until 2026-09-24 the
 `CODEX_API_KEY` repository secret was empty, so the Codex harness job and
@@ -321,15 +321,6 @@ A red run that stays red carries no information about the code. Before the
 tests, each harness job makes one small request. A billing or
 authentication refusal fails the job with an annotation that names the
 provider error, and the tests do not run.
-
-**L4. A Claude seat inherits the session of its host.** With no `env`
-option, the SDK starts the Claude executable with the environment of the
-host process. A host that runs inside Claude Code passes its
-`CLAUDE_CODE_SESSION_ID`. Every seat then reports that one id, and a
-resumed activation opens a transcript that holds the work of every seat.
-A local live run in a Claude Code session showed four seats with one
-session id. `queryOptions` removes the variables that bind the child to a
-parent session. A fake test pins that the child does not receive them.
 
 ### R. Release
 
