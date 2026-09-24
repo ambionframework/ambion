@@ -5,7 +5,7 @@ every contribution into one journal. It wakes a seat when a message matches
 the attention of that seat. It folds the journal into the state of the
 membership, the presence, and each exchange.
 
-The [repository README](../README.md) holds the positioning and the 0.1.0
+The [repository README](../README.md) holds the positioning and the current
 surface. The [runnable example](example.md) shows a room at work. The
 [documentation index](README.md) links every contract. The
 [plan](../planning/next.md) defines the scope and records the work that
@@ -204,7 +204,7 @@ credentials, process lifetime, and recovery.
 - [Roster](roster.md): membership, reserve, and attention.
 - [Summaries](summary.md): closing work and context replacement.
 - [Resources](resources.md): the resource contract, references, and provenance.
-- [Workspace](workspace.md): the Pi filesystem binding.
+- [Workspace](workspace.md): the workspace interface, its backends, and its tools.
 - [Durability](durability.md): journal guarantees, recovery, and leases.
 - [Deployment](deployment.md): host placement, storage, and reconnect.
 - [Envelope](envelope.md): configurable limits and the fold cost.

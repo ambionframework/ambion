@@ -129,15 +129,11 @@ agent context uses it in place of the covered source messages. Human
 participants can review the original discussion through `exchange.waitForClose()`.
 The journal retains the complete history.
 
-**0.1.0 remains a release target.** The
-[documentation index](https://github.com/ambionframework/ambion/blob/main/docs/README.md)
-distinguishes current behavior from the release plan.
-
 ## Read more
 
 - [Design contracts](https://github.com/ambionframework/ambion/tree/main/docs)
 - [Deployment and recovery](https://github.com/ambionframework/ambion/blob/main/docs/deployment.md)
 - [Workbench example](https://github.com/ambionframework/ambion/tree/main/examples/workbench)
-- [0.1.0 plan](https://github.com/ambionframework/ambion/blob/main/planning/next.md)
+- [Changelog](https://github.com/ambionframework/ambion/blob/main/CHANGELOG.md)
 
 Apache 2.0.

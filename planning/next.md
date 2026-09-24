@@ -72,17 +72,11 @@ records them here so that the release names them.
 | Exchange continuity, and the trace as host logs     | #294             | A seat keeps its harness session for one exchange. `@ambionframework/pi-journal` and the trace journals go, and each step goes to the host's logger        |
 | The Pi executor on Pi's AgentHarness                | #295             | The harness owns the model loop, the session, and compaction. Pi joins Claude and Codex as a harness adapter, and it runs the executor conformance suite   |
 
-**Two themes stay open, each with the acceptance it must meet on the
-tagged commit.** The phases below deliver them; the items explain them.
-
-| Theme                     | Acceptance                                                                                                                              |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| M One owner per mechanism | Each duplication that item M5 names has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2. |
-| L Live evidence           | The live run on `main` passes on the tagged commit for the Pi, Claude, and Codex harnesses.                                             |
-
-**The tag waits for the P0 and P1 steps.** No P0 step is open. A P2 step
-that is open when the last P1 step closes moves to the backlog. It does not
-hold the tag.
+**0.2.0 is ready to tag.** No step stays open. Live run 376, on `742f59d`,
+passed the Pi, Claude, and Codex jobs. Its package job failed one
+judgment case of the assistant, "honors an application override of
+default silence". The owner accepts that instability for 0.2.0. Items M5
+and L3 are P2, and they move to the [backlog](backlog.md#carried-from-020).
 
 **Format changes.** The changelog names each change to a stored format.
 
@@ -171,64 +165,16 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Two lanes run at once, and the release closes them.** A step names the
-steps it needs; a step with no "Needs" line starts now. **P0** blocks the
-tag. **P1** carries the release story. **P2** moves to the backlog when it
-is late.
-
-| Lane | Chain                  | Priority |
-| ---- | ---------------------- | -------- |
-| A    | Phase 1: the packages  | P2       |
-| B    | Phase 2: live evidence | P2       |
-| —    | Phase 3: the release   | P1       |
-
-**The lanes edit different files.** Phase 1 edits the conformance files.
-Phase 2 edits the live tests and the live workflow.
-
-### Phase 1. Package hygiene (P2)
-
-**Goal:** the conformance code keeps one copy of each fixture.
-
-- [ ] **1.** One set of scripted room fixtures in the conformance suite.
-      P2. (M5)
-
-**Evidence:** `pnpm check`.
-
-### Phase 2. Live evidence (P2)
-
-**Goal:** a red live run names its cause.
-
-- [ ] **1.** A provider billing or authentication failure reads as that
-      failure in the live run. P2. (L3)
-
-**Evidence:** a live run on a key that the provider refuses fails with one
-annotation that names the provider error, and runs no test.
-
-### Phase 3. Release (P1)
-
-**Goal:** the tag names a commit that a live run tested.
-
-- [ ] **1.** The live run on `main` after the last merge passes for Pi,
-      Claude, and Codex. (L5)
-
-**Evidence:** the live run on the tagged commit passes each harness job
-and the package job, and no job skips.
+**No phase stays open.** The release steps are in
+[Toolchain](../docs/toolchain.md#9-release-and-publishing): the version is
+0.2.0, the changelog entry has its date, and the owner tags the commit and
+runs `scripts/release.mjs`. The notes of the GitHub release link the live
+run on the tagged commit and name any case that failed.
 
 ## The items
 
 Each item states the problem, the solution, and the impact. The file and
 line references are from `main` at `67ecb72`.
-
-### M. One owner per mechanism
-
-**M5. The conformance suite.** `conformance.ts` and
-`conformance-executor-room.ts` each hold their own question, participants
-block, and `stale` constant (`conformance.ts:177`,
-`conformance-executor-room.ts:91`). Since #295, all three executors run
-the executor suite, so a fixture change reaches three packages.
-
-- The shared question, participants block, and `stale` constant move to
-  `conformance-support.ts`. `until` accepts an async predicate.
 
 ### L. Live evidence
 
@@ -251,16 +197,8 @@ changelog records each fix.
 - **L4.** A Claude seat took the session id of a host that runs inside
   Claude Code. A local run found it.
 
-**L3. A billing failure reads as a billing failure.** Twenty-three red
-runs in a row had one cause, and each run read as a set of test failures.
-A red run that stays red carries no information about the code. Before the
-tests, each harness job makes one small request. A billing or
-authentication refusal fails the job with an annotation that names the
-provider error, and the tests do not run.
-
 **L5. Live evidence on the release candidate.** The live workflow runs
-on each push to `main`. The tag names the last commit on `main`, and the
-live run on that commit is the evidence. Link the run in the notes of the
-GitHub release. The users of 0.2.0 then install code that a live run
-tested. A change that lands before the tag updates the changelog entry for
-0.2.0, and the tag adds its date.
+on each push to `main`. Run 376, on `742f59d`, is the evidence for the
+tag. Runs 368, 374, and 375 each failed one case, and each cause is
+recorded: two defects of the live tests, which #306 fixed, and a missing
+Codex summary that did not recur in run 376.

@@ -287,14 +287,14 @@ Two channels publish the eleven packages under the `@ambionframework` scope.
 Versions are lockstep:
 
 ```sh
-node scripts/version.mjs 0.1.0   # set versions
+node scripts/version.mjs 0.2.0   # set versions
 node scripts/version.mjs --check # verify agreement
 ```
 
 **Dev builds come from CI.** `.github/workflows/dev-release.yml` runs on a
 push to `main` that changes more than Markdown, `docs/`, and `planning/`. It
-stamps the version `0.2.0-dev.<run number>.g<sha7>` in the runner and commits
-nothing. The base `0.2.0` is the version of the next release and sits in the
+stamps the version `0.3.0-dev.<run number>.g<sha7>` in the runner and commits
+nothing. The base `0.3.0` is the version of the next release and sits in the
 workflow file. The `g` prefix keeps the commit identifier from becoming a numeric
 identifier with a leading zero, which semver forbids. The job runs the gate,
 packs once, and publishes those tarballs to GitHub Packages under `dev` with
@@ -346,16 +346,28 @@ those exact tarballs. It skips a published `name@version` and supports
 `--dry-run`, `--tag`, `--pack-only`, and `--skip-pack`. A release publish needs
 `--yes`. `pnpm pack` rewrites workspace dependencies to their release version.
 
-The sequence for 0.1.0, after the version and the tag are in place:
+The sequence for a release, once the commit that sets the version is on
+`main`:
 
 ```sh
+git checkout main && git pull
+git tag v0.2.0 && git push origin v0.2.0
 node scripts/release.mjs stage --dry-run
 NODE_AUTH_TOKEN=... node scripts/release.mjs stage
 node scripts/release.mjs verify
 NODE_AUTH_TOKEN=... node scripts/release.mjs promote --otp <code>
 ```
 
-The packages carry no provenance attestation at 0.1.0.
+**0.2.0 retires two packages.** `@ambionframework/cli` and
+`@ambionframework/pi-journal` stay at 0.1.0 on npmjs. Give each one a
+deprecation after the promote:
+
+```sh
+npm deprecate @ambionframework/cli "Removed in 0.2.0. It has no replacement."
+npm deprecate @ambionframework/pi-journal "Removed in 0.2.0. Pass a logger to createRuntime to read what a seat did."
+```
+
+The packages carry no provenance attestation.
 
 ## 10. Departures from Flue
 

@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/workstation",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"type": "module",
 	"description": "A workspace bash backend for Ambion over SSH: one remote server, one Unix account for each agent.",
 	"license": "Apache-2.0",

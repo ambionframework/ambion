@@ -1,6 +1,6 @@
 # The example: Workbench
 
-**One runnable example ships with 0.1.0. It is an agentic lab workbench.**
+**One runnable example ships with Ambion. It is an agentic lab workbench.**
 It replaces the site example and Relay. It is the room a new reader opens
 first, the host the deployment guide describes, and the evidence that the
 release claims hold. The directory is `examples/workbench`.
@@ -276,8 +276,8 @@ directory. It adds no brand files of its own.
 **The fuller lab vision waits for later work.** The original design named
 five specialists over data resources and instruments, and a drill-down
 interface. The Instruments agent and the Data Analysis agent need
-application resources that [next.md](../planning/next.md) does not schedule
-for 0.1.0. Workbench grows into them after the release.
+application resources that no release schedules yet. Workbench grows into
+them later.
 
 | Deferred capability                            | Item in next.md |
 | ---------------------------------------------- | --------------- |

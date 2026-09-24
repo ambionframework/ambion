@@ -1,7 +1,7 @@
 # Technical facts
 
 This page lists the key technical facts of Ambion, what is new, the
-packages, and the limits of the 0.1.0 release. The [README](../README.md)
+packages, and the limits of the 0.2.0 release. The [README](../README.md)
 holds the positioning and the headline of what is new.
 
 ## Key technical facts
@@ -91,16 +91,19 @@ holds the positioning and the headline of what is new.
 
 ## Packages
 
-| Package                       | Concern                                                                               |
-| ----------------------------- | ------------------------------------------------------------------------------------- |
-| `@ambionframework/ambion`     | The kernel: protocol, journal vocabulary, rules, room, driver; `/hosting`, `/testing` |
-| `@ambionframework/pi`         | The Pi executor                                                                       |
-| `@ambionframework/claude`     | The Claude Agent SDK executor                                                         |
-| `@ambionframework/codex`      | The Codex SDK executor                                                                |
-| `@ambionframework/workspace`  | The resource contract, a directory workspace, and a SQL resource                      |
-| `@ambionframework/assistant`  | A default assistant that guides membership and writes summaries                       |
-| `@ambionframework/journal`    | The append-only journal and its storage contract                                      |
-| `@ambionframework/cloudflare` | Rooms and seats as Durable Objects                                                    |
+| Package                        | Concern                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| `@ambionframework/ambion`      | The kernel: protocol, journal vocabulary, rules, room, driver; `/hosting`, `/testing` |
+| `@ambionframework/pi`          | The Pi executor, on Pi's AgentHarness                                                 |
+| `@ambionframework/claude`      | The Claude Agent SDK executor                                                         |
+| `@ambionframework/codex`       | The Codex SDK executor                                                                |
+| `@ambionframework/workspace`   | The workspace interface, its tools, a SQLite backend, and the conformance suites      |
+| `@ambionframework/just-bash`   | The just-bash backends: a shell and a filesystem in the process                       |
+| `@ambionframework/workstation` | A bash backend over SSH, with one Unix account for each agent                         |
+| `@ambionframework/git`         | A git backend: read-only templates, forks, clones, and pushes                         |
+| `@ambionframework/assistant`   | A default assistant that guides membership and writes summaries                       |
+| `@ambionframework/journal`     | The append-only journal and its storage contract                                      |
+| `@ambionframework/cloudflare`  | Rooms and seats as Durable Objects                                                    |
 
 ## Boundaries and limits
 
@@ -119,9 +122,11 @@ holds the positioning and the headline of what is new.
   with their connections after recovery.
 - Subscriptions belong to a running host. A reconnecting client reads
   durable messages and reacquires exchange handles.
-- A workspace provides no operating-system isolation between agents. One
-  host owns each resource.
-- A seat with harness memory holds state the record does not show.
+- The just-bash backends provide no operating-system isolation between
+  agents. The workstation runs each agent as its own Unix account on one
+  server ([Trust](trust.md)). One host owns each resource.
+- A seat keeps its harness session for one exchange. The session holds
+  state the record does not show.
 - A room remains available between interactions. Native timers, external
   event subscriptions, and scheduler ingress are future work.
 - The journal owns no domain transactions and no credentials. Browser-only

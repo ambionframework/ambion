@@ -190,7 +190,7 @@ later**, the floor `@opentui/core` sets for its terminal renderer. See
 [Documentation](docs/README.md) maps the design contracts and hosting
 guidance. [Contributing](CONTRIBUTING.md) covers builds and checks.
 [The plan](planning/next.md) names the scope of the next release.
-[The changelog](CHANGELOG.md) lists the packages of 0.1.0.
+[The changelog](CHANGELOG.md) lists the packages and changes of each release.
 
 ## License
 
