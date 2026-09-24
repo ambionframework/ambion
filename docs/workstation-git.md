@@ -3,8 +3,9 @@
 **No package implements this page yet.** This page proposes a second
 `GitBackend` for the [git contract](git.md). It keeps the repositories on
 the [workstation](workstation.md), in the home of one dedicated account,
-and each agent reaches them with `git` over SSH. No plan item holds the
-work yet. The examples show the proposed API.
+and each agent reaches them with `git` over SSH.
+[The plan](../planning/next.md) holds the work as items G1 and G2, in
+phase 4. The examples show the proposed API.
 
 **The proposal ships in `@ambionframework/workstation`.** The package
 already holds the SSH client, the environment over SFTP and `exec`, and the
@@ -562,23 +563,20 @@ is a candidate for the rotation story after v1.
 and an administration repository that the backend must push to. `serve`
 is about fifteen lines of `bash`.
 
-## Open decisions
+## Decisions taken
 
-1. **The key at rest.** This page keeps the key in the agent's home, with
-   `from` and `expiry-time`. The forwarded agent keeps no key at rest,
-   and it needs a spike on `ssh2`.
-2. **Two authorized-keys files.** This page asks the operator for a
-   `Match` block. The other choice is a block of lines that the backend
-   owns inside the one file. It needs no `sshd` change, and a fault in
-   the backend can then remove the host's key.
-3. **The home of the template helpers.** This page proposes
-   `@ambionframework/workspace/git`. The other choice is an entry of
-   `@ambionframework/git` that loads no `just-git`, and the workstation
-   then depends on `@ambionframework/git`.
-4. **The plan.** An item in [next.md](../planning/next.md) for 0.3.0, or
-   an entry in [the backlog](../planning/backlog.md#designs-with-a-shape).
-5. **A separate git server in v1.** `agentAddress` and `agentSources`
-   allow it. The OpenSSH tier tests only the loopback case.
+1. **The key rests in the agent's home,** with `from` and `expiry-time`.
+   A forwarded agent waits until after v1.
+2. **Two authorized-keys files.** The operator adds the `Match` block, so
+   no write of the backend reaches the host's own key.
+3. **The template helpers live in `@ambionframework/workspace/git`.**
+   The workstation installs no `just-git`.
+4. **Phase 4 of [next.md](../planning/next.md) holds the work,** as items
+   G1 and G2.
+5. **`agentAddress` and `agentSources` stay in v1.** The OpenSSH tier
+   tests the loopback case alone.
+
+## Checks
 
 **A stand-in for `sshd` checked the repository mechanics.** With `git`
 2.43, a script that sets `SSH_ORIGINAL_COMMAND` and runs `serve` served
