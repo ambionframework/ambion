@@ -207,20 +207,20 @@ account on its own server, and the host opens no port.
       core holds `transport` alone, each bash backend declares the
       transports that it carries, and `openWorkspace` refuses a pair that
       does not match. `gitConformance` calls harness hooks for the four
-      credential cases. The workstation loses `~/.git-credentials`. The
-      workbench, the README, `docs/example.md`, `docs/git.md`, and the
-      package guides take the new names in the same step. P1. (G1)
-- [ ] **2.** The template helpers move to
-      `@ambionframework/workspace/git`. Needs 1. P1. (G2)
-- [ ] **3.** `workstationGitBackend`: the git account, `serve`, the agent
+      credential cases. The template helpers move to
+      `@ambionframework/workspace/git`. The workstation loses
+      `~/.git-credentials`. The workbench, the README, `docs/example.md`,
+      `docs/git.md`, and the package guides take the new names in the same
+      step. P1. (G1)
+- [ ] **2.** `workstationGitBackend`: the git account, `serve`, the agent
       keys, fork and registration by rename, and the account in
-      `test/sshd/setup.sh`. Needs 2. P1. (G2)
-- [ ] **4.** The docs: `workstation-git.md` describes what shipped, and
+      `test/sshd/setup.sh`. Needs 1. P1. (G2)
+- [ ] **3.** The docs: `workstation-git.md` describes what shipped, and
       `git.md`, `trust.md`, and the package guide name the backend. The
-      trust row states the reach of a leaked agent key. Needs 3. P1. (G2)
-- [ ] **5.** `workstation.md` states the new credential rule: the host
+      trust row states the reach of a leaked agent key. Needs 2. P1. (G2)
+- [ ] **4.** `workstation.md` states the new credential rule: the host
       owns the account keys, and the git backend issues and rotates the
-      git key of each agent. Needs 3. P1. (G2)
+      git key of each agent. Needs 2. P1. (G2)
 
 **Evidence:** the `workstation` CI job runs `gitConformance` on OpenSSH
 with the SSH harness, and the tier proves the checks that

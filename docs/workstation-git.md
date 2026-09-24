@@ -143,7 +143,9 @@ const lab = openWorkspace({
 
 **The git account is on the workstation, and an agent reaches it on the
 loopback address.** `host`, `port`, and `hostKey` name the one server of
-both backends. A git server on a second machine waits in
+both backends, and the host passes one value to both, as the example
+does. Nothing compares the two. A git backend on a server of another host
+key fails its first operation at the host key check. A git server on a second machine waits in
 [the backlog](../planning/backlog.md#designs-with-a-shape).
 
 ## The git account
@@ -283,7 +285,7 @@ issuance and rotation as out of v1. Proposed: "The host owns the key of
 each account on the server. The git backend owns the git key of each
 agent: it issues the key, rotates it, and the key works only on the
 server until it expires." The bash backend keeps the rule as it
-is. Phase 4 step 5 changes the page.
+is. Phase 4 step 4 changes the page.
 
 **Each `connect` of the bash backend keeps the agent's files current.**
 
@@ -303,8 +305,10 @@ backend therefore runs one command on the server for each write: `date
 +%s` gives the server's time, and `date -d @<expiry> +%Y%m%d%H%M%S`
 renders the expiry in the server's zone. The margin and the `expiresAt`
 of the identity count from the server's time, so a skew between the two
-clocks shortens no key. The `command` path comes from the home that the
-client reads once with `realpath('.')`.
+clocks shortens no key. A local time in the hour that the end of daylight
+saving time repeats is ambiguous to `sshd`, so a key can expire up to one
+hour early or late on that day. The `command` path comes from the home
+that the client reads once with `realpath('.')`.
 
 **The margin is the rule of the 0.2.0 credential file.** A key counts as
 missing when the smaller of 10 minutes and half of its life is left
@@ -475,7 +479,7 @@ imports the rule from the new entry. The workstation needs them and
 must not install `just-git`. They move to a new entry,
 `@ambionframework/workspace/git`, which loads `node:fs` and `node:crypto`
 and no git library. `@ambionframework/just-bash/git` imports them from
-there.
+there. The move is part of G1, so the helpers leave `packages/git` once.
 
 **`gitConformance` asks the harness for each credential fact.** The
 suite stays blind to transports. Four cases touch a credential, and each
@@ -488,11 +492,11 @@ implements. [Tests](#tests) lists them.
 | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | G1   | `@ambionframework/git` goes. `@ambionframework/just-bash/git` exports `justGitBackend`, `sqliteGitStorage`, and `JustGitAccess`. The root entry of just-bash loads no `node:sqlite`                                                       |
 | G1   | `justGitBackend` has no `handler` and no `url`                                                                                                                                                                                            |
-| G1   | `GitAccess` holds `transport` alone. `prefix`, `fetch`, `credentialFor`, and `credentialsFor` leave the workspace                                                                                                                         |
+| G1   | `GitAccess` holds `transport` alone. `prefix`, `fetch`, `credentialFor`, and `credentialsFor` leave the workspace. `GitFetch` and `GitCredential` move to `@ambionframework/just-bash/git` beside `JustGitAccess`                         |
 | G1   | `BashBackend` gets `gitTransports`                                                                                                                                                                                                        |
 | G1   | `GitConformanceBackend` gets the credential hooks                                                                                                                                                                                         |
 | G1   | The workstation writes no `~/.git-credentials`                                                                                                                                                                                            |
-| G2   | The new entry `@ambionframework/workspace/git` exports `fromDirectory`, `TemplateRegistration`, `TemplateSource`, `TemplateFiles`, `hashesOf`, `sameFiles`, and the name rules. The export snapshot of the workspace gets its sixth entry |
+| G1   | The new entry `@ambionframework/workspace/git` exports `fromDirectory`, `TemplateRegistration`, `TemplateSource`, `TemplateFiles`, `hashesOf`, `sameFiles`, and the name rules. The export snapshot of the workspace gets its sixth entry |
 | G2   | `@ambionframework/workstation` exports `workstationGitBackend`, `WorkstationGitOptions`, `WorkstationGitAccess`, and `WorkstationGitIdentity`                                                                                             |
 
 ## Owners and order
@@ -503,9 +507,10 @@ client.** The client holds one SFTP channel. An operation opens one
 
 **`identityFor` does not take the git owner.** It runs from the bash
 backend's `connect`, the same as `credentialsFor` in 0.2.0. It awaits
-the preparation of the account, then reads the key from memory. A new key adds one write of `authorized_keys.ambion` on the
-git account's client. The git account's client then holds four channels
-at most, under the `MaxSessions` default of 10.
+the preparation of the account, then reads the key from memory. A new
+key adds one write of `authorized_keys.ambion` on the git account's
+client. The git account's client then holds four channels at most, under
+the `MaxSessions` default of 10.
 
 **The server orders the pushes to one repository.** `git receive-pack`
 takes a lock on each ref and compares the old commit. A push that lost
