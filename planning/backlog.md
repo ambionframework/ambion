@@ -181,4 +181,3 @@ today. **Condition:** a fault that one of them would have caught.
 | ---- | ----------------------------------------------- | ----------------------------------------------------------- |
 | #151 | Exchange-scoped tasks and Relay background work | Close in 0.3.0 item D1; delegation by reference replaces it |
 | #153 | Room simulation evals (draft)                   | Hold; see the evals package above                           |
-| #171 | Workspace log regression and path checks        | Carry onto main, then land in 0.2.0 item M4 first           |

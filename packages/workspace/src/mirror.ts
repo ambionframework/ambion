@@ -25,7 +25,7 @@ import type { Message, Room, RoomRead, Seq } from '@ambionframework/ambion';
 import type { Context, ExecutionEnv, JsonValue } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
-import { openLog } from './log.ts';
+import { bestEffort, isLogFile, openLog } from './log.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 
 /** One line of a room's message record. */
@@ -96,11 +96,6 @@ async function lastLineSeq(
 	}
 }
 
-/** Whether `name` is this log's active file or one it has rotated to. */
-function isLogFile(name: string, fileName: string): boolean {
-	return name === fileName || name.startsWith(`${fileName}.`);
-}
-
 /** The higher of two possibly-absent sequences. */
 function higher(a: Seq | undefined, b: Seq | undefined): Seq | undefined {
 	if (a === undefined) return b;
@@ -130,16 +125,6 @@ async function lastRecordedSeq(
 		max = higher(max, seq);
 	}
 	return max;
-}
-
-/** Tell `onError`, if one was given. A throwing callback must not replace the write it is reporting on. */
-function reportError(onError: ((error: Error) => void) | undefined, error: unknown): void {
-	try {
-		onError?.(error instanceof Error ? error : new Error(String(error)));
-	} catch {
-		// Best-effort: the write already failed once; a broken onError
-		// callback does not get a second chance to break anything else.
-	}
 }
 
 /**
@@ -188,9 +173,13 @@ export async function mirrorRoom(
 		// Message is already required to survive structuredClone as journal
 		// data (docs/durability.md §2); JsonValue's index signature is the
 		// one thing a named interface never satisfies structurally.
-		pending = drive
-			.use(agent, (env) => log.append(env, entry as unknown as JsonValue, BACKGROUND_CONTEXT))
-			.catch((error: unknown) => reportError(options.onError, error));
+		pending = bestEffort(
+			() =>
+				drive.use(agent, (env) =>
+					log.append(env, entry as unknown as JsonValue, BACKGROUND_CONTEXT),
+				),
+			options.onError,
+		);
 	};
 
 	let held: Message[] | undefined = [];

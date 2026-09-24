@@ -38,16 +38,24 @@ const entriesOf = (site: Workspace) => site.use(scribe, (env) => readLines(env, 
 
 /**
  * An env of a fresh memory backend, for `openAuditLog` alone. Its first
- * `failures` appends fail as a full filesystem refuses them.
+ * `failures` appends fail as a full filesystem refuses them, and its first
+ * `dirFailures` directory creations fail as a transient refusal.
  */
-async function bareEnv(failures = 0): Promise<WorkspaceEnv> {
+async function bareEnv(failures = 0, dirFailures = 0): Promise<WorkspaceEnv> {
 	const env = await memoryBackend().connect(scribe);
 	const append = env.appendFile.bind(env);
+	const createDir = env.createDir.bind(env);
 	let left = failures;
+	let dirsLeft = dirFailures;
 	env.appendFile = async (path, content, context) => {
 		left -= 1;
 		if (left >= 0) return err(new FileError('invalid', 'ENOSPC: no room for this entry', path));
 		return append(path, content, context);
+	};
+	env.createDir = async (path, options, context) => {
+		dirsLeft -= 1;
+		if (dirsLeft >= 0) return err(new FileError('permission_denied', 'EACCES: transient', path));
+		return createDir(path, options, context);
 	};
 	return env;
 }
@@ -261,5 +269,16 @@ describe('openAuditLog', () => {
 			},
 		});
 		await expect(throwing.record(await bareEnv(2), entryFor('one'), ctx)).resolves.toBeUndefined();
+	});
+
+	it('reports a directory failure to onError, and never retries it as an entry that is too large', async () => {
+		// Before, the fallback retried the directory step too: a transient
+		// failure then wrote a RecordTooLarge notice and never reached onError.
+		const env = await bareEnv(0, 1);
+		const errors: Error[] = [];
+		const log = openAuditLog({ path: '/workspace/audit.jsonl', onError: (e) => errors.push(e) });
+		await log.record(env, entryFor('one'), ctx);
+		expect(errors.map((error) => error.message)).toEqual([expect.stringMatching(/EACCES/)]);
+		expect(await env.exists(log.path, ctx)).toEqual({ ok: true, value: false });
 	});
 });

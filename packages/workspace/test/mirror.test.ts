@@ -95,8 +95,13 @@ describe('Workspace.mirror', () => {
 		const texts = async () =>
 			(await site.use(reader, (env) => readLines(env, first.path))).map((line) => line.text);
 		expect(await texts()).toEqual(['one', 'two', 'three']);
+		// A file beside the log that no rotation made does not count: its
+		// higher seq would hide message 4 from the resume.
+		await site.use(reader, (env) =>
+			env.writeFile(`${first.path}.bak`, `${JSON.stringify({ seq: 9 })}\n`, BACKGROUND_CONTEXT),
+		);
 		// A fresh call, as a restarted host would make: no in-memory state survives.
-		const second = await site.mirror(fakeRoom('lobby', backlog));
+		const second = await site.mirror(fakeRoom('lobby', [...backlog, said(4, 'four')]));
 		await second.stop();
 
 		const lines = await site.use(reader, (env) => readLines(env, second.path));
@@ -104,6 +109,7 @@ describe('Workspace.mirror', () => {
 			[1, 'one'],
 			[2, 'two'],
 			[3, 'three'],
+			[4, 'four'],
 		]);
 		expect(lines.every((line) => line.room === 'lobby')).toBe(true);
 		await site.dispose();

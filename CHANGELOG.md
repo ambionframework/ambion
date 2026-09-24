@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+**The tool-call audit log reports a directory failure to `onError`.** Before,
+the fallback for an entry too large for the backend retried the directory
+step with the write. A transient failure to create the directory then wrote
+a notice that named an entry too large, and `onError` got no call. The
+fallback now retries the write alone.
+
+**A log path must be absolute, normalized, and have no trailing slash.**
+`openLog` and the audit log refuse a doubled slash, a `.` or `..` segment,
+and a trailing slash at open. The audit log's `maxBytes` must be a positive
+number, the same as `rotateBytes` of `openLog`.
+
+**The room mirror ignores a stray file beside its log.** When `mirror()`
+resumes, it reads the log file and the files that rotation made of it. A
+file such as `messages.jsonl.bak` no longer counts. The logs share one core
+in `@ambionframework/workspace`, with no change to its exports.
+
 **A Cloudflare object keeps its metadata in one table row.** The room
 object's `name`, `agents`, and `stopped`, and the seat object's activation
 state, live in the `ambion_metadata` table of the object's SQLite. Before,

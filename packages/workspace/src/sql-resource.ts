@@ -20,6 +20,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import { defineTool, type ToolBundle, type ToolContext } from '@ambionframework/ambion';
 import { Type } from 'typebox';
+import { callEnvelope } from './call-envelope.ts';
+import { markdownTable } from './markdown-table.ts';
 import {
 	openResource,
 	type ResourceBackend,
@@ -206,13 +208,12 @@ function runRecord(
 }
 
 function provenanceOf(ctx: ToolContext): SqlProvenance {
+	const { exchange, ...placed } = callEnvelope(ctx);
 	return {
-		agent: ctx.agent.name,
-		...(ctx.room === undefined ? {} : { room: ctx.room }),
-		...(ctx.activation === undefined ? {} : { activation: ctx.activation }),
-		...(ctx.exchange === undefined
+		...placed,
+		...(exchange === undefined
 			? {}
-			: { exchange_owner: ctx.exchange.owner, exchange_from: String(ctx.exchange.from) }),
+			: { exchange_owner: exchange.owner, exchange_from: String(exchange.from) }),
 		at: new Date().toISOString(),
 	};
 }
@@ -269,19 +270,9 @@ function renderTable(rows: Record<string, SqlValue>[], maxRows: number): string 
 	if (rows.length === 0) return 'No rows.';
 	const columns = Object.keys(rows[0] ?? {});
 	const shown = rows.slice(0, maxRows);
-	const header = `| ${columns.map(cell).join(' | ')} |`;
-	const rule = `| ${columns.map(() => '---').join(' | ')} |`;
-	const body = shown.map((row) => `| ${columns.map((name) => cell(row[name])).join(' | ')} |`);
 	const footer =
 		rows.length > shown.length
 			? `Shows ${shown.length} of ${rows.length} rows. Add a LIMIT.`
 			: `${rows.length} ${rows.length === 1 ? 'row' : 'rows'}.`;
-	return `${[header, rule, ...body].join('\n')}\n\n${footer}`;
-}
-
-/** One table cell: NULL for a missing value, and pipes and newlines made safe. */
-function cell(value: SqlValue | undefined): string {
-	if (value === null || value === undefined) return 'NULL';
-	if (value instanceof Uint8Array) return `(${value.length} bytes)`;
-	return String(value).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+	return `${markdownTable(columns, shown)}\n\n${footer}`;
 }
