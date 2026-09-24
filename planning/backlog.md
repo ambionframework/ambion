@@ -60,14 +60,18 @@ measurement of 0.3.0 item W2 comes near the default
 `limits.lease.ttl` of 60 seconds ([envelope.md](../docs/envelope.md)). Past
 that point, replay sets the recovery time.
 
-**More kinds of job, and the end of a job as a notice.**
-[Processes](../docs/processes.md) names a job by a handle, `<kind>-<random>`, and
-`bash` is the one kind. A clone that runs past its call and a SQL export
-are candidate kinds. The end of a job wakes no seat: the seat calls `wait`
-or `status`. The notice of 0.3.0 item W1 can carry the end of a job. The
-job table lives in the host's memory, so a restart of the host loses every
-handle. **Condition:** a second kind of work that outlives its call, or a
-seat that must wake when a job ends.
+**Processes linked to the room, more kinds of process, and the end of a
+process as a notice.** A process runs until it ends, times out, or gets a
+cancel ([Processes](../docs/processes.md)). An exchange closes when no
+activation is live, so a cancel at the close stops a process at the first
+quiet moment. A link to the room needs its own design. The handle is
+`<kind>-<random>`, and `bash` is the one kind. A clone that runs past its
+call and a SQL export are candidate kinds. The end of a process wakes no
+seat: the seat calls `wait` or `status`. The notice of 0.3.0 item W1 can
+carry it. The process table lives in the host's memory, so a restart of
+the host loses every handle. **Condition:** a seat that must wake when a
+process ends, a process that must stop with its exchange, or a second
+kind of work that outlives its call.
 
 **Tool execution provenance beyond the activation.** `ToolContext` carries
 the activation, the exchange, and the room. A purpose field, a retry-safe

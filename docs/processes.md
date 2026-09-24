@@ -4,15 +4,15 @@
 processes in a workspace. Part of it is on this branch, and part of it
 waits for review before the code starts.
 
-| Part                                                       | State                              |
-| ---------------------------------------------------------- | ---------------------------------- |
-| `bash` starts a background process and gives a handle      | On this branch, under the word job |
-| `status`, `wait`, and `cancel` take a handle               | On this branch                     |
-| The output file, the limits, and disposal                  | On this branch, under `~/.jobs`    |
-| The word process, and `~/.processes`                       | Pending review                     |
-| `ps`: the running processes of one agent or of all         | Pending review                     |
-| A reminder of running processes in each activation         | Pending review, one core change    |
-| A cancel of every running process when its exchange closes | Pending review                     |
+| Part                                                  | State                              |
+| ----------------------------------------------------- | ---------------------------------- |
+| `bash` starts a background process and gives a handle | On this branch, under the word job |
+| `status`, `wait`, and `cancel` take a handle          | On this branch                     |
+| The output file, the limits, and disposal             | On this branch, under `~/.jobs`    |
+| The word process, `~/.processes`, and `name`          | Pending review                     |
+| `ps`: the running processes of one agent or of all    | Pending review                     |
+| `workspace.processes`: the host's view of processes   | Pending review                     |
+| A reminder of processes at the start of an activation | Pending review, one core change    |
 
 [For review](#for-review) lists the decisions that this page takes and
 that the review must confirm.
@@ -23,27 +23,31 @@ and `ps` lists the processes. The whole output of a process goes to a
 file in the agent's home. Every workspace has these five tools, on every
 bash backend.
 
+**A process runs until it ends, times out, or gets a cancel.** An
+activation, an exchange, and a room do not stop a process. The host sees
+every process through `workspace.processes`, and it can show them to a
+person ([The host's view](#the-hosts-view)).
+
 **`@ambionframework/workspace` implements this page.** The process table
 is `packages/workspace/src/jobs.ts`, and the tools are
 `packages/workspace/src/job-tools.ts`. The journal holds no entry for a
-process. The room gives the workspace two facts: the room and the
-exchange of each tool call, and the close of an exchange.
-[Workspace](workspace.md) states the owner and the backends that a process
-runs on.
+process. [Workspace](workspace.md) states the owner and the backends that
+a process runs on.
 
 ## Words
 
 | Word        | Meaning                                                                                |
 | ----------- | -------------------------------------------------------------------------------------- |
 | process     | One background command that the workspace runs for one agent. It replaces the word job |
-| handle      | The name of one process: `<kind>-<12 hex digits>`, such as `bash-3f9a2c1d0b7e`         |
+| handle      | The key of one process: `<kind>-<12 hex digits>`, such as `bash-3f9a2c1d0b7e`          |
+| name        | A label that the agent gives a process, such as `tests`                                |
 | owner agent | The agent whose call started the process                                               |
 | output file | `~/.processes/<handle>.out` in the owner agent's home                                  |
 | kind        | What started the process. `bash` is the one kind today                                 |
 
-**A process is workspace state.** A process is not an operating-system
-process. On the workstation it holds one, on the server. On just-bash it
-holds a command that runs in the host's process.
+**A process is an entry in the process table of the workspace.** On the
+workstation, it holds one process group on the server. On just-bash, it
+holds one command that runs in the host's process.
 
 ## The tools
 
@@ -62,26 +66,24 @@ holds a command that runs in the host's process.
 | `wait` `timeout`     | 30 s    | 0 to 600 s                    |
 | The wait of `cancel` | 10 s    | Fixed                         |
 
-**`name` gives a process a short name that the agent chooses.** A name is
-1 to 40 characters: lowercase letters, digits, `.`, `_`, and `-`, such as
-`tests` or `dev-server`. The result line, `ps`, and the reminder show it
-beside the handle. A name is a label: the handle stays the key of the
-process, and `status`, `wait`, and `cancel` take the handle alone. Two
-processes can have the same name. A process with no name shows its
-command in the places that show a name.
-
 **`bash` with `wait` is `bash` with a `wait` of 0 and then the `wait`
 tool.** A command that ends inside the window gives its output and its
 exit code in one call. The agent needs a second call only for a command
 that runs longer. A value outside its range makes the call fail with
 `Invalid`.
 
+**`name` is a label that the agent chooses.** A name is 1 to 40
+characters: lowercase letters, digits, `.`, `_`, and `-`. The result line,
+`ps`, the reminder, and the host's view show it beside the handle. The
+handle stays the key: `status`, `wait`, and `cancel` take the handle
+alone. Two processes can have the same name.
+
 ## The result
 
 **Each result of `bash`, `status`, `wait`, and `cancel` is the end of the
 output, then one bracketed line.** The line states the process, its
-handle, and its output file. A process that ended with no output shows
-`(no output)`.
+handle, its name when it has one, and its output file. A process that
+ended with no output shows `(no output)`.
 
 ```text
 /home/writer
@@ -96,20 +98,13 @@ compiling 14 of 120
 [Process bash-3f9a2c1d0b7e (tests) is running. Output: /home/writer/.processes/bash-3f9a2c1d0b7e.out. Call status, wait or cancel with its handle.]
 ```
 
-| State       | The bracketed line                                     |
-| ----------- | ------------------------------------------------------ |
-| `running`   | `Process <h> is running. ... Call status, wait or ...` |
-| `exited`    | `Process <h> exited with code <n>.`                    |
-| `timed_out` | `Process <h> timed out after <timeout> seconds.`       |
-| `cancelled` | `Process <h> is cancelled.`                            |
-| `failed`    | `Process <h> failed: <message>.`                       |
-
-**A process with a name shows it in brackets after the handle.** The
-table above writes `<h>` for the handle and the name together.
-
-**A process that the close of its exchange cancelled says so.** Its line
-is `Process <h> is cancelled: its exchange closed.`
-([The end of an exchange](#the-end-of-an-exchange)).
+| State       | The bracketed line, where `<h>` is the handle and the name |
+| ----------- | ---------------------------------------------------------- |
+| `running`   | `Process <h> is running. ... Call status, wait or ...`     |
+| `exited`    | `Process <h> exited with code <n>.`                        |
+| `timed_out` | `Process <h> timed out after <timeout> seconds.`           |
+| `cancelled` | `Process <h> is cancelled.`                                |
+| `failed`    | `Process <h> failed: <message>.`                           |
 
 **The view keeps the last 2000 lines or 50 KB.** These are the limits of
 Pi's `bash` tool. When the view cuts the output, the bracketed line adds
@@ -117,11 +112,24 @@ Pi's `bash` tool. When the view cuts the output, the bracketed line adds
 the rest from the output file with `read`, which takes an offset and a
 limit.
 
-**`details` holds the status of the process and the truncation.**
-`details.process` is a `ProcessStatus`: the handle, the name when the
-agent gave one, the kind, the owner agent, the command, the state, the output path, the timeout, the room and
-the exchange that started it, the start and end times, and the exit code
-or the error.
+**`details.process` is a `ProcessStatus`.** The host's view gives the
+same value.
+
+| Field       | Holds                                                        |
+| ----------- | ------------------------------------------------------------ |
+| `handle`    | The key of the process                                       |
+| `name`      | The label, when the agent gave one                           |
+| `kind`      | `bash`                                                       |
+| `agent`     | The owner agent                                              |
+| `command`   | The command as the agent gave it                             |
+| `state`     | `running`, `exited`, `timed_out`, `cancelled`, or `failed`   |
+| `output`    | The absolute path of the output file                         |
+| `timeout`   | Seconds the process may run                                  |
+| `room`      | The room of the `bash` call, when it had one. Metadata alone |
+| `startedAt` | ISO time of the start                                        |
+| `endedAt`   | ISO time of the end, when the state is final                 |
+| `exitCode`  | Set when the state is `exited`                               |
+| `error`     | Set when the state is `failed`                               |
 
 **A `bash` call fails when its process ends inside the window with a
 failure.** The failures are an exit code other than 0, a timeout, and a
@@ -174,7 +182,7 @@ a large output does not reach the host whole.
 | The error code `aborted`    | `cancelled` |
 | Any other error, or a throw | `failed`    |
 
-## Handles
+## Handles and limits
 
 **A handle is `<kind>-<12 hex digits>`.** An example is
 `bash-3f9a2c1d0b7e`. The output file has the handle as its name.
@@ -199,11 +207,17 @@ The output files stay on the filesystem.
   oldest finished process past that number. The table removes the
   output file of that process in the same operation.
 
+**The table stops the processes of one agent one at a time.** A stop on
+the workstation opens a channel of its own for the kill. A stop waits for
+the stops of the same agent before it, so the stops of one agent hold at
+most one kill channel. A cancel, a timeout, and `dispose()` all stop a
+process this way ([For review](#for-review), item 2).
+
 ## ps
 
 **`ps` lists running processes from the process table.** It reads no
-file and runs no command, so it is one read of the host's memory. It
-answers for every backend in the same way.
+output file and runs no command. It answers for every backend in the same
+way.
 
 | Parameters        | What `ps` lists                             |
 | ----------------- | ------------------------------------------- |
@@ -212,15 +226,15 @@ answers for every backend in the same way.
 | `all: true`       | The running processes of every agent        |
 | `agent` and `all` | Nothing: the call fails with `Invalid`      |
 
-**Each row states one process.** The rows are in the order the processes
-started. The command shows its first line, cut to 80 characters. A
-process with no name has an empty name cell.
+**Each line states one process, in the order the processes started.** The
+command shows its first line, cut to 80 characters. A process with no
+name has an empty name cell.
 
 ```text
-| Handle            | Name       | Agent  | Runs for | Room  | Command            |
-| ----------------- | ------ | -------- | ----- | ------------------ |
-| bash-3f9a2c1d0b7e | tests      | writer | 2m 14s   | lobby | npm test           |
-| bash-9c01d4e2aa31 | server-log | writer | 12s      | lobby | tail -f server.log |
+| Handle            | Name       | Agent  | Runs for | Command            |
+| ----------------- | ---------- | ------ | -------- | ------------------ |
+| bash-3f9a2c1d0b7e | tests      | writer | 2m 14s   | npm test           |
+| bash-9c01d4e2aa31 | server-log | writer | 12s      | tail -f server.log |
 
 2 running processes.
 ```
@@ -228,28 +242,69 @@ process with no name has an empty name cell.
 **A call with no running process to list gives one line.** It is
 `No running processes.`, or `<name> has no running processes.`
 
-**Another agent's row gives the metadata of its process alone.** The
-command text is visible to every agent in the workspace, as `ps` on a Unix
-server shows the command lines of other users. The output of the process
-is not: `status`, `wait`, and `cancel` stay with the owner agent.
+**Another agent's line gives the handle, the name, the agent, and the run
+time.** Its command cell is empty, since a command line can hold a token.
+The output of the process stays with the owner agent: `status`, `wait`,
+and `cancel` take the caller's own handles
+([For review](#for-review), item 4).
 
 **`ps` lists running processes alone.** A finished process stays in the
-table ([Handles](#handles)), and `status` reaches it by its handle. The
-reminder names the finished processes that the agent has not yet seen
-([Reminders](#reminders)).
+table ([Handles and limits](#handles-and-limits)), and `status` reaches it
+by its handle.
+
+## The host's view
+
+**`workspace.processes` gives the host every process of the workspace.**
+A host uses it to show a person what runs, and to stop a process that an
+agent left running. It reads the process table. It adds no tool.
+
+```ts
+export interface WorkspaceProcesses {
+  /** The processes in the table, in the order they started. */
+  list(query?: { agent?: string; running?: boolean }): readonly ProcessStatus[];
+  /** Call `listener` when a process starts and when it ends. Returns the unsubscribe. */
+  subscribe(listener: (event: ProcessEvent) => void): () => void;
+  /** Stop the process `handle` of any agent, and give its final status. */
+  cancel(handle: string): Promise<ProcessStatus>;
+}
+
+export type ProcessEvent =
+  | { readonly type: 'started'; readonly process: ProcessStatus }
+  | { readonly type: 'ended'; readonly process: ProcessStatus };
+```
+
+**`list` gives frozen values.** `running: true` gives the running
+processes alone. `agent` gives the processes of one owner agent.
+
+**`subscribe` gives one event when a process starts and one when it
+ends.** A host keeps its view current from the events, with no poll. A
+listener that throws does not stop the other listeners or the process.
+The events belong to the current run of the host.
+
+**The host reads the output of a process through `workspace.use`, as the
+owner agent.** `ProcessStatus.output` gives the path. The host needs no
+second read path.
+
+```ts
+const view = site.processes.list({ running: true });
+const unsubscribe = site.processes.subscribe((event) => render(event.process));
+const tail = await site.use({ name: view[0].agent }, (env) =>
+  env.readTextFile(view[0].output, BACKGROUND_CONTEXT),
+);
+```
 
 ## Reminders
 
-**Each activation of a seat starts with a list of its processes.** A
-seat can lose a handle: a new activation, a compaction of its session, or
-a harness with no session all start with no memory of an earlier
-`bash` call. The reminder gives the handles back.
+**Each activation of a seat starts with a list of its processes.** A seat
+can lose a handle. A new activation, a compaction of its session, or a
+harness with no session all start with no memory of an earlier `bash`
+call. The reminder gives the handles back.
 
 **The reminder names two sets of the seat's processes.**
 
 - Every running process of the agent, in every room of the workspace.
-- Every finished process of the agent whose final state no result has
-  shown yet. The reminder shows it once, and marks it as seen.
+- The finished processes of the agent that no result or reminder showed
+  yet: the newest 10, then `and <n> more`.
 
 ```text
 Your background processes in the workspace:
@@ -260,92 +315,59 @@ Call status, wait or cancel with a handle. Call ps to list processes.
 ```
 
 **Each line starts with the name when the process has one.** The handle
-follows it. A process with no name starts with its handle.
+follows it. A process from another room names that room.
 
-**A seat with no process to name gets no reminder.** The activation text
-then has no line about processes.
+**A seat with no process to name gets no reminder.** A summarize
+activation gets no reminder either: it has no workspace tools.
 
-**The reminder needs one change in the core: a bundle gives text for each
-activation.** `ToolBundle` gets one optional member. `defineAgent` keeps
-it for each bundle, and `renderActivation` calls it once for each
-activation, in every executor.
+**The reminder needs one change in the core.** A bundle gives text for
+each activation, and the room renders it.
+
+- `ToolBundle` gets an optional `remind` function.
+- `describeExecutor` collects the `remind` of each bundle into a new
+  `AgentExecutor` field, `reminders`, beside `tools` and `guidance`.
+- `renderActivation` calls each reminder for a respond activation, and
+  adds the text to the turn context. Pi, Claude, and Codex render through
+  it, so each executor that renders gets the reminder.
 
 ```ts
 export interface ToolBundle {
   readonly tools: readonly AmbionTool[];
   readonly guidance?: string;
-  /**
-   * Text for one activation of one seat, or undefined for none. The room
-   * calls it when it renders the activation, after `guidance`.
-   */
+  /** Text for one activation of one seat, or undefined for none. */
   readonly remind?: (seat: {
     readonly agent: string;
     readonly room: string;
     readonly activation: string;
-    readonly exchange?: Pick<ExchangeRef, 'owner' | 'from'>;
   }) => string | undefined;
 }
 ```
 
-**`remind` is synchronous.** The process table is in the host's memory,
-so the workspace answers with no I/O. A bundle that needs I/O for its text
-is a later design.
+**`remind` gives the same text for the same activation.** Pi and Claude
+render one activation twice: once for the agent part, and once for the
+context that the model reads. The process table marks the finished
+processes as shown on the first call for an activation, and keeps that
+text for the activation. A second call for the same activation gives the
+same text.
 
-**The reminder goes in the turn context of the activation.** `guidance`
-is the same for every activation, and the agent part holds it. The
-reminder changes on each activation, so it stays out of the agent part,
-and a provider's cache of the agent part stays valid.
+**`remind` is synchronous, and a throw gives no reminder.** The process
+table is in the host's memory, so the workspace answers with no I/O. The
+core catches a throw, and the activation continues with no reminder.
+
+**The reminder goes in the turn context.** The turn context already
+changes on each activation, for example with its clock line. A provider's
+cache of the agent part stays valid.
 
 **The reminder shows at the start of the activation alone.** A later pass
 of the same activation adds no reminder. Every result of a process tool
 states the process, and `ps` gives the whole list.
 
-## The end of an exchange
-
-**The close of an exchange cancels every running process that it
-started.** A process records the room and the exchange of the `bash` call
-that started it, from `ToolContext.room` and `ToolContext.exchange`. When
-the room writes the close of that exchange, the process table cancels
-each running process of that room and exchange, for every agent. The
-state becomes `cancelled`, and the line says `its exchange closed`.
-
-**`workspace.follow(room)` gives the workspace the closes of one room.**
-It subscribes to the room's `exchange_closed` events, and returns a
-handle with `stop()`. A host calls it once for each room that seats the
-workspace's tools, as it calls `mirror()`. The room publishes
-`exchange_closed` already, so the room and the journal do not change.
-
-```ts
-const site = openWorkspace({ name: 'lab', backend: { bash: memoryBackend() } });
-const room = await openRoom({ name: 'lobby', seats: [surveyor] });
-const following = site.follow(room);
-// ...
-await following.stop();
-```
-
-**A process that starts after the close of its exchange lives as long as
-its call.** A closing activation runs after the close, with the exchange
-it summarizes. The table remembers the closes it saw, and cancels such a
-process when its `bash` call returns.
-
-**Two kinds of process have no exchange to close.** A process from a
-call outside a room, and a process from a room that the host does not
-follow, run until they end, until their timeout, or until a cancel.
-
-**The notices belong to the current run of the room.** A room that
-resumes needs a new `follow`. A restart of the host loses the process
-table as well ([Handles](#handles)).
-
-**An exchange that awaits a person is closed.** The `awaiting` outcome
-holds on a closed exchange ([Exchange](exchange.md)), so the close
-cancels its processes too. A build that must outlive the question to a
-person starts again in the next exchange.
-
 ## Life and disposal
 
-**A process outlives the activation that started it.** An abort of the
-`bash` call stops the call's wait. The process keeps running until it
-ends, it times out, an agent cancels it, or its exchange closes.
+**A process outlives the call, the activation, and the exchange that
+started it.** An abort of the `bash` call stops the call's wait. The
+process keeps running until it ends, it times out, the owner agent or the
+host cancels it, or the workspace disposes.
 
 **`wait` gives the state when the process ends or when the time ends.** A
 process that is still running gives `running`. An abort of the call stops
@@ -355,12 +377,6 @@ the wait, and the process keeps running.
 The backend's abort path stops the command, and the state becomes
 `cancelled`. A `cancel` of a process in a final state gives that state
 again.
-
-**The process table stops the processes of one agent one at a time.** An
-abort on the workstation opens a channel of its own. A stop waits for the
-stops of the same agent before it, so two stops never hold two abort
-channels on one client. The close of an exchange and `dispose()` stop
-processes in the same way.
 
 **`dispose()` stops every process before the bash backend releases its
 handles.** The bash owner refuses new work and drains its queue. The
@@ -391,8 +407,8 @@ The idle timeout starts when the last one is cleaned up
 **Each call of the five tools has one audit entry.** The entry runs on
 the bash owner after the call ends. The entry of a `bash` call holds the
 state at the end of the call, which can be `running`. The end of a
-process has no entry of its own, and neither has a cancel by the close
-of an exchange. The output file is the record.
+process has no entry of its own, and a cancel by the host has none. The
+output file is the record.
 
 ## The guidance
 
@@ -406,17 +422,22 @@ The call waits up to wait seconds, 10 by default, and then gives the state of th
 The whole output of a process goes to ~/.processes/<handle>.out. Read it with read.
 status, wait and cancel take a handle. status gives the state of the process, wait waits for it to end,
 and cancel stops it. ps lists running processes: yours, one agent's, or every agent's.
-A process stops after timeout seconds, 600 by default, or when its exchange closes.
+A process keeps running after your activation ends. It stops after timeout seconds, 600 by default.
 ```
 
-## Kinds of process
+## Out of scope
+
+**A process has no link to the life of an activation, an exchange, or a
+room.** A cancel at the close of an exchange needs more design: an
+exchange closes when no activation is live, so such a rule stops a
+process at the first quiet moment. [Backlog](../planning/backlog.md#designs-with-a-shape)
+holds the linked lives, the kinds of process after `bash`, and the notice
+at the end of a process.
 
 **A new kind adds three parts.** It adds a name to `ProcessKind`, a
 runner that gives a final state, and a tool that starts it. The process
-table, the handle format, the output file, `ps`, the reminder, and the
-three handle tools stay as they are.
-[Backlog](../planning/backlog.md#designs-with-a-shape) holds the kinds and
-the notice that wait for a condition.
+table, the handle format, the output file, `ps`, the host's view, the
+reminder, and the three handle tools stay as they are.
 
 ## For review
 
@@ -425,38 +446,44 @@ review confirms it or changes it.
 
 1. **The word process replaces job.** The code renames `JobStatus` to
    `ProcessStatus`, `details.job` to `details.process`, and `~/.jobs` to
-   `~/.processes`. The state line says `Process`. The handle format stays.
-   _Recommendation:_ rename, since `ps` and this page use process.
-2. **The reminder needs `ToolBundle.remind` in the core.** The
-   alternatives change nothing in the core, and each misses the start of
-   an activation. A footer on each tool result reaches the seat only
-   after its first call. A guidance line that tells the seat to call `ps`
-   first costs one call in every activation, and a seat can skip it.
-   _Recommendation:_ add `remind`.
-3. **`follow(room)` gives the closes to the workspace.** The alternative
-   is a bundle hook that the room calls on a close, which changes the
-   room. A second alternative cancels lazily: a room has one open
-   exchange, so a call with a new exchange means the old one closed. It
-   cancels late, at the next call in the room. _Recommendation:_
-   `follow`, with no lazy sweep.
-4. **`ps` shows the processes of other agents, with their command
-   text.** `status`, `wait`, and `cancel` stay with the owner agent.
-   _Recommendation:_ as stated. A `wait` on another agent's process is
-   useful for coordination, and it can come later, with no output.
-5. **The close of an `awaiting` exchange cancels its processes.**
-   _Recommendation:_ cancel, for now, as the request states.
-6. **A crash of the host leaves a workstation process on the server.**
-   The host holds the timeout, and a dead host kills nothing. The group
-   keeps running until it ends by itself. _Recommendation:_ a later
-   change wraps the command in `timeout --kill-after` on the server. It
-   stays out of this change.
-7. **The reminder names processes in every room of the workspace.** A
-   seat in two rooms sees the processes it started in each.
-   _Recommendation:_ every room, with the room in the row when it is not
-   the current room.
-8. **A name is a label, and the handle stays the key.** An agent recalls
-   `tests` more easily than `bash-3f9a2c1d0b7e`, and the reminder gives
-   both. A name that `status`, `wait`, and `cancel` accept needs a rule
-   for two running processes with one name. _Recommendation:_ a label
-   alone, with no uniqueness rule. Accept a name in place of a handle
-   later, if seats pass names to these tools.
+   `~/.processes`, in one commit with no alias. _Recommendation:_ rename.
+2. **A timeout kill can go past the SSH channel limit today.** The
+   workstation kills a process at its timeout through a channel of its
+   own, outside the table's stops. Four processes that time out together
+   need 11 channels, and OpenSSH allows 10. A kill whose channel fails
+   leaves the group running on the server. _Recommendation:_ the table
+   holds the timer, and a timeout stops the process through the same
+   stops as a cancel, with the state `timed_out`. The alternative is a
+   limit of 3 running processes.
+3. **The default timeout stays at 600 seconds.** A dev server needs a
+   longer one, and the agent sets it. A process with no timeout outlives
+   a crash of the host on the workstation with no bound (item 7).
+   _Recommendation:_ keep 600, and let the agent raise it.
+4. **`ps` shows every agent's command text.** Command lines can hold
+   tokens. The server's own `ps` shows them on the workstation, and on
+   just-bash this is new. _Recommendation:_ another agent's line gives
+   the handle, the name, the agent, and the run time. The command text
+   shows for the caller's own processes. The host's view shows all.
+5. **The reminder needs `remind` in the core.** The alternatives change
+   nothing in the core, and each misses the start of an activation. A
+   footer on each tool result reaches the seat only after its first call.
+   A guidance line that tells the seat to call `ps` first costs one call
+   in each activation. _Recommendation:_ add `remind` as stated.
+6. **The host's view is `list`, `subscribe`, and `cancel`.** It adds no
+   read of the output: the host uses `workspace.use` as the owner agent.
+   _Recommendation:_ as stated. A helper that reads the end of the output
+   can come when a host needs it.
+7. **A crash of the host leaves a workstation process on the server.**
+   The host holds the timeout, and a dead host kills nothing.
+   _Recommendation:_ a later change wraps the command in
+   `timeout --kill-after` on the server.
+8. **Output files outlive a restart of the host.** The table forgets
+   them, and nothing removes them. _Recommendation:_ the host owns the
+   cleanup of `~/.processes` across restarts, and this page says so.
+9. **A name is a label, and the handle stays the key.** _Recommendation:_
+   no rule for two processes with one name. Accept a name in place of a
+   handle later, if seats pass names to the handle tools.
+10. **`ps` writes an audit entry, as every tool call does.** The entry
+    costs one file write on the bash owner for a read of memory.
+    _Recommendation:_ keep the entry, since the audit log records every
+    tool call.
