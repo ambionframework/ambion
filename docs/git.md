@@ -361,14 +361,15 @@ holds the bundle, so the git note stays at six lines.
 
 **`openWorkspace` joins the notes in this order.**
 
-1. The tool line, which counts the tools. With a git backend it names six:
-   read, write, edit, bash, repos and fork. With a SQL backend as well, it
-   names seven.
-2. The SQL note, when the workspace has a SQL backend.
-3. The git note.
-4. The bash backend's note about its shell.
-5. The audit note, when `audit` is set.
-6. The rooms note.
+1. The tool line, which counts the tools. With a git backend it names
+   ten: read, write, edit, bash, ps, status, wait, cancel, repos and fork.
+   With a SQL backend as well, it names eleven.
+2. The process note ([Processes](processes.md#the-guidance)).
+3. The SQL note, when the workspace has a SQL backend.
+4. The git note.
+5. The bash backend's note about its shell.
+6. The audit note, when `audit` is set.
+7. The rooms note.
 
 **The git note states the namespaces and the rule that persists an
 edit.** The workspace writes the backend's `server` into the first line.

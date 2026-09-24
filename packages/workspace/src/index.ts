@@ -71,6 +71,8 @@ export type {
 export type { WorkspaceLog, WorkspaceLogOptions } from './log.ts';
 export { openLog } from './log.ts';
 export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.ts';
+export type { ProcessKind, ProcessState, ProcessStatus } from './process-files.ts';
+export type { ProcessEvent, ProcessQuery } from './processes.ts';
 export type {
 	SqlBackend,
 	SqlEnv,
@@ -81,7 +83,7 @@ export type {
 	WorkspaceFiles,
 } from './sql-backend.ts';
 export { sqlResult } from './sql-result.ts';
-export type { Workspace } from './workspace.ts';
+export type { Workspace, WorkspaceProcesses } from './workspace.ts';
 export { openWorkspace } from './workspace.ts';
 
 /** Kept in step with package.json by a test. */

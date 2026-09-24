@@ -285,7 +285,8 @@ session, and the fresh start.
 **A session carries the id of the activation that began it.** The release
 records `{ harness: 'pi', id }`. An activation reopens the session only
 when `spec.resume` names that id. Its first prompt is the delta: the record
-beyond the position the session read through. A delta with no message
+beyond the position the session read through, after the reminders of the
+tool bundles ([Processes](processes.md#reminders)). A delta with no message
 starts no run. A closing activation reads the whole view. `readThrough`
 starts at the position the session read through.
 

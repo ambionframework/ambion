@@ -76,6 +76,7 @@ function toFileInfo(path: string, stats: Stats): FileInfo {
 export class SshEnv extends HomeEnv implements WorkspaceEnv {
 	private readonly channels = new Set<ClientChannel>();
 	private readonly host: CommandHost;
+	private released = false;
 
 	constructor(
 		private readonly session: Session,
@@ -372,10 +373,12 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 		return runCommand(this.host, command, cwd, options, context);
 	}
 
-	/** Close any channel the operation left open, and hand the client back to the backend. */
+	/** Close any channel the operation left open, and hand the client back to the backend once. */
 	async cleanup(): Promise<void> {
 		for (const channel of this.channels) channel.close();
 		this.channels.clear();
+		if (this.released) return;
+		this.released = true;
 		this.release();
 	}
 }

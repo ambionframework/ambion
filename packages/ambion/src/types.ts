@@ -8,6 +8,7 @@
 
 import type { Seq as RecordSeq } from '@ambionframework/journal';
 import type { TSchema } from 'typebox';
+import type { Reminder } from './bundle.ts';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = RecordSeq;
@@ -516,12 +517,6 @@ export interface ToolContext {
 	readonly exchange?: Pick<ExchangeRef, 'owner' | 'from'>;
 }
 
-/** A composable set of tools and the guidance that explains their use. */
-export interface ToolBundle {
-	readonly tools: readonly AmbionTool[];
-	readonly guidance?: string;
-}
-
 /** One normalized tool definition used by the room executor. */
 export interface AmbionTool {
 	readonly name: string;
@@ -565,6 +560,8 @@ export interface AgentExecutor {
 	readonly tools: readonly AmbionTool[];
 	/** Guidance composed from the agent's tool bundles. */
 	readonly guidance?: string;
+	/** The reminders of the agent's tool bundles, in bundle order. */
+	readonly reminders?: readonly Reminder[];
 	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
 	readonly speaking?: string;
 	/**

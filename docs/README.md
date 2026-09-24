@@ -11,33 +11,34 @@ each page.
 
 ## Contracts
 
-| Document                              | Use it for                                                             |
-| ------------------------------------- | ---------------------------------------------------------------------- |
-| [Room](room.md)                       | Overview, glossary, and the room-wide mechanisms                       |
-| [Technical facts](technical-facts.md) | Key facts, what is new, packages, and the limits of 0.2.0              |
-| [Definitions and tools](agent.md)     | Definitions and tools                                                  |
-| [Executors](executors.md)             | The executor contract, steps, the trace, and adapters                  |
-| [Pi executor](pi.md)                  | The Pi package: options, exchange continuity, testing                  |
-| [Claude executor](claude.md)          | The Claude Agent SDK package: policy, trust, sessions, testing         |
-| [Codex](codex.md)                     | The Codex SDK executor: install, options, trust, and testing           |
-| [Assistant](assistant.md)             | The default assistant package and the `assistant` room option          |
-| [Exchange](exchange.md)               | Human questions, completion, and durable result handles                |
-| [Presence](presence.md)               | Visits, arrivals, departures, and catch-up                             |
-| [Roster](roster.md)                   | Agent membership, reserve, and attention                               |
-| [Trust](trust.md)                     | What one owner guarantees another, and what the kernel does not defend |
-| [Patterns](patterns.md)               | The human collaboration patterns the room represents                   |
-| [Summaries](summary.md)               | Optional closing work and context replacement                          |
-| [Resources](resources.md)             | The resource contract, references, and provenance                      |
-| [Workspace](workspace.md)             | The workspace interface, its backends, and its tools                   |
-| [Workstation](workstation.md)         | A remote server as a workspace over SSH, one account for each agent    |
-| [Git](git.md)                         | A git backend: read-only templates, forks, clones, and pushes          |
-| [Workstation git](workstation-git.md) | Proposed: a git backend on the workstation, reached over SSH           |
-| [Example](example.md)                 | The one runnable example: an agentic lab workspace                     |
-| [Durability](durability.md)           | Journal guarantees, recovery, leases, and failure evidence             |
-| [Formal](formal.md)                   | The verified rules, their proofs, and how the gate runs them           |
-| [Deployment](deployment.md)           | Host placement, storage, reconnect, and operational limits             |
-| [Envelope](envelope.md)               | Configurable limits and the measured cost of the fold                  |
-| [Toolchain](toolchain.md)             | Package layout, checks, CI, and release commands                       |
+| Document                              | Use it for                                                                  |
+| ------------------------------------- | --------------------------------------------------------------------------- |
+| [Room](room.md)                       | Overview, glossary, and the room-wide mechanisms                            |
+| [Technical facts](technical-facts.md) | Key facts, what is new, packages, and the limits of 0.2.0                   |
+| [Definitions and tools](agent.md)     | Definitions and tools                                                       |
+| [Executors](executors.md)             | The executor contract, steps, the trace, and adapters                       |
+| [Pi executor](pi.md)                  | The Pi package: options, exchange continuity, testing                       |
+| [Claude executor](claude.md)          | The Claude Agent SDK package: policy, trust, sessions, testing              |
+| [Codex](codex.md)                     | The Codex SDK executor: install, options, trust, and testing                |
+| [Assistant](assistant.md)             | The default assistant package and the `assistant` room option               |
+| [Exchange](exchange.md)               | Human questions, completion, and durable result handles                     |
+| [Presence](presence.md)               | Visits, arrivals, departures, and catch-up                                  |
+| [Roster](roster.md)                   | Agent membership, reserve, and attention                                    |
+| [Trust](trust.md)                     | What one owner guarantees another, and what the kernel does not defend      |
+| [Patterns](patterns.md)               | The human collaboration patterns the room represents                        |
+| [Summaries](summary.md)               | Optional closing work and context replacement                               |
+| [Resources](resources.md)             | The resource contract, references, and provenance                           |
+| [Workspace](workspace.md)             | The workspace interface, its backends, and its tools                        |
+| [Processes](processes.md)             | Background processes: `bash`, `ps`, handles, the host's view, and reminders |
+| [Workstation](workstation.md)         | A remote server as a workspace over SSH, one account for each agent         |
+| [Git](git.md)                         | A git backend: read-only templates, forks, clones, and pushes               |
+| [Workstation git](workstation-git.md) | Proposed: a git backend on the workstation, reached over SSH                |
+| [Example](example.md)                 | The one runnable example: an agentic lab workspace                          |
+| [Durability](durability.md)           | Journal guarantees, recovery, leases, and failure evidence                  |
+| [Formal](formal.md)                   | The verified rules, their proofs, and how the gate runs them                |
+| [Deployment](deployment.md)           | Host placement, storage, reconnect, and operational limits                  |
+| [Envelope](envelope.md)               | Configurable limits and the measured cost of the fold                       |
+| [Toolchain](toolchain.md)             | Package layout, checks, CI, and release commands                            |
 
 ## Navigation hints
 
@@ -45,8 +46,9 @@ Read `patterns.md` to find which primitive represents a human pattern.
 
 Read `resources.md` for the resource contract and `workspace.md` for the
 filesystem binding and the just-bash backends of
-`@ambionframework/just-bash`. `workstation.md` is the bash backend for a
-workspace on a remote server over SSH. `git.md` is the git backend of
+`@ambionframework/just-bash`. `processes.md` is the `bash` tool, the
+background processes it starts, and `ps`. `workstation.md` is the bash
+backend for a workspace on a remote server over SSH. `git.md` is the git backend of
 `@ambionframework/git`: read-only templates, forks, clones, and pushes.
 
 `assistant.md` describes the assistant package, the room configuration

@@ -6,6 +6,7 @@
  * needed to resume a room; executable definitions are supplied for each run.
  */
 
+export type { Reminder, ReminderSeat, ToolBundle } from './bundle.ts';
 export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
 export { defineAgent, defineHuman, defineTool } from './define.ts';
 export type { AmbionErrorCode } from './errors.ts';
@@ -60,7 +61,6 @@ export type {
 	Step,
 	SummaryMessage,
 	SummaryOutcome,
-	ToolBundle,
 	ToolContext,
 	ToolExecutionMode,
 	ToolResult,

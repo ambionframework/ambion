@@ -36,7 +36,12 @@ import type {
 	Seq,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
-import { renderActivation, renderDelta, sessionToResume } from '@ambionframework/ambion/hosting';
+import {
+	renderActivation,
+	renderDelta,
+	resolveReminders,
+	sessionToResume,
+} from '@ambionframework/ambion/hosting';
 import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps, plainName } from './claude-trace.ts';
@@ -182,7 +187,7 @@ class Activation implements ExecutorSession {
 		try {
 			if (this.stopped) return { failed: false };
 			this.view = input.view;
-			const prompt = this.promptFor(input);
+			const prompt = await this.promptFor(input);
 			if (prompt === undefined) {
 				this.through = Math.max(this.through, input.view.through);
 				return { failed: false };
@@ -209,9 +214,10 @@ class Activation implements ExecutorSession {
 	 * seat's part for this activation. A closing activation gets its duties
 	 * and the reader's preferences this way.
 	 */
-	private promptFor(input: PassInput): string | undefined {
+	private async promptFor(input: PassInput): Promise<string | undefined> {
 		if (input.kind === 'delta') return renderDelta(input.view, input.since);
-		const { agent, context } = renderActivation(input.view, this.definition);
+		const reminders = await resolveReminders(input.view, this.definition);
+		const { agent, context } = renderActivation(input.view, this.definition, reminders);
 		const resumes =
 			this.stream === undefined && sessionToResume(input.view, 'claude') !== undefined;
 		return resumes ? `${RESUMED_NOTE}\n\n${agent}\n\n${context}` : context;

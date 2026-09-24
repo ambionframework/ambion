@@ -57,19 +57,20 @@ and no `node:sqlite`. The workstation does not depend on
 workspace supplies everything that holds on every backend
 ([The resource contract](workspace.md#the-resource-contract)).
 
-| Part                                  | Owner                                           |
-| ------------------------------------- | ----------------------------------------------- |
-| `connect()` and `dispose()`           | The workstation                                 |
-| `SshEnv`, the transport of each call  | The workstation                                 |
-| `layout`: the audit log and the rooms | The workstation, from its options               |
-| `guidance` about the shell            | The workstation                                 |
-| `read`, `write`, `edit`, `bash`       | The workspace: the four file tools              |
-| `sql`                                 | The workspace, when `backend.sql` is set        |
-| Path rule, deadline, output view      | The workspace: the environment helpers          |
-| Audit log and room mirror             | The workspace, at the paths that `layout` names |
+| Part                                     | Owner                                                        |
+| ---------------------------------------- | ------------------------------------------------------------ |
+| `connect()` and `dispose()`              | The workstation                                              |
+| `SshEnv`, the transport of each call     | The workstation                                              |
+| `layout`: the audit log and the rooms    | The workstation, from its options                            |
+| `guidance` about the shell               | The workstation                                              |
+| `read`, `write`, `edit`                  | The workspace: the three file tools                          |
+| `bash`, `ps`, `status`, `wait`, `cancel` | The workspace: the process tools ([Processes](processes.md)) |
+| `sql`                                    | The workspace, when `backend.sql` is set                     |
+| Path rule, deadline, output view         | The workspace: the environment helpers                       |
+| Audit log and room mirror                | The workspace, at the paths that `layout` names              |
 
-**The workstation adds no tools.** The four file tools cover every file
-and shell operation on a server, so `tools` stays unset.
+**The workstation adds no tools.** The file tools and the process tools cover
+every file and shell operation on a server, so `tools` stays unset.
 
 ## The SSH client
 
@@ -164,7 +165,9 @@ home, so the backend reads it once for each client with `realpath('.')`.
 
 **The server runs bash and util-linux.** `SshEnv` runs each command
 through `bash`, whatever the login shell of the account is. It also needs
-a `setsid` that has the `--wait` option. Each account needs a login shell
+a `setsid` that has the `--wait` option. A new run of the host adopts a
+live process through the `ps` of procps
+([Processes](processes.md#backends)). Each account needs a login shell
 that runs a command, so `nologin` does not serve.
 
 ## The layout on a server
@@ -375,8 +378,11 @@ call adds network round trips to every tool call.
   file call answers `unknown`, and a command answers `ExecutionError`
   `unknown` with no exit code. An append that the connection lost can have
   landed or not, and the caller cannot tell which.
-- **`idleTimeout` closes an unused client.** A client that runs no
-  operation for `idleTimeout` seconds closes, and the default is 300. The
+- **`idleTimeout` closes an unused client.** A client with no open
+  environment for `idleTimeout` seconds closes, and the default is 300.
+  A background process holds an environment of its own for its whole run
+  ([Processes](processes.md#backends)), so a process keeps its client open. The timer
+  starts when the last environment is cleaned up. The
   next `connect()` for that agent builds a new client. A long workspace
   run holds a client only for an agent that works.
 - **`dispose()` closes every client.** The backend deletes no data on the
@@ -384,13 +390,21 @@ call adds network round trips to every tool call.
 
 **The channels stay under the server's limit.** OpenSSH allows 10 sessions
 on one connection by default (`MaxSessions`). The bash owner runs one
-operation at a time, so a client holds at most three channels: SFTP, one
-command, and one abort.
+operation at a time, so the owner's work holds at most three channels of
+a client: SFTP, one command, and one abort. Each running process of the
+agent holds one command channel, and the process table allows 4. The table
+stops the processes of one agent one at a time, and a timeout stops a
+process the same way, so the stops hold at most one abort channel. A
+client then holds at most 8 channels, while each stop ends within its
+grace of 10 seconds. A process that outlives its grace meets the
+backend's own deadline later, and that kill opens one more channel
+([Processes](processes.md#a-process)).
 
-**The bash owner serializes every agent's file and shell work.** A
-workstation keeps one queue in v1, and each operation now waits on the
-network. A long command from one agent delays every other agent's file
-tool. A query runs on the SQL owner, so a command delays no query.
+**The bash owner serializes every agent's file work and the start of each
+process.** A workstation keeps one queue in v1, and each operation now waits
+on the network. A `bash` process runs off the owner, so a long command delays
+no file tool of another agent ([Processes](processes.md#a-process)). A query runs on
+the SQL owner, so a command delays no query.
 
 ## The shared database
 
@@ -459,7 +473,7 @@ and spill file has mode `0600`, and each temporary directory has mode
 
 **Both tiers run `workspaceConformance`.** A `ConformanceBackend` harness
 opens a fresh `workstationBackend` and disposes of it. The cases check the
-`ExecutionEnv` rules that the four file tools need. The scripted harness
+`ExecutionEnv` rules that the file tools and the process tools need. The scripted harness
 starts an `ssh2` server for each case
 (`packages/workstation/test/conformance.test.ts`).
 
