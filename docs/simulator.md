@@ -19,18 +19,25 @@ the judge who reads it.
 ## An eval as a test
 
 **An eval is a vitest test.** It starts a room, runs the simulation, asserts
-on the run, and asks the judge.
+on the run, and asks the judge. The local `support.ts` holds the agent
+definitions, the model id, a runtime on the live model, and `stopAtEnd`.
 
 ```ts
 import { defineHuman, startRoom } from '@ambionframework/ambion';
 import { modelActor, modelJudge, simulate } from '@ambionframework/simulator';
 import { expect, it } from 'vitest';
+import { assistant, liveRuntime, MODEL, payroll, stopAtEnd, weather } from './support.ts';
 
 const priya = defineHuman({ name: 'priya', identity: 'Site manager. Pours concrete.' });
 
 it('the assistant asks the weather desk once, and answers the person', async () => {
   const room = stopAtEnd(
-    await startRoom({ name: roomName('pour'), assistant, agents: [weather, payroll] }),
+    await startRoom({
+      name: `pour-${crypto.randomUUID()}`,
+      runtime: liveRuntime(),
+      assistant,
+      agents: [weather, payroll],
+    }),
   );
 
   const run = await simulate(room, {
@@ -82,7 +89,7 @@ sequenceDiagram
   a running `Room`. The test chooses the runtime, the storage, the
   execution, and the definitions. The test stops the room with
   `stopAtEnd(room)`.
-- **One loop pass is one exchange.** The actor sends one message. The loop
+- **One iteration of the loop is one exchange.** The actor sends one message. The loop
   waits on the handle of that exchange. The loop never sends into an open
   exchange.
 - **Every wait is a handle wait.** The loop uses `waitForClose()` and
@@ -95,7 +102,8 @@ sequenceDiagram
 - **The judge is a separate call after the run.** `simulate` takes no
   criteria, so the actor cannot read them.
 - **A criterion that code can decide is a check.** The judge grades only
-  what a check cannot decide: tone, fidelity, whether an answer answers.
+  what a check cannot decide: tone, fidelity, and whether the answer meets
+  the question.
 - **The package ships no rubric, no score scale, and no threshold.** A
   criterion is a string in the test. A verdict is pass or fail for each
   criterion.
@@ -156,12 +164,15 @@ export function simulate(room: Room, options: SimulateOptions): Promise<Run>;
 4. Call `visit.send(move)`. The loop sends the next move only after the
    exchange closes, so each move opens one exchange.
 5. Wait on `handle.waitForClose()` for at most `closeMs`. At the deadline,
-   call `room.abort()`. The abort writes a close, and the loop ends with
-   `ended: 'timeout'` after that close.
-6. Wait on `handle.waitForSummary()`. It returns `undefined` at once in a
-   room with no summary writer.
+   call `room.abort()`. The abort writes a close with the outcome
+   `cancelled`, and `waitForClose()` resolves.
+6. Wait on `handle.waitForSummary()`. In a room with no summary writer, it
+   returns `undefined` when the close lands. After an abort, the loop skips
+   this operation: a cancellation assigns no summary, and it fails a
+   pending one.
 7. Read the closed `ExchangeView` from `room.read()`, and add it to
-   `run.exchanges`. Add the discussion and the summary to `seen`.
+   `run.exchanges`. Add the discussion and the summary to `seen`. After an
+   abort, end the loop with `ended: 'timeout'`.
 8. Go back to operation 3. After `exchanges` messages, end the loop with
    `ended: 'limit'`.
 9. Call `visit.leave()`, read the room once more, and return the run.
@@ -172,7 +183,12 @@ summary fails. The run keeps the error message in `run.error`. The loop
 does not retry.
 
 **The loop does not stop the room.** The test owns the room, and it can
-read the room or resume it after `simulate` returns.
+read the room, or send into it again, after `simulate` returns.
+
+**The first message goes out at once after the arrival.** An arrival can
+wake a seat with `presence` attention. That activation keeps the room live,
+so the first exchange closes after it ends. A person does the same: they
+arrive and ask.
 
 **Events start at the subscription.** A notification from before
 `simulate` is not in `run.events`. The record holds every entry, so
@@ -201,21 +217,32 @@ one model request for each move, with no tools.
 - **The move** is the text of the answer. A text that starts with `STOP:`
   is a `stop` move. The move carries the `usage` of the request.
 
-**A message to the person needs an answer, and the brief decides it.** A
-closed exchange with the outcome `awaiting` is an ordinary case for the
-actor. The next move answers the question, or it stops.
+**A question to the person is in the discussion, and the brief decides
+the answer.** The person owns every exchange that the actor opens. A
+message to the owner answers the owner's question, so the exchange closes
+as `complete` ([Exchange](exchange.md#6-the-edges-a-host-sees)). The
+outcome `awaiting` never names the actor. The actor reads the question in
+the discussion, and its next move answers it or stops.
 
-**`modelActor` resolves the model through `@ambionframework/pi`.**
-`createExecutionServices()` maps a `provider/model-id` to a model and reads
-`<PROVIDER>_API_KEY`. The actor makes one request through the `stream` of
-those services. A test passes `stream` to run the actor on the scripted Pi
-stream of `@ambionframework/pi/testing`. The simulator imports no provider
-library of its own.
+**`modelActor` makes its request through `@ambionframework/pi`.** The Pi
+package gains one export: `complete(services, { model, name, system,
+prompt })`. It resolves the model through `services.model(model, name)`,
+makes one request through `services.stream`, and returns the text and the
+`Usage`. It maps the usage the way an activation maps it. The simulator
+then depends on no provider library.
+
+**`modelActor` and `modelJudge` take optional `services`.** The default is
+`createExecutionServices({ sessions: 'memory' })`, which reads
+`<PROVIDER>_API_KEY`. A test passes services over the scripted Pi stream of
+`@ambionframework/pi/testing`. The actor requests under the name `actor`
+and the judge under the name `judge`, so a script routes on the name.
 
 ## The run
 
-**A run is plain JSON.** A test can write it to a file and read it when an
-eval fails.
+**A run is a detached value.** Each part is a copy that the room gave out.
+`structuredClone` copies a run whole. An `error` event keeps its `Error`
+object, so a test that writes a run to a JSON file loses the error
+details.
 
 ```ts
 export interface Run {
@@ -230,7 +257,7 @@ export interface Run {
   readonly events: readonly RoomNotification[];
   readonly ended: 'stopped' | 'limit' | 'timeout' | 'failed';
   readonly error?: string;
-  /** `room` sums `exchanges[].usage`. `actor` sums `moves[].usage`. */
+  /** `room` sums `exchanges[].usage`, and `actor` sums `moves[].usage`. An absent usage counts as zero. */
   readonly usage: { readonly room: Usage; readonly actor: Usage };
 }
 ```
@@ -249,7 +276,7 @@ source in the run.
 | An activation failed or retried   | `run.exchanges[].activations[].outcome` and `attempt`  |
 | A tool was called                 | `tool_execution_start` in `run.events`                 |
 | The lock refused a say            | `conflict` in `run.events`                             |
-| Waiting on the person, or done    | `run.exchanges[].outcome.kind`                         |
+| Complete, cancelled, or exhausted | `run.exchanges[].outcome.kind`                         |
 | What the person read at the close | `run.exchanges[].summaries`                            |
 | What the room cost                | `run.usage.room`, and `usage` on each activation       |
 
@@ -283,7 +310,9 @@ export interface Verdict {
   seat, purpose, outcome, and the tools it called.
 
 **The judge does not read the actor's brief.** A criterion states what the
-person must get. The actor and the judge then share no text.
+person must get. The actor and the judge then share no text. The judge also
+does not read `run.moves` or `run.usage`: the reason of a `stop` move can
+repeat the brief.
 
 **`modelJudge` makes one model request.** It asks for JSON with one
 finding for each criterion, in the order of the list. An answer that does
@@ -316,7 +345,8 @@ holds the rules.
 
 **The package depends on `ambion` and `pi`.** The package graph in
 [Toolchain](toolchain.md#1-repository-layout) gains one line:
-`simulator ──▶ ambion, pi`.
+`simulator ──▶ ambion, pi`. `packages/pi/src/complete.ts` holds `complete`,
+the one change to the Pi package.
 
 | File                      | What it holds                                  |
 | ------------------------- | ---------------------------------------------- |
@@ -339,20 +369,21 @@ directed activation for the revision, and the judge grades the answer.
 runs on `scripted()` from `@ambionframework/ambion/testing`. The person is
 a `scriptedActor`. The judge is a function.
 
-| Case                              | What it asserts                                              |
-| --------------------------------- | ------------------------------------------------------------ |
-| The actor stops                   | `ended: 'stopped'`, and the moves end with the `stop`        |
-| The actor reaches the limit       | `ended: 'limit'` after `exchanges` messages                  |
-| A seat keeps the exchange open    | `ended: 'timeout'`, and the last outcome is `cancelled`      |
-| The room stops during an exchange | `ended: 'failed'`, with the error                            |
-| A required summary fails          | `ended: 'failed'`, with the error                            |
-| A seat asks the person a question | `seen` carries the discussion, and the outcome is `awaiting` |
-| A room with a summary writer      | `seen` carries each summary                                  |
-| One move opens one exchange       | `run.exchanges` has one view for each message                |
-| The run is plain JSON             | `structuredClone(run)` equals the run                        |
+| Case                              | What it asserts                                           |
+| --------------------------------- | --------------------------------------------------------- |
+| The actor stops                   | `ended: 'stopped'`, and the moves end with the `stop`     |
+| The actor reaches the limit       | `ended: 'limit'` after `exchanges` messages               |
+| A seat keeps the exchange open    | `ended: 'timeout'`, and the last outcome is `cancelled`   |
+| The room stops during an exchange | `ended: 'failed'`, with the error                         |
+| A required summary fails          | `ended: 'failed'`, with the error                         |
+| A seat asks the person a question | `seen` carries the question, and the next move answers it |
+| A room with a summary writer      | `seen` carries each summary                               |
+| One move opens one exchange       | `run.exchanges` has one view for each message             |
+| The run is a detached value       | `structuredClone(run)` equals the run                     |
 
 **The model actor and the model judge run on the scripted Pi stream.**
-The cases cover the prompt text, a `STOP:` answer, a judge answer that does
+The cases cover the prompt text, the name each request carries, a
+`STOP:` answer, a judge answer that does
 not parse, a judge answer that misses a criterion, and the usage that each
 request reports.
 
