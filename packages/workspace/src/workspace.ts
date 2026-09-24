@@ -11,12 +11,12 @@ import {
 	type RoomMirrorOptions,
 	roomMirrorGuidance,
 } from './mirror.ts';
+import type { ProcessStatus } from './process-files.ts';
 import { createProcessTools, processToolGuidance } from './process-tools.ts';
 import {
 	openProcessTable,
 	type ProcessEvent,
 	type ProcessQuery,
-	type ProcessStatus,
 	type ProcessTable,
 } from './processes.ts';
 import {
@@ -34,8 +34,11 @@ import { bindTools } from './tools.ts';
  * what runs, and stops a process that an agent left running.
  */
 export interface WorkspaceProcesses {
-	/** The processes in the table, in the order they started. */
-	list(query?: ProcessQuery): readonly ProcessStatus[];
+	/**
+	 * The processes of the agents that used the workspace in this run of the
+	 * host, read from each agent's files, in the order they started.
+	 */
+	list(query?: ProcessQuery): Promise<readonly ProcessStatus[]>;
 	/** Call `listener` when a process starts and when it ends. Returns the unsubscribe. */
 	subscribe(listener: (event: ProcessEvent) => void): () => void;
 	/**
@@ -66,8 +69,8 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	 */
 	readonly git?: WorkspaceResource<GitEnv>;
 	/**
-	 * The processes of every agent. Read the output of one through `use`, as
-	 * its owner agent, at `ProcessStatus.output`.
+	 * The processes of the agents of this run. Read the output of one through
+	 * `use`, as its owner agent, at `ProcessStatus.output`.
 	 */
 	readonly processes: WorkspaceProcesses;
 	/**
@@ -253,7 +256,11 @@ export function openWorkspace(options: {
 	const { bash, sql: sqlBackend, git: gitBackend } = options.backend;
 	const shellBackend = bashUnderOwner(bash, gitBackend);
 	// Each process connects its own environment, outside the queue of the bash owner.
-	const table = openProcessTable((agent) => shellBackend.connect(agent));
+	const table = openProcessTable({
+		connect: (agent) => shellBackend.connect(agent),
+		// The owner opens below. The table calls it only after the workspace opens.
+		shell: (agent, operation, signal) => resource.use(agent, operation, signal),
+	});
 	const resource = openResource<WorkspaceEnv>({
 		name: options.name,
 		backend: withProcesses(shellBackend, table),
@@ -276,9 +283,9 @@ export function openWorkspace(options: {
 			: openAuditLog({ ...options.audit, path: options.audit.path ?? layout.audit });
 	const toolBundle = workspaceTools(bash, resource, { sql, git, processes: table }, audit);
 	const processes: WorkspaceProcesses = Object.freeze({
-		list: (query?: ProcessQuery) => table.list(query),
+		list: (query?: ProcessQuery) => table.hostList(query),
 		subscribe: (listener: (event: ProcessEvent) => void) => table.subscribe(listener),
-		cancel: (handle: string) => table.cancelAny(handle),
+		cancel: (handle: string) => table.hostCancel(handle),
 	});
 	const tools = (): ToolBundle => toolBundle;
 	// The workspace's own name for a mirror: one agent it owns, so a caller

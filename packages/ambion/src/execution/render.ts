@@ -7,15 +7,13 @@
  * the record it reads at each activation, and the one line that tells it what
  * this activation is for. All of that is here.
  *
- * Every function is pure but one call. It takes an activation view, not the
- * room, and returns text, so what a participant reads can be built,
+ * Every function is pure. It takes an activation view, not the room, and
+ * returns text, so what a participant reads can be built,
  * diffed and tested without starting anything. The room's mechanics hold no
- * sentences, and this file holds no state. The one call out is to the
- * reminders of the agent's tool bundles: each gives the same text for the
- * same activation, so a second render reads the same prompt.
+ * sentences, and this file holds no state. The text of the bundle reminders
+ * comes in resolved (`reminders.ts`).
  */
 
-import type { Reminder, ReminderSeat } from '../bundle.ts';
 import type { ActivationView, ContextParticipant } from '../protocol.ts';
 import { messageUri, roomUri } from '../refs.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
@@ -294,21 +292,21 @@ export const DEFAULT_GUIDANCE = [
 	`it, and speak again only if your reply still adds something.`,
 ].join('\n');
 
-/** Render the three prompt parts from one detached activation view. */
-export function renderActivation(view: ActivationView, def: AgentDefinition): RenderedPrompt {
-	return { ...renderSystem(view, def), context: renderTurnContext(view, def) };
-}
-
 /**
- * The two parts of the system prompt alone. It renders no context, so it
- * calls no reminder: an adapter that builds its system prompt on each pass
- * leaves a reminder to the pass that sends the context.
+ * Render the three prompt parts from one detached activation view.
+ * `reminders` is the resolved text of the bundle reminders; a respond
+ * activation shows it before the ask line.
  */
-export function renderSystem(
+export function renderActivation(
 	view: ActivationView,
 	def: AgentDefinition,
-): Pick<RenderedPrompt, 'mechanism' | 'agent'> {
-	return { mechanism: MECHANISM, agent: renderAgent(view, def) };
+	reminders?: string,
+): RenderedPrompt {
+	return {
+		mechanism: MECHANISM,
+		agent: renderAgent(view, def),
+		context: renderTurnContext(view, def, reminders),
+	};
 }
 
 /**
@@ -368,7 +366,11 @@ function renderSetting(view: ActivationView): string[] {
 	return lines;
 }
 
-function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
+function renderTurnContext(
+	view: ActivationView,
+	def: AgentDefinition,
+	reminders: string | undefined,
+): string {
 	const { context } = view;
 	const people = context.participants.filter(
 		(participant): participant is HumanContextParticipant => participant.kind === 'human',
@@ -400,7 +402,7 @@ function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
 			context.omitted,
 		),
 		``,
-		...paragraph(renderReminders(view, def)),
+		...paragraph(view.spec.purpose.kind === 'respond' ? reminders : undefined),
 		askOf(view, def),
 	].join('\n');
 }
@@ -408,34 +410,6 @@ function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
 /** A text and the blank line after it, or nothing. */
 function paragraph(text: string | undefined): string[] {
 	return text === undefined ? [] : [text, ``];
-}
-
-/**
- * What the agent's tool bundles remind this seat of, as paragraphs, or
- * undefined for nothing. A summarize activation has no tools of the agent,
- * so it gets none. A reminder that throws gives no text. The context holds
- * it. An adapter that sends a continued session the delta alone sends it
- * before the delta, on the first pass of the activation.
- */
-export function renderReminders(view: ActivationView, def: AgentDefinition): string | undefined {
-	const reminders = def.executor.reminders;
-	if (reminders === undefined || view.spec.purpose.kind !== 'respond') return undefined;
-	const seat = { agent: def.name, room: view.context.name, activation: view.spec.id };
-	const texts = reminders.flatMap((remind) => {
-		const text = reminderText(remind, seat);
-		return text === undefined ? [] : [text];
-	});
-	return texts.length === 0 ? undefined : texts.join('\n\n');
-}
-
-function reminderText(remind: Reminder, seat: ReminderSeat): string | undefined {
-	try {
-		const text = remind(seat)?.trim();
-		return text === '' ? undefined : text;
-	} catch {
-		// A reminder is a courtesy of a bundle: the activation runs without it.
-		return undefined;
-	}
 }
 
 /** The agents that are available to seat. Every ordinary activation may read this list. */

@@ -7,13 +7,13 @@
  */
 
 import { markdownTable } from './markdown-table.ts';
-import type { ProcessStatus } from './processes.ts';
+import type { ProcessStatus } from './process-files.ts';
 
 /** The most finished processes one reminder names. It names the newest. */
 export const FINISHED_IN_REMINDER = 10;
 
 /** The columns of the `ps` table. */
-const PS_COLUMNS = ['Handle', 'Name', 'Agent', 'Runs for', 'Command'];
+const PS_COLUMNS = ['Handle', 'Name', 'Runs for', 'Command'];
 
 /** The most characters of a command that `ps` and the reminder show. */
 const COMMAND_CHARS = 80;
@@ -106,18 +106,13 @@ export function reminderText(
 	].join('\n');
 }
 
-/**
- * The `ps` table. A line of the caller's own process shows its command. A
- * line of another agent's process shows no command, since a command line
- * can hold a token.
- */
-export function psTable(processes: readonly ProcessStatus[], caller: string, now: number): string {
+/** The `ps` table of the caller's running processes. */
+export function psTable(processes: readonly ProcessStatus[], now: number): string {
 	const rows = processes.map((process) => ({
 		Handle: process.handle,
 		Name: process.name ?? '',
-		Agent: process.agent,
 		'Runs for': duration(now - Date.parse(process.startedAt)),
-		Command: process.agent === caller ? shortCommand(process.command) : '',
+		Command: shortCommand(process.command),
 	}));
 	const count =
 		processes.length === 1 ? '1 running process.' : `${processes.length} running processes.`;

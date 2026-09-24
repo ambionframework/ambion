@@ -52,8 +52,7 @@ import type {
 import {
 	renderActivation,
 	renderDelta,
-	renderReminders,
-	renderSystem,
+	resolveReminders,
 	sessionToResume,
 } from '@ambionframework/ambion/hosting';
 import type { AgentMessage, HarnessEvent, Session, StreamFn } from '@earendil-works/pi-agent-core';
@@ -257,7 +256,7 @@ export class Activation implements ExecutorSession {
 	private async runPass(input: PassInput): Promise<PassResult> {
 		const opened = await this.prepare(input.view);
 		if (opened === undefined || this.stopped) return { failed: false };
-		const prompt = [...this.promptFor(input), ...this.flush(input.view.through)];
+		const prompt = [...(await this.promptFor(input)), ...this.flush(input.view.through)];
 		if (prompt.length === 0) return this.nothingNew(opened, input.view);
 		return this.run(opened, prompt);
 	}
@@ -277,7 +276,7 @@ export class Activation implements ExecutorSession {
 		const def = this.definition;
 		if (view.spec.seat !== def.name)
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
-		const { mechanism, agent } = renderSystem(view, def);
+		const { mechanism, agent } = renderActivation(view, def);
 		this.systemPrompt = `${mechanism}\n\n${agent}`;
 		if (this.opened !== undefined) return this.opened;
 		const model = await this.options.model(modelOf(def.executor), def.name);
@@ -385,19 +384,21 @@ export class Activation implements ExecutorSession {
 	 * of the tool bundles, which the whole view holds. A closing activation
 	 * reads the whole view.
 	 */
-	private promptFor(input: PassInput): AgentMessage[] {
+	private async promptFor(input: PassInput): Promise<AgentMessage[]> {
 		const { view } = input;
-		const now = this.options.now();
 		const after = input.kind === 'delta' ? input.since : this.base;
 		if (after !== undefined && (input.kind === 'delta' || view.spec.purpose.kind === 'respond')) {
 			const delta = renderDelta(view, after);
 			if (delta === undefined) return [];
-			const reminders = input.kind === 'delta' ? undefined : renderReminders(view, this.definition);
+			// The bundle reminders resolve only when the pass has something to send.
+			const reminders =
+				input.kind === 'delta' ? undefined : await resolveReminders(view, this.definition);
 			const text = reminders === undefined ? delta : `${reminders}\n\n${delta}`;
-			return [recordMessage({ after, through: view.through }, text, now)];
+			return [recordMessage({ after, through: view.through }, text, this.options.now())];
 		}
-		const text = renderActivation(view, this.definition).context;
-		return [recordMessage({ after: 0, through: view.through }, text, now)];
+		const reminders = await resolveReminders(view, this.definition);
+		const text = renderActivation(view, this.definition, reminders).context;
+		return [recordMessage({ after: 0, through: view.through }, text, this.options.now())];
 	}
 
 	/**

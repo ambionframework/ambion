@@ -1,6 +1,10 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { memoryBackend } from '../../just-bash/src/index.ts';
+import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
+import { tempDir } from '../../just-bash/test/support/backends.ts';
+import { LOST } from '../src/process-files.ts';
 import { FINISHED_IN_REMINDER } from '../src/process-text.ts';
 import type { ProcessDetails, PsDetails } from '../src/process-tools.ts';
 import { MAX_FINISHED_PROCESSES, MAX_RUNNING_PROCESSES } from '../src/processes.ts';
@@ -59,7 +63,8 @@ async function endedUnseen(workspace: Workspace, command: string): Promise<strin
 		if (event.type === 'ended' && event.process.handle === handle) done.resolve();
 	});
 	handle = (await call(workspace, 'bash', { command, wait: 0 })).details.process.handle;
-	if (workspace.processes.list({ running: true }).every((one) => one.handle !== handle)) {
+	const running = await workspace.processes.list({ running: true });
+	if (running.every((one) => one.handle !== handle)) {
 		done.resolve();
 	}
 	await done.promise;
@@ -81,7 +86,7 @@ describe('bash', () => {
 		const { text, details } = await call(workspace, 'bash', { command: 'echo out; echo err >&2' });
 		const { handle, output } = details.process;
 		expect(details.process).toMatchObject({ kind: 'bash', state: 'exited', exitCode: 0 });
-		expect(output).toBe(`/home/alpha/.processes/${handle}.out`);
+		expect(output).toBe(`/home/alpha/.processes/${handle}/out`);
 		expect(text).toBe(`out\nerr\n\n[Process ${handle} exited with code 0. Output: ${output}.]`);
 		expect(await fileOf(workspace, 'alpha', output)).toBe('out\nerr\n');
 	});
@@ -242,27 +247,22 @@ describe('names', () => {
 });
 
 describe('ps', () => {
-	it("lists the caller's running processes, one agent's, or every agent's, and hides another agent's command", async () => {
+	it("lists the caller's own running processes alone", async () => {
 		const workspace = site();
 		await call(workspace, 'bash', { command: 'sleep 30', name: 'tests', wait: 0 });
 		await call(workspace, 'bash', { command: 'true' });
 		await call(workspace, 'bash', { command: 'sleep 30 # token=secret', wait: 0 }, 'beta');
-		const count = async (params: object, agent = 'alpha') => {
-			const { text, details } = await call(workspace, 'ps', params, agent);
+		const listed = async (agent: string) => {
+			const { text, details } = await call(workspace, 'ps', {}, agent);
 			return { text, count: (details as unknown as PsDetails).processes.length };
 		};
-		const own = await count({});
+		const own = await listed('alpha');
 		expect(own.count).toBe(1);
-		expect(own.text).toMatch(/\| bash-[0-9a-f]{12} \| tests \| alpha \| \d+s \| sleep 30 \|/);
+		expect(own.text).toMatch(/\| bash-[0-9a-f]{12} \| tests \| \d+s \| sleep 30 \|/);
+		expect(own.text).not.toContain('token=secret');
 		expect(own.text.endsWith('\n\n1 running process.')).toBe(true);
-		const all = await count({ all: true });
-		expect(all.count).toBe(2);
-		expect(all.text).not.toContain('token=secret');
-		expect((await count({ agent: 'beta' })).text).not.toContain('token=secret');
-		expect((await count({}, 'beta')).text).toContain('token=secret');
-		expect((await count({ agent: 'gamma' })).text).toBe('gamma has no running processes.');
-		expect((await count({}, 'gamma')).text).toBe('No running processes.');
-		await expect(count({ agent: 'beta', all: true })).rejects.toThrow('Invalid');
+		expect((await listed('beta')).text).toContain('token=secret');
+		expect((await listed('gamma')).text).toBe('No running processes.');
 	});
 });
 
@@ -278,8 +278,10 @@ describe('the host view', () => {
 		);
 		const { handle } = (await call(workspace, 'bash', { command: 'sleep 30', wait: 0 })).details
 			.process;
-		expect(workspace.processes.list({ running: true }).map((one) => one.handle)).toEqual([handle]);
-		expect(workspace.processes.list({ agent: 'beta' })).toEqual([]);
+		const running = await workspace.processes.list({ running: true });
+		expect(running.map((one) => one.handle)).toEqual([handle]);
+		// beta has not used the workspace in this run, so the host's list holds none of its processes.
+		expect(await workspace.processes.list({ agent: 'beta' })).toEqual([]);
 		expect((await workspace.processes.cancel(handle)).state).toBe('cancelled');
 		expect(events).toEqual([`started ${handle}`, `ended ${handle}`]);
 		unsubscribe();
@@ -294,11 +296,11 @@ describe('the host view', () => {
 describe('the reminder', () => {
 	const seat = (activation: string) => ({ agent: 'alpha', room: 'lobby', activation });
 
-	it('names running and unseen finished processes, gives one activation one text, and drops a process a result showed', async () => {
+	it('names running and unseen finished processes once, and drops a process a result showed', async () => {
 		const workspace = site();
 		const remind = workspace.tools().remind;
 		if (remind === undefined) throw new Error('The workspace bundle must remind.');
-		expect(remind(seat('a1'))).toBeUndefined();
+		expect(await remind(seat('a1'))).toBeUndefined();
 		const tests = await call(
 			workspace,
 			'bash',
@@ -317,7 +319,7 @@ describe('the reminder', () => {
 		const shown = await failedHandle(() =>
 			toolOf(workspace, 'bash').invoke({ command: 'exit 4' }, callAs('alpha')),
 		);
-		const text = remind(seat('a2')) ?? '';
+		const text = (await remind(seat('a2'))) ?? '';
 		expect(text.split('\n')).toEqual([
 			'Your background processes in the workspace:',
 			expect.stringMatching(
@@ -336,14 +338,12 @@ describe('the reminder', () => {
 			'Call status, wait or cancel with a handle. Call ps to list processes.',
 		]);
 		expect(text).not.toContain(shown);
-		expect(remind(seat('a2'))).toBe(text);
-		// An activation id names no room, so the same id in another room gets its own text.
-		expect(remind({ ...seat('a2'), room: 'review' })).toContain(
-			`${tests.details.process.handle}, is running for`,
-		);
-		expect(remind({ ...seat('a2'), room: 'review' })).toContain('in the room lobby');
-		expect(remind(seat('a3'))).not.toContain(failed);
-		expect(remind({ ...seat('a4'), agent: 'beta' })).toBeUndefined();
+		// The reminder wrote seen for the finished process, so the next one names the running ones alone.
+		const next = (await remind({ ...seat('a3'), room: 'review' })) ?? '';
+		expect(next).not.toContain(failed);
+		expect(next).toContain(`${tests.details.process.handle}, is running for`);
+		expect(next).toContain('in the room lobby');
+		expect(await remind({ ...seat('a4'), agent: 'beta' })).toBeUndefined();
 	});
 
 	it(`names the newest ${FINISHED_IN_REMINDER} unseen finished processes, and counts the rest`, async () => {
@@ -351,7 +351,7 @@ describe('the reminder', () => {
 		const handles: string[] = [];
 		for (let i = 0; i < FINISHED_IN_REMINDER + 2; i++)
 			handles.push(await endedUnseen(workspace, 'sleep 0.05'));
-		const lines = workspace.tools().remind?.(seat('a1'))?.split('\n') ?? [];
+		const lines = ((await workspace.tools().remind?.(seat('a1'))) ?? '').split('\n');
 		expect(lines).toHaveLength(FINISHED_IN_REMINDER + 3);
 		expect(lines[1]).toContain(handles[2]);
 		expect(lines.at(-2)).toBe('- and 2 more finished processes');
@@ -359,7 +359,7 @@ describe('the reminder', () => {
 });
 
 describe('a process on a backend that misbehaves', () => {
-	it('ends a process whose environment throws on cleanup, and keeps the table usable', async () => {
+	it('ends a process whose own environment throws on cleanup, and keeps the table usable', async () => {
 		const workspace = openWorkspace({
 			name: 'processes-cleanup',
 			backend: {
@@ -368,8 +368,9 @@ describe('a process on a backend that misbehaves', () => {
 						const env = await inner.connect(agent, signal);
 						const exec = env.exec.bind(env);
 						let ran = false;
+						// Only the environment of a process runs the wrapper, which starts with its pid.
 						env.exec = (...args) => {
-							ran = true;
+							if (args[0].startsWith('echo "$$"')) ran = true;
 							return exec(...args);
 						};
 						env.cleanup = async () => {
@@ -385,7 +386,7 @@ describe('a process on a backend that misbehaves', () => {
 			const { details } = await call(workspace, 'bash', { command: `echo ${text}` });
 			expect(details.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		}
-		expect(workspace.processes.list({ running: true })).toEqual([]);
+		expect(await workspace.processes.list({ running: true })).toEqual([]);
 	});
 });
 
@@ -403,6 +404,42 @@ describe('an aborted wait', () => {
 		);
 		controller.abort(new Error('The activation ended.'));
 		await expect(waiting).rejects.toThrow('The activation ended.');
-		expect(workspace.processes.list({ running: true }).map((one) => one.handle)).toEqual([handle]);
+		const running = await workspace.processes.list({ running: true });
+		expect(running.map((one) => one.handle)).toEqual([handle]);
+	});
+});
+
+describe('the files as the source of truth', () => {
+	it('reads the table of a new workspace over the same directory: a finished process, and one that no run owns', async () => {
+		const { dir, dispose } = await tempDir('ambion-processes-');
+		onTestFinished(dispose);
+		const first = openWorkspace({ name: 'files-one', backend: { bash: directoryBackend(dir) } });
+		const done = (await call(first, 'bash', { command: 'echo kept', name: 'build' })).details
+			.process;
+		await first.dispose();
+		// A spec with no end and no live shell: the run that owned it ended before it did.
+		const lost = 'bash-00000000000a';
+		const home = join(dir, 'home', 'alpha', '.processes', lost);
+		await mkdir(home, { recursive: true });
+		const spec = { handle: lost, kind: 'bash', agent: 'alpha', command: 'sleep 99' };
+		await writeFile(
+			join(home, 'spec'),
+			JSON.stringify({ ...spec, timeout: 600, startedAt: '2026-01-01T00:00:00.000Z' }),
+		);
+		const second = openWorkspace({ name: 'files-two', backend: { bash: directoryBackend(dir) } });
+		onTestFinished(() => second.dispose());
+		const status = await call(second, 'status', { handle: done.handle });
+		expect(status.details.process).toMatchObject({ state: 'exited', exitCode: 0, name: 'build' });
+		expect(status.text.startsWith('kept\n\n[Process')).toBe(true);
+		const reminded =
+			(await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a1' })) ?? '';
+		expect(reminded).toContain(`- ${lost} failed: sleep 99`);
+		expect(reminded).not.toContain(done.handle);
+		expect(
+			await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a2' }),
+		).toBeUndefined();
+		const lostStatus = await call(second, 'status', { handle: lost });
+		expect(lostStatus.details.process).toMatchObject({ state: 'failed', error: LOST });
+		expect((await call(second, 'ps', {})).text).toBe('No running processes.');
 	});
 });

@@ -106,15 +106,15 @@ refusal for the model.
 **A definition can replace the speaking policy.** The main entry exports
 `DEFAULT_GUIDANCE`. An executor takes a `speaking` option that replaces it.
 Tool bundle guidance stays in the `guidance` field and follows the policy.
-The rendering helpers stay pure and stateless, with one call out: the
-`reminders` of the executor. A reminder gives the same text for the same
-activation, so a second render of one activation reads the same prompt. A
-reminder that throws gives no text. The core does not cut a reminder, so
-the bundle bounds the length of its own text. `renderReminders` gives the
-reminder text alone, and `renderSystem` gives the mechanism and the agent
-part with no call to a reminder. An adapter that sends a continued session
-the delta alone sends the reminder text before the delta, on the first
-pass of an activation.
+The rendering helpers stay pure and stateless. The executor resolves the
+`reminders` of the bundles once for each respond activation, with
+`resolveReminders(view, def)`, and passes the text to
+`renderActivation(view, def, reminders)`. Each reminder has
+`REMINDER_TIMEOUT_MS`, 5 seconds, to answer. A reminder that throws,
+rejects, gives blank text, or answers late gives no text. The core does not
+cut a reminder, so the bundle bounds the length of its own text. An adapter
+that sends a continued session the delta alone sends the reminder text
+before the delta, on the first pass of an activation.
 
 ## How an activation runs
 

@@ -11,8 +11,9 @@ export interface ToolBundle {
 	readonly guidance?: string;
 	/**
 	 * Text for one respond activation of one seat, or undefined for none. The
-	 * room adds it to the turn context. The same activation can call it more
-	 * than once, and each call gives the same text. A throw gives no text.
+	 * executor calls it once, at the start of the activation, and the text
+	 * joins the turn context. A throw, a rejection, or no answer within
+	 * `REMINDER_TIMEOUT_MS` gives no text.
 	 */
 	readonly remind?: Reminder;
 }
@@ -27,5 +28,5 @@ export interface ReminderSeat {
 	readonly activation: string;
 }
 
-/** A bundle's text for one activation. It runs where the executor runs, synchronously. */
-export type Reminder = (seat: ReminderSeat) => string | undefined;
+/** A bundle's text for one activation. It runs where the executor runs, and it can read I/O. */
+export type Reminder = (seat: ReminderSeat) => string | undefined | Promise<string | undefined>;

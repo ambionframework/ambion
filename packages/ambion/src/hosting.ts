@@ -35,14 +35,13 @@ export type {
 	PassResult,
 } from './execution/executor.ts';
 export { classifyCause, PERMANENT_STATUS } from './execution/failure.ts';
+export { REMINDER_TIMEOUT_MS, resolveReminders } from './execution/reminders.ts';
 export type { RenderedPrompt } from './execution/render.ts';
 export {
 	refusal,
 	renderActivation,
 	renderDelta,
 	renderLine,
-	renderReminders,
-	renderSystem,
 	summaryToolDescription,
 } from './execution/render.ts';
 export type {

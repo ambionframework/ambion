@@ -58,7 +58,7 @@ commit.** The phases below deliver them; the items explain them.
 | W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                                                                                                                                                                                                    |
 | D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database.                                                                                                                                                                               |
 | G Git on the workstation  | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. |
-| B Background processes    | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees every process, and each activation starts with a reminder of its seat's processes. Landed in #307.                                                                                                                                                        |
+| B Background processes    | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307.                                                                                              |
 
 **Three format changes.** Each change lands with a golden journal of the
 new shape, and the changelog names each one.
@@ -461,12 +461,14 @@ owner until the command ended, and stopped it after 30 seconds, so a
 build or a test run held every other tool call of the workspace. `bash`
 now starts a process that runs off the owner, with its output in a file,
 and gives a handle. `ps`, `status`, `wait`, and `cancel` reach it, the
-host sees every process through `workspace.processes`, and each
-activation starts with a reminder of the seat's processes
-([Processes](../docs/processes.md)). A process has no link to an exchange
-yet; the backlog holds that design. **Evidence:**
-`packages/workspace/test/processes.test.ts`, the Pi continuity test of the
-reminder, and the timeout and cancel on OpenSSH. Landed in #307.
+host sees the processes of this run through `workspace.processes`, and
+each activation starts with a reminder of the seat's processes
+([Processes](../docs/processes.md)). The files of the bash backend hold
+the table, so a new run of the host adopts the live processes of an
+earlier run. A process has no link to an exchange yet; the backlog holds
+that design. **Evidence:** `packages/workspace/test/processes.test.ts`,
+the Pi continuity test of the reminder, and the timeout, cancel, and
+adoption on OpenSSH. Landed in #307.
 
 ### R. Release
 

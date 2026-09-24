@@ -33,8 +33,9 @@ import {
 import { type Static, Type } from 'typebox';
 import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
+import { PROCESSES_DIR, type ProcessStatus, quoted } from './process-files.ts';
 import { psTable, stateLine } from './process-text.ts';
-import { PROCESSES_DIR, type ProcessStatus, type ProcessTable, quoted } from './processes.ts';
+import type { ProcessTable } from './processes.ts';
 import type { WorkspaceResource } from './resource.ts';
 import { recordedOnShell } from './tools.ts';
 
@@ -72,9 +73,9 @@ export function processToolGuidance(): string {
 		`bash starts each command as a background process and returns its handle, such as bash-1a2b3c4d5e6f.`,
 		`Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.`,
 		`The call waits up to wait seconds, ${DEFAULT_BASH_WAIT_SECONDS} by default, and then gives the state of the process and the end of its output.`,
-		`The whole output of a process goes to ${PROCESSES_DIR}/<handle>.out. Read it with read.`,
+		`The whole output of a process goes to ${PROCESSES_DIR}/<handle>/out. Read it with read.`,
 		`status, wait and cancel take a handle. status gives the state of the process, wait waits for it to end,`,
-		`and cancel stops it. ps lists running processes: yours, one agent's, or every agent's.`,
+		`and cancel stops it. ps lists your running processes.`,
 		`A process keeps running after your activation ends. It stops after timeout seconds, ${DEFAULT_TIMEOUT_SECONDS} by default.`,
 	].join('\n');
 }
@@ -104,14 +105,7 @@ const bashSchema = Type.Object({
 	),
 });
 
-const psSchema = Type.Object({
-	agent: Type.Optional(
-		Type.String({ description: 'List the running processes of this agent. Omit it for yours.' }),
-	),
-	all: Type.Optional(
-		Type.Boolean({ description: 'Set true to list the running processes of every agent.' }),
-	),
-});
+const psSchema = Type.Object({});
 
 const handleSchema = Type.Object({ handle });
 
@@ -125,7 +119,6 @@ const waitSchema = Type.Object({
 });
 
 type BashParams = Static<typeof bashSchema>;
-type PsParams = Static<typeof psSchema>;
 type HandleParams = Static<typeof handleSchema>;
 type WaitParams = Static<typeof waitSchema>;
 
@@ -151,17 +144,16 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 		defineTool({
 			name: 'bash',
 			label: 'bash',
-			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and the end of its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>.out.`,
+			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and the end of its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out.`,
 			parameters: bashSchema,
 			execute: recorded('bash', (params: BashParams, ctx) => started(options, params, ctx)),
 		}),
 		defineTool({
 			name: 'ps',
 			label: 'Processes',
-			description:
-				"List running processes: yours by default, one agent's with agent, or every agent's with all.",
+			description: 'List your running processes.',
 			parameters: psSchema,
-			execute: recorded('ps', async (params: PsParams, ctx) => listed(table, params, ctx)),
+			execute: recorded('ps', async (_params: object, ctx) => listed(table, ctx)),
 		}),
 		defineTool({
 			name: 'status',
@@ -169,7 +161,7 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			description: 'Give the state of a process and the end of its output.',
 			parameters: handleSchema,
 			execute: recorded('status', async (params: HandleParams, ctx) =>
-				described(options, table.status(ctx.agent, params.handle), ctx),
+				described(options, await table.find(ctx.agent, params.handle, ctx.signal), ctx),
 			),
 		}),
 		defineTool({
@@ -248,23 +240,11 @@ function textOf(result: AgentToolResult<unknown>): string {
 	return result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
 }
 
-/** The `ps` result: the table of the running processes that the parameters select. */
-function listed(
-	table: ProcessTable,
-	params: PsParams,
-	ctx: ToolContext,
-): AgentToolResult<PsDetails> {
-	if (params.all === true && params.agent !== undefined) {
-		throw new Error('Invalid arguments: give agent or all, not both.');
-	}
-	const agent = params.all === true ? undefined : (params.agent ?? ctx.agent.name);
-	const processes = table.list({ running: true, ...(agent === undefined ? {} : { agent }) });
-	const text =
-		processes.length > 0
-			? psTable(processes, ctx.agent.name, Date.now())
-			: agent === undefined || agent === ctx.agent.name
-				? 'No running processes.'
-				: `${agent} has no running processes.`;
+/** The `ps` result: the table of the caller's running processes. */
+async function listed(table: ProcessTable, ctx: ToolContext): Promise<AgentToolResult<PsDetails>> {
+	const all = await table.list(ctx.agent, ctx.signal);
+	const processes = all.filter((process) => process.state === 'running');
+	const text = processes.length > 0 ? psTable(processes, Date.now()) : 'No running processes.';
 	return { content: [{ type: 'text', text }], details: { processes } };
 }
 
@@ -274,12 +254,19 @@ async function described(
 	process: ProcessStatus,
 	ctx: ToolContext,
 ): Promise<AgentToolResult<ProcessDetails>> {
-	const tail = await options.shell(ctx.agent, (env) => outputTail(env, process.output), ctx.signal);
+	const tail = await options.shell(
+		ctx.agent,
+		async (env) => {
+			const read = await outputTail(env, process.output);
+			await options.processes.markSeen(env, process);
+			return read;
+		},
+		ctx.signal,
+	);
 	const output = tail.text.endsWith('\n') ? tail.text.slice(0, -1) : tail.text;
 	const body = output === '' && process.state !== 'running' ? '(no output)' : output;
 	const notes = [stateLine(process), truncationLine(tail.truncation)].filter((note) => note !== '');
 	const text = [body, `[${notes.join(' ')}]`].filter((part) => part !== '').join('\n\n');
-	options.processes.shown(process.handle);
 	const details: ProcessDetails = tail.truncation.truncated
 		? { process, truncation: tail.truncation }
 		: { process };

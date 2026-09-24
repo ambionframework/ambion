@@ -396,7 +396,7 @@ process the same way, so the stops hold at most one abort channel. A
 client then holds at most 8 channels, while each stop ends within its
 grace of 10 seconds. A process that outlives its grace meets the
 backend's own deadline later, and that kill opens one more channel
-([Processes](processes.md#handles-and-limits)).
+([Processes](processes.md#a-process)).
 
 **The bash owner serializes every agent's file work and the start of each
 process.** A workstation keeps one queue in v1, and each operation now waits

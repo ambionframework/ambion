@@ -71,13 +71,8 @@ export type {
 export type { WorkspaceLog, WorkspaceLogOptions } from './log.ts';
 export { openLog } from './log.ts';
 export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.ts';
-export type {
-	ProcessEvent,
-	ProcessKind,
-	ProcessQuery,
-	ProcessState,
-	ProcessStatus,
-} from './processes.ts';
+export type { ProcessKind, ProcessState, ProcessStatus } from './process-files.ts';
+export type { ProcessEvent, ProcessQuery } from './processes.ts';
 export type {
 	SqlBackend,
 	SqlEnv,

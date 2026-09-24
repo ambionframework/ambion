@@ -74,10 +74,10 @@ describe('the built-in tools', () => {
 		const writer = results.writer ?? [];
 		expect(writer[0]).toMatchObject({ tool: 'write', failed: false });
 		expect(writer[1]?.tool).toBe('bash');
-		// Only the writer's home exists yet: nothing calls connect before an
-		// activation's first tool asks for it, and the reader is still waiting.
+		// Both homes exist: the reminder reads each seat's processes at the
+		// start of its activation, and that connect creates the reader's home.
 		expect(writer[1]?.text).toMatch(
-			/^\/home\/writer\nslab pour Thu\nwriter\n\n\[Process bash-[0-9a-f]{12} exited with code 0\. Output: \/home\/writer\/\.processes\/bash-[0-9a-f]{12}\.out\.\]$/,
+			/^\/home\/writer\nslab pour Thu\nreader\nwriter\n\n\[Process bash-[0-9a-f]{12} exited with code 0\. Output: \/home\/writer\/\.processes\/bash-[0-9a-f]{12}\/out\.\]$/,
 		);
 		const reader = results.reader ?? [];
 		expect(reader[0]).toMatchObject({ tool: 'read', text: 'slab pour Thu\n', failed: false });

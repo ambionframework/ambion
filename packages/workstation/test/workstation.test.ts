@@ -7,7 +7,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
 import { openWorkspace, type Workspace, type WorkspaceEnv } from '@ambionframework/workspace';
@@ -323,6 +323,51 @@ function toolOf(workspace: Workspace, name: string): AmbionTool {
 }
 
 describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
+	it('adopts the live processes of an earlier run from their files, cancels one through its pid, and times out the other', async () => {
+		const started = await server(['ada']);
+		const home = started.homes.get('ada') ?? '';
+		// An earlier run of the host starts two processes, and then goes away.
+		const earlier = workstationBackend(started.options);
+		const env = await earlier.connect({ name: 'ada' });
+		const launch = async (handle: string, timeout: number, startedAt: string) => {
+			const dir = join(home, '.processes', handle);
+			await mkdir(dir, { recursive: true });
+			const spec = {
+				handle,
+				kind: 'bash',
+				agent: 'ada',
+				command: 'exec sleep 30',
+				timeout,
+				startedAt,
+			};
+			await writeFile(join(dir, 'spec'), JSON.stringify(spec));
+			const script = `echo "$$" > '${dir}/pid'\n(\nexec sleep 30\n) < /dev/null > '${dir}/out' 2>&1`;
+			void env.exec(script, { timeout: 60 }, ctx).catch(() => undefined);
+			await until(() => spawnSync('test', ['-s', join(dir, 'pid')]).status === 0);
+			return Number((await readFile(join(dir, 'pid'), 'utf8')).trim());
+		};
+		const kept = await launch('bash-00000000000c', 600, new Date().toISOString());
+		const late = await launch('bash-00000000000d', 1, new Date(Date.now() - 5_000).toISOString());
+		await earlier.dispose?.();
+		const workspace = openWorkspace({
+			name: 'lab',
+			backend: { bash: workstationBackend(started.options) },
+		});
+		cleanups.push(() => workspace.dispose());
+		const call = async (tool: string, params: unknown) => {
+			const result = await toolOf(workspace, tool).invoke(params, context('ada'));
+			if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
+			return (result.details as { process: { state: string } }).process.state;
+		};
+		// A read adopts what it finds: ps reads both. The one past its timeout stops at once.
+		await toolOf(workspace, 'ps').invoke({}, context('ada'));
+		expect(await call('status', { handle: 'bash-00000000000c' })).toBe('running');
+		await until(() => processState(late) === '', 15_000);
+		expect(await call('status', { handle: 'bash-00000000000d' })).toBe('timed_out');
+		expect(await call('cancel', { handle: 'bash-00000000000c' })).toBe('cancelled');
+		expect(processState(kept)).toBe('');
+	});
+
 	it("writes a running process's output to its file in the home, and a cancel and a timeout kill the process", async () => {
 		const started = await server(['ada']);
 		const workspace = openWorkspace({
@@ -338,12 +383,12 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			return result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
 		};
 		const running = await call('bash', { command: 'echo first; exec sleep 30', wait: 1 });
-		const [process] = workspace.processes.list();
+		const [process] = await workspace.processes.list();
 		if (process === undefined) throw new Error('No process in the table.');
 		expect(process.state).toBe('running');
 		expect(running.startsWith('first\n\n[Process')).toBe(true);
 		expect(process.output).toBe(
-			join(started.homes.get('ada') ?? '', '.processes', `${process.handle}.out`),
+			join(started.homes.get('ada') ?? '', '.processes', process.handle, 'out'),
 		);
 		expect(await call('cancel', { handle: process.handle })).toContain('is cancelled.');
 		expect(await readFile(process.output, 'utf8')).toBe('first\n');
@@ -356,7 +401,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		expect(timed).toMatch(
 			/^Error: second\n\n\[Process bash-[0-9a-f]{12} timed out after 1 seconds\./,
 		);
-		expect(workspace.processes.list({ running: true })).toEqual([]);
+		expect(await workspace.processes.list({ running: true })).toEqual([]);
 	});
 
 	it('runs the file tools as the agent, audits them at the layout path, and lands a sql export in the home', async () => {

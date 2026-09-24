@@ -2,12 +2,13 @@
  * The rendered prompt of one ordinary and one closing activation, part by
  * part. The snapshots put the prompt text in the diff of every change to it.
  * The speaking policy of a definition replaces the default in the agent part.
- * The reminders of the definition's bundles join the context of a respond
- * activation, before its ask line.
+ * The resolved reminders of the definition's bundles join the context of a
+ * respond activation, before its ask line.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
 import type { ReminderSeat } from '../src/bundle.ts';
+import { REMINDER_TIMEOUT_MS, resolveReminders } from '../src/execution/reminders.ts';
 import { DEFAULT_GUIDANCE, renderActivation } from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
 import { defineAgent } from '../src/index.ts';
@@ -93,7 +94,7 @@ describe('the rendered prompt', () => {
 		expect(policy).not.toContain(DEFAULT_GUIDANCE);
 	});
 
-	it('places each bundle reminder before the ask line of a respond activation, and skips a closing activation, a throw, and blank text', () => {
+	it('resolves the bundle reminders of a respond activation, drops a throw, a rejection, blank text, and a late one, and places them before the ask line', async () => {
 		const seats: ReminderSeat[] = [];
 		const reminded = defineAgent({
 			name: 'worker',
@@ -104,7 +105,7 @@ describe('the rendered prompt', () => {
 				bundles: [
 					{
 						tools: [],
-						remind: (seat) => {
+						remind: async (seat) => {
 							seats.push(seat);
 							return 'Your process p1 runs.';
 						},
@@ -115,16 +116,25 @@ describe('the rendered prompt', () => {
 							throw new Error('The reminder broke.');
 						},
 					},
+					{ tools: [], remind: async () => Promise.reject(new Error('The read failed.')) },
 					{ tools: [], remind: () => '  ' },
+					{ tools: [], remind: () => new Promise<string>(() => undefined) },
 					{ tools: [] },
 				],
 			}),
 		});
-		const plain = renderActivation(respond, worker).context.split('\n');
-		const lines = renderActivation(respond, reminded).context.split('\n');
-		expect(lines).toEqual([...plain.slice(0, -1), 'Your process p1 runs.', '', plain.at(-1)]);
+		vi.useFakeTimers();
+		onTestFinished(() => void vi.useRealTimers());
+		const pending = resolveReminders(respond, reminded);
+		await vi.advanceTimersByTimeAsync(REMINDER_TIMEOUT_MS);
+		const text = await pending;
+		expect(text).toBe('Your process p1 runs.');
 		expect(seats).toEqual([{ agent: 'worker', room: 'site', activation: 'a' }]);
-		expect(renderActivation(summarize, reminded).context).toBe(
+		const plain = renderActivation(respond, worker).context.split('\n');
+		const lines = renderActivation(respond, reminded, text).context.split('\n');
+		expect(lines).toEqual([...plain.slice(0, -1), 'Your process p1 runs.', '', plain.at(-1)]);
+		expect(await resolveReminders(summarize, reminded)).toBeUndefined();
+		expect(renderActivation(summarize, worker, text).context).toBe(
 			renderActivation(summarize, worker).context,
 		);
 		expect(seats).toHaveLength(1);

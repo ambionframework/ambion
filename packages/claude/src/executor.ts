@@ -39,7 +39,7 @@ import type {
 import {
 	renderActivation,
 	renderDelta,
-	renderSystem,
+	resolveReminders,
 	sessionToResume,
 } from '@ambionframework/ambion/hosting';
 import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -187,7 +187,7 @@ class Activation implements ExecutorSession {
 		try {
 			if (this.stopped) return { failed: false };
 			this.view = input.view;
-			const prompt = this.promptFor(input);
+			const prompt = await this.promptFor(input);
 			if (prompt === undefined) {
 				this.through = Math.max(this.through, input.view.through);
 				return { failed: false };
@@ -214,9 +214,10 @@ class Activation implements ExecutorSession {
 	 * seat's part for this activation. A closing activation gets its duties
 	 * and the reader's preferences this way.
 	 */
-	private promptFor(input: PassInput): string | undefined {
+	private async promptFor(input: PassInput): Promise<string | undefined> {
 		if (input.kind === 'delta') return renderDelta(input.view, input.since);
-		const { agent, context } = renderActivation(input.view, this.definition);
+		const reminders = await resolveReminders(input.view, this.definition);
+		const { agent, context } = renderActivation(input.view, this.definition, reminders);
 		const resumes =
 			this.stream === undefined && sessionToResume(input.view, 'claude') !== undefined;
 		return resumes ? `${RESUMED_NOTE}\n\n${agent}\n\n${context}` : context;
@@ -251,7 +252,7 @@ class Activation implements ExecutorSession {
 		if (this.stream !== undefined) return;
 		if (view.spec.seat !== this.definition.name)
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
-		const { mechanism, agent } = renderSystem(view, this.definition);
+		const { mechanism, agent } = renderActivation(view, this.definition);
 		const executor = claudeOf(this.definition.executor);
 		this.resuming = sessionToResume(view, 'claude');
 		this.begin = () => {

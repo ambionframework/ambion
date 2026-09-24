@@ -502,8 +502,8 @@ and a required `layout` (see
 `openWorkspace` creates the resource owner, builds the three file tools, and
 binds them, and any tool the backend adds, to its `use` method. It also
 opens the process table and builds the five process tools over it
-([Processes](processes.md)). `workspace.processes` gives the host every
-process ([The host's view](processes.md#the-hosts-view)). `Workspace` adds `tools()`, `host`, and `mirror()` to the
+([Processes](processes.md)). `workspace.processes` gives the host the
+processes of this run ([The host's view](processes.md#the-hosts-view)). `Workspace` adds `tools()`, `host`, and `mirror()` to the
 resource surface. Direct operations and tool calls share one queue and one
 lifecycle.
 
@@ -573,8 +573,8 @@ await drive.dispose();
 ```
 
 Disposal immediately revokes new and queued work. It waits for an active
-operation and its cleanup, stops every background process and waits for it to
-end ([Processes](processes.md#life-and-disposal)), then asks the backend to release
+operation and its cleanup, stops every background process of this run and waits
+for it to end ([Processes](processes.md#life-and-disposal)), then asks the backend to release
 its local handles once. Concurrent calls join that release. A successful disposal is
 terminal. A failed disposal leaves the resource active and retryable.
 
