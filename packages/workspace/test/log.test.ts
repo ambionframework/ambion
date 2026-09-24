@@ -113,8 +113,9 @@ describe('a log path', () => {
 	it.each([
 		['rotateBytes', (bytes: number) => openLog({ path: '/logs/j.jsonl', rotateBytes: bytes })],
 		['maxBytes', (bytes: number) => openAuditLog({ maxBytes: bytes })],
-	])('refuses a non-positive %s', (option, open) => {
-		for (const bytes of [0, -1, Number.NaN]) expect(() => open(bytes)).toThrow(option);
+	])('refuses a non-positive or infinite %s', (option, open) => {
+		for (const bytes of [0, -1, Number.NaN, Number.POSITIVE_INFINITY])
+			expect(() => open(bytes)).toThrow(option);
 	});
 
 	it.each([

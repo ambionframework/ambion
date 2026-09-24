@@ -34,7 +34,7 @@ export type RoomMessageEntry = Message & { readonly room: string };
 export interface RoomMirrorOptions {
 	/** Bytes the file may hold before the next message rotates it. */
 	readonly rotateBytes?: number;
-	/** Told about a write or rotation failure. The room keeps running either way. */
+	/** Told about a directory, write, or rotation failure. The room keeps running either way. */
 	readonly onError?: (error: Error) => void;
 }
 

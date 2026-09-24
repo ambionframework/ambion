@@ -62,7 +62,7 @@ export interface AuditLogOptions {
 	readonly path?: string;
 	/** Bytes the file may hold before the next entry rotates it. Default 5 MiB. */
 	readonly maxBytes?: number;
-	/** Told about a write or rotation failure. The call that triggered it still returns. */
+	/** Told about a directory, write, or rotation failure. The call that triggered it still returns. */
 	readonly onError?: (error: Error) => void;
 }
 

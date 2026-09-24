@@ -10,8 +10,9 @@ fallback now retries the write alone.
 
 **A log path must be absolute, normalized, and have no trailing slash.**
 `openLog` and the audit log refuse a doubled slash, a `.` or `..` segment,
-and a trailing slash at open. The audit log's `maxBytes` must be a positive
-number, the same as `rotateBytes` of `openLog`.
+and a trailing slash at open. The audit log's `maxBytes` must be a positive,
+finite number, the same as `rotateBytes` of `openLog`. Before, `Infinity`
+turned rotation off.
 
 **The room mirror ignores a stray file beside its log.** When `mirror()`
 resumes, it reads the log file and the files that rotation made of it. A

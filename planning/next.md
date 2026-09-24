@@ -51,9 +51,9 @@ delegation by reference (D1) carry the change
 ## The scope
 
 **Fourteen changes already landed on main.** The changelog names the export
-changes of each one. Items M1, M2, M3, M4, M6, M7, S1, and S2 came from this plan. The
-other rows landed as their own pull requests, and the plan records them
-here so that the release names them.
+changes of each one. Items M1, M2, M3, M4, M6, M7, S1, and S2 came from
+this plan. The other rows landed as their own pull requests, and the plan
+records them here so that the release names them.
 
 | Change                                              | PR               | What it gives 0.2.0                                                                                                                                        |
 | --------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -183,8 +183,8 @@ is late.
 | B    | Phase 2: live evidence | P2       |
 | —    | Phase 3: the release   | P1       |
 
-**The lanes edit different files.** Phase 1 edits the conformance files. Phase 2 edits the live tests and the
-live workflow.
+**The lanes edit different files.** Phase 1 edits the conformance files.
+Phase 2 edits the live tests and the live workflow.
 
 ### Phase 1. Package hygiene (P2)
 

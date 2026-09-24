@@ -42,10 +42,10 @@ export function checkedLogPath(path: string, of: string): string {
 	return path;
 }
 
-/** A positive byte count, or a thrown error naming what needed one. */
+/** A positive, finite byte count, or a thrown error naming what needed one. */
 export function checkedByteThreshold(bytes: number, of: string): number {
 	if (!Number.isFinite(bytes) || bytes <= 0) {
-		throw new Error(`${of} must be a positive number, not ${bytes}.`);
+		throw new Error(`${of} must be a positive, finite number, not ${bytes}.`);
 	}
 	return bytes;
 }

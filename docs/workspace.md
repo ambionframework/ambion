@@ -150,9 +150,10 @@ connects first, splitting the log one way for that agent and another way
 for every other. `path` must also be normalized, with no trailing slash. A
 doubled slash, a `.` or `..` segment, or a trailing slash can name one file
 on one backend and a different file on another. `openLog` and the audit log
-refuse each of these at open. A caller scopes two logs apart by giving them two paths; a
-room's full record, an audit trail, and a metrics feed each open one log at
-its own path, over one shared workspace, with no collision.
+refuse each of these at open. A caller scopes two logs apart by giving
+them two paths; a room's full record, an audit trail, and a metrics feed
+each open one log at its own path, over one shared workspace, with no
+collision.
 
 **A log carries no state of its own.** `openLog` does no I/O and holds no
 count: every fact rotation needs — whether the active file exists, and how
@@ -196,7 +197,7 @@ const drive = openWorkspace({
 **The log is an ordinary file an agent reads.** The default path is the
 backend's `layout.audit`. Set `path` to open it somewhere else, and
 `maxBytes` to change the 5 MiB rotation threshold. `maxBytes` must be a
-positive number. An agent reads the log
+positive, finite number. An agent reads the log
 with `read` or `bash cat`, the same as any file a peer wrote, and sees every
 call any agent in any room made, including its own past calls. `jq` filters
 one entry out of many, by `room`, `tool`, `agent`, or `activation`.
@@ -223,9 +224,9 @@ line naming the call and the failure, in place of the full entry. The
 fallback retries the write alone. A failure to create the log's directory
 goes to `onError` and never becomes this notice.
 
-**A directory, write, or rotation failure calls `onError`.** The tool call itself keeps
-its own result. The log is best-effort: a full disk delays the record. It
-does not delay the agent. A throwing `onError` callback is caught inside the
+**A directory, write, or rotation failure calls `onError`.** The tool call
+itself keeps its own result. The log is best-effort: a full disk delays the
+record. It does not delay the agent. A throwing `onError` callback is caught inside the
 log, so it never reaches the tool call's own outcome.
 
 **Only a call through `workspace.tools()` is recorded.** A direct
