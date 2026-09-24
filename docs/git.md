@@ -5,27 +5,60 @@ for a workspace, proposed for 0.2.0. [The plan](../planning/next.md) does
 not list it yet. The examples show the proposed API.
 
 **A git backend hosts the repositories of one workspace.** A host puts
-read-only templates on it. An agent forks a template, clones the fork into
-its home, works on a branch, and pushes. A push to a deploy ref starts a
-job that the host runs to completion. The job writes its result back to
-the repository, where the agent reads it with `git`.
+read-only templates on it. A person asks an agent to start from a
+template. The agent forks the template, clones the fork into its home,
+edits the files, commits, and pushes. The push persists the edits across
+a restart of the host.
 
-**The backend needs no wake source.** 0.3.0 item W1 adds a notice that
-wakes a seat when a job ends
-([After W1](#after-w1)). Until then, an agent reads the result at its next
-activation.
+**This page covers the repositories and the access to them.** A deploy
+ref that starts a job is a later design, and it builds on this one.
 
 ## What the backend gives an agent
 
 | Operation                   | How the agent does it                                                 |
 | --------------------------- | --------------------------------------------------------------------- |
-| Start from a template       | The `repo` tool: `fork` a template into its own namespace             |
-| Clone into the home         | `git clone http://git.ambion.invalid/<agent>/<name>` in `bash`        |
+| Find a template             | The `repo` tool: `list`                                               |
+| Fork a template             | The `repo` tool: `fork` a template into the agent's own namespace     |
+| Clone into the home         | `fork` with `clone`, or `git clone <url>/<agent>/<name>` in `bash`    |
+| Edit                        | The `read`, `write`, and `edit` tools, or `bash`                      |
 | Work on a branch            | Ordinary `git` in `bash`: `switch -c`, `add`, `commit`, `merge`       |
-| Push                        | `git push origin <branch>`; the server checks the namespace           |
-| Deploy                      | `git push origin HEAD:deploy`; a check can refuse it at once          |
-| Read the result of a job    | `git fetch origin jobs` and `git show origin/jobs:<sha>/job.json`     |
+| Persist the edits           | `git push origin <branch>`; the server checks the namespace           |
 | Take a change of a template | Add the template as a second remote, then `git fetch` and `git merge` |
+
+## Prompt an agent
+
+**A person names the template and the result, and the agent does the
+rest.** The tool guidance states the URL, the namespaces, and the rule
+that a push persists the edits. An instruction needs no git commands.
+
+> Start a report from the `weekly-report` template. Fill in this week's
+> numbers from `~/data/week.csv`, and push it on a branch named `week-39`.
+
+**The agent then makes five calls.**
+
+1. `repo` `fork`, with source `templates/weekly-report`, name `report`,
+   and clone `~/report`. The tool forks the template to `analyst/report`
+   and clones the fork into `~/report`.
+2. `bash` with `cd ~/report && git switch -c week-39`.
+3. `edit` on `~/report/report.md`, one call or more.
+4. `bash` with `cd ~/report && git add -A && git commit -m "Week 39"`.
+5. `bash` with `cd ~/report && git push origin week-39`.
+
+**A later activation continues from the fork.** It clones the fork again,
+or it uses the working copy that is still in the home
+([Persistence](#persistence)). A peer reviews the work with
+`git clone <url>/analyst/report`.
+
+**The guidance holds these lines.** The URL in them is the `url` of the
+backend.
+
+```text
+Repositories live on the git server at http://git.ambion.invalid.
+templates/<name> is a read-only template. <agent>/<name> belongs to that agent.
+Fork a template with the repo tool, then work in the clone in your home.
+You can push only to repositories in your own namespace.
+An edit persists only after you commit it and push it. Push before you finish.
+```
 
 ## The name and the packages
 
@@ -64,6 +97,15 @@ interface GitEnv extends ResourceEnv {
   list(): Promise<readonly GitRepository[]>;
   fork(source: string, name: string): Promise<GitRepository>;
 }
+
+interface GitRepository {
+  /** `templates/<name>` or `<agent>/<name>`. */
+  readonly id: string;
+  /** The repository this one was forked from. */
+  readonly source?: string;
+  /** Each branch and the commit it names. */
+  readonly branches: Readonly<Record<string, string>>;
+}
 ```
 
 **A bash backend receives `GitAccess` when it connects.**
@@ -75,32 +117,29 @@ and the bash backend reaches the git backend through `GitAccess`.
 **`@ambionframework/git` implements the backend over `just-git/server`.**
 `just-git` already gives the just-bash shell its `git` command. Its server
 has forks that share objects, push hooks, and a ref policy. The package
-adds the namespaces, the templates, the deploy refs, and the jobs branch.
+adds the namespaces, the templates, the `repo` tool, and the storage over
+`node:sqlite`.
 
 ```ts
 import { openWorkspace } from '@ambionframework/workspace';
 import { directoryBackend } from '@ambionframework/just-bash';
 import { fromDirectory, gitBackend, sqliteGitStorage } from '@ambionframework/git';
 
-const git = gitBackend({
-  storage: sqliteGitStorage('./data/lab-git.db'),
-  secret: process.env.LAB_GIT_SECRET,
-  templates: { 'batch-job': fromDirectory('./templates/batch-job') },
-  deploy: {
-    admit: (push) => checkManifest(push),
-    start: (job) => runner.enqueue(job),
-  },
-});
-
 const lab = openWorkspace({
   name: 'lab',
-  backend: { bash: directoryBackend('./data/lab'), git },
+  backend: {
+    bash: directoryBackend('./data/lab'),
+    git: gitBackend({
+      storage: sqliteGitStorage('./data/lab-git.db'),
+      secret: process.env.LAB_GIT_SECRET,
+      templates: { 'weekly-report': fromDirectory('./templates/weekly-report') },
+    }),
+  },
 });
 ```
 
 **`Workspace.git` is the owner of the git backend, for host code.** It is
-the same as `Workspace.sql`. `git.report` belongs to the backend handle,
-because only the host reports on a job.
+the same as `Workspace.sql`.
 
 **The changelog names three export changes.** `WorkspaceBackends` gets
 `git`, `BashBackend.connect` gets its third argument, and the new package
@@ -110,13 +149,12 @@ adds its own exports.
 
 **A repository ID has two parts: a namespace and a name.** The server
 resolves the path of the URL to the ID, so
-`http://git.ambion.invalid/alice/report` names `alice/report`.
+`http://git.ambion.invalid/analyst/report` names `analyst/report`.
 
-| Namespace     | Holds                             | Who writes it                  |
-| ------------- | --------------------------------- | ------------------------------ |
-| `templates/`  | The templates of the host         | The host agent, `<name>-host`  |
-| `<agent>/`    | The forks and repositories of one | That agent                     |
-| Any namespace | The `jobs` branch                 | The host agent, through report |
+| Namespace    | Holds                                    | Who writes it                 |
+| ------------ | ---------------------------------------- | ----------------------------- |
+| `templates/` | The templates of the host                | The host agent, `<name>-host` |
+| `<agent>/`   | The forks and repositories of that agent | That agent                    |
 
 **Every agent reads every repository.** Agents in one room share their
 work, so a peer clones a fork to review it. The host can narrow this with
@@ -131,9 +169,9 @@ is `templates`.
 every push to `templates/`. The agent sees the refusal as ordinary git
 output:
 
-```
- ! [rejected]        main -> main (templates/batch-job is a read-only template)
-error: failed to push some refs to 'http://git.ambion.invalid/templates/batch-job'
+```text
+ ! [rejected]        main -> main (templates/weekly-report is a read-only template)
+error: failed to push some refs to 'http://git.ambion.invalid/templates/weekly-report'
 ```
 
 **The host declares each template, and the backend writes it.** The
@@ -165,13 +203,20 @@ and its forks stay is the host's decision.
 and reads each object from the root repository, so a fork costs a few
 rows. A fork of a fork records the root as its source.
 
+**`fork` refuses a name that the agent already uses.** The tool result
+names the existing repository, so the agent clones it or picks another
+name. A repeated `fork` call after a timeout therefore creates nothing
+twice.
+
 **`clone` puts the fork in the agent's home in the same call.** It names a
 path, such as `~/report`. The tool runs `git clone` through `bash` as the
-calling agent, so the clone sets `origin` to the fork.
+calling agent, so the clone sets `origin` to the fork. A path that already
+holds files fails the clone, and the fork stays.
 
 **The host can prepare a fork before the first activation.** Host code
-calls `lab.git.use(agent, (env) => env.fork('templates/batch-job', 'job'))`,
-then clones through `lab.use`. The agent then starts with a working copy.
+calls `lab.git.use(agent, (env) => env.fork('templates/weekly-report',
+'report'))`, then clones through `lab.use`. The agent then starts with a
+working copy.
 
 ## How the URL works
 
@@ -246,95 +291,41 @@ first connection.** It writes `~/.git-credentials` with mode `0600` and
 sets `credential.helper store`. The home has mode `0700`, so no other
 account reads the token. The agent can read its own token.
 
-## Deploy refs and jobs
+## Persistence
 
-**A push to the deploy ref of a repository starts a job.** The deploy ref
-is `refs/heads/deploy` by default, and the `deploy.ref` option changes it.
-An agent deploys with `git push origin HEAD:deploy`. The namespace rule
-applies, so an agent deploys only its own repositories.
+**A push is the point where an edit persists.** The git storage holds
+every pushed commit in one SQLite file. A restart of the host, a new
+activation, and a new exchange all find the same branches on the server.
 
-**A job has one key: `<repository>@<sha>`.** The host's runner uses the
-key to find a job that it already started.
+**The working copy persists with the bash backend.** A commit that the
+agent has not pushed lives in the clone, in the agent's home.
 
-### Admission
+| State of an edit             | Memory backend   | Directory backend | Workstation      |
+| ---------------------------- | ---------------- | ----------------- | ---------------- |
+| Pushed                       | Survives restart | Survives restart  | Survives restart |
+| Committed, not pushed        | Lost on restart  | Survives restart  | Survives restart |
+| Written, not committed       | Lost on restart  | Survives restart  | Survives restart |
+| Any state, after `dispose()` | Kept if pushed   | Kept              | Kept             |
 
-**`deploy.admit` can refuse a deploy before the ref changes.** It runs in
-the server's pre-receive hook. It receives the repository, the agent, the
-new commit, and a reader for files at that commit. It returns nothing to
-admit, or a message to refuse. The agent reads the message in the output
-of its `git push`, in the same activation.
+**The guidance tells the agent to push before it finishes.** The memory
+backend loses its working copies on a restart, and the git server is the
+one place that every backend keeps. A person can also ask a peer to clone
+the branch, and the peer reads only what was pushed.
 
-**`admit` runs inside the agent's `bash` call.** On the just-bash backends,
-that call holds the bash owner, so every other agent's file tools wait.
-Keep `admit` to checks of the tree, such as a manifest that parses. The
-command's timeout, 30 seconds by default, also bounds `admit`.
+**`sqliteGitStorage(path)` keeps every repository in one SQLite file.** It
+opens the file through `node:sqlite`, the same as `sqliteBackend`. It wraps
+`just-git`'s `BetterSqlite3Storage` with a `transaction()` that
+`node:sqlite` does not have. A native adapter can go upstream to
+`just-git` later. With `':memory:'`, the storage lives as long as the
+process, for tests.
 
-### The handoff
+**The git file stays apart from the SQL backend's file.** The `sql` tool
+does not reach the tables of the git storage.
 
-**After the ref changes, the backend records the job, then starts it.**
-
-1. The post-receive hook writes `<sha>/job.json` with state `queued` to
-   the repository's `jobs` branch, as the host agent.
-2. The backend calls `deploy.start(job)`. The job holds the key, the
-   repository, the ref, the commit, and the agent.
-
-**The host reports progress with `report`.** `git.report(key, state)`
-writes `<sha>/job.json` again, and an optional `<sha>/log.txt`. The states
-are `queued`, `running`, `succeeded`, and `failed`. The last two are final.
-
-**Open recovers every job that a crash left behind.** At open, the backend
-reads the deploy ref of each repository.
-
-- A deploy ref whose commit has no entry on `jobs` gets a `queued` entry
-  and a `start` call.
-- An entry in state `queued` or `running` gets a `start` call again.
-
-**`start` runs at least once for each key.** A crash between the ref
-change and the `queued` entry loses nothing: the deploy ref records the
-intent, and recovery reads it. Two deploys in quick succession each start
-a job. After a crash between them, recovery starts only the commit that
-the ref names now.
-
-**A job writes no journal entry.** The room record holds what the agent
-says about a deploy. The git backend adds no format change to 0.2.0.
-
-### The jobs branch
-
-**The `jobs` branch holds the result of every job in the repository.**
-One folder for each deployed commit, named by its full SHA:
-
-```
-<sha>/job.json   { "key", "state", "agent", "started", "ended", "summary" }
-<sha>/log.txt    the output the host chose to keep
-```
-
-**Only the host writes `jobs`.** The server refuses an agent's push to
-it. The host writes through `server.commit`, which runs no hook.
-
-**An agent reads a result with `git`.** Tool guidance names the commands:
-
-```sh
-git fetch origin jobs
-git show origin/jobs:$(git rev-parse HEAD)/job.json
-```
-
-**Read the result once, and do not wait in a loop.** A `sleep` loop in
-`bash` holds the bash owner until the command times out, and every other
-agent's file tools wait for it. A job that is still `running` ends its
-own activation. The agent reads the result at its next activation.
-
-**Nothing wakes the seat when a job ends.** The exchange closes when the
-room goes quiet, and the job does not hold it open. The next activation
-of the seat reads the result, for example when a person asks how the
-deploy went. A host can show the `jobs` branch to people directly.
-
-### After W1
-
-**W1 adds the wake, and the jobs branch stays the record.** A `report` of
-a final state delivers one notice with the job key as its stable key. The
-notice carries a reference to the job. A repeated `report` lands once.
-The reference needs a scheme, such as
-`ambion://git/<repository>/job/<sha>`, and W1 decides it.
+**The git storage is the record of the code.** The journal stays the
+record of the room. Neither writes to the other, and a restart of the host
+recovers each one on its own. A message can name a branch and a commit in
+its text, so a reader finds the work the message describes.
 
 ## Owners and order
 
@@ -348,27 +339,18 @@ the pushes to one repository: each ref update compares the old commit and
 the new one, and a push that lost the race fails.
 
 **A repeated push changes nothing.** A push of the commit that a ref
-already names updates no ref and starts no job. A tool call that repeats
-after a timeout is safe.
+already names updates no ref. A tool call that repeats after a timeout is
+safe.
+
+**A clone or a push holds the bash owner.** On the just-bash backends, the
+pack work runs in the host's process. While one agent clones a large
+template, every other agent's file tools wait. The backlog item
+[A backend profile and concurrent operations](../planning/backlog.md#designs-with-a-shape)
+removes this wait.
 
 **Disposal runs in order.** The SQL owner goes first, then the git owner,
 then the bash owner, and last the server closes. The server waits for the
 pushes in flight.
-
-## Storage
-
-**`sqliteGitStorage(path)` keeps every repository in one SQLite file.** It
-opens the file through `node:sqlite`, the same as `sqliteBackend`. It wraps
-`just-git`'s `BetterSqlite3Storage` with a `transaction()` that
-`node:sqlite` does not have. A native adapter can go upstream to
-`just-git` later.
-
-**The git file stays apart from the SQL backend's file.** The `sql` tool
-does not reach the tables of the git storage.
-
-**The git storage is the record of the code and the jobs.** The journal
-stays the record of the room. Neither writes to the other, and a restart
-of the host recovers each one on its own.
 
 ## Provenance
 
@@ -390,7 +372,7 @@ namespace rule on every backend. The bash backend decides the rest.
 | Attempt                                       | just-bash backends              | Workstation                            |
 | --------------------------------------------- | ------------------------------- | -------------------------------------- |
 | Push to another agent's repository            | Refused by the server           | Refused by the server                  |
-| Push to a template or to `jobs`               | Refused by the server           | Refused by the server                  |
+| Push to a template                            | Refused by the server           | Refused by the server                  |
 | Push as another agent                         | Not possible: no token exists   | Needs that agent's token, mode `0600`  |
 | Read another agent's repository on the server | Allowed by default              | Allowed by default                     |
 | Read another agent's working copy             | Possible: no wall between homes | Refused by the account permissions     |
@@ -402,45 +384,44 @@ namespace rule on every backend. The bash backend decides the rest.
 **`gitConformance(harness)` holds the cases of a `GitBackend`.** It lives
 in `@ambionframework/workspace/conformance`, beside `sqlConformance`.
 
-- A fork lists, clones, and takes a push from its owner.
-- A push to a template, to `jobs`, and to another agent's namespace is
-  refused.
-- A refusal from `admit` reaches the output of `git push`, and the ref
-  stays.
-- A deploy calls `start` once, and a repeated push calls it no more.
-- `report` writes `jobs`, and `git show` reads it back.
+- `list` shows each template, and each fork with its source.
+- `fork` with `clone` gives a working copy whose `origin` is the fork.
+- A second `fork` with the same name is refused and creates nothing.
+- The owner pushes a new branch, and a second clone reads it.
+- A push to a template and to another agent's namespace is refused, and
+  the agent's `git push` output names the reason.
+- A peer clones another agent's fork.
 
 **The scripted tier runs in process.** It runs the cases on the memory
-and the directory backends, with no network. A restart case stops the
-backend between the ref change and the `queued` entry, opens it again,
-and finds one `start` call.
+and the directory backends, with no network. A restart case pushes a
+branch, disposes the workspace, opens a new one over the same git file,
+and clones the branch with its commits.
+
+**A room test drives the prompt above.** A scripted execution makes the
+five calls of [Prompt an agent](#prompt-an-agent). The test then reads the
+pushed branch through `lab.git.use`. It needs no model.
 
 **The workstation tier runs a real `git` against the HTTP endpoint.** It
 joins the OpenSSH job of [Workstation](workstation.md#tests). It proves
 the `insteadOf` line, the credential file and its mode, and that one
 account cannot push as another.
 
-**No test needs a model.** A scripted execution drives the room, the same
-as every other workspace test.
-
 ## Out of v1
 
+- A deploy ref that starts a job, and the result of the job. A later page
+  designs them over this backend.
 - A git backend under workerd. `just-git` has a Durable Object storage,
   and the Cloudflare adapter has no workspace yet.
 - Import of a template from an external remote, and a mirror of a
   repository to an external host.
 - The SSH transport to the git server.
-- Garbage collection and retention of forks and jobs.
-- The wake when a job ends. That is 0.3.0 item W1.
+- Garbage collection, and retention of forks.
 
 ## Open decisions
 
 - **Access.** Every agent reads every repository by default. An `access`
   callback, `(agent, repository) => 'none' | 'read' | 'write'`, could
   replace the namespace rule.
-- **The job record.** A `jobs` branch is one ref that `git fetch` reads.
-  A ref for each job, `refs/jobs/<sha>`, keeps the jobs of two commits
-  apart, and costs the agent a longer `fetch` refspec.
 - **The token.** A token derived from one secret needs no store. A
   resolver for each agent, as the workstation has, lets the host use its
   own secrets manager.
