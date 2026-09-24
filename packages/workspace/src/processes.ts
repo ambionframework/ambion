@@ -129,8 +129,15 @@ export interface ProcessTable {
 	cancel(agent: WorkspaceAgent, handle: string): Promise<ProcessStatus>;
 	/** Write `seen` for a process in a final state, through `env` on the bash owner. */
 	markSeen(env: WorkspaceEnv, process: ProcessStatus): Promise<void>;
-	/** The reminder of one activation: the seat's running processes, and the finished ones that no result showed. */
-	remind(seat: { agent: string; room: string; activation: string }): Promise<string | undefined>;
+	/**
+	 * The reminder of one activation: the seat's running processes, and the
+	 * finished ones that no result showed. After `signal` aborts, it marks no
+	 * process `seen`, and a queued read does not start.
+	 */
+	remind(
+		seat: { agent: string; room: string; activation: string },
+		signal: AbortSignal,
+	): Promise<string | undefined>;
 	/** The host's list: the processes of the agents that used the workspace in this run. */
 	hostList(query?: ProcessQuery): Promise<readonly ProcessStatus[]>;
 	/** Call `listener` when a process starts and when it ends. Returns the unsubscribe. */
@@ -323,11 +330,18 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 
 	// -- the run of a process ---------------------------------------------------
 
+	/**
+	 * Run `fn` on the process's own environment, and on a fresh one when that
+	 * fails, as after a drop of the connection.
+	 */
+	const onFiles = <T>(own: Owned, fn: (env: WorkspaceEnv) => Promise<T>): Promise<T> =>
+		fn(own.env).catch(() => detached(own.agent, fn));
+
 	/** The final status of a process of this run, from its files, once the run ended. */
 	const finalStatus = async (own: Owned): Promise<ProcessStatus> => {
 		const root = own.dir.slice(0, own.dir.lastIndexOf('/'));
 		try {
-			const [files] = await readFiles(own.env, root, own.spec.handle);
+			const [files] = await onFiles(own, (env) => readFiles(env, root, own.spec.handle));
 			return files === undefined
 				? unreadable(own.spec, own.dir, 'no spec')
 				: statusOf(files, false);
@@ -336,24 +350,36 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		}
 	};
 
+	/** Write the end that a run gives: its exit code, or a stop for its error. */
+	const writeEnd = (env: WorkspaceEnv, dir: string, run: Run): Promise<void> =>
+		'ok' in run && run.ok
+			? writeExit(env, dir, run.value.exitCode)
+			: writeStop(env, dir, endOfRun(run));
+
 	/**
 	 * After the run: when the files name no end, write the one the run gives.
 	 * A shell that ended with a code before the wrapper wrote `exit`, as on a
 	 * syntax error, gives that code. An error of the run gives `stop`.
 	 */
 	const recordEnd = async (own: Owned, run: Run): Promise<void> => {
-		const exit = await own.env.exists(`${own.dir}/exit`, BACKGROUND_CONTEXT);
-		if ((exit.ok && exit.value) || own.stopping !== undefined) return;
-		if ('ok' in run && run.ok) await writeExit(own.env, own.dir, run.value.exitCode);
-		else await writeStop(own.env, own.dir, endOfRun(run));
+		if (own.stopping !== undefined) return;
+		await onFiles(own, async (env) => {
+			const exit = await env.exists(`${own.dir}/exit`, BACKGROUND_CONTEXT);
+			if (!exit.ok) throw exit.error;
+			if (!exit.value) await writeEnd(env, own.dir, run);
+		});
 	};
 
-	/** After the run: record the end the files lack, read the final status, and tell the host. */
+	/**
+	 * After the run: record the end the files lack, read the final status, and
+	 * tell the host. The process leaves this run's memory after the read, so a
+	 * start in between counts it as running and does not remove its files.
+	 */
 	const settleOwned = async (own: Owned, run: Run): Promise<void> => {
 		clearTimeout(own.timer);
 		await recordEnd(own, run).catch(() => undefined);
-		owned.delete(own.spec.handle);
 		const status = await finalStatus(own);
+		owned.delete(own.spec.handle);
 		await own.env.cleanup().catch(() => undefined);
 		emit({ type: 'ended', process: status });
 	};
@@ -369,9 +395,15 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 			.catch(() => void owned.delete(own.spec.handle));
 	};
 
-	/** Remove the oldest finished processes of the agent past the limit, with their files. */
+	/**
+	 * Remove the finished processes of the agent past the limit, with their
+	 * files: the oldest seen ones first, then the oldest that no result or
+	 * reminder showed.
+	 */
 	const forget = async (env: WorkspaceEnv, found: Found[]): Promise<void> => {
-		const finished = found.filter((one) => one.status.state !== 'running');
+		const finished = found
+			.filter((one) => one.status.state !== 'running')
+			.sort((a, b) => Number(b.files.seen) - Number(a.files.seen));
 		const excess = Math.max(0, finished.length - MAX_FINISHED_PROCESSES + 1);
 		for (const one of finished.slice(0, excess)) {
 			await env.remove(one.files.dir, { recursive: true, force: true }, BACKGROUND_CONTEXT);
@@ -490,20 +522,27 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 
 	// -- the reminder and the host's list ---------------------------------------
 
-	const remind: ProcessTable['remind'] = (seat) =>
-		shell({ name: seat.agent }, async (env) => {
-			const found = await read(seat.agent, env);
-			const running = found.filter((one) => one.status.state === 'running');
-			const unseen = found.filter((one) => one.status.state !== 'running' && !one.files.seen);
-			const text = reminderText(
-				running.map((one) => one.status),
-				unseen.map((one) => one.status),
-				seat.room,
-				Date.now(),
-			);
-			for (const one of unseen.slice(-FINISHED_IN_REMINDER)) await writeSeen(env, one.files.dir);
-			return text;
-		});
+	const remind: ProcessTable['remind'] = (seat, signal) =>
+		shell(
+			{ name: seat.agent },
+			async (env) => {
+				const found = await read(seat.agent, env);
+				const running = found.filter((one) => one.status.state === 'running');
+				const unseen = found.filter((one) => one.status.state !== 'running' && !one.files.seen);
+				const text = reminderText(
+					running.map((one) => one.status),
+					unseen.map((one) => one.status),
+					seat.room,
+					Date.now(),
+				);
+				for (const one of unseen.slice(-FINISHED_IN_REMINDER)) {
+					if (signal.aborted) break;
+					await writeSeen(env, one.files.dir);
+				}
+				return text;
+			},
+			signal,
+		);
 
 	const markSeen: ProcessTable['markSeen'] = async (env, process) => {
 		if (process.state === 'running') return;

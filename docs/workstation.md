@@ -165,7 +165,9 @@ home, so the backend reads it once for each client with `realpath('.')`.
 
 **The server runs bash and util-linux.** `SshEnv` runs each command
 through `bash`, whatever the login shell of the account is. It also needs
-a `setsid` that has the `--wait` option. Each account needs a login shell
+a `setsid` that has the `--wait` option. A new run of the host adopts a
+live process through the `ps` of procps
+([Processes](processes.md#backends)). Each account needs a login shell
 that runs a command, so `nologin` does not serve.
 
 ## The layout on a server

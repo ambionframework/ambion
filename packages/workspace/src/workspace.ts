@@ -160,7 +160,7 @@ function workspaceTools(
 	return Object.freeze({
 		tools: Object.freeze([...files, ...processes, ...sql.tools, ...git.tools, ...extra]),
 		guidance: joinNotes(notes),
-		remind: (seat: ReminderSeat) => backends.processes.remind(seat),
+		remind: (seat: ReminderSeat, signal: AbortSignal) => backends.processes.remind(seat, signal),
 	});
 }
 

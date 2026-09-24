@@ -110,8 +110,9 @@ The rendering helpers stay pure and stateless. The executor resolves the
 `reminders` of the bundles once for each respond activation, with
 `resolveReminders(view, def)`, and passes the text to
 `renderActivation(view, def, reminders)`. Each reminder has
-`REMINDER_TIMEOUT_MS`, 5 seconds, to answer. A reminder that throws,
-rejects, gives blank text, or answers late gives no text. The core does not
+`REMINDER_TIMEOUT_MS`, 5 seconds, to answer, and at that bound the
+executor aborts the signal that it passed to the reminder. A reminder
+that throws, rejects, gives blank text, or answers late gives no text. The core does not
 cut a reminder, so the bundle bounds the length of its own text. An adapter
 that sends a continued session the delta alone sends the reminder text
 before the delta, on the first pass of an activation.

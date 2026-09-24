@@ -11,8 +11,8 @@ every bash backend.
 **The files of the bash backend are the source of truth.** Each process
 is a directory in its owner agent's home. The table reads those files for
 every answer, so a new run of the host reads the same table. Memory holds
-only what no file can: the controllers and the timers of the processes
-that this run stops.
+only what no file can: the environment, the controller, and the timer of
+each process that this run owns or adopts.
 
 **A process runs until it ends, times out, or gets a cancel.** An
 activation, an exchange, and a room do not stop a process. The host sees
@@ -215,7 +215,8 @@ interleave. The owner gives no order between them.
   OpenSSH allows 10 channels on one client by default
   ([Workstation](workstation.md#the-ssh-client)).
 - **64 finished processes.** A start removes the directories of the
-  oldest finished processes past that number.
+  finished processes past that number: the oldest seen ones first, then
+  the oldest that no result or reminder showed.
 
 **The table holds the timeout of each process.** At the timeout, the
 table stops the process the way a cancel does. The backend's own deadline
@@ -253,9 +254,15 @@ reminder names it once.
 | `directoryBackend`   | A lost process: its commands ran in the host       |
 | `workstationBackend` | A live process, adopted, when its group still runs |
 
-**An adopted process ends without an event.** A wait reads its files
-every 500 ms. The host's `ended` event comes when a read of this run
-first sees the end.
+**The end of an adopted process comes from a read.** No run of this host
+waits on its shell, so a wait reads its files every 500 ms. The host's
+`ended` event comes when a read of this run first sees the end.
+
+**Two runs of the host over one account adopt the same processes.** A
+second run adopts the live processes of the first, and its `dispose()`
+stops them while the first run still waits on them. The journal fences
+a second host of a room, and the process table has no fence. Stop one
+run of the host before the next one starts over the same accounts.
 
 ## ps
 
@@ -295,8 +302,9 @@ export type ProcessEvent =
 ```
 
 **`list` reads the tables of the agents that used the workspace in this
-run.** An agent joins that set on its first tool call or reminder. A new
-run of the host shows an agent's processes once that agent acts again.
+run.** An agent joins that set on its first process tool call or
+reminder. A `read`, `write`, or `edit` call adds no agent. A new run of the
+host shows an agent's processes once that agent acts again.
 `running: true` gives the running processes alone, and `agent` gives one
 agent.
 
@@ -351,7 +359,10 @@ export interface ToolBundle {
   readonly remind?: Reminder;
 }
 
-export type Reminder = (seat: ReminderSeat) => string | undefined | Promise<string | undefined>;
+export type Reminder = (
+  seat: ReminderSeat,
+  signal: AbortSignal,
+) => string | undefined | Promise<string | undefined>;
 
 export interface ReminderSeat {
   readonly agent: string;
@@ -362,7 +373,10 @@ export interface ReminderSeat {
 
 **A reminder has 5 seconds.** A reminder that throws, rejects, gives
 blank text, or takes longer gives no text, and the activation goes on.
-The core does not cut a long reminder, so the bundle bounds its own text.
+At the bound the executor aborts `signal`. The workspace reminder then
+writes no `seen`, and a read that waits on a busy bash owner does not
+start. The core does not cut a long reminder, so the bundle bounds its own
+text.
 
 **Each executor resolves on the first pass of the activation.**
 
@@ -415,6 +429,11 @@ process still reaches the git backend.
 **just-bash has no `ps` and no `kill`.** A just-bash process runs in the
 host's process, so no process outlives its run, and the listing finds no
 live shell.
+
+**Adoption on the workstation needs the `ps` of procps.** The listing
+runs `ps -ww -o args= -p`, and the kill runs `ps -o pgid= -p`. The
+BusyBox `ps` of an Alpine image refuses `-p`. On such a server, a live
+process of an earlier run reads as lost, and nothing stops it.
 
 **A workstation process holds an environment over the agent's SSH
 session.** The session stays open while any environment is open over it
@@ -477,5 +496,6 @@ the three handle tools stay as they are.
 | `ps` writes an audit entry                                     | The audit log records every tool call                                   |
 
 **The host owns the cleanup of `~/.processes` past the limit of 64.** A
-start removes the oldest finished processes of the agent that starts it.
+start removes the oldest finished processes of the agent that starts it,
+the seen ones first.
 An agent that starts no process keeps its directories.

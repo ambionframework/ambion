@@ -31,14 +31,25 @@ export async function resolveReminders(
 	return kept.length === 0 ? undefined : kept.join('\n\n');
 }
 
-/** One reminder's text: undefined when it throws, rejects, gives blank text, or passes the timeout. */
+/**
+ * One reminder's text: undefined when it throws, rejects, gives blank text,
+ * or passes the timeout. The timeout aborts the reminder's signal first, so
+ * a late reminder can see that the executor drops its text.
+ */
 async function bounded(remind: Reminder, seat: ReminderSeat): Promise<string | undefined> {
+	const controller = new AbortController();
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const late = new Promise<undefined>((resolve) => {
-		timer = setTimeout(() => resolve(undefined), REMINDER_TIMEOUT_MS);
+		timer = setTimeout(() => {
+			controller.abort(new Error('The reminder passed its timeout.'));
+			resolve(undefined);
+		}, REMINDER_TIMEOUT_MS);
 	});
 	try {
-		const text = await Promise.race([Promise.resolve().then(() => remind(seat)), late]);
+		const text = await Promise.race([
+			Promise.resolve().then(() => remind(seat, controller.signal)),
+			late,
+		]);
 		const trimmed = text?.trim();
 		return trimmed === '' ? undefined : trimmed;
 	} catch {

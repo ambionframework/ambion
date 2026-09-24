@@ -4,7 +4,7 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { tempDir } from '../../just-bash/test/support/backends.ts';
-import { LOST } from '../src/process-files.ts';
+import { LOST, type ProcessFiles, statusOf } from '../src/process-files.ts';
 import { FINISHED_IN_REMINDER } from '../src/process-text.ts';
 import type { ProcessDetails, PsDetails } from '../src/process-tools.ts';
 import { MAX_FINISHED_PROCESSES, MAX_RUNNING_PROCESSES } from '../src/processes.ts';
@@ -295,12 +295,13 @@ describe('the host view', () => {
 
 describe('the reminder', () => {
 	const seat = (activation: string) => ({ agent: 'alpha', room: 'lobby', activation });
+	const live = () => new AbortController().signal;
 
 	it('names running and unseen finished processes once, and drops a process a result showed', async () => {
 		const workspace = site();
 		const remind = workspace.tools().remind;
 		if (remind === undefined) throw new Error('The workspace bundle must remind.');
-		expect(await remind(seat('a1'))).toBeUndefined();
+		expect(await remind(seat('a1'), live())).toBeUndefined();
 		const tests = await call(
 			workspace,
 			'bash',
@@ -319,7 +320,15 @@ describe('the reminder', () => {
 		const shown = await failedHandle(() =>
 			toolOf(workspace, 'bash').invoke({ command: 'exit 4' }, callAs('alpha')),
 		);
-		const text = (await remind(seat('a2'))) ?? '';
+		// A reminder that passes its bound while it waits on a busy owner marks nothing seen.
+		const gate = Promise.withResolvers<void>();
+		const busy = workspace.use({ name: 'alpha' }, () => gate.promise);
+		const bound = new AbortController();
+		const late = Promise.resolve(remind(seat('a1b'), bound.signal)).catch(() => undefined);
+		bound.abort();
+		gate.resolve();
+		await Promise.all([busy, late]);
+		const text = (await remind(seat('a2'), live())) ?? '';
 		expect(text.split('\n')).toEqual([
 			'Your background processes in the workspace:',
 			expect.stringMatching(
@@ -339,11 +348,11 @@ describe('the reminder', () => {
 		]);
 		expect(text).not.toContain(shown);
 		// The reminder wrote seen for the finished process, so the next one names the running ones alone.
-		const next = (await remind({ ...seat('a3'), room: 'review' })) ?? '';
+		const next = (await remind({ ...seat('a3'), room: 'review' }, live())) ?? '';
 		expect(next).not.toContain(failed);
 		expect(next).toContain(`${tests.details.process.handle}, is running for`);
 		expect(next).toContain('in the room lobby');
-		expect(await remind({ ...seat('a4'), agent: 'beta' })).toBeUndefined();
+		expect(await remind({ ...seat('a4'), agent: 'beta' }, live())).toBeUndefined();
 	});
 
 	it(`names the newest ${FINISHED_IN_REMINDER} unseen finished processes, and counts the rest`, async () => {
@@ -351,7 +360,7 @@ describe('the reminder', () => {
 		const handles: string[] = [];
 		for (let i = 0; i < FINISHED_IN_REMINDER + 2; i++)
 			handles.push(await endedUnseen(workspace, 'sleep 0.05'));
-		const lines = ((await workspace.tools().remind?.(seat('a1'))) ?? '').split('\n');
+		const lines = ((await workspace.tools().remind?.(seat('a1'), live())) ?? '').split('\n');
 		expect(lines).toHaveLength(FINISHED_IN_REMINDER + 3);
 		expect(lines[1]).toContain(handles[2]);
 		expect(lines.at(-2)).toBe('- and 2 more finished processes');
@@ -410,12 +419,40 @@ describe('an aborted wait', () => {
 });
 
 describe('the files as the source of truth', () => {
+	const EXIT = '0 2026-01-01T00:01:00Z';
+	const STOP = 'cancelled 2026-01-01T00:00:30.000Z';
+	it.each([
+		{ files: { exit: EXIT }, live: false, state: 'exited' },
+		{ files: { exit: EXIT, stop: STOP }, live: false, state: 'cancelled' },
+		{ files: { exit: EXIT, stop: STOP }, live: true, state: 'running' },
+		{ files: { stop: STOP }, live: true, state: 'running' },
+		{
+			files: { stop: 'failed 2026-01-01T00:00:30.000Z The run broke.' },
+			live: false,
+			state: 'failed',
+		},
+		{ files: {}, live: true, state: 'running' },
+		{ files: {}, live: false, state: 'failed' },
+	])('reads $state from the files $files, with a live shell: $live', ({ files, live, state }) => {
+		const spec = {
+			handle: 'bash-00000000000b',
+			kind: 'bash' as const,
+			agent: 'alpha',
+			command: 'true',
+			timeout: 600,
+			startedAt: '2026-01-01T00:00:00.000Z',
+		};
+		const read: ProcessFiles = { dir: '/p', spec, seen: false, alive: live, ...files };
+		expect(statusOf(read, false).state).toBe(state);
+	});
+
 	it('reads the table of a new workspace over the same directory: a finished process, and one that no run owns', async () => {
 		const { dir, dispose } = await tempDir('ambion-processes-');
 		onTestFinished(dispose);
 		const first = openWorkspace({ name: 'files-one', backend: { bash: directoryBackend(dir) } });
-		const done = (await call(first, 'bash', { command: 'echo kept', name: 'build' })).details
-			.process;
+		// A colon and a backslash in the command stay whole through the line-oriented listing.
+		const command = 'echo kept # a: b\\c';
+		const done = (await call(first, 'bash', { command, name: 'build' })).details.process;
 		await first.dispose();
 		// A spec with no end and no live shell: the run that owned it ended before it did.
 		const lost = 'bash-00000000000a';
@@ -427,19 +464,27 @@ describe('the files as the source of truth', () => {
 			JSON.stringify({ ...spec, timeout: 600, startedAt: '2026-01-01T00:00:00.000Z' }),
 		);
 		const second = openWorkspace({ name: 'files-two', backend: { bash: directoryBackend(dir) } });
+		const live = new AbortController().signal;
 		onTestFinished(() => second.dispose());
 		const status = await call(second, 'status', { handle: done.handle });
-		expect(status.details.process).toMatchObject({ state: 'exited', exitCode: 0, name: 'build' });
+		expect(status.details.process).toMatchObject({
+			state: 'exited',
+			exitCode: 0,
+			name: 'build',
+			command,
+		});
 		expect(status.text.startsWith('kept\n\n[Process')).toBe(true);
 		const reminded =
-			(await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a1' })) ?? '';
+			(await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a1' }, live)) ?? '';
 		expect(reminded).toContain(`- ${lost} failed: sleep 99`);
 		expect(reminded).not.toContain(done.handle);
 		expect(
-			await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a2' }),
+			await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a2' }, live),
 		).toBeUndefined();
 		const lostStatus = await call(second, 'status', { handle: lost });
 		expect(lostStatus.details.process).toMatchObject({ state: 'failed', error: LOST });
+		// The host's cancel finds the owner from the files, and gives the final state again.
+		expect(await second.processes.cancel(lost)).toMatchObject({ state: 'failed', error: LOST });
 		expect((await call(second, 'ps', {})).text).toBe('No running processes.');
 	});
 });

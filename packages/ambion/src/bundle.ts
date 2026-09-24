@@ -13,7 +13,8 @@ export interface ToolBundle {
 	 * Text for one respond activation of one seat, or undefined for none. The
 	 * executor calls it once, at the start of the activation, and the text
 	 * joins the turn context. A throw, a rejection, or no answer within
-	 * `REMINDER_TIMEOUT_MS` gives no text.
+	 * `REMINDER_TIMEOUT_MS` gives no text. At that bound the executor aborts
+	 * `signal`, so a reminder that records what it showed records nothing.
 	 */
 	readonly remind?: Reminder;
 }
@@ -29,4 +30,7 @@ export interface ReminderSeat {
 }
 
 /** A bundle's text for one activation. It runs where the executor runs, and it can read I/O. */
-export type Reminder = (seat: ReminderSeat) => string | undefined | Promise<string | undefined>;
+export type Reminder = (
+	seat: ReminderSeat,
+	signal: AbortSignal,
+) => string | undefined | Promise<string | undefined>;

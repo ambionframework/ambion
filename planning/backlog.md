@@ -68,7 +68,8 @@ quiet moment. A link to the room needs its own design. The handle is
 `<kind>-<random>`, and `bash` is the one kind. A clone that runs past its
 call and a SQL export are candidate kinds. The end of a process wakes no
 seat: the seat calls `wait` or `status`. The notice of 0.3.0 item W1 can
-carry it. **Condition:** a seat that must wake when a
+carry it. The table has no fence: two runs of the host over one account
+adopt the same processes. **Condition:** a seat that must wake when a
 process ends, a process that must stop with its exchange, or a second
 kind of work that outlives its call.
 
