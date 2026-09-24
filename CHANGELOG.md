@@ -53,6 +53,24 @@ activation starts with a reminder of the seat's processes. See
   backends.** The tool line of the guidance counts them.
 - **`dispose()` stops every running process of this run** before the bash
   backend releases its handles.
+- **`@ambionframework/git` is gone.** Its git backend moves into the new
+  entry `@ambionframework/just-bash/git`. That entry exports
+  `justGitBackend`, `sqliteGitStorage`, `JustGitBackend`,
+  `JustGitBackendOptions`, `GitStorage`, `OpenGitStorage`, `Registry`, and
+  `RegistryRow`. The root entry of `@ambionframework/just-bash` loads no
+  `node:sqlite`.
+- **`gitBackend` is now `justGitBackend`, and `GitBackendOptions` is now
+  `JustGitBackendOptions`.** `justGitBackend` has no `handler` and no `url`
+  option. Every clone URL starts with `http://git.ambion.invalid`, and the
+  backend serves the process it runs in.
+- **The template helpers and the name rules move to the new entry
+  `@ambionframework/workspace/git`.** It exports `fromDirectory`,
+  `filesOf`, `hashesOf`, `sameFiles`, `changeTo`, `validName`,
+  `namespaceOf`, `assertAgent`, `readOnly`, `TEMPLATES`, `SOURCES`,
+  `TemplateRegistration`, `TemplateSource`, and `TemplateFiles`. Import
+  `fromDirectory` from there.
+- **The workstation writes no `~/.git-credentials`.** It carries no git
+  transport, so a git backend beside it gives each agent's `git` no access.
 
 ## 0.2.0 (2026-09-24)
 

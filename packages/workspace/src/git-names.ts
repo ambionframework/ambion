@@ -6,7 +6,7 @@
  * namespace is the name of an agent. No agent takes a reserved name.
  */
 
-import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
+import type { WorkspaceAgent } from './resource.ts';
 
 /** The namespace of the read-only templates. */
 export const TEMPLATES = 'templates';
@@ -16,8 +16,10 @@ export const SOURCES = 'template-sources';
 
 const RESERVED = new Set([TEMPLATES, SOURCES]);
 
-/** The rule for the name of a repository: 1 to 64 characters. */
-const NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+/** The rule for the name of a repository, 1 to 64 characters, as the source of a pattern. */
+export const NAME_PATTERN = '^[a-z0-9][a-z0-9._-]{0,63}$';
+
+const NAME = new RegExp(NAME_PATTERN);
 
 /** The rule for a namespace: the name of an agent, or a reserved name. */
 const NAMESPACE = /^[a-z][a-z0-9-]*$/;

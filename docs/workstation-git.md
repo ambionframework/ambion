@@ -5,7 +5,7 @@
 the [workstation](workstation.md), in the home of one dedicated account,
 and each agent reaches them with `git` over SSH.
 [The plan](../planning/next.md) holds the work as items G1 and G2, in
-the five steps of phase 4. The examples show the proposed API.
+the steps of phase 4. The examples show the proposed API.
 
 **The proposal ships in `@ambionframework/workstation`.** The package
 already holds the SSH client and the environment over SFTP and `exec`.
@@ -16,7 +16,7 @@ The new backend reuses them and adds no dependency.
 **The git backend of 0.2.0 runs in the host's process.** `gitBackend`
 serves the just-bash `git` through a `fetch` in the same process. A real
 `git` on a workstation reaches it only over HTTP, through a listener on
-the host ([Git](git.md#gitbackend-a-server-in-the-hosts-process)). The
+the host ([Git](git.md#justgitbackend-a-server-in-the-hosts-process)). The
 default `url`, `http://git.ambion.invalid`, never resolves. With the
 defaults, `connect` succeeds, and the first `git clone` of an agent fails
 on DNS.
@@ -291,7 +291,7 @@ issuance and rotation as out of v1. Proposed: "The host owns the key of
 each account on the server. The git backend owns the git key of each
 agent: it issues the key, rotates it, and the key works only on the
 server until it expires." The bash backend keeps the rule as it
-is. Phase 4 step 5 changes the page.
+is. Phase 4 step 4 changes the page.
 
 **Each `connect` of the bash backend keeps the agent's files current.**
 

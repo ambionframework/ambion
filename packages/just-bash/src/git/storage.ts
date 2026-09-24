@@ -44,7 +44,7 @@ export interface OpenGitStorage {
 	close(): void;
 }
 
-/** Where a git backend keeps its repositories. `gitBackend` opens it on first use. */
+/** Where a git backend keeps its repositories. `justGitBackend` opens it on first use. */
 export interface GitStorage {
 	/** The file path, or `':memory:'`. */
 	readonly location: string;

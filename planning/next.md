@@ -204,58 +204,14 @@ names the new route.
 **Goal:** an agent on a workstation clones and pushes over SSH to one
 account on its own server, and the host opens no port.
 
-**Each step is one pull request.** Steps 1 and 2 land G1, steps 3 and 4
-land G2, and step 5 documents G2.
+**Each step is one pull request.** Step 1 finishes G1, steps 2 and 3 land
+G2, and step 4 documents G2.
 
-- [ ] **1.** G1a, the move. `packages/git` moves to
-      `packages/just-bash/src/git/` behind the new entry
-      `@ambionframework/just-bash/git`, and `gitBackend` becomes
-      `justGitBackend`. `handler`, the `url` option, and their two HTTP
-      tests go. The name rules and the template helpers without `just-git`
-      move to the new entry `@ambionframework/workspace/git`. The
-      workstation loses `~/.git-credentials`. `GitAccess` keeps its shape.
-      P1. (G1)
-  - **Code:** the workspace gets `src/git-entry.ts`, `git-names.ts`, and
-    `git-templates.ts`, and `git-tools.ts` imports the name rule from
-    `git-names.ts`. `packages/just-bash/src/git/` gets the backend, its
-    storage, and `tipHashes`, which reads `just-git/repo`. Each new entry
-    goes in its `tsdown.config.ts` and its `package.json`. The step
-    deletes `packages/git/`, `packages/workstation/src/git-credentials.ts`,
-    `test/git.test.ts`, the `services.git` branch of the workstation's
-    `backend.ts`, and the git case of `test/sshd/sshd.test.ts`.
-  - **Guards:** in `biome.jsonc`, an override for
-    `packages/just-bash/src/git/**` repeats the core restriction and
-    allows `node:sqlite`, `just-git/server`, `just-git/repo`, and
-    `@ambionframework/workspace/git`. The rest of
-    `packages/just-bash/src` keeps refusing `node:sqlite`. The override of
-    `packages/git` goes. `scripts/import-rules.test.mjs` moves the four
-    probes of `packages/git/src` to the new folder, and a new probe shows
-    that `packages/just-bash/src` outside it refuses
-    `@ambionframework/workspace/git`.
-  - **Snapshots and resolution:** the export snapshot of the workspace
-    gets its sixth entry, its stem, its build order, and a row of banned
-    chunks for `git-entry.mjs`. The snapshot of just-bash gets two
-    entries, and a test of its built chunks keeps the root free of
-    `node:sqlite`. `pnpm-lock.yaml` drops `@ambionframework/git` from the
-    workbench and the workstation. `packages/workspace/vitest.config.ts`
-    and `tsconfig.check.json` resolve `@ambionframework/workspace/git`
-    ahead of the bare name.
-  - **Pages:** `CLAUDE.md`, the README, `docs/technical-facts.md`,
-    `docs/README.md`, `docs/toolchain.md` (ten packages),
-    `docs/example.md`, `docs/git.md`, the workspace and just-bash
-    guides, and the workbench take the new names. The git text of
-    `docs/workstation.md`, `docs/trust.md`, and `docs/git.md` on a
-    workstation shrinks to one sentence: the workstation carries no git
-    transport until G2. The changelog names each export change.
-  - **Evidence:** `gitConformance` passes on `memoryBackend` and
-    `directoryBackend` under `justGitBackend`. The root chunk of
-    just-bash loads no `node:sqlite`. The workbench tests `lab.test.ts`
-    and `tool-set.test.ts` pass. `pnpm check` passes.
-- [ ] **2.** G1b, the contract. `GitAccess` in the core holds `transport`
+- [ ] **1.** G1b, the contract. `GitAccess` in the core holds `transport`
       alone, and `JustGitAccess` holds the rest. Each bash backend that
       pairs with a git backend declares `gitTransports`, and
       `openWorkspace` refuses a pair that does not match. `gitConformance`
-      calls harness hooks for the four credential cases. Needs 1. P1. (G1)
+      calls harness hooks for the four credential cases. P1. (G1)
   - **Code:** the step changes `git-backend.ts`, `backend.ts`,
     `workspace.ts`, and `git-conformance.ts` in the workspace. The
     refusal goes in a helper, since `workspaceTools` is near the
@@ -275,12 +231,12 @@ land G2, and step 5 documents G2.
     backend that carries `ssh`, and with one that carries no transport,
     and gets the refusal each time. The export snapshots pin each change,
     and the changelog names it. `pnpm check` passes.
-- [ ] **3.** G2a, the server side. `workstationGitBackend` prepares the git
+- [ ] **2.** G2a, the server side. `workstationGitBackend` prepares the git
       account, writes `serve`, registers the templates by rename, and runs
       `list`, `get`, and `fork`. `identityFor` issues the agent keys and
       writes `authorized_keys.ambion` under `flock`. `workstationBackend`
       carries no transport yet, so the tests drive the git backend alone.
-      Needs 2. P1. (G2)
+      Needs 1. P1. (G2)
   - **Code:** the backend goes in new files
     `packages/workstation/src/git-*.ts`, split to keep each file under 600
     lines and each function under complexity 10.
@@ -294,10 +250,10 @@ land G2, and step 5 documents G2.
     over a table of requests, the list, fork, and registration commands,
     and the lines of `authorized_keys.ambion`. The changelog names each
     export. `pnpm check` and the `workstation` CI job pass.
-- [ ] **4.** G2b, the agent side and the OpenSSH tier. `workstationBackend`
+- [ ] **3.** G2b, the agent side and the OpenSSH tier. `workstationBackend`
       writes the three key files and the `Include` line at each `connect`,
       and declares `gitTransports: ['ssh']`. The OpenSSH tier runs
-      `gitConformance`. Needs 3. P1. (G2)
+      `gitConformance`. Needs 2. P1. (G2)
   - **Code:** `session.ts` keeps the host key that the client verified,
     as the key type and the base64 key. `backend.ts` writes the files and
     keeps the rest of `~/.ssh/config`.
@@ -312,13 +268,13 @@ land G2, and step 5 documents G2.
     OpenSSH and the checks that
     [Workstation git](../docs/workstation-git.md#tests) lists, and the
     scripted tier tests the key files. `pnpm check` passes.
-- [ ] **5.** The docs of G2. `workstation-git.md` describes what shipped.
+- [ ] **4.** The docs of G2. `workstation-git.md` describes what shipped.
       `workstation.md` states the new credential rule, and its out-of-v1
       list drops credential issuance and rotation. `git.md` states the
       credential decision in its new words and names the backend in its
       file table. The trust row states the reach of a leaked agent key.
       `docs/README.md`, the `CLAUDE.md` row, and the workstation package
-      guide name the backend and the server steps. Needs 4. P1. (G2)
+      guide name the backend and the server steps. Needs 3. P1. (G2)
   - **Evidence:** each statement points at code on `main`.
     `scripts/evidence-links.test.mjs` and Prettier pass.
 

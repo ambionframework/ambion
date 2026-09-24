@@ -15,7 +15,7 @@ packages/
   cloudflare/   Durable Object adapter
   codex/        Codex SDK executor: codex() and codexExecution()
   journal/      append-only journal storage
-  just-bash/    workspace bash backends over just-bash, in memory or over a directory
+  just-bash/    workspace bash backends over just-bash, and a git backend in the process
   pi/           Pi executor: pi() and piExecution()
   workspace/    workspace resource, tool bundles, and backend helpers
   workstation/  workspace bash backend over SSH, one account for each agent
@@ -277,7 +277,7 @@ and [`durability.md`](durability.md) for the claims those tests enforce.
 
 ## 9. Release and publishing
 
-Two channels publish the eleven packages under the `@ambionframework` scope.
+Two channels publish the ten packages under the `@ambionframework` scope.
 
 | Channel | Registry                     | Dist-tag         | Who publishes                 |
 | ------- | ---------------------------- | ---------------- | ----------------------------- |

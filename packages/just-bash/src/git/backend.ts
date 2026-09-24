@@ -1,22 +1,20 @@
 /**
- * `gitBackend`: a `just-git` server in the host's process.
+ * `justGitBackend`: a `just-git` server in the host's process.
  *
  * The backend opens its storage and its server on first use, and it
  * registers its templates before its first operation: the first `connect`
  * and the first credential call await one registration. A failed
  * registration rejects that operation, and the next operation tries again.
  *
- * A clone URL is `<url>/<namespace>/<name>`. On the just-bash backends,
- * `access.fetch` passes each request to the server in the same process, so
- * no DNS lookup and no socket take part. A workstation reaches the server
- * over HTTP, through `handler`.
+ * A clone URL is `http://git.ambion.invalid/<namespace>/<name>`. The name
+ * never resolves. `access.fetch` passes each request to the server in the
+ * same process, so no DNS lookup and no socket take part.
  *
  * An agent holds a write credential for each repository in its namespace,
  * and a read credential for every template and every other agent's fork.
  * No agent holds a credential for `template-sources`.
  */
 
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type {
 	GitAccess,
 	GitBackend,
@@ -26,29 +24,32 @@ import type {
 	GitForkOutcome,
 	GitRepository,
 } from '@ambionframework/workspace';
+import {
+	assertAgent,
+	namespaceOf,
+	SOURCES,
+	type TemplateRegistration,
+	validName,
+} from '@ambionframework/workspace/git';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import { listBranches, readHead } from 'just-git/repo';
 import type { GitServer } from 'just-git/server';
-import { assertAgent, namespaceOf, SOURCES, validName } from './names.ts';
 import { DEFAULT_BRANCH, registerTemplates, settleAll } from './registration.ts';
 import { openServer, repositoryOfPath } from './server.ts';
 import type { GitStorage, OpenGitStorage, RegistryRow } from './storage.ts';
-import type { TemplateRegistration } from './templates.ts';
 import { signToken, type TokenClaims } from './tokens.ts';
 
-/** The base of every clone URL when the host names none. `.invalid` never resolves. */
-const DEFAULT_URL = 'http://git.ambion.invalid';
+/** The base of every clone URL. `.invalid` never resolves. */
+const BASE = 'http://git.ambion.invalid';
 
 /** Seconds a token lives when the host names no `tokenTtl`. */
 const DEFAULT_TOKEN_TTL = 3600;
 
-export interface GitBackendOptions {
+export interface JustGitBackendOptions {
 	/** `sqliteGitStorage(path)`, or `sqliteGitStorage(':memory:')` for tests. */
 	readonly storage: GitStorage;
 	/** The key of every token. A new secret revokes every token. */
 	readonly secret: string;
-	/** The base of every clone URL. The default is `http://git.ambion.invalid`. */
-	readonly url?: string;
 	/** The templates, by name. */
 	readonly templates?: Readonly<Record<string, TemplateRegistration>>;
 	/** Seconds a token lives. The default is 3600. */
@@ -57,11 +58,8 @@ export interface GitBackendOptions {
 	readonly onError?: (error: unknown) => void;
 }
 
-/** The git backend over `just-git`, and the Node request handler that serves it over HTTP. */
-export interface JustGitBackend extends GitBackend {
-	/** Serve the repositories to a real git client. Listen with `http.createServer(handler)`. */
-	handler(request: IncomingMessage, response: ServerResponse): void;
-}
+/** The git backend over `just-git`. Its access carries each request in the process. */
+export interface JustGitBackend extends GitBackend {}
 
 interface Opened {
 	readonly store: OpenGitStorage;
@@ -69,23 +67,18 @@ interface Opened {
 	readonly fetch: GitFetch;
 }
 
-function checked(options: GitBackendOptions): { base: string; ttl: number } {
-	if (options.secret === '') throw new Error('gitBackend needs a secret.');
+/** The life of a token in seconds, after the options are checked. */
+function checked(options: JustGitBackendOptions): number {
+	if (options.secret === '') throw new Error('justGitBackend needs a secret.');
 	const ttl = options.tokenTtl ?? DEFAULT_TOKEN_TTL;
 	if (!Number.isFinite(ttl) || ttl <= 0)
 		throw new Error('tokenTtl must be a finite number above 0.');
-	const base = (options.url ?? DEFAULT_URL).replace(/\/+$/, '');
-	const url = new URL(base);
-	if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-		throw new Error(`The url of a git backend is http or https: '${base}'.`);
-	}
-	return { base, ttl };
+	return ttl;
 }
 
 /** A git backend over a `just-git` server in the host's process. */
-export function gitBackend(options: GitBackendOptions): JustGitBackend {
-	const { base, ttl } = checked(options);
-	const basePath = new URL(base).pathname.replace(/\/+$/, '');
+export function justGitBackend(options: JustGitBackendOptions): JustGitBackend {
+	const ttl = checked(options);
 	let opened: Opened | undefined;
 	let registering: Promise<void> | undefined;
 	let closed = false;
@@ -97,10 +90,9 @@ export function gitBackend(options: GitBackendOptions): JustGitBackend {
 		const server = openServer({
 			storage: store.storage,
 			secret: options.secret,
-			basePath,
 			...(options.onError === undefined ? {} : { onError: options.onError }),
 		});
-		const network = server.asNetwork(base);
+		const network = server.asNetwork(BASE);
 		const fetch: GitFetch = (input, init) => (network.fetch ?? globalThis.fetch)(input, init);
 		opened = { store, server, fetch };
 		return opened;
@@ -122,7 +114,7 @@ export function gitBackend(options: GitBackendOptions): JustGitBackend {
 		return registering.then(() => current);
 	};
 
-	const repositories = new Repositories(base, ready);
+	const repositories = new Repositories(ready);
 
 	const credential = (agent: WorkspaceAgent, row: RegistryRow): GitCredential => {
 		const scope = namespaceOf(row.id) === agent.name ? 'write' : 'read';
@@ -133,17 +125,15 @@ export function gitBackend(options: GitBackendOptions): JustGitBackend {
 			scope,
 			expiresAt,
 		});
-		return { url: `${base}/${row.id}`, scope, token, expiresAt };
+		return { url: `${BASE}/${row.id}`, scope, token, expiresAt };
 	};
 
 	const access: GitAccess = {
-		prefix: `${base}/`,
+		prefix: `${BASE}/`,
 		fetch: (input, init) => open().fetch(input, init),
 		credentialFor: async (agent, url) => {
 			assertAgent(agent);
-			const id = url.startsWith(`${base}/`)
-				? repositoryOfPath(new URL(url).pathname, basePath)
-				: undefined;
+			const id = url.startsWith(`${BASE}/`) ? repositoryOfPath(new URL(url).pathname) : undefined;
 			const row = id === undefined ? undefined : await repositories.row(id);
 			return row === undefined ? undefined : credential(agent, row);
 		},
@@ -155,7 +145,7 @@ export function gitBackend(options: GitBackendOptions): JustGitBackend {
 
 	return Object.freeze({
 		access,
-		server: base,
+		server: BASE,
 		connect: async (agent: WorkspaceAgent): Promise<GitEnv> => {
 			assertAgent(agent);
 			await ready();
@@ -170,22 +160,12 @@ export function gitBackend(options: GitBackendOptions): JustGitBackend {
 			current.store.close();
 			opened = undefined;
 		},
-		handler: (request: IncomingMessage, response: ServerResponse) => {
-			if (closed) {
-				response.writeHead(503).end('The git backend is disposed.\n');
-				return;
-			}
-			open().server.nodeHandler(request, response);
-		},
 	});
 }
 
 /** The repositories of one backend, as the contract reports them. */
 class Repositories {
-	constructor(
-		private readonly base: string,
-		private readonly ready: () => Promise<Opened>,
-	) {}
+	constructor(private readonly ready: () => Promise<Opened>) {}
 
 	/** The forks in flight, by target ID. A second fork of one target waits for the first. */
 	private readonly forking = new Map<string, Promise<GitForkOutcome>>();
@@ -221,7 +201,7 @@ class Repositories {
 		const head = await readHead(repo);
 		return {
 			id: row.id,
-			url: `${this.base}/${row.id}`,
+			url: `${BASE}/${row.id}`,
 			...(row.source === undefined ? {} : { source: row.source }),
 			...(row.description === undefined ? {} : { description: row.description }),
 			defaultBranch: head.branch ?? DEFAULT_BRANCH,

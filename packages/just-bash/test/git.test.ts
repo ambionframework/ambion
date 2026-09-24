@@ -1,25 +1,21 @@
 /**
- * What `gitBackend` holds beyond the conformance cases: the tokens, the
+ * What `justGitBackend` holds beyond the conformance cases: the tokens, the
  * registration after a crash, a restart over one file, a shell variable that
- * tries to carry a token, the templates from a directory, and a real `git`
- * over HTTP.
+ * tries to carry a token, a token on a path of another repository, and the
+ * templates from a directory.
  */
-import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
-import { memoryBackend } from '@ambionframework/just-bash';
 import { BACKGROUND_CONTEXT, openWorkspace, type Workspace } from '@ambionframework/workspace';
+import { fromDirectory } from '@ambionframework/workspace/git';
 import { afterEach, describe, expect, it } from 'vitest';
-import { fromDirectory, gitBackend, sqliteGitStorage } from '../src/index.ts';
-import { openServer } from '../src/server.ts';
-import { signToken, tokenOf, verifyToken } from '../src/tokens.ts';
-import { SECRET } from './support/harness.ts';
+import { justGitBackend, sqliteGitStorage } from '../src/git/index.ts';
+import { openServer } from '../src/git/server.ts';
+import { signToken, tokenOf, verifyToken } from '../src/git/tokens.ts';
+import { memoryBackend } from '../src/index.ts';
+import { SECRET } from './support/git-harness.ts';
 
-const run = promisify(execFile);
 const ANALYST = { name: 'analyst' };
 const REVIEWER = { name: 'reviewer' };
 const TEMPLATES = { blank: { source: { 'README.md': 'blank\n' } } };
@@ -35,8 +31,8 @@ async function tempDir(): Promise<string> {
 	return dir;
 }
 
-function workspaceOver(file: string, options: Partial<Parameters<typeof gitBackend>[0]> = {}) {
-	const git = gitBackend({
+function workspaceOver(file: string, options: Partial<Parameters<typeof justGitBackend>[0]> = {}) {
+	const git = justGitBackend({
 		storage: sqliteGitStorage(file),
 		secret: SECRET,
 		templates: TEMPLATES,
@@ -96,7 +92,7 @@ describe('tokens', () => {
 	});
 });
 
-describe('gitBackend', () => {
+describe('justGitBackend', () => {
 	it('keeps a pushed branch across a restart over one file', async () => {
 		const file = join(await tempDir(), 'git.db');
 		const first = workspaceOver(file);
@@ -125,7 +121,7 @@ describe('gitBackend', () => {
 	it('finishes a registration that stopped after the commit to template-sources', async () => {
 		const file = join(await tempDir(), 'git.db');
 		const store = sqliteGitStorage(file).open();
-		const server = openServer({ storage: store.storage, secret: SECRET, basePath: '' });
+		const server = openServer({ storage: store.storage, secret: SECRET });
 		await server.createRepo('template-sources/blank', { defaultBranch: 'main' });
 		await server.commit('template-sources/blank', {
 			files: { 'README.md': 'blank\n' },
@@ -181,24 +177,18 @@ describe('gitBackend', () => {
 		});
 		for (const tokenTtl of [Number.POSITIVE_INFINITY, 0, Number.NaN]) {
 			expect(() =>
-				gitBackend({ storage: sqliteGitStorage(':memory:'), secret: SECRET, tokenTtl }),
+				justGitBackend({ storage: sqliteGitStorage(':memory:'), secret: SECRET, tokenTtl }),
 			).toThrow('tokenTtl must be a finite number above 0.');
 		}
 	});
 
-	it('opens nothing after dispose, and answers 503 on its handler', async () => {
+	it('opens nothing after dispose', async () => {
 		const { git, workspace } = workspaceOver(join(await tempDir(), 'git.db'));
 		await workspace.git?.use(ANALYST, (env) => env.list());
 		await workspace.dispose();
 		await expect(git.access.credentialsFor(ANALYST)).rejects.toThrow(
 			'The git backend is disposed.',
 		);
-		const http = createServer(git.handler);
-		const port = await new Promise<number>((resolve) =>
-			http.listen(0, '127.0.0.1', () => resolve((http.address() as AddressInfo).port)),
-		);
-		cleanup.push(() => new Promise((resolve) => http.close(resolve)));
-		expect((await fetch(`http://127.0.0.1:${port}/templates/blank/info/refs`)).status).toBe(503);
 	});
 
 	it('refuses a token on a path that names another repository', async () => {
@@ -241,59 +231,5 @@ describe('gitBackend', () => {
 		expect(listed.output).toContain('main.ts');
 		const head = await sh(workspace, ANALYST, 'cd ~/app && git log --oneline');
 		expect(head.output.trim().split('\n')).toHaveLength(1);
-	});
-});
-
-describe('a real git over HTTP', () => {
-	it('clones with the credential file, pushes its own fork, and is refused on a template', async () => {
-		const dir = await tempDir();
-		const http = createServer();
-		const port = await new Promise<number>((resolve) =>
-			http.listen(0, '127.0.0.1', () => resolve((http.address() as AddressInfo).port)),
-		);
-		cleanup.push(() => new Promise((resolve) => http.close(resolve)));
-		const { git, workspace } = workspaceOver(join(dir, 'git.db'), {
-			url: `http://127.0.0.1:${port}/git`,
-		});
-		http.on('request', git.handler);
-		await workspace.git?.use(ANALYST, (env) => env.fork('templates/blank', 'real'));
-		const credentials = await git.access.credentialsFor(ANALYST);
-		const lines = credentials.map((credential) => {
-			const url = new URL(credential.url);
-			return `${url.protocol}//ambion:${credential.token}@${url.host}${url.pathname}`;
-		});
-		await writeFile(join(dir, 'credentials'), `${lines.join('\n')}\n`, { mode: 0o600 });
-		const env = {
-			...process.env,
-			HOME: dir,
-			GIT_CONFIG_NOSYSTEM: '1',
-			GIT_TERMINAL_PROMPT: '0',
-			GIT_AUTHOR_NAME: 'analyst',
-			GIT_AUTHOR_EMAIL: 'analyst@ambion.invalid',
-			GIT_COMMITTER_NAME: 'analyst',
-			GIT_COMMITTER_EMAIL: 'analyst@ambion.invalid',
-		};
-		const gitArgs = [
-			'-c',
-			`credential.helper=store --file=${join(dir, 'credentials')}`,
-			'-c',
-			'credential.useHttpPath=true',
-		];
-		const real = (args: string[], cwd = dir) => run('git', [...gitArgs, ...args], { cwd, env });
-		const fork = `http://127.0.0.1:${port}/git/analyst/real`;
-		await real(['clone', fork, 'real']);
-		await writeFile(join(dir, 'real/new.txt'), 'new\n');
-		await real(['add', 'new.txt'], join(dir, 'real'));
-		await real(['commit', '-m', 'new'], join(dir, 'real'));
-		await real(['push', 'origin', 'main'], join(dir, 'real'));
-		const after = await workspace.git?.use(ANALYST, (env) => env.get('analyst/real'));
-		const log = await real(['log', '-1', '--format=%H'], join(dir, 'real'));
-		expect(after?.branches.main).toBe(log.stdout.trim());
-		await real(['clone', `http://127.0.0.1:${port}/git/templates/blank`, 'blank']);
-		await writeFile(join(dir, 'blank/x.txt'), 'x\n');
-		await real(['add', 'x.txt'], join(dir, 'blank'));
-		await real(['commit', '-m', 'x'], join(dir, 'blank'));
-		await expect(real(['push', 'origin', 'main'], join(dir, 'blank'))).rejects.toThrow();
-		expect(await readFile(join(dir, 'credentials'), 'utf8')).toContain('analyst/real');
 	});
 });

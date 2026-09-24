@@ -28,6 +28,7 @@ import { type Static, Type } from 'typebox';
 import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
 import type { GitEnv, GitRepository } from './git-backend.ts';
+import { NAME_PATTERN } from './git-names.ts';
 import type { WorkspaceResource } from './resource.ts';
 import { recordedOnShell } from './tools.ts';
 
@@ -76,7 +77,7 @@ const forkSchema = Type.Object({
 		description: 'The repository to fork, such as templates/weekly-report.',
 	}),
 	name: Type.String({
-		pattern: '^[a-z0-9][a-z0-9._-]{0,63}$',
+		pattern: NAME_PATTERN,
 		description: 'The name of the fork. The fork is <your name>/<name>.',
 	}),
 	clone: Type.Optional(
