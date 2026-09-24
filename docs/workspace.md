@@ -226,8 +226,8 @@ goes to `onError` and never becomes this notice.
 
 **A directory, write, or rotation failure calls `onError`.** The tool call
 itself keeps its own result. The log is best-effort: a full disk delays the
-record. It does not delay the agent. A throwing `onError` callback is caught inside the
-log, so it never reaches the tool call's own outcome.
+record. It does not delay the agent. A throwing `onError` callback is
+caught inside the log, so it never reaches the tool call's own outcome.
 
 **Only a call through `workspace.tools()` is recorded.** A direct
 `workspace.use` call reaches the backend with no entry. It is host code, and
