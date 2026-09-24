@@ -13,7 +13,7 @@
  * the owner. Each tool reads the end of the output file as one more
  * operation on the bash owner. No tool holds the owner while it waits for
  * a job. The audit entry of a call runs on the bash owner after the call
- * ends. `docs/bash.md` states the texts.
+ * ends. `docs/processes.md` states the texts.
  */
 
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';

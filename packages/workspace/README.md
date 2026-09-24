@@ -25,7 +25,7 @@ when the workspace has a SQL backend, plus any tool the bash backend adds of
 its own, and their guidance. Pass it in `bundles`; each tool reaches the
 environment the backend built for that agent, rooted at
 `/home/<agent name>`. `bash` starts each command as a background job and
-returns its handle; see [Bash](https://github.com/ambionframework/ambion/blob/main/docs/bash.md).
+returns its handle; see [Processes](https://github.com/ambionframework/ambion/blob/main/docs/processes.md).
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';

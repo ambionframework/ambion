@@ -61,7 +61,7 @@ measurement of 0.3.0 item W2 comes near the default
 that point, replay sets the recovery time.
 
 **More kinds of job, and the end of a job as a notice.**
-[Bash](../docs/bash.md) names a job by a handle, `<kind>-<random>`, and
+[Processes](../docs/processes.md) names a job by a handle, `<kind>-<random>`, and
 `bash` is the one kind. A clone that runs past its call and a SQL export
 are candidate kinds. The end of a job wakes no seat: the seat calls `wait`
 or `status`. The notice of 0.3.0 item W1 can carry the end of a job. The

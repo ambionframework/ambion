@@ -13,7 +13,7 @@
  * `status`, `wait` and `cancel` tools read the kind from the table, so a
  * new kind of job adds a kind and a runner, and no new tool.
  *
- * `docs/bash.md` is the design contract.
+ * `docs/processes.md` is the design contract.
  */
 
 import {

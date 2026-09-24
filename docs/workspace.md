@@ -71,7 +71,7 @@ console.log(drive.host); // { name: 'town-host' }
 `workspace.tools()` returns an ordinary Ambion `ToolBundle`. The neutral layer
 binds three file tools first: `read`, `write`, and `edit`. The four job tools
 come next: `bash`, `status`, `wait`, and `cancel`. `bash` starts each command
-as a background job and returns its handle ([Bash](bash.md)). A workspace
+as a background job and returns its handle ([Processes](processes.md)). A workspace
 with a SQL backend adds `sql`
 ([Query the shared database](#query-the-shared-database)). A workspace with
 no SQL backend has no `sql` tool. The bash backend then adds its own tools,
@@ -462,7 +462,7 @@ through `files` itself.
 
 **Each backend gets its own resource owner.** A long `bash` command does
 not delay a query. A job runs off the bash owner, so it does not delay a
-file tool either ([Bash](bash.md#the-job)). `workspace.use` and `mirror()` reach the bash owner.
+file tool either ([Processes](processes.md#a-process)). `workspace.use` and `mirror()` reach the bash owner.
 `workspace.sql` is the SQL owner, for host code.
 
 **A SQL operation may wait on the bash owner, and a bash operation never
@@ -500,7 +500,7 @@ and a required `layout` (see
 `openWorkspace` creates the resource owner, builds the three file tools, and
 binds them, and any tool the backend adds, to its `use` method. It also
 opens the job table and builds the four job tools over it
-([Bash](bash.md)). `Workspace` adds `tools()`, `host`, and `mirror()` to the
+([Processes](processes.md)). `Workspace` adds `tools()`, `host`, and `mirror()` to the
 resource surface. Direct operations and tool calls share one queue and one
 lifecycle.
 
@@ -571,7 +571,7 @@ await drive.dispose();
 
 Disposal immediately revokes new and queued work. It waits for an active
 operation and its cleanup, stops every background job and waits for it to
-end ([Bash](bash.md#life-and-disposal)), then asks the backend to release
+end ([Processes](processes.md#life-and-disposal)), then asks the backend to release
 its local handles once. Concurrent calls join that release. A successful disposal is
 terminal. A failed disposal leaves the resource active and retryable.
 
