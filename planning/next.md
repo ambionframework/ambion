@@ -34,9 +34,18 @@ holds on main.
 is new. 0.1.0 makes a room a place that agents and people use when a
 person asks a question. 0.2.0 makes the kernel cheaper to change, and it
 gives each agent a workspace on a real server, where the operating system
-keeps one agent's files apart from another's. In 0.2.0 each executor
-adapts a harness, and a seat keeps its harness session for one exchange.
-0.3.0 makes a room useful between questions
+keeps one agent's files apart from another's. It also gives a workspace a
+git backend: an agent forks a template, clones it, and pushes its work.
+In 0.2.0 each executor adapts a harness, and a seat keeps its harness
+session for one exchange.
+
+**0.3.0 makes Ambion responsive to environment events.** Through 0.2.0,
+Ambion is reactive: a seat acts when a person speaks, or when a seat
+addresses it. An environment event is a change outside the room, such as
+a push to a repository, a job that ends, or a timer that comes due. In
+0.3.0, an environment event reaches the room as a notice, and the room
+wakes the seats that attend to it. The notice (W1), the timer (W2), and
+delegation by reference (D1) carry the change
 ([backlog](backlog.md#030-the-room-works-between-questions)).
 
 ## The scope
@@ -59,7 +68,7 @@ here so that the release names them.
 | Exchange continuity, and the trace as host logs     | #294             | A seat keeps its harness session for one exchange. `@ambionframework/pi-journal` and the trace journals go, and each step goes to the host's logger        |
 | The Pi executor on Pi's AgentHarness                | #295             | The harness owns the model loop, the session, and compaction. Pi joins Claude and Codex as a harness adapter, and it runs the executor conformance suite   |
 
-**Three themes stay open, each with the acceptance it must meet on the
+**Four themes stay open, each with the acceptance it must meet on the
 tagged commit.** The phases below deliver them; the items explain them.
 
 | Theme                     | Acceptance                                                                                                                                                                                                                         |
@@ -67,6 +76,7 @@ tagged commit.** The phases below deliver them; the items explain them.
 | M One owner per mechanism | Each duplication that items M3 to M6 name has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2. The journal package owns the one crash-safe append loop. Each doc fact has one home. |
 | L Live evidence           | The live tier passes on the release candidate for the Pi, Claude, and Codex harnesses.                                                                                                                                             |
 | R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release. The pages that name a release name 0.2.0.                                                                      |
+| S Repositories for agents | An agent forks a read-only template, clones the fork into its home, and pushes. The push survives a restart. `gitBackend` passes `gitConformance` on the memory, directory, and workstation backends.                              |
 
 **The tag waits for the P0 and P1 steps.** A P2 step that is open when the
 last P1 step closes moves to the backlog. It does not hold the tag.
@@ -94,7 +104,8 @@ last P1 step closes moves to the backlog. It does not hold the tag.
 condition that brings each one back.
 
 - **The wake sources and the delegation.** The notice (W1), the timer
-  (W2), and delegation by reference (D1) are the scope of 0.3.0.
+  (W2), and delegation by reference (D1) make Ambion responsive to
+  environment events in 0.3.0.
   [Decisions taken](#decisions-taken) states the reason.
 - **The checkpoint entry.** The W2 resume measurement decides it.
 - **A generated API reference.** It adds a build step and a CI check, and
@@ -114,8 +125,8 @@ condition that brings each one back.
 
 ## Decisions taken
 
-- **0.2.0 carries no wake source and no delegation.** Phase 1 changes the
-  files that W1, W2, and D1 change. A tag between the two lets 0.3.0 start
+- **0.2.0 stays reactive.** It carries no wake source and no delegation.
+  Phase 1 changes the files that W1, W2, and D1 change. A tag between the two lets 0.3.0 start
   on a stable kernel. The 0.2.0 format changes retire two namespaces and
   change one field, and add no entry kind.
 - **`exchangeOutcome` stays a verified rule until W2.** The M2 sweep
@@ -155,21 +166,24 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Three lanes run at once, and the release closes them.** A step names the
+**Four lanes run at once, and the release closes them.** A step names the
 steps it needs; a step with no "Needs" line starts now. **P0** blocks the
 tag. **P1** carries the release story. **P2** moves to the backlog when it
 is late.
 
-| Lane | Chain                                         | Priority   |
-| ---- | --------------------------------------------- | ---------- |
-| A    | Phase 1: the kernel                           | P0         |
-| B    | Phase 2: the packages                         | P0, P1, P2 |
-| C    | Phase 3: live evidence                        | P1, P2     |
-| —    | Phase 4: the release, after lanes A, B, and C | P1         |
+| Lane | Chain                                            | Priority   |
+| ---- | ------------------------------------------------ | ---------- |
+| A    | Phase 1: the kernel                              | P0         |
+| B    | Phase 2: the packages                            | P0, P1, P2 |
+| C    | Phase 3: live evidence                           | P1, P2     |
+| D    | Phase 4: the git backend                         | P1         |
+| —    | Phase 5: the release, after lanes A, B, C, and D | P1         |
 
 **The lanes edit different files.** Phase 1 edits the docs. Phase 2 edits
 the journal, adapter, workspace log, and conformance files. Phase 3 edits
-the live tests and the live workflow.
+the live tests and the live workflow. Phase 4 edits the workspace's binding
+of tools after phase 2 step 2 lands, and it adds the package
+`packages/git`.
 
 ### Phase 1. Consolidate the kernel (P0)
 
@@ -210,15 +224,34 @@ changed.
 **Evidence:** the run of the live workflow on the release candidate, with
 each harness job green and no job skipped.
 
-### Phase 4. Release (P1)
+### Phase 4. The git backend (P1)
+
+**Goal:** an agent forks a template, clones the fork, and pushes, on every
+bash backend. [docs/git.md](../docs/git.md) holds the design.
+
+- [ ] **1.** The git contract in `packages/workspace`: the types, the
+      `repos` and `fork` tools, the guidance, the git owner, and
+      `gitConformance`. P1. Needs phase 2 step 2. (S2)
+- [ ] **2.** The just-bash wiring: `gitFor(agent, access)` and the one
+      sentence of the guidance. P1. Needs 1. (S2)
+- [ ] **3.** `gitBackend` in the new package `packages/git`, with the
+      scripted tier, the restart case, and the room test. P1. Needs 2.
+      (S2)
+- [ ] **4.** The workstation credential file, and the OpenSSH tier with a
+      real `git` against `gitBackend`. P1. Needs 3. (S2)
+
+**Evidence:** `pnpm check`; `gitConformance` on the memory, directory, and
+workstation backends; the restart case and the room test for step 3.
+
+### Phase 5. Release (P1)
 
 **Goal:** the release repeats without the owner's machine.
 
 - [ ] **1.** The changelog entry for 0.2.0: the format changes, each
-      export that changed or went, the two new packages, and the two
+      export that changed or went, the three new packages, and the two
       retired packages. Needs 2. Needs phase 1, phase 2 steps 1 and 2,
-      and phase 3 step 3. (R1)
-- [ ] **2.** The pages that name a release name 0.2.0 and list its ten
+      phase 3 step 3, and phase 4 steps 1 to 4. (R1)
+- [ ] **2.** The pages that name a release name 0.2.0 and list its eleven
       packages. (R2)
 - [ ] **3.** The dev build stamp derives its base from the last tag.
       (R1)
@@ -323,6 +356,26 @@ tests, each harness job makes one small request. A billing or
 authentication refusal fails the job with an annotation that names the
 provider error, and the tests do not run.
 
+### S. Workspace backends
+
+**S2. A git backend.** A task whose best start is a known file tree has no
+home today. The just-bash `git` has no network, so a remote is a path in a
+shared filesystem, and no template stays read-only. A workstation has no
+git server at all. An edit that the memory backend holds is lost on a
+restart.
+
+- Add `git` as a third backend kind, with the `repos` and `fork` tools and
+  a guidance note ([docs/git.md](../docs/git.md#the-contract)).
+- A credential grants one scope on one repository and expires. Only the
+  owner of a repository holds a write credential for it.
+- A template never changes after registration, and `fork` returns when
+  the fork can be cloned.
+- Ship `gitBackend` over the `just-git` server, with its storage in one
+  SQLite file.
+
+An agent starts from a template with one tool call, and a push persists
+its work on every bash backend.
+
 ### R. Release
 
 **R1. A repeatable release.** The 0.1.0 release ran from one machine with
@@ -333,8 +386,9 @@ from the last tag. The changelog entry is the last gate before the tag.
 
 - npmjs holds a trusted publisher setting for each package. Check whether
   npmjs lets a package that is not yet on the registry take one. If not,
-  `@ambionframework/just-bash` and `@ambionframework/workstation` need a
-  first publish by the owner before the workflow runs.
+  `@ambionframework/just-bash`, `@ambionframework/workstation`, and
+  `@ambionframework/git` need a first publish by the owner before the
+  workflow runs.
 - `@ambionframework/cli` and `@ambionframework/pi-journal` stay at 0.1.0
   on npmjs. `npm deprecate` gives each one a message. The `pi-journal`
   message names the host's trace logger. The CLI message states that the
