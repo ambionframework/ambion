@@ -221,7 +221,7 @@ type SeatInternals = {
 			change: (current: Readonly<Record<string, unknown>>) => {
 				patch: Record<string, unknown>;
 			},
-		) => Promise<unknown>;
+		) => unknown;
 	};
 	roomFor: (room: string) => RoomProtocol;
 };
@@ -245,10 +245,10 @@ async function recovering(
 	});
 	onTestFinished(() => configure(configuration));
 	await inside<SeatInternals, void>(seat, async (object, state) => {
-		await object.metadata.change(() => ({
+		object.metadata.change(() => ({
 			patch: { room: name, seat: 'product', activation, phase: 'running' },
 		}));
-		const metadata = seatMetadata(sqlStorage(state));
+		const metadata = seatMetadata(state);
 		object.roomFor = () => ({
 			view: async () => ({ stale: 'unused' }),
 			commit: async () => ({ stale: 'unused' }),
@@ -258,8 +258,7 @@ async function recovering(
 	});
 	await runDurableObjectAlarm(seat);
 	await new Promise((resolve) => setTimeout(resolve, 25));
-	const read = () =>
-		runInDurableObject(seat, (_instance, state) => seatMetadata(sqlStorage(state)).read());
+	const read = () => runInDurableObject(seat, (_instance, state) => seatMetadata(state).read());
 	const timedOut = () =>
 		expect(events).toContainEqual(
 			expect.objectContaining({
@@ -287,7 +286,7 @@ it('keeps newer metadata when a timed out recovery release replies late', async 
 	onTestFinished(() => late.resolve({ stale: 'late' }));
 	const name = 'seat-recovery-release-late';
 	const { read, timedOut } = await recovering(name, async (metadata) => {
-		await metadata.change(() => ({
+		metadata.change(() => ({
 			patch: { room: name, seat: 'product', activation: newer, phase: 'pending' },
 		}));
 		return late.promise;
@@ -310,7 +309,7 @@ it.each(['idle', 'pending'] as const)(
 		}
 		const snapshot = () =>
 			runInDurableObject(seat, async (_instance, state) => ({
-				metadata: await seatMetadata(sqlStorage(state)).read(),
+				metadata: seatMetadata(state).read(),
 				alarm: await state.storage.getAlarm(),
 			}));
 		const before = await snapshot();

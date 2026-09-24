@@ -56,7 +56,7 @@ async function presenceOf(stub: ReturnType<typeof roomOf>, name: string) {
 
 async function seedStoppedOpen(stub: ReturnType<typeof roomOf>, name: string): Promise<void> {
 	await inside<Room, void>(stub, async (object, state) => {
-		await object.metadata.change(() => ({ patch: { name, agents: [], stopped: true } }));
+		object.metadata.change(() => ({ patch: { name, agents: [], stopped: true } }));
 		const journal = await namespaced(sqlStorage(state), 'ambion/room').open(name);
 		let position = (await journal.read(0)).position;
 		const entries = [
@@ -339,7 +339,7 @@ it('retains the stopped handle when saving stop metadata fails', async () => {
 	const stub = roomOf('room-stop-retry');
 	await stub.start({ name: 'room-stop-retry', agents: [] });
 	type Stoppable = {
-		metadata: { change: (...args: never[]) => Promise<unknown> };
+		metadata: { change: (...args: never[]) => unknown };
 		stop(): Promise<void>;
 	};
 	await inside<Stoppable, void>(stub, async (object) => {
@@ -348,7 +348,7 @@ it('retains the stopped handle when saving stop metadata fails', async () => {
 		object.metadata.change = (...args) => {
 			if (!fail) return original(...args);
 			fail = false;
-			return Promise.reject(new Error('metadata write failed'));
+			throw new Error('metadata write failed');
 		};
 		await expect(object.stop()).rejects.toThrow('metadata write failed');
 		await object.stop();
@@ -361,7 +361,7 @@ it('leaves an uninitialized named record for an explicit start retry', async () 
 	const name = 'room-uninitialized-retry';
 	const stub = roomOf(name);
 	await inside<Room, void>(stub, async (object) => {
-		await object.metadata.change(() => ({
+		object.metadata.change(() => ({
 			patch: { name, agents: ['assistant'], stopped: false },
 		}));
 	});

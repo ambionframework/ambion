@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+**A Cloudflare object keeps its metadata in one table row.** The room
+object's `name`, `agents`, and `stopped`, and the seat object's activation
+state, live in the `ambion_metadata` table of the object's SQLite. Before,
+each object kept them as a journal of patches under the names
+`ambion/cloudflare/room` and `ambion/cloudflare/seat`, with its own write
+queue and its own recovery of a write in doubt. A change now reads and
+writes with no await between them, so no other request of the object runs
+in between, and SQLite commits the one write whole. An object that 0.1.0 wrote reads no
+metadata: start its room again.
+
+**A journal entry of a known kind with an invalid `seq` throws.** Before,
+the journal skipped it, which hid a corrupt record. The storage adapters
+report their read position through the verified `scanned` rule, and
+`@ambionframework/journal` no longer exports `scanned`.
+
 **A Codex seat with native tools runs with no Codex sandbox by default.**
 With `nativeTools: 'codex'` and no `sandboxMode`, the executor sets
 `danger-full-access`. A command then has write access and the network on

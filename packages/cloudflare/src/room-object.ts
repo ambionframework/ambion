@@ -105,9 +105,9 @@ export class RoomObject extends DurableObject<Env> {
 			clock: alarmClock(ctx),
 			transport: rpcTransport(env),
 		});
-		this.metadata = roomMetadata(this.storage);
+		this.metadata = roomMetadata(ctx);
 		ctx.blockConcurrencyWhile(async () => {
-			const { name, agents, stopped } = await this.metadata.read();
+			const { name, agents, stopped } = this.metadata.read();
 			if (name === undefined || stopped === true) return;
 			if (agents === undefined)
 				throw new Error(`Room '${name}' has no definitions in its metadata.`);
@@ -136,7 +136,7 @@ export class RoomObject extends DurableObject<Env> {
 	/** Start the room from names the worker configured. The composition lands on the journal. */
 	async start(options: StartOptions): Promise<void> {
 		if (this.room !== undefined) throw new Error(`Room '${this.room.name}' is running.`);
-		await this.metadata.change(() => ({
+		this.metadata.change(() => ({
 			patch: {
 				name: options.name,
 				agents: [...(options.agents ?? [])],
@@ -222,14 +222,14 @@ export class RoomObject extends DurableObject<Env> {
 	async stop(): Promise<void> {
 		const room = this.running();
 		await room.stop();
-		await this.metadata.change(() => ({ patch: { stopped: true } }));
+		this.metadata.change(() => ({ patch: { stopped: true } }));
 		this.room = undefined;
 		this.visits.clear();
 	}
 
 	/** Read a detached coherent projection, including stopped records. */
 	async read(options: Pick<ReadRoomOptions, 'messages'> = {}): Promise<RoomRead> {
-		const name = (await this.metadata.read()).name;
+		const name = this.metadata.read().name;
 		if (name === undefined) throw new Error('The room is not started.');
 		return readRoom(name, { ...options, runtime: this.runtime });
 	}

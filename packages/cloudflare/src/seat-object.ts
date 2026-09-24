@@ -21,7 +21,7 @@ import { createPiExecutor, type ExecutionServices } from '@ambionframework/pi';
 import type { SeatEvent } from './configure.ts';
 import { definitionOf, executionFor, seatEvent, traceLogger } from './configure.ts';
 import type { Env } from './room-object.ts';
-import { seatMetadata, sqlStorage } from './storage.ts';
+import { seatMetadata } from './storage.ts';
 
 type RecoveryCall<T> = { kind: 'value'; value: T } | { kind: 'lost'; error: Error };
 
@@ -56,12 +56,10 @@ export class SeatObject extends DurableObject<Env> {
 	/** Whether an alarm runs in this object now. */
 	private alarming = false;
 	private readonly metadata;
-	private readonly storage;
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
-		this.storage = sqlStorage(ctx);
-		this.metadata = seatMetadata(this.storage);
+		this.metadata = seatMetadata(ctx);
 	}
 
 	/**
@@ -70,7 +68,7 @@ export class SeatObject extends DurableObject<Env> {
 	 * runs is queued by the runner.
 	 */
 	async wake(wake: Wake): Promise<void> {
-		const next = await this.metadata.change((current) =>
+		const next = this.metadata.change((current) =>
 			current.activation !== undefined && current.activation !== wake.activation
 				? undefined
 				: {
@@ -101,7 +99,7 @@ export class SeatObject extends DurableObject<Env> {
 	 * reaches no runner, and the alarm that starts it is refused its claim.
 	 */
 	async cut(activation: string): Promise<void> {
-		await this.metadata.change((current) => ({ patch: { cuts: (current.cuts ?? 0) + 1 } }));
+		this.metadata.change((current) => ({ patch: { cuts: (current.cuts ?? 0) + 1 } }));
 		await this.runner?.cut(activation);
 	}
 
@@ -111,7 +109,7 @@ export class SeatObject extends DurableObject<Env> {
 	 * holds. A host drains a seat this way before it moves it.
 	 */
 	async hold(on: boolean): Promise<void> {
-		const next = await this.metadata.change(() => ({ patch: { hold: on } }));
+		const next = this.metadata.change(() => ({ patch: { hold: on } }));
 		if (!on && next.activation !== undefined) {
 			await this.ctx.storage.setAlarm(Date.now());
 		}
@@ -119,12 +117,12 @@ export class SeatObject extends DurableObject<Env> {
 
 	/** How many wakes this seat has taken. The tests read it. */
 	async wakes(): Promise<number> {
-		return (await this.metadata.read()).wakes ?? 0;
+		return this.metadata.read().wakes ?? 0;
 	}
 
 	/** How many cuts the room has sent this seat. The tests read it. */
 	async cuts(): Promise<number> {
-		return (await this.metadata.read()).cuts ?? 0;
+		return this.metadata.read().cuts ?? 0;
 	}
 
 	/**
@@ -144,7 +142,7 @@ export class SeatObject extends DurableObject<Env> {
 	}
 
 	private async runHeld(): Promise<void> {
-		const state = await this.metadata.read();
+		const state = this.metadata.read();
 		const { activation, room, seat } = state;
 		if (activation === undefined || room === undefined || seat === undefined) return;
 		const protocol = this.roomFor(room);
@@ -165,7 +163,7 @@ export class SeatObject extends DurableObject<Env> {
 			}
 			return;
 		}
-		await this.metadata.change(() => ({ patch: { phase: 'running' } }));
+		this.metadata.change(() => ({ patch: { phase: 'running' } }));
 		const definition = definitionOf(seat);
 		const executor = this.executorFor(seat, definition, execution);
 		const emit = (event: ExecutionEvent) => seatEvent(seatLine(room, seat, event));
@@ -291,7 +289,7 @@ export class SeatObject extends DurableObject<Env> {
 	}
 
 	private async clear(activation: string): Promise<void> {
-		await this.metadata.change((current) =>
+		this.metadata.change((current) =>
 			current.activation === activation ? { remove: ['activation', 'phase'] } : undefined,
 		);
 	}

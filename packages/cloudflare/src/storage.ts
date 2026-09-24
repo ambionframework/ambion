@@ -1,15 +1,9 @@
 /**
- * The Durable Object's SQLite as one native journal backend. Room records,
- * Pi sessions, and object metadata derive separate names from this backend.
+ * The Durable Object's SQLite: one native journal backend for the room
+ * records, and one table for the durable record of each object.
  */
-import type {
-	JournalOpener,
-	JournalStorage,
-	Sql,
-	SqlValue,
-	StoragePosition,
-} from '@ambionframework/journal';
-import { namespaced, scanned, sqliteJournals } from '@ambionframework/journal';
+import type { JournalOpener, Sql, SqlValue } from '@ambionframework/journal';
+import { sqliteJournals } from '@ambionframework/journal';
 
 /** The object's SQLite as the core reaches it. */
 export function sqlOver(storage: SqlStorage): Sql {
@@ -28,111 +22,60 @@ export function sqlStorage(state: DurableObjectState): JournalOpener {
 	return sqliteJournals(sqlOver(state.storage.sql));
 }
 
-interface MetadataEvent<T extends object> {
-	id: string;
-	patch: Partial<T>;
-	remove: readonly (keyof T)[];
+/** What one change does to a record: fields to set and fields to remove. */
+interface MetadataUpdate<T extends object> {
+	patch?: Partial<T>;
+	remove?: readonly (keyof T)[];
 }
 
+/** The durable record of one object, outside its room record. */
 export interface MetadataStore<T extends object> {
-	read(): Promise<T>;
-	change(
-		change: (
-			current: Readonly<T>,
-		) => { patch?: Partial<T>; remove?: readonly (keyof T)[] } | undefined,
-	): Promise<T>;
+	/** A copy of the record. A record never written reads as `{}`. */
+	read(): T;
+	/**
+	 * Read the record, decide an update, and write it. `undefined` writes
+	 * nothing. Returns a copy of the record as it stands after the change.
+	 */
+	change(decide: (current: Readonly<T>) => MetadataUpdate<T> | undefined): T;
 }
 
-class MetadataJournal<T extends object> implements MetadataStore<T> {
-	private tail = Promise.resolve();
-	private current = {} as T;
-	private cursor: StoragePosition = 0;
-	private readonly events = new Set<string>();
+const METADATA = `CREATE TABLE IF NOT EXISTS ambion_metadata (
+	name TEXT PRIMARY KEY,
+	value TEXT NOT NULL
+)`;
 
-	constructor(private readonly storage: Promise<JournalStorage>) {}
-
-	read(): Promise<T> {
-		return this.enqueue(async () => structuredClone(await this.refresh()));
-	}
-
-	change(
-		change: (
-			current: Readonly<T>,
-		) => { patch?: Partial<T>; remove?: readonly (keyof T)[] } | undefined,
-	): Promise<T> {
-		return this.enqueue(() => this.changeNow(change));
-	}
-
-	private enqueue<TResult>(work: () => Promise<TResult>): Promise<TResult> {
-		const next = this.tail.then(work, work);
-		this.tail = next.then(
-			() => undefined,
-			() => undefined,
-		);
-		return next;
-	}
-
-	private async refresh(): Promise<T> {
-		const found = await this.storage;
-		const read = await found.read(this.cursor);
-		for (const stored of read.entries) {
-			this.cursor = scanned(this.cursor, stored.position);
-			this.take(stored.entry as MetadataEvent<T>);
-		}
-		this.cursor = scanned(this.cursor, read.position);
-		return this.current;
-	}
-
-	private take(event: MetadataEvent<T>): void {
-		if (this.events.has(event.id)) return;
-		this.events.add(event.id);
-		this.current = apply(this.current, event);
-	}
-
-	private async changeNow(
-		change: (
-			current: Readonly<T>,
-		) => { patch?: Partial<T>; remove?: readonly (keyof T)[] } | undefined,
-	): Promise<T> {
-		const id = crypto.randomUUID();
-		for (;;) {
-			const current = await this.refresh();
-			if (this.events.has(id)) return structuredClone(this.current);
-			const update = change(structuredClone(current));
-			if (update === undefined) return structuredClone(current);
-			const event: MetadataEvent<T> = {
-				id,
-				patch: update.patch ?? {},
-				remove: update.remove ?? [],
+/**
+ * One JSON record in the object's SQLite. `change` reads, decides, and
+ * writes with no await between them, so no other request of the object runs
+ * in between. SQLite commits the one write whole, and the object sends no
+ * reply before the write is durable.
+ */
+function metadataStore<T extends object>(sql: SqlStorage, name: string): MetadataStore<T> {
+	sql.exec(METADATA);
+	const read = (): T => {
+		const [row] = sql.exec('SELECT value FROM ambion_metadata WHERE name = ?', name).toArray();
+		return row === undefined ? ({} as T) : (JSON.parse(String(row.value)) as T);
+	};
+	return {
+		read,
+		change(decide) {
+			const current = read();
+			const update = decide(current);
+			if (update === undefined) return current;
+			const next: Record<string, unknown> = {
+				...(current as Record<string, unknown>),
+				...update.patch,
 			};
-			const landed = await this.append(event, this.cursor, id);
-			if (landed === undefined) continue;
-			this.cursor = landed.position;
-			this.take(landed.entry as MetadataEvent<T>);
-			return structuredClone(this.current);
-		}
-	}
-
-	private async append(
-		event: MetadataEvent<T>,
-		position: StoragePosition,
-		id: string,
-	): Promise<import('@ambionframework/journal').StoredEntry | undefined> {
-		const found = await this.storage;
-		try {
-			return await found.append(event, position);
-		} catch (error) {
-			const recovered = await this.refresh().catch(() => undefined);
-			if (recovered !== undefined && this.events.has(id)) return undefined;
-			throw error;
-		}
-	}
-}
-
-function apply<T extends object>(current: T, event: MetadataEvent<T>): T {
-	const next: Record<string, unknown> = { ...current, ...event.patch };
-	for (const key of event.remove) delete next[String(key)];
-	return next as T;
+			for (const key of update.remove ?? []) delete next[String(key)];
+			sql.exec(
+				`INSERT INTO ambion_metadata (name, value) VALUES (?, ?)
+				ON CONFLICT (name) DO UPDATE SET value = excluded.value`,
+				name,
+				JSON.stringify(next),
+			);
+			return next as T;
+		},
+	};
 }
 
 export interface RoomMetadata {
@@ -153,12 +96,12 @@ export interface SeatMetadata {
 	hold?: boolean;
 }
 
-/** Durable state owned by a room object, under a name apart from its room record. */
-export function roomMetadata(storage: JournalOpener): MetadataStore<RoomMetadata> {
-	return new MetadataJournal(namespaced(storage, 'ambion/cloudflare/room').open('metadata'));
+/** Durable state owned by a room object, apart from its room record. */
+export function roomMetadata(state: DurableObjectState): MetadataStore<RoomMetadata> {
+	return metadataStore(state.storage.sql, 'room');
 }
 
-/** Durable state owned by a seat object, under a name apart from its Pi session. */
-export function seatMetadata(storage: JournalOpener): MetadataStore<SeatMetadata> {
-	return new MetadataJournal(namespaced(storage, 'ambion/cloudflare/seat').open('metadata'));
+/** Durable state owned by a seat object, apart from the room record. */
+export function seatMetadata(state: DurableObjectState): MetadataStore<SeatMetadata> {
+	return metadataStore(state.storage.sql, 'seat');
 }

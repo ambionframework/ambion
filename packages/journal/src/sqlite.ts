@@ -1,11 +1,11 @@
 /** SQLite storage for named journal entries. */
-import {
-	type JournalOpener,
-	type JournalRead,
-	type JournalStorage,
-	positionRead,
-	type StoragePosition,
-	type StoredEntry,
+import { scanned } from './rules.verified.ts';
+import type {
+	JournalOpener,
+	JournalRead,
+	JournalStorage,
+	StoragePosition,
+	StoredEntry,
 } from './storage.ts';
 
 /** What a bound parameter and a column hold. */
@@ -38,7 +38,7 @@ class SqliteJournal implements JournalStorage {
 				after,
 			)
 			.map((row) => ({ position: Number(row.position), entry: JSON.parse(String(row.entry)) }));
-		return { entries, position: positionRead(after, entries.at(-1)?.position) };
+		return { entries, position: scanned(after, entries.at(-1)?.position ?? after) };
 	}
 
 	async append(

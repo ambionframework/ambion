@@ -1,6 +1,7 @@
 /**
- * Native journals use one SQLite table through distinct names.
- * Each keeps its own ordering and replay contract.
+ * Native journals use one SQLite table through distinct names. Each keeps
+ * its own ordering and replay contract. The durable record of each object
+ * lives in a table beside them.
  */
 
 import { env, runInDurableObject } from 'cloudflare:test';
@@ -32,74 +33,36 @@ it('orders native journal appends conditionally beside a second journal name on 
 	});
 });
 
-it('keeps an atomic metadata patch after an uncertain append confirmation', async () => {
+it('keeps each object record in one row, and applies each change whole', async () => {
 	const stub = env.ROOM.get(env.ROOM.idFromName('storage-metadata'));
 	await runInDurableObject(stub, async (_instance, state) => {
-		const storage = sqlStorage(state);
-		let loseConfirmation = true;
-		const uncertain = {
-			open: async (name: string) => {
-				const journal = await storage.open(name);
-				return {
-					read: (after: number) => journal.read(after),
-					async append(entry: unknown, position: number) {
-						const appended = await journal.append(entry, position);
-						if (appended !== undefined && loseConfirmation) {
-							loseConfirmation = false;
-							throw new Error('the write landed but the confirmation did not');
-						}
-						return appended;
-					},
-				};
-			},
-		};
-		const metadata = roomMetadata(uncertain);
-		await metadata.change(() => ({
-			patch: { name: 'room', agents: ['assistant'], stopped: false },
-		}));
-		expect(await metadata.read()).toEqual({
+		const room = roomMetadata(state);
+		expect(room.read()).toEqual({});
+		expect(room.change(() => undefined)).toEqual({});
+		room.change(() => ({ patch: { name: 'room', agents: ['assistant'], stopped: false } }));
+		expect(room.change(() => ({ remove: ['stopped'] }))).toEqual({
 			name: 'room',
 			agents: ['assistant'],
-			stopped: false,
 		});
-		const entries = await (
-			await namespaced(storage, 'ambion/cloudflare/room').open('metadata')
-		).read(0);
-		expect(entries.entries).toHaveLength(1);
+		// A copy leaves the stored record as it was.
+		room.read().agents?.push('extra');
+		expect(roomMetadata(state).read()).toEqual({ name: 'room', agents: ['assistant'] });
 
-		const seat = seatMetadata(storage);
+		// A second store over the same object reads what the first wrote, and
+		// the seat record keeps a row apart from the room record.
+		const seat = seatMetadata(state);
+		const other = seatMetadata(state);
 		await Promise.all(
-			Array.from({ length: 8 }, () =>
-				seat.change((current) => ({ patch: { wakes: (current.wakes ?? 0) + 1 } })),
+			Array.from({ length: 8 }, async (_, index) =>
+				(index % 2 === 0 ? seat : other).change((current) => ({
+					patch: { wakes: (current.wakes ?? 0) + 1 },
+				})),
 			),
 		);
-		expect((await seat.read()).wakes).toBe(8);
-	});
-});
-
-it('refreshes metadata from the cursor after confirmed patches', async () => {
-	const stub = env.ROOM.get(env.ROOM.idFromName('storage-metadata-cursor'));
-	await runInDurableObject(stub, async (_instance, state) => {
-		const storage = sqlStorage(state);
-		const after: number[] = [];
-		const counted = {
-			async open(name: string) {
-				const journal = await storage.open(name);
-				return {
-					async read(position: number) {
-						after.push(position);
-						return journal.read(position);
-					},
-					append: journal.append.bind(journal),
-				};
-			},
-		};
-		const metadata = roomMetadata(counted);
-		await metadata.change(() => ({ patch: { name: 'first' } }));
-		await metadata.change(() => ({ patch: { name: 'second' } }));
-		await metadata.change(() => ({ patch: { name: 'third' } }));
-		expect(await metadata.read()).toEqual({ name: 'third' });
-		expect(after).toEqual([0, 1, 2, 3]);
+		expect(seat.read()).toEqual({ wakes: 8 });
+		expect(room.read()).toEqual({ name: 'room', agents: ['assistant'] });
+		const rows = state.storage.sql.exec('SELECT name FROM ambion_metadata ORDER BY name').toArray();
+		expect(rows.map((row) => row.name)).toEqual(['room', 'seat']);
 	});
 });
 
