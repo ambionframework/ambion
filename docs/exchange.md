@@ -11,18 +11,10 @@ One room has one open exchange. A close fixes the range of messages it covered;
 it says nothing about answer quality. A summary may later replace that range in
 agent context while human review still sees the original messages.
 
-## 1. Two spans, and both are the room's
+## 1. The spans
 
-Ambion has two useful spans:
-
-| Span           | Starts                                                    | Ends                                         |
-| -------------- | --------------------------------------------------------- | -------------------------------------------- |
-| **activation** | The room wakes one seat                                   | That seat's work ends                        |
-| **exchange**   | A person's spoken message lands while no exchange is open | The room reaches quiescence or terminal work |
-
-Pi's turns and runs are provider execution details. An activation may contain
-multiple provider runs when a message arrives mid-work; the exchange spans all
-activations from its opening question to its durable close.
+[The two spans](room.md#the-two-spans) defines the activation and the
+exchange. This page holds the exchange.
 
 ## 2. The shape
 
@@ -209,3 +201,5 @@ departure, multiple exchanges, and the ordering of `waitForClose()` before
 `waitForSummary()`. Replay and storage variants are included. Restart behavior is
 covered by [`restart.test.ts`](../packages/ambion/test/restart.test.ts) and
 presence/reconnect cases by [`presence.test.ts`](../packages/ambion/test/presence.test.ts).
+[`exchange-outcome.test.ts`](../packages/ambion/test/exchange-outcome.test.ts)
+checks the outcome order, the `awaiting` clearing, and `pendingFor`.

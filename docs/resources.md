@@ -115,9 +115,12 @@ cited by the URI that the application chooses.
 absolute URI. The room cannot check that the path exists.
 
 **Provenance names who made a change.** Every tool call receives a
-`ToolContext`. It holds `room`, `activation`, and `exchange` (`owner` and
-`from`). All three are absent outside a room. A binding stamps them where its
-data allows.
+`ToolContext`. It holds `room`, `activation`, and `exchange`. `room` names
+the room. `activation` is the id that every event and message of the
+activation carries. `exchange` holds the `owner` and `from` of the exchange
+that was open when the activation read the record, and it is absent when no
+exchange was open. All three are absent outside a room. A binding stamps
+them where its data allows.
 
 | Binding    | Where provenance lands                                              |
 | ---------- | ------------------------------------------------------------------- |

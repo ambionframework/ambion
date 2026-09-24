@@ -198,11 +198,11 @@ native tools.
 [How an activation runs](executors.md#how-an-activation-runs) states the
 read position. Codex sends no echo of the prompt.
 
-**One thread serves one activation.** The Codex SDK has no system prompt
-option, so the first prompt carries the mechanism, the agent instructions,
-and the whole view. A later pass sends the delta, the lines that landed
-since the pass read, as the next run of the same thread. The `turn.*`
-events of Codex mark each run.
+**The first prompt of an activation carries the seat's part.** The Codex
+SDK has no system prompt option, so the first prompt carries the mechanism,
+the agent instructions, and the whole view. A later pass sends the delta,
+the lines that landed since the pass read, as the next run of the same
+thread. The `turn.*` events of Codex mark each run.
 
 **A run ends on `turn.completed` or `turn.failed`.** Codex also sends `error`
 events for trouble that it survives, such as a reconnect. An `error` event

@@ -1,7 +1,8 @@
 # Technical facts
 
-This page holds the key technical facts of Ambion, what is new, the packages, and the
-limits of the 0.1.0 release. The [README](../README.md) holds the positioning.
+This page lists the key technical facts of Ambion, what is new, the
+packages, and the limits of the 0.1.0 release. The [README](../README.md)
+holds the positioning and the headline of what is new.
 
 ## Key technical facts
 

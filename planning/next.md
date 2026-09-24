@@ -50,8 +50,8 @@ delegation by reference (D1) carry the change
 
 ## The scope
 
-**Eleven changes already landed on main.** The changelog names the export
-changes of each one. Items M1, M2, M7, S1, and S2 came from this plan. The
+**Twelve changes already landed on main.** The changelog names the export
+changes of each one. Items M1, M2, M6, M7, S1, and S2 came from this plan. The
 other rows landed as their own pull requests, and the plan records them
 here so that the release names them.
 
@@ -63,6 +63,7 @@ here so that the release names them.
 | The removal of `@ambionframework/cli`               | #273             | Every library package needs only Node `>=22.19.0`                                                                                                          |
 | M1. Kernel decision layers                          | #286             | `evolve` in test support, one said-content matcher, one summary narrowing, one landed-message base, and the summary text in `render.ts`                    |
 | M2. The rules sweep                                 | #291             | Every exported room rule but `exchangeOutcome` gates a write, and `draftsClose` counts a summary draft by the writer's seat in the fold and in the verdict |
+| M6. Each doc fact has one home                      | #301             | Seven repeated facts keep one home page, and the other pages link to it. `room.md` no longer says that an activation opens a fresh session                 |
 | The room tools in the hosting entry                 | #287             | `roomTools` and `agentTools` hold the room tool rules once. The Pi, Claude, and Codex executors adapt them and keep no copy                                |
 | `@ambionframework/just-bash`                        | #288, #289       | The workspace installs no just-bash, and the workstation installs 72 fewer packages. Each just-bash shell runs `git`, locked to the agent                  |
 | Package hygiene reads the built files               | #285             | `check:packages` fails on an undeclared import in `dist` and on bundled code from outside the package's own `src`                                          |
@@ -72,11 +73,11 @@ here so that the release names them.
 **Three themes stay open, each with the acceptance it must meet on the
 tagged commit.** The phases below deliver them; the items explain them.
 
-| Theme                     | Acceptance                                                                                                                                                                                                                         |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M One owner per mechanism | Each duplication that items M3 to M6 name has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2. The journal package owns the one crash-safe append loop. Each doc fact has one home. |
-| L Live evidence           | The live tier passes on the release candidate for the Pi, Claude, and Codex harnesses.                                                                                                                                             |
-| R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release. The pages that name a release name 0.2.0.                                                                      |
+| Theme                     | Acceptance                                                                                                                                                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| M One owner per mechanism | Each duplication that items M3 to M5 name has one owner. The rules file carries only rules that gate a write, and `exchangeOutcome` until W2. The journal package owns the one crash-safe append loop. |
+| L Live evidence           | The live tier passes on the release candidate for the Pi, Claude, and Codex harnesses.                                                                                                                 |
+| R A repeatable release    | A trusted CI workflow publishes the release to npmjs with provenance. The dev build stamp follows the next release. The pages that name a release name 0.2.0.                                          |
 
 **The tag waits for the P0 and P1 steps.** A P2 step that is open when the
 last P1 step closes moves to the backlog. It does not hold the tag.
@@ -126,8 +127,8 @@ condition that brings each one back.
 ## Decisions taken
 
 - **0.2.0 stays reactive.** It carries no wake source and no delegation.
-  Phase 1 changes the files that W1, W2, and D1 change. A tag between the two lets 0.3.0 start
-  on a stable kernel. The 0.2.0 format changes retire two namespaces and
+  M1 and M2 changed the room files and the rules file that W1, W2, and D1
+  change. A tag between the two lets 0.3.0 start on a stable kernel. The 0.2.0 format changes retire two namespaces and
   change one field, and add no entry kind.
 - **`exchangeOutcome` stays a verified rule until W2.** The M2 sweep
   classifies every other exported rule. The `awaiting` expiry decides this
@@ -166,34 +167,22 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Three lanes run at once, and the release closes them.** A step names the
+**Two lanes run at once, and the release closes them.** A step names the
 steps it needs; a step with no "Needs" line starts now. **P0** blocks the
 tag. **P1** carries the release story. **P2** moves to the backlog when it
 is late.
 
-| Lane | Chain                                     | Priority   |
-| ---- | ----------------------------------------- | ---------- |
-| A    | Phase 1: the kernel                       | P0         |
-| B    | Phase 2: the packages                     | P0, P1, P2 |
-| C    | Phase 3: live evidence                    | P2         |
-| —    | Phase 4: the release, after lanes A and B | P1         |
+| Lane | Chain                              | Priority   |
+| ---- | ---------------------------------- | ---------- |
+| A    | Phase 1: the packages              | P0, P1, P2 |
+| B    | Phase 2: live evidence             | P2         |
+| —    | Phase 3: the release, after lane A | P1         |
 
-**The lanes edit different files.** Phase 1 edits the docs. Phase 2 edits
-the journal, adapter, workspace log, and conformance files. Phase 3 edits
-the live tests and the live workflow.
+**The lanes edit different files.** Phase 1 edits the journal, adapter,
+workspace log, and conformance files. Phase 2 edits the live tests and the
+live workflow.
 
-### Phase 1. Consolidate the kernel (P0)
-
-**Goal:** each doc fact has one home. M1 and M2 landed the kernel half:
-each kernel rule has one owner, and every rule in the rules file but
-`exchangeOutcome` gates a write ([formal.md §8](../docs/formal.md#8-why-each-room-rule-is-a-rule)).
-
-- [ ] **1.** Each doc fact has one home. (M6)
-
-**Evidence:** `pnpm check`; each fact in the M6 table appears on its home
-page only.
-
-### Phase 2. Package hygiene (P0, P1, and P2)
+### Phase 1. Package hygiene (P0, P1, and P2)
 
 **Goal:** the journal, adapter, workspace, and conformance
 code keep one copy of each mechanism.
@@ -207,7 +196,7 @@ code keep one copy of each mechanism.
 
 **Evidence:** `pnpm check`; `pnpm chaos` and the restart suite for step 1.
 
-### Phase 3. Live evidence (P2)
+### Phase 2. Live evidence (P2)
 
 **Goal:** a red live run names its cause.
 
@@ -217,13 +206,13 @@ code keep one copy of each mechanism.
 **Evidence:** a live run on a key that the provider refuses fails with one
 annotation that names the provider error, and runs no test.
 
-### Phase 4. Release (P1)
+### Phase 3. Release (P1)
 
 **Goal:** the release repeats without the owner's machine.
 
 - [ ] **1.** The changelog entry for 0.2.0: the format changes, each
       export that changed or went, the three new packages, and the two
-      retired packages. Needs 2. Needs phase 1 and phase 2 steps 1 and 2.
+      retired packages. Needs 2. Needs phase 1 steps 1 and 2.
       (R1)
 - [ ] **2.** The pages that name a release name 0.2.0 and list its eleven
       packages. (R2)
@@ -288,24 +277,6 @@ the executor suite, so a fixture change reaches three packages.
 
 - The shared question, participants block, and `stale` constant move to
   `conformance-support.ts`. `until` accepts an async predicate.
-
-**M6. Each doc fact has one home.** The positioning rule in
-[CLAUDE.md](../CLAUDE.md) states that every page states a fact once.
-
-| Fact                                        | Home                                | Where it repeats                    |
-| ------------------------------------------- | ----------------------------------- | ----------------------------------- |
-| The legacy-refusal and resume rule          | `room.md`                           | `summary.md:144`, `roster.md:100`   |
-| The table of the two spans                  | `room.md`                           | `exchange.md:18`                    |
-| The list of what is new                     | `technical-facts.md`                | The claim at `technical-facts.md:3` |
-| The assistant seats normalization           | `assistant.md`                      | `roster.md:35`                      |
-| The tool-call provenance subset             | `resources.md`                      | `agent.md:86`, `workspace.md:120`   |
-| The owner rules and two test citations      | The owning pages                    | `patterns.md:32`, `patterns.md:45`  |
-| Exchange continuity and where sessions live | `executors.md` §Exchange continuity | `README.md:135`, `trust.md:83`      |
-
-The README keeps the headline of what is new. `technical-facts.md` keeps
-the list. For exchange continuity, the README keeps one sentence and a
-link. `trust.md` keeps the trust fact and links the rule. Each executor
-page and package README states only where its own harness keeps a session.
 
 ### L. Live evidence
 

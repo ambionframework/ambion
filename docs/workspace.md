@@ -119,14 +119,9 @@ const readPlan = defineTool({
 ```
 
 `ToolContext` contains `agent`, `signal`, `callId`, `onUpdate`, `room`,
-`activation`, and `exchange`. `room` names the room the call ran in and
-`activation` names the activation. Both are absent for a call made outside
-a room.
-
-`exchange` holds the `owner` and `from` of the exchange that was open when
-the activation read the record. It is absent when no exchange was open. The
-executor builds the context once per call and freezes it. `ToolContext` holds no
-workspace or resource field.
+`activation`, and `exchange`. [Resources](resources.md#references-and-provenance)
+states what the last three hold. The executor builds the context once per
+call and freezes it. `ToolContext` holds no workspace or resource field.
 
 ## Write an append-only log
 
