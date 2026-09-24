@@ -8,18 +8,18 @@ and each agent reaches them with `git` over SSH.
 phase 4. The examples show the proposed API.
 
 **The proposal ships in `@ambionframework/workstation`.** The package
-already holds the SSH client, the environment over SFTP and `exec`, and the
-credential file of the HTTP path. The new backend reuses them and adds no
-dependency.
+already holds the SSH client and the environment over SFTP and `exec`.
+The new backend reuses them and adds no dependency.
 
-## Why a second backend
+## Why the workstation needs its own backend
 
-**`gitBackend` serves a workstation only through a listener on the host.**
-The real `git` on the server reaches the repositories over HTTP. The host
-must listen on an address that the server reaches, and set `url` to it
-([Git](git.md#gitbackend-a-server-in-the-hosts-process)). The default
-`url`, `http://git.ambion.invalid`, never resolves. With the defaults,
-`connect` succeeds, and the first `git clone` of an agent fails on DNS.
+**The git backend of 0.2.0 runs in the host's process.** `gitBackend`
+serves the just-bash `git` through a `fetch` in the same process. A real
+`git` on a workstation reaches it only over HTTP, through a listener on
+the host ([Git](git.md#gitbackend-a-server-in-the-hosts-process)). The
+default `url`, `http://git.ambion.invalid`, never resolves. With the
+defaults, `connect` succeeds, and the first `git clone` of an agent fails
+on DNS.
 
 **The HTTP path has three costs on a workstation.**
 
@@ -31,6 +31,12 @@ must listen on an address that the server reaches, and set `url` to it
 - **The code lives on the host, and the working copies live on the
   server.** A command on the server that wants the code clones it across
   the network.
+
+**0.3.0 removes the HTTP path.** Item G1 of
+[the plan](../planning/next.md) renames the package to
+`@ambionframework/just-git` and the function to `justGitBackend`. It
+serves the just-bash backends alone, and `openWorkspace` refuses it beside
+a workstation. This page gives the workstation its own git backend.
 
 **This backend keeps the git traffic inside the server.** The agent's
 `git` connects to the `sshd` of its own server, on the loopback address.
@@ -121,7 +127,7 @@ const lab = openWorkspace({
 | `agentAddress` | The address that an agent's `ssh` uses. The default is `127.0.0.1` and `port`            |
 | `agentSources` | The source addresses from which an agent key works. The default is `127.0.0.1` and `::1` |
 | `alias`        | The host name in every clone URL. The default is `ambion-git`                            |
-| `templates`    | The registrations, by template name. The same shape as `gitBackend`                      |
+| `templates`    | The registrations, by template name. The same shape as `justGitBackend`                  |
 | `keyTtl`       | Seconds an agent key lives. The default is 3600                                          |
 | `idleTimeout`  | Seconds the git account's client may stay unused. The default is 300                     |
 
@@ -266,8 +272,8 @@ agent's home. The host provisions no agent key for git.
    `~/.ssh/config` in one command. It writes each one that differs,
    through a temporary name, `chmod 600`, and `mv`.
 
-**The margin is the rule of the HTTP path.** A key counts as missing when
-the smaller of 10 minutes and half of its life is left
+**The margin is the rule of the 0.2.0 credential file.** A key counts as
+missing when the smaller of 10 minutes and half of its life is left
 ([Git](git.md#credentials)). The key rotates about once each `keyTtl`, and
 a command that starts with a key keeps it for the length of the margin.
 
@@ -321,12 +327,12 @@ fork of a fork works the same as a fork of a template.
 **A crash leaves a folder in `.staging` and no half repository.** The
 rename is the one step that publishes a repository. The backend removes
 each staging folder older than one hour at its first operation. The
-`forking` state and the settle step of `gitBackend` have no counterpart.
+`forking` state and the settle step of `justGitBackend` have no counterpart.
 
 **An abort kills the fork's command.** The environment over SSH kills the
 process group ([Workstation](workstation.md#commands-and-aborts)). The
 staging folder stays until the next sweep. A repeated `fork` is safe, the
-same as on `gitBackend`.
+same as on `justGitBackend`.
 
 **Registration builds a template in `.staging` and renames it into
 `templates/`.** It keeps the three cases of
@@ -343,25 +349,27 @@ same as on `gitBackend`.
    `templates/<name>.git`.
 
 **The backend keeps no `template-sources` repositories.** In
-`gitBackend`, a template is a fork of its source so that a crash can
+`justGitBackend`, a template is a fork of its source so that a crash can
 resume. Here the rename gives the same property. The name
 `template-sources` stays reserved, and `serve` refuses it.
 
 ## Changes to the contract
 
-**`GitAccess` names its transport.** A bash backend reads the transport
-and refuses one that it cannot carry. The HTTP form is today's
-`GitAccess` with a `transport` field.
+**G1 lands first, and this page builds on it.** After G1, `GitAccess`
+names its transport, and each bash backend declares the transports that it
+carries. `justGitBackend` gives `in-process`. This page adds `ssh`.
 
 ```ts
-type GitAccess = GitHttpAccess | GitSshAccess;
+type GitTransport = 'in-process' | 'ssh';
 
-interface GitHttpAccess {
-  readonly transport: 'http';
+type GitAccess = GitInProcessAccess | GitSshAccess;
+
+/** After G1: the access of `justGitBackend`. */
+interface GitInProcessAccess {
+  readonly transport: 'in-process';
   readonly prefix: string;
-  readonly fetch?: GitFetch;
+  readonly fetch: GitFetch;
   credentialFor(agent: WorkspaceAgent, url: string): Promise<GitCredential | undefined>;
-  credentialsFor(agent: WorkspaceAgent): Promise<readonly GitCredential[]>;
 }
 
 /** One agent's key for a git server over SSH, and how its ssh reaches the server. */
@@ -379,6 +387,7 @@ interface GitSshIdentity {
   readonly expiresAt: number;
 }
 
+/** G2: the access of `workstationGitBackend`. */
 interface GitSshAccess {
   readonly transport: 'ssh';
   /** Every clone URL starts with this prefix. */
@@ -386,43 +395,50 @@ interface GitSshAccess {
   /** The key of `agent`. Rejects for a reserved name. */
   identityFor(agent: WorkspaceAgent): Promise<GitSshIdentity>;
 }
+
+interface BashBackend {
+  // ...
+  /** After G1: the git transports that the shell of this backend carries. */
+  readonly gitTransports?: readonly GitTransport[];
+}
 ```
 
-**Each bash backend states the transports that it carries.**
+**`openWorkspace` refuses a pair that does not match.** When `backend.git`
+is set and `backend.bash.gitTransports` does not hold its transport,
+`openWorkspace` throws. The error names both backends. A bash backend with
+no `gitTransports` carries none.
 
-| Bash backend | `http`                                | `ssh`                                          |
-| ------------ | ------------------------------------- | ---------------------------------------------- |
-| just-bash    | Carries it in process, as today       | Refuses it in `connect`: `just-git` has no SSH |
-| Workstation  | Writes `~/.git-credentials`, as today | Writes the key and the ssh configuration       |
-
-**The workstation refuses an HTTP access that it cannot reach.** When the
-host of `prefix` ends in `.invalid`, `connect` rejects. The error names
-`url` and `handler`, and it names `workstationGitBackend`. This change
-stands alone, and it can land before the rest of this page.
+| Bash backend | `in-process`          | `ssh`                                    |
+| ------------ | --------------------- | ---------------------------------------- |
+| just-bash    | Carries it, as today  | Refused when the workspace opens         |
+| Workstation  | Refused when it opens | Writes the key and the ssh configuration |
 
 **One decision of [Git](git.md#decisions-taken) changes its words.**
 Today: "A credential grants one scope on one repository, and it expires."
 Proposed: "A credential names one agent, and it expires. The server
-checks each request against the namespace rule." The HTTP tokens keep
-one scope on one repository. The SSH keys name the agent, and `serve`
-applies the rule. The one-pusher rule holds on both.
+checks each request against the namespace rule." The tokens of
+`justGitBackend` keep one scope on one repository. The SSH keys name the
+agent, and `serve` applies the rule. The one-pusher rule holds on both.
 
 **The template helpers move to the workspace package.** `fromDirectory`,
 `TemplateRegistration`, the blob hashes, and the name rules live in
 `packages/git` today, beside `just-git`. The workstation needs them and
 must not install `just-git`. They move to a new entry,
 `@ambionframework/workspace/git`, which loads `node:fs` and `node:crypto`
-and no git library. `@ambionframework/git` imports them from there.
+and no git library. `@ambionframework/just-git` imports them from there.
 
 **The changelog names these export changes.**
 
-- `GitAccess` becomes the union of `GitHttpAccess` and `GitSshAccess`.
-- The root entry of the workspace exports `GitSshIdentity`.
-- The entry `@ambionframework/workspace/git` exports `fromDirectory`,
-  `TemplateRegistration`, and `TemplateSource`.
-- `@ambionframework/git` no longer exports `fromDirectory`.
-- `@ambionframework/workstation` exports `workstationGitBackend` and
-  `WorkstationGitOptions`.
+| Item | Change                                                                                                                                                                              |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G1   | `@ambionframework/git` becomes `@ambionframework/just-git`, and `gitBackend` becomes `justGitBackend`                                                                               |
+| G1   | `justGitBackend` has no `handler` and no `url`                                                                                                                                      |
+| G1   | `GitAccess` becomes a union with a `transport` field, and `credentialsFor` goes                                                                                                     |
+| G1   | `BashBackend` gets `gitTransports`, and the root entry exports `GitTransport`                                                                                                       |
+| G1   | The workstation writes no `~/.git-credentials`                                                                                                                                      |
+| G2   | The root entry of the workspace exports `GitSshAccess` and `GitSshIdentity`                                                                                                         |
+| G2   | The entry `@ambionframework/workspace/git` exports `fromDirectory`, `TemplateRegistration`, and `TemplateSource`, and `@ambionframework/just-git` no longer exports `fromDirectory` |
+| G2   | `@ambionframework/workstation` exports `workstationGitBackend` and `WorkstationGitOptions`                                                                                          |
 
 ## Owners and order
 
@@ -431,14 +447,14 @@ client.** The client holds one SFTP channel. An operation opens one
 `exec` channel, and an abort opens one more.
 
 **`identityFor` does not take the git owner.** It runs from the bash
-backend's `connect`, the same as `credentialsFor` today. It reads the key
+backend's `connect`, the same as `credentialsFor` in 0.2.0. It reads the key
 from memory. A new key adds one write of `authorized_keys.ambion` on the
 git account's client. The git account's client then holds four channels
 at most, under the `MaxSessions` default of 10.
 
 **The server orders the pushes to one repository.** `git receive-pack`
 takes a lock on each ref and compares the old commit. A push that lost
-the race fails, the same as on `gitBackend`.
+the race fails, the same as on `justGitBackend`.
 
 **A clone or a push holds no owner in the host.** The pack work runs
 between two processes on the server. The bash owner still waits for the
@@ -446,35 +462,35 @@ between two processes on the server. The bash owner still waits for the
 
 ## Persistence
 
-| State of an edit             | Workstation with `gitBackend` | Workstation with this backend |
-| ---------------------------- | ----------------------------- | ----------------------------- |
-| Pushed, host restarts        | Survives                      | Survives                      |
-| Pushed, server disk lost     | Survives on the host          | Lost                          |
-| Committed, not pushed        | Survives a host restart       | Survives a host restart       |
-| Any state, after `dispose()` | Kept                          | Kept                          |
+| State of an edit             | Workstation with this backend |
+| ---------------------------- | ----------------------------- |
+| Pushed, host restarts        | Survives                      |
+| Pushed, server disk lost     | Lost                          |
+| Committed, not pushed        | Survives a host restart       |
+| Any state, after `dispose()` | Kept                          |
 
 **The code and the working copies share one failure domain.** With
-`gitBackend`, a push copies the code to the host. With this backend, the
-code stays on the server. The host backs up `~lab-git/repos` with its own
-tools, such as a filesystem snapshot or one `git bundle` for each
-repository.
+`justGitBackend`, the code lives in a SQLite file on the host. With this
+backend, the code stays on the server beside the working copies. The host
+backs up `~lab-git/repos` with its own tools, such as a filesystem
+snapshot or one `git bundle` for each repository.
 
 ## Trust
 
 **`docs/trust.md` gets a row for this backend.** The forced command and
 the account permissions enforce the one-pusher rule. The kernel does not.
 
-| Attempt                                 | Workstation with `gitBackend`                  | Workstation with this backend                                    |
-| --------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------- |
-| Push to another agent's repository      | Refused: no write credential                   | Refused by `serve`                                               |
-| Push to a template                      | Refused: read-only                             | Refused by `serve` and by the template's hook                    |
-| Use another agent's credential          | Needs that agent's file, mode `0600`           | Needs that agent's key file, mode `0600`                         |
-| Read or change a repository on the disk | Not possible: the repositories are on the host | Refused: the git home has mode `0700`                            |
-| Use its credential from another machine | Possible until `tokenTtl`                      | Refused by `from`                                                |
-| Copy its credential into the record     | Possible; the token expires in `tokenTtl`      | Possible; the key works only from `agentSources`, until `keyTtl` |
-| Open a shell as the git account         | Not applicable                                 | Refused: `restrict` and the forced command                       |
-| Find which agent moved a ref            | The server knows the token                     | The reflog of the repository names the agent                     |
-| Fill the disk with pushes               | Fills the host's SQLite file                   | Fills the server's disk                                          |
+| Attempt                                 | just-bash with `justGitBackend`                              | Workstation with this backend                                    |
+| --------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------- |
+| Push to another agent's repository      | Refused: no write credential                                 | Refused by `serve`                                               |
+| Push to a template                      | Refused: read-only                                           | Refused by `serve` and by the template's hook                    |
+| Use another agent's credential          | Not possible: no file holds it                               | Needs that agent's key file, mode `0600`                         |
+| Read or change a repository on the disk | Not possible: the repositories are in the host's SQLite file | Refused: the git home has mode `0700`                            |
+| Use its credential from another machine | Not possible: no file holds it                               | Refused by `from`                                                |
+| Copy its credential into the record     | Not possible: no file holds it                               | Possible; the key works only from `agentSources`, until `keyTtl` |
+| Open a shell as the git account         | Not applicable                                               | Refused: `restrict` and the forced command                       |
+| Find which agent moved a ref            | The just-bash `git` locks the author to the agent            | The reflog of the repository names the agent                     |
+| Fill the disk with pushes               | Fills the host's SQLite file                                 | Fills the server's disk                                          |
 
 ## Prepare the server
 
@@ -521,14 +537,13 @@ The tier also proves:
   lines, and a write drops the expired ones.
 
 **`gitConformance` reads the transport in four cases.** The cases that
-call `credentialsFor` or `credentialFor` directly branch on
-`access.transport`:
+call `credentialFor` directly branch on `access.transport`:
 
-| Case                                 | `http`, as today                | `ssh`                                                 |
+| Case                                 | `in-process`, after G1          | `ssh`                                                 |
 | ------------------------------------ | ------------------------------- | ----------------------------------------------------- |
-| No credential for `template-sources` | No credential URL names it      | `git ls-remote` of it fails in the shell              |
-| An agent with a reserved name        | `credentialsFor` rejects        | `identityFor` rejects                                 |
-| Credential reads beside forks        | A loop of `credentialsFor`      | A loop of `identityFor`, which writes the key file    |
+| No credential for `template-sources` | `credentialFor` gives none      | `git ls-remote` of it fails in the shell              |
+| An agent with a reserved name        | `credentialFor` rejects         | `identityFor` rejects                                 |
+| Credential reads beside forks        | A loop of `credentialFor`       | A loop of `identityFor`, which writes the key file    |
 | A credential expires                 | A probe with the token gets 401 | `ssh` with a copy of the old key fails after `keyTtl` |
 
 ## Alternatives
@@ -600,4 +615,4 @@ form that the oldest supported release reads.
   a push, as `git` does by default.
 - Protocol version 2. It needs `AcceptEnv GIT_PROTOCOL` in `sshd`.
   Version 0 serves every operation of the contract.
-- A migration from `gitBackend` storage to this backend.
+- A migration from `justGitBackend` storage to this backend.

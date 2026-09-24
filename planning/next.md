@@ -39,21 +39,23 @@ that ends, or a timer that comes due. In 0.3.0, an environment event
 reaches the room as a notice, and the room wakes the seats that attend to
 it. A room also hands work to another room and waits for the result.
 
-**0.3.0 also keeps the code of a workstation on the workstation.** The git
-backend of 0.2.0 serves a workstation only through a listener on the
-Ambion host. A second git backend keeps the repositories in one account on
-the server, and each agent reaches them with `git` over SSH.
+**0.3.0 also gives each bash backend the git backend that fits it.** The
+git backend of 0.2.0 runs in the host's process, and it serves a
+workstation only through a listener on the Ambion host. 0.3.0 names it
+`just-git` and pairs it with the just-bash backends alone. A second git
+backend keeps the repositories of a workstation in one account on the
+server, and each agent reaches them with `git` over SSH.
 
 ## The scope
 
 **Three themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
-| Theme                     | Acceptance                                                                                                                                                                                     |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                      |
-| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database. |
-| G Git on the workstation  | `workstationGitBackend` passes `gitConformance` on OpenSSH. No agent pushes outside its namespace, and no agent key works from another machine or after `keyTtl`.                              |
+| Theme                     | Acceptance                                                                                                                                                                                                                 |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                                                  |
+| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database.                             |
+| G Git on the workstation  | `openWorkspace` refuses `just-git` beside a workstation. `workstationGitBackend` passes `gitConformance` on OpenSSH. No agent pushes outside its namespace, and no agent key works from another machine or after `keyTtl`. |
 
 **Three format changes.** Each change lands with a golden journal of the
 new shape, and the changelog names each one.
@@ -118,6 +120,9 @@ condition that brings each one back.
 - **Two release channels.** CI publishes a dev build of `main` to GitHub
   Packages under `dev`. An official release goes to npmjs from the
   owner's machine.
+- **Each git backend serves the bash backends of its own kind.**
+  `just-git` runs in the host's process and serves the just-bash
+  backends. The workstation gets a git backend of its own on the server.
 - **The git backend on the workstation takes the defaults of its
   design.** [Workstation git](../docs/workstation-git.md#decisions-taken)
   lists them: a key file in the agent's home, a second authorized-keys
@@ -193,12 +198,15 @@ names the new route.
 **Goal:** an agent on a workstation clones and pushes over SSH to one
 account on its own server, and the host opens no port.
 
-- [ ] **1.** The workstation refuses an HTTP git access whose URL does
-      not resolve. P1. (G1)
-- [ ] **2.** The contract: `GitAccess` names its transport, the
-      just-bash backends refuse `ssh`, the template helpers move to
-      `@ambionframework/workspace/git`, and `gitConformance` branches on
-      the transport in four cases. P1. (G2)
+- [ ] **1.** The clean-up: `@ambionframework/git` becomes
+      `@ambionframework/just-git`, and `gitBackend` becomes
+      `justGitBackend` with no `handler` and no `url`. `GitAccess` names
+      its transport, each bash backend declares the transports that it
+      carries, and `openWorkspace` refuses a pair that does not match.
+      The workstation loses `~/.git-credentials`. P1. (G1)
+- [ ] **2.** The contract for SSH: `GitSshAccess`, the template helpers
+      in `@ambionframework/workspace/git`, and `gitConformance` branches
+      on the transport in four cases. Needs 1. P1. (G2)
 - [ ] **3.** `workstationGitBackend`: the git account, `serve`, the agent
       keys, fork and registration by rename, and the account in
       `test/sshd/setup.sh`. Needs 2. P1. (G2)
@@ -262,18 +270,36 @@ with a comment that names the new route.
 
 ### G. Git on the workstation
 
-**G1. A workstation refuses a git server that it cannot reach.**
-`gitBackend` defaults to `http://git.ambion.invalid`, which never
-resolves. On a workstation, `connect` succeeds, and the first `git clone`
-of an agent fails on DNS in the middle of an activation. The workstation
-rejects an HTTP access whose host ends in `.invalid`, and the error names
-`url`, `handler`, and `workstationGitBackend`. **Evidence:** a scripted
-case that connects with the default `gitBackend` and gets the error.
+**G1. The git backend in the host's process is `just-git`, and it pairs
+with just-bash alone.** `gitBackend` defaults to
+`http://git.ambion.invalid`, which never resolves. Beside a workstation,
+`connect` succeeds, and the first `git clone` of an agent fails on DNS in
+the middle of an activation. A host that serves `handler` to fix it opens
+an inbound port and sends each token over HTTP.
 
-**G2. A git backend on the workstation.** `gitBackend` serves a
-workstation only when the host listens on an address that the server
-reaches, and each token crosses the network in HTTP basic authentication.
-[Workstation git](../docs/workstation-git.md) designs a second backend in
+- **The package and the function take the name of the library.**
+  `@ambionframework/just-git` exports `justGitBackend`, the same as
+  `@ambionframework/just-bash` over `just-bash`.
+- **The backend serves the process it runs in.** `handler` and the `url`
+  option go. The clone URLs keep the base `http://git.ambion.invalid`.
+- **`GitAccess` names its transport.** `justGitBackend` gives
+  `in-process`: `prefix`, `fetch`, and `credentialFor`. `credentialsFor`
+  goes, since no client reads a credential file.
+- **A bash backend declares its transports, and `openWorkspace` checks
+  them.** `BashBackend.gitTransports` lists them. The just-bash backends
+  carry `in-process`. The workstation carries none until G2. A pair that
+  does not match throws when the workspace opens, and the error names both
+  backends.
+- **The workstation's HTTP path goes.** `git-credentials.ts`, its tests,
+  and the git case of the OpenSSH tier go with it.
+
+The owner deprecates `@ambionframework/git` on npmjs with a message that
+names `@ambionframework/just-git`. **Evidence:** a scripted case that
+opens `justGitBackend` beside a workstation and gets the error, and
+`gitConformance` on the just-bash backends under the new names.
+
+**G2. A git backend on the workstation.** After G1, a workstation has no
+git backend. [Workstation git](../docs/workstation-git.md) designs one in
 `@ambionframework/workstation`. One account on the server owns every
 repository, and each agent reaches it with `git` over SSH on the loopback
 address. A forced command decides each request by the namespace rule. The
