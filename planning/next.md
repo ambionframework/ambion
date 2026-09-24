@@ -171,13 +171,13 @@ steps it needs; a step with no "Needs" line starts now. **P0** blocks the
 tag. **P1** carries the release story. **P2** moves to the backlog when it
 is late.
 
-| Lane | Chain                                            | Priority   |
-| ---- | ------------------------------------------------ | ---------- |
-| A    | Phase 1: the kernel                              | P0         |
-| B    | Phase 2: the packages                            | P0, P1, P2 |
-| C    | Phase 3: live evidence                           | P1, P2     |
-| D    | Phase 4: the git backend                         | P1         |
-| —    | Phase 5: the release, after lanes A, B, C, and D | P1         |
+| Lane | Chain                                         | Priority   |
+| ---- | --------------------------------------------- | ---------- |
+| A    | Phase 1: the kernel                           | P0         |
+| B    | Phase 2: the packages                         | P0, P1, P2 |
+| C    | Phase 3: live evidence                        | P2         |
+| D    | Phase 4: the git backend                      | P1         |
+| —    | Phase 5: the release, after lanes A, B, and D | P1         |
 
 **The lanes edit different files.** Phase 1 edits the docs. Phase 2 edits
 the journal, adapter, workspace log, and conformance files. Phase 3 edits
@@ -210,18 +210,15 @@ code keep one copy of each mechanism.
 
 **Evidence:** `pnpm check`; `pnpm chaos` and the restart suite for step 1.
 
-### Phase 3. Live evidence (P1 and P2)
+### Phase 3. Live evidence (P2)
 
-**Goal:** the tag carries live evidence for each harness that 0.2.0
-changed.
+**Goal:** a red live run names its cause.
 
 - [ ] **1.** A provider billing or authentication failure reads as that
       failure in the live run. P2. (L3)
-- [ ] **2.** The live tier passes on the release candidate for Pi,
-      Claude, and Codex. P1. (L5)
 
-**Evidence:** the run of the live workflow on the release candidate, with
-each harness job green and no job skipped.
+**Evidence:** a live run on a key that the provider refuses fails with one
+annotation that names the provider error, and runs no test.
 
 ### Phase 4. The git backend (P1)
 
@@ -249,18 +246,22 @@ workstation backends; the restart case and the room test for step 3.
 - [ ] **1.** The changelog entry for 0.2.0: the format changes, each
       export that changed or went, the three new packages, and the two
       retired packages. Needs 2. Needs phase 1, phase 2 steps 1 and 2,
-      phase 3 step 2, and phase 4 steps 1 to 4. (R1)
+      and phase 4 steps 1 to 4. (R1)
 - [ ] **2.** The pages that name a release name 0.2.0 and list its eleven
       packages. (R2)
-- [ ] **3.** The dev build stamp derives its base from the last tag.
+- [ ] **3.** The live tier passes on the release candidate for Pi,
+      Claude, and Codex. Needs 1 and 2. (L5)
+- [ ] **4.** The dev build stamp derives its base from the last tag.
       (R1)
-- [ ] **4.** An npmjs release that a trusted CI workflow runs with
-      provenance. The retired packages carry an npm deprecation. Needs 3.
-      (R1)
+- [ ] **5.** An npmjs release that a trusted CI workflow runs with
+      provenance. The retired packages carry an npm deprecation. Needs 3
+      and 4. (R1)
 
-**Evidence:** a release from CI installs without a token; the dev stamp
-after the 0.2.0 tag sorts above 0.2.0; `npm view` shows the deprecation on
-`@ambionframework/cli` and `@ambionframework/pi-journal`.
+**Evidence:** the live run on the tagged commit passes each harness job
+and the package job, and no job skips; a release from CI installs without
+a token; the dev stamp after the 0.2.0 tag sorts above 0.2.0; `npm view`
+shows the deprecation on `@ambionframework/cli` and
+`@ambionframework/pi-journal`.
 
 ## The items
 
@@ -337,19 +338,17 @@ from #271 to #294 merged with no live run in CI. Run 364, on `67ecb72`, is
 the first run with credit: Pi and the package tiers pass, Claude fails one
 case, and Codex skips.
 
-**Three fixes and one secret closed items L1, L2, and L4.** The changelog
-records each fix.
+**Three fixes and the Codex key close items L1, L2, and L4.** The
+changelog records each fix.
 
 - **L1.** A resumed Claude session kept the system prompt it began with, so
   a closing activation lost its duties.
-- **L4.** A Claude seat took the session id of a host that runs inside
-  Claude Code. A local run found it.
 - **L2.** The `CODEX_API_KEY` secret was empty, so the Codex jobs skipped.
   With the key, run 365 failed three Codex package tests that need a
-  native command. The Codex sandbox runs a command through bubblewrap, and
-  the runner restricts the user namespace that bubblewrap needs. A seat
-  with native tools now runs with no Codex sandbox by default. Run 367, on
+  native command. The changelog states the cause and the fix. Run 367, on
   `a5b9ff3`, passed all four jobs, with the Codex package tier at 9 of 9.
+- **L4.** A Claude seat took the session id of a host that runs inside
+  Claude Code. A local run found it.
 
 **L3. A billing failure reads as a billing failure.** Twenty-three red
 runs in a row had one cause, and each run read as a set of test failures.
@@ -359,10 +358,11 @@ authentication refusal fails the job with an annotation that names the
 provider error, and the tests do not run.
 
 **L5. Live evidence on the release candidate.** The live tier on `main`
-tests each merged change. The tag needs one run on the commit that it
-names. Dispatch the live workflow on the release candidate, and link the
-run in the changelog entry for 0.2.0. Each harness job and the package job
-pass, and no job skips.
+tests each merged change, and the tag needs a run on the commit that it
+names. The release candidate is the commit that holds the finished
+changelog entry and the release pages, and the tag names it. Dispatch the
+live workflow on it, and link the run in the notes of the GitHub release.
+The users of 0.2.0 then install code that a live run tested.
 
 ### S. Workspace backends
 
