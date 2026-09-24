@@ -249,7 +249,8 @@ definition, and the built-in tools that `allowedTools` names, minus
 `disallowedTools`. A test asserts that an empty policy passes `--tools ''`.
 
 **What the environment holds.** Without `env`, the executable inherits the
-whole environment of the host, and `Bash` can print it. With `env`, the value
+environment of the host, less the variables of a Claude Code session, and
+`Bash` can print it. With `env`, the value
 **replaces** the environment. The executor does not merge it with
 `process.env`. A `PATH`, a `HOME`, or a key that the value omits is absent.
 Pass the variables that the executable needs, as the example does. A seat
@@ -260,8 +261,13 @@ runs inside Claude Code holds variables such as `CLAUDE_CODE_SESSION_ID`
 and `CLAUDE_CODE_REMOTE_SESSION_ID`. With them, every seat reports the id of
 the host's session, and a resume opens one transcript for all seats. The
 executor removes these variables from the environment, with or without
-`env`. It also removes `CLAUDE_CODE_ENTRYPOINT`, so the SDK marks the
-executable as its own. A test on the fake executable holds the list.
+`env`. It also removes `CLAUDE_CODE_ENTRYPOINT`, and the SDK then sets it
+to `sdk-ts`. A test on the fake executable holds the list.
+
+**A seat in a remote Claude Code environment needs its own key.** Without
+`CLAUDE_CODE_REMOTE_SESSION_ID`, the executable does not wait for a rotated
+host token after a 401. A seat that authenticates with the host's token can
+then fail on a long query. Pass `ANTHROPIC_API_KEY` to such a seat.
 
 **A permission request goes to `canUseTool`.** A tool call that the allow
 list does not cover asks. The executor answers it in this order:
@@ -303,6 +309,8 @@ a new `systemPrompt`. The seat's duties and instructions for the
 activation, its agent part, therefore go at the head of the first message.
 A closing activation resumes the session of the exchange it summarizes.
 This message gives it the summary duties and the reader's preferences.
+When the resume fails, the fresh session gets the same message, and the
+seat's part then appears twice.
 
 **A resume that fails starts a fresh session.** The SDK cannot resume when
 the session store is gone, such as after a move to a new disk. The real SDK

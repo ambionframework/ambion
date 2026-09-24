@@ -18,7 +18,7 @@
 
 This file holds the open work for 0.2.0: the scope, the order of the work,
 the evidence each step needs, and the reason for each item. What landed
-leaves this file, and the [changelog](../CHANGELOG.md) records it.
+leaves the phases, and the [changelog](../CHANGELOG.md) records it.
 [backlog.md](backlog.md) holds everything after 0.2.0, and its first
 section holds the scope for 0.3.0.
 
@@ -300,13 +300,14 @@ page and package README states only where its own harness keeps a session.
 
 **The live tier gave no signal from 2026-09-22 to 2026-09-24.** Runs 340
 to 363 of the live workflow failed on the Anthropic message "Your credit
-balance is too low". Every change from #271 to #294 merged with no live
+balance is too low", except run 352, which was cancelled. Every change from #271 to #294 merged with no live
 run in CI. Run 364, on `67ecb72`, is the first run with credit: Pi and the
 package tiers pass, Claude fails one case, and Codex skips. The changelog
 records the fix of the Claude case: a resumed Claude session kept the
 system prompt it began with, so a closing activation lost its duties. It
 also records a second Claude fix that a local run found: a seat no
 longer takes the session id of a host that runs inside Claude Code.
+Items L1 and L4 held those two fixes, so they left this file.
 
 **L2. The Codex harness has no live run in CI.** Until 2026-09-24 the
 `CODEX_API_KEY` repository secret was empty, so the Codex harness job and

@@ -6,9 +6,10 @@
 host that runs inside Claude Code passed its `CLAUDE_CODE_SESSION_ID`, or in
 a remote environment its `CLAUDE_CODE_REMOTE_SESSION_ID`, to every seat.
 Every seat then reported the id of the host's session, and a resume opened
-one transcript for all seats. The executor now removes the variables that
-tie the executable to a Claude Code session, with or without `env`, and
-`CLAUDE_CODE_ENTRYPOINT`. `@ambionframework/claude` exports no new name.
+one transcript for all seats. With or without `env`, the executor now
+removes `CLAUDE_CODE_ENTRYPOINT` and the variables that tie the executable
+to a Claude Code session. A seat in a remote Claude Code environment then
+needs its own key. `@ambionframework/claude` exports no new name.
 
 **A resumed Claude activation gets its own duties.** A resumed Claude
 session keeps the system prompt it began with, and the SDK ignores a new

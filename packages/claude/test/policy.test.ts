@@ -4,8 +4,8 @@
  * answer. A permission request becomes an `approval` step: the application
  * answers it, and the step carries the answer.
  */
-import { expect, it } from 'vitest';
-import { PARENT_SESSION } from '../src/options.ts';
+import { expect, it, vi } from 'vitest';
+import { claudeOf, PARENT_SESSION, type QueryInput, queryOptions } from '../src/options.ts';
 import { open, seat, viewOf } from './support.ts';
 
 async function argvOf(
@@ -123,4 +123,22 @@ it('starts the executable outside the Claude Code session of its host', async ()
 	for (const name of PARENT_SESSION.filter((name) => name !== 'CLAUDE_CODE_ENTRYPOINT'))
 		expect(env.names).not.toContain(name);
 	expect(env.names).toContain('AMBION_KEPT');
+});
+
+it('removes the same variables from the environment of this process when the host passes no env', () => {
+	for (const name of PARENT_SESSION) vi.stubEnv(name, `host-${name}`);
+	try {
+		const options = queryOptions({
+			executor: claudeOf(seat().executor),
+			systemPrompt: '',
+			server: {} as QueryInput['server'],
+			names: [],
+			canUseTool: async () => ({ behavior: 'deny', message: '' }),
+			runtime: {},
+		});
+		for (const name of PARENT_SESSION) expect(options.env).not.toHaveProperty(name);
+		expect(options.env?.PATH).toBe(process.env.PATH);
+	} finally {
+		vi.unstubAllEnvs();
+	}
 });

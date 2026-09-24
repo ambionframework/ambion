@@ -33,7 +33,9 @@ export interface ClaudeRuntime {
  * a remote Claude Code environment, every seat reports the id of the host's
  * session, and a resume opens one transcript for all seats. Claude Code
  * removes most of these names when it starts a fresh session. Without
- * `CLAUDE_CODE_ENTRYPOINT`, the SDK marks the executable as its own.
+ * `CLAUDE_CODE_ENTRYPOINT`, the SDK sets it to `sdk-ts`. The two
+ * `CLAUDE_CODE_QUESTION_` names are the ones the SDK removes when it gets
+ * no `env`.
  */
 export const PARENT_SESSION = [
 	'CLAUDECODE',
@@ -53,6 +55,8 @@ export const PARENT_SESSION = [
 	'CLAUDE_CODE_RESUME_PROMPT',
 	'CLAUDE_CODE_RESUME_REASON',
 	'CLAUDE_CODE_RESUME_SOURCE_ALIVE',
+	'CLAUDE_CODE_QUESTION_EXTENDED',
+	'CLAUDE_CODE_QUESTION_OPTIONAL_DESCRIPTIONS',
 ] as const;
 
 /** The environment of a seat's executable: the host's, less the variables of its Claude Code session. */
