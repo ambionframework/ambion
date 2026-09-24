@@ -14,7 +14,7 @@ each page.
 | Document                              | Use it for                                                             |
 | ------------------------------------- | ---------------------------------------------------------------------- |
 | [Room](room.md)                       | Overview, glossary, and the room-wide mechanisms                       |
-| [Technical facts](technical-facts.md) | Key facts, what is new, packages, and the limits of 0.1.0              |
+| [Technical facts](technical-facts.md) | Key facts, what is new, packages, and the limits of 0.2.0              |
 | [Definitions and tools](agent.md)     | Definitions and tools                                                  |
 | [Executors](executors.md)             | The executor contract, steps, the trace, and adapters                  |
 | [Pi executor](pi.md)                  | The Pi package: options, exchange continuity, testing                  |
@@ -28,7 +28,7 @@ each page.
 | [Patterns](patterns.md)               | The human collaboration patterns the room represents                   |
 | [Summaries](summary.md)               | Optional closing work and context replacement                          |
 | [Resources](resources.md)             | The resource contract, references, and provenance                      |
-| [Workspace](workspace.md)             | The Pi filesystem binding of the resource contract                     |
+| [Workspace](workspace.md)             | The workspace interface, its backends, and its tools                   |
 | [Workstation](workstation.md)         | A remote server as a workspace over SSH, one account for each agent    |
 | [Git](git.md)                         | A git backend: read-only templates, forks, clones, and pushes          |
 | [Example](example.md)                 | The one runnable example: an agentic lab workspace                     |

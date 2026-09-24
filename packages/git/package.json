@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/git",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"type": "module",
 	"description": "A git backend for an Ambion workspace: read-only templates, forks, and pushes, over an in-process just-git server.",
 	"license": "Apache-2.0",

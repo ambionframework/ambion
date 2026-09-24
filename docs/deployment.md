@@ -278,8 +278,8 @@ host topology affect recovery time.
 `stop()` before reporting their durable work complete. See the
 [cancellation contract](durability.md#cancellation). Exchange handles do not
 provide independent cancellation.
-Subscriptions belong to one host; 0.1.0 includes no durable subscription service
-across processes.
+Subscriptions belong to one host. Ambion includes no durable subscription
+service across processes.
 
 **Transport deadlines and execution limits have different scopes.**
 `limits.call.timeout` bounds each executor call to the room.
@@ -300,4 +300,4 @@ Continuing contributions can keep a discussion open.
 Ambient rooms remain available between interactions. Native timers, external
 event subscriptions, and scheduler ingress remain future work. Browser-only
 execution, a managed service, arbitrary edge-platform support, and turnkey
-deployment commands are outside 0.1.0.
+deployment commands are outside the current scope.

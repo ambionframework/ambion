@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/ambion",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"type": "module",
 	"description": "The collaboration kernel for agents and humans: rooms, the journal vocabulary, the rules, and the room driver.",
 	"license": "Apache-2.0",

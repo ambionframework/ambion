@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-09-24)
 
 **A workspace now has real backends.** A shell on a remote server, a shared
 SQL database, and git repositories plug into one workspace. The Pi executor
