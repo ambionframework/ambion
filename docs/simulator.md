@@ -101,9 +101,6 @@ sequenceDiagram
   exchange: what the assistant said in it, and the summary that closed it.
   Each entry of `run.exchanges` holds the message sent, the discussion, the
   summary, and the closed view.
-- **One deadline covers the close and the summary of an exchange.** The
-  summary is the answer a person reads, so an exchange is done when its
-  summary is done.
 - **Every wait is a handle wait.** The loop uses `waitForClose()` and
   `waitForSummary()`. It never polls for a quiet room, and it never calls
   `reconcile()`.
@@ -192,13 +189,15 @@ export function simulate(room: Room, options: SimulateOptions): Promise<Run>;
 4. Call `visit.send(move)`. The loop sends the next move only after the
    exchange closes, so each move opens one exchange.
 5. Wait on `handle.waitForClose()`, then on `handle.waitForSummary()`.
-   Both waits share one deadline, `exchangeMs` after the send. In a room
-   with no summary writer, `waitForSummary()` returns `undefined` when the
-   close lands.
-6. At the deadline, call `room.abort()`. Before the close, the abort writes
-   a close with the outcome `cancelled`. After the close, it fails the
-   pending summary. The loop reads the closed view, and ends with
-   `ended: 'timeout'`.
+   Both waits share one deadline, `exchangeMs` after the send, because the
+   summary is the answer a person reads. In a room with no summary writer,
+   `waitForSummary()` returns `undefined` when the close lands.
+6. At the deadline, call `room.abort()`, and end with `ended: 'timeout'`
+   after operation 7. Before the close, the abort writes a close with the
+   outcome `cancelled`, and the summary wait returns `undefined`. After the
+   close, the abort fails the pending summary, and `waitForSummary()`
+   rejects. The loop reads that one rejection as the timeout. The closed
+   view then shows the summary as `failed`.
 7. Read the closed `ExchangeView` from `room.read()`. Add the exchange to
    `run.exchanges`, and add the discussion and the summary to `seen`.
 8. Go back to operation 3. After `exchanges` messages, end the loop with
@@ -386,42 +385,70 @@ the provider, and the specialist returns one fixed `say`.
 **The rewrite removes both mechanisms.**
 
 - **The specialist runs on the testing entry.** Its definition carries
-  `executor: { kind: 'scripted', ... }`. `composeExecutions` from
-  `@ambionframework/ambion/hosting` runs it on `scripted()`, and runs the
-  assistant on `piExecution()`.
+  `executor: { kind: 'scripted', instructions, tools: [] }`.
+  `composeExecutions` from `@ambionframework/ambion/hosting` runs it on
+  `scripted()`, and runs the assistant on `piExecution()`. `defineAssistant`
+  builds its executor with `pi()`, so the assistant has the kind `pi`.
 - **`simulate` replaces `evaluate()`.** A case passes
-  `scriptedActor([question])` and `exchanges: 1`. `exchangeMs` replaces the
-  timer.
+  `scriptedActor([question])` and `exchanges: 1`. `exchangeMs: 90_000`
+  replaces the timer.
+- **Each case starts its own runtime.** `scripted()` keeps one step counter
+  for each seat name over the life of its runtime. A shared runtime shares
+  the counter between cases.
+
+**The specialist script reads the view, and ignores the counter.** The
+`call` argument counts every step of the seat in the runtime, so a script
+that speaks at `call === 1` answers the first exchange only. A script for a
+case with several exchanges speaks once in each exchange:
+
+```ts
+const answers =
+  (fact: string): Script =>
+  ({ view }) => {
+    const from = view.context.exchange?.from ?? 0;
+    const spoke = view.context.messages.some(
+      (m) => m.kind === 'said' && m.from === 'inventory' && m.seq >= from,
+    );
+    return spoke ? quiet() : speak(fact, 'assistant');
+  };
+```
 
 **An exact fact stays a check. A regex that lists wordings becomes a
 criterion.** A check such as `/8|eight/` decides a fact. A regex that lists
-eight ways to say "not verified" tries to grade a meaning.
+eight ways to say "not verified" grades a meaning.
 
-| Case today                                      | Checks                                                                                                      | Criteria for the judge                                                                                                   |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Routes participation, five samples              | The specialist spoke. At `named`, the assistant says once, to `inventory`; else never. The summary names 8. | None                                                                                                                     |
-| Corrects a superseded constraint, three samples | The assistant says once, and names 8. The summary names 8.                                                  | None                                                                                                                     |
-| Does not steer valid work                       | The assistant says nothing.                                                                                 | The summary says that the dispatch capacity is unknown, and it reports no success.                                       |
-| Honors an application override                  | The assistant says the exact override text once. The summary names 8.                                       | None                                                                                                                     |
-| Keeps the verification limits                   | The assistant says nothing.                                                                                 | The summary says that only the source was inspected, that runtime behavior is unverified, and that nothing was released. |
+| Case today                                      | Checks                                                                                                                      | Criteria for the judge                                                               |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Routes participation, five samples              | The specialist spoke. At `named`, the assistant says once, to `inventory`, and says nothing otherwise. The summary names 8. | None                                                                                 |
+| The reserve sample of the five                  | The record holds a `seated` entry for `inventory` from `assistant`.                                                         | None                                                                                 |
+| Corrects a superseded constraint, three samples | The assistant says once, and names 8. The summary names 8.                                                                  | None                                                                                 |
+| Does not steer valid work                       | The assistant says nothing.                                                                                                 | The summary says that the dispatch capacity is unknown, and it reports no success.   |
+| Honors an application override                  | The assistant says the exact override text once. The summary names 8.                                                       | None                                                                                 |
+| Keeps the verification limits                   | The assistant says nothing. The summary matches `/source\|static/`.                                                         | The summary says that runtime behavior is unverified, and that nothing was released. |
 
 **The rewrite adds the cases that `evaluate()` cannot express.** Each one
 needs more than one exchange.
 [Assistant evaluation](assistant.md#integration-and-evaluation) lists
 them.
 
-| New case                                    | Actor                                                   | Checks                                                                     | Criteria for the judge                                                                           |
-| ------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| A person revises the request                | Scripted: the question, then the revision               | In the second exchange, the assistant says at most once, to `inventory`.   | The second summary uses the revised request.                                                     |
-| A constraint survives into a later exchange | Scripted: a no-dispatch constraint, then a plan request | No spoken message in the second exchange reports a dispatch.               | The second summary keeps the no-dispatch constraint.                                             |
-| The assistant needs a material fact         | `agentActor`, with the fact in the brief                | The first exchange has a message to the person. A second exchange follows. | The first summary waits on the person and reports no completion. The last summary uses the fact. |
+| New case                                    | Actor                                                   | Checks                                                                     | Criteria for the judge                                                                                     |
+| ------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| A person revises the request                | Scripted: the question, then the revision               | At `named`, the assistant says once to `inventory` in the second exchange. | The request to `inventory` carries the revision. The second summary uses it.                               |
+| A constraint survives into a later exchange | Scripted: a no-dispatch constraint, then a plan request | At `named`, the assistant says once to `inventory` in the second exchange. | That request carries the no-dispatch constraint. The second summary keeps it.                              |
+| The assistant needs a material fact         | `agentActor`, with the fact in the brief                | Two exchanges run. The second message the person sent carries the fact.    | The first summary asks for the fact, or reports that the work waits on it. The last summary uses the fact. |
+
+**The specialist asks for the material fact.** In the third case, its
+script says in the first exchange that it needs the fact. The assistant can
+relay the question in a `say` or in the summary. Both reach the person, and
+neither makes the exchange `awaiting`, so the check reads the second
+message and the judge reads the first summary.
 
 **Samples stay in the test.** `it.each` keeps the sample numbers of today.
 The simulator repeats nothing.
 
 **The evidence for the port:**
 
-- `evaluate()` and the routing stream leave the file.
+- The file no longer holds `evaluate()` or the routing stream.
 - Every claim of the eleven tests holds as a check or a criterion.
 - The three new cases run, and each one has more than one exchange.
 - `pnpm check` passes, and one live run of the file prints the cost of each
