@@ -31,7 +31,7 @@ Examples are private. The package graph is:
 
 ```text
 ambion ──▶ journal
-pi ──▶ ambion, journal
+pi ──▶ ambion
 claude ──▶ ambion
 codex ──▶ ambion
 cloudflare ──▶ ambion, journal, pi

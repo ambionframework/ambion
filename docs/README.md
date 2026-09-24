@@ -18,7 +18,7 @@ each page.
 | [Definitions and tools](agent.md)     | Definitions and tools                                                  |
 | [Executors](executors.md)             | The executor contract, steps, the trace, and adapters                  |
 | [Pi executor](pi.md)                  | The Pi package: options, exchange continuity, testing                  |
-| [Claude executor](claude.md)          | The Claude Agent SDK package: policy, trust, memory, testing           |
+| [Claude executor](claude.md)          | The Claude Agent SDK package: policy, trust, sessions, testing         |
 | [Codex](codex.md)                     | The Codex SDK executor: install, options, trust, and testing           |
 | [Assistant](assistant.md)             | The default assistant package and the `assistant` room option          |
 | [Exchange](exchange.md)               | Human questions, completion, and durable result handles                |

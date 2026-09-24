@@ -281,7 +281,8 @@ every executor works this way.
 
 **An executor resumes only the session that `spec.resume` names.** It
 uses the session only when the harness name is its own. With no
-`spec.resume` it starts a fresh session and drops any session it holds.
+`spec.resume` it starts a fresh session. [Pi](pi.md#exchange-continuity)
+keeps its two latest transcripts in the process.
 
 **The session is a cache, and its persistence is best effort.** The
 harness keeps the session where it keeps it: Claude and Codex keep it in

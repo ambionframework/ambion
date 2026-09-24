@@ -480,7 +480,7 @@ describe('the steps the driver owns', () => {
 });
 
 describe('a sink that closes late', () => {
-	it('lets a wake that comes during the close run beside the next queued wake', async () => {
+	it('queues a wake that comes during the close, and runs it after', async () => {
 		const [first, second, third] = [
 			'message:1:product:1',
 			'message:2:product:1',
@@ -488,7 +488,6 @@ describe('a sink that closes late', () => {
 		];
 		const closing = deferred();
 		const closed = deferred();
-		const claimed = deferred();
 		const { room, actor } = play(
 			scripted(() => quiet()),
 			undefined,
@@ -508,25 +507,22 @@ describe('a sink that closes late', () => {
 				},
 			}),
 		);
-		room.hold = (lease) =>
-			lease.activation === second && lease.operation === 'claim' ? claimed.promise : undefined;
 		const running = actor.run(first);
 		await closing.promise;
-		// The first activation released its lease and waits on its sink. A new
-		// wake starts at once, and a third one queues behind it.
-		const waiting = actor.run(second);
+		// The first activation released its lease and waits on its sink. It
+		// still holds the seat, so the next two wakes queue behind it.
+		await actor.run(second);
 		await actor.run(third);
+		expect(room.leases.filter((lease) => lease.operation === 'claim')).toHaveLength(1);
 		closed.resolve();
 		await running;
-		claimed.resolve();
-		await waiting;
 		const released = room.leases.flatMap((lease) =>
 			lease.operation === 'release' ? [[lease.activation, lease.reason]] : [],
 		);
 		expect(released).toEqual([
 			[first, 'released'],
-			[third, 'released'],
 			[second, 'released'],
+			[third, 'released'],
 		]);
 	});
 });
