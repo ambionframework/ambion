@@ -346,8 +346,13 @@ Items L1 and L4 held those two fixes, so they left this file.
 `CODEX_API_KEY` repository secret was empty, so the Codex harness job and
 the Codex package tier skipped on every run. The room tools of #287 and
 the thread resume of #294 reach Codex, and neither has a live run. The
-owner added the secret. The item closes when a run on `main` shows both
-Codex jobs run their tests.
+owner added the secret. Run 365, the first with the key, passed the Codex
+harness job and failed three Codex package tests. Each needs a native
+command, and none ran. The Codex sandbox runs a command through bubblewrap,
+which needs an unprivileged user namespace, and AppArmor on Ubuntu 24.04
+restricts such namespaces by default. A seat with native tools now runs
+with no Codex sandbox by default. The next run on `main` confirms the cause.
+The item closes when a run on `main` passes both Codex jobs.
 
 **L3. A billing failure reads as a billing failure.** Twenty-three red
 runs in a row had one cause, and each run read as a set of test failures.

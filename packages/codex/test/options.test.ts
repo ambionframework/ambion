@@ -107,6 +107,35 @@ describe('threadOptions', () => {
 		}
 	});
 
+	it('gives a seat with native tools no Codex sandbox unless it names one', () => {
+		const native = { instructions: 'x', model: 'm', nativeTools: 'codex' } as const;
+		expect(threadOptions(codex(native)).sandboxMode).toBe('danger-full-access');
+		expect(threadOptions(codex({ ...native, sandboxMode: 'read-only' })).sandboxMode).toBe(
+			'read-only',
+		);
+	});
+
+	it.each([
+		{ sandboxMode: undefined, refused: true },
+		{ sandboxMode: 'danger-full-access', refused: true },
+		{ sandboxMode: 'read-only', refused: true },
+		{ sandboxMode: 'workspace-write', refused: false },
+	] as const)(
+		'refuses networkAccessEnabled that Codex would not read under $sandboxMode',
+		({ sandboxMode, refused }) => {
+			const define = () =>
+				codex({
+					instructions: 'x',
+					model: 'm',
+					nativeTools: 'codex',
+					networkAccessEnabled: false,
+					...(sandboxMode && { sandboxMode }),
+				});
+			if (refused) expect(define).toThrow(/networkAccessEnabled applies only/);
+			else expect(define).not.toThrow();
+		},
+	);
+
 	it('defaults nativeTools to none', () => {
 		expect(codex({ instructions: 'x', model: 'm' }).nativeTools).toBe('none');
 		expect(codex({ instructions: 'x', model: 'm', nativeTools: 'codex' }).nativeTools).toBe(
