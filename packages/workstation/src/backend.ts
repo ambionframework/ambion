@@ -13,19 +13,12 @@
  * time it builds a session, and it stores, issues, and rotates no
  * credential.
  *
- * With a git backend, each `connect` keeps the agent's `~/.git-credentials`
- * current (`./git-credentials.ts`), so the real `git` on the server reaches
- * the backend's repositories as that agent.
+ * The workstation carries no git transport. `connect` ignores the git
+ * access that a git backend gives.
  */
 
-import type {
-	BashBackend,
-	BashServices,
-	WorkspaceEnv,
-	WorkspaceLayout,
-} from '@ambionframework/workspace';
+import type { BashBackend, WorkspaceEnv, WorkspaceLayout } from '@ambionframework/workspace';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
-import { freshGitState, type GitCredentialState, syncGitCredentials } from './git-credentials.ts';
 import { Session, type WorkstationCredential } from './session.ts';
 import { SshEnv } from './ssh-env.ts';
 
@@ -57,11 +50,10 @@ const GUIDANCE = [
 	'network access, and the commands you can run are the ones the server installs.',
 ].join('\n');
 
-/** One agent's session, the idle timer that closes it, and its git credentials. */
+/** One agent's session, and the idle timer that closes it. */
 interface Entry {
 	readonly session: Promise<Session>;
 	timer: NodeJS.Timeout | undefined;
-	readonly git: GitCredentialState;
 }
 
 function checked(options: WorkstationOptions): { port: number; idleMs: number } {
@@ -98,7 +90,6 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 		const entry: Entry = {
 			session: (async () => Session.connect(address, await options.credentialFor(agent), signal))(),
 			timer: undefined,
-			git: freshGitState(),
 		};
 		entries.set(agent.name, entry);
 		entry.session.then(
@@ -121,28 +112,16 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 	return {
 		layout: options.layout,
 		guidance: GUIDANCE,
-		async connect(
-			agent: WorkspaceAgent,
-			signal?: AbortSignal,
-			services?: BashServices,
-		): Promise<WorkspaceEnv> {
+		async connect(agent: WorkspaceAgent, signal?: AbortSignal): Promise<WorkspaceEnv> {
 			const current = entries.get(agent.name);
 			const entry = current ?? open(agent, signal);
 			const session = await entry.session;
 			if (session.closed) {
 				forget(agent.name, entry);
-				return this.connect(agent, signal, services);
+				return this.connect(agent, signal);
 			}
 			clearTimeout(entry.timer);
-			const env = new SshEnv(session, () => idle(agent.name, entry, session));
-			if (services?.git === undefined) return env;
-			try {
-				await syncGitCredentials(env, agent, services.git, entry.git);
-			} catch (error) {
-				await env.cleanup();
-				throw error;
-			}
-			return env;
+			return new SshEnv(session, () => idle(agent.name, entry, session));
 		},
 		async dispose(): Promise<void> {
 			const all = [...entries.values()];

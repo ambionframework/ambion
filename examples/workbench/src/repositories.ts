@@ -15,7 +15,8 @@
 import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fromDirectory, gitBackend, sqliteGitStorage } from '@ambionframework/git';
+import { justGitBackend, sqliteGitStorage } from '@ambionframework/just-bash/git';
+import { fromDirectory } from '@ambionframework/workspace/git';
 
 const templatesDirectory = fileURLToPath(new URL('../templates/', import.meta.url));
 
@@ -30,7 +31,7 @@ const templates = {
 
 /** The git backend of the lab, with its storage at `location`, or `':memory:'` for a test. */
 export function labRepositories(location: string) {
-	return gitBackend({
+	return justGitBackend({
 		storage: sqliteGitStorage(location),
 		secret: randomBytes(32).toString('hex'),
 		templates,

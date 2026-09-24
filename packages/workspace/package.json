@@ -34,6 +34,10 @@
 			"types": "./dist/sqlite-entry.d.mts",
 			"import": "./dist/sqlite-entry.mjs"
 		},
+		"./git": {
+			"types": "./dist/git-entry.d.mts",
+			"import": "./dist/git-entry.mjs"
+		},
 		"./conformance": {
 			"types": "./dist/conformance.d.mts",
 			"import": "./dist/conformance.mjs"

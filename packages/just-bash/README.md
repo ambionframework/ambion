@@ -4,7 +4,8 @@ The just-bash backends for an
 [Ambion](https://ambionframework.com) workspace. Each backend is a
 `BashBackend` over [just-bash](https://github.com/vercel-labs/just-bash): a
 virtual Unix filesystem and shell in the process, in memory or over a real
-directory.
+directory. The `./git` entry holds a git backend over a
+[just-git](https://github.com/blindmansion/just-git) server in the process.
 
 ## Install
 
@@ -51,15 +52,74 @@ It supports the common subcommands, each with a subset of the flags of real
 git. The author of a commit is the agent's name, and `git config` does not
 change it. With no git backend, `git` has no network access, so a remote is a
 path on the workspace's filesystem, such as another agent's home. With a git
-backend ([`@ambionframework/git`](../git/README.md)), `git` reaches the
-backend's URL prefix alone, and the token of each request stays inside the
-`git` command. The guidance tells each agent the same.
+backend ([`justGitBackend`](#the-git-backend)), `git` reaches the backend's
+URL prefix alone, and the token of each request stays inside the `git`
+command. The guidance tells each agent the same.
+
+## The git backend
+
+**`justGitBackend(options)` runs a `just-git` server in the host's
+process.** Pass it as `backend.git`. The workspace then gives each agent
+the `repos` and `fork` tools, and the `git` of each agent's shell reaches
+the backend's repositories. An agent forks a read-only template, clones the
+fork into its home, edits, commits, and pushes. A push persists the edits
+across a restart of the host.
+
+```ts
+import { directoryBackend } from '@ambionframework/just-bash';
+import { justGitBackend, sqliteGitStorage } from '@ambionframework/just-bash/git';
+import { openWorkspace } from '@ambionframework/workspace';
+import { fromDirectory } from '@ambionframework/workspace/git';
+
+const lab = openWorkspace({
+  name: 'lab',
+  backend: {
+    bash: directoryBackend('./data/lab'),
+    git: justGitBackend({
+      storage: sqliteGitStorage('./data/lab-git.db'),
+      secret: process.env.LAB_GIT_SECRET ?? '',
+      templates: {
+        'weekly-report': {
+          description: 'A weekly status report: numbers, risks, and next steps.',
+          source: fromDirectory('./templates/weekly-report'),
+        },
+      },
+    }),
+  },
+});
+```
+
+The storage is one SQLite file, through `node:sqlite`. The first use opens
+it, and `lab.dispose()` closes it and keeps the file. The root entry of the
+package loads no `node:sqlite`.
+
+| Option      | Meaning                                                                |
+| ----------- | ---------------------------------------------------------------------- |
+| `storage`   | `sqliteGitStorage(path)`, or `sqliteGitStorage(':memory:')` for tests  |
+| `secret`    | The key of every token. A new secret revokes every token               |
+| `templates` | The registrations, by template name                                    |
+| `tokenTtl`  | Seconds a token lives. The default is 3600                             |
+| `onError`   | Called with a fault of the server. Absent, the backend reports nothing |
+
+**A template never changes after registration.** The backend registers
+each template before its first operation. A registration with a changed
+source fails with an error that names the template. Register the change
+under a new name.
+
+**No request leaves the process.** Every clone URL starts with
+`http://git.ambion.invalid`, a name that never resolves. The `git` command
+passes each request to the server in the process, with a token that no
+file holds. A workstation carries no git transport, so this backend pairs
+with the two just-bash backends alone.
 
 ## Tests
 
 **`pnpm test`** runs `workspaceConformance` on both backends, and the
-tests of the adapter, the memory backend, and the `/dev` layer. Every test
-runs in process, with no key and no network.
+tests of the adapter, the memory backend, and the `/dev` layer. It runs
+`gitConformance` on both backends under `justGitBackend`, and the tests of
+the tokens, the registration after a crash, and a restart over one file.
+Every test runs in process, with no key and no network.
 
 [Workspace](https://github.com/ambionframework/ambion/blob/main/docs/workspace.md)
-holds the design contract.
+and [Git](https://github.com/ambionframework/ambion/blob/main/docs/git.md)
+hold the design contracts.

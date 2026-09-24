@@ -57,7 +57,15 @@ the SQL backend over one SQLite database. `./sql` holds `openSqlResource`, a
 resource over its own SQLite database, with its `SqlProvenance` and
 `SqlResourceEnv` types. `./conformance` holds `workspaceConformance`, the
 scenario matrix a new backend runs to prove it meets the resource contract,
-and `sqlConformance`, the cases a `SqlBackend` runs.
+and `sqlConformance` and `gitConformance`, the cases a `SqlBackend` and a
+`GitBackend` run.
+
+`./git` holds what every git backend shares, and it loads no git library.
+The name rules of a repository ID are `validName`, `namespaceOf`,
+`assertAgent`, `readOnly`, `TEMPLATES`, and `SOURCES`. The template helpers
+are `fromDirectory`, `filesOf`, `hashesOf`, `sameFiles`, and `changeTo`,
+with the `TemplateRegistration`, `TemplateSource`, and `TemplateFiles`
+types. `@ambionframework/just-bash/git` holds a git backend that uses them.
 
 `openWorkspace` takes its backends by kind: `backend: { bash, sql }`.
 `bash` is required. `sql` is an optional `SqlBackend`, and the `sql` tool

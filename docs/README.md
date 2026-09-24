@@ -47,7 +47,8 @@ Read `resources.md` for the resource contract and `workspace.md` for the
 filesystem binding and the just-bash backends of
 `@ambionframework/just-bash`. `workstation.md` is the bash backend for a
 workspace on a remote server over SSH. `git.md` is the git backend of
-`@ambionframework/git`: read-only templates, forks, clones, and pushes.
+`@ambionframework/just-bash/git`: read-only templates, forks, clones, and
+pushes.
 
 `assistant.md` describes the assistant package, the room configuration
 shorthand, and how the workbench example evaluates it.

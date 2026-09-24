@@ -45,7 +45,8 @@ over SSH with [`@ambionframework/workstation`](docs/workstation.md).
 The `sql` tool exists only when the workspace has a SQL backend. SQLite is the
 default. The `repos` and `fork` tools exist only when the workspace has a git
 backend: an agent forks a read-only template, clones it, and pushes with
-[`@ambionframework/git`](docs/git.md). See [Workspace](docs/workspace.md).
+[`@ambionframework/just-bash/git`](docs/git.md). See
+[Workspace](docs/workspace.md).
 
 ## One team on three harnesses
 

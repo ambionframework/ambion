@@ -2,16 +2,16 @@
  * A workspace with a git backend: the `repos` and `fork` tools and their
  * texts, the tool line and the order of the notes, the audit entry of a
  * call, and a room in which a seat forks a template, clones it, edits,
- * commits, and pushes. The backend is `gitBackend`, reached by relative
- * path the same way as the just-bash source; its own package runs the
- * conformance cases.
+ * commits, and pushes. The backend is `justGitBackend`, reached by
+ * relative path the same way as the just-bash source; its own package runs
+ * the conformance cases.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { callTool, quiet, speak } from '../../ambion/test/support/scripted.ts';
-import { gitBackend, sqliteGitStorage } from '../../git/src/index.ts';
+import { justGitBackend, sqliteGitStorage } from '../../just-bash/src/git/index.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { defaultToolGuidance } from '../src/default-tools.ts';
 import { gitToolGuidance } from '../src/git-tools.ts';
@@ -36,7 +36,7 @@ async function tempFile(): Promise<string> {
 }
 
 async function lab(options: { sql?: boolean; audit?: boolean; templates?: typeof TEMPLATES } = {}) {
-	const git = gitBackend({
+	const git = justGitBackend({
 		storage: sqliteGitStorage(await tempFile()),
 		secret: 'test-secret',
 		templates: options.templates ?? TEMPLATES,

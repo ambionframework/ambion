@@ -1,22 +1,17 @@
 /**
- * Templates: registration, and the sources a host registers.
+ * Templates: the sources a host registers, and the pure helpers that
+ * compare them with a repository.
  *
- * A template is a read-only fork of `template-sources/<name>`. Registration
- * is idempotent, and it resumes after a crash. It compares the files of the
- * source with the tree at the tip of the template by their blob hashes, so
- * it writes nothing to compare.
- *
- * 1. The template exists, and its tree equals the source. Nothing happens.
- * 2. The template exists, and its tree differs. Registration fails with an
- *    error that names the template. A change registers a new name.
- * 3. The template does not exist. The source repository gets the source at
- *    its tip, and the backend forks it to the template.
+ * A git backend registers each template before its first operation. It
+ * compares the files of the source with the tree at the tip of the
+ * template by their blob hashes, so it writes nothing to compare. This
+ * module reads no repository and loads no git library. Each git backend
+ * reads the hashes at a tip with its own library.
  */
 
 import { createHash } from 'node:crypto';
 import { lstat, readdir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
-import { flattenTree, type GitRepo, readCommit, readHead } from 'just-git/repo';
 
 /** The files of a template: each path, relative to the root, with its bytes. */
 export type TemplateFiles = Readonly<Record<string, Uint8Array>>;
@@ -74,15 +69,6 @@ function blobHash(bytes: Uint8Array): string {
 /** Each path of `files` with its blob hash. */
 export function hashesOf(files: TemplateFiles): ReadonlyMap<string, string> {
 	return new Map(Object.entries(files).map(([path, bytes]) => [path, blobHash(bytes)]));
-}
-
-/** Each path at the tip of the default branch of `repo`, with its blob hash. Empty for an unborn branch. */
-export async function tipHashes(repo: GitRepo): Promise<ReadonlyMap<string, string>> {
-	const head = await readHead(repo);
-	if (head.hash === null) return new Map();
-	const commit = await readCommit(repo, head.hash);
-	const entries = await flattenTree(repo, commit.tree);
-	return new Map(entries.map((entry) => [entry.path, entry.hash]));
 }
 
 /** Whether two maps of path to blob hash hold the same files. */

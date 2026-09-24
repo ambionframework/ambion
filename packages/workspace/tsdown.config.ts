@@ -6,6 +6,7 @@ export default defineConfig({
 		'src/resource-entry.ts',
 		'src/sql-resource.ts',
 		'src/sqlite-entry.ts',
+		'src/git-entry.ts',
 		'src/conformance.ts',
 	],
 	format: ['esm'],

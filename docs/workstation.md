@@ -417,12 +417,8 @@ set of grants.
 
 ## A git backend
 
-**The real `git` on the server reaches the git backend as each agent.**
-With `backend.git` set, each `connect` keeps the account's
-`~/.git-credentials` current, with mode `0600`, and sets a credential
-helper that reads the file alone. The host serves `gitBackend`'s
-`handler` on an address that the server reaches. [Git](git.md#on-a-workstation)
-states the file and the helper.
+**The workstation carries no git transport until G2 of
+[the plan](../planning/next.md#g-git-on-the-workstation).**
 
 ## Guidance
 

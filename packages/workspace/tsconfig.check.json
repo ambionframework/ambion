@@ -18,6 +18,7 @@
 			"@ambionframework/workspace": ["./src/index.ts"],
 			"@ambionframework/workspace/resource": ["./src/resource-entry.ts"],
 			"@ambionframework/workspace/conformance": ["./src/conformance.ts"],
+			"@ambionframework/workspace/git": ["./src/git-entry.ts"],
 			"@ambionframework/ambion": ["../ambion/src/index.ts"],
 			"@ambionframework/ambion/hosting": ["../ambion/src/hosting.ts"],
 			"@ambionframework/pi": ["../pi/src/index.ts"]

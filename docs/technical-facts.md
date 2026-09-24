@@ -98,9 +98,8 @@ holds the positioning and the headline of what is new.
 | `@ambionframework/claude`      | The Claude Agent SDK executor                                                         |
 | `@ambionframework/codex`       | The Codex SDK executor                                                                |
 | `@ambionframework/workspace`   | The workspace interface, its tools, a SQLite backend, and the conformance suites      |
-| `@ambionframework/just-bash`   | The just-bash backends: a shell and a filesystem in the process                       |
+| `@ambionframework/just-bash`   | The just-bash shell and filesystem in the process, and a git backend in `/git`        |
 | `@ambionframework/workstation` | A bash backend over SSH, with one Unix account for each agent                         |
-| `@ambionframework/git`         | A git backend: read-only templates, forks, clones, and pushes                         |
 | `@ambionframework/assistant`   | A default assistant that guides membership and writes summaries                       |
 | `@ambionframework/journal`     | The append-only journal and its storage contract                                      |
 | `@ambionframework/cloudflare`  | Rooms and seats as Durable Objects                                                    |

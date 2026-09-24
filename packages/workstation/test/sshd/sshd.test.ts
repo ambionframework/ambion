@@ -7,13 +7,9 @@
  * channel limit, the spill file, and the permissions between accounts.
  */
 
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { tmpdir } from 'node:os';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ToolContext } from '@ambionframework/ambion';
-import { gitBackend, sqliteGitStorage } from '@ambionframework/git';
 import { openWorkspace, type WorkspaceEnv } from '@ambionframework/workspace';
 import {
 	type ConformanceBackend,
@@ -270,58 +266,6 @@ describe.skipIf(configPath === undefined)('a workspace on OpenSSH', () => {
 			expect(agents.slice(-2)).toEqual(['surveyor', 'planner']);
 		} finally {
 			await workspace.dispose();
-		}
-	});
-});
-
-describe.skipIf(configPath === undefined)('a git backend on OpenSSH', () => {
-	it("gives each account its own credential file, and refuses a push to another account's fork", async () => {
-		const dir = await mkdtemp(join(tmpdir(), 'ambion-sshd-git-'));
-		const http = createServer();
-		const port = await new Promise<number>((resolve) =>
-			http.listen(0, '127.0.0.1', () => resolve((http.address() as AddressInfo).port)),
-		);
-		const git = gitBackend({
-			storage: sqliteGitStorage(join(dir, 'git.db')),
-			secret: 'sshd-secret',
-			url: `http://127.0.0.1:${port}`,
-			templates: { blank: { source: { 'README.md': 'blank\n' } } },
-		});
-		http.on('request', git.handler);
-		const workspace = openWorkspace({
-			name: 'lab',
-			backend: { bash: workstationBackend(await options()), git },
-		});
-		const run = async (agent: string, command: string) => {
-			const ran = await workspace.use({ name: agent }, (env) =>
-				env.exec(command, { timeout: 60 }, ctx),
-			);
-			if (!ran.ok) throw ran.error;
-			return ran.value.exitCode;
-		};
-		try {
-			await run('surveyor', WIPE);
-			await run('planner', WIPE);
-			const forked = await workspace.git?.use({ name: 'surveyor' }, (env) =>
-				env.fork('templates/blank', 'survey'),
-			);
-			if (!forked?.ok) throw new Error('the fork was refused');
-			const url = forked.repository.url;
-			const commit = 'git -c user.name=a -c user.email=a@x commit --allow-empty -m change';
-			expect(
-				await run(
-					'surveyor',
-					`git clone ${url} survey && cd survey && ${commit} && git push origin main`,
-				),
-			).toBe(0);
-			expect(await run('surveyor', 'test "$(stat -c %a ~/.git-credentials)" = 600')).toBe(0);
-			expect(await run('planner', 'cat /home/surveyor/.git-credentials')).not.toBe(0);
-			expect(await run('planner', `git clone ${url} theirs`)).toBe(0);
-			expect(await run('planner', `cd theirs && ${commit} && git push origin main`)).not.toBe(0);
-		} finally {
-			await workspace.dispose();
-			await new Promise((resolve) => http.close(resolve));
-			await rm(dir, { recursive: true, force: true });
 		}
 	});
 });
