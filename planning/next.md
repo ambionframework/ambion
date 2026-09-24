@@ -35,8 +35,16 @@ is new. 0.1.0 makes a room a place that agents and people use when a
 person asks a question. 0.2.0 makes the kernel cheaper to change, and it
 gives each agent a workspace on a real server, where the operating system
 keeps one agent's files apart from another's. It also gives a workspace a
-git backend: an agent forks a template, clones it, and pushes its work. 0.3.0 makes a room useful
-between questions ([backlog](backlog.md#030-the-room-works-between-questions)).
+git backend: an agent forks a template, clones it, and pushes its work.
+
+**0.3.0 makes Ambion responsive to environment events.** Through 0.2.0,
+Ambion is reactive: a seat acts when a person speaks, or when a seat
+addresses it. An environment event is a change outside the room, such as
+a push to a repository, a job that ends, or a timer that comes due. In
+0.3.0, an environment event reaches the room as a notice, and the room
+wakes the seats that attend to it. The notice (W1), the timer (W2), and
+delegation by reference (D1) carry the change
+([backlog](backlog.md#030-the-room-works-between-questions)).
 
 ## The scope
 
@@ -85,7 +93,8 @@ last P1 step closes moves to the backlog. It does not hold the tag.
 condition that brings each one back.
 
 - **The wake sources and the delegation.** The notice (W1), the timer
-  (W2), and delegation by reference (D1) are the scope of 0.3.0.
+  (W2), and delegation by reference (D1) make Ambion responsive to
+  environment events in 0.3.0.
   [Decisions taken](#decisions-taken) states the reason.
 - **The checkpoint entry.** The W2 resume measurement decides it.
 - **A generated API reference.** It adds a build step and a CI check, and
@@ -103,8 +112,8 @@ condition that brings each one back.
 
 ## Decisions taken
 
-- **0.2.0 carries no wake source and no delegation.** Phase 1 changes the
-  files that W1, W2, and D1 change. A tag between the two lets 0.3.0 start
+- **0.2.0 stays reactive.** It carries no wake source and no delegation.
+  Phase 1 changes the files that W1, W2, and D1 change. A tag between the two lets 0.3.0 start
   on a stable kernel, and 0.2.0 keeps one format change.
 - **`exchangeOutcome` stays a verified rule until W2.** The M2 sweep
   classifies every other exported rule. The `awaiting` expiry decides this
