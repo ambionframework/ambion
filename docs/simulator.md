@@ -5,6 +5,10 @@ yet.** The [backlog](../planning/backlog.md) holds the condition that
 schedules it. Until it lands, the live tests in `packages/*/test/live` are
 the only behavioral evidence.
 
+**The package is outside the 0.3.0 scope.** [The plan](../planning/next.md)
+names the evals package out of scope. A change to that scope comes before
+the first pull request.
+
 **The rewrite of the assistant's live suite validates the design.** The
 package lands when `packages/assistant/test/live/behavior.test.ts` runs on
 it and keeps every claim the suite makes today.
@@ -268,13 +272,14 @@ const actor = scriptedActor(['Can we pour on Thursday?', { text: 'And Friday?', 
 **`agentActor` plays a brief as an agent.** It takes the options of an
 agent definition and one more:
 
-| Option     | What it is                                                               |
-| ---------- | ------------------------------------------------------------------------ |
-| `model`    | A `provider/model-id`                                                    |
-| `brief`    | The private goal of the person. It has the role of `instructions`        |
-| `tools`    | `AmbionTool` values, the same as an agent's                              |
-| `bundles`  | Tool bundles and their guidance, such as `workspace.tools()`             |
-| `services` | The Pi execution services. [The model call](#the-model-call) states them |
+| Option      | What it is                                                               |
+| ----------- | ------------------------------------------------------------------------ |
+| `model`     | A `provider/model-id`                                                    |
+| `brief`     | The private goal of the person. It has the role of `instructions`        |
+| `tools`     | `AmbionTool` values, the same as an agent's                              |
+| `bundles`   | Tool bundles and their guidance, such as `workspace.tools()`             |
+| `services`  | The Pi execution services. [The model call](#the-model-call) states them |
+| `timeoutMs` | Real milliseconds for one move. The default is 60 000                    |
 
 - **The system prompt** holds the person's `identity`, the `brief`, the
   guidance of each bundle, and three rules. Speak as the person. Do not
@@ -285,17 +290,21 @@ agent definition and one more:
 - **The move ends with a tool call.** `send({ text, to? })` is a message to
   the room. `stop({ reason })` ends the loop. Before either one, the actor
   can call its other tools, for example `read` on a file that an agent
-  wrote. The move keeps those calls and the usage of every request.
-- **A move that ends with no `send` and no `stop` rejects.** The loop then
-  ends with `ended: 'failed'`.
+  wrote. `Move.calls` holds every call before the call that ends the move,
+  and the move carries the usage of every request.
+- **A move that ends with no `send` and no `stop` rejects.** So does a
+  move that passes `timeoutMs`. The loop then ends with `ended: 'failed'`.
 
 **The workspace knows the person by name.** A workspace tool reads the
 caller from `ctx.agent`. The actor's calls carry the person's name and
-identity, so the person has a home like any seat. On a workstation, the
-person needs a Unix account like any agent.
+identity, so the person has a home like any seat. `openWorkspace` takes no
+list of agents, and it connects the person on the first call. The
+[workstation](workstation.md) maps each caller to a Unix account, so it
+maps the person to one too. A `bash` call by the actor starts a process
+that outlives the move, and `workspace.processes` shows it.
 
 **A person with write tools changes the state that the agents read.** This
-is the dual control of τ²-bench. The test decides it by the bundles it
+is the dual control of [τ²-bench](https://github.com/sierra-research/tau2-bench). The test decides it by the bundles it
 passes. The room records no tool call of the person, so a check reads
 `run.moves[].calls`.
 
@@ -309,20 +318,54 @@ the discussion, and its next move answers it or stops.
 ## The model call
 
 **Both agents run on Pi's AgentHarness through `@ambionframework/pi`.**
-The Pi package gains one export: `runAgent(services, { model, agent,
-system, prompt, tools, ends })`. It resolves the model through
-`services.model(model, agent.name)`, and it runs the harness with the
-tools until the agent calls a tool in `ends`. It returns that call, the
-calls before it, and the `Usage` of every request. It maps the usage the
-way an activation maps it. The simulator then depends on no provider
-library.
+The Pi package gains one export:
+
+```ts
+export function runAgent(
+  services: ExecutionServices,
+  request: {
+    /** A `provider/model-id`. */
+    readonly model: string;
+    /** The routing name: `actor` or `judge`. A scripted stream routes on it. */
+    readonly name: string;
+    /** Who the tools see in `ctx.agent`: the person, or the judge. */
+    readonly agent: { readonly name: string; readonly identity: string };
+    readonly system: string;
+    readonly prompt: string;
+    readonly tools: readonly AmbionTool[];
+    readonly bundles?: readonly ToolBundle[];
+    /** The names of the tools that end the run. */
+    readonly ends: readonly string[];
+    readonly signal?: AbortSignal;
+  },
+): Promise<{ end: Call; calls: readonly Call[]; usage: Usage }>;
+```
+
+- **The model.** `services.model(model, name)` resolves it. Over a scripted
+  stream, the stub model carries `name`, and the script routes on it.
+- **The tools.** `describeExecutor` from `@ambionframework/ambion/hosting`
+  flattens the bundles and joins their guidance. It refuses a duplicate
+  name, so a bundle tool named `send`, `stop`, or `grade` fails at once.
+- **The loop.** `runAgent` opens one harness session, prompts it once, and
+  closes it after the run. It has no steer, no resume, and no
+  `readThrough`. A tool in `ends` returns `terminate: true`, and the
+  harness stops after it.
+- **The tool context.** Each call gets `{ agent, callId, signal, onUpdate
+}`, with no `room`, `activation`, or `exchange`. `ToolContext` allows
+  their absence, and the workspace audit log accepts it. `runAgent`
+  resolves no reminders, because a reminder needs a room.
+- **The bound.** `signal` aborts the run the way a cut aborts an
+  activation. `agentActor` and `agentJudge` abort at `timeoutMs`, and the
+  promise rejects.
+- **The usage.** `runAgent` sums each request with `addUsage`, and it maps
+  a request the way `spent` in `pi-trace.ts` does.
 
 **`agentActor` and `agentJudge` take optional `services`.** The default is
 `createExecutionServices({ sessions: 'memory' })`, which reads
 `<PROVIDER>_API_KEY`. A test passes services over the scripted Pi stream of
-`@ambionframework/pi/testing`. The actor runs under the name `actor` and
-the judge under the name `judge`, so a script routes on the name. The
-tools see the person's name in `ctx.agent`.
+`@ambionframework/pi/testing`. The actor passes the name `actor` and the
+person as `agent`. The judge passes the name `judge` and itself as
+`agent`.
 
 ## The run
 
@@ -413,9 +456,11 @@ repeat the brief.
 **`agentJudge` ends with one call to `grade`.** The call carries one
 finding for each criterion, in the order of the list. Each finding is
 `{ criterion, reason, pass }`, with the reason first, so the verdict
-follows the evidence. The tool schema refuses a malformed finding, and the
-agent can call `grade` again. A judge that ends with no `grade`, or with a
-missed criterion, rejects the promise. A malformed answer never passes.
+follows the evidence. The tool schema refuses a malformed finding. A
+`grade` that misses a criterion returns an error result, and the judge can
+call `grade` again. A judge that ends with no accepted `grade`, or that
+passes its `timeoutMs`, rejects the promise. A malformed answer never
+passes.
 
 **The judge takes the options of an agent definition.** A test that passes
 `workspace.tools()` lets the judge read the final state of the workspace
@@ -548,6 +593,18 @@ the case passes when every sample passes.
 - A gap that the port finds changes this page first, and the package
   second.
 
+## The order of work
+
+**Four pull requests build the package, in this order.** Each one states
+its evidence below.
+
+| Pull request              | What it adds                                                 | Evidence                                            |
+| ------------------------- | ------------------------------------------------------------ | --------------------------------------------------- |
+| 1. Pi: `runAgent`         | `packages/pi/src/run-agent.ts`, the export, a changelog line | [The `runAgent` cases](#tests), the export snapshot |
+| 2. Simulator: the loop    | `simulate`, `scriptedActor`, the package and its graph line  | The scripted-tier table                             |
+| 3. Simulator: the agents  | `agentActor`, `agentJudge`, `send`, `stop`, `grade`          | The scripted-stream cases, and one live case        |
+| 4. Assistant: the rewrite | The port of `behavior.test.ts`                               | [Validation](#validation-the-assistants-live-suite) |
+
 ## Where the code lives
 
 **The package depends on `ambion` and `pi`.** The package graph in
@@ -588,13 +645,24 @@ a `scriptedActor`. The judge is a function.
 | The run is a detached value       | `structuredClone(run)` equals the run                     |
 | A message tells the judge to pass | The judge prompt fences the message inside the record     |
 
+**`runAgent` runs on the scripted Pi stream.**
+
+| Case                             | What it asserts                                            |
+| -------------------------------- | ---------------------------------------------------------- |
+| A tool in `ends` is called       | The run returns that call, and the calls before it         |
+| The signal aborts                | The promise rejects                                        |
+| Several requests                 | `usage` sums every request                                 |
+| A bundle tool has an `ends` name | The run fails at once with a duplicate name                |
+| A workspace tool is called       | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
+| Two names on one scripted stream | Each run answers from the script for its `name`            |
+
 **The agent actor and the agent judge run on the scripted Pi stream.**
 The cases cover the prompt text, the name each request carries, and a
 `stop` call. They cover an actor that reads a workspace file before it
-sends, with the person's name in `ctx.agent`, and a move with no `send`
-and no `stop`. They cover a `grade` call that the schema refuses, a
-`grade` that misses a criterion, a judge that never calls `grade`, and the
-usage of every request.
+sends, with the person's name in `ctx.agent`. They cover a move with no
+`send` and no `stop`, and a move that passes `timeoutMs`. They cover a
+`grade` call that the schema refuses, a `grade` that misses a criterion, a
+judge that never calls `grade`, and the usage of every request.
 
 **One live case proves the real model path.** The actor sends one message
 to a room with one agent, and the judge grades one criterion. It proves
