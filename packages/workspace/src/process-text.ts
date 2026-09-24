@@ -6,10 +6,14 @@
  * `docs/processes.md` states each text.
  */
 
+import { markdownTable } from './markdown-table.ts';
 import type { ProcessStatus } from './processes.ts';
 
 /** The most finished processes one reminder names. It names the newest. */
 export const FINISHED_IN_REMINDER = 10;
+
+/** The columns of the `ps` table. */
+const PS_COLUMNS = ['Handle', 'Name', 'Agent', 'Runs for', 'Command'];
 
 /** The most characters of a command that `ps` and the reminder show. */
 const COMMAND_CHARS = 80;
@@ -108,24 +112,14 @@ export function reminderText(
  * can hold a token.
  */
 export function psTable(processes: readonly ProcessStatus[], caller: string, now: number): string {
-	const lines = processes.map((process) => {
-		const command = process.agent === caller ? shortCommand(process.command) : '';
-		const cells = [
-			process.handle,
-			process.name ?? '',
-			process.agent,
-			duration(now - Date.parse(process.startedAt)),
-			command.replaceAll('|', '\\|'),
-		];
-		return `| ${cells.join(' | ')} |`;
-	});
+	const rows = processes.map((process) => ({
+		Handle: process.handle,
+		Name: process.name ?? '',
+		Agent: process.agent,
+		'Runs for': duration(now - Date.parse(process.startedAt)),
+		Command: process.agent === caller ? shortCommand(process.command) : '',
+	}));
 	const count =
 		processes.length === 1 ? '1 running process.' : `${processes.length} running processes.`;
-	return [
-		'| Handle | Name | Agent | Runs for | Command |',
-		'| --- | --- | --- | --- | --- |',
-		...lines,
-		'',
-		count,
-	].join('\n');
+	return `${markdownTable(PS_COLUMNS, rows)}\n\n${count}`;
 }

@@ -2,7 +2,43 @@
 
 ## Unreleased
 
-No change yet.
+**A shell command runs in the background.** `bash` starts every command as
+a background process and returns a handle. A process outlives the call and
+the activation that started it. Each activation starts with a reminder of
+the seat's processes, and the host sees every process. See
+[Processes](docs/processes.md).
+
+### New
+
+- **`ps`, `status`, `wait`, and `cancel` join `bash`.** `ps` lists the
+  running processes of the caller, of one agent, or of every agent, and
+  hides the command of another agent. The handle tools take a handle of
+  the caller. `bash` takes an optional `name`, a label that `ps` and the
+  reminder show. The whole output goes to `~/.processes/<handle>.out`.
+- **`Workspace.processes` is the host's view.** `list`, `subscribe`, and
+  `cancel` reach the process of any agent. The root entry of
+  `@ambionframework/workspace` exports `ProcessEvent`, `ProcessKind`,
+  `ProcessQuery`, `ProcessState`, `ProcessStatus`, and
+  `WorkspaceProcesses`.
+- **A tool bundle can remind a seat.** `ToolBundle.remind` gives text for
+  each respond activation, and `AgentExecutor.reminders` holds the
+  reminders of the bundles. `renderActivation` adds the text before the
+  ask line. The main entry exports `Reminder` and `ReminderSeat`. The
+  hosting entry exports `renderReminders` and `renderSystem`, and the Pi
+  executor sends a continued session the reminders before the delta.
+- **The workstation keeps a session open while any environment is open
+  over it.** A process holds an environment for its whole run.
+
+### Breaking changes
+
+- **`bash` returns a handle, and waits up to `wait` seconds, 10 by
+  default.** A command that runs longer keeps running, and the result
+  says so. A process can run for `timeout` seconds, 600 by default. Before,
+  a command held the bash owner and stopped after 30 seconds by default.
+- **Every workspace has eight tools before the tools of its other
+  backends.** The tool line of the guidance counts them.
+- **`dispose()` stops every running process** before the bash backend
+  releases its handles.
 
 ## 0.2.0 (2026-09-24)
 

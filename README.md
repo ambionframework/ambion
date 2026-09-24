@@ -44,8 +44,8 @@ with [`@ambionframework/workstation`](docs/workstation.md). `read`, `write`,
 and `edit` work on files. `bash` starts each command as a background
 process, with its output in a file, and returns a handle for `status`,
 `wait`, and `cancel`. `ps` lists the running processes, and each activation
-starts with a reminder of the seat's processes
-([Processes](docs/processes.md)).
+starts with a reminder of the seat's processes. Background processes are
+part of 0.3.0 ([Processes](docs/processes.md)).
 The `sql` tool exists only when the workspace has a SQL backend. SQLite is the
 default. The `repos` and `fork` tools exist only when the workspace has a git
 backend: an agent forks a read-only template, clones it, and pushes with

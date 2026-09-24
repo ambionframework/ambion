@@ -1,6 +1,6 @@
 /**
- * The GitHub Markdown table that both SQL tools show. The module imports
- * nothing, so each entry that renders rows carries this code alone.
+ * The GitHub Markdown table that the SQL tools and `ps` show. The module
+ * imports nothing, so each entry that renders rows carries this code alone.
  */
 
 /** A table of `rows` under a header of `columns`, one line for each row. */

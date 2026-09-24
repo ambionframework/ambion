@@ -1,5 +1,8 @@
 # Processes
 
+**Background processes are part of 0.3.0.** In 0.2.0, `bash` holds the
+call until its command ends, and a workspace has four tools.
+
 **`bash` starts every command as a background process.** The call gives a
 handle for the process. `status`, `wait`, and `cancel` take that handle,
 and `ps` lists the processes. The whole output of a process goes to a
