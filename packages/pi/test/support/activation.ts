@@ -10,6 +10,7 @@ import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { noTrace } from '../../../ambion/test/support/trace.ts';
 import { Activation } from '../../src/executor.ts';
 import { stubModel } from '../../src/services.ts';
+import { memorySessions } from '../../src/sessions.ts';
 
 const unused = () => {
 	throw new Error('unused');
@@ -52,6 +53,7 @@ export function activationFor(
 			stream: options.stream ?? unused,
 			now: () => 0,
 		},
+		{ sessions: memorySessions(), closing: new Map() },
 	);
 }
 

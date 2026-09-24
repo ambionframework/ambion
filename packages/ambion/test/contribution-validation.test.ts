@@ -128,6 +128,7 @@ describe('the message byte limit', () => {
 		const runtime = createRuntime({
 			...limits,
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted((context) => {
 					results.push(toolResultTexts(context));
 					return toolResultTexts(context).length === 0 ? speak(long) : quiet();

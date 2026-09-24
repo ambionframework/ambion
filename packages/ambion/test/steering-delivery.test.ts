@@ -77,6 +77,7 @@ function holdingAlpha(hold: number) {
 	const release = deferred();
 	const contexts: string[] = [];
 	const execution = piExecution({
+		sessions: 'memory',
 		stream: scripted(
 			byAgent({
 				alpha: async (context, _agent, call) => {
@@ -222,6 +223,7 @@ describe.each(storages)('steering on $name', (storage) => {
 				runtime: runtime(),
 				agents: [alpha, beta, assistant],
 				execution: piExecution({
+					sessions: 'memory',
 					stream: scripted(
 						byAgent({
 							alpha: (context) => {
@@ -258,6 +260,7 @@ describe.each(storages)('steering on $name', (storage) => {
 				seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast', [beta.name]: 'named' },
 				runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
 				execution: piExecution({
+					sessions: 'memory',
 					stream: scripted(
 						byAgent({
 							alpha: says(['First fact.', 'Second fact.']),

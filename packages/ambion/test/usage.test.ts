@@ -52,7 +52,10 @@ describe.each(storages)('usage on $name storage', (storage) => {
 				name,
 				agents: [product],
 				runtime,
-				execution: piExecution({ stream: scripted(() => ({ ...quiet('done'), usage: spent })) }),
+				execution: piExecution({
+					sessions: 'memory',
+					stream: scripted(() => ({ ...quiet('done'), usage: spent })),
+				}),
 			}),
 		);
 		const events = collect(room);

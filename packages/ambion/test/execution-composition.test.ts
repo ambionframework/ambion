@@ -162,6 +162,7 @@ describe('execution composition', () => {
 		let defaultCalls = 0;
 		const runtime = createRuntime({
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted(() => {
 					defaultCalls += 1;
 					return quiet();
@@ -178,6 +179,7 @@ describe('execution composition', () => {
 						runtime,
 						agents: [writer],
 						execution: piExecution({
+							sessions: 'memory',
 							stream: answer(`${label} question?`, `${label} answer.`, calls),
 						}),
 					}),
@@ -221,6 +223,7 @@ describe('execution composition', () => {
 		const runtime = createRuntime({
 			storage: opened.storage,
 			execution: piExecution({
+				sessions: 'memory',
 				stream: answer('Other question?', 'Runtime answer.', fallbackCalls),
 			}),
 		});
@@ -230,6 +233,7 @@ describe('execution composition', () => {
 				runtime,
 				agents: [definition('Original writer.', 'Use the original instructions.')],
 				execution: piExecution({
+					sessions: 'memory',
 					stream: answer('Original question?', 'Original answer.', firstCalls),
 				}),
 			}),
@@ -250,6 +254,7 @@ describe('execution composition', () => {
 				runtime,
 				agents: [definition('Replacement writer.', 'Use the replacement instructions.')],
 				execution: piExecution({
+					sessions: 'memory',
 					stream: answer('Replacement question?', 'Replacement answer.', firstCalls),
 				}),
 			}),

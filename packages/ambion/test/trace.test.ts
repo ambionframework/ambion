@@ -59,7 +59,12 @@ async function traced(stream: StreamFn, options: CreateRuntimeOptions = {}, agen
 	const runtime = createRuntime({ ...options, logger: log.logger });
 	const name = roomName('trace');
 	const room = stopAtEnd(
-		await startRoom({ name, agents: [agent], runtime, execution: piExecution({ stream }) }),
+		await startRoom({
+			name,
+			agents: [agent],
+			runtime,
+			execution: piExecution({ sessions: 'memory', stream }),
+		}),
 	);
 	const events = collect(room);
 	await (await room.visit(andrei)).send({ text: 'Ready?' });
@@ -333,7 +338,7 @@ function play(
 	wrap: (opener: TraceOpener) => TraceOpener = (opener) => opener,
 ) {
 	const clock = fakeClock();
-	const runtime = createRuntime({ clock, execution: piExecution({ stream }) });
+	const runtime = createRuntime({ clock, execution: piExecution({ sessions: 'memory', stream }) });
 	const services = createExecutionServices({ clock, stream });
 	const hosting = hostingOf(runtime);
 	const room = new PlayedRoom(() => clock.now());

@@ -84,7 +84,7 @@ async function open(
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
 			runtime,
-			execution: piExecution({ stream: scripted(script) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
 		}),
 	);
 	return { session, clock, runtime };

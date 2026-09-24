@@ -35,7 +35,7 @@ const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');
 const worker = scriptedAgent('worker');
 const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
-const quietly = () => piExecution({ stream: scripted(() => quiet()) });
+const quietly = () => piExecution({ sessions: 'memory', stream: scripted(() => quiet()) });
 
 /** Record every wake, and deliver it only when `deliver` says so. */
 function recorded(deliver = true): { transport: Transport; sent: Wake[] } {
@@ -87,6 +87,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 				seats: { [assistant.name]: 'broadcast', [alpha.name]: 'broadcast' },
 				runtime: createRuntime({ storage: opened.storage, clock, transport: observed.transport }),
 				execution: piExecution({
+					sessions: 'memory',
 					stream: scripted(
 						byAgent({
 							alpha: () => {

@@ -32,6 +32,7 @@ describe('participant views', () => {
 					agents: [writer],
 					runtime,
 					execution: piExecution({
+						sessions: 'memory',
 						stream: scripted((context) => {
 							contexts.push(`${context.systemPrompt ?? ''}\n${contextText(context)}`);
 							const text = contextText(context);

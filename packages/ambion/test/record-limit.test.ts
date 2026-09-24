@@ -75,7 +75,11 @@ async function watched(
 		contexts.push({ seat: name, text: contextText(context) });
 		return script(context, name, call);
 	});
-	const runtime = createRuntime({ transport, limits, execution: piExecution({ stream }) });
+	const runtime = createRuntime({
+		transport,
+		limits,
+		execution: piExecution({ sessions: 'memory', stream }),
+	});
 	const started = stopAtEnd(await startRoom({ name: roomName('limit'), runtime, agents, ...room }));
 	return { room: started, pages, contexts };
 }

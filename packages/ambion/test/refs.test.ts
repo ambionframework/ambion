@@ -123,7 +123,7 @@ describe.each(storages)('refs through the room on $name storage', (storage) => {
 				seats: { product: 'broadcast', assistant: 'none' },
 				summary: assistant.name,
 				runtime: createRuntime({ storage: opened.storage }),
-				execution: piExecution({ stream }),
+				execution: piExecution({ sessions: 'memory', stream }),
 			}),
 		);
 		const events = collect(room);
@@ -147,7 +147,7 @@ describe.each(storages)('refs through the room on $name storage', (storage) => {
 			await resumeRoom(name, {
 				agents: [product, assistant],
 				runtime,
-				execution: piExecution({ stream }),
+				execution: piExecution({ sessions: 'memory', stream }),
 			}),
 		);
 		const read = await readExchange(name, exchange.from, { runtime });

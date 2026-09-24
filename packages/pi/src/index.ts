@@ -1,6 +1,6 @@
 /**
  * The Pi executor for Ambion rooms: `pi()` defines an agent that runs on
- * Pi's model loop, and `piExecution()` gives a runtime or a room the
+ * Pi's `AgentHarness`, and `piExecution()` gives a runtime or a room the
  * services that run it. The kernel, `@ambionframework/ambion`, names no
  * model library. This package holds Pi and the model registry.
  */
@@ -13,8 +13,10 @@ export {
 	type ExecutionServices,
 	type ExecutionServicesOptions,
 	type ModelResolver,
+	type SessionPlace,
 	stubModel,
 } from './services.ts';
+export { memorySessions, type PiSessions, type SessionScope } from './sessions.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/pi';

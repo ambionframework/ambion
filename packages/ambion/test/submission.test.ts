@@ -75,6 +75,7 @@ async function summarisedRoom(storage: JournalOpener, script: Script, transport?
 			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, assistant],
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted(
 					byAgent({
 						alpha: script,
@@ -208,6 +209,7 @@ async function inheritedLease(storage: Storage, send: { to?: string; text: strin
 			seats: { [watcher.name]: 'broadcast' },
 			runtime,
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted(async () => {
 					started.resolve();
 					await held.promise;
@@ -226,7 +228,7 @@ async function inheritedLease(storage: Storage, send: { to?: string; text: strin
 			room: resumeRoom(name, {
 				agents: [watcher],
 				runtime: next,
-				execution: piExecution({ stream: scripted(() => quiet()) }),
+				execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
 			}),
 		};
 	};

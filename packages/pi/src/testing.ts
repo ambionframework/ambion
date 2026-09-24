@@ -1,9 +1,12 @@
 /**
  * The deterministic tools for a room on Pi: a scripted `StreamFn` that
- * `piExecution({ stream })` takes, and the helpers that read what the model
- * was shown. A test that needs no Pi imports `scripted` from
- * `@ambionframework/ambion/testing`, which runs a script with no model.
+ * `piExecution({ stream })` takes, the helpers that read what the model was
+ * shown, and the harness that runs the executor suite of
+ * `@ambionframework/ambion/conformance` on the Pi executor. A test that
+ * needs no Pi imports `scripted` from `@ambionframework/ambion/testing`,
+ * which runs a script with no model.
  */
+import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
 import {
@@ -11,6 +14,10 @@ import {
 	fauxAssistantMessage,
 	fauxToolCall,
 } from '@earendil-works/pi-ai';
+import { pi } from './define.ts';
+import { createPiExecutor } from './executor.ts';
+import { stubModel } from './services.ts';
+import { memorySessions } from './sessions.ts';
 
 /** One activation's answer: the model's message, given the context and which call this is. */
 export type Script = (
@@ -100,4 +107,116 @@ export function toolResultTexts(context: Context): string[] {
 			? [message.content.map((c) => (c.type === 'text' ? c.text : '')).join('')]
 			: [],
 	);
+}
+
+/**
+ * The results of the model's say calls since the last user message, oldest
+ * first: whether each was an error. A session that continues across the
+ * activations of an exchange holds the says of the ones before.
+ */
+function sayResults(context: Context): boolean[] {
+	const since = context.messages.slice(
+		context.messages.findLastIndex((message) => message.role === 'user') + 1,
+	);
+	const says = new Set(
+		since.flatMap((message) =>
+			message.role === 'assistant'
+				? message.content.flatMap((item) =>
+						item.type === 'toolCall' && item.name === 'say' ? [item.id] : [],
+					)
+				: [],
+		),
+	);
+	return since.flatMap((message) =>
+		message.role === 'toolResult' && says.has(message.toolCallId) ? [message.isError] : [],
+	);
+}
+
+/** How long the seat that waits for a steer waits between two looks, in milliseconds. */
+const LOOK = 10;
+
+/** How many looks the seat that waits for a steer takes before it gives up. */
+const LOOKS = 500;
+
+/**
+ * The seat waits for the steered line. Each look calls a tool the model
+ * does not hold: the harness answers with an error result, and the run takes
+ * the next request, which holds any line steered since.
+ */
+async function awaitSteer(context: Context, text: string): Promise<AssistantMessage> {
+	if (sayResults(context).length > 0) return quiet();
+	if (contextText(context).includes('[new] ')) return speak(text);
+	const looks = context.messages.filter((message) => message.role === 'toolResult').length;
+	if (looks >= LOOKS) return quiet();
+	await new Promise((resolve) => setTimeout(resolve, LOOK));
+	return callTool('wait', {});
+}
+
+/** The error a failing provider reports, by cause. */
+const FAILURES = {
+	permanent: 'Your credit balance is too low',
+	transient: 'overloaded 529',
+} as const;
+
+/** The script that performs one plan of the suite. */
+export function scriptOf(plan: ExecutorPlan): Script {
+	switch (plan.kind) {
+		case 'sayOnce':
+			return (context) => (sayResults(context).length === 0 ? speak(plan.text) : quiet());
+		case 'holdSay':
+		case 'missThenResay':
+			// A `missed` answer is an error result, and it leaves the seat a second say.
+			return (context) => {
+				const results = sayResults(context);
+				return results.length === 0 || (results.length === 1 && results[0] === true)
+					? speak(plan.text)
+					: quiet();
+			};
+		case 'sayEachPass':
+			return (context) => (context.messages.at(-1)?.role === 'user' ? speak(plan.text) : quiet());
+		case 'awaitSteer':
+			return (context) => awaitSteer(context, plan.text);
+		case 'usage':
+			return (context) => {
+				if (sayResults(context).length > 0) return quiet();
+				const { input, output, cacheRead, cacheWrite } = plan.usage;
+				const usage = {
+					input,
+					output,
+					cacheRead,
+					cacheWrite,
+					totalTokens: input + output + cacheRead + cacheWrite,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				};
+				return { ...speak(plan.text), usage };
+			};
+		case 'fail':
+			return () => {
+				throw new Error(FAILURES[plan.cause]);
+			};
+	}
+}
+
+/**
+ * The harness that runs the executor suite on the Pi executor, over a
+ * scripted stream and sessions in memory. It declares steering, usage,
+ * permanent failure and memory: the harness takes a line during a run,
+ * reports its spend, names a refusal, and reopens a session by id.
+ */
+export function piExecutorHarness(): ExecutorHarness {
+	return {
+		open: (plan, definition) =>
+			createPiExecutor({
+				// The suite names a neutral executor. The seat runs on a Pi one.
+				definition: {
+					...definition,
+					executor: pi({ instructions: '', model: `scripted/${definition.name}` }),
+				},
+				model: stubModel,
+				stream: scripted(scriptOf(plan)),
+				now: Date.now,
+				sessions: memorySessions(),
+			}),
+		can: { steer: true, usage: true, permanentFailure: true, memory: true },
+	};
 }

@@ -218,7 +218,7 @@ export class World {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			execution: piExecution({ stream: scripted(this.cast.script) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }),
 		});
 		this.watch();
 	}
@@ -235,7 +235,7 @@ export class World {
 			this.session = await resumeRoom(this.name, {
 				runtime: this.runtime,
 				agents,
-				execution: piExecution({ stream: scripted(this.cast.script) }),
+				execution: piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }),
 			});
 		} catch (error) {
 			if (!/no composition/.test(String(error))) throw error;

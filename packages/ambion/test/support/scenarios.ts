@@ -113,6 +113,7 @@ export const oneExchange: Scenario = {
 			seats: { [product.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [product, assistant],
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted(
 					byAgent({ product: twoAnswersEach, assistant: composes([], 'The one message.') }),
 				),
@@ -144,6 +145,7 @@ export const twoPeopleTwoExchanges: Scenario = {
 			},
 			agents: [product, colleague, assistant],
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted(
 					byAgent({
 						product: answersLastQuestion(['priya', 'sam']),
@@ -189,6 +191,7 @@ export const seatFromReserve: Scenario = {
 			agents: [product, surveyor, assistant],
 			seats: { [assistant.name]: 'broadcast', ...{ [product.name]: 'broadcast' } },
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted(
 					byAgent({
 						assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),

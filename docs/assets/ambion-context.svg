@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="650" viewBox="0 0 1000 650" role="img" aria-labelledby="title desc">
   <title id="title">What an activation reads, and what survives</title>
-  <desc id="desc">A room over two exchanges, on a time axis. Entries in the room journal: 1, a person asks. Agents A and B activate and read the record. 2, A says. 3, B says to A, which wakes A again. A's second activation resumes the harness session of its first and reads only entries 2 and 3. 4, A says. 5, the exchange closes. 6, a summary. 7, the person asks again, which opens exchange 2. A's third activation starts a fresh session and reads the record, with the summary in place of exchange 1. 8, A says. B stays silent in exchange 2. The record is durable and a restart replays it. The steps of each activation go to the logger the host passes in. The harness session is a cache for one exchange: Claude and Codex keep it on the local disk and Pi keeps it in the process. When it is lost, the next activation starts fresh from the record.</desc>
+  <desc id="desc">A room over two exchanges, on a time axis. Entries in the room journal: 1, a person asks. Agents A and B activate and read the record. 2, A says. 3, B says to A, which wakes A again. A's second activation resumes the harness session of its first and reads only entries 2 and 3. 4, A says. 5, the exchange closes. 6, a summary. 7, the person asks again, which opens exchange 2. A's third activation starts a fresh session and reads the record, with the summary in place of exchange 1. 8, A says. B stays silent in exchange 2. The record is durable and a restart replays it. The steps of each activation go to the logger the host passes in. The harness session is a cache for one exchange: on Node, Claude, Codex and Pi keep it on the local disk; a Pi seat on Cloudflare keeps it in memory. When it is lost, the next activation starts fresh from the record.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#666d6b"/></marker>
     <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#2f817a"/></marker>
@@ -121,7 +121,7 @@
   </g>
   <text x="690" y="478" class="sans teal n">The session · a cache</text>
   <text x="690" y="510" class="sans ink s">What the model saw and did, for one</text>
-  <text x="690" y="534" class="sans ink s">exchange. Claude, Codex: local disk.</text>
-  <text x="690" y="558" class="sans ink s">Pi: the process. When it is lost, the</text>
-  <text x="690" y="582" class="sans ink s">next activation reads the record.</text>
+  <text x="690" y="534" class="sans ink s">exchange. On Node: the local disk. On</text>
+  <text x="690" y="558" class="sans ink s">Cloudflare: memory. When it is lost,</text>
+  <text x="690" y="582" class="sans ink s">the next activation reads the record.</text>
 </svg>

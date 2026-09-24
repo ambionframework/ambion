@@ -5,6 +5,9 @@
  * fail one, and answers every stream and the `scripted` provider with a
  * scripted stream. A real stream needs a key and a network.
  */
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { isSpoken, startRoom, systemClock } from '@ambionframework/ambion';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import {
@@ -12,11 +15,12 @@ import {
 	type Context,
 	createAssistantMessageEventStream,
 } from '@earendil-works/pi-ai';
-import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { stubModel } from '../src/services.ts';
+import { defaultSessionDir } from '../src/sessions.ts';
 
 const catalog = vi.hoisted(() => ({
 	builds: 0,
@@ -48,12 +52,24 @@ async function freshServices(count: number) {
 	return Array.from({ length: count }, () => createExecutionServices({ clock: systemClock() }));
 }
 
+/** The OS temporary directory of this file: no session reaches the real one. */
+let temporary = '';
+
+beforeAll(async () => {
+	temporary = await mkdtemp(join(tmpdir(), 'ambion-provider-runtime-'));
+	vi.stubEnv('TMPDIR', temporary);
+});
+
+afterAll(async () => {
+	vi.unstubAllEnvs();
+	await rm(temporary, { recursive: true, force: true });
+});
+
 describe('default provider runtime', () => {
-	it('runs a room of Pi agents with no execution option', async () => {
+	it('runs a room of Pi agents with no execution option, and keeps its sessions in the OS temporary directory of the user', async () => {
 		catalog.stream = scripted((_context, _agent, call) => (call === 1 ? speak('42') : quiet()));
-		const room = stopAtEnd(
-			await startRoom({ name: roomName('pi-default'), agents: [scriptedAgent('worker')] }),
-		);
+		const name = roomName('pi-default');
+		const room = stopAtEnd(await startRoom({ name, agents: [scriptedAgent('worker')] }));
 		const visit = await room.visit(andrei);
 		const exchange = await visit.send({ text: 'What is the answer?' });
 		const messages = await exchange.waitForClose();
@@ -61,6 +77,10 @@ describe('default provider runtime', () => {
 			['andrei', 'What is the answer?'],
 			['worker', '42'],
 		]);
+		const dir = await defaultSessionDir();
+		expect(dir.startsWith(temporary)).toBe(true);
+		const folders = (await readdir(dir)).filter((folder) => folder.includes(name));
+		expect(folders.some((folder) => folder.includes('worker'))).toBe(true);
 	});
 
 	it('builds one catalog for concurrent first model uses, resolves real ids, and streams through it', async () => {

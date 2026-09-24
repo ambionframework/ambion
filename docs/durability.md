@@ -244,17 +244,20 @@ of the seat in the same exchange to the next activation as `spec.resume`.
 The room never reads the id.
 
 **The room promises nothing about the session itself.** The harness keeps
-it on the local disk or in the process, as a cache of the work of one
-exchange. A restart, a new disk, or a host with no disk loses it. The next
+it on the local disk or in memory, as a cache of the work of one exchange.
+A new disk, a host with no disk, or a lost memory loses it. The next
 activation then starts fresh from the record, and its release records the
 new id. The activation does not fail.
 
-- **The Pi id names the activation that began the transcript.** The
-  transcript lives in the process, so a restart loses it.
+- **The Pi id names the activation that began the session.** Pi keeps the
+  session as a JSONL file under `sessionDir` on the local disk. A restart on
+  the same disk resumes it. A session the disk refuses stays in memory.
+  `sessions: 'memory'` keeps it in memory, so a restart loses it.
 - **The Claude and Codex ids come from the SDK.** The SDK stores the
   session on the local disk. A restart on the same disk resumes it.
-- **A Cloudflare seat keeps a Pi transcript while its object stays in
-  memory.** An eviction loses it, and the next activation starts fresh.
+- **A Cloudflare seat keeps its Pi sessions in memory.** The seat object
+  holds them while it stays in memory. An eviction loses them, and the next
+  activation starts fresh.
 
 Cancellation adds the `cancel` entry kind. Older runtimes must not resume a
 journal that contains cancellation entries, because they do not interpret

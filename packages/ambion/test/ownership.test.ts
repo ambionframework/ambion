@@ -83,7 +83,7 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 		const { opened, room } = await open({
 			agents: [writer],
 			seats: {},
-			execution: piExecution({ stream: scripted(() => quiet()) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
 		});
 		const exchange = await (await room.visit(andrei)).send({ text: 'Original question.' });
 		await exchange.waitForClose();
@@ -117,6 +117,7 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 			seats: { writer: 'none' },
 			summary: writer.name,
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted((context) => (isClosing(context) ? speak('Original result.') : quiet())),
 			}),
 		});

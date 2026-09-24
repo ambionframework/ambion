@@ -28,7 +28,7 @@ const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');
 const gamma = scriptedAgent('gamma');
 const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
-const silent = () => piExecution({ stream: scripted(() => quiet()) });
+const silent = () => piExecution({ sessions: 'memory', stream: scripted(() => quiet()) });
 
 type Options = Omit<Parameters<typeof startRoom>[0], 'name' | 'runtime'>;
 
@@ -171,6 +171,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			agents,
 			seats,
 			execution: piExecution({
+				sessions: 'memory',
 				stream: scripted((context, _agent, call) => {
 					prompts.push(context.systemPrompt ?? '');
 					return call === 1 ? callTool('inspect', {}) : quiet();

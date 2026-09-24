@@ -11,7 +11,7 @@ import type {
 	CommitResult,
 	Intent,
 } from '@ambionframework/ambion/hosting';
-import type { AgentTool } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import type { Entry } from '../../ambion/src/journal/journal.ts';
@@ -19,7 +19,7 @@ import { activationSpec } from '../../ambion/src/room/activation.ts';
 import { foldRoom } from '../../ambion/src/room/fold.ts';
 import { viewOf } from '../../ambion/src/room/view.ts';
 import { pi } from '../src/index.ts';
-import { binding, toolsFor } from '../src/tools.ts';
+import { binding, type PiTool, toolsFor } from '../src/tools.ts';
 import { activationFor, roomThatCommits, unusedRoom, viewFor } from './support/activation.ts';
 
 /** What the domain tool received, one context per call. */
@@ -89,7 +89,7 @@ function bound(id: string, purpose: Purpose, ...answers: CommitResult[]) {
 		return answer;
 	});
 	const tools = toolsFor(viewFor(purpose), worker, binding(activation, room));
-	const tool = (index: number): AgentTool => {
+	const tool = (index: number): PiTool => {
 		const found = tools[index];
 		if (found === undefined) throw new Error(`The purpose has no tool at ${index}.`);
 		return found;
@@ -97,7 +97,20 @@ function bound(id: string, purpose: Purpose, ...answers: CommitResult[]) {
 	return { activation, commits, tools, say: tool(0), tool };
 }
 
-const names = (tools: readonly AgentTool[]) => tools.map((tool) => tool.name);
+const names = (tools: readonly PiTool[]) => tools.map((tool) => tool.name);
+
+/** One call of a harness tool, as the harness makes it. */
+const invocation = {
+	invocationId: 'invocation',
+	operationId: 'operation',
+	turnId: 'turn',
+	getMemo: async () => undefined,
+	setMemo: async () => {},
+};
+const call = (tool: PiTool | undefined, id: string, params: Record<string, unknown>) => {
+	if (tool === undefined) throw new Error('No tool.');
+	return tool.execute(id, params, () => {}, undefined, invocation, BACKGROUND_CONTEXT);
+};
 
 describe('executor tool authority', () => {
 	it('binds only the tool named by each activation purpose', () => {
@@ -117,9 +130,9 @@ describe('executor tool authority', () => {
 			{ refused: blank },
 			said(1, 'A useful answer.'),
 		);
-		await expect(say.execute('same-key', { text: '   ' })).rejects.toThrow(blank);
+		await expect(call(say, 'same-key', { text: '   ' })).rejects.toThrow(blank);
 		expect(activation.readThrough).toBe(0);
-		await expect(say.execute('same-key', { text: '  A useful answer.  ' })).resolves.toMatchObject({
+		await expect(call(say, 'same-key', { text: '  A useful answer.  ' })).resolves.toMatchObject({
 			content: [{ text: 'delivered' }],
 		});
 		expect(activation.cancelled).toBe(false);
@@ -137,8 +150,8 @@ describe('executor tool authority', () => {
 			{ refused: blank },
 			said(5, 'The room stamped this.'),
 		);
-		await expect(say.execute('closing-key', { to: 'priya', text: ' \t' })).rejects.toThrow(blank);
-		const result = await say.execute('closing-key', {
+		await expect(call(say, 'closing-key', { to: 'priya', text: ' \t' })).rejects.toThrow(blank);
+		const result = await call(say, 'closing-key', {
 			to: ' priya ',
 			text: '  The exchange is complete.  ',
 		});
@@ -161,9 +174,9 @@ describe('executor tool authority', () => {
 		'passes trimmed refs from the %s say tool into the intent',
 		async (_kind, id, purpose) => {
 			const { commits, say } = bound(id, purpose, said(5, 'x'));
-			await say.execute('c1', { text: 'x', refs: [' https://x/a ', '', 'https://x/b'] });
-			await say.execute('c2', { text: 'x', refs: [] });
-			await say.execute('c3', { text: 'x', refs: ['  '] });
+			await call(say, 'c1', { text: 'x', refs: [' https://x/a ', '', 'https://x/b'] });
+			await call(say, 'c2', { text: 'x', refs: [] });
+			await call(say, 'c3', { text: 'x', refs: ['  '] });
 			expect(commits.map((commit) => commit.intent)).toEqual([
 				{ kind: 'said', text: 'x', refs: ['https://x/a', 'https://x/b'] },
 				{ kind: 'said', text: 'x' },
@@ -176,7 +189,7 @@ describe('executor tool authority', () => {
 		const { activation, commits, tool } = bound('message:4:worker:1', respond, {
 			unchanged: { kind: 'seated', name: 'surveyor' },
 		});
-		await expect(tool(1).execute('seat-call', { name: 'surveyor' })).resolves.toMatchObject({
+		await expect(call(tool(1), 'seat-call', { name: 'surveyor' })).resolves.toMatchObject({
 			content: [{ text: 'delivered' }],
 		});
 		expect(commits).toEqual([
@@ -265,11 +278,8 @@ describe('executor tool authority', () => {
 			context: { ...base.context, exchange: { owner: 'priya', from: 4 } },
 		};
 		const held = binding(activationFor('message:4:worker:1', worker), unusedRoom);
-		await toolsFor(open, worker, held)[3]?.execute('call-1', {});
-		await toolsFor({ ...open, context: { ...base.context } }, worker, held)[3]?.execute(
-			'call-2',
-			{},
-		);
+		await call(toolsFor(open, worker, held)[3], 'call-1', {});
+		await call(toolsFor({ ...open, context: { ...base.context } }, worker, held)[3], 'call-2', {});
 
 		const [first, second] = seen;
 		expect(first).toMatchObject({

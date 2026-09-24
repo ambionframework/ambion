@@ -1,12 +1,13 @@
-/** Model, stream and trace-limit services that a Pi execution host composes. */
+/** Model, stream, session and trace-limit services that a Pi execution host composes. */
 
 import { systemClock } from '@ambionframework/ambion';
 import type { Clock, Limits } from '@ambionframework/ambion/hosting';
 import { callLimits, DEFAULT_TRACE_LIMITS } from '@ambionframework/ambion/hosting';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models } from '@earendil-works/pi-ai';
+import { defaultSessionDir, diskSessions, memorySessions, type PiSessions } from './sessions.ts';
 
-/** Resolves an agent's `provider/model-id` to the model Pi's loop runs. */
+/** Resolves an agent's `provider/model-id` to the model Pi's harness runs. */
 export type ModelResolver = (id: string, agent: string) => Model<Api> | Promise<Model<Api>>;
 
 /** What the trace keeps of a step, and how many steps one pass keeps. */
@@ -21,6 +22,8 @@ export interface ExecutionServices {
 	readonly trace: TraceLimits;
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
+	/** Where each seat keeps its Pi harness sessions. */
+	readonly sessions: PiSessions;
 }
 
 export interface ExecutionServicesOptions {
@@ -29,7 +32,21 @@ export interface ExecutionServicesOptions {
 	readonly call?: Partial<Limits['call']>;
 	readonly trace?: Partial<TraceLimits>;
 	readonly stream?: StreamFn;
+	/** Where each seat keeps its sessions. Absent, `'disk'`. */
+	readonly sessions?: SessionPlace;
+	/**
+	 * The directory on the local disk for the sessions. Absent,
+	 * `ambion-pi-sessions-<uid>` in the OS temporary directory.
+	 */
+	readonly sessionDir?: string;
 }
+
+/**
+ * Where each seat keeps its Pi harness sessions: JSONL files on the local
+ * disk, or memory for as long as the services live. A test keeps them in
+ * memory, so that no room reads a session of another run.
+ */
+export type SessionPlace = 'disk' | 'memory';
 
 let builtinRegistry: Promise<Models> | undefined;
 
@@ -54,7 +71,7 @@ const registryModel: ModelResolver = async (id, agent) => {
 	throw new Error(`Unknown model '${id}' for agent '${agent}': expected 'provider/model-id'.`);
 };
 
-/** A custom stream never reads a model, so Pi receives a stub. It names the seat, and a scripted stream routes on that name. */
+/** A custom stream never reads a model, so the harness receives a stub. It names the seat, and a scripted stream routes on that name. */
 export const stubModel: ModelResolver = (id, agent): Model<Api> => ({
 	id,
 	name: agent,
@@ -76,5 +93,12 @@ export function createExecutionServices(options: ExecutionServicesOptions = {}):
 		trace: { ...DEFAULT_TRACE_LIMITS, ...options.trace },
 		stream: options.stream ?? registryStream,
 		model: custom ? stubModel : registryModel,
+		sessions: sessionsOf(options),
 	};
+}
+
+/** The session store: memory, the named directory, or the default directory. */
+function sessionsOf(options: ExecutionServicesOptions): PiSessions {
+	if (options.sessions === 'memory') return memorySessions();
+	return diskSessions(options.sessionDir ?? defaultSessionDir);
 }

@@ -1,12 +1,13 @@
 /**
  * The room tools bound to one activation, and the agent's own tools, as Pi
- * tools.
+ * harness tools.
  *
  * The core's `roomTools` holds what each room tool commits and what the
- * model reads. Pi reads a thrown error as an error result, so a room tool's
- * error result becomes a thrown error here. A result that ends the
- * activation sets `terminate`. The agent's own tools keep their Pi fields:
- * Pi prepares and checks the arguments, and passes the signal and updates.
+ * model reads. The harness reads a thrown error as an error result, so a
+ * room tool's error result becomes a thrown error here. A result that ends
+ * the activation sets `terminate`. The agent's own tools keep their Pi
+ * fields: the harness prepares and checks the arguments, and passes the
+ * signal of the run and the updates.
  */
 import type { AmbionTool } from '@ambionframework/ambion';
 import type {
@@ -18,8 +19,7 @@ import type {
 	RoomToolContent,
 } from '@ambionframework/ambion/hosting';
 import { roomTools, toolContext } from '@ambionframework/ambion/hosting';
-import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import type { TSchema } from 'typebox';
+import type { AgentHarnessTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { Activation } from './executor.ts';
 
 /** What every room tool reaches: the activation and the room. */
@@ -36,8 +36,11 @@ export function binding(activation: Activation, room: RoomProtocol): RoomToolBin
 	};
 }
 
-/** A Pi tool from a room tool. An error result that does not end the activation throws. */
-function fromRoomTool(tool: RoomTool): AgentTool {
+/** A harness tool: the tools of one activation take no tool context. */
+export type PiTool = AgentHarnessTool<undefined>;
+
+/** A harness tool from a room tool. An error result that does not end the activation throws. */
+function fromRoomTool(tool: RoomTool): PiTool {
 	return {
 		name: tool.name,
 		label: tool.name,
@@ -59,14 +62,10 @@ function textOf(part: RoomToolContent): string {
 }
 
 /**
- * A Pi tool from a normalized tool. The tool reads the view of the pass that
- * runs it, so the room and the open exchange it names are current.
+ * A harness tool from a normalized tool. The tool reads the view of the pass
+ * that runs it, so the room and the open exchange it names are current.
  */
-function toPiTool(
-	tool: AmbionTool,
-	agent: AgentDefinition,
-	current: () => ActivationView,
-): AgentTool<TSchema, unknown> {
+function toPiTool(tool: AmbionTool, agent: AgentDefinition, current: () => ActivationView): PiTool {
 	return {
 		name: tool.name,
 		label: tool.label,
@@ -74,8 +73,8 @@ function toPiTool(
 		parameters: tool.parameters,
 		...(tool.prepareArguments === undefined ? {} : { prepareArguments: tool.prepareArguments }),
 		...(tool.executionMode === undefined ? {} : { executionMode: tool.executionMode }),
-		execute: async (toolCallId, params, signal, onUpdate) => {
-			const context = toolContext(agent, current(), toolCallId, signal, onUpdate);
+		execute: async (toolCallId, params, onUpdate, _toolContext, _invocation, run) => {
+			const context = toolContext(agent, current(), toolCallId, run.abortSignal, onUpdate);
 			const result = await tool.invoke(params, context);
 			return typeof result === 'string'
 				? { content: [{ type: 'text', text: result }], details: {} }
@@ -93,7 +92,7 @@ export function toolsFor(
 	def: AgentDefinition,
 	held: RoomToolBinding,
 	current: () => ActivationView = () => view,
-): AgentTool[] {
+): PiTool[] {
 	const room = roomTools(view, held).map(fromRoomTool);
 	if (view.spec.purpose.kind === 'summarize') return room;
 	return [...room, ...def.executor.tools.map((tool) => toPiTool(tool, def, current))];

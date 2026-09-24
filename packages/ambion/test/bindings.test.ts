@@ -44,7 +44,7 @@ describe('room bindings', () => {
 								tools: [own],
 							}),
 						],
-						execution: piExecution({ stream }),
+						execution: piExecution({ sessions: 'memory', stream }),
 					}),
 				);
 				await (await room.visit(person)).send({ text: `${label}?` });
@@ -65,7 +65,7 @@ describe('room bindings', () => {
 			name,
 			runtime: createRuntime({ storage: opened.storage }),
 			agents: [analyst],
-			execution: piExecution({ stream: scripted(() => quiet()) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
 		});
 		await waitForRoom(first);
 		await expect(
@@ -93,7 +93,7 @@ describe('room bindings', () => {
 			agents: [original],
 			seats: {},
 			runtime: createRuntime({ storage: faulty.journals }),
-			execution: piExecution({ stream: scripted(() => quiet()) }),
+			execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
 		});
 		try {
 			faulty.fail(true, 'message');

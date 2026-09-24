@@ -26,7 +26,7 @@ const quietRoom = (name: string, runtime: Runtime) =>
 		runtime,
 		seats: { [assistant.name]: 'none' },
 		agents: [assistant],
-		execution: piExecution({ stream: scripted(() => quiet()) }),
+		execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
 	});
 
 type Limits = NonNullable<CreateRuntimeOptions['limits']>;
