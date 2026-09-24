@@ -228,8 +228,10 @@ type SeatInternals = {
 
 /**
  * A seat that recovers a running activation on its alarm, against a room whose
- * release call `lease` answers. A room call times out after 10 ms. The test
- * restores the tier configuration when it ends.
+ * release call `lease` answers. A room call times out after 10 ms. The helper
+ * waits for the release error, because workerd can fire the alarm on its own
+ * before `runDurableObjectAlarm` calls it, and that call then returns at once.
+ * The test restores the tier configuration when it ends.
  */
 async function recovering(
 	name: string,
@@ -257,7 +259,9 @@ async function recovering(
 		await state.storage.setAlarm(Date.now());
 	});
 	await runDurableObjectAlarm(seat);
-	await new Promise((resolve) => setTimeout(resolve, 25));
+	await until(async () =>
+		events.some((event) => event.event === 'delivery_error' && event.operation === 'release'),
+	);
 	const read = () => runInDurableObject(seat, (_instance, state) => seatMetadata(state).read());
 	const timedOut = () =>
 		expect(events).toContainEqual(

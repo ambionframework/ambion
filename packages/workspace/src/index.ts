@@ -61,9 +61,7 @@ export {
 export type {
 	GitAccess,
 	GitBackend,
-	GitCredential,
 	GitEnv,
-	GitFetch,
 	GitForkOutcome,
 	GitRepository,
 	GitRepositoryId,

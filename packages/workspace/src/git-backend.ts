@@ -5,18 +5,22 @@
  * Every workspace has a bash backend. A git backend is optional. When a
  * workspace has one, the `repos` and `fork` tools run on it, under an owner
  * of its own, and the bash backend receives `GitAccess` when it connects,
- * so the `git` of each agent reaches the backend's repositories.
+ * so the `git` of each agent reaches the backend's repositories. A bash
+ * backend lists the transports it carries in `gitTransports`, and
+ * `openWorkspace` refuses a pair whose transport the bash backend does not
+ * carry.
  *
  * A repository ID is `templates/<name>` or `<agent>/<name>`. A template
  * never changes after registration. Only the owner of a repository holds a
  * write credential for it, and every other agent holds a read credential.
- * A credential grants one scope on one repository, and it expires.
+ * A credential grants one scope on one repository, and it expires. The
+ * package of each git backend defines its credentials.
  *
  * This module holds types only, so the root entry loads no git library.
  * `docs/git.md` states the contract.
  */
 
-import type { ResourceBackend, ResourceEnv, WorkspaceAgent } from './resource.ts';
+import type { ResourceBackend, ResourceEnv } from './resource.ts';
 
 /** A repository ID: `templates/<name>` or `<agent>/<name>`. */
 export type GitRepositoryId = string;
@@ -36,29 +40,15 @@ export interface GitRepository {
 	readonly branches: Readonly<Record<string, string>>;
 }
 
-/** One credential: one scope on one repository, until `expiresAt`. */
-export interface GitCredential {
-	/** The clone URL of the repository. */
-	readonly url: string;
-	readonly scope: 'read' | 'write';
-	readonly token: string;
-	/** Milliseconds since the epoch. */
-	readonly expiresAt: number;
-}
-
-/** A web-standard fetch, in the shape the `just-git` client calls. */
-export type GitFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
-
-/** What a bash backend needs to reach the git backend as one agent. */
+/**
+ * What a bash backend needs to reach the git backend as one agent. The core
+ * knows the transport by its name alone. The package of each git backend
+ * extends this type with the wire shape of its transport, and the bash
+ * backend that carries the transport reads it.
+ */
 export interface GitAccess {
-	/** Every clone URL starts with this prefix. The just-bash `git` reaches it alone. */
-	readonly prefix: string;
-	/** Carries a git request in process. Absent, the bash backend uses the network. */
-	readonly fetch?: GitFetch;
-	/** The credential of `agent` for one clone URL, or `undefined` for a URL outside the prefix. */
-	credentialFor(agent: WorkspaceAgent, url: string): Promise<GitCredential | undefined>;
-	/** Every credential that `agent` holds now, for a client that reads them from a file. */
-	credentialsFor(agent: WorkspaceAgent): Promise<readonly GitCredential[]>;
+	/** The name of the transport, such as `in-process` or `ssh`. */
+	readonly transport: string;
 }
 
 /** What a fork gives: the new repository, or the reason the backend refused it. */

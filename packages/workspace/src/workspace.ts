@@ -165,6 +165,22 @@ function workspaceTools(
 }
 
 /**
+ * Refuse a git backend whose transport the bash backend does not carry.
+ * Neither backend has a name, so the error names the transport and the
+ * server of the git backend, and the transports of the bash backend.
+ */
+function assertTransport(bash: BashBackend, git: GitBackend | undefined): void {
+	if (git === undefined) return;
+	const { transport } = git.access;
+	const carried = bash.gitTransports ?? [];
+	if (carried.includes(transport)) return;
+	const list = carried.length === 0 ? 'no git transport' : carried.join(', ');
+	throw new Error(
+		`The bash backend cannot reach the git backend at ${git.server}: the git backend uses the transport ${transport}, and the bash backend carries ${list}.`,
+	);
+}
+
+/**
  * The bash backend under its owner. With a git backend, each `connect`
  * passes the backend's access, so the shell of each agent reaches the
  * repositories. The owner reads `connect` and `dispose` alone.
@@ -238,8 +254,10 @@ function openSqlOwner(
  * resource owner, so a long shell command does not delay a query or a
  * fork. The SQL backend reaches the bash backend through `WorkspaceFiles`
  * to write an export. The bash backend reaches the git backend through the
- * `GitAccess` that each `connect` receives. `use` and `mirror()` reach the
- * bash owner, `sql` exposes the SQL owner, and `git` the git owner. The
+ * `GitAccess` that each `connect` receives. `openWorkspace` throws when
+ * `bash.gitTransports` does not hold the transport of that access. `use`
+ * and `mirror()` reach the bash owner, `sql` exposes the SQL owner, and
+ * `git` the git owner. The
  * bash backend's `layout` names where the audit log and the room mirrors
  * live. A workspace with no SQL backend has no `sql` tool, and one with no
  * git backend has no `repos` and no `fork` tool. Set `audit.path`
@@ -254,6 +272,7 @@ export function openWorkspace(options: {
 	audit?: AuditLogOptions;
 }): Workspace {
 	const { bash, sql: sqlBackend, git: gitBackend } = options.backend;
+	assertTransport(bash, gitBackend);
 	const shellBackend = bashUnderOwner(bash, gitBackend);
 	// Each process connects its own environment, outside the queue of the bash owner.
 	const table = openProcessTable({

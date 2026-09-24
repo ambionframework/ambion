@@ -106,26 +106,10 @@ interface GitRepository {
   readonly branches: Readonly<Record<string, string>>;
 }
 
-/** One credential: one scope on one repository, until `expiresAt`. */
-interface GitCredential {
-  /** The clone URL of the repository. */
-  readonly url: string;
-  readonly scope: 'read' | 'write';
-  readonly token: string;
-  /** Milliseconds since the epoch. */
-  readonly expiresAt: number;
-}
-
 /** What a bash backend needs to reach the git backend as one agent. */
 interface GitAccess {
-  /** Every clone URL starts with this prefix. The just-bash `git` reaches it alone. */
-  readonly prefix: string;
-  /** Carries a git request in process. Absent, the bash backend uses the network. */
-  readonly fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
-  /** The credential of `agent` for one clone URL, or `undefined` for a URL outside the prefix. */
-  credentialFor(agent: WorkspaceAgent, url: string): Promise<GitCredential | undefined>;
-  /** Every credential that `agent` holds now, for a client that reads them from a file. */
-  credentialsFor(agent: WorkspaceAgent): Promise<readonly GitCredential[]>;
+  /** The name of the transport, such as `in-process` or `ssh`. */
+  readonly transport: string;
 }
 
 type GitForkOutcome =
@@ -161,8 +145,8 @@ It resolves when that fork can be cloned, the same as a new fork.
 
 **The backend registers its templates before its first operation.**
 `openWorkspace` is synchronous, and a backend has no open step. The first
-`connect` of the git owner, and the first call of `credentialFor` or
-`credentialsFor`, await one registration. A failed registration rejects
+`connect` of the git owner, and the first call of `credentialFor`, await
+one registration. A failed registration rejects
 that operation with an error that names the template. The next operation
 tries again. Host code that wants the error at start calls
 `lab.git.use(lab.host, (env) => env.list())`.
@@ -171,6 +155,26 @@ tries again. Host code that wants the error at start calls
 `BashBackend.connect` gets a third, optional argument, `BashServices`,
 which holds `git?: GitAccess`. `openWorkspace` wraps the bash backend's
 `connect` and passes it when `backend.git` is set.
+
+**The core knows a transport by its name alone.** The package of each git
+backend extends `GitAccess` with the wire shape of its transport. The
+bash backend that carries the transport reads `transport`, and it casts
+to the access type of that package.
+
+```ts
+interface BashBackend {
+  // ...
+  /** The git transports that the shell of this backend carries. */
+  readonly gitTransports?: readonly string[];
+}
+```
+
+**`openWorkspace` refuses a pair that does not match.** When
+`backend.git` is set and `backend.bash.gitTransports` does not hold its
+`transport`, `openWorkspace` throws. Neither backend has a name, so the
+error names the `transport` and the `server` of the git backend, and the
+transports that the bash backend carries. A bash backend with no
+`gitTransports` carries none.
 
 **`Workspace.git` is the owner of the git backend, for host code.** It is
 the same as `Workspace.sql`.
@@ -430,12 +434,42 @@ again before it expires. A new fork adds a write credential at once.
 
 ### On the just-bash backends
 
+**The just-bash backends carry the `in-process` transport.** Their
+`gitTransports` is `['in-process']`. They read the access of
+`justGitBackend`, a `JustGitAccess` from `@ambionframework/just-bash/git`.
+The root entry imports the type alone, so it loads no `node:sqlite`.
+
+```ts
+/** One credential: one scope on one repository, until `expiresAt`. */
+interface GitCredential {
+  /** The clone URL of the repository. */
+  readonly url: string;
+  readonly scope: 'read' | 'write';
+  readonly token: string;
+  /** Milliseconds since the epoch. */
+  readonly expiresAt: number;
+}
+
+/** A web-standard fetch, in the shape the `just-git` client calls. */
+type GitFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
+interface JustGitAccess extends GitAccess {
+  readonly transport: 'in-process';
+  /** Every clone URL starts with this prefix. The just-bash `git` reaches it alone. */
+  readonly prefix: string;
+  /** Carries a git request to the server in the same process. */
+  readonly fetch: GitFetch;
+  /** The credential of `agent` for one clone URL, or `undefined` for a URL that no agent reaches. */
+  credentialFor(agent: WorkspaceAgent, url: string): Promise<GitCredential | undefined>;
+}
+```
+
 **The token stays inside the `git` command.** `gitFor(agent, access)`
 builds the `just-git` client with these options:
 
 - `network.allowed` is `[access.prefix]`, so `git` reaches no other host.
-- `network.fetch` is `access.fetch` when it is set. Otherwise the client
-  uses the network of the host's process.
+- `network.fetch` is `access.fetch`, so each request stays in the
+  process.
 - `credentials` is `(url) => access.credentialFor(agent, url)`, as a
   bearer token.
 
@@ -615,38 +649,43 @@ the agent's name.
 
 ## Where the code lives
 
-| Package              | File                             | What it holds                                                   |
-| -------------------- | -------------------------------- | --------------------------------------------------------------- |
-| `packages/workspace` | `src/git-backend.ts`             | The types of [The contract](#the-contract)                      |
-| `packages/workspace` | `src/git-tools.ts`               | `repos`, `fork`, and the git note                               |
-| `packages/workspace` | `src/workspace.ts`               | The git owner, the `connect` wrapper, and the order of disposal |
-| `packages/workspace` | `src/git-conformance.ts`         | `gitConformance`                                                |
-| `packages/workspace` | `src/git-entry.ts`               | The `/git` entry                                                |
-| `packages/workspace` | `src/git-names.ts`               | The name rules of a repository ID                               |
-| `packages/workspace` | `src/git-templates.ts`           | `fromDirectory` and the template helpers                        |
-| `packages/just-bash` | `src/just-bash.ts`               | `gitFor(agent, access)`                                         |
-| `packages/just-bash` | `src/git/backend.ts`             | `justGitBackend`, the access, and the environment               |
-| `packages/just-bash` | `src/git/server.ts`, `tokens.ts` | The `just-git` server, its authentication, and the tokens       |
-| `packages/just-bash` | `src/git/registration.ts`        | Template registration                                           |
-| `packages/just-bash` | `src/git/storage.ts`             | `sqliteGitStorage` and the registry table                       |
+| Package              | File                             | What it holds                                                                               |
+| -------------------- | -------------------------------- | ------------------------------------------------------------------------------------------- |
+| `packages/workspace` | `src/git-backend.ts`             | The types of [The contract](#the-contract)                                                  |
+| `packages/workspace` | `src/git-tools.ts`               | `repos`, `fork`, and the git note                                                           |
+| `packages/workspace` | `src/workspace.ts`               | The git owner, the `connect` wrapper, the check of the transport, and the order of disposal |
+| `packages/workspace` | `src/git-conformance.ts`         | `gitConformance`                                                                            |
+| `packages/workspace` | `src/git-entry.ts`               | The `/git` entry                                                                            |
+| `packages/workspace` | `src/git-names.ts`               | The name rules of a repository ID                                                           |
+| `packages/workspace` | `src/git-templates.ts`           | `fromDirectory` and the template helpers                                                    |
+| `packages/just-bash` | `src/just-bash.ts`               | `gitFor(agent, access)`                                                                     |
+| `packages/just-bash` | `src/git/access.ts`              | `JustGitAccess`, `GitCredential`, and `GitFetch`                                            |
+| `packages/just-bash` | `src/git/backend.ts`             | `justGitBackend`, the access, and the environment                                           |
+| `packages/just-bash` | `src/git/server.ts`, `tokens.ts` | The `just-git` server, its authentication, and the tokens                                   |
+| `packages/just-bash` | `src/git/registration.ts`        | Template registration                                                                       |
+| `packages/just-bash` | `src/git/storage.ts`             | `sqliteGitStorage` and the registry table                                                   |
 
 ## Tests
 
 **`gitConformance(harness)` holds the cases of a `GitBackend`.** It lives
 in `@ambionframework/workspace/conformance`, beside `sqlConformance`. A
 harness opens a store: one bash backend, and a factory that opens a git
-backend over the same repositories each time it is called.
+backend over the same repositories each time it is called. The suite
+knows no transport. Four cases ask a hook of the harness for a
+credential fact, and each hook takes the backend and the workspace that
+the case opened.
 
 - `list` shows each template with its description, and each fork with its
   source, its default branch, and its URL. `list` with a namespace shows
   that namespace alone.
 - `list` does not show `template-sources`, and no agent holds a credential
-  for it.
+  for it (the hook `sourcesCredential`).
 - A clone of a fork has the fork as `origin`.
 - A second `fork` with a taken name is `name_taken`, and it creates
   nothing. A `fork` of a missing source is `no_source`.
 - A fork of a fork names its direct source.
-- An agent named `templates` or `template-sources` is refused.
+- An agent named `templates` or `template-sources` is refused, and it gets
+  no credential (the hook `issueCredentials`).
 - The owner pushes a branch, and a peer reads it.
 - A push to a template and a push to another agent's fork are refused,
   and the owner's push is accepted. The case checks the exit status of
@@ -654,18 +693,21 @@ backend over the same repositories each time it is called.
   other.
 - An aborted `fork` rejects, and a repeated call is safe.
 - Two forks of one name at once give one `ok` and one `name_taken`, and
-  forks beside a loop of credential calls lose no repository.
+  forks beside a loop of `issueCredentials` lose no repository. The owner
+  then holds a write credential for its fork (the hook
+  `writeCredential`).
 - A registration with the same source writes nothing, and one with a
   changed source rejects the first operation with an error that names
   the template.
-- A credential is refused after it expires. The harness names its
-  shortest `tokenTtl`, and the case skips a backend whose shortest
-  `tokenTtl` is longer than 5 seconds.
+- A credential is refused after it expires (the hook `probeCredential`).
+  The harness names its shortest `credentialTtl`, and the case skips a
+  backend whose shortest `credentialTtl` is longer than 5 seconds.
 
 **`packages/just-bash` runs the cases on the memory and the directory
 backends.** Its own tests add:
 
 - the tokens, and a `tokenTtl` that is not finite;
+- an access of another transport at `connect`;
 - a registration that stopped after the commit to `template-sources`;
 - a restart over one git file;
 - a `GIT_HTTP_BEARER_TOKEN` that an agent sets;

@@ -109,8 +109,10 @@ under a new name.
 **No request leaves the process.** Every clone URL starts with
 `http://git.ambion.invalid`, a name that never resolves. The `git` command
 passes each request to the server in the process, with a token that no
-file holds. A workstation carries no git transport, so this backend pairs
-with the two just-bash backends alone.
+file holds. This is the `in-process` transport. The two just-bash
+backends carry it, and a workstation carries no git transport.
+`openWorkspace` throws when the bash backend does not carry the
+transport of the git backend.
 
 ## Tests
 

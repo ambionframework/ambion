@@ -1,8 +1,8 @@
 /**
  * What `justGitBackend` holds beyond the conformance cases: the tokens, the
  * registration after a crash, a restart over one file, a shell variable that
- * tries to carry a token, a token on a path of another repository, and the
- * templates from a directory.
+ * tries to carry a token, an access of another transport, a token on a path
+ * of another repository, and the templates from a directory.
  */
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -182,13 +182,21 @@ describe('justGitBackend', () => {
 		}
 	});
 
+	it('refuses the access of another transport at a connect outside a workspace', async () => {
+		await expect(
+			memoryBackend().connect(ANALYST, undefined, { git: { transport: 'ssh' } }),
+		).rejects.toThrow(
+			'The just-bash backends carry the git transport in-process, and the git access uses ssh.',
+		);
+	});
+
 	it('opens nothing after dispose', async () => {
 		const { git, workspace } = workspaceOver(join(await tempDir(), 'git.db'));
 		await workspace.git?.use(ANALYST, (env) => env.list());
 		await workspace.dispose();
-		await expect(git.access.credentialsFor(ANALYST)).rejects.toThrow(
-			'The git backend is disposed.',
-		);
+		await expect(
+			git.access.credentialFor(ANALYST, 'http://git.ambion.invalid/templates/blank'),
+		).rejects.toThrow('The git backend is disposed.');
 	});
 
 	it('refuses a token on a path that names another repository', async () => {
@@ -198,9 +206,8 @@ describe('justGitBackend', () => {
 			ANALYST,
 			'http://git.ambion.invalid/analyst/mine',
 		);
-		const fetch = git.access.fetch ?? globalThis.fetch;
 		const probe = (path: string) =>
-			fetch(`http://git.ambion.invalid/${path}/info/refs?service=git-upload-pack`, {
+			git.access.fetch(`http://git.ambion.invalid/${path}/info/refs?service=git-upload-pack`, {
 				headers: { Authorization: `Bearer ${credential?.token}` },
 			});
 		// The token check and the server decode a path the same way, so both name one repository.

@@ -204,39 +204,15 @@ names the new route.
 **Goal:** an agent on a workstation clones and pushes over SSH to one
 account on its own server, and the host opens no port.
 
-**Each step is one pull request.** Step 1 finishes G1, steps 2 and 3 land
-G2, and step 4 documents G2.
+**Each step is one pull request.** Steps 1 and 2 land G2, and step 3
+documents G2.
 
-- [ ] **1.** G1b, the contract. `GitAccess` in the core holds `transport`
-      alone, and `JustGitAccess` holds the rest. Each bash backend that
-      pairs with a git backend declares `gitTransports`, and
-      `openWorkspace` refuses a pair that does not match. `gitConformance`
-      calls harness hooks for the four credential cases. P1. (G1)
-  - **Code:** the step changes `git-backend.ts`, `backend.ts`,
-    `workspace.ts`, and `git-conformance.ts` in the workspace. The
-    refusal goes in a helper, since `workspaceTools` is near the
-    complexity cap. `JustGitAccess`, `GitFetch`, and `GitCredential` go
-    in `packages/just-bash/src/git/`. `just-bash.ts` narrows the access
-    with an `import type` alone, and its two backends declare
-    `['in-process']`. The helper `wrapped()` in
-    `packages/workspace/test/support/backends.ts` carries the transports
-    of the memory backend inside it.
-  - **Suite:** each hook takes the opened backend and workspace.
-    `tokenTtl` and `shortestTokenTtl` become `credentialTtl` and
-    `shortestCredentialTtl`. The harness in
-    `packages/just-bash/test/support/git-harness.ts` implements the hooks
-    for `in-process`.
-  - **Evidence:** `gitConformance` passes on the two just-bash backends
-    through the hooks. A scripted case pairs `justGitBackend` with a bash
-    backend that carries `ssh`, and with one that carries no transport,
-    and gets the refusal each time. The export snapshots pin each change,
-    and the changelog names it. `pnpm check` passes.
-- [ ] **2.** G2a, the server side. `workstationGitBackend` prepares the git
+- [ ] **1.** G2a, the server side. `workstationGitBackend` prepares the git
       account, writes `serve`, registers the templates by rename, and runs
       `list`, `get`, and `fork`. `identityFor` issues the agent keys and
       writes `authorized_keys.ambion` under `flock`. `workstationBackend`
       carries no transport yet, so the tests drive the git backend alone.
-      Needs 1. P1. (G2)
+      P1. (G2)
   - **Code:** the backend goes in new files
     `packages/workstation/src/git-*.ts`, split to keep each file under 600
     lines and each function under complexity 10.
@@ -250,10 +226,10 @@ G2, and step 4 documents G2.
     over a table of requests, the list, fork, and registration commands,
     and the lines of `authorized_keys.ambion`. The changelog names each
     export. `pnpm check` and the `workstation` CI job pass.
-- [ ] **3.** G2b, the agent side and the OpenSSH tier. `workstationBackend`
+- [ ] **2.** G2b, the agent side and the OpenSSH tier. `workstationBackend`
       writes the three key files and the `Include` line at each `connect`,
       and declares `gitTransports: ['ssh']`. The OpenSSH tier runs
-      `gitConformance`. Needs 2. P1. (G2)
+      `gitConformance`. Needs 1. P1. (G2)
   - **Code:** `session.ts` keeps the host key that the client verified,
     as the key type and the base64 key. `backend.ts` writes the files and
     keeps the rest of `~/.ssh/config`.
@@ -268,13 +244,13 @@ G2, and step 4 documents G2.
     OpenSSH and the checks that
     [Workstation git](../docs/workstation-git.md#tests) lists, and the
     scripted tier tests the key files. `pnpm check` passes.
-- [ ] **4.** The docs of G2. `workstation-git.md` describes what shipped.
+- [ ] **3.** The docs of G2. `workstation-git.md` describes what shipped.
       `workstation.md` states the new credential rule, and its out-of-v1
       list drops credential issuance and rotation. `git.md` states the
       credential decision in its new words and names the backend in its
       file table. The trust row states the reach of a leaked agent key.
       `docs/README.md`, the `CLAUDE.md` row, and the workstation package
-      guide name the backend and the server steps. Needs 3. P1. (G2)
+      guide name the backend and the server steps. Needs 2. P1. (G2)
   - **Evidence:** each statement points at code on `main`.
     `scripts/evidence-links.test.mjs` and Prettier pass.
 

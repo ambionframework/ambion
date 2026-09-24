@@ -30,6 +30,7 @@
  * not. The design contract is `docs/git.md`.
  */
 
+export type { GitCredential, GitFetch, JustGitAccess } from './access.ts';
 export type { JustGitBackend, JustGitBackendOptions } from './backend.ts';
 export { justGitBackend } from './backend.ts';
 export type { GitStorage, OpenGitStorage, Registry, RegistryRow } from './storage.ts';

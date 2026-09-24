@@ -3,7 +3,7 @@
  *
  * The backend opens its storage and its server on first use, and it
  * registers its templates before its first operation: the first `connect`
- * and the first credential call await one registration. A failed
+ * and the first `credentialFor` await one registration. A failed
  * registration rejects that operation, and the next operation tries again.
  *
  * A clone URL is `http://git.ambion.invalid/<namespace>/<name>`. The name
@@ -15,15 +15,7 @@
  * No agent holds a credential for `template-sources`.
  */
 
-import type {
-	GitAccess,
-	GitBackend,
-	GitCredential,
-	GitEnv,
-	GitFetch,
-	GitForkOutcome,
-	GitRepository,
-} from '@ambionframework/workspace';
+import type { GitBackend, GitEnv, GitForkOutcome, GitRepository } from '@ambionframework/workspace';
 import {
 	assertAgent,
 	namespaceOf,
@@ -34,6 +26,7 @@ import {
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import { listBranches, readHead } from 'just-git/repo';
 import type { GitServer } from 'just-git/server';
+import type { GitCredential, GitFetch, JustGitAccess } from './access.ts';
 import { DEFAULT_BRANCH, registerTemplates, settleAll } from './registration.ts';
 import { openServer, repositoryOfPath } from './server.ts';
 import type { GitStorage, OpenGitStorage, RegistryRow } from './storage.ts';
@@ -59,7 +52,9 @@ export interface JustGitBackendOptions {
 }
 
 /** The git backend over `just-git`. Its access carries each request in the process. */
-export interface JustGitBackend extends GitBackend {}
+export interface JustGitBackend extends GitBackend {
+	readonly access: JustGitAccess;
+}
 
 interface Opened {
 	readonly store: OpenGitStorage;
@@ -128,7 +123,8 @@ export function justGitBackend(options: JustGitBackendOptions): JustGitBackend {
 		return { url: `${BASE}/${row.id}`, scope, token, expiresAt };
 	};
 
-	const access: GitAccess = {
+	const access: JustGitAccess = {
+		transport: 'in-process',
 		prefix: `${BASE}/`,
 		fetch: (input, init) => open().fetch(input, init),
 		credentialFor: async (agent, url) => {
@@ -136,10 +132,6 @@ export function justGitBackend(options: JustGitBackendOptions): JustGitBackend {
 			const id = url.startsWith(`${BASE}/`) ? repositoryOfPath(new URL(url).pathname) : undefined;
 			const row = id === undefined ? undefined : await repositories.row(id);
 			return row === undefined ? undefined : credential(agent, row);
-		},
-		credentialsFor: async (agent) => {
-			assertAgent(agent);
-			return (await repositories.rows()).map((row) => credential(agent, row));
 		},
 	};
 
