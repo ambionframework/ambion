@@ -37,7 +37,8 @@ speaks, or when a seat addresses it.
 event is a change outside the room, such as a push to a repository, a job
 that ends, or a timer that comes due. In 0.3.0, an environment event
 reaches the room as a notice, and the room wakes the seats that attend to
-it. A room also hands work to another room and waits for the result.
+it. A room also hands work to another room and waits for the result. A
+seat's shell work runs as a background process between its activations.
 
 **0.3.0 also gives each deployment shape one package.** The local shape
 is one node that runs the host and every agent:
@@ -49,7 +50,7 @@ repositories in one account on the server. Each agent reaches them with
 
 ## The scope
 
-**Three themes, each with the acceptance it must meet on the tagged
+**Four themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
 | Theme                     | Acceptance                                                                                                                                                                                                                                                                                                                                                                   |
@@ -57,6 +58,7 @@ commit.** The phases below deliver them; the items explain them.
 | W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                                                                                                                                                                                                    |
 | D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database.                                                                                                                                                                               |
 | G Git on the workstation  | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. |
+| B Background processes    | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees every process, and each activation starts with a reminder of its seat's processes. Landed in #307.                                                                                                                                                        |
 
 **Three format changes.** Each change lands with a golden journal of the
 new shape, and the changelog names each one.
@@ -155,7 +157,8 @@ means two things or two names mean one.
 **The order is the notice, the timer, then the delegation.** The notice
 host call needs the notice kind, the timer needs the host call, and the
 delegating message needs the notice. The git backend on the workstation
-needs none of them, so phase 4 runs beside phases 1 to 3. A step names the
+needs none of them, so phase 4 runs beside phases 1 to 3. Background processes (B1) needed no
+phase, and landed first. A step names the
 steps it needs; a step with no "Needs" line starts now. **P0** blocks the tag. **P1**
 carries the release story. **P2** moves to the backlog when it is late.
 
@@ -450,6 +453,20 @@ between cases. **Evidence:** `gitConformance` and the checks of the
 design pass in the OpenSSH tier. The backend renders `expiry-time` in the
 server's time zone, from the server's clock, since the `Z` suffix for UTC
 needs OpenSSH 9.1.
+
+### B. Background processes
+
+**B1. A shell command in the background.** Pi's `bash` tool held the bash
+owner until the command ended, and stopped it after 30 seconds, so a
+build or a test run held every other tool call of the workspace. `bash`
+now starts a process that runs off the owner, with its output in a file,
+and gives a handle. `ps`, `status`, `wait`, and `cancel` reach it, the
+host sees every process through `workspace.processes`, and each
+activation starts with a reminder of the seat's processes
+([Processes](../docs/processes.md)). A process has no link to an exchange
+yet; the backlog holds that design. **Evidence:**
+`packages/workspace/test/processes.test.ts`, the Pi continuity test of the
+reminder, and the timeout and cancel on OpenSSH. Landed in #307.
 
 ### R. Release
 
