@@ -114,8 +114,8 @@ judge calibration, and twelve legacy variants. Its harness re-implements
 the scripted stream and polls for a quiet room, and the 0.1.0 testing entry
 removes both. **Condition:** a live-eval budget and an owner for the
 calibration. The package then starts again from main on the testing entry.
-[Simulator](../docs/simulator.md) designs that start: one loop, a model
-actor, and a model judge, with no calibration suite.
+[Simulator](../docs/simulator.md) designs that start: one loop, an agent
+actor, and an agent judge, with no calibration suite.
 
 **A durable subscription service across processes.** Subscriptions belong
 to one running host. A client that reconnects reads and reacquires its

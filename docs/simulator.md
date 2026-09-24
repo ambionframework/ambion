@@ -5,12 +5,12 @@ yet.** The [backlog](../planning/backlog.md) holds the condition that
 schedules it. Until it lands, the live tests in `packages/*/test/live` are
 the only behavioral evidence.
 
-**The simulator runs an eval: a model plays a person in a room, and the test
+**The simulator runs an eval: an agent plays a person in a room, and the test
 grades what the room did.** An eval has three parts. The actor sends each
 question on behalf of a person. Checks in code assert facts on the record.
 A judge grades the criteria that code cannot decide.
 
-**The package holds one loop and two model calls.** The room, the record,
+**The package holds one loop and two agents: the actor and the judge.** The room, the record,
 and the waits come from the kernel. The scripted execution comes from
 `@ambionframework/ambion/testing`. The model resolution comes from
 `@ambionframework/pi`. The simulator adds the person who drives the room and
@@ -24,7 +24,7 @@ definitions, the model id, a runtime on the live model, and `stopAtEnd`.
 
 ```ts
 import { defineHuman, startRoom } from '@ambionframework/ambion';
-import { modelActor, modelJudge, simulate } from '@ambionframework/simulator';
+import { agentActor, agentJudge, simulate } from '@ambionframework/simulator';
 import { expect, it } from 'vitest';
 import { assistant, liveRuntime, MODEL, payroll, stopAtEnd, weather } from './support.ts';
 
@@ -42,7 +42,7 @@ it('the assistant asks the weather desk once, and answers the person', async () 
 
   const run = await simulate(room, {
     person: priya,
-    actor: modelActor({
+    actor: agentActor({
       model: MODEL,
       brief: 'Find out if you can pour concrete on Thursday. Stop when you have a yes or a no.',
     }),
@@ -55,7 +55,7 @@ it('the assistant asks the weather desk once, and answers the person', async () 
     [],
   );
 
-  const verdict = await modelJudge({ model: MODEL })(run, [
+  const verdict = await agentJudge({ model: MODEL })(run, [
     'The person learns whether Thursday is dry, with the forecast as the reason.',
     'No agent repeats a fact that another agent already said.',
   ]);
@@ -111,6 +111,12 @@ sequenceDiagram
   wants several samples writes the loop.
 - **Actor and judge are functions.** A scripted actor and a scripted judge
   are ordinary values, so the scripted tier runs every path with no key.
+- **The `Actor` and `Judge` types hold the contract, and the agents behind
+  them grow.** In v1, each agent makes one model request. A later actor can
+  call tools, make several requests for one move, and keep a session
+  across moves. A later judge can read the workspace and run commands
+  before it grades. Each change stays inside `agentActor` or `agentJudge`,
+  and `simulate` does not change.
 
 ## The surface
 
@@ -120,8 +126,8 @@ sequenceDiagram
 | `Actor`         | `(seen: Seen) => Move \| Promise<Move>`: the person's next move |
 | `Judge`         | `(run: Run, criteria: readonly string[]) => Promise<Verdict>`   |
 | `scriptedActor` | An actor that plays a fixed list of moves                       |
-| `modelActor`    | An actor on a model, from a brief                               |
-| `modelJudge`    | A judge on a model                                              |
+| `agentActor`    | An agent that plays a person from a brief                       |
+| `agentJudge`    | An agent that grades a run                                      |
 
 ```ts
 /** What the person does next: send a message, or stop and give the reason. */
@@ -197,7 +203,7 @@ arrive and ask.
 ## The actor
 
 **An actor returns the next move from what the person has seen.** It is a
-function, so an actor on a model and an actor on a list have one shape.
+function, so an agent and a list have one shape.
 
 **`scriptedActor` plays a list.** A string is a message to the room. A
 `Move` is sent as it is. The actor stops when the list ends.
@@ -206,9 +212,9 @@ function, so an actor on a model and an actor on a list have one shape.
 const actor = scriptedActor(['Can we pour on Thursday?', { text: 'And Friday?', to: 'weather' }]);
 ```
 
-**`modelActor` plays a brief on a model.** It takes `model`, a
-`provider/model-id`, and `brief`, the private goal of the person. It makes
-one model request for each move, with no tools.
+**`agentActor` plays a brief as an agent.** It takes `model`, a
+`provider/model-id`, and `brief`, the private goal of the person. In v1,
+the agent makes one model request for each move, with no tools.
 
 - **The system prompt** holds the person's `identity`, the `brief`, and one
   rule: answer with the next message, or with `STOP:` and the reason.
@@ -224,14 +230,14 @@ as `complete` ([Exchange](exchange.md#6-the-edges-a-host-sees)). The
 outcome `awaiting` never names the actor. The actor reads the question in
 the discussion, and its next move answers it or stops.
 
-**`modelActor` makes its request through `@ambionframework/pi`.** The Pi
+**`agentActor` makes its request through `@ambionframework/pi`.** The Pi
 package gains one export: `complete(services, { model, name, system,
 prompt })`. It resolves the model through `services.model(model, name)`,
 makes one request through `services.stream`, and returns the text and the
 `Usage`. It maps the usage the way an activation maps it. The simulator
 then depends on no provider library.
 
-**`modelActor` and `modelJudge` take optional `services`.** The default is
+**`agentActor` and `agentJudge` take optional `services`.** The default is
 `createExecutionServices({ sessions: 'memory' })`, which reads
 `<PROVIDER>_API_KEY`. A test passes services over the scripted Pi stream of
 `@ambionframework/pi/testing`. The actor requests under the name `actor`
@@ -302,7 +308,7 @@ export interface Verdict {
 }
 ```
 
-**The judge reads the record.** `modelJudge` renders the run as text:
+**The judge reads the record.** `agentJudge` renders the run as text:
 
 - the room's goal and the person's identity;
 - every message in seq order, with its author, its recipient, and its kind;
@@ -314,10 +320,10 @@ person must get. The actor and the judge then share no text. The judge also
 does not read `run.moves` or `run.usage`: the reason of a `stop` move can
 repeat the brief.
 
-**`modelJudge` makes one model request.** It asks for JSON with one
+**In v1, `agentJudge` makes one model request.** It asks for JSON with one
 finding for each criterion, in the order of the list. An answer that does
 not parse, or that misses a criterion, rejects the promise. A malformed
-answer never passes. It resolves the model the way `modelActor` does, and
+answer never passes. It resolves the model the way `agentActor` does, and
 it accepts the same `stream` for the scripted tier.
 
 **A scripted judge is a function.** A test of the loop passes
@@ -325,7 +331,7 @@ it accepts the same `stream` for the scripted tier.
 
 ## Cost
 
-**Every eval with a model actor or a model judge is a live test.** It
+**Every eval with an agent actor or an agent judge is a live test.** It
 costs money on each run. [CLAUDE.md](../CLAUDE.md#live-runs-cost-money)
 holds the rules.
 
@@ -351,12 +357,12 @@ the one change to the Pi package.
 | File                      | What it holds                                  |
 | ------------------------- | ---------------------------------------------- |
 | `src/simulate.ts`         | `simulate`, `Run`, `Seen`, `Move`              |
-| `src/actor.ts`            | `scriptedActor`, `modelActor`, and its prompt  |
-| `src/judge.ts`            | `modelJudge`, `Verdict`, and its prompt        |
+| `src/actor.ts`            | `scriptedActor`, `agentActor`, and its prompt  |
+| `src/judge.ts`            | `agentJudge`, `Verdict`, and its prompt        |
 | `src/index.ts`            | The one entry                                  |
 | `test/simulate.test.ts`   | The loop on a scripted room                    |
-| `test/model.test.ts`      | The model actor and judge on a scripted stream |
-| `test/live/model.test.ts` | One live case of the actor and the judge       |
+| `test/agent.test.ts`      | The agent actor and judge on a scripted stream |
+| `test/live/agent.test.ts` | One live case of the actor and the judge       |
 
 **The first eval is an assistant case.** It moves one case from
 `packages/assistant/test/live/behavior.test.ts` onto the simulator: a
@@ -381,7 +387,7 @@ a `scriptedActor`. The judge is a function.
 | One move opens one exchange       | `run.exchanges` has one view for each message             |
 | The run is a detached value       | `structuredClone(run)` equals the run                     |
 
-**The model actor and the model judge run on the scripted Pi stream.**
+**The agent actor and the agent judge run on the scripted Pi stream.**
 The cases cover the prompt text, the name each request carries, a
 `STOP:` answer, a judge answer that does
 not parse, a judge answer that misses a criterion, and the usage that each
