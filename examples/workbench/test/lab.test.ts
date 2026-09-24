@@ -79,7 +79,7 @@ describe('the lab SQL resource', () => {
 			openLab(join(directory, 'lab.db')),
 			'SELECT name FROM projects ORDER BY name',
 		);
-		expect(rows.map((row) => row.name)).toEqual(['bringup', 'power', 'sensing']);
+		expect(rows.map((row) => row.name)).toEqual(['bringup', 'firmware', 'power', 'sensing']);
 	});
 });
 

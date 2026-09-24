@@ -112,6 +112,7 @@ describe('Workbench host', () => {
 			['bringup', 'running'],
 			['sensing', 'running'],
 			['power', 'running'],
+			['firmware', 'running'],
 		]);
 		await workbench.join('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'summary-1', 'Pick the LED resistor.');
@@ -132,6 +133,7 @@ describe('Workbench host', () => {
 			['bringup', 'stopped'],
 			['sensing', 'running'],
 			['power', 'running'],
+			['firmware', 'running'],
 		]);
 		expect((await workbench.file(plan)).text).toBe(PLAN);
 		expect((await workbench.control('bringup', 'resume')).status).toBe('running');

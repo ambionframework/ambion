@@ -201,14 +201,15 @@ scenario needs `ANTHROPIC_API_KEY`, and the `sensing` scenario needs
 
 ## The rooms
 
-**Three rooms share one kit.** Each goal shows a distinct collaboration
+**Four rooms share one kit.** Each goal shows a distinct collaboration
 pattern. Each room offers a suggested prompt.
 
-| Room    | Pattern                  | Starting work                                |
-| ------- | ------------------------ | -------------------------------------------- |
-| bringup | Datasheet check → design | Blink one LED and choose its series resistor |
-| sensing | Design → test plan       | Wire the HC-SR04 and plan a distance test    |
-| power   | Datasheet check → budget | Add up the kit current and confirm USB power |
+| Room     | Pattern                         | Starting work                                             |
+| -------- | ------------------------------- | --------------------------------------------------------- |
+| bringup  | Datasheet check → design        | Blink one LED and choose its series resistor              |
+| sensing  | Design → test plan              | Wire the HC-SR04 and plan a distance test                 |
+| power    | Datasheet check → budget        | Add up the kit current and confirm USB power              |
+| firmware | Template → fork → pushed branch | Fork the firmware sketch, set the pins, and push a branch |
 
 ## The workspace
 
@@ -220,6 +221,7 @@ the team's artifacts.
   rooms.db          Room journals, Pi audits, and the host room catalog
   shared.db         The workspace's shared database, for the sql tool
   lab.db            The lab records: projects, plans, runs, and results
+  git.db            The repositories: the firmware-sketch template and every fork
   workspace/
     library/        The datasheets, copied from examples/workbench/library
     shared/         kit.md and notes.md, the team's artifacts
@@ -258,29 +260,30 @@ workspace resources.
 
 ## Files
 
-| File                 | What                                                  |
-| -------------------- | ----------------------------------------------------- |
-| `src/definitions.ts` | The assistant, the three specialists, and the people  |
-| `src/scenarios.ts`   | The rooms, and the workspace seed                     |
-| `src/rooms.ts`       | The host lifecycle and the room catalog               |
-| `src/workbench.ts`   | The host API the terminal calls in process            |
-| `src/files.ts`       | The workspace list, one file preview, and `/attach`   |
-| `src/names.ts`       | The room name and goal rules                          |
-| `src/session.ts`     | The terminal state and commands, without OpenTUI      |
-| `src/feed.ts`        | The room feed: one read at a time                     |
-| `src/commands.ts`    | The slash commands and their suggestions              |
-| `src/timeline.ts`    | The record grouped into questions, threads, summaries |
-| `src/steps.ts`       | The steps of an activation, and the cost of a run     |
-| `src/approvals.ts`   | The instrument operations that wait for an answer     |
-| `src/transcript.ts`  | The conversation, with open and closed threads        |
-| `src/composer.ts`    | The composer, room chip, palette, and paste detection |
-| `src/browser.ts`     | The files panel state: search, matches, chosen file   |
-| `src/files-panel.ts` | The files panel beside the conversation               |
-| `src/database.ts`    | The SQLite preview: tables and their first rows       |
-| `src/refs.ts`        | The refs of a message: parse, resolve, and one chip   |
-| `src/tui.ts`         | The terminal: layout, keys, and the run loop          |
-| `src/families.ts`    | The family, model, and key of each seat               |
-| `src/unavailable.ts` | The execution of a family that has no key             |
-| `src/main.ts`        | The entry point                                       |
-| `src/brand.ts`       | The product name and the terminal palette             |
-| `library/`           | The datasheets                                        |
+| File                  | What                                                  |
+| --------------------- | ----------------------------------------------------- |
+| `src/definitions.ts`  | The assistant, the three specialists, and the people  |
+| `src/scenarios.ts`    | The rooms, and the workspace seed                     |
+| `src/repositories.ts` | The git backend and its firmware-sketch template      |
+| `src/rooms.ts`        | The host lifecycle and the room catalog               |
+| `src/workbench.ts`    | The host API the terminal calls in process            |
+| `src/files.ts`        | The workspace list, one file preview, and `/attach`   |
+| `src/names.ts`        | The room name and goal rules                          |
+| `src/session.ts`      | The terminal state and commands, without OpenTUI      |
+| `src/feed.ts`         | The room feed: one read at a time                     |
+| `src/commands.ts`     | The slash commands and their suggestions              |
+| `src/timeline.ts`     | The record grouped into questions, threads, summaries |
+| `src/steps.ts`        | The steps of an activation, and the cost of a run     |
+| `src/approvals.ts`    | The instrument operations that wait for an answer     |
+| `src/transcript.ts`   | The conversation, with open and closed threads        |
+| `src/composer.ts`     | The composer, room chip, palette, and paste detection |
+| `src/browser.ts`      | The files panel state: search, matches, chosen file   |
+| `src/files-panel.ts`  | The files panel beside the conversation               |
+| `src/database.ts`     | The SQLite preview: tables and their first rows       |
+| `src/refs.ts`         | The refs of a message: parse, resolve, and one chip   |
+| `src/tui.ts`          | The terminal: layout, keys, and the run loop          |
+| `src/families.ts`     | The family, model, and key of each seat               |
+| `src/unavailable.ts`  | The execution of a family that has no key             |
+| `src/main.ts`         | The entry point                                       |
+| `src/brand.ts`        | The product name and the terminal palette             |
+| `library/`            | The datasheets                                        |

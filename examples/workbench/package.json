@@ -18,6 +18,7 @@
 		"@ambionframework/assistant": "workspace:*",
 		"@ambionframework/claude": "workspace:*",
 		"@ambionframework/codex": "workspace:*",
+		"@ambionframework/git": "workspace:*",
 		"@ambionframework/journal": "workspace:*",
 		"@ambionframework/just-bash": "workspace:*",
 		"@ambionframework/pi": "workspace:*",

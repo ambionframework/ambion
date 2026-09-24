@@ -102,6 +102,13 @@ workspace resource.
 **The workspace's `sql` tool opens `shared.db`.** The SQLite backend keeps
 this file beside the workspace directory, and the shell does not reach it.
 
+**The workspace has a git backend, with its storage in `git.db`.** It holds
+one read-only template, `templates/firmware-sketch`: a pin map and an
+Arduino sketch, from `examples/workbench/templates`. An agent forks it with
+`fork`, clones the fork into its home, and pushes a branch with `git` in
+`bash`. A peer finds the fork with `repos` and clones it to review. A push
+survives a restart of the host. [Git](git.md) holds the contract.
+
 The datasheets are simplified summaries for a runnable example. They are not
 the manufacturer datasheets.
 
@@ -130,14 +137,15 @@ The terminal shows a `requested` operation to the exchange owner until a later r
 
 ### The rooms
 
-**Three rooms share one kit.** Each goal shows a distinct collaboration
+**Four rooms share one kit.** Each goal shows a distinct collaboration
 pattern. Each room offers a suggested prompt.
 
-| Room    | Pattern                  | Starting work                                |
-| ------- | ------------------------ | -------------------------------------------- |
-| bringup | Datasheet check → design | Blink one LED and choose its series resistor |
-| sensing | Design → test plan       | Wire the HC-SR04 and plan a distance test    |
-| power   | Datasheet check → budget | Add up the kit current and confirm USB power |
+| Room     | Pattern                         | Starting work                                             |
+| -------- | ------------------------------- | --------------------------------------------------------- |
+| bringup  | Datasheet check → design        | Blink one LED and choose its series resistor              |
+| sensing  | Design → test plan              | Wire the HC-SR04 and plan a distance test                 |
+| power    | Datasheet check → budget        | Add up the kit current and confirm USB power              |
+| firmware | Template → fork → pushed branch | Fork the firmware sketch, set the pins, and push a branch |
 
 ### One process, one terminal
 
@@ -207,6 +215,7 @@ automated test yet.
 | The terminal opens the steps of an activation                   | A drill-down into the trace                | Scripted: the host keeps the steps its logger receives, and the model groups passes and steps                                                                                 |
 | An exchange ends on a message to a person                       | `awaiting` reads as waiting on that person | Scripted: the discussion flag, and a note for the person named                                                                                                                |
 | An instrument request waits for its owner                       | The terminal shows an approval             | Scripted: the host lists the request, and drops it once a later row answers                                                                                                   |
+| The Design specialist starts the firmware from a template       | A fork, a clone, and a pushed branch       | Scripted: Design forks `templates/firmware-sketch`, sets a pin, and pushes `sensing`. Experiments clones the fork and reads the pin                                           |
 
 The kernel chaos tier covers a kill during work. This example does not.
 
@@ -223,6 +232,7 @@ examples/workbench/
     brand.ts           the product name and the terminal palette
     definitions.ts     the assistant, three specialists, and the people
     scenarios.ts       the rooms, the workspace seed, the lab schema, and the instruments
+    repositories.ts    the git backend and its firmware-sketch template
     instrument.ts      the simulated instruments and their approval step
     rooms.ts           the host lifecycle and the room catalog
     workbench.ts       the host: open, read, watch, send, control, create, files
@@ -252,6 +262,7 @@ examples/workbench/
     unavailable.ts     the execution of a family that has no key
     main.ts            the entry point
   library/             the datasheets as text
+  templates/           the source of each git template
   test/                scripted tests: host, session, feed, commands, timeline, text, header,
                        recovery
   test/live/           two scenarios on a real provider
