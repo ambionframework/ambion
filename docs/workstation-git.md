@@ -43,6 +43,14 @@ a workstation. This page gives the workstation its own git backend.
 The host needs no listener. The host reaches the server over SSH, the same
 as the bash backend does.
 
+**The design has one cost against the tokens of 0.2.0: a leaked
+credential reaches more.** A token grants one scope on one repository. An
+agent key names the agent, and `serve` grants every repository in that
+agent's namespace. Every account on the server shares the loopback
+address, and the room mirror puts the record on the same server. A key
+that an agent copies into a message lets any peer on the server push as
+that agent until `keyTtl` ends. [Trust](#trust) states the rows.
+
 ## The shape
 
 ```mermaid
@@ -167,9 +175,14 @@ backend cannot lock itself out.
 no room mirror. A fault in the forced command gives an agent the rights of
 the git account alone.
 
-**The backend installs `serve` at its first operation.** It writes the
-script over SFTP when the content differs, the same as it keeps the
-credential file current today.
+**The backend prepares the account once, before its first operation.**
+It makes `~/.ambion` and `~/.ssh`, writes `serve` when its content
+differs, removes the old staging folders, and registers the templates.
+`serve` goes to a temporary name and then a rename, since `bash` reads a
+script as it runs and a write in place can change a running copy. The
+first `connect` of the git owner and the first `identityFor` await the
+same preparation, so no key reaches `sshd` before its forced command
+exists.
 
 ## The protocol
 
@@ -181,7 +194,9 @@ credential file current today.
 **The agent's ssh configuration maps the alias to the server.** At each
 `connect`, the bash backend writes three files into `~/.ssh` with mode
 `0600`, and makes `Include ambion-git.conf` the first line of
-`~/.ssh/config`:
+`~/.ssh/config`. It makes `~/.ssh` with mode `0700` when it is absent,
+and each temporary name lives in `~/.ssh`, so each rename stays on one
+filesystem:
 
 ```text
 # ~/.ssh/ambion-git.conf
@@ -210,14 +225,14 @@ the key. Every other remote keeps the agent's own ssh settings.
 **Each agent key has one line in `authorized_keys.ambion`.**
 
 ```text
-restrict,from="127.0.0.1,::1",expiry-time="20260924171230",command="/home/lab-git/.ambion/serve analyst" ssh-ed25519 AAAA... ambion:analyst
+restrict,from="127.0.0.1,::1",expiry-time="20260924101230",command="/home/lab-git/.ambion/serve analyst" ssh-ed25519 AAAA... ambion:analyst
 ```
 
 | Option        | Effect                                                                         |
 | ------------- | ------------------------------------------------------------------------------ |
 | `restrict`    | No pty, no port forwarding, no agent forwarding, no X11                        |
 | `from`        | The key works only from `agentSources`. A copy of the key off the server fails |
-| `expiry-time` | `sshd` refuses the key after this time                                         |
+| `expiry-time` | `sshd` refuses the key after this time, in the server's time zone              |
 | `command`     | `sshd` runs `serve <agent>` for every request, whatever the client asks        |
 
 **`serve` is the one place that decides a request.** `sshd` puts the
@@ -261,6 +276,15 @@ key pair in the OpenSSH format (`utils.generateKeyPairSync('ed25519')`
 in `ssh2` 1.17.0). The key lives in the backend's memory and in the
 agent's home. The host provisions no agent key for git.
 
+**The credential rule of the workstation package changes its words.**
+[Workstation](workstation.md#credentials) states today: "The backend
+stores, issues, and rotates no credential", and it lists credential
+issuance and rotation as out of v1. Proposed: "The host owns the key of
+each account on the server. The git backend owns the git key of each
+agent: it issues the key, rotates it, and the key works only from
+`agentSources` until it expires." The bash backend keeps the rule as it
+is. Phase 4 step 5 changes the page.
+
 **Each `connect` of the bash backend keeps the agent's files current.**
 
 1. The bash backend calls `identityFor(agent)` on the git backend's
@@ -272,6 +296,16 @@ agent's home. The host provisions no agent key for git.
    `~/.ssh/config` in one command. It writes each one that differs,
    through a temporary name, `chmod 600`, and `mv`.
 
+**The server's clock and time zone decide the expiry.** OpenSSH 7.7
+added `expiry-time`, and it reads the time in the server's time zone. The
+`Z` suffix for UTC needs OpenSSH 9.1, and Ubuntu 22.04 ships 8.9. The
+backend therefore runs one command on the server for each write: `date
++%s` gives the server's time, and `date -d @<expiry> +%Y%m%d%H%M%S`
+renders the expiry in the server's zone. The margin and the `expiresAt`
+of the identity count from the server's time, so a skew between the two
+clocks shortens no key. The `command` path comes from the home that the
+client reads once with `realpath('.')`.
+
 **The margin is the rule of the 0.2.0 credential file.** A key counts as
 missing when the smaller of 10 minutes and half of its life is left
 ([Git](git.md#credentials)). The key rotates about once each `keyTtl`, and
@@ -282,10 +316,13 @@ keeps the old one, so a command in flight with the old key finishes.
 Each write drops the lines whose `expiry-time` has passed. `sshd`
 refuses an expired line on its own, so a late drop grants nothing.
 
-**The backend serializes its writes of `authorized_keys.ambion`.** Two
-agents that connect at once each need a line. One promise chain in the
-host's process orders the writes: read, change, write to a temporary
-name, `chmod 600`, and rename. One host process drives one git account.
+**The server serializes the writes of `authorized_keys.ambion`.** Two
+agents that connect at once each need a line, and two host processes can
+overlap during a handover ([Deployment](deployment.md)). Each write is
+one command on the server under `flock ~/.ambion/keys.lock`: read the
+file, add the new line, drop the expired lines, write a temporary name in
+`~/.ssh`, `chmod 600`, and rename. The lock orders the writes of every
+host process, so no line is lost.
 
 **A restart of the host issues new keys.** The keys live in memory. The
 first `connect` of each agent after a restart writes a new key and a new
@@ -421,24 +458,27 @@ checks each request against the namespace rule." The tokens of
 agent, and `serve` applies the rule. The one-pusher rule holds on both.
 
 **The template helpers move to the workspace package.** `fromDirectory`,
-`TemplateRegistration`, the blob hashes, and the name rules live in
-`packages/git` today, beside `just-git`. The workstation needs them and
+`TemplateRegistration`, `TemplateSource`, `TemplateFiles`, `hashesOf`,
+`sameFiles`, and the name rules of `names.ts` live in `packages/git`
+today, beside `just-git`. `git-tools.ts` repeats the name pattern, and it
+imports the rule from the new entry. The workstation needs them and
 must not install `just-git`. They move to a new entry,
 `@ambionframework/workspace/git`, which loads `node:fs` and `node:crypto`
 and no git library. `@ambionframework/just-git` imports them from there.
 
 **The changelog names these export changes.**
 
-| Item | Change                                                                                                                                                                              |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| G1   | `@ambionframework/git` becomes `@ambionframework/just-git`, and `gitBackend` becomes `justGitBackend`                                                                               |
-| G1   | `justGitBackend` has no `handler` and no `url`                                                                                                                                      |
-| G1   | `GitAccess` becomes a union with a `transport` field, and `credentialsFor` goes                                                                                                     |
-| G1   | `BashBackend` gets `gitTransports`, and the root entry exports `GitTransport`                                                                                                       |
-| G1   | The workstation writes no `~/.git-credentials`                                                                                                                                      |
-| G2   | The root entry of the workspace exports `GitSshAccess` and `GitSshIdentity`                                                                                                         |
-| G2   | The entry `@ambionframework/workspace/git` exports `fromDirectory`, `TemplateRegistration`, and `TemplateSource`, and `@ambionframework/just-git` no longer exports `fromDirectory` |
-| G2   | `@ambionframework/workstation` exports `workstationGitBackend` and `WorkstationGitOptions`                                                                                          |
+| Item | Change                                                                                                                                                                                                                                    |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G1   | `@ambionframework/git` becomes `@ambionframework/just-git`, and `gitBackend` becomes `justGitBackend`                                                                                                                                     |
+| G1   | `justGitBackend` has no `handler` and no `url`                                                                                                                                                                                            |
+| G1   | `GitAccess` becomes a union with a `transport` field, and `credentialsFor` goes                                                                                                                                                           |
+| G1   | `BashBackend` gets `gitTransports`, and the root entry exports `GitTransport`                                                                                                                                                             |
+| G1   | The workstation writes no `~/.git-credentials`                                                                                                                                                                                            |
+| G2   | The root entry of the workspace exports `GitSshAccess` and `GitSshIdentity`                                                                                                                                                               |
+| G2   | The new entry `@ambionframework/workspace/git` exports `fromDirectory`, `TemplateRegistration`, `TemplateSource`, `TemplateFiles`, `hashesOf`, `sameFiles`, and the name rules. The export snapshot of the workspace gets its sixth entry |
+| G2   | `@ambionframework/just-git` no longer exports `fromDirectory`                                                                                                                                                                             |
+| G2   | `@ambionframework/workstation` exports `workstationGitBackend` and `WorkstationGitOptions`                                                                                                                                                |
 
 ## Owners and order
 
@@ -447,8 +487,8 @@ client.** The client holds one SFTP channel. An operation opens one
 `exec` channel, and an abort opens one more.
 
 **`identityFor` does not take the git owner.** It runs from the bash
-backend's `connect`, the same as `credentialsFor` in 0.2.0. It reads the key
-from memory. A new key adds one write of `authorized_keys.ambion` on the
+backend's `connect`, the same as `credentialsFor` in 0.2.0. It awaits
+the preparation of the account, then reads the key from memory. A new key adds one write of `authorized_keys.ambion` on the
 git account's client. The git account's client then holds four channels
 at most, under the `MaxSessions` default of 10.
 
@@ -480,17 +520,17 @@ snapshot or one `git bundle` for each repository.
 **`docs/trust.md` gets a row for this backend.** The forced command and
 the account permissions enforce the one-pusher rule. The kernel does not.
 
-| Attempt                                 | just-bash with `justGitBackend`                              | Workstation with this backend                                    |
-| --------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------- |
-| Push to another agent's repository      | Refused: no write credential                                 | Refused by `serve`                                               |
-| Push to a template                      | Refused: read-only                                           | Refused by `serve` and by the template's hook                    |
-| Use another agent's credential          | Not possible: no file holds it                               | Needs that agent's key file, mode `0600`                         |
-| Read or change a repository on the disk | Not possible: the repositories are in the host's SQLite file | Refused: the git home has mode `0700`                            |
-| Use its credential from another machine | Not possible: no file holds it                               | Refused by `from`                                                |
-| Copy its credential into the record     | Not possible: no file holds it                               | Possible; the key works only from `agentSources`, until `keyTtl` |
-| Open a shell as the git account         | Not applicable                                               | Refused: `restrict` and the forced command                       |
-| Find which agent moved a ref            | The just-bash `git` locks the author to the agent            | The reflog of the repository names the agent                     |
-| Fill the disk with pushes               | Fills the host's SQLite file                                 | Fills the server's disk                                          |
+| Attempt                                 | just-bash with `justGitBackend`                              | Workstation with this backend                                                                      |
+| --------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Push to another agent's repository      | Refused: no write credential                                 | Refused by `serve`                                                                                 |
+| Push to a template                      | Refused: read-only                                           | Refused by `serve` and by the template's hook                                                      |
+| Use another agent's credential          | Not possible: no file holds it                               | Needs that agent's key file, mode `0600`, or a copy of it                                          |
+| Read or change a repository on the disk | Not possible: the repositories are in the host's SQLite file | Refused: the git home has mode `0700`                                                              |
+| Use its credential from another machine | Not possible: no file holds it                               | Refused by `from`                                                                                  |
+| Copy its credential into the record     | Not possible: no file holds it                               | Possible. A peer on the server can then push to every repository of that agent until `keyTtl` ends |
+| Open a shell as the git account         | Not applicable                                               | Refused: `restrict` and the forced command                                                         |
+| Find which agent moved a ref            | The just-bash `git` locks the author to the agent            | The reflog of the repository names the agent                                                       |
+| Fill the disk with pushes               | Fills the host's SQLite file                                 | Fills the server's disk                                                                            |
 
 ## Prepare the server
 
@@ -504,7 +544,11 @@ of [the package guide](../packages/workstation/README.md) do not change.
 - **`AllowUsers`, when it is set,** names the account.
 - **`git` and `openssh-client`** on the server. An agent runs `ssh` to
   reach the account.
-- **OpenSSH 8.2 or newer** for `expiry-time`. `restrict` needs 7.2.
+- **OpenSSH 7.7 or newer** for `expiry-time`. `restrict` needs 7.2.
+- **GNU coreutils and util-linux:** `mv -T`, `date -d`, and `flock`.
+  The workstation already needs `setsid` from util-linux.
+- **One writer of the account's key file at a time** holds without the
+  operator: every host process takes `flock` on the server.
 
 `test/sshd/setup.sh` gets each step for the account `lab-git`.
 
@@ -520,6 +564,9 @@ The tier also proves:
   `git-upload-archive` or a path with `..`;
 - that an agent cannot read `~lab-git`;
 - that a key past its `expiry-time` fails;
+- that a key fails from a source outside `agentSources`: `setup.sh` also
+  listens on the runner's own address, and a connection to that address
+  has it as its source;
 - that the reflog of a pushed ref names the agent.
 
 **The scripted tier tests the parts without `sshd`.**
@@ -601,10 +648,11 @@ command after a `;`. A bare clone hard-linked the object files, `mv -T`
 onto an existing fork failed with "Directory not empty", and the reflog
 named the pushing agent while the commit named another author.
 
-**One fact needs a check against OpenSSH before the implementation.** This
-page has not verified how `sshd` reads the time of `expiry-time`: as the
-server's local time, or as UTC with a `Z` suffix. The backend writes the
-form that the oldest supported release reads.
+**The release notes of OpenSSH settle the time of `expiry-time`.**
+[OpenSSH 7.7](https://www.openssh.org/txt/release-7.7) added the option.
+[OpenSSH 9.1](https://www.openssh.org/txt/release-9.1) added the `Z`
+suffix for UTC. Before 9.1, `sshd` reads the time in the server's time
+zone, so the backend renders it on the server.
 
 ## Out of v1
 

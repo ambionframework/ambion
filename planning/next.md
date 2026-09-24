@@ -51,11 +51,11 @@ server, and each agent reaches them with `git` over SSH.
 **Three themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
-| Theme                     | Acceptance                                                                                                                                                                                                                 |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                                                  |
-| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database.                             |
-| G Git on the workstation  | `openWorkspace` refuses `just-git` beside a workstation. `workstationGitBackend` passes `gitConformance` on OpenSSH. No agent pushes outside its namespace, and no agent key works from another machine or after `keyTtl`. |
+| Theme                     | Acceptance                                                                                                                                                                                                                        |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                                                         |
+| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database.                                    |
+| G Git on the workstation  | `openWorkspace` refuses `just-git` beside a workstation. `workstationGitBackend` passes `gitConformance` on OpenSSH. No agent pushes outside its namespace, and no agent key works from outside `agentSources` or after `keyTtl`. |
 
 **Three format changes.** Each change lands with a golden journal of the
 new shape, and the changelog names each one.
@@ -203,7 +203,9 @@ account on its own server, and the host opens no port.
       `justGitBackend` with no `handler` and no `url`. `GitAccess` names
       its transport, each bash backend declares the transports that it
       carries, and `openWorkspace` refuses a pair that does not match.
-      The workstation loses `~/.git-credentials`. P1. (G1)
+      The workstation loses `~/.git-credentials`. The workbench, the
+      README, `docs/example.md`, `docs/git.md`, and the package guide
+      take the new names in the same step. P1. (G1)
 - [ ] **2.** The contract for SSH: `GitSshAccess`, the template helpers
       in `@ambionframework/workspace/git`, and `gitConformance` branches
       on the transport in four cases. Needs 1. P1. (G2)
@@ -211,12 +213,19 @@ account on its own server, and the host opens no port.
       keys, fork and registration by rename, and the account in
       `test/sshd/setup.sh`. Needs 2. P1. (G2)
 - [ ] **4.** The docs: `workstation-git.md` describes what shipped, and
-      `git.md`, `workstation.md`, `trust.md`, and the package guide name
-      the backend. Needs 3. P1. (G2)
+      `git.md`, `trust.md`, and the package guide name the backend. The
+      trust row states the reach of a leaked agent key. Needs 3. P1. (G2)
+- [ ] **5.** `workstation.md` states the new credential rule: the host
+      owns the account keys, and the git backend issues and rotates the
+      git key of each agent. Needs 3. P1. (G2)
 
 **Evidence:** the `workstation` CI job runs `gitConformance` on OpenSSH
 with the SSH harness, and the tier proves the checks that
-[Workstation git](../docs/workstation-git.md#tests) lists.
+[Workstation git](../docs/workstation-git.md#tests) lists. The workbench
+runs on `justGitBackend`.
+
+**The tag needs G1 and G2 together.** After G1 alone, a workstation has
+no git backend.
 
 ### Phase 5. Release (P1)
 
@@ -306,8 +315,9 @@ address. A forced command decides each request by the namespace rule. The
 backend issues one Ed25519 key for each agent, limited by `from` and
 `expiry-time`. A fork or a template lands with one rename, so the backend
 keeps no registry table. **Evidence:** `gitConformance` and the checks of
-the design pass in the OpenSSH tier. The tier states how the oldest
-supported `sshd` reads the time of `expiry-time`.
+the design pass in the OpenSSH tier. The backend renders `expiry-time`
+in the server's time zone, from the server's clock, since the `Z` suffix
+for UTC needs OpenSSH 9.1.
 
 ### R. Release
 
