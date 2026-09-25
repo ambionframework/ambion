@@ -543,10 +543,10 @@ acceptance test of the design.** The suite runs a live assistant beside a
 specialist whose evidence the test fixes. Its claims are about judgment:
 routing, silence, correction, and what the summary keeps.
 
-**Today the suite holds one helper and eleven tests.** `evaluate()` starts
-a room, sends one question, waits for the summary under its own timer, and
-stops the room. A Pi stream routes on the model id. The assistant reaches
-the provider, and the specialist returns one fixed `say`.
+**Before the port, the suite held one helper and eleven tests.** `evaluate()` started
+a room, sent one question, waited for the summary under its own timer,
+and stopped the room. A Pi stream routed on the model id. The assistant
+reached the provider, and the specialist returned one fixed `say`.
 
 **The rewrite removes both mechanisms.**
 
