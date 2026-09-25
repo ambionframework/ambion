@@ -34,6 +34,7 @@ each page.
 | [Git](git.md)                         | A git backend: read-only templates, forks, clones, and pushes               |
 | [Workstation git](workstation-git.md) | The git backend on the workstation: one account, git over SSH, agent keys   |
 | [Example](example.md)                 | The one runnable example: an agentic lab workspace                          |
+| [Simulator](simulator.md)             | A design: evals where an agent plays a person, with checks and a judge      |
 | [Durability](durability.md)           | Journal guarantees, recovery, leases, and failure evidence                  |
 | [Formal](formal.md)                   | The verified rules, their proofs, and how the gate runs them                |
 | [Deployment](deployment.md)           | Host placement, storage, reconnect, and operational limits                  |
