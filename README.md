@@ -145,16 +145,11 @@ builds its team the same way and runs it in a terminal.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-exchange-dark.svg">
-  <img alt="One exchange on a time axis. visit.send() records the question as entry 1. The room activates three agents, and they reason in parallel. Agent A says, entry 2. The first say of Agent B read only entry 1, so it comes back missed with entry 2. Agent B reconsiders, writes a file, and says, entry 3. Agent C has nothing to add. The room closes the exchange, and waitForClose() returns. An optional summary returns from waitForSummary()." src="docs/assets/ambion-exchange.svg">
+  <img alt="Two exchanges on a time axis. A person asks with visit.send(), entry 1. The room activates Agent A, on Pi, and Agent B, on the Claude Agent SDK, and they reason in parallel. A reads a file and says, entry 2. The first say of B read only entry 1, so it comes back missed with entry 2. B reads entry 2, writes a new file, and says to A, entry 3. Entry 3 wakes A, and A resumes the harness session of its first activation. A reads only entry 3 and answers the person, entry 4. The room closes the exchange, entry 5, and waitForClose() returns. A summary follows, entry 6, and waitForSummary() returns it. The person asks again, entry 7. A starts a fresh session, reads the summary and entry 7, and says, entry 8. B has nothing to add and stays silent. The record is durable. The session is a cache for one exchange. The workspace keeps the files. The trace goes to the host's logs." src="docs/assets/ambion-exchange.svg">
 </picture>
 
 **An exchange runs from `visit.send()` to `waitForClose()`.** A room started
 with `summary` adds a closing summary, and `waitForSummary()` returns it.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-context-dark.svg">
-  <img alt="A room over two exchanges on a time axis. A person asks, entry 1. Agents A, on Pi, and B read the record. A says, entry 2. B says to A, entry 3, which wakes A again. A's second activation resumes the harness session of its first and reads only entries 2 and 3. A says, entry 4. The exchange closes, entry 5, and a summary follows, entry 6. The person asks again, entry 7, which opens exchange 2. A's third activation starts a fresh session and reads the summary and entry 7. B stays silent. The record is durable. The trace goes to the host's logs. The session is a cache for one exchange." src="docs/assets/ambion-context.svg">
-</picture>
 
 **The record is durable, and every activation reads it.** It holds every
 message, close, summary and lease entry. A restart replays it. A summary
