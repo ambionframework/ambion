@@ -530,7 +530,7 @@ holds the rules.
   scripted execution, a scripted actor, and a scripted judge before the
   first live run.
 - **A failed case keeps its evidence.** The live support writes `run` and
-  `verdict` to `test/live/runs/<case>.json`, and prints the path. Each
+  `verdict` to `test/live/runs/<model>/<case>.json`, and prints the path. Each
   `Error` becomes its `message`. Git ignores the directory. A person reads
   the file before a check or a criterion changes. The repository rule
   forbids a second live run to chase a flake, so the file is the record of
