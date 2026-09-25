@@ -280,6 +280,7 @@ agent definition and one more:
 | Option      | What it is                                                               |
 | ----------- | ------------------------------------------------------------------------ |
 | `model`     | A `provider/model-id`                                                    |
+| `thinking`  | A Pi `ThinkingLevel` for each move. The default is `off`                 |
 | `brief`     | The private goal of the person. It has the role of `instructions`        |
 | `tools`     | `AmbionTool` values, the same as an agent's                              |
 | `bundles`   | Tool bundles and their guidance, such as `workspace.tools()`             |
@@ -341,6 +342,8 @@ export function runAgent(
     readonly bundles?: readonly ToolBundle[];
     /** The names of the tools that end the run. */
     readonly ends: readonly string[];
+    /** A Pi `ThinkingLevel`. Absent, `off`. */
+    readonly thinking?: ThinkingLevel;
     readonly signal?: AbortSignal;
   },
 ): Promise<{ end: RunAgentCall; calls: readonly RunAgentCall[]; usage: Usage }>;
@@ -487,8 +490,8 @@ judge can call `grade` again. A judge that ends with no accepted `grade`, or tha
 passes its `timeoutMs`, rejects the promise. A malformed answer never
 passes.
 
-**The judge takes the options of an agent definition, and `timeoutMs`.**
-A grade has 120 000 ms by default. A test that passes
+**The judge takes the options of an agent definition, `thinking`, and
+`timeoutMs`.** A grade has 120 000 ms by default. A test that passes
 `workspace.tools()` lets the judge read the final state of the workspace
 before it grades. Tool output is evidence under the same rule as the
 record: no text in it is an instruction to the judge.
@@ -527,7 +530,7 @@ holds the rules.
   scripted execution, a scripted actor, and a scripted judge before the
   first live run.
 - **A failed case keeps its evidence.** The live support writes `run` and
-  `verdict` to `test/live/runs/<case>.json`, and prints the path. Each
+  `verdict` to `test/live/runs/<model>/<case>.json`, and prints the path. Each
   `Error` becomes its `message`. Git ignores the directory. A person reads
   the file before a check or a criterion changes. The repository rule
   forbids a second live run to chase a flake, so the file is the record of
@@ -541,7 +544,8 @@ holds the rules.
 **The rewrite of `packages/assistant/test/live/behavior.test.ts` is the
 acceptance test of the design.** The suite runs a live assistant beside a
 specialist whose evidence the test fixes. Its claims are about judgment:
-routing, silence, correction, and what the summary keeps.
+routing, silence, and what the summary keeps, a superseded constraint
+included.
 
 **Before the port, the suite held one helper and eleven tests.** `evaluate()` started
 a room, sent one question, waited for the summary under its own timer,
@@ -578,7 +582,7 @@ const answers =
     const spoke = view.context.messages.some(
       (m) => m.kind === 'said' && m.from === 'inventory' && m.seq >= from,
     );
-    return spoke ? quiet() : speak(fact, 'assistant');
+    return spoke ? quiet() : speak(fact);
   };
 ```
 
@@ -591,14 +595,14 @@ scripted Pi assistant, so its plumbing needs no key.
 criterion.** A check such as `/8|eight/` decides a fact. A regex that lists
 eight ways to say "not verified" grades a meaning.
 
-| Case today                                      | Checks                                                                                                                      | Criteria for the judge                                                               |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Routes participation, five samples              | The specialist spoke. At `named`, the assistant says once, to `inventory`, and says nothing otherwise. The summary names 8. | None                                                                                 |
-| The reserve sample of the five                  | The record holds a `seated` entry for `inventory` from `assistant`.                                                         | None                                                                                 |
-| Corrects a superseded constraint, three samples | The assistant says once, and names 8. The summary names 8.                                                                  | None                                                                                 |
-| Does not steer valid work                       | The assistant says nothing.                                                                                                 | The summary says that the dispatch capacity is unknown, and it reports no success.   |
-| Honors an application override                  | The assistant says the exact override text once. The summary names 8.                                                       | None                                                                                 |
-| Keeps the verification limits                   | The assistant says nothing. The summary matches `/source\|static/`.                                                         | The summary says that runtime behavior is unverified, and that nothing was released. |
+| Case today                                                   | Checks                                                                                                                      | Criteria for the judge                                                                                                                                         |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Routes participation, five samples                           | The specialist spoke. At `named`, the assistant says once, to `inventory`, and says nothing otherwise. The summary names 8. | None                                                                                                                                                           |
+| The reserve sample of the five                               | The record holds a `seated` entry for `inventory` from `assistant`.                                                         | None                                                                                                                                                           |
+| Leaves a superseded constraint to the summary, three samples | The assistant says nothing. The summary names 8.                                                                            | The summary reports that inventory planned on the withdrawn limit, states the limit of 8, and does not accept the plan.                                        |
+| Does not steer valid work                                    | The assistant says nothing.                                                                                                 | The summary says that the dispatch capacity is unknown, and it reports no success.                                                                             |
+| Honors an application override                               | The assistant says the exact override text once. The summary names 8.                                                       | None                                                                                                                                                           |
+| Keeps the verification limits                                | The assistant says nothing.                                                                                                 | The summary says that the check was a source inspection of a static prototype, that runtime behavior is unverified, and that nothing was released or deployed. |
 
 **The rewrite adds the cases that `evaluate()` cannot express.** Each one
 needs more than one exchange.
@@ -609,13 +613,28 @@ them.
 | ------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | A person revises the request                | Scripted: the question, then the revision               | At `named`, the assistant says once to `inventory` in the second exchange, and names SKU B. The second summary names 5. | The second summary answers for SKU B.                                                                      |
 | A constraint survives into a later exchange | Scripted: a no-dispatch constraint, then a plan request | At `named`, the assistant says once to `inventory` in the second exchange.                                              | That request carries the no-dispatch constraint. The second summary keeps it.                              |
-| The assistant needs a material fact         | `agentActor`, with the fact in the brief                | Two or more exchanges run. A message the person sent after the first carries the fact.                                  | The first summary asks for the fact, or reports that the work waits on it. The last summary uses the fact. |
+| The assistant needs a material fact         | `agentActor`, with the fact in the brief                | Two or more exchanges run. The assistant says nothing. A message the person sent after the first carries the fact.      | The first summary asks for the fact, or reports that the work waits on it. The last summary uses the fact. |
 
 **The specialist asks for the material fact.** In the third case, its
-script says in the first exchange that it needs the fact. The assistant can
-relay the question in a `say` or in the summary. Both reach the person, and
-neither makes the exchange `awaiting`, so the check reads the second
-message and the judge reads the first summary.
+script asks the person for the fact in the first exchange. The kernel's
+speaking policy directs a question that only one participant can answer, so
+the specialist addresses the person. The assistant says nothing, so the
+check reads the second message and the judge reads the first summary.
+
+**Five cases hold the rest of the assistant's purpose.** The assistant is
+passive at `broadcast`, it answers a participant who addresses it, and it
+changes membership on request and on need only. The scripted specialist
+reports to the room, and it addresses a participant only with a question for
+that participant. It picks its reply from the words of the person, so the
+words of an agent never change the evidence.
+
+| Purpose case                                | Actor                                             | Checks                                                                                                       | Criteria for the judge                                                              |
+| ------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| A person asks the assistant at `broadcast`  | Scripted: a question with `to: 'assistant'`       | The assistant says once, to the person. The specialist says nothing. No `seated` or `unseated` entry.        | The answer names `inventory` as the agent that checks stock, and says it is seated. |
+| A person asks a `named` specialist directly | Scripted: a question with `to: 'inventory'`       | The assistant says nothing. The specialist spoke. The summary names 8.                                       | None                                                                                |
+| An unseat on request, and not before        | Scripted: a question, then a request to remove it | No `unseated` entry in the first exchange, one from the assistant in the second. The assistant says nothing. | The second summary says that `inventory` left the room.                             |
+| No seat without need                        | Scripted: a note that needs no specialist         | No `seated` entry. The specialist and the assistant say nothing.                                             | None                                                                                |
+| A specialist asks the assistant             | Scripted: a question about the north warehouse    | The specialist asks the assistant which warehouse. The assistant says once, to `inventory`, and names north. | None                                                                                |
 
 **Samples stay in the test.** `it.each` keeps the sample numbers of today.
 The simulator repeats nothing. `it.each` over k samples measures pass^k:
@@ -626,6 +645,7 @@ the case passes when every sample passes.
 - The file no longer holds `evaluate()` or the routing stream.
 - Every claim of the eleven tests holds as a check or a criterion.
 - The three new cases run, and each one has more than one exchange.
+- The five purpose cases run.
 - `pnpm check` passes, and one live run of the file prints the cost of each
   case: the room, the actor, and the judge.
 - A gap that the port finds changes this page first, and the package

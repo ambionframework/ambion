@@ -28,9 +28,15 @@ import {
 	type Usage,
 } from '@ambionframework/ambion';
 import { describeExecutor } from '@ambionframework/ambion/hosting';
-import type { HarnessEvent, RunResult, StreamFn } from '@earendil-works/pi-agent-core';
+import type {
+	HarnessEvent,
+	RunResult,
+	StreamFn,
+	ThinkingLevel,
+} from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, DEFAULT_COMPACTION_SETTINGS } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
+import { checkThinking, thinkingOf } from './define.ts';
 import { passOutcome } from './failure.ts';
 import { providerMessages } from './freshness.ts';
 import { openHarness } from './harness.ts';
@@ -66,6 +72,8 @@ export interface RunAgentRequest {
 	readonly bundles?: readonly ToolBundle[];
 	/** The names of the tools that end the run. Each one names a tool of the run. */
 	readonly ends: readonly string[];
+	/** How much the model reasons before it answers. Absent, `off`. */
+	readonly thinking?: ThinkingLevel;
 	readonly signal?: AbortSignal;
 }
 
@@ -91,15 +99,19 @@ export async function runAgent(
 	services: ExecutionServices,
 	request: RunAgentRequest,
 ): Promise<RunAgentResult> {
+	checkThinking(request.thinking);
 	const definition = defineAgent({
 		name: request.agent.name,
 		identity: request.agent.identity,
-		executor: describeExecutor({
-			kind: 'pi',
-			instructions: request.system,
-			...(request.tools === undefined ? {} : { tools: request.tools }),
-			...(request.bundles === undefined ? {} : { bundles: request.bundles }),
-		}),
+		executor: {
+			...describeExecutor({
+				kind: 'pi',
+				instructions: request.system,
+				...(request.tools === undefined ? {} : { tools: request.tools }),
+				...(request.bundles === undefined ? {} : { bundles: request.bundles }),
+			}),
+			...(request.thinking === undefined ? {} : { thinking: request.thinking }),
+		},
 	});
 	const run = new Run(definition, endsOf(definition, request.ends));
 	request.signal?.throwIfAborted();
@@ -116,6 +128,7 @@ export async function runAgent(
 		tools: definition.executor.tools.map((tool) => run.tool(tool)),
 		systemPrompt: () => systemOf(definition),
 		compaction: DEFAULT_COMPACTION_SETTINGS,
+		thinking: thinkingOf(definition.executor),
 		toProviderMessages: providerMessages,
 		onEvent: (event) => run.note(event),
 	}).catch(async (error: unknown) => {

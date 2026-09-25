@@ -146,7 +146,7 @@ describe('runAgent', () => {
 		expect(requests).toBe(2);
 	});
 
-	it('routes each run on its name, and shows the model the system prompt with the guidance', async () => {
+	it('routes each run on its name, and shows the model the system prompt, the guidance, and the thinking level', async () => {
 		const systems: string[] = [];
 		const script = byAgent({
 			actor: (context) => {
@@ -155,13 +155,22 @@ describe('runAgent', () => {
 			},
 			judge: () => callTool('finish', { answer: 'from the judge' }),
 		});
-		const shared = services(script);
+		const reasoning: unknown[] = [];
+		const base = scripted(script);
+		const shared = createExecutionServices({
+			stream: (model, context, options) => {
+				reasoning.push(options?.reasoning);
+				return base(model, context, options);
+			},
+			sessions: 'memory',
+		});
 		const bundles = [{ tools: [lookup], guidance: 'Look a fact up before you answer.' }];
-		const actor = await runAgent(shared, request({ tools: [finish], bundles }));
+		const actor = await runAgent(shared, request({ tools: [finish], bundles, thinking: 'medium' }));
 		const judge = await runAgent(shared, request({ name: 'judge' }));
 		expect(actor.end.args).toEqual({ answer: 'from the actor' });
 		expect(judge.end.args).toEqual({ answer: 'from the judge' });
 		expect(systems).toEqual(['Play the person.\n\nLook a fact up before you answer.']);
+		expect(reasoning).toEqual(['medium', undefined]);
 	});
 
 	it('rejects when the signal aborts the run', async () => {
@@ -258,6 +267,11 @@ describe('runAgent', () => {
 			'a bundle tool with the name of a tool',
 			request({ bundles: [{ tools: [finish] }] }),
 			/duplicate tools named 'finish'/,
+		],
+		[
+			'a thinking level that Pi does not name',
+			request({ thinking: 'huge' as RunAgentRequest['thinking'] }),
+			/Thinking must be one of/,
 		],
 	] as const)('refuses %s before any request', async (_case, bad, error) => {
 		let requests = 0;

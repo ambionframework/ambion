@@ -37,6 +37,10 @@ message. See [Processes](docs/processes.md).
   aborts the run. `@ambionframework/pi` exports `runAgent`,
   `RunAgentRequest`, `RunAgentResult`, and `RunAgentCall`. The simulator of
   [Simulator](docs/simulator.md) builds its actor and its judge on it.
+- **A Pi seat takes a thinking level.** `pi({ thinking })` takes a Pi
+  `ThinkingLevel`, and the harness sends it to the provider. Absent, the
+  level is `off`, as before. `runAgent`, `defineAssistant`, `agentActor`,
+  and `agentJudge` take `thinking` too.
 - **`ps`, `status`, `wait`, and `cancel` join `bash`.** `ps` lists the
   running processes of the caller. The handle tools take a handle of the
   caller. `bash` takes an optional `name`, a label that `ps` and the
@@ -111,6 +115,16 @@ message. See [Processes](docs/processes.md).
 
 ### Breaking changes
 
+- **The default assistant is passive at `broadcast`, and keeps to
+  membership and summaries.** It sends nothing to a specialist at
+  `broadcast` or `presence` attention. It sends no correction, no relay,
+  and no question to the person during the exchange. The summary reports a superseded
+  fact, a broken constraint, and a question for the person. The assistant
+  answers a person or a specialist that addresses it, and it sends one directed
+  request to an idle specialist at `named` attention. A constraint stays in
+  force until the person withdraws it. Its identity now reads "Room
+  assistant. Seats and unseats specialists as the request needs, and
+  summarizes each exchange." See [Default assistant](docs/assistant.md).
 - **`bash` returns a handle, and waits up to `wait` seconds, 10 by
   default.** A command that runs longer keeps running, and the result
   says so. A process can run for `timeout` seconds, 600 by default. Before,

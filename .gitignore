@@ -53,4 +53,4 @@ examples/*/demo-run.json
 *.dfy.merged
 
 # the runs of failed live evals, kept for a person to read
-test/live/runs/
+**/test/live/runs/

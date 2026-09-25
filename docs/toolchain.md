@@ -251,7 +251,12 @@ change lands on `main`, on a weekly schedule, and by dispatch. It does not run
 on a pull request, because a real-model run costs money. It runs one
 job per harness. The `pi` and `claude` jobs read `ANTHROPIC_API_KEY` and use
 `AMBION_MODEL` (the default is `anthropic/claude-sonnet-5`). The `codex` job
-reads `CODEX_API_KEY`. The workflow cancels a superseded run. Run it locally
+reads `CODEX_API_KEY`. The `packages` job runs the live tier of every other
+package, with a limit of 90 minutes. It sets `AMBION_THINKING` and
+`JUDGE_THINKING` to `medium` for the assistant's evals. With an
+`OPENAI_API_KEY` secret, it sets `JUDGE_MODEL` to `openai/gpt-5.6-luna`, so
+another model family grades the assistant. The workflow cancels a superseded
+run. Run it locally
 with:
 
 ```sh
