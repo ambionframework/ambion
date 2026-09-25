@@ -186,6 +186,23 @@ asks a judge for the rest.
       `anthropic/claude-sonnet-5` and `openai/gpt-5.6-luna` at `medium`,
       each graded by the other. Needs 4. P1. (E1)
 
+**The results of step 5 so far.** Each cell counts the passing cases of 18,
+with one sample for each case.
+
+| Guidance                                   | Sonnet 5, `medium` | Luna 5.6, `medium` |
+| ------------------------------------------ | ------------------ | ------------------ |
+| Before the change                          | 13                 | 12                 |
+| Membership first                           | 16                 | 16                 |
+| Each reaction at `broadcast` named         | 17                 | 18                 |
+| A constraint stays until withdrawn         | 17                 | 18                 |
+| The summary restates a constraint          | 1 of 1 run (a)     | Not run            |
+| The rule for each specialist               | 9, then no credit  | 17 (b)             |
+| The questions of a specialist reach people | Not run            | 18 (b)             |
+
+(a) Only the case that failed before. (b) A Luna judge: the Anthropic
+account had no credit for the Sonnet judge. Step 5 closes after one full run
+of the last guidance on both models, each graded by the other.
+
 **Evidence:** each step states its cases in
 [Simulator](../docs/simulator.md#the-order-of-work). The last step keeps
 every claim of the assistant's live suite, and one live run of the file
