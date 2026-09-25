@@ -16,7 +16,8 @@
  *   so it resolves no reminder.
  * - **Session.** The run opens one session under the name `name`, prompts it
  *   once, and closes it. It has no steer and no resume.
- * - **Bound.** `signal` aborts the run, and the promise rejects.
+ * - **Bound.** `signal` aborts the run, and every provider request with it.
+ *   A run whose signal aborted rejects, even when an end landed first.
  */
 import {
 	type AgentDefinition,
@@ -27,7 +28,7 @@ import {
 	type Usage,
 } from '@ambionframework/ambion';
 import { describeExecutor } from '@ambionframework/ambion/hosting';
-import type { HarnessEvent, RunResult } from '@earendil-works/pi-agent-core';
+import type { HarnessEvent, RunResult, StreamFn } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, DEFAULT_COMPACTION_SETTINGS } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { passOutcome } from './failure.ts';
@@ -40,8 +41,11 @@ import { type ContextOf, fromAmbionTool, type PiTool } from './tools.ts';
 
 const CONTEXT = BACKGROUND_CONTEXT;
 
-/** The room name of every session a run opens. The session store keeps runs apart from rooms. */
-const RUN_SCOPE = 'run-agent';
+/**
+ * The room name of every session a run opens. A room name holds no `#`, so
+ * the session store keeps runs apart from rooms.
+ */
+const RUN_SCOPE = '#run-agent';
 
 /** One tool call of a run. */
 export interface RunAgentCall {
@@ -107,7 +111,7 @@ export async function runAgent(
 	);
 	const opened = await openHarness({
 		session,
-		models: streamModels(model, services.stream),
+		models: streamModels(model, bounded(services.stream, request.signal)),
 		model,
 		tools: definition.executor.tools.map((tool) => run.tool(tool)),
 		systemPrompt: () => systemOf(definition),
@@ -125,10 +129,28 @@ export async function runAgent(
 		request.signal?.throwIfAborted();
 		const result = await opened.lane.prompt(request.prompt, undefined, CONTEXT);
 		return run.result(result, request.signal);
+	} catch (error) {
+		// A run that the signal cut rejects with the signal's reason, whatever the lane threw.
+		request.signal?.throwIfAborted();
+		throw error;
 	} finally {
 		request.signal?.removeEventListener('abort', abort);
 		await opened.harness.close(CONTEXT).catch(noop);
 	}
+}
+
+/**
+ * A stream whose every request also ends when `signal` aborts. The lane
+ * ignores an abort that lands before it admits the prompt, so the signal
+ * cuts the request itself.
+ */
+function bounded(stream: StreamFn, signal: AbortSignal | undefined): StreamFn {
+	if (signal === undefined) return stream;
+	return (model, context, options) =>
+		stream(model, context, {
+			...options,
+			signal: options?.signal === undefined ? signal : AbortSignal.any([options.signal, signal]),
+		});
 }
 
 /** The names in `ends`, once each names a tool of the run. */
@@ -216,9 +238,10 @@ class Run {
 
 	/** What the run returns, or why it rejects. */
 	result(result: RunResult, signal: AbortSignal | undefined): RunAgentResult {
+		// A run whose signal aborted rejects, even when an end landed first.
+		signal?.throwIfAborted();
 		const end = this.end;
 		if (end !== undefined) return { end, calls: [...this.calls], usage: this.usage };
-		signal?.throwIfAborted();
 		const outcome = passOutcome(result, this.last);
 		if (outcome.failed) throw outcome.error;
 		const names = [...this.ends].join("', '");
