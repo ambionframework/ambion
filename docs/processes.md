@@ -51,8 +51,8 @@ states the owner and the backends that a process runs on.
 | -------- | --------------------------------------- | -------------------------------------------------------------------- |
 | `bash`   | `command`, `name?`, `timeout?`, `wait?` | Starts a process, waits up to `wait` seconds, and gives its state    |
 | `ps`     | None                                    | Lists the caller's running processes                                 |
-| `status` | `handle`                                | Gives the state of the process and the end of its output             |
-| `wait`   | `handle`, `timeout?`                    | Waits up to `timeout` seconds for the process to end, then as status |
+| `status` | `handle`                                | Gives the state of the process and its new output                    |
+| `wait`   | `handle` or `handles`, `timeout?`       | Waits up to `timeout` seconds for the process to end, then as status |
 | `cancel` | `handle`                                | Stops a running process, waits for it to end, then as status         |
 
 | Value                | Default | Range                         |
@@ -81,14 +81,15 @@ agent is the agent's own home. A handle of another agent fails with
 
 **Each process is a directory: `~/.processes/<handle>/`.**
 
-| File   | Written by  | When                                                                 |
-| ------ | ----------- | -------------------------------------------------------------------- |
-| `spec` | The table   | At the start: the command, the name, the timeout, the room, the time |
-| `out`  | The command | While it runs. The just-bash backends write it when the command ends |
-| `pid`  | The wrapper | First: the pid of the shell that runs the command                    |
-| `exit` | The wrapper | After the command: the exit code and the time, whole or absent       |
-| `stop` | The table   | Before it stops the process: `cancelled`, `timed_out`, or `failed`   |
-| `seen` | The table   | When a result or a reminder showed the end                           |
+| File     | Written by  | When                                                                 |
+| -------- | ----------- | -------------------------------------------------------------------- |
+| `spec`   | The table   | At the start: the command, the name, the timeout, the room, the time |
+| `out`    | The command | While it runs. The just-bash backends write it when the command ends |
+| `pid`    | The wrapper | First: the pid of the shell that runs the command                    |
+| `exit`   | The wrapper | After the command: the exit code and the time, whole or absent       |
+| `stop`   | The table   | Before it stops the process: `cancelled`, `timed_out`, or `failed`   |
+| `seen`   | The table   | When a result or a reminder showed the end                           |
+| `cursor` | The table   | After each result: the byte offset of the output that results showed |
 
 **The wrapper writes the pid, runs the command, and writes the end.**
 
@@ -129,15 +130,31 @@ one `find` that hands `spec`, `exit`, `stop`, and `seen` of every process
 to one `grep`. Where `ps` exists, the script then checks the pid of each
 process with no `exit`. A read costs one `exec` on every backend, and
 just-bash reads a table of 64 processes in about 30 ms. `ps` and the
-reminder read the whole table. `status`, `wait`, and `cancel` read the one
-process.
+reminder read the whole table. `status` and `cancel` read the one process.
+`wait` reads the one process, or the whole table on each read when it has
+`handles`.
 
 ## The result
 
-**Each result of `bash`, `status`, `wait`, and `cancel` is the end of the
-output, then one bracketed line.** The line states the process, its
-handle, its name when it has one, and its output file. A process that
-ended with no output shows `(no output)`.
+**Each result of `bash`, `status`, `wait`, and `cancel` is the new output,
+then one bracketed line.** The new output is the output after the cursor:
+the part that no earlier result of the agent showed. The line states the
+process, its handle, its name when it has one, and its output file. A
+`wait` with `handles` gives this for each process that ended, then the
+bracketed line of each one that still runs. A process that ended with no
+output shows `(no output)`. A process that wrote
+nothing new since the last result shows `(no new output)`. A running
+process that has written nothing yet shows only the bracketed line.
+
+**The cursor moves with each result.** A read gives the bytes from the
+cursor to the size of `out` when the read began, and writes that size to
+`cursor`. A result that starts past the start of the output adds `The text
+above starts at byte <n> of the output. An earlier result showed the bytes
+before it.` `details.read` holds `from` and `to`. Ten polls of a long build
+give ten new parts, and no part twice. One read takes at most 200 KB, so a
+burst past that shows only its end, and `read` reaches the rest. The cursor is a file, so a new run
+of the host reads on from the same byte. A failed write of `cursor` gives
+the same bytes again on the next read.
 
 ```text
 /home/writer
@@ -160,10 +177,11 @@ compiling 14 of 120
 | `cancelled` | `Process <h> is cancelled.`                                |
 | `failed`    | `Process <h> failed: <message>.`                           |
 
-**The view keeps the last 2000 lines or 50 KB.** These are the limits of
-Pi's `bash` tool. When the view cuts the output, the bracketed line adds
-`The text above is the last <n> lines, <size> of <total>.` A file up to
-200 KB is read whole, and a larger one with `tail -c`. The agent reads the
+**The view keeps the last 2000 lines or 50 KB of the new output.** These
+are the limits of Pi's `bash` tool. When the view cuts the new output, the
+bracketed line adds `The text above is the last <n> lines, <size> of the
+<total> after byte <n>.` in place of the start line. One read takes at
+most 200 KB, with `head -c <size> | tail -c <count>`. The agent reads the
 rest with `read`, which takes an offset and a limit.
 
 **`details.process` is a `ProcessStatus`.** The host's view gives the
@@ -396,6 +414,73 @@ An activation that fails between the reminder and its first request to
 the provider loses that one notice. `ps` and `status` still reach the
 process.
 
+## The end of a process
+
+**No message wakes a seat when a process ends.** The agent reads the end.
+`bash` and `wait` block until a process ends or their time ends, inside
+the activation. A process that outlives the activation shows in the
+reminder at the start of the seat's next activation. The guidance states
+this rule to the agent. Codex's unified exec follows the same rule: the
+model polls with `write_stdin`, and nothing wakes it.
+
+**An agent waits for the result that its answer needs.** It calls `wait`
+before it answers. `wait` returns when the process ends, and `wait` with
+`handles` returns when the first of several ends. A wait stops 30 seconds
+before the room ends the activation, so one activation can wait for a
+process for up to 570 seconds with the default lease deadline of 600
+seconds.
+
+**The end of a longer process reaches the agent at its next activation.**
+A message of a person or of another seat starts that activation. Until
+then, the end stays in the files.
+
+### A host can wake the owner seat
+
+**A host that wants a wake posts a message when a process ends.**
+`workspace.processes.subscribe` gives an `ended` event. The host sends a
+message through `room.visit`, as a person that it defines, to the owner
+agent, under a key that names the handle. A message starts an activation,
+so the owner seat reads the end in its reminder, and `status` gives the
+output. The kernel adds nothing for this. It is application code.
+
+```ts
+import { defineHuman } from '@ambionframework/ambion';
+
+const lab = defineHuman({
+  name: 'lab',
+  identity: 'The lab host. It reports each process that ends.',
+});
+const visit = await room.visit(lab);
+workspace.processes.subscribe((event) => {
+  const { handle, name, agent, state, room: started } = event.process;
+  if (event.type !== 'ended' || started !== room.name) return;
+  visit
+    .send({
+      to: agent,
+      text: `Process ${name ?? handle} is ${state}. Call status with ${handle} for its output.`,
+      key: `process-ended:${handle}`,
+    })
+    .catch((error: unknown) => log.error(error));
+});
+```
+
+**The message is an ordinary message of a person.**
+
+- It opens an exchange when none is open, and the closing summary goes to
+  the host's person. When an exchange is open, the message joins it, and
+  the summary goes to the owner of that exchange.
+- The owner agent must hold a seat in that room. The room refuses a
+  delivery to an agent in the reserve, and `send` rejects. A stopped room
+  rejects too, so the host catches each delivery.
+- The key makes a second delivery of one end land once, for example after
+  a restart of the host.
+- A process of an earlier run ends in a read. A host that bridges its
+  ends calls `workspace.processes.list()` on an interval, so a read sees
+  them. `list` reads the agents that acted in this run. A process that
+  ended while no host ran gives no event, and the reminder names it.
+- `ProcessStatus.room` names the room of the `bash` call, so a host with
+  several rooms posts each end to the room that started the process.
+
 ## Life and disposal
 
 **A process outlives the call, the activation, and the exchange that
@@ -406,6 +491,28 @@ host cancels it, or the workspace disposes.
 **`wait` gives the state when the process ends or when the time ends.** A
 process that is still running gives `running`. An abort of the call stops
 the wait, and the process keeps running.
+
+**`wait` with `handles` returns when the first of several processes
+ends.** It takes 1 to 16 handles in place of `handle`, and counts a handle
+that repeats once. The result gives the new output and the bracketed line
+of each process that ended, then the bracketed line of each one that still
+runs. `details.processes` holds every status in the order of the handles,
+and `details.ended` holds the details of each process that ended.
+
+**A process that already ended makes `wait` with `handles` return at
+once.** An agent that runs a parameter sweep as four processes calls `wait`
+with the four handles, reads the result of the first that ends, and calls
+`wait` again with the handles that still run.
+
+**A wait ends 30 seconds before the room ends the activation.** The room
+ends an activation `limits.lease.deadline` after its first claim, 600
+seconds by default, and counts it as a failed attempt. `ToolContext.deadline`
+carries that time. `bash` and `wait` wait for the shorter of the time the call
+gives and the time left before the margin. A process that still runs then
+gives `running`, and the result line adds `The wait stopped early, because
+your activation ends in <n> seconds. Answer before then.` The margin also
+covers the skew between the clock of the room's host and the clock of the
+seat's host.
 
 **`cancel` stops the process and waits up to 10 seconds for it to end.**
 The state becomes `cancelled`. A process that has not ended after 10
@@ -467,11 +574,14 @@ line.**
 ```text
 bash starts each command as a background process and returns its handle, such as bash-1a2b3c4d5e6f.
 Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.
-The call waits up to wait seconds, 10 by default, and then gives the state of the process and the end of its output.
+The call waits up to wait seconds, 10 by default, and then gives the state of the process and its output.
 The whole output of a process goes to ~/.processes/<handle>/out. Read it with read.
 status, wait and cancel take a handle. status gives the state of the process, wait waits for it to end,
 and cancel stops it. ps lists your running processes.
 A process keeps running after your activation ends. It stops after timeout seconds, 600 by default.
+No message tells you when a process ends. When your answer needs the result, call wait before you answer.
+A wait stops before your activation ends.
+A process that outlives your activation shows in the reminder at the start of your next activation.
 ```
 
 ## Out of scope
@@ -480,8 +590,8 @@ A process keeps running after your activation ends. It stops after timeout secon
 room.** An exchange closes when no activation is live, so a cancel at the
 close stops a process at the first quiet moment.
 [Backlog](../planning/backlog.md#designs-with-a-shape) holds the linked
-lives, the kinds of process after `bash`, and the notice at the end of a
-process.
+lives, the kinds of process after `bash`, and the notice of the backlog's
+wake sources, which a process end can use later.
 
 **A new kind adds three parts.** It adds a name to `ProcessKind`, a
 runner that writes the same files, and a tool that starts it. The table,
@@ -490,18 +600,19 @@ the three handle tools stay as they are.
 
 ## Decisions taken
 
-| Decision                                                       | Reason                                                                  |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| The files of the bash backend are the source of truth          | A new run reads the same table, and a crash loses no record             |
-| An agent reaches its own processes alone                       | Its table is its home, and the workstation's accounts make it the wall  |
-| A lost process reads `failed`                                  | It left no end, and nothing runs it                                     |
-| The host's list covers this run's agents                       | The workspace keeps no roster                                           |
-| The reminder resolves once per activation, and can read I/O    | Every render of one activation reads the same text                      |
-| The table holds the timeout, and adopts a live process         | A kill goes through the stops of its agent, in every run                |
-| A stop writes no `stop` after `exit`                           | A command that ended reads its own end, whatever stop came late         |
-| The default timeout is 600 seconds, and the agent can raise it | An adopted process needs a bound from its spec                          |
-| A name is a label, and the handle is the key                   | Two processes can have one name with no rule for which one a call takes |
-| `ps` writes an audit entry                                     | The audit log records every tool call                                   |
+| Decision                                                       | Reason                                                                                             |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| The files of the bash backend are the source of truth          | A new run reads the same table, and a crash loses no record                                        |
+| An agent reaches its own processes alone                       | Its table is its home, and the workstation's accounts make it the wall                             |
+| A lost process reads `failed`                                  | It left no end, and nothing runs it                                                                |
+| The host's list covers this run's agents                       | The workspace keeps no roster                                                                      |
+| The reminder resolves once per activation, and can read I/O    | Every render of one activation reads the same text                                                 |
+| The table holds the timeout, and adopts a live process         | A kill goes through the stops of its agent, in every run                                           |
+| A stop writes no `stop` after `exit`                           | A command that ended reads its own end, whatever stop came late                                    |
+| The default timeout is 600 seconds, and the agent can raise it | An adopted process needs a bound from its spec                                                     |
+| A name is a label, and the handle is the key                   | Two processes can have one name with no rule for which one a call takes                            |
+| `ps` writes an audit entry                                     | The audit log records every tool call                                                              |
+| A process wakes no seat, and the agent waits for its result    | The kernel adds no wake source for the end of a process, and a host that wants one posts a message |
 
 **The host owns the cleanup of `~/.processes` past the limit of 64.** A
 start removes the oldest finished processes of the agent that starts it,

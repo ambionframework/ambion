@@ -1,7 +1,7 @@
 # The simulator
 
 **This page designs `@ambionframework/simulator`. The package does not exist
-yet.** Phase 5 of [the 0.3.0 plan](../planning/next.md) builds it, in the
+yet.** Phase 2 of [the 0.3.0 plan](../planning/next.md) builds it, in the
 four pull requests of [the order of work](#the-order-of-work). Until it
 lands, the live tests in `packages/*/test/live` are the only behavioral
 evidence.

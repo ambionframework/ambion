@@ -30,15 +30,15 @@ holds on main.
 **Ambion is a collaboration kernel for agents and humans.** The
 [README](../README.md) holds the statement, and
 [Technical facts](../docs/technical-facts.md) holds the key facts and what
-is new. Through 0.2.0, Ambion is reactive: a seat acts when a person
-speaks, or when a seat addresses it.
+is new. Ambion is reactive: a seat acts when a person speaks, or when a
+seat addresses it.
 
-**0.3.0 makes Ambion responsive to environment events.** An environment
-event is a change outside the room, such as a push to a repository, a job
-that ends, or a timer that comes due. In 0.3.0, an environment event
-reaches the room as a notice, and the room wakes the seats that attend to
-it. A room also hands work to another room and waits for the result. A
-seat's shell work runs as a background process between its activations.
+**0.3.0 lets the work of a seat outlive its activation.** A seat's shell
+work runs as a background process between its activations. The agent
+waits for the result that its answer needs inside the activation, and
+nothing wakes a seat when a process ends. A host that wants a wake posts a
+message. Wake sources and delegation between rooms wait in the
+[backlog](backlog.md#wake-sources-and-delegation).
 
 **0.3.0 also gives each deployment shape one package.** The local shape
 is one node that runs the host and every agent:
@@ -50,25 +50,17 @@ repositories in one account on the server. Each agent reaches them with
 
 ## The scope
 
-**Five themes, each with the acceptance it must meet on the tagged
+**Three themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
-| Theme                     | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                                                                                                                                                                                                                                          |
-| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database.                                                                                                                                                                                                                     |
-| G Git on the workstation  | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317. |
-| B Background processes    | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307.                                                                                                                                    |
-| E Evals                   | The assistant's live suite runs on `@ambionframework/simulator`. Every claim of its eleven tests holds as a check or a criterion, and three new cases run over several exchanges. [Simulator](../docs/simulator.md) holds the design.                                                                                                                                                                              |
+| Theme                    | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317. |
+| B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).         |
+| E Evals                  | The assistant's live suite runs on `@ambionframework/simulator`. Every claim of its eleven tests holds as a check or a criterion, and three new cases run over several exchanges. [Simulator](../docs/simulator.md) holds the design.                                                                                                                                                                              |
 
-**Three format changes.** Each change lands with a golden journal of the
-new shape, and the changelog names each one.
-
-| Change                                  | Item | Kind                       |
-| --------------------------------------- | ---- | -------------------------- |
-| The notice message kind                 | W1   | A new message union member |
-| The timer entry                         | W2   | A new entry kind           |
-| An `awaiting` outcome that names a room | D1   | A new outcome union member |
+**No journal format change.** The notice kind, the timer entry, and the `awaiting`
+outcome that names a room moved to the backlog with W1, W2, and D1.
 
 **Deployment models.** The same rules serve four placements.
 
@@ -84,7 +76,13 @@ new shape, and the changelog names each one.
 **These wait in the [backlog](backlog.md).** The backlog states the
 condition that brings each one back.
 
-- **The checkpoint entry.** The W2 resume measurement decides it.
+- **Wake sources and delegation (W1, W2, D1).** The notice from a
+  resource, the timer that the journal records, and delegation by
+  reference moved to the [backlog](backlog.md#wake-sources-and-delegation).
+  A process follows the pull model of Codex's unified exec, and a host
+  that wants a wake posts a message.
+- **The checkpoint entry.** The resume measurement of the backlog's timer
+  item decides it.
 - **The conformance fixtures (M5) and the billing annotation (L3).** Both
   carry over from 0.2.0 with a condition each.
 - **A repeatable release from CI (R1).** The owner runs the release.
@@ -102,16 +100,10 @@ condition that brings each one back.
 
 ## Decisions taken
 
-- **A notice is the scheduler ingress.** The application owns its
-  schedule and delivers a notice through one host call. The kernel adds no
-  scheduler.
-- **The journal records a timer, and the host runs it.** The host owns the
-  clock. A restart reads the timer entries and arms them again.
-- **Delegation has no task database.** A working room is a room, and a ref
-  connects the two.
-- **W2 decides `exchangeOutcome`.** If the `awaiting` expiry writes on the
-  `awaiting` outcome, the rule gates a write and stays verified. Otherwise
-  it leaves the rules file, as the 0.2.0 sweep states for read views.
+- **A process wakes no seat.** The agent waits for its result inside the
+  activation, and a wait stops before the room ends the activation. A host
+  that wants a wake posts a message
+  ([Processes](../docs/processes.md#the-end-of-a-process)).
 - **One example.** The agentic lab workspace in
   [docs/example.md](../docs/example.md) stays the one example.
 - **Two entries.** `@ambionframework/ambion` for applications and
@@ -153,58 +145,18 @@ means two things or two names mean one.
 
 ## The order of work
 
-**The order is the notice, the timer, then the delegation.** The notice
-host call needs the notice kind, the timer needs the host call, and the
-delegating message needs the notice. The git backend on the workstation
-needed none of them, and phase 4 landed it beside phases 1 to 3.
-Background processes (B1) needed no phase, and landed first. The
-simulator (phase 5) needs no other phase. A step names the
-steps it needs; a step with no "Needs" line starts now. **P0** blocks the tag. **P1**
-carries the release story. **P2** moves to the backlog when it is late.
+**Three phases remain, and the git phase holds no open step.** Background
+processes (B1 and B2) needed no phase, and the simulator (phase 2) needs
+none. The release needs the git and simulator phases. A step names the
+steps it needs; a step with no "Needs" line starts now.
+**P1** carries the release story.
 
-### Phase 1. The notice (P1)
-
-**Goal:** an event outside the room wakes the seats that attend to it.
-
-- [ ] **1.** The notice message kind, its routing by attention, and the
-      host call that delivers it with a stable key. P1. (W1)
-
-**Evidence:** a scripted test and a chaos case for the kind and for the
-host call, with its durable start and its restart semantics.
-
-### Phase 2. The timer (P1)
-
-**Goal:** a clock wakes a room, and a restart loses no timer.
-
-- [ ] **1.** The timer entry, armed by the host and armed again after a
-      restart. Needs phase 1 step 1. P1. (W2)
-- [ ] **2.** The `awaiting` expiry as a timer that the close schedules,
-      and the decision on `exchangeOutcome`. Needs 1. P1. (W2)
-- [ ] **3.** The Cloudflare adapter runs a timer through its alarm, and a
-      measurement records the resume cost of a room with many timer
-      wakes. Needs 1. P1. (W2)
-
-**Evidence:** a kill between the timer entry and the wake keeps the wake;
-the docs that call timers future work say what shipped.
-
-### Phase 3. Delegation (P1)
-
-**Goal:** a room hands work to another room and waits for the result.
-
-- [ ] **1.** A delegating message with a ref to a working room, the
-      `awaiting` outcome that names the room, and the message that returns
-      the result. Needs phase 1 step 1. P1. (D1)
-
-**Evidence:** the workbench delegates one question to a second room; a
-restart in the middle keeps the work. PR #151 closes with a comment that
-names the new route.
-
-### Phase 4. Git on the workstation (P1)
+### Phase 1. Git on the workstation (P1)
 
 **Goal:** an agent on a workstation clones and pushes over SSH to one
 account on its own server, and the host opens no port.
 
-**Phase 4 holds no open step.** G1 landed in #312 and #314. G2 landed in
+**Phase 1 holds no open step.** G1 landed in #312 and #314. G2 landed in
 #316 and #317, and its docs landed after them.
 
 **Evidence:** the `workstation` CI job runs `gitConformance` on OpenSSH
@@ -212,7 +164,7 @@ with the SSH harness, and the tier proves the checks that
 [Workstation git](../docs/workstation-git.md#tests) lists. The workbench
 runs on `justGitBackend`. The evidence holds on `main`.
 
-### Phase 5. The simulator (P1)
+### Phase 2. The simulator (P1)
 
 **Goal:** an eval drives a room as a person, checks the run in code, and
 asks a judge for the rest.
@@ -232,12 +184,12 @@ asks a judge for the rest.
 every claim of the assistant's live suite, and one live run of the file
 prints the cost of each case.
 
-### Phase 6. Release (P1)
+### Phase 3. Release (P1)
 
 **Goal:** the tag names a commit that a live run tested.
 
-- [ ] **1.** The changelog entry for 0.3.0 names each format change and
-      each export that changed. Needs phases 1 to 5. P1. (R0)
+- [ ] **1.** The changelog entry for 0.3.0 names each export that
+      changed. Needs phases 1 and 2. P1. (R0)
 - [ ] **2.** The live run on `main` after the last merge passes for Pi,
       Claude, and Codex. Needs 1. P1. (R0)
 
@@ -247,40 +199,6 @@ tagged commit and name any case that failed.
 ## The items
 
 Each item states the problem, the solution, and the impact.
-
-### W. Wake sources
-
-**W1. A notice from a resource.** A room wakes only when a person speaks,
-so an agent cannot react when a brief changes or a run completes. Add a
-message kind with a ref and no author, routed by attention. One host call
-delivers it with a stable key, so a retried delivery lands once. An
-application scheduler calls the same host call, so the kernel needs no
-scheduler of its own. A notice opens no exchange by itself and arrives
-through no hidden timeout. **Evidence:** a scripted test and a chaos case
-for the kind and for the host call, with its durable start and its restart
-semantics.
-
-**W2. A timer that the journal records.** Nothing wakes a room on a clock,
-and an `awaiting` exchange waits for ever. A timer entry records the due
-time and the wake it owes. The host arms it and writes the wake when it is
-due. A restart reads the open timer entries and arms them again, so a
-crash loses no timer. The `awaiting` expiry is a timer that the close
-schedules. The Cloudflare adapter runs a timer through its alarm, and a
-measurement records the resume cost of a room with many timer wakes.
-**Evidence:** a kill between the timer entry and the wake keeps the wake;
-the docs that call timers future work say what shipped.
-
-### D. Delegation by reference
-
-**D1. Delegation by reference.** PR #151 stored tasks in the journal and
-scanned every task on each reconcile pass. Use a ref and the `awaiting`
-outcome. The delegating message carries a ref to
-`ambion://room/<working>/message/<from>`. The origin exchange closes as
-`awaiting` that room. The working room closes with one message that
-carries a ref back. Status is a read of the exchange that the referenced
-message opened. **Evidence:** the workbench delegates one question to a
-second room; a restart in the middle keeps the work. Then close PR #151
-with a comment that names the new route.
 
 ### G. Git on the workstation
 
@@ -367,6 +285,20 @@ earlier run. A process has no link to an exchange yet; the backlog holds
 that design. **Evidence:** `packages/workspace/test/processes.test.ts`,
 the Pi continuity test of the reminder, and the timeout, cancel, and
 adoption on OpenSSH. Landed in #307.
+
+**B2. An agent waits for its result inside the activation.** No message
+wakes a seat when a process ends, as in Codex's unified exec. A wait
+could run past the room's deadline for the activation, each poll resent
+the same 50 KB tail, and an agent polled a sweep one process at a time.
+`bash` and `wait` now stop 30 seconds before the deadline that
+`ToolContext.deadline` carries. Each result gives the new output after a
+cursor that the files keep. `wait` takes `handles` and returns at the
+first end. The guidance states that nothing pushes, and
+[Processes](../docs/processes.md#the-end-of-a-process) shows how a host
+posts a message to wake the owner seat. **Evidence:** the deadline tests
+in the core and the workspace, the cursor tests on just-bash and on the
+workstation, and the test of a wait on several handles. #320, #321, and
+#322 carry the code.
 
 ### E. Evals
 

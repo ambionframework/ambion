@@ -137,6 +137,28 @@ describe('justGitBackend', () => {
 		expect(listed?.map((repository) => repository.id)).toEqual(['templates/blank']);
 	});
 
+	it('finishes an update that stopped after the commit to template-sources', async () => {
+		const file = join(await tempDir(), 'git.db');
+		const first = workspaceOver(file);
+		await first.workspace.git?.use(ANALYST, (env) => env.list());
+		await first.workspace.dispose();
+		const store = sqliteGitStorage(file).open();
+		const server = openServer({ storage: store.storage, secret: SECRET });
+		const { hash } = await server.commit('template-sources/blank', {
+			files: { 'README.md': 'updated\n' },
+			message: 'Register the template blank\n',
+			author: { name: 'ambion', email: 'ambion@ambion.invalid' },
+			branch: 'main',
+		});
+		await server.close();
+		store.close();
+		const { workspace } = workspaceOver(file, {
+			templates: { blank: { source: { 'README.md': 'updated\n' } } },
+		});
+		const template = await workspace.git?.use(ANALYST, (env) => env.get('templates/blank'));
+		expect(template?.branches.main).toBe(hash);
+	});
+
 	it('gives no credential that a shell variable can replace', async () => {
 		const { workspace } = workspaceOver(join(await tempDir(), 'git.db'));
 		const forked = await workspace.git?.use(ANALYST, (env) => env.fork('templates/blank', 'mine'));

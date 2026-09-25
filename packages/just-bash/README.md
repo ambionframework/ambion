@@ -101,10 +101,10 @@ package loads no `node:sqlite`.
 | `tokenTtl`  | Seconds a token lives. The default is 3600                             |
 | `onError`   | Called with a fault of the server. Absent, the backend reports nothing |
 
-**A template never changes after registration.** The backend registers
-each template before its first operation. A registration with a changed
-source fails with an error that names the template. Register the change
-under a new name.
+**A registration updates its template.** The backend registers each
+template before its first operation. A changed source fast-forwards the
+template to a new commit, and a changed description replaces the old one.
+A fork keeps the commit it came from.
 
 **No request leaves the process.** Every clone URL starts with
 `http://git.ambion.invalid`, a name that never resolves. The `git` command
