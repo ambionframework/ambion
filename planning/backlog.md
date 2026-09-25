@@ -72,6 +72,7 @@ and the process tools. A step names the steps it needs; a step with no
 - [ ] **6.** One record for a live process in the table. (C11)
 - [ ] **7.** The body schemas guard the journal, and the format number
       goes. Needs 3 and 5. (C12)
+- [ ] **8.** The assistant works a request after its owner leaves. (A1)
 
 **Evidence:** each step keeps `pnpm check` green and holds the coverage
 of each changed package, measured before and after as `CLAUDE.md`
@@ -395,6 +396,35 @@ and kept format 1.
 
 **Evidence:** a journal validation case for each refused old shape, the
 golden journals with no `format`, and `pnpm chaos` on both storages.
+
+**A1. The assistant works a request after its owner leaves.** This item
+fixes a defect and adds no capability. A room stays available between
+interactions, so a person who asks and leaves gets the answer later.
+
+- **The problem.** On 2026-09-25, a Workbench test sent `/try` in the four
+  sample rooms and switched rooms at once. Each switch wrote `left` for the
+  person two seqs after the question. In `bringup` and `power`, the
+  assistant released its activation with no say and no seat. Its closing
+  summary read "this exchange closed with no answer … you left before the
+  datasheets and design specialists could be engaged". In `sensing`, the
+  same `left` came, and the assistant routed the work. The same question,
+  sent with the person present, got a full answer in both rooms. The
+  guidance of `packages/assistant` says nothing about presence, so the
+  model decides.
+- **The change.** The membership guidance states that the presence of the
+  owner does not change the work. The assistant seats and routes as it
+  does for a person who stays, and the closing summary goes to the owner.
+- **Seen in the same run, not in scope.** In `firmware`, the assistant
+  forked, edited, and pushed the work itself and sent nothing to a
+  specialist, while [Default assistant](../docs/assistant.md) keeps it to
+  membership and summaries. The Workbench gives every seat the same tools.
+  In `power`, `design` said "Working the sum + margin now … one moment."
+  before its answer, and its instructions forbid an acknowledgment.
+
+**Evidence:** a case in `packages/assistant/test/live/behavior.test.ts`,
+at pass^3, where the person asks and leaves before the first activation.
+The assistant sends a directed request to a specialist, and the closing
+summary answers the question. The live suite of the assistant stays green.
 
 ## Known defects
 
