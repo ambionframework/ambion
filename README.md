@@ -30,30 +30,28 @@ workspace. See the [Workbench repository](https://github.com/fastforwardengine/w
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-capabilities-dark.svg">
-  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, a say to itself, the close, an optional summary, and the returned say. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. An agent says to itself with a delay. The exchange closes while the say waits. When the say is due, the room gives it back, and the returned say opens an exchange. Every workspace gives an agent processes. bash starts a process that outlives the activation. ps lists it, and status, wait, and cancel take its handle. At the start of each activation, a reminder lists the seat's processes. An optional shared database adds sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files, with read, write, and edit. The other capabilities write their files there: a process writes its output, sql writes a CSV export, and fork clones a working copy. Each agent has a home. On a workstation, no other agent reads it. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. A person and the host steer the room. A person on a visit asks a question and reads results. The host is application code. It lists and cancels processes, and hears each start and end. Each one posts a message to the room, and the host can post one when a process ends. A message cites a file with a ref. A restart replays the room's entries." src="docs/assets/ambion-capabilities.svg">
+  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, a say to itself, the close, an optional summary, and the returned say. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. An agent says to itself with a delay. The exchange closes while the say waits. When the say is due, the room gives it back, and the returned say opens an exchange. Every workspace gives an agent processes. bash starts a process that outlives the activation. ps lists it, and status, wait, and cancel take its handle. At the start of each activation, a reminder lists the seat's processes. Optional tables add sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files, with read, write, and edit. The other capabilities write their files there: a process writes its output, sql writes a CSV export, and fork clones a working copy. Each agent has a home. On a workstation, no other agent reads it. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. A person and the host steer the room. A person on a visit asks a question and reads results. The host is application code. It lists and cancels processes, and hears each start and end. Each one posts a message to the room, and the host can post one when a process ends. A message cites a file with a ref. A restart replays the room's entries." src="docs/assets/ambion-capabilities.svg">
 </picture>
 
 **The journal records what is said. The workspace holds what is made, and a
 message cites it.** Agents speak through `say` and work through tools. A
 room is a shared journal with rules for taking part.
 
-**Every workspace gives an agent files and background work.** `read`,
-`write`, and `edit` reach the files. `bash` starts a process that outlives
-the activation. `ps` lists it, and `status`, `wait`, and `cancel` take its
-handle. Each activation starts with a reminder of the seat's processes.
-Background work is part of 0.3.0. An optional SQL backend gives a shared
-database and adds `sql`: agents pass work to each other through a table or
-a view. An optional git backend gives repositories and adds `repos` and
-`fork`: an agent forks a read-only template, clones it into its home, and
+**Every workspace gives an agent files and processes.** `read`, `write`, and
+`edit` reach the files. `bash` starts a process that outlives the activation.
+`ps` lists it, and `status`, `wait`, and `cancel` take its handle. Each
+activation starts with a reminder of the seat's processes. An optional SQL
+backend gives tables and adds `sql`: agents pass work to each other through a
+table or a view. An optional git backend gives repositories and adds `repos`
+and `fork`: an agent forks a read-only template, clones it into its home, and
 pushes. See [Workspace](docs/workspace.md), [Processes](docs/processes.md),
 and [Git](docs/git.md).
 
-**An agent comes back to its work later.** It says to itself with `after`,
-in seconds. The exchange closes while the say waits. When the say is due,
-the room gives it back, and the returned say opens an exchange for the
-person who owned the first one. An agent checks a long build this way with
-no event source and no host code. The scheduled say is part of 0.3.0. See
-[Exchange](docs/exchange.md#6-a-scheduled-say).
+**An agent comes back to its work later.** It says to itself with `after`, in
+seconds. The exchange closes while the say waits. When the say is due, the
+room gives it back, and the returned say opens an exchange for the person who
+owned the first one. An agent checks a long build this way with no event
+source and no host code. See [Exchange](docs/exchange.md#6-a-scheduled-say).
 
 **The host lists and cancels processes through `workspace.processes`.** It
 hears when each process starts and ends. Host code can post a message to
