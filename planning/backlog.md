@@ -59,17 +59,18 @@ lands with a golden journal of the new format. **Condition:** a measured
 resume time comes near the default `limits.lease.ttl` of 60 seconds ([envelope.md](../docs/envelope.md)). Past
 that point, replay sets the recovery time.
 
-**Processes linked to the room, and more kinds of process.** A process runs until it ends, times out, or gets a
-cancel ([Processes](../docs/processes.md)). An exchange closes when no
-activation is live, so a cancel at the close stops a process at the first
-quiet moment. A link to the room needs its own design. The handle is
-`<kind>-<random>`, and `bash` is the one kind. A clone that runs past its call
-and a SQL export are candidate kinds. The end of a process wakes no seat, by
-decision: the agent waits, and a host can post a message
+**Processes linked to the room, and more kinds of process.** A process runs
+until it ends, times out, or gets a cancel
+([Processes](../docs/processes.md)). An exchange closes when no activation is
+live, so a cancel at the close stops a process at the first quiet moment. A
+link to the room needs its own design. The handle is `<kind>-<random>`, and
+`bash` is the one kind. A clone that runs past its call and a SQL export are
+candidate kinds. The end of a process wakes no seat, by decision: the agent
+waits, and a host can post a message
 ([Processes](../docs/processes.md#the-end-of-a-process)). The table has no
 fence: two runs of the host over one account adopt the same processes.
-**Condition:** a process that must stop with its exchange, or a second kind
-of work that outlives its call.
+**Condition:** a process that must stop with its exchange, or a second kind of
+work that outlives its call.
 
 **One record for a live process in the table.** The table keeps a process
 of this run and an adopted process in two maps, with two stop paths and two
