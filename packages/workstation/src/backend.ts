@@ -14,12 +14,21 @@
  * time it builds a session, and it stores, issues, and rotates no
  * credential.
  *
- * The workstation carries no git transport. `connect` ignores the git
- * access that a git backend gives.
+ * The workstation carries the git transport `ssh` of
+ * `workstationGitBackend`. With that git backend, each `connect` asks
+ * `identityFor` for the agent's key, and writes the key and the ssh
+ * configuration into the agent's `~/.ssh` (`git-agent.ts`). A failure of
+ * either step fails the `connect`.
  */
 
-import type { BashBackend, WorkspaceEnv, WorkspaceLayout } from '@ambionframework/workspace';
+import type {
+	BashBackend,
+	BashServices,
+	WorkspaceEnv,
+	WorkspaceLayout,
+} from '@ambionframework/workspace';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
+import { sshAccess, WORKSTATION_TRANSPORTS, writeGitFiles } from './git-agent.ts';
 import { Session, type WorkstationCredential } from './session.ts';
 import { SshEnv } from './ssh-env.ts';
 
@@ -127,20 +136,41 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 		entry.timer.unref();
 	};
 
+	/** An env over the agent's live session, and a new session when the last one closed. */
+	const envFor = async (
+		agent: WorkspaceAgent,
+		signal: AbortSignal | undefined,
+	): Promise<SshEnv> => {
+		const entry = entries.get(agent.name) ?? open(agent, signal);
+		const session = await entry.session;
+		if (session.closed) {
+			forget(agent.name, entry);
+			return envFor(agent, signal);
+		}
+		clearTimeout(entry.timer);
+		entry.open += 1;
+		return new SshEnv(session, () => idle(agent.name, entry, session));
+	};
+
 	return {
 		layout: options.layout,
 		guidance: GUIDANCE,
-		async connect(agent: WorkspaceAgent, signal?: AbortSignal): Promise<WorkspaceEnv> {
-			const current = entries.get(agent.name);
-			const entry = current ?? open(agent, signal);
-			const session = await entry.session;
-			if (session.closed) {
-				forget(agent.name, entry);
-				return this.connect(agent, signal);
+		gitTransports: WORKSTATION_TRANSPORTS,
+		async connect(
+			agent: WorkspaceAgent,
+			signal?: AbortSignal,
+			services?: BashServices,
+		): Promise<WorkspaceEnv> {
+			const git = sshAccess(services);
+			const env = await envFor(agent, signal);
+			if (git === undefined) return env;
+			try {
+				await writeGitFiles(env, await git.identityFor(agent), signal);
+			} catch (error) {
+				await env.cleanup();
+				throw error;
 			}
-			clearTimeout(entry.timer);
-			entry.open += 1;
-			return new SshEnv(session, () => idle(agent.name, entry, session));
+			return env;
 		},
 		async dispose(): Promise<void> {
 			const all = [...entries.values()];

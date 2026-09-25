@@ -52,8 +52,14 @@ activation starts with a reminder of the seat's processes. See
   `restrict`, `from`, `expiry-time`, and `command`.
   `@ambionframework/workstation` exports `workstationGitBackend`,
   `WorkstationGitOptions`, `WorkstationGitAccess`, and
-  `WorkstationGitIdentity`. `workstationBackend` carries no git transport
-  yet, so no agent reaches the repositories.
+  `WorkstationGitIdentity`.
+- **`workstationBackend` carries the git transport `ssh`.** Its
+  `gitTransports` is `['ssh']`, so it pairs with `workstationGitBackend`.
+  At each `connect`, it writes the agent's key, a `known_hosts` file, and
+  an ssh configuration for the alias into `~/.ssh` with mode `0600`. It
+  makes `Include ambion-git.conf` the first line of `~/.ssh/config`, and
+  it keeps the other lines. The agent's own `git` then clones and pushes
+  over SSH to the git account on the loopback address.
 
 ### Breaking changes
 

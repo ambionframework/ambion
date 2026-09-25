@@ -41,9 +41,9 @@ afterEach(async () => {
 	for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
-/** Start a server with the account `lab-git`. The test's end stops it. */
-export async function gitServer(): Promise<GitServer> {
-	const server = await startSshServer(['lab-git']);
+/** Start a server with the account `lab-git`, and one account for each of `agents`. The test's end stops it. */
+export async function gitServer(agents: readonly string[] = []): Promise<GitServer> {
+	const server = await startSshServer(['lab-git', ...agents]);
 	cleanups.push(() => server.stop());
 	const credential = await server.options.credentialFor({ name: 'lab-git' });
 	const home = server.homes.get('lab-git');

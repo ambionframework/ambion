@@ -15,9 +15,10 @@ restart of the host.
 **`justGitBackend` implements the contract.** It runs a
 [`just-git`](https://github.com/blindmansion/just-git) server in the host's
 process, and it serves the just-bash backends. The
-[workstation](workstation.md) carries no git transport until G2 of
-[the plan](../planning/next.md#g-git-on-the-workstation). `gitConformance`
-holds the contract, so a later implementation meets the same behavior.
+[workstation](workstation.md) carries the `ssh` transport of
+`workstationGitBackend` ([Workstation git](workstation-git.md)).
+`gitConformance` holds the contract, so a later implementation meets the
+same behavior.
 
 **This page covers the repositories and the access to them.** A deploy
 ref that starts a job is a later design, and it builds on this one.
@@ -480,8 +481,9 @@ server accepts.
 
 ### On a workstation
 
-**The workstation carries no git transport until G2 of
-[the plan](../planning/next.md#g-git-on-the-workstation).**
+**The workstation carries the git transport `ssh` of
+`workstationGitBackend`.** [Workstation git](workstation-git.md) describes
+the backend.
 
 ## justGitBackend: a server in the host's process
 
