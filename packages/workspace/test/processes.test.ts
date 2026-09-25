@@ -70,13 +70,32 @@ async function failedHandle(invoke: () => unknown): Promise<string> {
 }
 
 /** Start a process with a wait of 0, and resolve once it ends: no result shows its end. */
+let gates = 0;
+
+/**
+ * Start `command` behind a gate file, so `bash` returns while the process
+ * still runs and no result shows its end. The test then opens the gate, and
+ * waits for the end. A command that ended before `bash` read it would give
+ * its end in the result, and the reminder would skip it.
+ */
 async function endedUnseen(workspace: Workspace, command: string): Promise<string> {
+	gates += 1;
+	const gate = `~/gate-${gates}`;
 	const done = Promise.withResolvers<void>();
 	let handle = '';
 	const unsubscribe = workspace.processes.subscribe((event) => {
 		if (event.type === 'ended' && event.process.handle === handle) done.resolve();
 	});
-	handle = (await call(workspace, 'bash', { command, wait: 0 })).details.process.handle;
+	const gated = `until [ -f ${gate} ]; do sleep 0.01; done; ${command}`;
+	const started = await call(workspace, 'bash', { command: gated, wait: 0 });
+	expect(started.details.process.state).toBe('running');
+	handle = started.details.process.handle;
+	await workspace.use({ name: 'alpha' }, async (env) => {
+		const path = await env.absolutePath(gate, BACKGROUND_CONTEXT);
+		if (!path.ok) throw path.error;
+		const written = await env.writeFile(path.value, '', BACKGROUND_CONTEXT);
+		if (!written.ok) throw written.error;
+	});
 	const running = await workspace.processes.list({ running: true });
 	if (running.every((one) => one.handle !== handle)) {
 		done.resolve();
@@ -392,7 +411,7 @@ describe('the reminder', () => {
 			),
 			expect.stringMatching(
 				new RegExp(
-					`^- ${failed} exited with code 3 at \\d\\d:\\d\\d:\\d\\d UTC: sleep 0.05; exit 3$`,
+					`^- ${failed} exited with code 3 at \\d\\d:\\d\\d:\\d\\d UTC: until .*; sleep 0.05; exit 3$`,
 				),
 			),
 			'Call status, wait or cancel with a handle. Call ps to list processes.',
