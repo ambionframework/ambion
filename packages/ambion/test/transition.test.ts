@@ -497,6 +497,26 @@ describe('a scheduled say', () => {
 		expect(reconcile(back, due).events.map((entry) => entry.kind)).toEqual(['message']);
 	});
 
+	it("lists the seat's own pending says in its response view, with the seq as the handle", () => {
+		const state = waiting(lease('message:3:writer:1', 6));
+		const view = (activation: string) => {
+			const spec = activationSpec(activation, state);
+			if (spec === undefined) throw new Error('Expected a grant.');
+			return viewOf(spec, { name: 'room', now, state, live: new Map(), messagesSince: () => 0 });
+		};
+		expect(view('message:3:product:1').context.scheduled).toEqual([
+			{
+				seq: 5,
+				seat: 'product',
+				owner: 'priya',
+				due: new Date(due).toISOString(),
+				text: 'Check the build.',
+				refs: ['file:///out.log'],
+			},
+		]);
+		expect(view('message:3:writer:1').context.scheduled).toBeUndefined();
+	});
+
 	it('steers only the seat that scheduled it while both seats work', () => {
 		const state = fold(
 			composition(undefined, [product, watcher]),

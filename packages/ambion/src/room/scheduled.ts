@@ -9,7 +9,14 @@
  */
 
 import type { Body } from '../journal/journal.ts';
-import type { ExchangeRef, Message, ReturnedMessage, ScheduleLimits, Seq } from '../types.ts';
+import type {
+	ExchangeRef,
+	Message,
+	PendingSay,
+	ReturnedMessage,
+	ScheduleLimits,
+	Seq,
+} from '../types.ts';
 import { survivesCancellation } from './rules.verified.ts';
 
 /** One say that waits to return to its author. */
@@ -53,6 +60,15 @@ export function scheduleStep(list: readonly ScheduledSay[], message: Message): S
 			...(message.refs === undefined ? {} : { refs: message.refs }),
 		},
 	];
+}
+
+/** A pending say as a read and a view show it: its due time as ISO, and a copy of its refs. */
+export function pendingSay({ dueAt, refs, ...say }: ScheduledSay): PendingSay {
+	return {
+		...say,
+		due: new Date(dueAt).toISOString(),
+		...(refs === undefined ? {} : { refs: [...refs] }),
+	};
 }
 
 /** The says that a cancellation leaves: the ones after it. */

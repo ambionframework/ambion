@@ -20,6 +20,7 @@ import type {
 	HumanParticipantInfo,
 	Intent,
 	Message,
+	PendingSay,
 	Seq,
 	Usage,
 	Without,
@@ -102,6 +103,11 @@ export interface CollaborationContext {
 	readonly reserve: readonly { readonly name: string; readonly identity: string }[];
 	/** Only the summary writer reads the owner's preferences. */
 	readonly preferences?: string;
+	/**
+	 * The says of this seat that wait to return, for a response. The seq of
+	 * each is its handle. Absent when none waits.
+	 */
+	readonly scheduled?: readonly PendingSay[];
 	/**
 	 * The lowest message position the record holds. The room reports it only for
 	 * a bounded page, so a seat that windows the record knows where the record

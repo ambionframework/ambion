@@ -14,7 +14,7 @@
  * comes in resolved (`reminders.ts`).
  */
 
-import type { ActivationView, ContextParticipant } from '../protocol.ts';
+import type { ActivationView, CollaborationContext, ContextParticipant } from '../protocol.ts';
 import { messageUri, roomUri } from '../refs.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
 import {
@@ -419,6 +419,7 @@ function renderTurnContext(
 			context.omitted,
 		),
 		``,
+		...paragraph(renderScheduled(context.scheduled)),
 		...paragraph(view.spec.purpose.kind === 'respond' ? reminders : undefined),
 		askOf(view, def),
 	].join('\n');
@@ -427,6 +428,15 @@ function renderTurnContext(
 /** A text and the blank line after it, or nothing. */
 function paragraph(text: string | undefined): string[] {
 	return text === undefined ? [] : [text, ``];
+}
+
+/** The says of this seat that wait to return, by handle, or nothing when none waits. */
+function renderScheduled(scheduled: CollaborationContext['scheduled']): string | undefined {
+	if (scheduled === undefined || scheduled.length === 0) return undefined;
+	return [
+		`Your says that wait to return. The room gives each back to you at its due time:`,
+		...scheduled.map((say) => `- ${say.seq}, due ${say.due}: ${say.text}`),
+	].join('\n');
 }
 
 /** The agents that are available to seat. Every ordinary activation may read this list. */

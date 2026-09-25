@@ -11,6 +11,7 @@ import {
 import { exchangeViews } from './exchange.ts';
 import type { RoomState } from './fold.ts';
 import { liveWork } from './reconcile.ts';
+import { pendingSay } from './scheduled.ts';
 import { participantsOf } from './view.ts';
 
 export type MessageSelection = false | { since?: Seq };
@@ -63,11 +64,7 @@ export function readView(
 		initialized: true,
 		...(state.composition.goal === undefined ? {} : { goal: state.composition.goal }),
 		messages: selectMessages(state.messages, messages),
-		scheduled: state.scheduled.map(({ dueAt, refs, ...say }) => ({
-			...say,
-			due: new Date(dueAt).toISOString(),
-			...(refs === undefined ? {} : { refs: [...refs] }),
-		})),
+		scheduled: state.scheduled.map(pendingSay),
 		participants: participantsOf({ state, live: liveWork(state, now).seats }),
 		exchanges,
 		exchange: current,

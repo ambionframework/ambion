@@ -40,8 +40,10 @@ const AFTER = 600;
  * The worker starts a check on a question, and answers when the check comes
  * back. A delivered say or a scheduled one ends the activation.
  */
+const results: string[] = [];
 const checksLater: Script = (context) => {
 	const last = toolResultTexts(context).at(-1);
+	if (last !== undefined) results.push(last);
 	if (last === 'delivered' || last?.startsWith('scheduled')) return quiet();
 	if (contextText(context).includes('[returned → worker'))
 		return speak('The build passed.', 'priya');
@@ -89,6 +91,10 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		await first.waitForClose();
 		const [say] = stateOf(room).scheduled;
 		expect(say).toMatchObject({ seat: 'worker', owner: 'priya', text: 'Check the build.' });
+		const due = new Date(clock.now() + AFTER * 1000).toISOString();
+		expect(results).toContain(
+			`scheduled ${say?.seq}: the room gives this say back to you at ${due}`,
+		);
 		expect((await room.read({ messages: false })).scheduled).toEqual([
 			{
 				seq: say?.seq,

@@ -11,6 +11,7 @@ import type {
 import type { AgentParticipantInfo, ParticipantInfo, Seq } from '../types.ts';
 import { isSummary, type Message } from '../types.ts';
 import type { RoomState } from './fold.ts';
+import { pendingSay } from './scheduled.ts';
 
 /** The most messages a view holds beyond the pinned exchange. */
 interface ViewLimits {
@@ -89,6 +90,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange
 			page,
 		),
 		...purposeContext(purpose, state),
+		...scheduledOf(spec, state),
 	};
 	// In-process executors receive the same detached snapshot as remote executors.
 	return structuredClone({
@@ -96,6 +98,16 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange
 		through: purpose.kind === 'summarize' ? purpose.through : state.lastSeq,
 		context,
 	});
+}
+
+/** The says of the seat that wait to return. A closing activation reads none. */
+function scheduledOf(
+	spec: ActivationSpec,
+	state: RoomState,
+): Pick<CollaborationContext, 'scheduled'> {
+	if (spec.purpose.kind !== 'respond') return {};
+	const own = state.scheduled.filter((say) => say.seat === spec.seat).map(pendingSay);
+	return own.length === 0 ? {} : { scheduled: own };
 }
 
 /** A well-formed page request: a positive limit, and a non-negative cursor. */

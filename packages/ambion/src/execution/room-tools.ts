@@ -186,7 +186,7 @@ function scheduled(response: CommitResult): RoomToolResult | undefined {
 	const message = response.committed;
 	if (message.kind !== 'said' || message.after === undefined) return undefined;
 	const due = new Date(Date.parse(message.at) + message.after * 1000).toISOString();
-	return text(`scheduled: the room gives this say back to you at ${due}`);
+	return text(`scheduled ${message.seq}: the room gives this say back to you at ${due}`);
 }
 
 /** The result that tells the model its activation has ended. */
