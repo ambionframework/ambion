@@ -88,7 +88,7 @@ export async function openRoom(options: RoomOptions): Promise<Room> {
 }
 
 /**
- * A specialist that says `evidence` to the assistant once in each exchange,
+ * A specialist that says `evidence` to the room once in each exchange,
  * and says nothing in an exchange where `evidence` gives no text. It reads
  * the view: the step counter of `scripted()` spans the runtime, so it cannot
  * tell one exchange from the next.
@@ -106,7 +106,8 @@ export const answers =
 		);
 		if (exchange.some((message) => message.from === 'inventory')) return quiet();
 		const text = evidence(exchange);
-		return text === undefined ? quiet() : speak(text, 'assistant');
+		// A specialist reports to the room. It addresses the assistant only with a question for it.
+		return text === undefined ? quiet() : speak(text);
 	};
 
 /** The presence entries of one kind about `subject` in one exchange, in record order. */

@@ -7,6 +7,9 @@
  * `it.each` over k samples measures pass^k: a case passes when every
  * sample passes.
  */
+
+import { isSpoken, type SpokenMessage } from '@ambionframework/ambion';
+import { quiet, speak } from '@ambionframework/ambion/testing';
 import {
 	agentActor,
 	agentJudge,
@@ -433,5 +436,48 @@ live('the default assistant, driven by the simulator', () => {
 		expect(presence(exchange, 'seated', 'inventory')).toEqual([]);
 		expect(saidBy(exchange, 'inventory')).toEqual([]);
 		expect(saidBy(exchange, 'assistant'), JSON.stringify(exchange?.discussion)).toEqual([]);
+	});
+
+	it('answers a specialist that addresses a question to it', async () => {
+		const evidence = track('specialist-question');
+		const room = await openRoom({
+			attention: 'broadcast',
+			// The specialist asks the assistant once, and reports to the room after the answer.
+			specialist: ({ view, results }) => {
+				if (results.length > 0 || view.context.exchange === undefined) return quiet();
+				const { from } = view.context.exchange;
+				const said = view.context.messages.filter(
+					(message): message is SpokenMessage => isSpoken(message) && message.seq >= from,
+				);
+				const asked = said.some(
+					(message) => message.from === 'inventory' && message.to === 'assistant',
+				);
+				if (!asked) {
+					return speak('Which warehouse did priya ask me to check, north or south?', 'assistant');
+				}
+				const answered = said.some(
+					(message) => message.from === 'assistant' && message.to === 'inventory',
+				);
+				const reported = said.some(
+					(message) => message.from === 'inventory' && message.to === undefined,
+				);
+				return answered && !reported
+					? speak('The north warehouse has 8 units of SKU A available to dispatch today.')
+					: quiet();
+			},
+		});
+		const run = await simulate(room, {
+			person: priya,
+			actor: scriptedActor(['How many units of SKU A are in the north warehouse today?']),
+			exchanges: 1,
+			exchangeMs: EXCHANGE_MS,
+		});
+		evidence.run = run;
+		expectGradable(run);
+		const [exchange] = run.exchanges;
+		const speech = saidBy(exchange, 'assistant');
+		expect(speech, JSON.stringify(exchange?.discussion)).toHaveLength(1);
+		expect(speech[0]).toMatchObject({ to: 'inventory', text: expect.stringMatching(/north/i) });
+		expect(exchange?.summary?.text).toMatch(EIGHT);
 	});
 });

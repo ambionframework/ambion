@@ -110,7 +110,7 @@ message. See [Processes](docs/processes.md).
   `broadcast` or `presence` attention. It sends no correction, no relay,
   and no question to the person during the exchange. The summary reports a superseded
   fact, a broken constraint, and a question for the person. The assistant
-  answers a message that a person addresses to it, and it sends one directed
+  answers a person or a specialist that addresses it, and it sends one directed
   request to an idle specialist at `named` attention. A constraint stays in
   force until the person withdraws it. Its identity now reads "Room
   assistant. Seats and unseats specialists as the request needs, and

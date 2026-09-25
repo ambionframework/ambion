@@ -582,7 +582,7 @@ const answers =
     const spoke = view.context.messages.some(
       (m) => m.kind === 'said' && m.from === 'inventory' && m.seq >= from,
     );
-    return spoke ? quiet() : speak(fact, 'assistant');
+    return spoke ? quiet() : speak(fact);
   };
 ```
 
@@ -620,9 +620,11 @@ script says in the first exchange that it needs the fact. The assistant
 relays the question in the summary only, so the check reads the second
 message and the judge reads the first summary.
 
-**Four cases hold the rest of the assistant's purpose.** The assistant is
-passive at `broadcast`, it answers a person who addresses it, and it changes
-membership on request and on need only.
+**Five cases hold the rest of the assistant's purpose.** The assistant is
+passive at `broadcast`, it answers a participant who addresses it, and it
+changes membership on request and on need only. The scripted specialist
+reports to the room: a specialist addresses the assistant only with a
+question for it.
 
 | Purpose case                                | Actor                                             | Checks                                                                                                       | Criteria for the judge                                                              |
 | ------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
@@ -630,6 +632,7 @@ membership on request and on need only.
 | A person asks a `named` specialist directly | Scripted: a question with `to: 'inventory'`       | The assistant says nothing. The specialist spoke. The summary names 8.                                       | None                                                                                |
 | An unseat on request, and not before        | Scripted: a question, then a request to remove it | No `unseated` entry in the first exchange, one from the assistant in the second. The assistant says nothing. | The second summary says that `inventory` left the room.                             |
 | No seat without need                        | Scripted: a note that needs no specialist         | No `seated` entry. The specialist and the assistant say nothing.                                             | None                                                                                |
+| A specialist asks the assistant             | Scripted: a question about the north warehouse    | The specialist asks the assistant which warehouse. The assistant says once, to `inventory`, and names north. | None                                                                                |
 
 **Samples stay in the test.** `it.each` keeps the sample numbers of today.
 The simulator repeats nothing. `it.each` over k samples measures pass^k:
@@ -640,7 +643,7 @@ the case passes when every sample passes.
 - The file no longer holds `evaluate()` or the routing stream.
 - Every claim of the eleven tests holds as a check or a criterion.
 - The three new cases run, and each one has more than one exchange.
-- The four purpose cases run.
+- The five purpose cases run.
 - `pnpm check` passes, and one live run of the file prints the cost of each
   case: the room, the actor, and the judge.
 - A gap that the port finds changes this page first, and the package

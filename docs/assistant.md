@@ -12,9 +12,9 @@ evidence needed to evaluate it.
 summarizes closed exchanges.** It seats a reserve specialist when the request
 needs one. It unseats a specialist when the person asks or the scope no longer
 needs it. It is passive when the specialists are seated at `broadcast`
-or `presence` attention. It speaks during an exchange only when a person
-addresses it, or when an idle specialist at `named` attention needs a
-directed request.
+or `presence` attention. It speaks during an exchange only when a
+participant addresses it, or when an idle specialist at `named` attention
+needs a directed request.
 
 The assistant is an ordinary agent. The kernel continues to own membership,
 activation authority, freshness checks, exchange closure, and summary
@@ -25,7 +25,7 @@ The package introduces no privileged role or separate execution lifecycle.
 | -------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | Membership     | Seat specialists whose expertise can materially affect the result. Unseat on request or on a clear change of scope.    |
 | Routing        | Send one directed request to an idle specialist at `named` attention, with every constraint that is still in force.    |
-| Answers        | Answer a message that a person addresses to the assistant. The summary answers a question to the room.                 |
+| Answers        | Answer a person or a specialist that addresses the assistant. The summary answers a question to the room.              |
 | Summaries      | Answer the opening question, and report corrections, conflicts, constraints, open questions, and unresolved work.      |
 | Silence        | Call no `say` at `broadcast` or `presence` attention: no correction, no relay, no question to the person, no steering. |
 
@@ -213,8 +213,10 @@ included. The person reads every message too. A correction from the
 assistant repeats what both already have, and it starts more work.
 
 The assistant does not correct, verify, or question a specialist during the
-exchange, and it does not ask the person a question. The assistant reads a
-specialist message to it as a report. When a result relies on a superseded
+exchange, and it does not ask the person a question. A specialist reports to
+the room, and it addresses the assistant only with a question for it. The
+assistant answers that question to the specialist, and it does not pass it on
+to the person. When a result relies on a superseded
 fact, breaks a constraint, or needs information from the person, the closing
 summary reports it. The person then decides what happens next.
 
@@ -345,6 +347,7 @@ exchange, and a summary that states the conflict or asks the question.
 Include these cases of the purpose:
 
 - A question that a person addresses to the assistant.
+- A question that a specialist addresses to the assistant.
 - A question that a person addresses to a named specialist.
 - An unseat on request.
 - A request that needs no specialist.
