@@ -418,7 +418,8 @@ hashes of the source.
 **Registration compares the template that landed.** After case 2 or case
 3, the backend reads the tip again. Two host processes that register one
 template at once then agree, or the one that lost fails with the name of
-the template.
+the template. When `git update-ref` fails for another cause, such as a
+lock, the error holds the message of git.
 
 **Each case writes the description when it differs.**
 

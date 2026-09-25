@@ -6,7 +6,7 @@
  * `serve` and the key lines have files of their own.
  */
 
-import { cp, mkdir, readdir, readFile, stat, utimes, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { type WorkstationGitOptions, workstationGitBackend } from '../src/index.ts';
@@ -124,6 +124,24 @@ describe.skipIf(!hasGitTools)('workstationGitBackend', () => {
 		expect(git(repo, 'ls-tree', '-r', '--name-only', 'main')).toBe('NOTES.md\n');
 		expect(await readdir(join(home, 'repos', '.staging'))).toEqual([]);
 		expect((await blank(gitBackend(changed)))?.branches.main).toBe(updated?.branches.main);
+	});
+
+	it('names the error of git when the move of main fails, and a later registration moves it', async () => {
+		const { home, options } = await gitServer();
+		await gitBackend(options).connect(ANALYST);
+		const repo = join(home, 'repos', 'templates', 'blank.git');
+		const lock = join(repo, 'refs', 'heads', 'main.lock');
+		await writeFile(lock, '');
+		const changed: WorkstationGitOptions = {
+			...options,
+			templates: { ...options.templates, blank: { source: { 'NOTES.md': 'changed\n' } } },
+		};
+		await expect(gitBackend(changed).connect(ANALYST)).rejects.toThrow(
+			/git update-ref failed: .*main\.lock/s,
+		);
+		await rm(lock);
+		await gitBackend(changed).connect(ANALYST);
+		expect(git(repo, 'ls-tree', '-r', '--name-only', 'main')).toBe('NOTES.md\n');
 	});
 
 	it.each<[string, WorkstationGitOptions['templates'], RegExp]>([

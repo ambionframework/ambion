@@ -47,9 +47,8 @@ const TIP_SCRIPT = [
 	'set -euo pipefail',
 	'repo="$HOME/$AMBION_ROOT/templates/$AMBION_NAME.git"',
 	'[ -f "$repo/HEAD" ] || exit 0',
-	'if [ "$(cat "$repo/description" 2>/dev/null || true)" != "$AMBION_DESCRIPTION" ]; then',
+	`printf '%s' "$AMBION_DESCRIPTION" | cmp -s - "$repo/description" ||`,
 	`  printf '%s' "$AMBION_DESCRIPTION" >"$repo/description"`,
-	'fi',
 	"tree=''",
 	'if git --git-dir="$repo" rev-parse -q --verify HEAD >/dev/null; then',
 	'  tree=$(git --git-dir="$repo" ls-tree -r -z --full-tree HEAD | base64 -w0)',
@@ -86,7 +85,11 @@ const BUILD_SCRIPT = [
 	'',
 ].join('\n');
 
-/** Commit the files of the staging folder on the tip of a template's `main`, and move `main` if no other write moved it. */
+/**
+ * Commit the files of the staging folder on the tip of a template's `main`,
+ * and move `main` if no other write moved it. Print the error of git, in
+ * base64, when the move fails.
+ */
 const UPDATE_SCRIPT = [
 	'set -euo pipefail',
 	'root="$HOME/$AMBION_ROOT"',
@@ -101,7 +104,9 @@ const UPDATE_SCRIPT = [
 	'export GIT_COMMITTER_NAME=ambion GIT_COMMITTER_EMAIL=ambion@ambion.invalid',
 	'if [ -n "$old" ]; then set -- -p "$old"; else set --; fi',
 	String.raw`commit=$(printf 'Register the template %s\n' "$AMBION_NAME" | git commit-tree "$tree" "$@")`,
-	'git update-ref refs/heads/main "$commit" "$old" 2>/dev/null || true',
+	'if ! refused=$(git update-ref refs/heads/main "$commit" "$old" 2>&1); then',
+	String.raw`  printf 'AMBION_REFUSED %s\n' "$(printf '%s' "$refused" | base64 -w0)"`,
+	'fi',
 	'unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE',
 	'rm -rf -- "$stage"',
 	'',
@@ -128,7 +133,10 @@ function blobsOf(listing: Buffer): ReadonlyMap<string, string> {
 	return blobs;
 }
 
-/** The blob hashes at the tip of `templates/<name>`, or `undefined` when it does not exist. */
+/**
+ * Write the description of `templates/<name>` when it differs, and give the
+ * blob hashes at its tip, or `undefined` when it does not exist.
+ */
 async function tipOf(
 	account: GitAccount,
 	root: string,
@@ -152,7 +160,7 @@ async function writeFiles(env: SshEnv, folder: string, files: TemplateFiles): Pr
 	}
 }
 
-/** Write the files of a template into a new folder in `.staging`, and run `script` over it. */
+/** Write the files of a template into a new folder in `.staging`, run `script` over it, and give its output. */
 async function stageAndRun(
 	account: GitAccount,
 	root: string,
@@ -160,11 +168,11 @@ async function stageAndRun(
 	registration: TemplateRegistration,
 	files: TemplateFiles,
 	script: string,
-): Promise<void> {
+): Promise<string> {
 	const stage = `template.${randomName()}`;
-	await account.use(async (env, session) => {
+	return account.use(async (env, session) => {
 		await writeFiles(env, `${session.home}/${root}/.staging/${stage}/files`, files);
-		await runIn(env, script, {
+		return runIn(env, script, {
 			AMBION_ROOT: root,
 			AMBION_STAGE: stage,
 			AMBION_NAME: name,
@@ -186,15 +194,21 @@ async function registerOne(
 	const tip = await tipOf(account, root, name, registration.description);
 	if (tip !== undefined && sameFiles(tip, wanted)) return;
 	const script = tip === undefined ? BUILD_SCRIPT : UPDATE_SCRIPT;
-	await stageAndRun(account, root, name, registration, files, script);
+	const output = await stageAndRun(account, root, name, registration, files, script);
 	const landed = await tipOf(account, root, name, registration.description);
 	if (landed === undefined)
 		throw new Error(`The template '${name}' is missing after its registration.`);
-	if (!sameFiles(landed, wanted)) {
-		throw new Error(
-			`The template '${name}' does not hold its source after its registration. Another host process can have registered other files.`,
-		);
-	}
+	if (!sameFiles(landed, wanted)) throw new Error(notLanded(name, output));
+}
+
+/** The error of a registration whose template does not hold its source: the error of git, or another host. */
+function notLanded(name: string, output: string): string {
+	const refused = tagged(output, 'AMBION_REFUSED')[0];
+	const cause =
+		refused === undefined
+			? 'Another host process can have registered other files.'
+			: `git update-ref failed: ${Buffer.from(refused, 'base64').toString('utf8').trim()}`;
+	return `The template '${name}' does not hold its source after its registration. ${cause}`;
 }
 
 /** Register every template, in name order. */
