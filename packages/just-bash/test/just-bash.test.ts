@@ -175,14 +175,16 @@ describe('the just-bash adapter', () => {
 		while (!existsSync(join(dir, 'home', 'alpha', 'dst'))) {
 			await new Promise((resolve) => setImmediate(resolve));
 		}
-		// The `mkdir -p` of the home in `connect` waits for the copy, then starts after it.
+		// The `mkdir -p` of the home in `connect` waits for the copy. The end of the copy
+		// starts it, in the context of the script, and the script then ends.
+		const beta = backend.connect({ name: 'beta' });
+		expect(await copy).toMatchObject({ ok: true, exitCode: 0 });
 		const settles = (work: Promise<unknown>) =>
 			Promise.race([
 				work.then(() => 'settled'),
 				new Promise((resolve) => setTimeout(() => resolve('pending'), 2_000)),
 			]);
-		expect(await settles(backend.connect({ name: 'beta' }))).toBe('settled');
-		expect(await copy).toMatchObject({ ok: true, exitCode: 0 });
+		expect(await settles(beta)).toBe('settled');
 		expect(await settles(alpha.writeFile('after.txt', 'x', ctx))).toBe('settled');
 	});
 });
