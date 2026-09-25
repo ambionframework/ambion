@@ -50,7 +50,7 @@ repositories in one account on the server. Each agent reaches them with
 
 ## The scope
 
-**Four themes, each with the acceptance it must meet on the tagged
+**Five themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
 | Theme                     | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -59,6 +59,7 @@ commit.** The phases below deliver them; the items explain them.
 | D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database.                                                                                                                                                                                                                     |
 | G Git on the workstation  | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317. |
 | B Background processes    | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307.                                                                                                                                    |
+| E Evals                   | The assistant's live suite runs on `@ambionframework/simulator`. Every claim of its eleven tests holds as a check or a criterion, and three new cases run over several exchanges. [Simulator](../docs/simulator.md) holds the design.                                                                                                                                                                              |
 
 **Three format changes.** Each change lands with a golden journal of the
 new shape, and the changelog names each one.
@@ -89,8 +90,6 @@ condition that brings each one back.
 - **A repeatable release from CI (R1).** The owner runs the release.
 - **A generated API reference.** It adds a build step and a CI check, and
   the typed README examples already hold the surface.
-- **The evals package.** PR #153 is a draft, conflicts with main, and
-  carries its own list of open work.
 - **The open proofs.** The stop-loop and pass measures, unique roster
   names, `seatLive`, and `storedIdAccepted` remove no defect today.
 - **A backend profile and concurrent operations.** A profile that lets the
@@ -158,7 +157,8 @@ means two things or two names mean one.
 host call needs the notice kind, the timer needs the host call, and the
 delegating message needs the notice. The git backend on the workstation
 needed none of them, and phase 4 landed it beside phases 1 to 3.
-Background processes (B1) needed no phase, and landed first. A step names the
+Background processes (B1) needed no phase, and landed first. The
+simulator (phase 6) needs no other phase. A step names the
 steps it needs; a step with no "Needs" line starts now. **P0** blocks the tag. **P1**
 carries the release story. **P2** moves to the backlog when it is late.
 
@@ -211,6 +211,25 @@ account on its own server, and the host opens no port.
 with the SSH harness, and the tier proves the checks that
 [Workstation git](../docs/workstation-git.md#tests) lists. The workbench
 runs on `justGitBackend`. The evidence holds on `main`.
+
+### Phase 6. The simulator (P1)
+
+**Goal:** an eval drives a room as a person, checks the run in code, and
+asks a judge for the rest.
+
+- [ ] **1.** `runAgent` in `@ambionframework/pi`: one agent run outside a
+      room, until the agent calls a tool that ends it. P1. (E1)
+- [ ] **2.** `@ambionframework/simulator` with `simulate` and
+      `scriptedActor`, proven on the scripted tier. P1. (E1)
+- [ ] **3.** `agentActor`, `agentJudge`, and their tools `send`, `stop`,
+      and `grade`, with one live case. Needs 1 and 2. P1. (E1)
+- [ ] **4.** The assistant's live suite on the simulator. Needs 3. P1.
+      (E1)
+
+**Evidence:** each step states its cases in
+[Simulator](../docs/simulator.md#the-order-of-work). The last step keeps
+every claim of the assistant's live suite, and one live run of the file
+prints the cost of each case.
 
 ### Phase 5. Release (P1)
 
@@ -347,6 +366,18 @@ earlier run. A process has no link to an exchange yet; the backlog holds
 that design. **Evidence:** `packages/workspace/test/processes.test.ts`,
 the Pi continuity test of the reminder, and the timeout, cancel, and
 adoption on OpenSSH. Landed in #307.
+
+### E. Evals
+
+**E1. A simulator for evals.** A live test sends one fixed question and
+matches the answer with a regex. It cannot follow up on an answer, and
+a regex cannot grade a meaning. PR #153 tried a larger package and stays
+a draft. `@ambionframework/simulator` runs a loop of one exchange at a
+time. An actor plays a person, checks in code read the run, and a judge
+grades the criteria that code cannot decide. The actor and the judge are
+agents on Pi's `AgentHarness`, configured with tools and bundles like any
+agent. **Evidence:** the assistant's live suite runs on the simulator.
+Then close PR #153 with a comment that names the new package.
 
 ### R. Release
 

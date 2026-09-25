@@ -5,9 +5,8 @@ yet.** The [backlog](../planning/backlog.md) holds the condition that
 schedules it. Until it lands, the live tests in `packages/*/test/live` are
 the only behavioral evidence.
 
-**The package is outside the 0.3.0 scope.** [The plan](../planning/next.md)
-names the evals package out of scope. A change to that scope comes before
-the first pull request.
+**Phase 6 of [the 0.3.0 plan](../planning/next.md) builds the package.**
+[The order of work](#the-order-of-work) names its four pull requests.
 
 **The rewrite of the assistant's live suite validates the design.** The
 package lands when `packages/assistant/test/live/behavior.test.ts` runs on
@@ -332,13 +331,13 @@ export function runAgent(
     readonly agent: { readonly name: string; readonly identity: string };
     readonly system: string;
     readonly prompt: string;
-    readonly tools: readonly AmbionTool[];
+    readonly tools?: readonly AmbionTool[];
     readonly bundles?: readonly ToolBundle[];
     /** The names of the tools that end the run. */
     readonly ends: readonly string[];
     readonly signal?: AbortSignal;
   },
-): Promise<{ end: Call; calls: readonly Call[]; usage: Usage }>;
+): Promise<{ end: RunAgentCall; calls: readonly RunAgentCall[]; usage: Usage }>;
 ```
 
 - **The model.** `services.model(model, name)` resolves it. Over a scripted
@@ -600,7 +599,7 @@ its evidence below.
 
 | Pull request              | What it adds                                                 | Evidence                                            |
 | ------------------------- | ------------------------------------------------------------ | --------------------------------------------------- |
-| 1. Pi: `runAgent`         | `packages/pi/src/run-agent.ts`, the export, a changelog line | [The `runAgent` cases](#tests), the export snapshot |
+| 1. Pi: `runAgent`         | `packages/pi/src/run-agent.ts`, the export, a changelog line | [The `runAgent` cases](#tests)                      |
 | 2. Simulator: the loop    | `simulate`, `scriptedActor`, the package and its graph line  | The scripted-tier table                             |
 | 3. Simulator: the agents  | `agentActor`, `agentJudge`, `send`, `stop`, `grade`          | The scripted-stream cases, and one live case        |
 | 4. Assistant: the rewrite | The port of `behavior.test.ts`                               | [Validation](#validation-the-assistants-live-suite) |
@@ -653,8 +652,10 @@ a `scriptedActor`. The judge is a function.
 | The signal aborts                | The promise rejects                                        |
 | Several requests                 | `usage` sums every request                                 |
 | A bundle tool has an `ends` name | The run fails at once with a duplicate name                |
-| A workspace tool is called       | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
+| A tool is called                 | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
 | Two names on one scripted stream | Each run answers from the script for its `name`            |
+| The agent stops with no end call | The promise rejects, and names the tools in `ends`         |
+| Two ending calls run at once     | The first call to succeed ends the run                     |
 
 **The agent actor and the agent judge run on the scripted Pi stream.**
 The cases cover the prompt text, the name each request carries, and a
