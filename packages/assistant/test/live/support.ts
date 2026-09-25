@@ -90,7 +90,9 @@ export const answers =
 	({ view, results }) => {
 		// One say for each activation: the view of a later step may not hold it yet.
 		if (results.length > 0) return quiet();
-		const from = view.context.exchange?.from ?? 0;
+		// An activation outside an exchange carries no request to answer.
+		if (view.context.exchange === undefined) return quiet();
+		const { from } = view.context.exchange;
 		const exchange = view.context.messages.filter(
 			(message): message is SpokenMessage => isSpoken(message) && message.seq >= from,
 		);
@@ -111,13 +113,23 @@ export interface Evidence {
 }
 
 /**
- * The evidence of the running case. When the case fails, it goes to
- * `test/live/runs/<name>.json`, which git ignores, and the path goes to
- * stdout. The repository forbids a second live run to chase a flake, so the
- * file is the record of the first.
+ * The evidence of the running case. When the case ends, one line on stdout
+ * gives what the room, the actor, and the judge spent. It goes to stdout
+ * directly: vitest keeps what a passing test logs through `console`.
+ *
+ * When the case fails, the evidence goes to `test/live/runs/<name>.json`,
+ * which git ignores, and the path goes to stdout. The repository forbids a
+ * second live run to chase a flake, so the file is the record of the first.
  */
-export function keepOnFailure(name: string): Evidence {
+export function track(name: string): Evidence {
 	const evidence: Evidence = {};
+	onTestFinished(() => {
+		const cost = (usage: { cost?: number } | undefined) => (usage?.cost ?? 0).toFixed(4);
+		const { run, verdict } = evidence;
+		process.stdout.write(
+			`assistant eval · ${name}: room $${cost(run?.usage.room)}, actor $${cost(run?.usage.actor)}, judge $${cost(verdict?.usage)}\n`,
+		);
+	});
 	onTestFailed(() => {
 		const dir = new URL('./runs/', import.meta.url);
 		mkdirSync(dir, { recursive: true });
@@ -128,15 +140,4 @@ export function keepOnFailure(name: string): Evidence {
 		process.stdout.write(`assistant eval · ${name}: evidence in ${path.pathname}\n`);
 	});
 	return evidence;
-}
-
-/**
- * One line per case: what the room, the actor, and the judge spent. Written
- * to stdout directly: vitest keeps what a passing test logs through `console`.
- */
-export function report(name: string, run: Run, verdict?: Verdict): void {
-	const cost = (usage: { cost?: number } | undefined) => (usage?.cost ?? 0).toFixed(4);
-	process.stdout.write(
-		`assistant eval · ${name}: room $${cost(run.usage.room)}, actor $${cost(run.usage.actor)}, judge $${cost(verdict?.usage)}\n`,
-	);
 }

@@ -11,6 +11,7 @@ import {
 	agentActor,
 	agentJudge,
 	type Judge,
+	type Run,
 	scriptedActor,
 	simulate,
 } from '@ambionframework/simulator';
@@ -19,19 +20,33 @@ import {
 	answers,
 	EXCHANGE_MS,
 	JUDGE_MODEL,
-	keepOnFailure,
 	live,
 	MODEL,
 	openRoom,
 	priya,
-	report,
 	saidBy,
+	track,
 } from './support.ts';
 
 const judge: Judge = (run, criteria) => agentJudge({ model: JUDGE_MODEL })(run, criteria);
 
 const STOCK = 'The warehouse has 8 units of SKU A available to dispatch today.';
-const EIGHT = /8|eight/i;
+const EIGHT = /\b8\b|\beight\b/i;
+const FIVE = /\b5\b|\bfive\b/i;
+const SKU_B = /SKU\s*B\b/i;
+
+/** Real milliseconds for a case of two exchanges and a grade. */
+const TWO_EXCHANGES_MS = 420_000;
+/** Real milliseconds for a case of three exchanges, three moves of the actor, and a grade. */
+const THREE_EXCHANGES_MS = 600_000;
+
+/** A run that the judge can grade: it ended cleanly, and each exchange has its summary. */
+function expectGradable(run: Run, ended: readonly Run['ended'][] = ['limit']): void {
+	expect(ended, run.error).toContain(run.ended);
+	for (const exchange of run.exchanges) {
+		expect(exchange.summary, JSON.stringify(exchange.discussion)).toBeDefined();
+	}
+}
 
 live('the default assistant, driven by the simulator', () => {
 	it.each([
@@ -44,7 +59,7 @@ live('the default assistant, driven by the simulator', () => {
 		'routes %s participation without a restated prompt (sample %i)',
 		async (attention, sample) => {
 			const name = `routes-${attention ?? 'reserve'}-${sample}`;
-			const evidence = keepOnFailure(name);
+			const evidence = track(name);
 			const room = await openRoom({ specialist: answers(() => STOCK), attention });
 			const run = await simulate(room, {
 				person: priya,
@@ -55,9 +70,8 @@ live('the default assistant, driven by the simulator', () => {
 				exchangeMs: EXCHANGE_MS,
 			});
 			evidence.run = run;
-			report(name, run);
 			const [exchange] = run.exchanges;
-			expect(run.ended).toBe('limit');
+			expectGradable(run);
 			expect(saidBy(exchange, 'inventory')).not.toEqual([]);
 			const speech = saidBy(exchange, 'assistant');
 			if (attention === 'named') {
@@ -80,7 +94,7 @@ live('the default assistant, driven by the simulator', () => {
 		'corrects clear reliance on a superseded constraint once (sample %i)',
 		async (sample) => {
 			const name = `corrects-${sample}`;
-			const evidence = keepOnFailure(name);
+			const evidence = track(name);
 			const room = await openRoom({
 				attention: 'broadcast',
 				specialist: answers(
@@ -96,7 +110,6 @@ live('the default assistant, driven by the simulator', () => {
 				exchangeMs: EXCHANGE_MS,
 			});
 			evidence.run = run;
-			report(name, run);
 			const [exchange] = run.exchanges;
 			const speech = saidBy(exchange, 'assistant');
 			expect(speech, JSON.stringify(exchange?.discussion)).toHaveLength(1);
@@ -106,7 +119,7 @@ live('the default assistant, driven by the simulator', () => {
 	);
 
 	it('does not steer valid work or turn an incomplete result into success', async () => {
-		const evidence = keepOnFailure('incomplete');
+		const evidence = track('incomplete');
 		const room = await openRoom({
 			attention: 'broadcast',
 			specialist: answers(
@@ -123,17 +136,17 @@ live('the default assistant, driven by the simulator', () => {
 			exchangeMs: EXCHANGE_MS,
 		});
 		evidence.run = run;
+		expectGradable(run);
 		expect(saidBy(run.exchanges[0], 'assistant')).toEqual([]);
 		const verdict = await judge(run, [
 			'The summary to priya says that the dispatch capacity is unknown, and it reports no success.',
 		]);
 		evidence.verdict = verdict;
-		report('incomplete', run, verdict);
 		expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
 	});
 
 	it('honors an application override of default silence', async () => {
-		const evidence = keepOnFailure('override');
+		const evidence = track('override');
 		const room = await openRoom({
 			attention: 'broadcast',
 			specialist: answers(() => 'There are 8 units of SKU A in stock.'),
@@ -147,7 +160,6 @@ live('the default assistant, driven by the simulator', () => {
 			exchangeMs: EXCHANGE_MS,
 		});
 		evidence.run = run;
-		report('override', run);
 		const [exchange] = run.exchanges;
 		expect(saidBy(exchange, 'assistant')).toEqual([
 			expect.objectContaining({ text: 'Inventory checkpoint recorded.' }),
@@ -156,7 +168,7 @@ live('the default assistant, driven by the simulator', () => {
 	});
 
 	it('preserves source-only verification limits in the closing summary', async () => {
-		const evidence = keepOnFailure('verification');
+		const evidence = track('verification');
 		const room = await openRoom({
 			attention: 'broadcast',
 			specialist: answers(
@@ -173,6 +185,7 @@ live('the default assistant, driven by the simulator', () => {
 			exchangeMs: EXCHANGE_MS,
 		});
 		evidence.run = run;
+		expectGradable(run);
 		const [exchange] = run.exchanges;
 		expect(saidBy(exchange, 'assistant')).toEqual([]);
 		expect(exchange?.summary?.text).toMatch(/source|static/i);
@@ -181,108 +194,119 @@ live('the default assistant, driven by the simulator', () => {
 			'The summary to priya says that nothing was released or deployed.',
 		]);
 		evidence.verdict = verdict;
-		report('verification', run, verdict);
 		expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
 	});
 
 	// The cases below need more than one exchange, which the old helper could not run.
 
-	it('carries a revised request to the specialist in one directed message', async () => {
-		const evidence = keepOnFailure('revision');
-		const room = await openRoom({
-			attention: 'named',
-			specialist: answers((exchange) =>
-				exchange.some((message) => /SKU B/.test(message.text))
-					? 'The warehouse has 5 units of SKU B available to dispatch today.'
-					: STOCK,
-			),
-		});
-		const run = await simulate(room, {
-			person: priya,
-			actor: scriptedActor([
-				'How many units of SKU A can the warehouse dispatch today?',
-				'Correction: I need the count for SKU B, not SKU A.',
-			]),
-			exchanges: 2,
-			exchangeMs: EXCHANGE_MS,
-		});
-		evidence.run = run;
-		const second = run.exchanges[1];
-		const speech = saidBy(second, 'assistant');
-		expect(speech, JSON.stringify(second?.discussion)).toHaveLength(1);
-		expect(speech[0]).toMatchObject({ to: 'inventory', text: expect.stringMatching(/SKU B/) });
-		expect(second?.summary?.text).toMatch(/5|five/i);
-		const verdict = await judge(run, [
-			'The second summary to priya answers for SKU B, and does not give the SKU A count as the answer.',
-		]);
-		evidence.verdict = verdict;
-		report('revision', run, verdict);
-		expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
-	});
+	it(
+		'carries a revised request to the specialist in one directed message',
+		async () => {
+			const evidence = track('revision');
+			const room = await openRoom({
+				attention: 'named',
+				specialist: answers((exchange) =>
+					exchange.some((message) => SKU_B.test(message.text))
+						? 'The warehouse has 5 units of SKU B available to dispatch today.'
+						: STOCK,
+				),
+			});
+			const run = await simulate(room, {
+				person: priya,
+				actor: scriptedActor([
+					'How many units of SKU A can the warehouse dispatch today?',
+					'Correction: I need the count for SKU B, not SKU A.',
+				]),
+				exchanges: 2,
+				exchangeMs: EXCHANGE_MS,
+			});
+			evidence.run = run;
+			expectGradable(run);
+			const second = run.exchanges[1];
+			const speech = saidBy(second, 'assistant');
+			expect(speech, JSON.stringify(second?.discussion)).toHaveLength(1);
+			expect(speech[0]).toMatchObject({ to: 'inventory', text: expect.stringMatching(SKU_B) });
+			expect(second?.summary?.text).toMatch(FIVE);
+			const verdict = await judge(run, [
+				'The second summary to priya answers for SKU B, and does not give the SKU A count as the answer.',
+			]);
+			evidence.verdict = verdict;
+			expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
+		},
+		TWO_EXCHANGES_MS,
+	);
 
-	it('keeps a constraint of the first exchange in the second', async () => {
-		const evidence = keepOnFailure('constraint');
-		const room = await openRoom({
-			attention: 'named',
-			specialist: answers((exchange) =>
-				exchange.some((message) => /plan/i.test(message.text))
-					? 'I prepared a plan to dispatch 8 units of SKU A.'
-					: STOCK,
-			),
-		});
-		const run = await simulate(room, {
-			person: priya,
-			actor: scriptedActor([
-				'Report the stock of SKU A. Do not dispatch anything this week.',
-				'Now prepare a dispatch plan for SKU A.',
-			]),
-			exchanges: 2,
-			exchangeMs: EXCHANGE_MS,
-		});
-		evidence.run = run;
-		const speech = saidBy(run.exchanges[1], 'assistant');
-		expect(speech, JSON.stringify(run.exchanges[1]?.discussion)).toHaveLength(1);
-		expect(speech[0]).toMatchObject({ to: 'inventory' });
-		const verdict = await judge(run, [
-			"In the second exchange, the assistant's request to inventory carries the constraint that nothing is dispatched this week.",
-			'The second summary to priya keeps the constraint that nothing is dispatched this week.',
-		]);
-		evidence.verdict = verdict;
-		report('constraint', run, verdict);
-		expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
-	});
+	it(
+		'keeps a constraint of the first exchange in the second',
+		async () => {
+			const evidence = track('constraint');
+			const room = await openRoom({
+				attention: 'named',
+				specialist: answers((exchange) =>
+					exchange.some((message) => /plan/i.test(message.text))
+						? 'I prepared a plan to dispatch 8 units of SKU A.'
+						: STOCK,
+				),
+			});
+			const run = await simulate(room, {
+				person: priya,
+				actor: scriptedActor([
+					'Report the stock of SKU A. Do not dispatch anything this week.',
+					'Now prepare a dispatch plan for SKU A.',
+				]),
+				exchanges: 2,
+				exchangeMs: EXCHANGE_MS,
+			});
+			evidence.run = run;
+			expectGradable(run);
+			const speech = saidBy(run.exchanges[1], 'assistant');
+			expect(speech, JSON.stringify(run.exchanges[1]?.discussion)).toHaveLength(1);
+			expect(speech[0]).toMatchObject({ to: 'inventory' });
+			const verdict = await judge(run, [
+				"In the second exchange, the assistant's request to inventory carries the constraint that nothing is dispatched this week.",
+				'The second summary to priya keeps the constraint that nothing is dispatched this week.',
+			]);
+			evidence.verdict = verdict;
+			expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
+		},
+		TWO_EXCHANGES_MS,
+	);
 
-	it('asks the person for a material fact, and uses it once given', async () => {
-		const evidence = keepOnFailure('material-fact');
-		const room = await openRoom({
-			attention: 'broadcast',
-			specialist: answers((exchange) =>
-				exchange.some((message) => /A-100/.test(message.text))
-					? 'The warehouse has 8 units of SKU A-100 available to dispatch today.'
-					: 'I need the SKU before I can check the stock.',
-			),
-		});
-		const run = await simulate(room, {
-			person: priya,
-			actor: agentActor({
-				model: MODEL,
-				brief:
-					'You want to know how many units the warehouse can dispatch today. The SKU is A-100. Give the SKU only when someone asks for it. Stop when you know the count.',
-			}),
-			exchanges: 3,
-			exchangeMs: EXCHANGE_MS,
-		});
-		evidence.run = run;
-		expect(['stopped', 'limit']).toContain(run.ended);
-		expect(run.exchanges.length).toBeGreaterThanOrEqual(2);
-		expect(run.exchanges[0]?.sent).not.toMatch(/A-100/);
-		expect(run.exchanges[1]?.sent).toMatch(/A-100/);
-		const verdict = await judge(run, [
-			'The first summary to priya asks for the SKU, or says that the count waits on it, and reports no count.',
-			'The last summary to priya states that 8 units can be dispatched today.',
-		]);
-		evidence.verdict = verdict;
-		report('material-fact', run, verdict);
-		expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
-	});
+	it(
+		'asks the person for a material fact, and uses it once given',
+		async () => {
+			const evidence = track('material-fact');
+			const room = await openRoom({
+				attention: 'broadcast',
+				specialist: answers((exchange) =>
+					exchange.some((message) => /A-100/.test(message.text))
+						? 'The warehouse has 8 units of SKU A-100 available to dispatch today.'
+						: 'I need the SKU before I can check the stock.',
+				),
+			});
+			const run = await simulate(room, {
+				person: priya,
+				actor: agentActor({
+					model: MODEL,
+					brief:
+						'You want to know how many units the warehouse can dispatch today. The SKU is A-100. Give the SKU only when someone asks for it. Stop when you know the count.',
+				}),
+				exchanges: 3,
+				exchangeMs: EXCHANGE_MS,
+			});
+			evidence.run = run;
+			expectGradable(run, ['stopped', 'limit']);
+			// The actor gives the SKU in a later exchange. The first criterion reads whether the assistant asked.
+			expect(run.exchanges.slice(1).map((exchange) => exchange.sent)).toContainEqual(
+				expect.stringMatching(/A-100/),
+			);
+			const verdict = await judge(run, [
+				'The first summary to priya asks for the SKU, or says that the count waits on it, and reports no count.',
+				'The last summary to priya states that 8 units can be dispatched today.',
+			]);
+			evidence.verdict = verdict;
+			expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
+		},
+		THREE_EXCHANGES_MS,
+	);
 });

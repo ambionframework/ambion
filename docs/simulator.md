@@ -4,8 +4,8 @@
 [the 0.3.0 plan](../planning/next.md) builds it, in the four pull requests
 of [the order of work](#the-order-of-work). The package holds `simulate`,
 `scriptedActor`, `agentActor`, and `agentJudge`, and the assistant's live
-suite runs on it. The first live run of that suite is the evidence that
-validates the design.
+suite runs on it. The evidence that validates the design waits on the first
+live run of that suite on `main`.
 
 **The rewrite of the assistant's live suite validates the design.** The
 package lands when `packages/assistant/test/live/behavior.test.ts` runs on
@@ -518,7 +518,11 @@ holds the rules.
   schedule. A pull request workflow runs none.
 - **The run reports what it spent.** `run.usage` and `verdict.usage` give
   the room, the actor, and the judge. The test prints one line with the
-  three totals, the way `report()` does in the live tier.
+  three totals, the way `track()` does in the live tier when a case ends.
+- **A case grades only a clean run.** Before the judge, the case checks
+  that the run ended at the limit or at a stop, and that each exchange has
+  its summary. A run that fails there spends no grade, and its evidence
+  file shows the cause.
 - **The scripted tier proves the eval first.** Run the eval with a
   scripted execution, a scripted actor, and a scripted judge before the
   first live run.
@@ -569,8 +573,8 @@ A script for a case with several exchanges speaks once in each exchange:
 const answers =
   (fact: string): Script =>
   ({ view, results }) => {
-    if (results.length > 0) return quiet();
-    const from = view.context.exchange?.from ?? 0;
+    if (results.length > 0 || view.context.exchange === undefined) return quiet();
+    const { from } = view.context.exchange;
     const spoke = view.context.messages.some(
       (m) => m.kind === 'said' && m.from === 'inventory' && m.seq >= from,
     );
@@ -605,7 +609,7 @@ them.
 | ------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | A person revises the request                | Scripted: the question, then the revision               | At `named`, the assistant says once to `inventory` in the second exchange, and names SKU B. The second summary names 5. | The second summary answers for SKU B.                                                                      |
 | A constraint survives into a later exchange | Scripted: a no-dispatch constraint, then a plan request | At `named`, the assistant says once to `inventory` in the second exchange.                                              | That request carries the no-dispatch constraint. The second summary keeps it.                              |
-| The assistant needs a material fact         | `agentActor`, with the fact in the brief                | Two exchanges run. The second message the person sent carries the fact.                                                 | The first summary asks for the fact, or reports that the work waits on it. The last summary uses the fact. |
+| The assistant needs a material fact         | `agentActor`, with the fact in the brief                | Two or more exchanges run. A message the person sent after the first carries the fact.                                  | The first summary asks for the fact, or reports that the work waits on it. The last summary uses the fact. |
 
 **The specialist asks for the material fact.** In the third case, its
 script says in the first exchange that it needs the fact. The assistant can
