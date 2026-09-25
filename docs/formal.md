@@ -281,8 +281,7 @@ before the rules existed.
 record: it decides an entry, an admission, or the `due` list that
 `admitsLease` reads. A rule that only shapes a read leaves the file, and
 it lives beside its caller with an ordinary test. The sweep for 0.2.0
-found no such rule. `exchangeOutcome` shapes a read alone, and it leaves the
-file at the next edit of the rules.
+found no such rule.
 
 | Rule                   | The write it gates                                             |
 | ---------------------- | -------------------------------------------------------------- |
