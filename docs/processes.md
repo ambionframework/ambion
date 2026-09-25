@@ -130,8 +130,9 @@ one `find` that hands `spec`, `exit`, `stop`, and `seen` of every process
 to one `grep`. Where `ps` exists, the script then checks the pid of each
 process with no `exit`. A read costs one `exec` on every backend, and
 just-bash reads a table of 64 processes in about 30 ms. `ps` and the
-reminder read the whole table. `status`, `wait`, and `cancel` read the one
-process.
+reminder read the whole table. `status` and `cancel` read the one process.
+`wait` reads the one process, or the whole table on each read when it has
+`handles`.
 
 ## The result
 
@@ -139,7 +140,9 @@ process.
 then one bracketed line.** The new output is the output after the cursor:
 the part that no earlier result of the agent showed. The line states the
 process, its handle, its name when it has one, and its output file. A
-process that ended with no output shows `(no output)`. A process that wrote
+`wait` with `handles` gives this for each process that ended, then the
+bracketed line of each one that still runs. A process that ended with no
+output shows `(no output)`. A process that wrote
 nothing new since the last result shows `(no new output)`. A running
 process that has written nothing yet shows only the bracketed line.
 
@@ -427,9 +430,12 @@ ends.** It takes 1 to 16 handles in place of `handle`, and counts a handle
 that repeats once. The result gives the new output and the bracketed line
 of each process that ended, then the bracketed line of each one that still
 runs. `details.processes` holds every status in the order of the handles,
-and `details.ended` holds the details of each process that ended. An agent
-that runs a parameter sweep as four processes waits for all four with one
-call, and gets each result as it comes.
+and `details.ended` holds the details of each process that ended.
+
+**A process that already ended makes `wait` with `handles` return at
+once.** An agent that runs a parameter sweep as four processes calls `wait`
+with the four handles, reads the result of the first that ends, and calls
+`wait` again with the handles that still run.
 
 **A wait ends 30 seconds before the room ends the activation.** The room
 ends an activation `limits.lease.deadline` after its first claim, 600

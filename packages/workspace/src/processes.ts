@@ -44,7 +44,7 @@ import {
 import {
 	endOfRun,
 	MAX_TIMER_SECONDS,
-	NEVER,
+	pause,
 	type Run,
 	runBash,
 	unreadable,
@@ -232,7 +232,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		const deadline = Date.now() + ms;
 		while (Date.now() < deadline && adopted.has(handle)) {
 			await detached(agent, (env) => read(agent, env, handle)).catch(() => undefined);
-			if (adopted.has(handle)) await within(NEVER, POLL_MS);
+			if (adopted.has(handle)) await pause(POLL_MS);
 		}
 	};
 
@@ -434,14 +434,16 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	 * earlier run ends in a read, so the wait reads again every `POLL_MS`.
 	 */
 	const wait: ProcessTable['wait'] = async (agent, handles, seconds, signal) => {
+		if (handles.length === 0) return [];
 		const deadline = Date.now() + seconds * 1000;
 		let statuses = await findAll(agent, handles, signal);
+		// One race for the whole wait: a process of this run leaves `owned` only after it ends.
+		const owns = handles.flatMap((handle) => owned.get(handle)?.ended ?? []);
+		const first = owns.length === 0 ? new Promise<void>(() => {}) : Promise.race(owns);
+		const polled = owns.length < handles.length;
 		while (statuses.every((one) => one.state === 'running') && Date.now() < deadline) {
-			const ends = handles.map((handle) => owned.get(handle)?.ended);
-			const owns = ends.filter((end): end is Promise<void> => end !== undefined);
 			const left = deadline - Date.now();
-			const ms = owns.length === ends.length ? left : Math.min(POLL_MS, left);
-			await within(owns.length === 0 ? NEVER : Promise.race(owns), ms, signal);
+			await within(first, polled ? Math.min(POLL_MS, left) : left, signal);
 			statuses = await findAll(agent, handles, signal);
 		}
 		return statuses;

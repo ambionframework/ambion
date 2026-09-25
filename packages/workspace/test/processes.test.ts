@@ -516,11 +516,19 @@ describe('a wait on several handles', () => {
 			{ handles: ['bash-000000000001'] },
 			/You have no process bash-000000000001/,
 		],
+		[
+			'a handle of no process beside a known one, through the listing',
+			{ handles: ['KNOWN', 'bash-000000000001'] },
+			/You have no process bash-000000000001/,
+		],
 	])('refuses %s', async (_case, params, message) => {
 		const workspace = site();
-		await call(workspace, 'bash', { command: 'true' });
+		const known = (await call(workspace, 'bash', { command: 'true' })).details.process.handle;
+		const handles =
+			'handles' in params ? params.handles.map((one) => one.replace('KNOWN', known)) : undefined;
+		const given = handles === undefined ? params : { ...params, handles };
 		await expect(
-			Promise.resolve().then(() => toolOf(workspace, 'wait').invoke(params, callAs('alpha'))),
+			Promise.resolve().then(() => toolOf(workspace, 'wait').invoke(given, callAs('alpha'))),
 		).rejects.toThrow(message);
 	});
 });
