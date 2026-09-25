@@ -47,7 +47,7 @@ const send = defineTool({
 
 const stop = defineTool({
 	name: 'stop',
-	description: 'Stop: you have what you came for, or you give up. Give the reason.',
+	description: 'Stop: you have the answer, or you give up. Give the reason.',
 	parameters: Type.Object({ reason: Type.String() }),
 	execute: () => 'Stopped.',
 });

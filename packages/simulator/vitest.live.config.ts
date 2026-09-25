@@ -4,6 +4,7 @@ export default defineConfig({
 	test: {
 		include: ['test/live/**/*.test.ts'],
 		fileParallelism: false,
-		testTimeout: 120_000,
+		// Three moves, the exchanges, and a grade, each with its own bound.
+		testTimeout: 600_000,
 	},
 });

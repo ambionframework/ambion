@@ -19,16 +19,22 @@ import {
 } from '@ambionframework/ambion';
 import type { Run, SeenExchange } from './types.ts';
 
-/** One message as a line: its place, its author, its recipient, its kind, and its text. */
+/**
+ * One message as one line: its place, its author, its recipient, its kind,
+ * and its text as a JSON string. The quotes keep a newline in the text from
+ * starting a line that reads as another message.
+ */
 function messageLine(message: Message): string {
+	const text = JSON.stringify('text' in message ? message.text : '');
 	if (isSummary(message)) {
 		const { from, through } = message.covers;
-		return `[${message.seq}] summary from ${message.from} to ${message.to} (covers ${from}-${through}): ${message.text}`;
+		return `[${message.seq}] summary from ${message.from} to ${message.to} (covers ${from}-${through}): ${text}`;
 	}
 	if (isSpoken(message)) {
-		return `[${message.seq}] ${message.from} to ${message.to ?? 'the room'}: ${message.text}`;
+		return `[${message.seq}] ${message.from} to ${message.to ?? 'the room'}: ${text}`;
 	}
-	const by = message.from === undefined ? '' : ` by ${message.from}`;
+	const by =
+		message.from === undefined || message.from === message.subject ? '' : ` by ${message.from}`;
 	return `[${message.seq}] ${message.subject} ${message.kind}${by}`;
 }
 
