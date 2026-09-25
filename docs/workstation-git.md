@@ -401,14 +401,30 @@ same as on `justGitBackend`.
 
 1. The template exists, and `git ls-tree -r` of its tip gives the blob
    hashes of the source. Nothing happens.
-2. The template exists, and the hashes differ. Registration fails with an
-   error that names the template.
+2. The template exists, and the hashes differ. The backend writes the
+   files into a staging folder over SFTP and commits them on the tip of
+   `main` as `ambion`. `git update-ref` then moves `main` to that commit,
+   and it compares the old commit.
 3. The template does not exist. The backend writes the files into a
    staging folder over SFTP, commits them to a new bare repository on
    `main` as `ambion`, writes the description, installs the
    `pre-receive` hook, and renames the repository to
-   `templates/<name>.git`. It then compares the template that landed, so
-   two host processes that register one template at once agree.
+   `templates/<name>.git`.
+
+**A commit of registration adds every file with `git add -A --force`.** A
+`.gitignore` in the source then skips no file, and the tip holds the blob
+hashes of the source.
+
+**Registration compares the template that landed.** After case 2 or case
+3, the backend reads the tip again. Two host processes that register one
+template at once then agree, or the one that lost fails with the name of
+the template. When `git update-ref` fails for another cause, such as a
+lock, the error holds the message of git.
+
+**Each case writes the description when it differs.**
+
+**An update does not change a fork.** A fork is a `git clone --bare` on
+the git account, so it holds its own objects and refs.
 
 **The backend keeps no `template-sources` repositories.** In
 `justGitBackend`, a template is a fork of its source so that a crash can

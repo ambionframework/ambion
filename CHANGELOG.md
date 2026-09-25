@@ -118,6 +118,14 @@ message. See [Processes](docs/processes.md).
   carries none. `memoryBackend` and `directoryBackend` carry
   `in-process`, and they refuse an access of another transport at
   `connect`.
+- **A registration with a changed source updates its template.** Before,
+  it failed with an error that named the template, and the host
+  registered the change under a new name. Now both git backends
+  fast-forward `templates/<name>` to a new commit whose parent is the old
+  tip. A changed description replaces the old one. A fork keeps the
+  commit it came from. `justGitBackend` commits the change to
+  `template-sources/<name>` and moves the template's ref. `Registry` gets
+  `describe`.
 - **`gitConformance` asks the harness for each credential fact.**
   `GitConformanceBackend` gets four hooks: `sourcesCredential`,
   `issueCredentials`, `writeCredential`, and `probeCredential`. Each hook

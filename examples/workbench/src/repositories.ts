@@ -20,7 +20,7 @@ import { fromDirectory } from '@ambionframework/workspace/git';
 
 const templatesDirectory = fileURLToPath(new URL('../templates/', import.meta.url));
 
-/** The templates, by name. A template never changes: a change takes a new name. */
+/** The templates, by name. A change to a directory updates its template at the next start. */
 const templates = {
 	'firmware-sketch': {
 		description:
