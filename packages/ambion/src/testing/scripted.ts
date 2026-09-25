@@ -1,3 +1,4 @@
+import type { ToolContext, ToolResult } from '../bundle.ts';
 import { composeConnector } from '../execution/connector.ts';
 import type {
 	Executor,
@@ -8,15 +9,7 @@ import type {
 } from '../execution/executor.ts';
 import type { Execution, ExecutionConnector, ExecutionHost } from '../host/runtime.ts';
 import type { ActivationView, CommitResult } from '../protocol.ts';
-import type {
-	AgentDefinition,
-	FailureCause,
-	Intent,
-	Seq,
-	ToolContext,
-	ToolResult,
-	Usage,
-} from '../types.ts';
+import type { AgentDefinition, FailureCause, Intent, Seq, Usage } from '../types.ts';
 
 /** One tool call of a scripted turn. */
 export interface Call {
@@ -96,11 +89,13 @@ function intentOf(call: Call): Intent | undefined {
 	if (call.tool !== 'say') return undefined;
 	const to = trimmed(call.args.to);
 	const refs = Array.isArray(call.args.refs) ? call.args.refs.map(String) : [];
+	const after = call.args.after;
 	return {
 		kind: 'said',
 		...(to === undefined ? {} : { to }),
 		text: trimmed(call.args.text) ?? '',
 		...(refs.length === 0 ? {} : { refs }),
+		...(typeof after === 'number' ? { after } : {}),
 	};
 }
 

@@ -54,7 +54,12 @@ it('lists the room tools with JSON Schema beside the agent tools, runs an agent 
 		'unseat',
 	]);
 	const say = listed.find((tool) => tool.name === 'say');
-	expect(Object.keys(say?.inputSchema.properties ?? {}).sort()).toEqual(['refs', 'text', 'to']);
+	expect(Object.keys(say?.inputSchema.properties ?? {}).sort()).toEqual([
+		'after',
+		'refs',
+		'text',
+		'to',
+	]);
 	expect(say?.inputSchema.required).toEqual(['text']);
 	const found = listed.find((tool) => tool.name === 'lookup');
 	expect(found?.inputSchema.properties.id?.description).toBe('The record id.');

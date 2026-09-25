@@ -32,6 +32,12 @@ import {
 import { applyLease, type LeaseHold } from './lease.ts';
 import { judgeOwed, type OwedEntry, type OwedFacts, rejudgeOwed } from './owed.ts';
 import { advancePeople, type PersonState } from './presence.ts';
+import {
+	afterCancellation,
+	changesScheduled,
+	type ScheduledSay,
+	scheduleStep,
+} from './scheduled.ts';
 import { candidatesOf, dropSeat, pendingOf, rejudgeSeat, type WakeCandidate } from './wakes.ts';
 
 /** Leases of one kind of activation, grouped by a key, then by activation id. */
@@ -44,7 +50,7 @@ export interface RoomProjection {
 	readonly exchange: ExchangeRef | undefined;
 	/** The `through` of the last close. */
 	readonly boundary: Seq;
-	/** The spoken messages after the boundary: all that can open an exchange. */
+	/** The spoken messages and returned says after the boundary: all that can open an exchange. */
 	readonly tail: Message[];
 	/** The summary and unseated messages, which the summary rules read. */
 	readonly record: Message[];
@@ -56,6 +62,7 @@ export interface RoomProjection {
 	readonly closedLeases: LeaseIndex<Seq>;
 	readonly wakes: WakeCandidate[];
 	readonly owed: OwedEntry[];
+	readonly scheduled: ScheduledSay[];
 	readonly lastSeq: Seq;
 }
 
@@ -80,6 +87,7 @@ export function emptyProjection(): RoomProjection {
 		closedLeases: new Map(),
 		wakes: [],
 		owed: [],
+		scheduled: [],
 		lastSeq: 0,
 	};
 }
@@ -111,6 +119,7 @@ export function projectState(projection: RoomProjection): RoomState {
 		pending,
 		owed,
 		due: [...pending, ...owed],
+		scheduled: projection.scheduled,
 		messages: base.messages,
 		lastSeq: projection.lastSeq,
 	};
@@ -175,17 +184,19 @@ function onMessage(prev: RoomProjection, message: Message, step: Step): RoomProj
 			...candidatesOf(message, delivery, prev.seatLeases, step.options),
 		],
 		owed: owedAfter(projection, message, step),
+		scheduled: changesScheduled(message) ? scheduleStep(prev.scheduled, message) : prev.scheduled,
 		lastSeq: message.seq,
 	};
 }
 
-/** The open exchange after a message: only a question or a new person can change it. */
+/** The open exchange after a message: only a question, a returned say, or a new person can change it. */
 function exchangeOf(
 	projection: RoomProjection,
 	known: ExchangeRef | undefined,
 	message: Message,
 ): ExchangeRef | undefined {
-	const changes = message.kind === 'said' || message.kind === 'arrived';
+	const changes =
+		message.kind === 'said' || message.kind === 'returned' || message.kind === 'arrived';
 	if (!changes) return known;
 	return exchangeAfter(projection.tail, [...projection.people.keys()], projection.boundary);
 }
@@ -196,7 +207,8 @@ function notedBy(
 	message: Message,
 	step: Step,
 ): { tail: Message[]; record: Message[] } {
-	const speaks = message.kind === 'said' && message.seq > prev.boundary;
+	const opens = message.kind === 'said' || message.kind === 'returned';
+	const speaks = opens && message.seq > prev.boundary;
 	const keeps = message.kind === 'summary' || message.kind === 'unseated';
 	return {
 		tail: speaks ? pushed(prev.tail, message, step.own) : prev.tail,
@@ -313,7 +325,13 @@ function onCancel(prev: RoomProjection, entry: CancelEntry, step: Step): RoomPro
 		cancelClosed: [...prev.base.cancelClosed],
 	};
 	applyEvent(base, entry);
-	const marked = { ...prev, base, wakes: [], ...indexLeases(base.leases) };
+	const marked = {
+		...prev,
+		base,
+		wakes: [],
+		scheduled: afterCancellation(prev.scheduled, entry.seq),
+		...indexLeases(base.leases),
+	};
 	const projection = {
 		...marked,
 		owed: rejudgeOwed(prev.owed, () => true, factsOf(marked), step.options),

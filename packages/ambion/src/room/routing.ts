@@ -37,6 +37,7 @@ function spoken(message: RoutedMessage): message is Extract<RoutedMessage, { kin
 
 function reachOf(message: RoutedMessage): Attention {
 	if (message.kind === 'summary') return 'none';
+	if (message.kind === 'returned') return 'named';
 	if (!spoken(message)) return 'presence';
 	return message.to === undefined ? 'broadcast' : 'named';
 }
@@ -64,7 +65,7 @@ function wakes(
 
 /** The seat a message names: a directed say names who it addresses, a seating names who it seats. */
 function targetOf(message: RoutedMessage): string | undefined {
-	if (spoken(message)) return message.to;
+	if (spoken(message) || message.kind === 'returned') return message.to;
 	return message.kind === 'seated' ? message.subject : undefined;
 }
 

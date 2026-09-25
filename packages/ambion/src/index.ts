@@ -6,7 +6,16 @@
  * needed to resume a room; executable definitions are supplied for each run.
  */
 
-export type { Reminder, ReminderSeat, ToolBundle } from './bundle.ts';
+export type {
+	AmbionTool,
+	Reminder,
+	ReminderSeat,
+	ToolBundle,
+	ToolContext,
+	ToolExecutionMode,
+	ToolResult,
+	ToolUpdate,
+} from './bundle.ts';
 export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
 export { defineAgent, defineHuman, defineTool } from './define.ts';
 export type { AmbionErrorCode } from './errors.ts';
@@ -34,7 +43,6 @@ export type {
 	AgentDefinition,
 	AgentExecutor,
 	AgentParticipantInfo,
-	AmbionTool,
 	Attention,
 	Clock,
 	ClosedExchange,
@@ -52,6 +60,7 @@ export type {
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,
+	ReturnedMessage,
 	RoomEvent,
 	RoomNotification,
 	SeatOptions,
@@ -61,17 +70,13 @@ export type {
 	Step,
 	SummaryMessage,
 	SummaryOutcome,
-	ToolContext,
-	ToolExecutionMode,
-	ToolResult,
-	ToolUpdate,
 	TraceLogger,
 	TracePolicy,
 	TraceRecord,
 	TraceStep,
 	Usage,
 } from './types.ts';
-export { isPresence, isSpoken, isSummary } from './types.ts';
+export { isPresence, isReturned, isSpoken, isSummary } from './types.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/ambion';

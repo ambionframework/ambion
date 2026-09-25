@@ -7,8 +7,7 @@
  */
 
 import type { Seq as RecordSeq } from '@ambionframework/journal';
-import type { TSchema } from 'typebox';
-import type { Reminder } from './bundle.ts';
+import type { AmbionTool, Reminder } from './bundle.ts';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = RecordSeq;
@@ -26,9 +25,19 @@ export type EndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandon
  */
 export type FailureCause = 'permanent' | 'transient';
 
+/**
+ * The bounds on a scheduled say: `after` in whole seconds from `minAfter` to
+ * `maxAfter`, and at most `pending` says of one seat that wait to return.
+ */
+export interface ScheduleLimits {
+	readonly minAfter: number;
+	readonly maxAfter: number;
+	readonly pending: number;
+}
+
 /** What a seat asks the room to record. The room stamps everything else. */
 export type Intent =
-	| { kind: 'said'; to?: string; text: string; refs?: string[] }
+	| { kind: 'said'; to?: string; text: string; refs?: string[]; after?: number }
 	| { kind: 'seated'; name: string }
 	| { kind: 'unseated'; name: string };
 
@@ -183,6 +192,37 @@ export interface SpokenMessage extends Landed {
 	/** Present when the delivery or say was directed. */
 	to?: string;
 	text: string;
+	/**
+	 * Seconds after `at` when the room returns the say to its author. Present
+	 * only on a say that an agent addressed to itself: a scheduled say.
+	 */
+	after?: number;
+	/**
+	 * On a scheduled say, the owner of the exchange it landed in: the person
+	 * the say returns for. The room stamps it from the open exchange.
+	 */
+	owner?: string;
+}
+
+/**
+ * A scheduled say that the room gave back to its author when it was due.
+ * The room writes it, so it has no author. It opens an exchange for `owner`
+ * when none is open, as a person's question does.
+ */
+export interface ReturnedMessage extends Landed {
+	kind: 'returned';
+	/** The room wrote it, and the room is not a participant, so it has no author. */
+	from?: undefined;
+	/** The seat that scheduled the say, and the one seat this entry wakes. */
+	to: string;
+	/** The seq of the scheduled say. */
+	message: Seq;
+	/** The owner of the exchange that the scheduled say landed in. */
+	owner: string;
+	/** The text of the scheduled say. */
+	text: string;
+	/** The refs of the scheduled say. */
+	refs?: string[];
 }
 
 /**
@@ -249,7 +289,7 @@ export interface SummaryMessage extends Landed {
 }
 
 /** One entry on a room's record. */
-export type Message = SpokenMessage | PresenceMessage | SummaryMessage;
+export type Message = SpokenMessage | PresenceMessage | SummaryMessage | ReturnedMessage;
 
 /** Copy a recorded message before it crosses an ownership boundary. */
 export function copyMessage<T extends Message>(message: T): T {
@@ -258,6 +298,10 @@ export function copyMessage<T extends Message>(message: T): T {
 
 export function isSpoken(message: Message): message is SpokenMessage {
 	return message.kind === 'said';
+}
+
+export function isReturned(message: Message): message is ReturnedMessage {
+	return message.kind === 'returned';
 }
 
 export function isSummary(message: Message): message is SummaryMessage {
@@ -492,63 +536,6 @@ export interface TracePolicy {
 
 /** The room's event stream: room facts and execution events, under one `subscribe`. */
 export type RoomNotification = RoomEvent | ExecutionEvent;
-
-/**
- * What a tool's `execute` is handed beside its parameters: the calling agent
- * and the abort signal the executor gives the tool call.
- */
-export interface ToolContext {
-	/** Stable identity of the agent making this tool call. */
-	readonly agent: { readonly name: string; readonly identity: string };
-	readonly signal?: AbortSignal;
-	readonly callId: string;
-	readonly onUpdate?: ToolUpdate;
-	/** Name of the room this call ran in. Absent for a call made outside a room. */
-	readonly room?: string;
-	/**
-	 * The activation this call ran in: the id every execution event and every
-	 * recorded message carries. Absent for a call made outside a room.
-	 */
-	readonly activation?: string;
-	/**
-	 * The exchange that was open when the activation read the record. Absent
-	 * outside a room, and absent when no exchange was open.
-	 */
-	readonly exchange?: Pick<ExchangeRef, 'owner' | 'from'>;
-	/** When the room ends the activation, in ms since the epoch on the wall clock. Absent outside a room. */
-	readonly deadline?: number;
-}
-
-/** One normalized tool definition used by the room executor. */
-export interface AmbionTool {
-	readonly name: string;
-	readonly description: string;
-	readonly parameters: TSchema;
-	readonly label: string;
-	readonly prepareArguments?: (args: unknown) => unknown;
-	readonly executionMode?: ToolExecutionMode;
-	readonly invoke: (
-		params: unknown,
-		ctx: ToolContext,
-	) => Promise<string | ToolResult> | string | ToolResult;
-}
-
-/** Whether an executor runs the calls of one activation in turn or together. */
-export type ToolExecutionMode = 'sequential' | 'parallel';
-
-/** What a tool hands back to the model: content it reads, and details it does not. */
-export interface ToolResult {
-	readonly content: (
-		| { readonly type: 'text'; readonly text: string }
-		| { readonly type: 'image'; readonly data: string; readonly mimeType: string }
-	)[];
-	readonly details: unknown;
-	/** Ends the activation after this result when every call of the batch sets it. */
-	readonly terminate?: boolean;
-}
-
-/** A tool's progress report while it runs. */
-export type ToolUpdate = (partial: ToolResult) => void;
 
 /**
  * What an agent runs on: a family name, instructions, and tools. The room

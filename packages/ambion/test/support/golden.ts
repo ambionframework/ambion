@@ -15,10 +15,11 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../../src/index.ts';
-import { fakeClock } from '../../src/testing.ts';
+import { type FakeClock, fakeClock } from '../../src/testing.ts';
 import { roomName, storedOf, tick, waitForRoom } from './room.ts';
 import {
 	byAgent,
+	callTool,
 	contextText,
 	isClosing,
 	quiet,
@@ -48,8 +49,8 @@ const assistant = defineAgent({
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
 
-/** What a scenario hands the driver: the room, and the storage to read back. */
-type Drive = (room: Room) => Promise<void>;
+/** What a scenario hands the driver: the room, and the clock that the room runs on. */
+type Drive = (room: Room, clock: FakeClock) => Promise<void>;
 
 interface Setup {
 	readonly agents: (typeof worker)[];
@@ -62,9 +63,10 @@ interface Setup {
 
 async function record(setup: Setup): Promise<readonly JournalEntry[]> {
 	const opened = await memory.open();
+	const clock = fakeClock();
 	const runtime = createRuntime({
 		storage: opened.storage,
-		clock: fakeClock(),
+		clock,
 		limits: { activation: { attempts: setup.attempts ?? 3, backoff: () => 0 } },
 	});
 	const room = await startRoom({
@@ -76,7 +78,7 @@ async function record(setup: Setup): Promise<readonly JournalEntry[]> {
 		execution: piExecution({ sessions: 'memory', stream: scripted(setup.stream) }),
 	});
 	try {
-		await setup.drive(room);
+		await setup.drive(room, clock);
 		await room.stop();
 		return await storedOf(hostingOf(runtime).journals, room.name);
 	} finally {
@@ -185,6 +187,39 @@ const exhausted = (): Promise<readonly JournalEntry[]> =>
 		},
 	});
 
+/**
+ * The worker schedules a check, and answers when the check comes back. A
+ * delivered say or a scheduled one ends the pass.
+ */
+const checksLater: Script = (context) => {
+	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
+	if (contextText(context).includes('[returned → worker')) return speak('The slab is poured.');
+	return callTool('say', { to: worker.name, text: 'Check the pour log.', after: 600 });
+};
+
+/**
+ * A scheduled say. The first exchange closes while the say waits. The room
+ * returns it when it is due, and the returned entry opens a second exchange
+ * for the same owner. The assistant summarises each exchange for her.
+ */
+const scheduled = (): Promise<readonly JournalEntry[]> =>
+	record({
+		agents: [worker, assistant],
+		summary: assistant.name,
+		seats: { worker: 'broadcast', assistant: 'none' },
+		stream: byAgent({
+			worker: checksLater,
+			assistant: (context) =>
+				isClosing(context) ? summarise('The worker checks the pour later.') : quiet(),
+		}),
+		async drive(room, clock) {
+			await (await room.visit(priya)).send({ text: 'Is the slab poured?' });
+			await waitForRoom(room);
+			await clock.advance(600_000);
+			await waitForRoom(room);
+		},
+	});
+
 /** A room that stops and resumes: two runs, and the second fences the first. */
 async function resumed(): Promise<readonly JournalEntry[]> {
 	const opened = await memory.open();
@@ -227,6 +262,7 @@ async function resumed(): Promise<readonly JournalEntry[]> {
 export const goldenScenarios: Readonly<Record<string, () => Promise<readonly JournalEntry[]>>> = {
 	complete,
 	awaiting,
+	scheduled,
 	cancelled,
 	exhausted,
 	resumed,

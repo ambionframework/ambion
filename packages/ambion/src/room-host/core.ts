@@ -82,12 +82,15 @@ export const sameRefs = (
 	return left.length === right.length && left.every((ref, index) => ref === right[index]);
 };
 
-/** A recorded `said` carries the recipient, the text, and the refs that a same-key retry sent. */
+/** A recorded `said` carries the recipient, the text, the refs, and the `after` that a same-key retry sent. */
 export const saidContentMatches = (
-	message: Pick<SpokenMessage, 'to' | 'text' | 'refs'>,
-	said: { to?: string; text: string; refs?: readonly string[] },
+	message: Pick<SpokenMessage, 'to' | 'text' | 'refs' | 'after'>,
+	said: { to?: string; text: string; refs?: readonly string[]; after?: number },
 ): boolean =>
-	message.to === said.to && message.text === said.text && sameRefs(message.refs, said.refs);
+	message.to === said.to &&
+	message.text === said.text &&
+	message.after === said.after &&
+	sameRefs(message.refs, said.refs);
 
 export function messageKeyConflict(key: string, message: Message): string {
 	return `The key '${key}' already names a different room operation at message seq ${message.seq}.`;

@@ -11,6 +11,8 @@
  * its id, and the id is the idempotency key of the commit. The rules for what
  * the model reads, and for when the activation ends, live here once.
  */
+
+import type { AmbionTool, ToolContext, ToolResult, ToolUpdate } from '../bundle.ts';
 import { SAY, SEAT, UNSEAT } from '../define.ts';
 import {
 	type ActivationView,
@@ -19,15 +21,7 @@ import {
 	type Intent,
 	type RoomProtocol,
 } from '../protocol.ts';
-import type {
-	AgentDefinition,
-	AmbionTool,
-	Message,
-	Seq,
-	ToolContext,
-	ToolResult,
-	ToolUpdate,
-} from '../types.ts';
+import type { AgentDefinition, Message, Seq } from '../types.ts';
 import { refusal, summaryToolDescription } from './render.ts';
 
 /** One part of what a tool hands back to the model. */
@@ -86,6 +80,7 @@ interface SayArgs {
 	to?: string;
 	text: string;
 	refs?: string[];
+	after?: number;
 }
 
 const text = (value: string, isError = false): RoomToolResult => ({
@@ -185,6 +180,15 @@ function landed(binding: RoomToolBinding, response: CommitResult): RoomToolResul
 	return ended(`Your turn ended: ${why}.`);
 }
 
+/** The result of a say the room scheduled: when it returns. */
+function scheduled(response: CommitResult): RoomToolResult | undefined {
+	if (!('committed' in response)) return undefined;
+	const message = response.committed;
+	if (message.kind !== 'said' || message.after === undefined) return undefined;
+	const due = new Date(Date.parse(message.at) + message.after * 1000).toISOString();
+	return text(`scheduled: the room gives this say back to you at ${due}`);
+}
+
 /** The result that tells the model its activation has ended. */
 function ended(why: string): RoomToolResult {
 	return { ...text(`${why} This turn is over.`, true), terminate: true };
@@ -200,6 +204,7 @@ function saidBy(args: SayArgs, options: RoomToolOptions): Intent {
 		...(to ? { to } : {}),
 		text: args.text.trim(),
 		...(refs.length > 0 ? { refs: [...refs] } : {}),
+		...(args.after === undefined ? {} : { after: args.after }),
 	};
 }
 
@@ -231,7 +236,7 @@ async function say(
 	});
 	if ('missed' in response) return missedSay(binding, call, response.missed, closing);
 	if ('committed' in response) accepted(binding, options, response.committed, closing);
-	const result = landed(binding, response);
+	const result = scheduled(response) ?? landed(binding, response);
 	if (closing === undefined || result.isError) return result;
 	// The closing activation ends after the last recipient has a message.
 	return closing.answered >= closing.people.length ? { ...result, terminate: true } : result;

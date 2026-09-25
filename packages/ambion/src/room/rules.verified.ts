@@ -12,11 +12,11 @@
  * The string unions below are declared again beside the rules, because
  * LemmaScript lowers only the types in its own file. `rules.test.ts`
  * asserts each copy equals the public type in `types.ts`. `Message` is
- * the public union itself; the stub names the four fields the rules read.
+ * the public union itself; the stub names the five fields the rules read.
  */
 
 import type { Message } from '../types.ts';
-//@ declare-type Message { kind: string, seq: number, from: string, at: string }
+//@ declare-type Message { kind: string, seq: number, from: string, owner: string, at: string }
 
 /** The two phases a lease holds. */
 export type LeasePhase = 'running' | 'ended';
@@ -735,16 +735,19 @@ export function lastOf(seqs: readonly number[]): number {
 	return seqs[seqs.length - 1] ?? 0;
 }
 
-//@ contract A message opens an exchange when a person spoke it after the last close: agent speech, arrivals and departures open nothing.
+//@ contract A message opens an exchange after the last close when a person spoke it, or when the room returned a say for a person: agent speech, arrivals and departures open nothing.
 function opensExchange(
 	message: Message,
 	people: readonly string[],
 	closedThrough: number,
 ): boolean {
-	//@ ensures \result <==> message.kind == 'said' && people.includes(message.from) && message.seq > closedThrough
-	//@ ensures message.kind != 'said' ==> !\result
+	//@ ensures message.kind == 'said' ==> (\result <==> people.includes(message.from) && message.seq > closedThrough)
+	//@ ensures message.kind == 'returned' ==> (\result <==> people.includes(message.owner) && message.seq > closedThrough)
+	//@ ensures message.kind != 'said' && message.kind != 'returned' ==> !\result
 	//@ ensures message.seq <= closedThrough ==> !\result
-	return message.kind === 'said' && people.includes(message.from) && message.seq > closedThrough;
+	if (message.seq <= closedThrough) return false;
+	if (message.kind === 'returned') return people.includes(message.owner);
+	return message.kind === 'said' && people.includes(message.from);
 }
 
 //@ contract The open exchange is the first message that opens one after the last close; there is at most one, and its position is on the record.
@@ -754,7 +757,7 @@ export function openingQuestion(
 	closedThrough: number,
 ): Message | undefined {
 	//@ requires forall(i, forall(j, 0 <= i && i < j && j < messages.length ==> messages[i].seq < messages[j].seq))
-	//@ ensures \result != undefined ==> \result.kind == 'said' && people.includes(\result.from) && \result.seq > closedThrough
+	//@ ensures \result != undefined ==> opensExchange(\result, people, closedThrough) && \result.seq > closedThrough
 	//@ ensures \result == undefined <==> !exists(i, 0 <= i && i < messages.length && opensExchange(messages[i], people, closedThrough))
 	//@ ensures \result != undefined ==> exists(i, 0 <= i && i < messages.length && messages[i] == \result && forall(j, 0 <= j && j < i ==> !opensExchange(messages[j], people, closedThrough)))
 	//@ ensures \result != undefined ==> messages.length > 0 && \result.seq <= messages[messages.length - 1].seq

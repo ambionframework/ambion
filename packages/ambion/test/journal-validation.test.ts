@@ -17,6 +17,7 @@ const summary = {
 	text: 'x',
 	covers: { from: 1, through: 2 },
 };
+const returned = { kind: 'returned', at, to: 'alpha', message: 3, owner: 'andrei', text: 'x' };
 const ended = { id: 'message:1:alpha:1', phase: 'ended', reason: 'released', at, readThrough: 3 };
 
 /** A journal that replays these stored entries, one place each. */
@@ -46,6 +47,11 @@ describe('room journal body validation', () => {
 		],
 		['message', { ...summary, refs: ['https://x/a'] }],
 		['message', summary],
+		[
+			'message',
+			{ kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', after: 600, owner: 'andrei' },
+		],
+		['message', { ...returned, refs: ['https://x/a'], wakes: ['alpha'] }],
 		['message', { kind: 'arrived', at, subject: 'andrei' }],
 		['message', { kind: 'left', at, subject: 'andrei' }],
 		['message', { kind: 'seated', at, subject: 'andrei' }],
@@ -85,11 +91,28 @@ describe('room journal body validation', () => {
 			validateRoomBody('message', { kind: 'said', at, from: 'a', text: 'x', refs }),
 		).toThrow(message);
 		expect(() => validateRoomBody('message', { ...summary, refs })).toThrow(message);
+		expect(() => validateRoomBody('message', { ...returned, refs })).toThrow(message);
 	});
 
 	it.each([
 		['message', { kind: 'said', at: 'now', from: 'alpha' }, 'body.text'],
 		['message', { ...summary, covers: { from: 1 } }, 'body.covers.through'],
+		['message', { kind: 'said', at, from: 'alpha', text: 'x', after: 0 }, 'body.after'],
+		['message', { kind: 'said', at, from: 'alpha', text: 'x', after: 1.5 }, 'body.after'],
+		['message', { ...returned, message: 0 }, 'body.message'],
+		['message', { kind: 'returned', at, to: 'alpha', message: 3, text: 'x' }, 'body.owner'],
+		['message', { ...returned, from: 'alpha' }, 'body.from'],
+		[
+			'message',
+			{ kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', after: 60 },
+			'body.owner',
+		],
+		['message', { kind: 'said', at, from: 'alpha', text: 'x', owner: 'andrei' }, 'body.after'],
+		[
+			'message',
+			{ kind: 'said', at, from: 'alpha', to: 'beta', text: 'x', after: 60, owner: 'andrei' },
+			'body.to',
+		],
 		['message', { kind: 'seated', at, subject: 'andrei', fixed: 'yes' }, 'body.fixed'],
 		[
 			'message',

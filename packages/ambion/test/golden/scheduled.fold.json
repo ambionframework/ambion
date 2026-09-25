@@ -1,0 +1,214 @@
+{
+	"name": "golden",
+	"initialized": true,
+	"messages": [],
+	"participants": [
+		{
+			"kind": "agent",
+			"name": "worker",
+			"identity": "Answers the question.",
+			"status": "idle",
+			"attention": "broadcast"
+		},
+		{
+			"kind": "agent",
+			"name": "assistant",
+			"identity": "Writes a closing summary.",
+			"status": "idle",
+			"attention": "none"
+		},
+		{
+			"kind": "human",
+			"name": "priya",
+			"identity": "Project manager.",
+			"presence": "absent"
+		}
+	],
+	"exchanges": [
+		{
+			"owner": "priya",
+			"from": 4,
+			"through": 6,
+			"at": "2026-01-01T09:00:00.000Z",
+			"status": "closed",
+			"activations": [
+				{
+					"id": "message:4:worker:1",
+					"seat": "worker",
+					"attempt": 1,
+					"purpose": "respond",
+					"outcome": {
+						"status": "released"
+					},
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"cost": 0
+					},
+					"session": {
+						"harness": "pi",
+						"id": "message:4:worker:1"
+					}
+				},
+				{
+					"id": "closed:6:assistant:1",
+					"seat": "assistant",
+					"attempt": 1,
+					"purpose": "summary",
+					"outcome": {
+						"status": "released"
+					},
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"cost": 0
+					},
+					"session": {
+						"harness": "pi",
+						"id": "closed:6:assistant:1"
+					}
+				}
+			],
+			"summary": {
+				"status": "published",
+				"summary": {
+					"kind": "summary",
+					"text": "The worker checks the pour later.",
+					"to": "priya",
+					"covers": {
+						"from": 4,
+						"through": 6
+					},
+					"at": "2026-01-01T09:00:00.000Z",
+					"activationId": "closed:6:assistant:1",
+					"from": "assistant",
+					"seq": 11,
+					"key": "key-4"
+				}
+			},
+			"outcome": {
+				"kind": "complete"
+			},
+			"summaries": [
+				{
+					"kind": "summary",
+					"text": "The worker checks the pour later.",
+					"to": "priya",
+					"covers": {
+						"from": 4,
+						"through": 6
+					},
+					"at": "2026-01-01T09:00:00.000Z",
+					"activationId": "closed:6:assistant:1",
+					"from": "assistant",
+					"seq": 11,
+					"key": "key-4"
+				}
+			],
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			}
+		},
+		{
+			"owner": "priya",
+			"from": 13,
+			"through": 15,
+			"at": "2026-01-01T09:10:00.000Z",
+			"status": "closed",
+			"activations": [
+				{
+					"id": "message:13:worker:1",
+					"seat": "worker",
+					"attempt": 1,
+					"purpose": "respond",
+					"outcome": {
+						"status": "released"
+					},
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"cost": 0
+					},
+					"session": {
+						"harness": "pi",
+						"id": "message:13:worker:1"
+					}
+				},
+				{
+					"id": "closed:15:assistant:1",
+					"seat": "assistant",
+					"attempt": 1,
+					"purpose": "summary",
+					"outcome": {
+						"status": "released"
+					},
+					"usage": {
+						"input": 0,
+						"output": 0,
+						"cacheRead": 0,
+						"cacheWrite": 0,
+						"cost": 0
+					},
+					"session": {
+						"harness": "pi",
+						"id": "closed:15:assistant:1"
+					}
+				}
+			],
+			"summary": {
+				"status": "published",
+				"summary": {
+					"kind": "summary",
+					"text": "The worker checks the pour later.",
+					"to": "priya",
+					"covers": {
+						"from": 13,
+						"through": 15
+					},
+					"at": "2026-01-01T09:10:00.000Z",
+					"activationId": "closed:15:assistant:1",
+					"from": "assistant",
+					"seq": 20,
+					"key": "key-6"
+				}
+			},
+			"outcome": {
+				"kind": "complete"
+			},
+			"summaries": [
+				{
+					"kind": "summary",
+					"text": "The worker checks the pour later.",
+					"to": "priya",
+					"covers": {
+						"from": 13,
+						"through": 15
+					},
+					"at": "2026-01-01T09:10:00.000Z",
+					"activationId": "closed:15:assistant:1",
+					"from": "assistant",
+					"seq": 20,
+					"key": "key-6"
+				}
+			],
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			}
+		}
+	],
+	"watermark": 22
+}

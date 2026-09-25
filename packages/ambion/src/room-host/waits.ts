@@ -44,11 +44,12 @@ export function exchange(host: WaitsHost, from: Seq): ExchangeHandle | undefined
 	const close = state.closes.find((candidate) => candidate.from === from);
 	const found = close ?? (state.exchange?.from === from ? state.exchange : undefined);
 	if (found === undefined) return undefined;
-	const message = state.messages.find(
-		(candidate): candidate is Extract<Message, { kind: 'said' }> =>
-			candidate.seq === from && candidate.kind === 'said',
+	// A person's question or a returned say opens an exchange.
+	const opens = state.messages.some(
+		(candidate) =>
+			candidate.seq === from && (candidate.kind === 'said' || candidate.kind === 'returned'),
 	);
-	return message === undefined ? undefined : handleFor(host, found, false);
+	return opens ? handleFor(host, found, false) : undefined;
 }
 
 function handleFor(host: WaitsHost, found: ExchangeRef, opened: boolean): ExchangeHandle {

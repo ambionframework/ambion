@@ -37,6 +37,7 @@ import {
 	type ExchangeRef,
 	type ExchangeView,
 	type HarnessSession,
+	isReturned,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -459,8 +460,10 @@ export function exchangeAfter(
 	closedThrough: Seq,
 ): ExchangeRef | undefined {
 	const question = openingQuestion(messages, people, closedThrough);
+	if (question === undefined) return undefined;
 	// The re-test narrows the TypeScript type only: the contract fixes the kind.
-	return question !== undefined && isSpoken(question)
+	if (isReturned(question)) return { owner: question.owner, from: question.seq, at: question.at };
+	return isSpoken(question)
 		? { owner: question.from, from: question.seq, at: question.at }
 		: undefined;
 }
