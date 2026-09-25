@@ -68,9 +68,10 @@ function bodyOf(message: Message): string {
 	return '';
 }
 
-/** When a say to oneself returns, as a clock time after its header. */
-function returnsAt(message: Message): string {
+/** When a say to oneself returns, as a clock time after its header, or that it was dismissed. */
+function returnsAt({ message, dismissed }: MessageBlock): string {
 	if (message.kind !== 'said' || message.after === undefined) return '';
+	if (dismissed) return '  dismissed';
 	return `  returns ${clock(new Date(Date.parse(message.at) + message.after * 1000).toISOString())}`;
 }
 
@@ -102,7 +103,7 @@ function headerOf(block: MessageBlock, fill?: string): Chunk[] {
 			arrow,
 			at,
 		];
-	const returns = paint(returnsAt(message), { color: palette.accent, fill });
+	const returns = paint(returnsAt(block), { color: palette.accent, fill });
 	return [paint(from, { color: palette.accent, fill }), arrow, returns, at];
 }
 

@@ -57,6 +57,8 @@ export interface Workbench {
 	/** Send a message. The same key and text return the first exchange and add no message. */
 	send(room: string, person: string, key: string, text: string, refs?: string[]): Promise<void>;
 	control(room: string, action: RoomAction): Promise<RoomView>;
+	/** Dismiss a say of a room that waits to return, by its handle. False when it no longer waits. */
+	dismiss(room: string, handle: number): Promise<boolean>;
 	/**
 	 * The steps of one activation, as the logger of this process received them.
 	 * A running activation returns the steps so far. An activation this process
@@ -185,6 +187,7 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 			});
 		},
 		control: (room, action) => rooms.lifecycle(room, action),
+		dismiss: (room, handle) => inRoom(room, (live) => live.dismiss(handle)),
 		activation: (room, id) => rooms.activation(room, id),
 		approvals: (room) => rooms.approvals(room),
 		// Async, so a refusal is a rejected promise like every other failure of this interface.

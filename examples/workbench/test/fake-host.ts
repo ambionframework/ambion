@@ -102,6 +102,12 @@ export class FakeHost implements Workbench {
 	async control(room: string) {
 		return this.read(room);
 	}
+	/** What `dismiss` answers: true while the say waits. */
+	dismissed = true;
+	async dismiss(room: string, handle: number) {
+		this.calls.push(`dismiss:${room}:${handle}`);
+		return this.dismissed;
+	}
 	async create(name: string): Promise<RoomView> {
 		throw new Error(`The fake host creates no room ${name}.`);
 	}

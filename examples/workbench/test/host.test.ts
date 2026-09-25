@@ -272,6 +272,32 @@ describe('Workbench host', () => {
 		);
 	});
 
+	it('lists a say that waits to return, and dismisses it once', async () => {
+		const workbench = await openHost({
+			stream: scriptedStream((agent, call, closing) => {
+				if (closing || agent !== 'assistant' || call !== 1)
+					return fauxAssistantMessage('quiet', { stopReason: 'stop' });
+				const later = { to: 'assistant', text: 'Check the bench supply.', after: 600 };
+				return fauxAssistantMessage([fauxToolCall('say', later)], { stopReason: 'toolUse' });
+			}),
+		});
+		await workbench.join('bringup', 'mira');
+		await workbench.send('bringup', 'mira', 'later-1', 'Check the supply later.');
+		const waiting = await vi.waitFor(async () => {
+			const [say] = (await workbench.read('bringup', 0)).scheduled;
+			if (!say) throw new Error('No say waits yet.');
+			return say;
+		});
+		expect(waiting).toMatchObject({ seat: 'assistant', owner: 'mira' });
+		expect(await workbench.dismiss('bringup', waiting.seq)).toBe(true);
+		expect(await workbench.dismiss('bringup', waiting.seq)).toBe(false);
+		expect((await workbench.read('bringup', 0)).scheduled).toEqual([]);
+		expect((await messagesOf(workbench, 'bringup')).at(-1)).toMatchObject({
+			kind: 'dismissed',
+			message: waiting.seq,
+		});
+	});
+
 	it('tells the watchers of one room when it records something, until each watch ends, across a stop and a resume', async () => {
 		const workbench = await openHost();
 		const counts = { ended: 0, bringup: 0, sensing: 0 };

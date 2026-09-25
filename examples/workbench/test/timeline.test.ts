@@ -127,6 +127,23 @@ describe('buildTimeline', () => {
 		]);
 	});
 
+	it('marks a scheduled say that a dismissal names, in the open and in a discussion', () => {
+		const scheduled = { ...said(61, 'agent', 'agent'), after: 600 } as Message;
+		const dismissed = { seq: 62, kind: 'dismissed', message: 61, at: AT } as Message;
+		const open = build([said(59, 'mira'), scheduled, dismissed], []);
+		expect(open.find((block) => block.type === 'message' && block.message.seq === 61)).toEqual({
+			type: 'message',
+			message: scheduled,
+			role: 'said',
+			dismissed: true,
+		});
+		const messages = [said(59, 'mira'), scheduled, dismissed, said(63, 'agent')];
+		const [, discussion] = build(messages, [closedExchange(59, 63, 'mira')]);
+		expect(discussion).toMatchObject({ type: 'discussion', count: 2 });
+		if (discussion?.type !== 'discussion') throw new Error('Expected a discussion.');
+		expect(discussion.items.map((item) => item.dismissed)).toEqual([true, undefined]);
+	});
+
 	it('keeps a returned say that lands in an open exchange inside its discussion', () => {
 		const returned = {
 			seq: 70,
