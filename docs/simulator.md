@@ -616,15 +616,17 @@ them.
 | The assistant needs a material fact         | `agentActor`, with the fact in the brief                | Two or more exchanges run. The assistant says nothing. A message the person sent after the first carries the fact.      | The first summary asks for the fact, or reports that the work waits on it. The last summary uses the fact. |
 
 **The specialist asks for the material fact.** In the third case, its
-script says in the first exchange that it needs the fact. The assistant
-relays the question in the summary only, so the check reads the second
+script asks the person for the fact in the first exchange. The kernel's
+speaking policy directs a question that only one participant can answer, so
+the specialist addresses the person. The assistant says nothing, so the check reads the second
 message and the judge reads the first summary.
 
 **Five cases hold the rest of the assistant's purpose.** The assistant is
 passive at `broadcast`, it answers a participant who addresses it, and it
 changes membership on request and on need only. The scripted specialist
-reports to the room: a specialist addresses the assistant only with a
-question for it.
+reports to the room, and it addresses a participant only with a question for
+that participant. It picks its reply from the words of the person, so the
+words of an agent never change the evidence.
 
 | Purpose case                                | Actor                                             | Checks                                                                                                       | Criteria for the judge                                                              |
 | ------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |

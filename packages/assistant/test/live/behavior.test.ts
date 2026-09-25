@@ -294,7 +294,7 @@ live('the default assistant, driven by the simulator', () => {
 				specialist: answers((exchange) =>
 					exchange.some((message) => /A-100/.test(message.text))
 						? 'The warehouse has 8 units of SKU A-100 available to dispatch today.'
-						: 'I need the SKU before I can check the stock.',
+						: { text: 'Which SKU should I check?', to: 'priya' },
 				),
 			});
 			const run = await simulate(room, {

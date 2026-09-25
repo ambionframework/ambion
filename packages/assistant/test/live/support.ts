@@ -87,14 +87,18 @@ export async function openRoom(options: RoomOptions): Promise<Room> {
 	return room;
 }
 
+/** What a scripted specialist says: text to the room, or text to one participant. */
+export type Reply = string | { readonly text: string; readonly to: string } | undefined;
+
 /**
- * A specialist that says `evidence` to the room once in each exchange,
- * and says nothing in an exchange where `evidence` gives no text. It reads
- * the view: the step counter of `scripted()` spans the runtime, so it cannot
- * tell one exchange from the next.
+ * A specialist that says `evidence` once in each exchange, and says nothing
+ * in an exchange where `evidence` gives no reply. `evidence` reads what the
+ * person said in the exchange, so the words of an agent never pick the
+ * reply. It reads the view: the step counter of `scripted()` spans the
+ * runtime, so it cannot tell one exchange from the next.
  */
 export const answers =
-	(evidence: (requests: readonly SpokenMessage[]) => string | undefined): Script =>
+	(evidence: (requests: readonly SpokenMessage[]) => Reply): Script =>
 	({ view, results }) => {
 		// One say for each activation: the view of a later step may not hold it yet.
 		if (results.length > 0) return quiet();
@@ -105,9 +109,10 @@ export const answers =
 			(message): message is SpokenMessage => isSpoken(message) && message.seq >= from,
 		);
 		if (exchange.some((message) => message.from === 'inventory')) return quiet();
-		const text = evidence(exchange);
-		// A specialist reports to the room. It addresses the assistant only with a question for it.
-		return text === undefined ? quiet() : speak(text);
+		const reply = evidence(exchange.filter((message) => message.from === priya.name));
+		if (reply === undefined) return quiet();
+		// A specialist reports to the room. It addresses a participant only with a question for it.
+		return typeof reply === 'string' ? speak(reply) : speak(reply.text, reply.to);
 	};
 
 /** The presence entries of one kind about `subject` in one exchange, in record order. */
