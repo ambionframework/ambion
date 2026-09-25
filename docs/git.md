@@ -12,13 +12,13 @@ a template. The agent forks the template, clones the fork into its home,
 edits the files, commits, and pushes. The push persists the edits across a
 restart of the host.
 
-**`justGitBackend` implements the contract.** It runs a
+**Two backends implement the contract.** `justGitBackend` runs a
 [`just-git`](https://github.com/blindmansion/just-git) server in the host's
-process, and it serves the just-bash backends. The
-[workstation](workstation.md) carries the `ssh` transport of
-`workstationGitBackend` ([Workstation git](workstation-git.md)).
-`gitConformance` holds the contract, so a later implementation meets the
-same behavior.
+process, and it serves the just-bash backends. `workstationGitBackend` in
+`@ambionframework/workstation` keeps the repositories in one account on
+the [workstation](workstation.md), and it serves the agents of that
+server over SSH ([Workstation git](workstation-git.md)). `gitConformance`
+holds the contract, so a later implementation meets the same behavior.
 
 **This page covers the repositories and the access to them.** A deploy
 ref that starts a job is a later design, and it builds on this one.
@@ -67,9 +67,9 @@ that is still in the home, or it clones the fork again
   new name. A fork keeps the template it came from.
 - **A clone URL is opaque.** The tools give each URL, and no agent builds
   one. Each implementation picks its own URL shape.
-- **A credential grants one scope on one repository, and it expires.**
-  The owner holds a write credential for each of its repositories. Every
-  agent holds a read credential for every other repository.
+- **A credential names one agent, and it expires.** The server checks
+  each request against the namespace rule: the owner writes to each of
+  its repositories, and every agent reads every other repository.
 - **`fork` returns when the fork can be cloned.** An implementation that
   forks in the background waits inside the call.
 - **A message names a commit in its text.** The room does not check that
@@ -409,9 +409,9 @@ need no git commands, no URL, and no rule about pushes.
 
 ## Credentials
 
-**A credential grants one scope on one repository, and it expires.** The
-backend issues the credentials, and the host gives the backend its
-secret. An agent holds this set:
+**A credential of `justGitBackend` grants one scope on one repository,
+and it expires.** The backend issues the credentials, and the host gives
+the backend its secret. An agent holds this set:
 
 | Repository                 | Scope   |
 | -------------------------- | ------- |
@@ -482,8 +482,11 @@ server accepts.
 ### On a workstation
 
 **The workstation carries the git transport `ssh` of
-`workstationGitBackend`.** [Workstation git](workstation-git.md) describes
-the backend.
+`workstationGitBackend`.** Each agent holds a key that names it, and the
+forced command `serve` of the git account applies the namespace rule to
+each request. [Workstation git](workstation-git.md#keys) describes the
+keys, and [Workstation](workstation.md#a-git-backend) describes the files
+in the agent's home.
 
 ## justGitBackend: a server in the host's process
 
@@ -651,21 +654,27 @@ the agent's name.
 
 ## Where the code lives
 
-| Package              | File                             | What it holds                                                                               |
-| -------------------- | -------------------------------- | ------------------------------------------------------------------------------------------- |
-| `packages/workspace` | `src/git-backend.ts`             | The types of [The contract](#the-contract)                                                  |
-| `packages/workspace` | `src/git-tools.ts`               | `repos`, `fork`, and the git note                                                           |
-| `packages/workspace` | `src/workspace.ts`               | The git owner, the `connect` wrapper, the check of the transport, and the order of disposal |
-| `packages/workspace` | `src/git-conformance.ts`         | `gitConformance`                                                                            |
-| `packages/workspace` | `src/git-entry.ts`               | The `/git` entry                                                                            |
-| `packages/workspace` | `src/git-names.ts`               | The name rules of a repository ID                                                           |
-| `packages/workspace` | `src/git-templates.ts`           | `fromDirectory` and the template helpers                                                    |
-| `packages/just-bash` | `src/just-bash.ts`               | `gitFor(agent, access)`                                                                     |
-| `packages/just-bash` | `src/git/access.ts`              | `JustGitAccess`, `GitCredential`, and `GitFetch`                                            |
-| `packages/just-bash` | `src/git/backend.ts`             | `justGitBackend`, the access, and the environment                                           |
-| `packages/just-bash` | `src/git/server.ts`, `tokens.ts` | The `just-git` server, its authentication, and the tokens                                   |
-| `packages/just-bash` | `src/git/registration.ts`        | Template registration                                                                       |
-| `packages/just-bash` | `src/git/storage.ts`             | `sqliteGitStorage` and the registry table                                                   |
+| Package                | File                                   | What it holds                                                                               |
+| ---------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `packages/workspace`   | `src/git-backend.ts`                   | The types of [The contract](#the-contract)                                                  |
+| `packages/workspace`   | `src/git-tools.ts`                     | `repos`, `fork`, and the git note                                                           |
+| `packages/workspace`   | `src/workspace.ts`                     | The git owner, the `connect` wrapper, the check of the transport, and the order of disposal |
+| `packages/workspace`   | `src/git-conformance.ts`               | `gitConformance`                                                                            |
+| `packages/workspace`   | `src/git-entry.ts`                     | The `/git` entry                                                                            |
+| `packages/workspace`   | `src/git-names.ts`                     | The name rules of a repository ID                                                           |
+| `packages/workspace`   | `src/git-templates.ts`                 | `fromDirectory` and the template helpers                                                    |
+| `packages/just-bash`   | `src/just-bash.ts`                     | `gitFor(agent, access)`                                                                     |
+| `packages/just-bash`   | `src/git/access.ts`                    | `JustGitAccess`, `GitCredential`, and `GitFetch`                                            |
+| `packages/just-bash`   | `src/git/backend.ts`                   | `justGitBackend`, the access, and the environment                                           |
+| `packages/just-bash`   | `src/git/server.ts`, `tokens.ts`       | The `just-git` server, its authentication, and the tokens                                   |
+| `packages/just-bash`   | `src/git/registration.ts`              | Template registration                                                                       |
+| `packages/just-bash`   | `src/git/storage.ts`                   | `sqliteGitStorage` and the registry table                                                   |
+| `packages/workstation` | `src/git-backend.ts`                   | `workstationGitBackend`, its options, the access, and the identity                          |
+| `packages/workstation` | `src/git-account.ts`, `git-prepare.ts` | The client of the git account, its scripts, the preparation, and `serve`                    |
+| `packages/workstation` | `src/git-keys.ts`                      | The agent keys and the lines of `authorized_keys.ambion`                                    |
+| `packages/workstation` | `src/git-repositories.ts`              | `list`, `get`, and `fork` on the git account                                                |
+| `packages/workstation` | `src/git-registration.ts`              | Template registration on the git account                                                    |
+| `packages/workstation` | `src/git-agent.ts`                     | The key files and the ssh configuration in the agent's home                                 |
 
 ## Tests
 
@@ -716,6 +725,10 @@ backends.** Its own tests add:
 - a token on a path that names another repository;
 - a backend after `dispose`;
 - a template from a directory.
+
+**`packages/workstation` runs the cases on OpenSSH.** The `workstation`
+CI job runs them with the hooks of the `ssh` transport
+([Workstation git](workstation-git.md#tests)).
 
 **`packages/workspace` holds the texts and a room test.** Each outcome of
 `fork` and the `repos` table has a case, and so do the tool line and the

@@ -53,12 +53,12 @@ repositories in one account on the server. Each agent reaches them with
 **Four themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
-| Theme                     | Acceptance                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                                                                                                                                                                                                    |
-| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database.                                                                                                                                                                               |
-| G Git on the workstation  | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. |
-| B Background processes    | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307.                                                                                              |
+| Theme                     | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| W Wake sources            | A room wakes a seat on a notice from a resource and on a timer that the journal records. A restart re-arms every timer. An `awaiting` exchange expires on a stated bound.                                                                                                                                                                                                                                          |
+| D Delegation by reference | A working room is a room. A message that carries a ref to it delegates the work. The origin exchange awaits the working room, and one message with a ref returns the result. No task database.                                                                                                                                                                                                                     |
+| G Git on the workstation  | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317. |
+| B Background processes    | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307.                                                                                                                                    |
 
 **Three format changes.** Each change lands with a golden journal of the
 new shape, and the changelog names each one.
@@ -157,8 +157,8 @@ means two things or two names mean one.
 **The order is the notice, the timer, then the delegation.** The notice
 host call needs the notice kind, the timer needs the host call, and the
 delegating message needs the notice. The git backend on the workstation
-needs none of them, so phase 4 runs beside phases 1 to 3. Background processes (B1) needed no
-phase, and landed first. A step names the
+needed none of them, and phase 4 landed it beside phases 1 to 3.
+Background processes (B1) needed no phase, and landed first. A step names the
 steps it needs; a step with no "Needs" line starts now. **P0** blocks the tag. **P1**
 carries the release story. **P2** moves to the backlog when it is late.
 
@@ -204,28 +204,13 @@ names the new route.
 **Goal:** an agent on a workstation clones and pushes over SSH to one
 account on its own server, and the host opens no port.
 
-**Each step is one pull request.** Step 1 documents G2.
-
-- [ ] **1.** The docs of G2. `workstation-git.md` describes what shipped.
-      `workstation.md` states the new credential rule, and its out-of-v1
-      list drops credential issuance and rotation. `git.md` states the
-      credential decision in its new words and names the backend in its
-      file table. The trust row states the reach of a leaked agent key.
-      `docs/README.md`, the `CLAUDE.md` row, and the workstation package
-      guide name the backend and the server steps. P1. (G2)
-  - **Evidence:** each statement points at code on `main`.
-    `scripts/evidence-links.test.mjs` and Prettier pass.
+**Phase 4 holds no open step.** G1 landed in #312 and #314. G2 landed in
+#316 and #317, and its docs landed after them.
 
 **Evidence:** the `workstation` CI job runs `gitConformance` on OpenSSH
 with the SSH harness, and the tier proves the checks that
 [Workstation git](../docs/workstation-git.md#tests) lists. The workbench
-runs on `justGitBackend`.
-
-**A step of G2 merges only with the `workstation` CI job green.** That
-job alone runs the OpenSSH tier.
-
-**The tag needs G1 and G2 together.** After G1 alone, a workstation has
-no git backend.
+runs on `justGitBackend`. The evidence holds on `main`.
 
 ### Phase 5. Release (P1)
 
@@ -317,11 +302,10 @@ an inbound port and sends each token over HTTP.
   names the `transport` and the `server` of the git backend, and the
   transports that the bash backend carries.
 - **The workstation's HTTP path goes.** `git-credentials.ts`, its tests,
-  and the git case of the OpenSSH tier go with it. Until G2, the pages
-  state in one sentence that the workstation carries no git transport.
+  and the git case of the OpenSSH tier go with it.
 
-G1 lands in two steps. G1a moves the code and keeps the shape of
-`GitAccess`. G1b changes the contract. The owner deprecates
+G1 landed in two steps. G1a (#312) moved the code and kept the shape of
+`GitAccess`. G1b (#314) changed the contract. The owner deprecates
 `@ambionframework/git` on npmjs with a message that names
 `@ambionframework/just-bash/git`. **Evidence:** a scripted case that
 pairs `justGitBackend` with a bash backend that carries `ssh` or no
@@ -338,10 +322,10 @@ backend issues one Ed25519 key for each agent, limited by `from` and
 A fork or a template lands with one rename, so the backend keeps no
 registry table.
 
-G2 lands in two steps. G2a built the server side, and its tests drive
-the git backend alone. G2b made the bash backend write the key files,
+G2 landed in two steps. G2a (#316) built the server side, and its tests drive
+the git backend alone. G2b (#317) made the bash backend write the key files,
 and it added the OpenSSH tier. Only the `workstation` CI job runs that
-tier, so a step of G2 merges only with that job green. The OpenSSH
+tier, so a step of G2 merged only with that job green. The OpenSSH
 harness removes the repositories and the agent keys of the git account
 between cases. **Evidence:** `gitConformance` and the checks of the
 design pass in the OpenSSH tier. The backend renders `expiry-time` in the

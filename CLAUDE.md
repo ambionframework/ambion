@@ -24,7 +24,7 @@ floor.
 | `packages/codex`          | The Codex SDK executor: `codex()` and `codexExecution()`, over a stdio room tools server; live-tested, no fake                                                       |
 | `packages/workspace`      | A workspace resource and its tools, the helpers a bash backend builds on, an optional SQL backend interface, and the git helpers in `/git`                           |
 | `packages/just-bash`      | The just-bash workspace backends: `memoryBackend` and `directoryBackend`, and `justGitBackend` in `/git`, a `just-git` server in process                             |
-| `packages/workstation`    | A workspace bash backend over SSH: one remote server, one Unix account for each agent. Tested on an in-process server and on OpenSSH in CI                           |
+| `packages/workstation`    | A workspace bash backend over SSH to one server, one Unix account for each agent, and `workstationGitBackend`. Tested on an in-process server and on OpenSSH in CI   |
 | `docs/trust.md`           | Design contract for what one owner guarantees another, and what the kernel does not defend — read before exposing a room to untrusted agents                         |
 | `docs/agent.md`           | Design contract for the core — read before changing the runtime                                                                                                      |
 | `docs/assistant.md`       | Design contract for the default assistant package and the `assistant` room option — read with `agent.md`                                                             |
@@ -35,7 +35,7 @@ floor.
 | `docs/processes.md`       | Design contract for background processes: `bash`, `ps`, `status`, `wait`, `cancel`, handles, output files, the host's view, and reminders — read with `workspace.md` |
 | `docs/workstation.md`     | Design contract for the workspace backend over SSH to one remote server, one Unix account for each agent — read with `workspace.md`                                  |
 | `docs/git.md`             | Design contract for the git backend: read-only templates, forks, clones into the home, and pushes — read with `workspace.md`                                         |
-| `docs/workstation-git.md` | A proposal with no package yet: a git backend on the workstation, one account for the repositories, git over SSH                                                     |
+| `docs/workstation-git.md` | Design contract for the git backend on the workstation: one account for the repositories, git over SSH — read with `git.md`                                          |
 | `docs/example.md`         | The one runnable example, an agentic lab workspace, and what it must show                                                                                            |
 | `docs/roster.md`          | Design contract for a roster that changes while the room runs — read with `agent.md`                                                                                 |
 | `docs/durability.md`      | What the record promises under failure, and how the tiers prove it — read with `agent.md`                                                                            |
