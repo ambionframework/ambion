@@ -178,22 +178,33 @@ compiling 14 of 120
 | `failed`    | `Process <h> failed: <message>.`                           |
 
 **The result of a running process can point to a scheduled say.** `bash`,
-`status` and `wait` add one note when two facts hold. The timeout of the
-process ends past the reach of a wait, 30 seconds before
-`ToolContext.deadline`. The context carries an open exchange, so the room
-takes a say with `after`. `wait` with `handles` adds the note once when one
-running process qualifies. `cancel` adds no note.
+`status` and `wait` add one note when two facts hold:
+
+- **The process runs past the reach of a wait.** The reach of a wait ends
+  30 seconds before `ToolContext.deadline`. The timeout of the process
+  ends after that time.
+- **The context carries an open exchange.** The room then takes a say with
+  `after`.
 
 ```text
-Your activation ends in 540 seconds. The process can run longer. To look at it later, say to yourself with after, in seconds.
+Your activation ends in 540 seconds. Process bash-3f9a2c1d0b7e can run longer. To look at a process later, say to yourself with after, in seconds.
 ```
+
+**The defaults show the note on each running process in an exchange.** The
+default timeout is 600 seconds, and the default lease deadline is 600
+seconds after the first claim. So the timeout of a new process always ends
+past the reach of a wait. A process with a shorter timeout gets no note.
 
 **The note names the seconds left before the deadline.** The agent weighs
 a last `wait` against a say with `after` by that number. When the deadline
 also cut the wait, the note starts with the line of the cut, which names
 the same seconds. The seconds show once.
 
-**The note shows only where a say with `after` helps.** Outside a room
+**The note names each process that qualifies.** `wait` with `handles` adds
+one note, and it names each running process past the reach of a wait.
+`cancel` adds no note.
+
+**The note shows only where a say with `after` can help.** Outside a room
 there is no `say`. A process that ends inside the reach of a wait needs a
 `wait`, and each returned say costs one activation.
 
@@ -462,8 +473,8 @@ back when it is due, and the returned say starts an activation for the
 same seat ([Exchange](exchange.md#6-a-scheduled-say)). That activation
 reads the process in its reminder, and `status` gives the output. When the
 process still runs, the agent can schedule another say. The guidance
-states this to the agent, and the result of a process that can outlast
-the activation states it again.
+states this to the agent, and the result of a process past the reach of a
+wait states it again.
 
 **Each returned say costs one activation.** The room does not look at the
 process before it returns the say.
@@ -545,7 +556,7 @@ carries that time. `bash` and `wait` wait for the shorter of the time the call
 gives and the time left before the margin. A process that still runs then
 gives `running`, and the result line adds `The wait stopped early, because
 your activation ends in <n> seconds. Answer before then.` When the process
-can outlast the activation, the note of a scheduled say follows. The margin also
+runs past the reach of a wait, the note of a scheduled say follows. The margin also
 covers the skew between the clock of the room's host and the clock of the
 seat's host.
 

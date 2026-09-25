@@ -57,22 +57,27 @@ export function stateLine(process: ProcessStatus): string {
 	}
 }
 
-/** The note for a running process that can run longer than the activation lets the agent wait. */
-export const LATER_LINE =
-	'The process can run longer. To look at it later, say to yourself with after, in seconds.';
+/** The end of the note for running processes past the reach of a wait: the scheduled say. */
+export const LATER_LINE = 'To look at a process later, say to yourself with after, in seconds.';
+
+/** `Process <h> can run longer.`, or `Processes <h>, <h> can run longer.` */
+function longerLine(handles: readonly string[]): string {
+	const who = handles.length === 1 ? 'Process' : 'Processes';
+	return `${who} ${handles.join(', ')} can run longer. ${LATER_LINE}`;
+}
 
 /**
  * The note near the end of the activation: the seconds `left` before the
- * room ends it, the wait that the deadline `cut`, and the scheduled say
- * when the process runs `later` than a wait can reach. Empty when the wait
- * was not cut and no say helps. The seconds show once.
+ * room ends it, the wait that the deadline `cut`, and the scheduled say for
+ * the processes `later` that run past the reach of a wait. Empty when the
+ * wait was not cut and no say helps. The seconds show once.
  */
-export function deadlineNote(left: number, cut: boolean, later: boolean): string {
-	if (!cut && !later) return '';
+export function deadlineNote(left: number, cut: boolean, later: readonly string[]): string {
+	if (!cut && later.length === 0) return '';
 	const time = cut
 		? `The wait stopped early, because your activation ends in ${left} seconds. Answer before then.`
 		: `Your activation ends in ${left} seconds.`;
-	return later ? `${time} ${LATER_LINE}` : time;
+	return later.length === 0 ? time : `${time} ${longerLine(later)}`;
 }
 
 /** The end of a finished process, for the reminder. */

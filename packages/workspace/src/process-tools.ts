@@ -244,7 +244,7 @@ function outlasts(process: ProcessStatus, ctx: ToolContext): boolean {
 /**
  * The note near the end of the activation for `running`: the seconds left,
  * the wait that the deadline cut while `cut` still runs, and the scheduled
- * say when one of `running` outlasts the reach of a wait.
+ * say for each of `running` that outlasts the reach of a wait.
  */
 function deadlineLine(
 	wait: { cut: boolean },
@@ -254,7 +254,7 @@ function deadlineLine(
 ): string {
 	if (ctx.deadline === undefined) return '';
 	const left = Math.max(0, Math.round((ctx.deadline - Date.now()) / 1000));
-	const later = running.some((process) => outlasts(process, ctx));
+	const later = running.filter((process) => outlasts(process, ctx)).map((one) => one.handle);
 	return deadlineNote(left, wait.cut && cut.state === 'running', later);
 }
 

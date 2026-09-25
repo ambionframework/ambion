@@ -562,7 +562,7 @@ describe('a wait near the end of the activation', () => {
 		expect(Date.now() - before).toBeLessThan(2_000);
 		// The note rounds the time left, and a loaded runner can take a second.
 		expect(waited).toMatch(
-			/The wait stopped early, because your activation ends in (9|10) seconds\. Answer before then\. The process can run longer\./,
+			/The wait stopped early, because your activation ends in (9|10) seconds\. Answer before then\. Process bash-[0-9a-f]{12} can run longer\./,
 		);
 		expect(waited).not.toContain('Your activation ends in');
 	});
@@ -577,22 +577,34 @@ describe('the note that points to a scheduled say', () => {
 	])('for a process that %s', async (_case, timeout, context, shows) => {
 		const workspace = site();
 		const inside = callAs('alpha', { deadline: Date.now() + 600_000, ...context });
-		const bash = toolOf(workspace, 'bash');
-		const started = await bash.invoke({ command: 'sleep 30', timeout, wait: 0 }, inside);
+		const started = await toolOf(workspace, 'bash').invoke(
+			{ command: 'sleep 30', timeout, wait: 0 },
+			inside,
+		);
 		if (typeof started === 'string') throw new Error('A process tool gives a structured result.');
 		const { handle } = (started.details as ProcessDetails).process;
+		// Two processes run, under the limit of four. The ended one makes wait with handles return at once.
 		const other = (await call(workspace, 'bash', { command: 'sleep 30', timeout, wait: 0 })).details
 			.process.handle;
+		const ended = (await call(workspace, 'bash', { command: 'true' })).details.process.handle;
+		const wait = toolOf(workspace, 'wait');
 		const texts = [
-			await invokeText(bash, { command: 'sleep 30', timeout, wait: 0 }, inside),
+			started.content.map((part) => (part.type === 'text' ? part.text : '')).join(''),
 			await invokeText(toolOf(workspace, 'status'), { handle }, inside),
-			await invokeText(toolOf(workspace, 'wait'), { handle, timeout: 0 }, inside),
-			await invokeText(toolOf(workspace, 'wait'), { handles: [other, handle], timeout: 0 }, inside),
+			await invokeText(wait, { handle, timeout: 0 }, inside),
+			await invokeText(wait, { handles: [other, handle], timeout: 0 }, inside),
+			await invokeText(wait, { handles: [ended, other, handle], timeout: 0 }, inside),
 		];
 		for (const text of texts) {
-			// The note names the seconds left before the deadline, and a loaded runner can take a second.
-			expect(/Your activation ends in (599|600) seconds\./.test(text)).toBe(shows);
+			const left = /Your activation ends in (\d+) seconds\./.exec(text)?.[1];
+			expect(left !== undefined).toBe(shows);
+			// A loaded runner can take some seconds between the calls.
+			if (left !== undefined) expect(Number(left)).toBeGreaterThan(580);
 			expect(text.includes(LATER_LINE)).toBe(shows);
+		}
+		if (shows) {
+			expect(texts[0]).toContain(`Process ${handle} can run longer.`);
+			expect(texts[3]).toContain(`Processes ${other}, ${handle} can run longer.`);
 		}
 	});
 });
