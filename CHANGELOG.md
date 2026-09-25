@@ -6,8 +6,10 @@
 a background process and returns a handle. A process outlives the call and
 the activation that started it. The files of the bash backend hold the
 process table, so a new run of the host reads the same table. Each
-activation starts with a reminder of the seat's processes. See
-[Processes](docs/processes.md).
+activation starts with a reminder of the seat's processes. No message
+wakes a seat when a process ends: the agent waits for the result inside
+the activation, and the guidance says so. A host that wants a wake posts a
+message. See [Processes](docs/processes.md).
 
 ### New
 

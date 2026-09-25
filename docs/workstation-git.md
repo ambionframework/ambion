@@ -683,7 +683,7 @@ is about fifteen lines of `bash`.
 3. **The template helpers live in `@ambionframework/workspace/git`.**
    The workstation installs no `just-git`.
 4. **Items G1 and G2 of [next.md](../planning/next.md) hold the work,**
-   and phase 4 of that plan landed it.
+   and phase 1 of that plan landed it.
 5. **The git account is on the workstation, on the loopback address.** A
    git server on a second machine waits in the backlog.
 6. **The core knows a transport by its name.** Each access type lives
