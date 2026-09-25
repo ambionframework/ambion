@@ -50,6 +50,7 @@ type MessageCommand =
 	| { type: 'commit'; commit: CommitRequest; bytes?: number; schedule?: ScheduleLimits }
 	| { type: 'return'; message: Seq }
 	| { type: 'dismiss'; message: Seq };
+type DismissStamp = { at: string; activationId?: string; from?: string };
 type LeaseCommand =
 	| { type: 'claim'; id: string; expiry: number; deadline: number }
 	| { type: 'renew'; id: string; expiry: number; deadline: number; readThrough?: number }
@@ -135,7 +136,7 @@ export function decide(
 		case 'return':
 			return returnSay(state, command.message, now);
 		case 'dismiss':
-			return hostDismissal(state, command.message, now);
+			return dismissing(state, command.message, { at: iso(now) });
 		case 'claim':
 			return claim(state, command, now);
 		case 'renew':
@@ -424,7 +425,7 @@ function ordinaryCommit(
 	const stamp = { at: iso(now), activationId: request.activation, from: live.seat };
 	if (intent.kind === 'seated') return seating(state, intent.name, stamp, now);
 	if (intent.kind === 'unseated') return unseating(state, intent.name, stamp, now);
-	if (intent.kind === 'dismissed') return seatDismissal(state, intent.message, stamp, now);
+	if (intent.kind === 'dismissed') return dismissing(state, intent.message, stamp);
 	const refusal = addressRefusal(state, live.seat, intent, schedule);
 	if (refusal !== undefined) return refusal;
 	const { refs, ...rest } = intent;
@@ -722,23 +723,14 @@ function reconcile(state: RoomState, command: ReconcileCommand, now: number): Re
 	};
 }
 
-/** A seat dismisses its own pending say. The entry reaches nobody. */
-function seatDismissal(
-	state: RoomState,
-	seq: Seq,
-	stamp: { at: string; activationId: string; from: string },
-	now: number,
-): RoomDecision<'message'> {
+/** A dismissal reaches nobody. The host's has no `from`, and its retry writes nothing. */
+function dismissing(state: RoomState, seq: Seq, stamp: DismissStamp): RoomDecision<'message'> {
 	const answer = dismissal(state.scheduled, state.messages, stamp.from, seq);
-	if (answer === 'unchanged') return { unchanged: { kind: 'dismissed', message: seq } };
-	if (answer !== 'dismiss') return refused(answer);
-	return message(state, { kind: 'dismissed', message: seq, ...stamp }, now, false);
-}
-
-/** The host dismisses any pending say. A say that no longer waits writes nothing. */
-function hostDismissal(state: RoomState, seq: Seq, now: number): RoomDecision<'message'> {
-	if (!state.scheduled.some((say) => say.seq === seq)) return { event: undefined };
-	return message(state, { kind: 'dismissed', message: seq, at: iso(now) }, now, false);
+	const body = { kind: 'dismissed' as const, message: seq, ...stamp };
+	if (answer === 'dismiss') return { event: { kind: 'message', body } };
+	if (answer !== 'unchanged') return refused(answer);
+	if (stamp.from === undefined) return { event: undefined };
+	return { unchanged: { kind: 'dismissed', message: seq } };
 }
 
 /** The write of one returned say, decided again inside the journal queue. */

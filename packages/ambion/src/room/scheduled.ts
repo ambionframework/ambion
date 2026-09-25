@@ -154,17 +154,19 @@ export function returning(
 }
 
 /**
- * What a seat's dismissal of one handle does. A seat dismisses its own
- * pending say. Its own say that no longer waits is `unchanged`, so a
- * retry reads the same answer. Any other handle gets a refusal.
+ * What a dismissal of one handle does. A seat dismisses its own pending
+ * say, and the host, with no seat, any pending say. A say that no longer
+ * waits is `unchanged`, so a retry reads the same answer. Any other handle
+ * of a seat gets a refusal.
  */
 export function dismissal(
 	list: readonly ScheduledSay[],
 	messages: readonly Message[],
-	seat: string,
+	seat: string | undefined,
 	seq: Seq,
 ): 'dismiss' | 'unchanged' | string {
 	const say = list.find((candidate) => candidate.seq === seq);
+	if (seat === undefined) return say === undefined ? 'unchanged' : 'dismiss';
 	if (say !== undefined)
 		return say.seat === seat
 			? 'dismiss'

@@ -118,6 +118,7 @@ describe('executor tool authority', () => {
 			'say',
 			'seat',
 			'unseat',
+			'dismiss',
 			'record_decision',
 		]);
 		expect(names(bound('activation', summarize).tools)).toEqual(['say']);
@@ -278,8 +279,12 @@ describe('executor tool authority', () => {
 			context: { ...base.context, exchange: { owner: 'priya', from: 4 } },
 		};
 		const held = binding(activationFor('message:4:worker:1', worker), unusedRoom);
-		await call(toolsFor(open, worker, held)[3], 'call-1', {});
-		await call(toolsFor({ ...open, context: { ...base.context } }, worker, held)[3], 'call-2', {});
+		await call(toolsFor(open, worker, held).at(-1), 'call-1', {});
+		await call(
+			toolsFor({ ...open, context: { ...base.context } }, worker, held).at(-1),
+			'call-2',
+			{},
+		);
 
 		const [first, second] = seen;
 		expect(first).toMatchObject({

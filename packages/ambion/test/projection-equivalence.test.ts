@@ -4,8 +4,8 @@
  * A seeded walk writes journal entries straight at the fold layer: people
  * come and go, messages are directed at people, seats are seated and unseated, a summary lands long after its
  * close, a cancellation cuts running work, and new leases follow it. A seat
- * schedules a say, and the room returns one, possibly after an unseating or
- * a cancellation dropped it. After
+ * schedules a say. The room returns it, or the seat or the host dismisses
+ * it, possibly after an unseating or a cancellation dropped it. After
  * every entry the projection that `advance` built must equal `foldRoom` over
  * the whole history. At a random cut the walk drops the projection and
  * rebuilds it with `replay`, as a resumed room does, and goes on. A state a
@@ -134,10 +134,19 @@ class Walk {
 		});
 	}
 
-	/** The room returns a say: often a scheduled one, sometimes one that no longer waits. */
+	/**
+	 * The room returns a say, or its seat or the host dismisses it: often a
+	 * scheduled one, sometimes one that no longer waits.
+	 */
 	private returned(): Entry {
 		const say = this.scheduledSays.length ? this.pick(this.scheduledSays) : undefined;
 		if (say === undefined) return this.scheduled();
+		if (this.chance(0.3))
+			return this.message({
+				kind: 'dismissed',
+				message: say.seq,
+				...(this.chance(0.5) ? { from: say.seat } : {}),
+			});
 		return this.message({
 			kind: 'returned',
 			to: say.seat,

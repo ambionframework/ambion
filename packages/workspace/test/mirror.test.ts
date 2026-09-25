@@ -57,6 +57,12 @@ function fakeRoom(
 		async pendingFor() {
 			return [];
 		},
+		async scheduled() {
+			return [];
+		},
+		async dismiss() {
+			return false;
+		},
 		subscribe(listener) {
 			listeners.add(listener);
 			return () => listeners.delete(listener);
