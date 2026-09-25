@@ -4,9 +4,8 @@
 `workstationGitBackend` is a second `GitBackend` for the
 [git contract](git.md). It keeps the repositories on the
 [workstation](workstation.md), in the home of one dedicated account, and
-each agent reaches them with `git` over SSH. Items G1 and G2 of
-[the plan](../planning/next.md#g-git-on-the-workstation) hold the reasons
-for the work.
+each agent reaches them with `git` over SSH. The
+[changelog of 0.3.0](../CHANGELOG.md#030-2026-09-25) states the change.
 
 **The backend reuses the SSH code of the package.** The client of the git
 account is the same kind of SSH session, with the same environment over
@@ -698,8 +697,7 @@ is about fifteen lines of `bash`.
    no write of the backend reaches the host's own key.
 3. **The template helpers live in `@ambionframework/workspace/git`.**
    The workstation installs no `just-git`.
-4. **Items G1 and G2 of [next.md](../planning/next.md) hold the work,**
-   and phase 1 of that plan landed it.
+4. **0.3.0 landed the work,** in #312, #314, #316, and #317.
 5. **The git account is on the workstation, on the loopback address.** A
    git server on a second machine waits in the backlog.
 6. **The core knows a transport by its name.** Each access type lives
