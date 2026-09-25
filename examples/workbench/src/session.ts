@@ -6,7 +6,7 @@ import { type Choices, type Parsed, parse, type Suggestion, suggest } from './co
 import { RoomFeed } from './feed.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
 import { holderOf, type Known, labUri, type RefItem, refItems, shows, tableOfUri } from './refs.ts';
-import { DONE, errorText, HELP, pendingLine, refusal, workingAgents } from './session-text.ts';
+import { DONE, errorText, HELP, notesOf, refusal, workingAgents } from './session-text.ts';
 import { type ActivationSteps, activationLine, ended, stepsView } from './steps.ts';
 import { type Block, buildTimeline } from './timeline.ts';
 import type { Approval, FileEntry, Person, RoomAction, RoomView, Workbench } from './workbench.ts';
@@ -177,10 +177,7 @@ export class Session {
 
 	/** The blocks that follow the closed exchanges: what waits on the person, and the open steps. */
 	private tail(view: RoomView): Block[] {
-		const blocks: Block[] = [
-			...this.attention.map((text) => ({ type: 'note' as const, text })),
-			...view.scheduled.map((say) => ({ type: 'note' as const, text: pendingLine(say) })),
-		];
+		const blocks = notesOf(this.attention, view);
 		const steps = this.steps;
 		if (!steps?.read) return blocks;
 		const activation = view.exchanges

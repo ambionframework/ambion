@@ -47,6 +47,7 @@ function fakeRoom(
 				name: roomName,
 				initialized: true,
 				messages,
+				scheduled: [],
 				participants: [],
 				exchanges: [],
 				exchange: undefined,

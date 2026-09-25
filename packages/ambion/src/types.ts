@@ -126,15 +126,11 @@ export type ExchangeView =
 /** A closed exchange view: the one that carries an outcome. */
 export type ClosedExchangeView = Extract<ExchangeView, { readonly status: 'closed' }>;
 
-/** A say that waits to return to its author, as a read shows it. */
+/** A say that waits to return to its seat for its owner, as a read shows it: due is ISO. */
 export interface PendingSay {
-	/** The seq of the say. */
 	readonly seq: Seq;
-	/** The seat that said it, and the seat it returns to. */
 	readonly seat: string;
-	/** The person it returns for. */
 	readonly owner: string;
-	/** When it is due, ISO. */
 	readonly due: string;
 	readonly text: string;
 	readonly refs?: readonly string[];
