@@ -8,26 +8,30 @@ evidence needed to evaluate it.
 
 ## Responsibility
 
-**The assistant helps the room advance the user's stated goal.** It guides
-membership, provides exceptionally rare steering, and summarizes closed
-exchanges. It uses the room goal, the user's request, relevant preferences,
-and the discussion to decide whether an intervention helps.
+**The assistant keeps the membership of the room fit for the request, and
+summarizes closed exchanges.** It seats a reserve specialist when the request
+needs one. It unseats a specialist when the person asks or the scope no longer
+needs it. It is passive when the specialists are seated at `broadcast`
+or `presence` attention. It speaks during an exchange only when a
+participant addresses it, or when an idle specialist at `named` attention
+needs a directed request.
 
 The assistant is an ordinary agent. The kernel continues to own membership,
 activation authority, freshness checks, exchange closure, and summary
 provenance. Other agents retain their existing membership and speech tools.
 The package introduces no privileged role or separate execution lifecycle.
 
-| Responsibility | Default behavior                                                                                   |
-| -------------- | -------------------------------------------------------------------------------------------------- |
-| Membership     | Seat specialists whose expertise can materially affect the result. Unseat conservatively.          |
-| Steering       | Intervene extremely rarely, only with clear evidence of divergence or context rot in the exchange. |
-| Summaries      | Answer the opening question and preserve decisions, evidence, constraints, and unresolved work.    |
-| Restraint      | Stay silent when the room already has the context and participants needed to progress.             |
+| Responsibility | Default behavior                                                                                                       |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Membership     | Seat specialists whose expertise can materially affect the result. Unseat on request or on a clear change of scope.    |
+| Routing        | Send one directed request to an idle specialist at `named` attention, with every constraint that is still in force.    |
+| Answers        | Answer a person or a specialist that addresses the assistant. The summary answers a question to the room.              |
+| Summaries      | Answer the opening question, and report corrections, conflicts, constraints, open questions, and unresolved work.      |
+| Silence        | Call no `say` at `broadcast` or `presence` attention: no correction, no relay, no question to the person, no steering. |
 
-The assistant can answer simple questions directly. Specialists own domain
-judgments. The assistant must not invent extra work after the request is
-satisfied or require every specialist contribution to pass through it.
+Specialists own domain judgments. The assistant must not invent extra work
+after the request is satisfied or require every specialist contribution to
+pass through it.
 
 ## Package and room configuration
 
@@ -45,8 +49,8 @@ The kernel owns the shared speaking policy as `DEFAULT_GUIDANCE`. The package
 keeps only the orchestration guidance that the kernel does not enforce.
 
 **Additional instructions can override any assistant behavioral default.**
-This includes recruitment, unseating, steering frequency, direct answers,
-clarification, and summary content or style. The factory must state that
+This includes recruitment, unseating, silence at `broadcast`, direct answers,
+questions to the person, and summary content or style. The factory must state that
 application instructions take precedence when they conflict with its defaults.
 Defaults continue to apply where application instructions give no alternative.
 The behavior described below assumes no application override.
@@ -165,19 +169,18 @@ A name inside `text` does not route the message. Seating an agent that is
 already seated does not activate it. Check the roster before choosing the
 operation.
 
-| Situation                                                       | Assistant behavior                                                                       |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| A relevant specialist already receives the request              | Let it work without repeating the request.                                               |
-| Seating creates work for a specialist during the exchange       | Let it read the existing request; add a message only when it supplies missing direction. |
-| An idle specialist needs to be named to activate                | Send one concise directed request.                                                       |
-| A review depends on an artifact that does not exist yet         | Request review when the artifact becomes available.                                      |
-| The record clearly shows divergence from an explicit constraint | Give one minimal correction if no participant has already corrected it.                  |
-| Another participant already supplied the needed correction      | Stay silent.                                                                             |
+| Situation                                                       | Assistant behavior                                                      |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| A relevant specialist already receives the request              | Let it work without repeating the request.                              |
+| Seating creates work for a specialist during the exchange       | Let it read the existing request. Send no assignment after the seating. |
+| An idle specialist needs to be named to activate                | Send one concise directed request.                                      |
+| A person addresses a named specialist directly                  | Stay silent. The message already activates the specialist.              |
+| A specialist result relies on a superseded fact or a constraint | Stay silent. The summary states the conflict and the fact that applies. |
+| A specialist asks for information that only the person can give | Stay silent. The summary asks the person for it.                        |
 
-Independent contributions can proceed concurrently. Dependent contributions
-must have their required inputs. Avoid announcements, acknowledgements,
-repeated assignments, and coordination messages that create further work
-without advancing the request.
+Avoid announcements, acknowledgements, repeated assignments, and
+coordination messages that create further work without advancing the
+request.
 
 **A specialist's answer needs no forwarding.** Even a result addressed to
 the assistant is visible in the shared record. During ordinary work, do not
@@ -202,32 +205,23 @@ revise is new direction even when an earlier exchange left a similar answer or
 artifact. Activate the specialist once for that request; silence remains the
 default when the user has not renewed the work.
 
-## Exceptional steering
+## Silence during the exchange
 
-**Steering should occur extremely rarely.** Intervene only when the exchange
-contains clear evidence of divergence or context rot. Divergence means that
-work departs from the stated outcome or an explicit constraint. Context rot
-means that work relies on superseded facts, forgets an accepted correction,
-or repeats a resolved decision because relevant context was lost.
+**The assistant does not steer.** A specialist at `broadcast` or `presence`
+attention receives every message, the person's corrections and constraints
+included. The person reads every message too. A correction from the
+assistant repeats what both already have, and it starts more work.
 
-The assistant must identify the relevant statement or action and the goal,
-constraint, or correction it contradicts. Speculation about future drift is
-insufficient. A different approach, ordinary disagreement, silence, or work
-in progress does not by itself justify steering.
+The assistant does not correct, verify, or question a specialist during the
+exchange, and it does not ask the person a question. A specialist reports to
+the room, and it addresses the assistant only with a question for it. The
+assistant answers that question to the specialist, and it does not pass it on
+to the person. When a result relies on a superseded
+fact, breaks a constraint, or needs information from the person, the closing
+summary reports it. The person then decides what happens next.
 
-Treat specialist statements as reports until they are supported by tool
-evidence. Before repeating a claim that a known artifact or capability is
-missing, inspect the concrete path or capability when it is available. An
-empty broad search is inconclusive. If sources conflict, preserve and qualify
-the contradiction instead of writing a downstream artifact or summary that
-states the unsupported claim as fact.
-
-Check whether another participant has already corrected the issue. If a
-correction is still needed, make it once with the minimum useful context.
-Then let the specialists continue. Do not add routine progress checks,
-commentary, repeated reminders, or unsolicited improvements to their approach.
-Required directed activation and necessary user clarification remain separate
-reasons to speak; neither justifies routine supervision.
+When a specialist report conflicts with evidence already in the record, the
+summary states both. It does not state the unsupported claim as fact.
 
 **The assistant observes through ordinary attention and activation rules.**
 It has no continuous view of specialist execution or private tool use.
@@ -235,6 +229,12 @@ It can act only on context it receives during an authorized activation.
 It does not guarantee that every omission or failure will be detected before
 closure. A closing activation can report an incomplete result but cannot
 repair it through further investigation.
+
+**The live suite measured the change.** The earlier guidance let the
+assistant give one minimal correction. On it, both models tested corrected a
+specialist at `broadcast` in each of three samples. Both also asked the
+person for a missing fact during the exchange. Phase 2 step 5 of
+[the plan](../planning/next.md) records the models and the results.
 
 ## Membership and completion
 
@@ -259,20 +259,18 @@ and membership restrictions require enforcement outside the prompt.
 
 **The room goal and the user's current request guide ordinary work.** Later
 user corrections can change the requested outcome. An explicit change from
-the user is new direction, not evidence of agent divergence. Ask about a
-conflict with the room goal only when the intended scope remains materially
-unclear.
+the user is new direction.
 
-**Clarification must resolve a consequential ambiguity.** Proceed with a
-reasonable, reversible assumption when the missing detail does not materially
-change the outcome or authority to act. Ask a concise question when it does.
-Do not repeat a question that another participant has already asked.
-Independent work can continue while an answer is pending. Do not treat
-silence as authorization for work that requires the answer.
+**A constraint stays in force until the person withdraws it in words.** A new
+request does not withdraw an earlier constraint. A request for a plan, a
+proposal, or an estimate does not permit the action that it describes. The assistant carries each constraint that is still in force into a
+directed request, and the summary keeps it.
 
-If the exchange closes with an unanswered question, record the unresolved
-dependency. Distinguish waiting for the user from completing the request.
-Closure does not prove that the goal was achieved.
+**The summary carries a question for the person.** The assistant asks no
+question during the exchange. When the work waits on information that only
+the person can give, the summary asks for it. Distinguish waiting for the
+user from completing the request. Closure does not prove that the goal was
+achieved.
 
 Human preferences currently reach only the closing activation. They describe
 how that person wants to read the response. Ordinary activations receive the
@@ -282,14 +280,16 @@ Working preferences, such as prioritizing cost over speed, need explicit
 scope and visibility during ordinary work. For this implementation, provide
 shared working constraints through the room goal, conversation, or application
 instructions. Do not claim that the package automatically reads private
-preferences during steering. Broader preference routing needs a separate
+preferences during ordinary work. Broader preference routing needs a separate
 contract, including how preferences from multiple people interact.
 
 ## Summaries
 
 **Closing summaries also become context for later agents.** Preserve material
-corrections, decisions, quantities, dates, owners, constraints, uncertainty,
-and unfinished commitments. Distinguish verified outcomes from proposals.
+corrections, decisions, quantities, dates, owners, constraints that are still
+in force, uncertainty, and unfinished commitments. When a specialist relied on
+a superseded fact or broke a constraint, state the conflict and the value
+that applies. Distinguish verified outcomes from proposals.
 State when the discussion did not answer the user's question.
 
 When available context shows specialist failure or an incomplete result,
@@ -305,12 +305,13 @@ prototype from delivered capability.
 
 Adapt presentation to the assigned recipient's preferences without removing
 facts needed for later work. Avoid a transcript recap or a second performance
-of the discussion. The existing summary contract permits the writer to
-decline; the source discussion then remains available in agent context.
+of the discussion. Publish a summary for every closed exchange that holds a
+question, a request, or a specialist result, even when a message in the
+exchange already answered it. The existing summary contract permits the
+writer to decline an exchange that holds none of them.
 
 A closing activation receives only `say`, with a fixed source range and
 recipient. It cannot seat agents, use domain tools, or reopen investigation.
-Necessary steering must occur during ordinary work before the exchange closes.
 See [Summaries](summary.md) for the existing authority and completion rules.
 
 ## Integration and evaluation
@@ -326,29 +327,33 @@ room when evaluating changes to the shared behavior.
 
 Use deterministic tests for shorthand equivalence, configuration conflicts,
 membership, summary assignment, and resume. Use behavioral evaluations for
-specialist selection, steering quality, summary fidelity, and restraint.
+specialist selection, silence, summary fidelity, and restraint.
 Evaluate redundant routing explicitly: a specialist that already receives
 the user's request must not require an assistant restatement.
 
-Include named activation, dependent review, changed user instructions,
-unresolved disagreement, conservative unseating, and successful silence.
+Include named activation, changed user instructions, unresolved
+disagreement, conservative unseating, and successful silence.
 Include specialist failure and incomplete results. Check that the assistant
 reports gaps accurately without inventing success or repeatedly assigning work.
 
 Include explicit constraints that must survive seating and handoff, including
-an item scoped draft with a no-file-edits instruction. Include a known artifact
-that a specialist incorrectly reports as missing after an unhelpful broad
-search; the assistant should qualify the report using the checked path. Include
-a human revision and check that it causes one concise directed activation.
+an item scoped draft with a no-file-edits instruction. Include a human revision
+and check that it causes one concise directed activation.
 
-Compare clear divergence and context rot with ordinary disagreement and work
-in progress. Require a minimal correction only in the evidence-backed cases,
-and silence when a participant has already supplied that correction.
-Test material clarification, reversible assumptions, and summaries that
-distinguish waiting for the user from completion.
+Include a specialist result that relies on a superseded constraint, and one
+that asks for information from the person. Require silence during the
+exchange, and a summary that states the conflict or asks the question.
+
+Include these cases of the purpose:
+
+- A question that a person addresses to the assistant.
+- A question that a specialist addresses to the assistant.
+- A question that a person addresses to a named specialist.
+- An unseat on request.
+- A request that needs no specialist.
 
 Evaluate explicit application overrides of assistant defaults, including
-steering policy. Check that kernel authority remains unchanged.
+the silence at `broadcast`. Check that kernel authority remains unchanged.
 
 Verify that summaries preserve constraints needed in later exchanges.
 Measure coordination messages and unnecessary activations alongside task
@@ -362,17 +367,21 @@ configuration should follow evidence from consumers.
 
 Run `pnpm check` for formatting, builds, types, lint, and deterministic tests.
 
-The provider evaluations require credentials for `AMBION_MODEL`. They default
-to `anthropic/claude-sonnet-5` with `ANTHROPIC_API_KEY` and skip without that
-credential. Run them after building:
+The provider evaluations require credentials for `AMBION_MODEL` and for
+`JUDGE_MODEL`. The model defaults to `anthropic/claude-sonnet-5` with
+`ANTHROPIC_API_KEY`, and the judge's model defaults to `AMBION_MODEL`. Name
+another model family for the judge. `AMBION_THINKING` and `JUDGE_THINKING`
+set the thinking levels, `off` by default. The suite skips without both
+credentials. Run it after building:
 
 ```sh
 pnpm --filter @ambionframework/assistant test:live
 pnpm --filter @ambionframework-examples/workbench test:live
 ```
 
-The assistant suite uses a real assistant with controlled specialist evidence.
-It checks routing, silence, correction of obsolete constraints, incomplete
-results, and application overrides. The Workbench suite runs two example rooms
+The assistant suite runs on [the simulator](simulator.md). It uses a real
+assistant with controlled specialist evidence. It checks routing, silence at
+`broadcast`, summaries of obsolete constraints and missing facts, incomplete
+results, direct questions, unseating, and application overrides. The Workbench suite runs two example rooms
 with real agents. These evaluations sample
 model behavior; they do not guarantee that every model follows the defaults.

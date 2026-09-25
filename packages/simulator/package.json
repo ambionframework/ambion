@@ -1,20 +1,20 @@
 {
-	"name": "@ambionframework/assistant",
+	"name": "@ambionframework/simulator",
 	"version": "0.2.0",
 	"type": "module",
-	"description": "A reusable assistant definition for Ambion rooms.",
+	"description": "Evals for Ambion rooms: an actor plays a person, checks read the run, and a judge grades the rest.",
 	"license": "Apache-2.0",
 	"homepage": "https://ambionframework.com",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/ambionframework/ambion.git",
-		"directory": "packages/assistant"
+		"directory": "packages/simulator"
 	},
 	"keywords": [
 		"agents",
-		"ambient",
-		"collaboration",
-		"framework"
+		"evals",
+		"simulation",
+		"testing"
 	],
 	"exports": {
 		".": {
@@ -38,14 +38,16 @@
 		"build": "tsdown",
 		"check:types": "tsc --noEmit",
 		"test": "vitest run",
-		"test:live": "pnpm --filter '@ambionframework/assistant^...' build && vitest run --config vitest.live.config.ts"
+		"test:live": "pnpm --filter '@ambionframework/simulator^...' build && vitest run --config vitest.live.config.ts"
 	},
 	"dependencies": {
 		"@ambionframework/ambion": "workspace:*",
-		"@ambionframework/pi": "workspace:*"
+		"@ambionframework/pi": "workspace:*",
+		"typebox": "^1.3.18"
 	},
 	"devDependencies": {
-		"@ambionframework/simulator": "workspace:*",
+		"@ambionframework/just-bash": "workspace:*",
+		"@ambionframework/workspace": "workspace:*",
 		"@earendil-works/pi-ai": "^0.85.1",
 		"tsdown": "^0.22.14",
 		"typescript": "^7.0.2",

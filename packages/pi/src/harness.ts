@@ -22,6 +22,7 @@ import type {
 	HarnessEvent,
 	HarnessEventType,
 	Session,
+	ThinkingLevel,
 } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, AgentHarness as Harness } from '@earendil-works/pi-agent-core';
 import type { Api, Message, Model, Models } from '@earendil-works/pi-ai';
@@ -48,6 +49,8 @@ export interface HarnessInput {
 	/** The system prompt of the pass that runs now. */
 	readonly systemPrompt: () => string;
 	readonly compaction: CompactionSettings;
+	/** How much the model reasons before it answers. */
+	readonly thinking: ThinkingLevel;
 	/** The provider messages of one request. */
 	readonly toProviderMessages: (messages: AgentMessage[]) => Message[];
 	readonly onEvent: (event: HarnessEvent) => void;
@@ -71,7 +74,7 @@ export async function openHarness(input: HarnessInput): Promise<OpenHarness> {
 			session: input.session,
 			models: input.models,
 			model: input.model,
-			thinkingLevel: 'off',
+			thinkingLevel: input.thinking,
 			tools: [...input.tools],
 			activeToolNames: input.tools.map((tool) => tool.name),
 			systemPrompt: () => input.systemPrompt(),

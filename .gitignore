@@ -51,3 +51,6 @@ examples/*/demo-run.json
 # LemmaScript merge scratch, left by `lsc regen` when a merge or a proof fails
 *.dfy.base
 *.dfy.merged
+
+# the runs of failed live evals, kept for a person to read
+**/test/live/runs/

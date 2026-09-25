@@ -1,8 +1,8 @@
 # @ambionframework/assistant
 
 `@ambionframework/assistant` supplies a reusable ordinary agent definition for
-rooms that need help selecting specialists, steering rare divergences, and
-writing closing summaries.
+rooms that need help seating and unseating specialists and writing closing
+summaries.
 
 Install it alongside the core package using the repository's GitHub Packages
 registry configuration:
@@ -43,17 +43,19 @@ Omitting `seats` starts all defined agents at broadcast attention. Use
 `seats: {}` to start with only the assistant. Supply the assistant definition
 again in the complete `agents` definitions when calling `resumeRoom`.
 
-The default assistant uses corrective steering extremely rarely, when the
-record shows divergence or context rot. It avoids repeated assignments and
-reserves consolidation for the separate closing activation. Behavioral
+The default assistant is passive when the specialists are seated at
+broadcast or presence attention. It speaks during an exchange only when a
+person or a specialist addresses it, or when an idle specialist at named
+attention needs one
+directed request. The closing summary reports corrections, conflicts, and
+questions for the person. Behavioral
 defaults are model instructions; the kernel enforces collaboration authority.
 
 Explicit user constraints apply across seating and specialist handoffs,
 including scope, output limits, and permissions such as “do not edit files.”
-Role instructions are defaults and yield to those constraints. Specialist
-claims about missing artifacts should be checked against known paths before
-they are repeated; conflicting reports stay qualified in artifacts and
-summaries. Human revision feedback is sent as one concise directed request to
+Role instructions are defaults and yield to those constraints. A constraint
+stays in force until the person withdraws it. Conflicting reports stay
+qualified in summaries. Human revision feedback is sent as one concise directed request to
 the responsible specialist. Assignment deduplication is scoped to the current
 exchange, so an explicit later request to recheck or revise activates the
 specialist once even when an earlier result remains in the record.
