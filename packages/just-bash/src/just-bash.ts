@@ -38,7 +38,7 @@ import {
 	type WorkspaceLayout,
 } from '@ambionframework/workspace';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
-import { Bash, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
+import { Bash, DefenseInDepthBox, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
 import { createGit } from 'just-git';
 import { BashEnv } from './bash-env.ts';
 import { DEV_DIR, withDevices } from './devices.ts';
@@ -259,6 +259,61 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryBashBac
 	};
 }
 
+/** Run one change of the filesystem as trusted code of just-bash. */
+function trusted(change: () => Promise<void>): Promise<void> {
+	return DefenseInDepthBox.runTrustedAsync(change);
+}
+
+/**
+ * The filesystem of `directoryBackend`. `ReadWriteFs` 3.4.2 makes one
+ * change at a time on a root. The change that ends starts the next change
+ * in its own async context. When a script made the change that ends, the
+ * next change runs in the context of that script, also when a host or
+ * another agent asked for it. When the script ends first, the defense layer
+ * of just-bash blocks the callbacks of that next change. The change never
+ * settles, and each later change on the root waits with no end. Each change
+ * here runs as trusted code, so the defense layer wraps none of its
+ * callbacks.
+ */
+class DirectoryFs extends ReadWriteFs {
+	override async lstat(path: string) {
+		// ReadWriteFs 3.4.2 validates the parent of / outside its own root.
+		// The virtual root is a directory, never a traversable symlink;
+		// stat keeps the backend's root validation without inspecting its parent.
+		return posix.normalize(path) === '/' ? this.stat('/') : super.lstat(path);
+	}
+	override writeFile(...args: Parameters<ReadWriteFs['writeFile']>): Promise<void> {
+		return trusted(() => super.writeFile(...args));
+	}
+	override appendFile(...args: Parameters<ReadWriteFs['appendFile']>): Promise<void> {
+		return trusted(() => super.appendFile(...args));
+	}
+	override mkdir(...args: Parameters<ReadWriteFs['mkdir']>): Promise<void> {
+		return trusted(() => super.mkdir(...args));
+	}
+	override rm(...args: Parameters<ReadWriteFs['rm']>): Promise<void> {
+		return trusted(() => super.rm(...args));
+	}
+	override cp(...args: Parameters<ReadWriteFs['cp']>): Promise<void> {
+		return trusted(() => super.cp(...args));
+	}
+	override mv(...args: Parameters<ReadWriteFs['mv']>): Promise<void> {
+		return trusted(() => super.mv(...args));
+	}
+	override chmod(...args: Parameters<ReadWriteFs['chmod']>): Promise<void> {
+		return trusted(() => super.chmod(...args));
+	}
+	override symlink(...args: Parameters<ReadWriteFs['symlink']>): Promise<void> {
+		return trusted(() => super.symlink(...args));
+	}
+	override link(...args: Parameters<ReadWriteFs['link']>): Promise<void> {
+		return trusted(() => super.link(...args));
+	}
+	override utimes(...args: Parameters<ReadWriteFs['utimes']>): Promise<void> {
+		return trusted(() => super.utimes(...args));
+	}
+}
+
 /**
  * A workspace over a real directory. `ReadWriteFs` writes through to disk
  * and needs its root to exist, so the first `connect` creates the root and
@@ -270,14 +325,6 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryBashBac
 export function directoryBackend(root: string): BashBackend {
 	const resource = lazyResource(async () => {
 		await mkdir(root, { recursive: true });
-		class DirectoryFs extends ReadWriteFs {
-			override async lstat(path: string) {
-				// ReadWriteFs 3.4.2 validates the parent of / outside its own root.
-				// The virtual root is a directory, never a traversable symlink;
-				// stat keeps the backend's root validation without inspecting its parent.
-				return posix.normalize(path) === '/' ? this.stat('/') : super.lstat(path);
-			}
-		}
 		return new DirectoryFs({ root });
 	});
 	return {
