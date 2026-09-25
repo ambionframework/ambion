@@ -445,9 +445,7 @@ process still runs, the agent can schedule another say. The guidance
 states this to the agent.
 
 **Each returned say costs one activation.** The room does not look at the
-process before it returns the say. A guard that holds the say while its
-process runs waits in the
-[backlog](../planning/backlog.md#wake-sources-and-delegation).
+process before it returns the say.
 
 ### A host can wake the owner seat
 

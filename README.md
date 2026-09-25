@@ -207,8 +207,8 @@ later**, the floor `@opentui/core` sets for its terminal renderer. See
 - The journal owns no domain transactions and no credentials.
 - Tools can act before a contribution commits. Applications own effect
   idempotency.
-- A scheduled say is the one clock an agent sets. External event
-  subscriptions and scheduler ingress are future work.
+- A scheduled say is the one clock an agent sets. A host that wants
+  a wake posts a message.
 
 [Technical facts](docs/technical-facts.md) lists every limit.
 

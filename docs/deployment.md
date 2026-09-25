@@ -299,6 +299,5 @@ Continuing contributions can keep a discussion open.
 
 Ambient rooms remain available between interactions. The room returns a
 scheduled say on the host's clock, and the Cloudflare room object on its
-alarm. External event subscriptions and scheduler ingress remain future
-work. Browser-only execution, a managed service, arbitrary edge-platform
+alarm. A host that wants a wake posts a message. Browser-only execution, a managed service, arbitrary edge-platform
 support, and turnkey deployment commands are outside the current scope.

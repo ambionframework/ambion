@@ -128,7 +128,7 @@ holds the positioning and the headline of what is new.
 - A seat keeps its harness session for one exchange. The session holds
   state the record does not show.
 - A room remains available between interactions. An agent schedules a say
-  for itself, and the room returns it when it is due. External event
-  subscriptions and scheduler ingress are future work.
+  for itself, and the room returns it when it is due. A host that wants a
+  wake posts a message.
 - The journal owns no domain transactions and no credentials. Browser-only
   execution and a managed service are not provided.

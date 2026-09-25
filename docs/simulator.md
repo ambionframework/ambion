@@ -746,8 +746,7 @@ tool calls on a real provider.
 
 ## Out of v1
 
-**The simplest simulator leaves these out.** Most were open work on PR
-#153.
+**The simplest simulator leaves these out.**
 
 - More than one person, and a person who knows the brief of another.
 - A message sent into an open exchange, and a person who steers an
