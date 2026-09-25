@@ -6,7 +6,9 @@
  * owner. The backend gives back a preview of the last statement's rows and
  * their count. With `export`, the backend writes every row as CSV to the
  * agent's files on the bash backend (`WorkspaceFiles`), and the tool shows
- * the head of the file.
+ * the head of the file. With `import`, the backend reads a CSV file from the
+ * agent's files into the table `import.rows` for the one call, and the
+ * statements copy the rows into the shared tables.
  *
  * The audit entry of a call runs as one more operation on the bash owner,
  * after the call ends, over `BACKGROUND_CONTEXT`. A cut call still leaves
@@ -24,7 +26,8 @@ import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
 import { markdownTable } from './markdown-table.ts';
 import type { WorkspaceResource } from './resource.ts';
-import type { SqlEnv, SqlOutcome } from './sql-backend.ts';
+import type { SqlEnv, SqlOutcome, SqlRunOptions } from './sql-backend.ts';
+import { IMPORT_TABLE, MAX_IMPORT_BYTES } from './sql-import.ts';
 import { csvHeader, csvRecord, NULL_SENTINEL } from './sql-result.ts';
 import { recordedOnShell } from './tools.ts';
 
@@ -39,6 +42,9 @@ interface SqlDetails {
 	database: string;
 	rows: number;
 	export?: string;
+	/** The absolute path of the imported file, and its row count. */
+	import?: string;
+	imported?: number;
 }
 
 type SqlResult = AgentToolResult<SqlDetails>;
@@ -53,6 +59,11 @@ const sqlSchema = Type.Object({
 		Type.String({
 			description:
 				'A file path for the full result as CSV. Omit it to keep the result in the database.',
+		}),
+	),
+	import: Type.Optional(
+		Type.String({
+			description: `A CSV file path. Its rows are the table ${IMPORT_TABLE} for this call alone, as text, with \\N as NULL.`,
 		}),
 	),
 	maxRows: Type.Optional(
@@ -82,6 +93,10 @@ export function sqlToolGuidance(database: string): string {
 		`through a view or a table; this needs no copy. Reach this database with sql alone. The`,
 		`tool shows the last result as a table and keeps the data in the database. Set export to`,
 		`write the full result as a CSV file in your workspace for another tool or script.`,
+		`Set import to read a CSV file with a header from your workspace, up to ${MAX_IMPORT_BYTES / 1024 / 1024} MiB. Its rows`,
+		`are the table ${IMPORT_TABLE} for that call alone: every value is text, and \\N is NULL. Copy`,
+		`them in the same call with INSERT INTO ... SELECT, and CAST each value. Wait for the`,
+		`process that writes the file before you import it.`,
 	].join('\n');
 }
 
@@ -91,7 +106,7 @@ export function createSqlTool(options: SqlToolOptions): AmbionTool {
 		name: 'sql',
 		label: 'SQL',
 		description:
-			'Run statements on the shared database. Share a table or a view; it needs no copy. Set export for a CSV file.',
+			'Run statements on the shared database. Share a table or a view; it needs no copy. Set export to write a CSV file, and import to read one.',
 		parameters: sqlSchema,
 		execute: recordedOnShell('sql', options.shell, options.audit, (params: SqlParams, ctx) =>
 			run(options, params, ctx),
@@ -106,16 +121,30 @@ async function run(
 ): Promise<SqlResult> {
 	const context =
 		ctx.signal === undefined ? BACKGROUND_CONTEXT : withAbortSignal(ctx.signal, BACKGROUND_CONTEXT);
-	const maxRows = params.maxRows ?? PREVIEW_ROWS;
-	const runOptions = params.export === undefined ? { maxRows } : { maxRows, export: params.export };
+	const runOptions: SqlRunOptions = {
+		maxRows: params.maxRows ?? PREVIEW_ROWS,
+		...(params.export === undefined ? {} : { export: params.export }),
+		...(params.import === undefined ? {} : { import: params.import }),
+	};
 	const outcome = await options.sql(
 		ctx.agent,
 		(env) => env.run(params.sql, runOptions, context),
 		ctx.signal,
 	);
 	if (!outcome.ok) return failed(options.database, outcome.message);
-	if (outcome.export === undefined) return previewed(options.database, outcome);
-	return exported(options.database, outcome, outcome.export);
+	const result =
+		outcome.export === undefined
+			? previewed(options.database, outcome)
+			: exported(options.database, outcome, outcome.export);
+	return outcome.import === undefined ? result : withImport(result, outcome.import);
+}
+
+/** `result` with a first line that names the imported file and counts its rows. */
+function withImport(result: SqlResult, imported: { path: string; rows: number }): SqlResult {
+	const { path, rows } = imported;
+	const line = `Imported ${rows} ${plural(rows)} from ${path} into ${IMPORT_TABLE}.`;
+	const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+	return report(`${line}\n\n${text}`, { ...result.details, import: path, imported: rows });
 }
 
 /** The report of one preview: a Markdown table of the preview rows. */

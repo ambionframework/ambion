@@ -74,12 +74,16 @@ export type { ProcessEvent, ProcessQuery } from './process-table.ts';
 export type {
 	SqlBackend,
 	SqlEnv,
+	SqlImported,
+	SqlImportTable,
 	SqlOutcome,
 	SqlRow,
 	SqlRunOptions,
 	SqlValue,
 	WorkspaceFiles,
+	WorkspaceRead,
 } from './sql-backend.ts';
+export { sqlImport } from './sql-import.ts';
 export { sqlResult } from './sql-result.ts';
 export type { Workspace, WorkspaceProcesses } from './workspace.ts';
 export { openWorkspace } from './workspace.ts';

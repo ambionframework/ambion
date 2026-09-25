@@ -1,9 +1,10 @@
 /**
  * `WorkspaceFiles`: the chunks land in a temporary file beside the target,
- * and the target changes only after the last chunk.
+ * and the target changes only after the last chunk. A read follows a
+ * symbolic link, checks the size first, and names each refusal.
  */
 
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { workspaceFiles } from '../src/files.ts';
@@ -14,7 +15,7 @@ const agent = { name: 'alpha' };
 function open() {
 	const backend = memoryBackend();
 	const resource = openResource({ name: 'files', backend });
-	return { backend, files: workspaceFiles(resource.use, agent) };
+	return { backend, resource, files: workspaceFiles(resource.use, agent) };
 }
 
 describe('WorkspaceFiles', () => {
@@ -58,5 +59,41 @@ describe('WorkspaceFiles', () => {
 		const after = await backend.readFiles();
 		expect(after.filter((file) => file.path.endsWith('.part'))).toEqual([]);
 		expect(after.find((file) => file.path === '/home/alpha/kept.csv')?.text).toBe('old');
+	});
+
+	it('reads a file of at most maxBytes, follows a symbolic link, and names every refusal', async () => {
+		const { resource, files } = open();
+		await files.writeFile('in/rows.csv', ['a,b\n1,2\n'], BACKGROUND_CONTEXT);
+		await resource.use(agent, (env) =>
+			env.exec('ln -s /home/alpha/in/rows.csv /home/alpha/link.csv', undefined, BACKGROUND_CONTEXT),
+		);
+		const text = 'a,b\n1,2\n';
+		expect(await files.readFile('in/rows.csv', 8, BACKGROUND_CONTEXT)).toEqual({
+			ok: true,
+			path: '/home/alpha/in/rows.csv',
+			text,
+		});
+		expect(await files.readFile('~/link.csv', 8, BACKGROUND_CONTEXT)).toEqual({
+			ok: true,
+			path: '/home/alpha/link.csv',
+			text,
+		});
+		const refusals: [string, number, string][] = [
+			[
+				'in/rows.csv',
+				7,
+				'/home/alpha/in/rows.csv holds 8 bytes, and an import reads at most 7 bytes.',
+			],
+			['in', 8, '/home/alpha/in is not a file.'],
+			['missing.csv', 8, 'Cannot read /home/alpha/missing.csv: '],
+		];
+		for (const [path, maxBytes, message] of refusals) {
+			const read = await files.readFile(path, maxBytes, BACKGROUND_CONTEXT);
+			expect(read.ok ? '' : read.message, path).toContain(message);
+		}
+		const controller = new AbortController();
+		controller.abort(new Error('cut'));
+		const aborted = withAbortSignal(controller.signal, BACKGROUND_CONTEXT);
+		await expect(files.readFile('in/rows.csv', 8, aborted)).rejects.toThrow();
 	});
 });

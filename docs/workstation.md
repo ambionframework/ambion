@@ -427,6 +427,10 @@ backend streams the CSV through `WorkspaceFiles`, one operation on the
 bash owner as that agent. The file lands in the agent's home, or at the
 path the agent names, with that account's permissions.
 
+**An import reads the workstation as the calling agent.** `WorkspaceFiles`
+reads the CSV file over SFTP as that account. An agent imports only a file
+that its account reads.
+
 **A database server waits in the backlog.** The
 [backlog](../planning/backlog.md#designs-with-a-shape) entry for a SQL
 backend over a database server pairs it with a workstation. That backend

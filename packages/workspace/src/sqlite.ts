@@ -17,7 +17,9 @@
  * transaction open gets it rolled back and an `ok: false` outcome, so no
  * later call from another agent runs inside it. After each call the backend
  * detaches every database the call attached, so a scratch database lives
- * for one call and no other agent reads it.
+ * for one call and no other agent reads it. An import is one such scratch
+ * database: `sqlImport` reads the CSV file into `import.rows` before the
+ * first statement runs.
  *
  * `node:sqlite` runs a statement to its end, and has no hook to stop one.
  * The backend stops a call between statements and between rows: on an
@@ -41,11 +43,13 @@ import { Deadline } from './execution-env.ts';
 import type {
 	SqlBackend,
 	SqlEnv,
+	SqlImportTable,
 	SqlOutcome,
 	SqlRow,
 	SqlRunOptions,
 	WorkspaceFiles,
 } from './sql-backend.ts';
+import { IMPORT_TABLE, sqlImport } from './sql-import.ts';
 import { sqlResult } from './sql-result.ts';
 
 /** The in-memory location. Every agent shares it while the backend lives. */
@@ -171,6 +175,63 @@ async function runStatements(
 	return sqlResult([], [], options, files, context);
 }
 
+/** `name` as a quoted SQL identifier. */
+function quoteName(name: string): string {
+	return `"${name.replace(/"/g, '""')}"`;
+}
+
+/** Run `body` in one transaction, and roll it back when `body` throws. */
+function inTransaction(db: DatabaseSync, body: () => void): void {
+	db.exec('BEGIN');
+	try {
+		body();
+	} catch (error) {
+		db.exec('ROLLBACK');
+		throw error;
+	}
+	db.exec('COMMIT');
+}
+
+/**
+ * The table of an import, in a scratch database that the call attaches.
+ * `resetHandle` detaches it after the call, as it does every scratch
+ * database. A column has no type, so every value stays text or NULL.
+ */
+function importTable(db: DatabaseSync): SqlImportTable {
+	let insert: StatementSync | undefined;
+	return {
+		create: (columns) => {
+			db.exec(`ATTACH '${MEMORY}' AS import`);
+			db.exec(`CREATE TABLE ${IMPORT_TABLE} (${columns.map(quoteName).join(', ')})`);
+			const slots = columns.map(() => '?').join(', ');
+			insert = db.prepare(`INSERT INTO ${IMPORT_TABLE} VALUES (${slots})`);
+		},
+		insert: (rows) => {
+			const statement = insert;
+			if (statement === undefined) throw new Error('The import table must exist before a row.');
+			inTransaction(db, () => {
+				for (const row of rows) statement.run(...row);
+			});
+		},
+	};
+}
+
+/** Stage the import of `options`, if it names one, and then run the statements. */
+async function runWithImport(
+	db: DatabaseSync,
+	sql: string,
+	options: SqlRunOptions,
+	files: WorkspaceFiles,
+	context: Context,
+): Promise<SqlOutcome> {
+	if (options.import === undefined) return runStatements(db, sql, options, files, context);
+	const staged = await sqlImport(options.import, files, importTable(db), context);
+	if (!staged.ok) return staged;
+	const outcome = await runStatements(db, sql, options, files, context);
+	if (!outcome.ok) return outcome;
+	return { ...outcome, import: { path: staged.path, rows: staged.rows } };
+}
+
 /** True for an error the database or the backend gives about a statement. */
 function statementError(error: unknown): error is Error {
 	if (error instanceof Refusal) return true;
@@ -219,7 +280,7 @@ async function runCall(
 	const deadline = new Deadline(context.abortSignal, timeout);
 	let outcome: SqlOutcome;
 	try {
-		outcome = await runStatements(
+		outcome = await runWithImport(
 			db,
 			sql,
 			options,

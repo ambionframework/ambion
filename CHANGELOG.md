@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+**`sql` imports a CSV file.** The `import` parameter names a CSV file in
+the workspace. Its rows are the table `import.rows` for that call alone,
+and the statements copy them into the shared tables with
+`INSERT INTO ... SELECT`. The file is the CSV that `export` writes, and
+every value stays text. See
+[Query the shared database](docs/workspace.md#query-the-shared-database).
+
+### Breaking changes
+
+- **`WorkspaceFiles` has `readFile(path, maxBytes, context)`.** A custom
+  `WorkspaceFiles` implements it.
+- **`SqlRunOptions` has `import`, and an `ok` `SqlOutcome` has `import`.**
+  A custom `SqlBackend` stages the file in `import.rows`, with
+  `sqlImport` from the root entry, or refuses the option.
+- **The root entry exports `sqlImport`, and the types `SqlImported`,
+  `SqlImportTable`, and `WorkspaceRead`.**
+
 ## 0.3.0 (2026-09-25)
 
 **The work of a seat outlives its activation.** A shell command runs as a
