@@ -94,7 +94,7 @@ const REVIEWER: WorkspaceAgent = { name: 'reviewer' };
 const TEMPLATES: GitConformanceOptions['templates'] = {
 	'weekly-report': {
 		description: 'A weekly status report.',
-		files: { 'report.md': '# Week\n', 'data/numbers.csv': 'a,b\n1,2\n' },
+		files: { 'report.md': '# Week\n', 'data/numbers.csv': 'a,b\n1,2\n', '.gitignore': 'data/\n' },
 	},
 	blank: { files: { 'README.md': 'blank\n' } },
 };
@@ -425,7 +425,10 @@ async function mainOf(workspace: Workspace, id: string): Promise<string | undefi
 
 const CHANGED: GitConformanceOptions['templates'] = {
 	...TEMPLATES,
-	blank: { description: 'An empty start.', files: { 'NOTES.md': 'changed\n' } },
+	blank: {
+		description: 'An empty start.',
+		files: { 'NOTES.md': 'changed\n', '.gitignore': 'NOTES.md\n' },
+	},
 };
 
 /** Fork the updated `templates/blank` as `late`, clone it, and check its files and its history. */

@@ -17,7 +17,8 @@
  *    hook that refuses every push, and renames the repository to
  *    `templates/<name>.git`.
  *
- * Each case writes the description when it differs. The rename is the one
+ * A commit adds every file with `--force`, so a `.gitignore` in the source
+ * skips no file. Each case writes the description when it differs. The rename is the one
  * step that publishes a template, and the move of `main` compares the old
  * commit. A crash leaves a folder in `.staging`, and the sweep removes it.
  * When two host processes register one template at once, one rename or one
@@ -66,7 +67,7 @@ const BUILD_SCRIPT = [
 	'mkdir -p "$stage/files"',
 	'git init --bare --quiet "$repo"',
 	'export GIT_DIR="$repo" GIT_WORK_TREE="$stage/files" GIT_INDEX_FILE="$stage/index"',
-	'git add -A',
+	'git add -A --force',
 	'tree=$(git write-tree)',
 	'export GIT_AUTHOR_NAME=ambion GIT_AUTHOR_EMAIL=ambion@ambion.invalid',
 	'export GIT_COMMITTER_NAME=ambion GIT_COMMITTER_EMAIL=ambion@ambion.invalid',
@@ -94,7 +95,7 @@ const UPDATE_SCRIPT = [
 	'mkdir -p "$stage/files"',
 	'old=$(git --git-dir="$repo" rev-parse -q --verify refs/heads/main || true)',
 	'export GIT_DIR="$repo" GIT_WORK_TREE="$stage/files" GIT_INDEX_FILE="$stage/index"',
-	'git add -A',
+	'git add -A --force',
 	'tree=$(git write-tree)',
 	'export GIT_AUTHOR_NAME=ambion GIT_AUTHOR_EMAIL=ambion@ambion.invalid',
 	'export GIT_COMMITTER_NAME=ambion GIT_COMMITTER_EMAIL=ambion@ambion.invalid',
@@ -190,7 +191,9 @@ async function registerOne(
 	if (landed === undefined)
 		throw new Error(`The template '${name}' is missing after its registration.`);
 	if (!sameFiles(landed, wanted)) {
-		throw new Error(`Another registration of the template '${name}' wrote other files.`);
+		throw new Error(
+			`The template '${name}' does not hold its source after its registration. Another host process can have registered other files.`,
+		);
 	}
 }
 

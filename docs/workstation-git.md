@@ -411,6 +411,10 @@ same as on `justGitBackend`.
    `pre-receive` hook, and renames the repository to
    `templates/<name>.git`.
 
+**A commit of registration adds every file with `git add -A --force`.** A
+`.gitignore` in the source then skips no file, and the tip holds the blob
+hashes of the source.
+
 **Registration compares the template that landed.** After case 2 or case
 3, the backend reads the tip again. Two host processes that register one
 template at once then agree, or the one that lost fails with the name of
