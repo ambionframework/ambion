@@ -9,6 +9,12 @@ export { type PiExecutionOptions, piExecution } from './compose.ts';
 export { fromPiTool, type PiExecutor, type PiOptions, pi } from './define.ts';
 export { createPiExecutor, type PiExecutorOptions } from './executor.ts';
 export {
+	type RunAgentCall,
+	type RunAgentRequest,
+	type RunAgentResult,
+	runAgent,
+} from './run-agent.ts';
+export {
 	createExecutionServices,
 	type ExecutionServices,
 	type ExecutionServicesOptions,

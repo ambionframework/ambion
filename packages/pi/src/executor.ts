@@ -58,7 +58,7 @@ import {
 import type { AgentMessage, HarnessEvent, Session, StreamFn } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, getOrUndefined } from '@earendil-works/pi-agent-core';
 import type { Api, AssistantMessage, Message, Model } from '@earendil-works/pi-ai';
-import { compactionOf, modelOf } from './define.ts';
+import { compactionOf, modelOf, thinkingOf } from './define.ts';
 import { passOutcome } from './failure.ts';
 import { Freshness, providerMessages, READ, recordMessage } from './freshness.ts';
 import { type OpenHarness, openHarness } from './harness.ts';
@@ -343,6 +343,7 @@ export class Activation implements ExecutorSession {
 				tools,
 				systemPrompt: () => this.systemPrompt,
 				compaction: compactionOf(def.executor),
+				thinking: thinkingOf(def.executor),
 				toProviderMessages: (messages) => this.provide(messages),
 				onEvent: (event) => this.note(event),
 			});

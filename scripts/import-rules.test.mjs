@@ -29,6 +29,9 @@ const CASES = [
 	['packages/pi/src', '@ambionframework/ambion/testing', true],
 	['packages/codex/src', '../../ambion/src/room.ts', true],
 	['packages/cloudflare/src', '@ambionframework/ambion/hosting', false],
+	['packages/simulator/src', '@ambionframework/ambion', false],
+	['packages/simulator/src', '@ambionframework/ambion/testing', true],
+	['packages/simulator/src', '../../ambion/src/room.ts', true],
 	['examples/workbench/src', '@ambionframework/ambion/testing', true],
 	['examples/workbench/src', '../../../packages/ambion/src/room.ts', true],
 	// The workspace reaches the core the same way, and loads no just-bash.
