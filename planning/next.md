@@ -57,7 +57,7 @@ commit.** The phases below deliver them; the items explain them.
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317. |
 | B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).         |
-| E Evals                  | The assistant's live suite runs on `@ambionframework/simulator`. Every claim of its eleven tests holds as a check or a criterion, and three new cases run over several exchanges. [Simulator](../docs/simulator.md) holds the design.                                                                                                                                                                              |
+| E Evals                  | The assistant's live suite runs on `@ambionframework/simulator`, with three cases over several exchanges and four cases of the assistant's purpose. It passes on two model families at `medium` thinking, each graded by the other. [Simulator](../docs/simulator.md) holds the design.                                                                                                                            |
 
 **No journal format change.** The notice kind, the timer entry, and the `awaiting`
 outcome that names a room moved to the backlog with W1, W2, and D1.
@@ -179,7 +179,12 @@ asks a judge for the rest.
       and `grade`, with one live case. Needs 1 and 2. P1. (E1) Landed in
       #326.
 - [x] **4.** The assistant's live suite on the simulator. Needs 3. P1.
-      (E1) Landed in #327. The first live run of the file is still open.
+      (E1) Landed in #327.
+- [ ] **5.** The assistant held to its purpose: passive at `broadcast`,
+      membership and summaries, an answer when a person addresses it. Four
+      purpose cases, a thinking level for Pi seats, and the suite passes on
+      `anthropic/claude-sonnet-5` and `openai/gpt-5.6-luna` at `medium`,
+      each graded by the other. Needs 4. P1. (E1)
 
 **Evidence:** each step states its cases in
 [Simulator](../docs/simulator.md#the-order-of-work). The last step keeps
