@@ -315,6 +315,23 @@ class DirectoryFs extends ReadWriteFs {
 }
 
 /**
+ * Refuse a just-bash with a change that DirectoryFs does not run as trusted
+ * code. ReadWriteFs keeps an `*Unlocked` method for each change that takes
+ * its lock, so a new change of a later just-bash names itself here.
+ */
+function checkTrustedChanges(): void {
+	const unwrapped = Object.getOwnPropertyNames(ReadWriteFs.prototype)
+		.filter((name) => name.endsWith('Unlocked'))
+		.map((name) => name.slice(0, -'Unlocked'.length))
+		.filter((name) => !Object.hasOwn(DirectoryFs.prototype, name));
+	if (unwrapped.length > 0) {
+		throw new Error(
+			`DirectoryFs runs these changes outside trusted code: ${unwrapped.join(', ')}.`,
+		);
+	}
+}
+
+/**
  * A workspace over a real directory. `ReadWriteFs` writes through to disk
  * and needs its root to exist, so the first `connect` creates the root and
  * builds the filesystem. Disposal releases the filesystem handle and keeps
@@ -324,6 +341,7 @@ class DirectoryFs extends ReadWriteFs {
  */
 export function directoryBackend(root: string): BashBackend {
 	const resource = lazyResource(async () => {
+		checkTrustedChanges();
 		await mkdir(root, { recursive: true });
 		return new DirectoryFs({ root });
 	});
