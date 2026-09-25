@@ -59,14 +59,14 @@ repositories in one account on the server. Each agent reaches them with
 **Three themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
-| Theme                    | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317.                   |
-| B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).                           |
-| S A scheduled say        | An agent says to itself with `after`, and the room refuses every other use of `after` and every other say to oneself. The room writes a `due` entry when the say is due, and the entry wakes the seat. The due entry opens an exchange for the owner of the exchange of the say when no exchange is open. A kill between the say and the due entry keeps one delivery, and the Cloudflare room object delivers it through its alarm. |
+| Theme                    | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317.                                  |
+| B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).                                          |
+| S A scheduled say        | An agent says to itself with `after`, and the room refuses every other use of `after` and every other say to oneself. The room writes a `returned` entry when the say is due, and the entry wakes the seat. The returned entry opens an exchange for the owner of the exchange of the say when no exchange is open. A kill between the say and the returned entry keeps one delivery, and the Cloudflare room object delivers it through its alarm. |
 
-**One journal format change.** A said entry takes `after`, and the `due`
-message kind is new (S1). The notice kind and the `awaiting` outcome that
+**One journal format change.** A said entry takes `after`, and the
+`returned` message kind is new (S1). The notice kind and the `awaiting` outcome that
 names a room stay in the backlog with W1 and D1.
 
 **Deployment models.** The same rules serve four placements.
@@ -88,7 +88,7 @@ condition that brings each one back.
   [backlog](backlog.md#wake-sources-and-delegation). A process follows the
   pull model of Codex's unified exec, and a host that wants a wake posts a
   message.
-- **A scheduled say that waits on a process.** A due say wakes the seat
+- **A scheduled say that waits on a process.** A returned say wakes the seat
   on the clock alone. A guard that holds a say while its process runs is
   an optimization, and it waits in the
   [backlog](backlog.md#wake-sources-and-delegation).
@@ -118,10 +118,10 @@ condition that brings each one back.
   ([Processes](../docs/processes.md#the-end-of-a-process)).
 - **A scheduled say goes to its author alone.** `to` names the author if
   and only if `after` is set. The room stamps everything else: the author,
-  the due entry, and the owner of the exchange that the due entry opens.
+  the returned entry, and the owner of the exchange that it opens.
   No seat speaks under the name of a person, and no seat schedules work
   for another seat.
-- **A due entry is an ordinary message when it lands.** It opens an
+- **A returned entry is an ordinary message when it lands.** It opens an
   exchange when none is open. When an exchange is open, it joins it and
   steers work, and the owner of that exchange stays the owner.
 - **The journal records the schedule, and the host arms the clock.** The
@@ -192,12 +192,12 @@ runs on `justGitBackend`. The evidence holds on `main`.
 **Goal:** an agent checks a long process later, and no event source and no
 host code wake it.
 
-- [ ] **1.** The kernel: `after` on a said entry, the `due` kind, the
-      rules, the commit path, the fold, and the due write in the
-      reconcile. P1. (S1)
-- [ ] **2.** The tool and the read surface: `after` on `say`, the render
-      of a scheduled say and a due entry, the pending says in a read, and
-      the workbench. Needs 1. P1. (S2)
+- [ ] **1.** The kernel: `after` on `say` and on a said entry, the
+      `returned` kind, the rule that opens an exchange, the commit path,
+      the fold, and the write in the reconcile. P1. (S1)
+- [ ] **2.** The read surface: the render of a scheduled say and a
+      returned entry, the pending says in a read, and the workbench.
+      Needs 1. P1. (S2)
 - [ ] **3.** The guidance and the docs. Needs 2. P1. (S3)
 
 **Evidence:** the tests and the golden journal that S1 names hold on
@@ -330,46 +330,59 @@ first.
 
 - **A say to oneself with `after` schedules the say.** The room refuses a
   say to oneself today (`addressRefusal` in `room/transition.ts`), so the
-  pair has no earlier meaning. `after` is in seconds from the `at` that the
-  room stamps, so a replay computes the same due time on any clock.
-- **The room decides who may schedule.** `scheduleAllowed` in
-  `room/rules.verified.ts` takes a response activation that serves the
-  open exchange. A summarize activation and an activation outside every
-  exchange get a refusal. `limits.schedule` bounds `after` and the
-  pending says of one seat.
+  pair has no earlier meaning. `say` takes `after` in seconds from the
+  `at` that the room stamps, so a replay computes the same due time on any
+  clock.
+- **The room decides who may schedule.** The commit path takes a
+  response activation while an exchange is open. A summarize activation
+  and an activation outside every exchange get a refusal.
+  `limits.schedule` bounds `after` and the pending says of one seat. A
+  retry of the same key with another `after` is a conflict.
 - **The said entry is an ordinary message.** It lands in the range of the
-  exchange that its activation serves. The room adds the URI of that
-  exchange to its refs. Routing skips its author, so it wakes nobody.
-- **The `due` entry records the moment.** The reconcile writes
-  `due { to, message, owner }` when the say is due. The room writes it, so
-  it has no `from`. It stores `owner`, so `opensExchange` stays a check of
-  one entry. The due entry wakes the seat that `to` names.
+  exchange that its activation serves. Routing skips its author, so it
+  wakes nobody.
+- **The `returned` entry records the moment.** The reconcile writes
+  `returned { to, message, owner, text, refs }` when the say is due. The
+  room writes it, so it has no `from`. It copies the text and the refs of
+  the say, so a record window, a summary, and a steer carry them. It
+  stores `owner`, so `opensExchange` in `room/rules.verified.ts` stays a
+  check of one entry. The entry wakes the seat that `to` names and steers
+  no other seat. The name `due` already means an activation that the room
+  owes.
+- **A returned entry opens an exchange like a question.** `opensExchange`
+  and its proofs accept it, and the projection, `room.exchange`, and the
+  routing read it. The reconcile writes it after a close of the same pass,
+  so it lands after the close. A harness session never crosses an
+  exchange, so the returned activation starts a fresh session. The
+  process reminder carries the state of the work.
 - **A pending say is not live work.** The origin exchange closes while the
   say waits. An unseating of the author drops its says, and a cancel drops
-  the says of the cancelled exchange.
-- **The host arms the clock.** `nextAlarm` takes the earliest due time.
-  The Cloudflare room object's alarm follows it with no new code.
+  the says before it.
+- **The reconcile decides each write again.** The write decides inside the
+  journal queue, and it writes nothing when the fold holds the entry
+  already. The fence refuses a second run. `nextAlarm` takes the earliest
+  due time, and the Cloudflare room object's alarm follows it with no new
+  code.
 
 **Evidence:** scripted tests of each refusal and of each path through the
 reconcile on an injected clock; a golden journal of a say, the close of
-its exchange, the due entry, and the exchange that the due entry opens; a
-chaos case that kills the host between the say and the due entry and
-finds one due entry; the Cloudflare room object delivers a due say in
-workerd; the rules pass `pnpm check:lemmascript`.
+its exchange, the returned entry, and the exchange that it opens; a chaos
+case that kills the host between the say and the returned entry and finds
+one returned entry; the Cloudflare room object returns a say in workerd;
+the rules pass `pnpm check:lemmascript`.
 
-**S2. The agent and the person see the schedule.** `say` takes `after`,
-and its result names the due time. The render shows a scheduled say with
-its due time, and a due entry with the text and the refs of its say, the
-due time, and the time it landed. The view carries the say of each due
-entry, so a record window and a summary do not hide it. A read lists the
-pending says, and the workbench shows each one until it is due.
-**Evidence:** the render tests, the prompt snapshot, the executor
-conformance on Pi, Claude, and Codex, and a read test of the pending says.
+**S2. The agent and the person see the schedule.** The say result names
+the due time. The render shows a scheduled say with its due time, and a
+returned entry with its text and refs, the due time, and the time it
+landed. A read lists the pending says, and the workbench shows each one
+until it returns. **Evidence:** the render tests, the prompt snapshot, the
+executor conformance on Pi, Claude, and Codex, and a read test of the
+pending says.
 
 **S3. The guidance and the docs state the scheduled say.** The process
 guidance tells an agent to say to itself with `after` to check a long
-process later. [Exchange](../docs/exchange.md) states that a due entry
-opens an exchange, and [Trust](../docs/trust.md),
+process later. [Exchange](../docs/exchange.md) states that a returned
+entry opens an exchange, and [Trust](../docs/trust.md),
 [Processes](../docs/processes.md), [Presence](../docs/presence.md),
 [Durability](../docs/durability.md), the README, and the changelog state
 what shipped. **Evidence:** the doc tests pass, and no page calls a timer
