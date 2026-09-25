@@ -134,6 +134,12 @@ export interface ActivationView {
 	/** The context boundary represented by this view. Consumption acknowledges it. */
 	through: Seq;
 	context: CollaborationContext;
+	/**
+	 * When the room ends this activation, whatever its renewals, in
+	 * milliseconds since the epoch on the wall clock: `Date.now()` plus the
+	 * time the room's own clock has left. A view that no room served has none.
+	 */
+	deadline?: number;
 }
 
 /** The request the lease answers is gone: the lease ended, or the room did. */

@@ -22,6 +22,10 @@ activation starts with a reminder of the seat's processes. See
   its process id. A process that ended with the earlier run, with no exit
   file, is `failed` with the message "The host run ended before the
   process did."
+- **A wait ends before the activation does.** The room puts `deadline` on
+  each view, and `ToolContext.deadline` carries it to each tool call: when
+  the room ends the activation, in milliseconds on the wall clock. `bash`
+  and `wait` stop their wait 30 seconds before it, and the result says so.
 - **`Workspace.processes` is the host's view.** `list`, `subscribe`, and
   `cancel` reach the processes of the agents that used the workspace in
   this run. `list` returns a promise. The root entry of

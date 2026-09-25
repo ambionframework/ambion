@@ -34,7 +34,10 @@ export interface Answering {
 	// -- the room as a value --
 	readonly name: string;
 	/** How much of the record one activation reads. */
-	readonly limits: { readonly context: { readonly messages: number } };
+	readonly limits: {
+		readonly context: { readonly messages: number };
+		readonly lease: { readonly deadline: number };
+	};
 	now(): number;
 	// -- what the room does --
 	/** The room answers nothing more: the host stopped it, or it was dropped. */
@@ -81,7 +84,12 @@ export async function answerView(
 	if (spec === undefined || spec.seat !== seat) return stale('the activation has no current grant');
 	const resume = exchangeSession(id, state.closes, state.exchange, state.leases);
 	const granted = resume === undefined ? spec : { ...spec, resume };
-	return { view: viewOf(granted, facts(room, state), range) };
+	const view = viewOf(granted, facts(room, state), range);
+	const lease = state.leases.get(id);
+	if (lease === undefined) return { view };
+	// The room ends the lease on its own clock. The tools of a seat read the wall clock.
+	const left = Date.parse(lease.claimedAt) + room.limits.lease.deadline - room.now();
+	return { view: { ...view, deadline: Date.now() + left } };
 }
 
 /** What a view is built from: the fold, and what the room holds beside it. */

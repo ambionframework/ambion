@@ -399,6 +399,29 @@ describe('a process on a backend that misbehaves', () => {
 	});
 });
 
+describe('a wait near the end of the activation', () => {
+	it('stops the wait of bash and of wait before the deadline, and says why', async () => {
+		const workspace = site();
+		// 32 s are left: the wait stops 30 s before the deadline, so bash waits about 2 s of its 10.
+		const near = callAs('alpha', { deadline: Date.now() + 32_000 });
+		const started = Date.now();
+		const run = await toolOf(workspace, 'bash').invoke({ command: 'sleep 30' }, near);
+		if (typeof run === 'string') throw new Error('A process tool gives a structured result.');
+		const handle = (run.details as ProcessDetails).process.handle;
+		const text = run.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+		expect(Date.now() - started).toBeLessThan(8_000);
+		expect(text).toMatch(
+			/is running\..*The wait stopped early, because your activation ends in \d+ seconds\./s,
+		);
+		// Less than the margin is left: wait returns at once.
+		const late = callAs('alpha', { deadline: Date.now() + 10_000 });
+		const before = Date.now();
+		const waited = await invokeText(toolOf(workspace, 'wait'), { handle, timeout: 60 }, late);
+		expect(Date.now() - before).toBeLessThan(2_000);
+		expect(waited).toContain('The wait stopped early, because your activation ends in 10 seconds.');
+	});
+});
+
 describe('an aborted wait', () => {
 	it('rejects the call, and the process keeps running', async () => {
 		const workspace = site();
