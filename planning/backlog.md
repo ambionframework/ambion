@@ -57,14 +57,16 @@ from the owner's machine, or a user who asks for provenance.
 0.3.0 follow the pull model of Codex's unified exec: an agent waits for its
 result inside the activation, and nothing wakes a seat when a process ends
 ([Processes](../docs/processes.md#the-end-of-a-process)). A host that wants
-a wake posts a message. The notice (W1) is the step that the timer (W2)
-and the delegation (D1) build on, so the three moved together.
+a wake posts a message. The scheduled say of 0.3.0 (S1 in
+[next.md](next.md#s-a-scheduled-say)) gives the journal a clock: the fold
+holds the pending says, and the room's alarm takes the earliest due time.
+The items here build on it.
 **Condition:** an application that must react to a change outside the room
 with no person present, where a message that the host posts does not serve.
 
-**The order is the notice, the timer, then the delegation.** The notice
-host call needs the notice kind, the timer needs the host call, and the
-delegating message needs the notice.
+**The order is the notice, then the delegation.** The delegating message
+needs the notice. The `awaiting` expiry and the guard need only the clock
+of the scheduled say, so each one can come first.
 
 **W1. A notice from a resource.** A room wakes only when a person speaks,
 so an agent cannot react when a brief changes or a run completes. Add a
@@ -76,15 +78,21 @@ through no hidden timeout. **Evidence:** a scripted test and a chaos case
 for the kind and for the host call, with its durable start and its restart
 semantics.
 
-**W2. A timer that the journal records.** Nothing wakes a room on a clock,
-and an `awaiting` exchange waits for ever. A timer entry records the due
-time and the wake it owes. The host arms it and writes the wake when it is
-due. A restart reads the open timer entries and arms them again, so a
-crash loses no timer. The `awaiting` expiry is a timer that the close
-schedules. The Cloudflare adapter runs a timer through its alarm, and a
-measurement records the resume cost of a room with many timer wakes.
-**Evidence:** a kill between the timer entry and the wake keeps the wake;
-the docs that call timers future work say what shipped.
+**W2. The `awaiting` expiry.** An `awaiting` exchange waits for ever. The
+close schedules an expiry on the clock of the scheduled say, and the room
+writes it when it is due. A measurement records the resume cost of a room
+with many pending says. **Condition:** an application that must act on an
+`awaiting` exchange that nobody answers. **Evidence:** a kill between the
+close and the expiry keeps the expiry.
+
+**W3. A guard that holds a scheduled say while its process runs.** Each
+due say costs one activation, and an agent that checks a build of three
+hours every ten minutes pays for eighteen activations. A bundle hook, such as
+`ToolBundle.due`, reads the state of the processes that the say names and
+holds the say until one ends. No model runs while it holds. **Condition:**
+a measured cost of due says that find their process still running.
+**Evidence:** a scripted case where the guard holds a say twice and
+delivers it once, with one activation.
 
 **D1. Delegation by reference.** PR #151 stored tasks in the journal and
 scanned every task on each reconcile pass. Use a ref and the `awaiting`
@@ -101,21 +109,19 @@ with a comment that names the new route.
 - **A notice is the scheduler ingress.** The application owns its
   schedule and delivers a notice through one host call. The kernel adds no
   scheduler.
-- **The journal records a timer, and the host runs it.** The host owns the
-  clock. A restart reads the timer entries and arms them again.
 - **Delegation has no task database.** A working room is a room, and a ref
   connects the two.
 - **W2 decides `exchangeOutcome`.** If the `awaiting` expiry writes on the
   `awaiting` outcome, the rule gates a write and stays verified. Otherwise
   it leaves the rules file, as the 0.2.0 sweep states for read views.
 
-**Each item changes a format.** Each change lands with a golden journal of
+**Each item but W3 changes a format.** Each change lands with a golden journal of
 the new shape, and the changelog names each one.
 
 | Change                                  | Item | Kind                       |
 | --------------------------------------- | ---- | -------------------------- |
 | The notice message kind                 | W1   | A new message union member |
-| The timer entry                         | W2   | A new entry kind           |
+| The `awaiting` expiry                   | W2   | A new entry kind           |
 | An `awaiting` outcome that names a room | D1   | A new outcome union member |
 
 ## Designs with a shape
@@ -123,7 +129,8 @@ the new shape, and the changelog names each one.
 **The checkpoint entry.** A checkpoint entry lets a resume skip settled
 history, and full replay stays the reference. It is a format change, so it
 lands with a golden journal of the new format. **Condition:** the resume
-measurement of item W2 above comes near the default
+measurement of S1 in [next.md](next.md#s-a-scheduled-say) or of item W2
+above comes near the default
 `limits.lease.ttl` of 60 seconds ([envelope.md](../docs/envelope.md)). Past
 that point, replay sets the recovery time.
 

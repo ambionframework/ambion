@@ -30,14 +30,20 @@ holds on main.
 **Ambion is a collaboration kernel for agents and humans.** The
 [README](../README.md) holds the statement, and
 [Technical facts](../docs/technical-facts.md) holds the key facts and what
-is new. Ambion is reactive: a seat acts when a person speaks, or when a
-seat addresses it.
+is new. Ambion is reactive: a seat acts when a person speaks, when a seat
+addresses it, or when a say that it scheduled comes due.
 
 **0.3.0 lets the work of a seat outlive its activation.** A seat's shell
 work runs as a background process between its activations. The agent
 waits for the result that its answer needs inside the activation, and
 nothing wakes a seat when a process ends. A host that wants a wake posts a
-message. Wake sources and delegation between rooms wait in the
+message.
+
+**0.3.0 lets an agent come back to its work later.** An agent says to
+itself with `after`, and the room delivers the say back to it when it is
+due. The delivery opens an exchange for the person who owned the exchange
+of the say. An agent checks a long process this way, and the room needs no
+event source. The notice and delegation between rooms wait in the
 [backlog](backlog.md#wake-sources-and-delegation).
 
 **0.3.0 also gives each deployment shape one package.** The local shape
@@ -50,16 +56,18 @@ repositories in one account on the server. Each agent reaches them with
 
 ## The scope
 
-**Two themes, each with the acceptance it must meet on the tagged
+**Three themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
-| Theme                    | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317. |
-| B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).         |
+| Theme                    | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317.                   |
+| B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).                           |
+| S A scheduled say        | An agent says to itself with `after`, and the room refuses every other use of `after` and every other say to oneself. The room writes a `due` entry when the say is due, and the entry wakes the seat. The due entry opens an exchange for the owner of the exchange of the say when no exchange is open. A kill between the say and the due entry keeps one delivery, and the Cloudflare room object delivers it through its alarm. |
 
-**No journal format change.** The notice kind, the timer entry, and the `awaiting`
-outcome that names a room moved to the backlog with W1, W2, and D1.
+**One journal format change.** A said entry takes `after`, and the `due`
+message kind is new (S1). The notice kind and the `awaiting` outcome that
+names a room stay in the backlog with W1 and D1.
 
 **Deployment models.** The same rules serve four placements.
 
@@ -75,13 +83,16 @@ outcome that names a room moved to the backlog with W1, W2, and D1.
 **These wait in the [backlog](backlog.md).** The backlog states the
 condition that brings each one back.
 
-- **Wake sources and delegation (W1, W2, D1).** The notice from a
-  resource, the timer that the journal records, and delegation by
-  reference moved to the [backlog](backlog.md#wake-sources-and-delegation).
-  A process follows the pull model of Codex's unified exec, and a host
-  that wants a wake posts a message.
-- **The checkpoint entry.** The resume measurement of the backlog's timer
-  item decides it.
+- **The notice and delegation (W1, D1).** The notice from a resource and
+  delegation by reference stay in the
+  [backlog](backlog.md#wake-sources-and-delegation). A process follows the
+  pull model of Codex's unified exec, and a host that wants a wake posts a
+  message.
+- **A scheduled say that waits on a process.** A due say wakes the seat
+  on the clock alone. A guard that holds a say while its process runs is
+  an optimization, and it waits in the
+  [backlog](backlog.md#wake-sources-and-delegation).
+- **The checkpoint entry.** The resume measurement of S1 decides it.
 - **The conformance fixtures (M5) and the billing annotation (L3).** Both
   carry over from 0.2.0 with a condition each.
 - **A repeatable release from CI (R1).** The owner runs the release.
@@ -105,6 +116,18 @@ condition that brings each one back.
   activation, and a wait stops before the room ends the activation. A host
   that wants a wake posts a message
   ([Processes](../docs/processes.md#the-end-of-a-process)).
+- **A scheduled say goes to its author alone.** `to` names the author if
+  and only if `after` is set. The room stamps everything else: the author,
+  the due entry, and the owner of the exchange that the due entry opens.
+  No seat speaks under the name of a person, and no seat schedules work
+  for another seat.
+- **A due entry is an ordinary message when it lands.** It opens an
+  exchange when none is open. When an exchange is open, it joins it and
+  steers work, and the owner of that exchange stays the owner.
+- **The journal records the schedule, and the host arms the clock.** The
+  fold holds the pending says, and the room's alarm takes the earliest due
+  time beside the lease expiries and the retry times. A restart reads the
+  pending says from the journal.
 - **One example.** The agentic lab workspace in
   [docs/example.md](../docs/example.md) stays the one example.
 - **Two entries.** `@ambionframework/ambion` for applications and
@@ -146,10 +169,10 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Two phases remain, and the git phase holds no open step.** Background
-processes (B1 and B2) needed no phase. The release needs the git phase. A
-step names the steps it needs; a step with no "Needs" line starts now.
-**P1** carries the release story.
+**Three phases remain, and the git phase holds no open step.** Background
+processes (B1 and B2) needed no phase. The release needs the git phase and
+the scheduled say. A step names the steps it needs; a step with no "Needs"
+line starts now. **P1** carries the release story.
 
 ### Phase 1. Git on the workstation (P1)
 
@@ -164,12 +187,28 @@ with the SSH harness, and the tier proves the checks that
 [Workstation git](../docs/workstation-git.md#tests) lists. The workbench
 runs on `justGitBackend`. The evidence holds on `main`.
 
-### Phase 2. Release (P1)
+### Phase 2. A scheduled say (P1)
+
+**Goal:** an agent checks a long process later, and no event source and no
+host code wake it.
+
+- [ ] **1.** The kernel: `after` on a said entry, the `due` kind, the
+      rules, the commit path, the fold, and the due write in the
+      reconcile. P1. (S1)
+- [ ] **2.** The tool and the read surface: `after` on `say`, the render
+      of a scheduled say and a due entry, the pending says in a read, and
+      the workbench. Needs 1. P1. (S2)
+- [ ] **3.** The guidance and the docs. Needs 2. P1. (S3)
+
+**Evidence:** the tests and the golden journal that S1 names hold on
+`main`, and the docs that call timers future work state what shipped.
+
+### Phase 3. Release (P1)
 
 **Goal:** the tag names a commit that a live run tested.
 
 - [ ] **1.** The changelog entry for 0.3.0 names each export that
-      changed. Needs phase 1. P1. (R0)
+      changed. Needs phases 1 and 2. P1. (R0)
 - [ ] **2.** The live run on `main` after the last merge passes for Pi,
       Claude, and Codex. Needs 1. P1. (R0)
 
@@ -279,6 +318,62 @@ posts a message to wake the owner seat. **Evidence:** the deadline tests
 in the core and the workspace, the cursor tests on just-bash and on the
 workstation, and the test of a wait on several handles. #320, #321, and
 #322 carry the code.
+
+### S. A scheduled say
+
+**S1. The room delivers a say back to its author.** A room wakes a seat
+only when a person speaks or a seat addresses it. An agent that starts a
+build of three hours can wait 570 seconds inside one activation, and then
+it must end. Nothing brings it back unless a person speaks or a host posts
+a message. The backlog's timer (W2) needed a notice kind and a host call
+first.
+
+- **A say to oneself with `after` schedules the say.** The room refuses a
+  say to oneself today (`addressRefusal` in `room/transition.ts`), so the
+  pair has no earlier meaning. `after` is in seconds from the `at` that the
+  room stamps, so a replay computes the same due time on any clock.
+- **The room decides who may schedule.** `scheduleAllowed` in
+  `room/rules.verified.ts` takes a response activation that serves the
+  open exchange. A summarize activation and an activation outside every
+  exchange get a refusal. `limits.schedule` bounds `after` and the
+  pending says of one seat.
+- **The said entry is an ordinary message.** It lands in the range of the
+  exchange that its activation serves. The room adds the URI of that
+  exchange to its refs. Routing skips its author, so it wakes nobody.
+- **The `due` entry records the moment.** The reconcile writes
+  `due { to, message, owner }` when the say is due. The room writes it, so
+  it has no `from`. It stores `owner`, so `opensExchange` stays a check of
+  one entry. The due entry wakes the seat that `to` names.
+- **A pending say is not live work.** The origin exchange closes while the
+  say waits. An unseating of the author drops its says, and a cancel drops
+  the says of the cancelled exchange.
+- **The host arms the clock.** `nextAlarm` takes the earliest due time.
+  The Cloudflare room object's alarm follows it with no new code.
+
+**Evidence:** scripted tests of each refusal and of each path through the
+reconcile on an injected clock; a golden journal of a say, the close of
+its exchange, the due entry, and the exchange that the due entry opens; a
+chaos case that kills the host between the say and the due entry and
+finds one due entry; the Cloudflare room object delivers a due say in
+workerd; the rules pass `pnpm check:lemmascript`.
+
+**S2. The agent and the person see the schedule.** `say` takes `after`,
+and its result names the due time. The render shows a scheduled say with
+its due time, and a due entry with the text and the refs of its say, the
+due time, and the time it landed. The view carries the say of each due
+entry, so a record window and a summary do not hide it. A read lists the
+pending says, and the workbench shows each one until it is due.
+**Evidence:** the render tests, the prompt snapshot, the executor
+conformance on Pi, Claude, and Codex, and a read test of the pending says.
+
+**S3. The guidance and the docs state the scheduled say.** The process
+guidance tells an agent to say to itself with `after` to check a long
+process later. [Exchange](../docs/exchange.md) states that a due entry
+opens an exchange, and [Trust](../docs/trust.md),
+[Processes](../docs/processes.md), [Presence](../docs/presence.md),
+[Durability](../docs/durability.md), the README, and the changelog state
+what shipped. **Evidence:** the doc tests pass, and no page calls a timer
+future work.
 
 ### R. Release
 
