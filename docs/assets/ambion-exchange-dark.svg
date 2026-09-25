@@ -1,121 +1,141 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" role="img" aria-labelledby="title desc">
-  <title id="title">One exchange</title>
-  <desc id="desc">One exchange on a time axis. Person 1 asks with visit.send(), and the room records the question as entry 1. The room activates Agents A, B, and C at broadcast attention, and they reason in parallel. Agent A reads a file and says, entry 2. Agent B tries to say from a record that ends at entry 1. The say comes back missed, with entry 2. Agent B reconsiders with entry 2, writes a new file that names its activation, and says, entry 3. Agent C has nothing to add and writes no entry. No seat has work left, so the room closes the exchange, entry 4, and waitForClose() returns. An optional summary, entry 5, returns from waitForSummary().</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="732" viewBox="0 0 1000 732" role="img" aria-labelledby="title desc">
+  <title id="title">Exchanges and activations</title>
+  <desc id="desc">Two exchanges on a time axis, with lanes for a person, the room journal, Agent A on Pi, and Agent B on the Claude Agent SDK. Exchange 1: the person asks with visit.send(), and the room records entry 1. The room activates A and B at broadcast attention, and they reason in parallel. A reads a file and says, entry 2, with a ref to the file. The first say of B read only entry 1, so it comes back missed with entry 2. B reads entry 2, writes a new file, and says to A, entry 3, with a ref to the new file. Entry 3 wakes A. The second activation of A resumes the harness session of its first and reads only entry 3. A answers the person, entry 4. No seat has work left, so the room closes the exchange, entry 5, and waitForClose() returns. A summary of entries 1 to 5 follows, entry 6, and waitForSummary() returns it. Exchange 2: the person asks again, entry 7. The third activation of A starts a fresh session and reads the summary and entry 7. A says, entry 8. B has nothing to add and stays silent. The record is durable, and a restart replays it. The harness session is a cache for one exchange. The workspace keeps the files, and an opt-in audit log names the activation that wrote each one. The steps of each activation go to the logger of the host.</desc>
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 10 5 0 10Z" fill="#a3aba8"/>
-    </marker>
-    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 10 5 0 10Z" fill="#6cc4bb"/>
-    </marker>
-    <marker id="cross" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="12" markerHeight="12">
-      <path d="M2 2 10 10 M10 2 2 10" stroke="#ef8570" stroke-width="2.4" stroke-linecap="round"/>
-    </marker>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.35"/>
-    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#a3aba8"/></marker>
+    <marker id="cross" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="12" markerHeight="12"><path d="M2 2 10 10 M10 2 2 10" stroke="#ef8570" stroke-width="2.4" stroke-linecap="round"/></marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.35"/></filter>
     <style>
       .sans { font-family: Inter, "IBM Plex Sans", system-ui, sans-serif; }
       .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
-      .ink { fill: #e8e9e4; }
-      .dim { fill: #a3aba8; }
-      .teal { fill: #6cc4bb; }
-      .red { fill: #ef8570; }
-      .code { fill: #a4b6f2; }
-      .lab { font-size: 13px; font-weight: 700; letter-spacing: 1.2px; }
-      .t { font-size: 19px; font-weight: 700; }
-      .n { font-size: 16px; font-weight: 700; }
-      .b { font-size: 16px; }
-      .s { font-size: 14px; }
-      .x { font-size: 13px; }
+      .ink { fill: #e8e9e4; } .dim { fill: #a3aba8; } .teal { fill: #6cc4bb; } .red { fill: #ef8570; } .code { fill: #a4b6f2; }
+      .n { font-size: 16px; font-weight: 700; } .s { font-size: 14px; } .x { font-size: 13px; } .c { font-size: 13px; } .lab { font-size: 13px; font-weight: 700; }
       .flow { fill: none; stroke: #a3aba8; stroke-width: 2; }
-      .flow-dash { fill: none; stroke: #a3aba8; stroke-width: 2; stroke-dasharray: 6 5; }
-      .flow-teal { fill: none; stroke: #6cc4bb; stroke-width: 2; stroke-dasharray: 6 5; }
       .flow-red { fill: none; stroke: #ef8570; stroke-width: 2; stroke-dasharray: 5 4; }
       .guide { stroke: #384143; stroke-width: 1.5; stroke-dasharray: 2 6; }
-      .rule { stroke: #384143; stroke-width: 1.5; }
+      .split { stroke: #a3aba8; stroke-width: 1.5; stroke-dasharray: 6 6; }
     </style>
   </defs>
-  <rect width="1000" height="560" rx="20" fill="#171c1d"/>
-  <text x="24" y="68" text-anchor="start" class="sans ink n">Person 1</text>
-  <text x="24" y="88" text-anchor="start" class="sans dim s">owns the exchange</text>
-  <text x="24" y="140" text-anchor="start" class="sans ink n">Room</text>
-  <text x="24" y="160" text-anchor="start" class="sans dim s">the journal</text>
-  <text x="24" y="238" text-anchor="start" class="sans ink n">Agent A</text>
-  <text x="24" y="258" text-anchor="start" class="sans dim s">Pi</text>
-  <text x="24" y="318" text-anchor="start" class="sans ink n">Agent B</text>
-  <text x="24" y="338" text-anchor="start" class="sans dim s">Claude Agent SDK</text>
-  <text x="24" y="398" text-anchor="start" class="sans ink n">Agent C</text>
-  <text x="24" y="418" text-anchor="start" class="sans dim s">Codex SDK</text>
-  <text x="24" y="474" text-anchor="start" class="sans ink n">Workspace</text>
-  <text x="24" y="494" text-anchor="start" class="sans dim s">files and tables</text>
-  <line x1="190" y1="70" x2="976" y2="70" class="guide"/>
-  <line x1="190" y1="240" x2="976" y2="240" class="guide"/>
-  <line x1="190" y1="320" x2="976" y2="320" class="guide"/>
-  <line x1="190" y1="400" x2="976" y2="400" class="guide"/>
-  <path d="M600 334 V450" class="flow-teal" marker-end="url(#arrow-teal)"/>
-  <text x="612" y="432" text-anchor="start" class="sans teal s">writes</text>
+  <rect width="1000" height="732" rx="20" fill="#171c1d"/>
+  <text x="24" y="80" text-anchor="start" class="sans ink n">Person</text>
+  <text x="24" y="100" text-anchor="start" class="sans dim s">asks, reads</text>
+  <text x="24" y="152" text-anchor="start" class="sans ink n">Room</text>
+  <text x="24" y="172" text-anchor="start" class="sans dim s">the journal</text>
+  <text x="24" y="279" text-anchor="start" class="sans ink n">Agent A</text>
+  <text x="24" y="299" text-anchor="start" class="sans dim s">Pi</text>
+  <text x="24" y="381" text-anchor="start" class="sans ink n">Agent B</text>
+  <text x="24" y="401" text-anchor="start" class="sans dim s">Claude Agent SDK</text>
+  <line x1="170" y1="80" x2="976" y2="80" class="guide"/>
+  <line x1="170" y1="277" x2="976" y2="277" class="guide"/>
+  <line x1="170" y1="379" x2="976" y2="379" class="guide"/>
+  <line x1="834" y1="20" x2="834" y2="424" class="split"/>
+  <text x="180" y="34" text-anchor="start" class="sans dim lab" letter-spacing="1.2">EXCHANGE 1</text>
+  <text x="846" y="34" text-anchor="start" class="sans dim lab" letter-spacing="1.2">EXCHANGE 2</text>
+  <circle cx="196" cy="80" r="7" fill="#e39a78"/>
+  <circle cx="628" cy="80" r="7" fill="#e39a78"/>
+  <circle cx="760" cy="80" r="7" fill="#e39a78"/>
+  <circle cx="856" cy="80" r="7" fill="#e39a78"/>
+  <text x="210" y="64" text-anchor="start" class="mono code c">visit.send()</text>
+  <text x="870" y="64" text-anchor="start" class="mono code c">visit.send()</text>
+  <text x="628" y="64" text-anchor="middle" class="mono code c">waitForClose()</text>
+  <text x="760" y="64" text-anchor="middle" class="mono code c">waitForSummary()</text>
+  <path d="M196 88 V112" class="flow" marker-end="url(#arrow)"/>
+  <path d="M856 88 V112" class="flow" marker-end="url(#arrow)"/>
+  <path d="M628 116 V90" class="flow" marker-end="url(#arrow)"/>
+  <path d="M760 116 V90" class="flow" marker-end="url(#arrow)"/>
   <g filter="url(#shadow)">
-    <rect x="190" y="110" width="786" height="64" rx="12" fill="#20282a" stroke="#e8e9e4" stroke-width="1.5"/>
+    <rect x="170" y="116" width="806" height="88" rx="12" fill="#20282a" stroke="#e8e9e4" stroke-width="1.5"/>
   </g>
-  <circle cx="214" cy="134" r="11" fill="#e8e9e4"/>
-  <text x="214" y="138" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">1</text>
-  <text x="232" y="139" text-anchor="start" class="sans ink s">ask</text>
-  <circle cx="420" cy="134" r="11" fill="#e8e9e4"/>
-  <text x="420" y="138" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">2</text>
-  <text x="438" y="139" text-anchor="start" class="sans ink s">A says</text>
-  <text x="438" y="162" text-anchor="start" class="sans teal s">ref: a file</text>
-  <circle cx="630" cy="134" r="11" fill="#e8e9e4"/>
-  <text x="630" y="138" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">3</text>
-  <text x="648" y="139" text-anchor="start" class="sans ink s">B says</text>
-  <text x="648" y="162" text-anchor="start" class="sans teal s">ref: a new file</text>
-  <circle cx="750" cy="134" r="11" fill="#e8e9e4"/>
-  <text x="750" y="138" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">4</text>
-  <text x="768" y="139" text-anchor="start" class="sans ink s">close</text>
-  <text x="768" y="162" text-anchor="start" class="sans dim s">no work left</text>
-  <circle cx="880" cy="134" r="11" fill="#e8e9e4"/>
-  <text x="880" y="138" text-anchor="middle" class="sans x" font-weight="700" fill="#20282a">5</text>
-  <text x="898" y="139" text-anchor="start" class="sans ink s">summary</text>
-  <text x="898" y="162" text-anchor="start" class="sans dim s">optional</text>
-  <circle cx="214" cy="70" r="7" fill="#e39a78"/>
-  <text x="214" y="46" text-anchor="middle" class="mono code x">visit.send()</text>
-  <circle cx="750" cy="70" r="7" fill="#e39a78"/>
-  <text x="750" y="46" text-anchor="middle" class="mono code x">waitForClose()</text>
-  <circle cx="880" cy="70" r="7" fill="#e39a78"/>
-  <text x="880" y="46" text-anchor="middle" class="mono code x">waitForSummary()</text>
-  <path d="M214 78 V108" class="flow" marker-end="url(#arrow)"/>
-  <text x="226" y="98" text-anchor="start" class="sans dim s">asks</text>
-  <path d="M750 110 V80" class="flow" marker-end="url(#arrow)"/>
-  <path d="M880 110 V80" class="flow" marker-end="url(#arrow)"/>
-  <path d="M280 174 V224" class="flow" marker-end="url(#arrow)"/>
-  <path d="M280 174 V304" class="flow" marker-end="url(#arrow)"/>
-  <path d="M280 174 V384" class="flow" marker-end="url(#arrow)"/>
-  <text x="290" y="200" text-anchor="start" class="sans dim s">activates</text>
-  <text x="290" y="218" text-anchor="start" class="sans dim s">broadcast</text>
-  <rect x="280" y="226" width="160" height="28" rx="14" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
-  <text x="296" y="245" text-anchor="start" class="sans ink s">reads a file</text>
-  <rect x="280" y="306" width="370" height="28" rx="14" fill="#243a20" stroke="#86cc70" stroke-width="1.5"/>
-  <text x="296" y="325" text-anchor="start" class="sans ink s">reasons on 1</text>
-  <text x="502" y="325" text-anchor="start" class="sans ink s">reconsiders with 2</text>
-  <rect x="280" y="386" width="240" height="28" rx="14" fill="#3d321c" stroke="#e4b060" stroke-width="1.5"/>
-  <text x="296" y="405" text-anchor="start" class="sans ink s">nothing to add</text>
-  <rect x="530" y="388" width="60" height="24" rx="12" fill="#3d321c"/>
-  <text x="560" y="405" text-anchor="middle" class="mono ink x">silent</text>
-  <path d="M420 226 V178" class="flow" marker-end="url(#arrow)"/>
-  <text x="430" y="206" text-anchor="start" class="sans dim s">says</text>
-  <path d="M490 306 V178" class="flow-red" marker-end="url(#cross)"/>
-  <text x="502" y="236" text-anchor="start" class="sans red s" font-weight="700">missed</text>
-  <text x="502" y="256" text-anchor="start" class="sans red s">returns entry 2</text>
-  <path d="M630 306 V178" class="flow" marker-end="url(#arrow)"/>
-  <text x="640" y="236" text-anchor="start" class="sans dim s">says</text>
+  <circle cx="196" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="196" y="144.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">1</text>
+  <text x="196" y="174" text-anchor="middle" class="sans ink s">ask</text>
+  <circle cx="306" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="306" y="144.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">2</text>
+  <text x="306" y="174" text-anchor="middle" class="sans ink s">A says</text>
+  <text x="306" y="194" text-anchor="middle" class="sans teal s">ref: a file</text>
+  <circle cx="452" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="452" y="144.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">3</text>
+  <text x="452" y="174" text-anchor="middle" class="sans ink s">B → A</text>
+  <text x="452" y="194" text-anchor="middle" class="sans teal s">ref: a new file</text>
+  <circle cx="548" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="548" y="144.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">4</text>
+  <text x="548" y="174" text-anchor="middle" class="sans ink s">A → Person</text>
+  <circle cx="628" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="628" y="144.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">5</text>
+  <text x="628" y="174" text-anchor="middle" class="sans ink s">close</text>
+  <text x="628" y="194" text-anchor="middle" class="sans dim s">quiet</text>
+  <circle cx="760" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="760" y="144.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">6</text>
+  <text x="760" y="174" text-anchor="middle" class="sans ink s">summary</text>
+  <text x="760" y="194" text-anchor="middle" class="sans dim s">of 1–5</text>
+  <circle cx="856" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="856" y="144.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">7</text>
+  <text x="856" y="174" text-anchor="middle" class="sans ink s">ask</text>
+  <circle cx="944" cy="140" r="11" fill="#e8e9e4"/>
+  <text x="944" y="144.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">8</text>
+  <text x="944" y="174" text-anchor="middle" class="sans ink s">A says</text>
+  <rect x="206" y="262" width="114" height="30" rx="15" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
+  <text x="220" y="282" text-anchor="start" class="sans ink s">reads a file</text>
+  <rect x="186" y="364" width="280" height="30" rx="15" fill="#243a20" stroke="#86cc70" stroke-width="1.5"/>
+  <text x="200" y="384" text-anchor="start" class="sans ink s">reads 1</text>
+  <text x="358" y="384" text-anchor="start" class="sans ink s">reads 2</text>
+  <rect x="468" y="262" width="94" height="30" rx="15" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
+  <text x="482" y="282" text-anchor="start" class="sans ink s">reads 3</text>
+  <rect x="868" y="262" width="90" height="30" rx="15" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
+  <text x="882" y="282" text-anchor="start" class="sans ink s">reads 6–7</text>
+  <rect x="852" y="364" width="112" height="30" rx="15" fill="#3d321c" stroke="#e4b060" stroke-width="1.5"/>
+  <text x="868" y="384" text-anchor="start" class="sans ink s">silent</text>
+  <text x="358" y="416" text-anchor="start" class="sans teal s">writes a new file</text>
+  <rect x="206" y="302" width="422" height="8" rx="4" fill="#36615d"/>
+  <line x1="320" y1="306" x2="468" y2="306" stroke="#6cc4bb" stroke-width="2" stroke-dasharray="4 4"/>
+  <rect x="206" y="302" width="114" height="8" rx="4" fill="#6cc4bb"/>
+  <rect x="468" y="302" width="94" height="8" rx="4" fill="#6cc4bb"/>
+  <rect x="868" y="302" width="90" height="8" rx="4" fill="#6cc4bb"/>
+  <text x="206" y="330" text-anchor="start" class="sans teal s">a fresh session</text>
+  <text x="468" y="330" text-anchor="start" class="sans teal s">resumes the session</text>
+  <text x="972" y="330" text-anchor="end" class="sans teal s">a fresh session</text>
+  <path d="M186 204 V362" class="flow" marker-end="url(#arrow)"/>
+  <path d="M206 204 V260" class="flow" marker-end="url(#arrow)"/>
+  <text x="218" y="228" text-anchor="start" class="sans dim s">activates</text>
+  <text x="218" y="246" text-anchor="start" class="sans dim s">broadcast</text>
+  <path d="M306 262 V208" class="flow" marker-end="url(#arrow)"/>
+  <path d="M346 364 V216" class="flow-red" marker-end="url(#cross)"/>
+  <text x="359" y="234" text-anchor="start" class="sans red s" font-weight="700">missed</text>
+  <text x="359" y="252" text-anchor="start" class="sans red s">with entry 2</text>
+  <path d="M452 364 V208" class="flow" marker-end="url(#arrow)"/>
+  <path d="M468 204 V260" class="flow" marker-end="url(#arrow)"/>
+  <text x="478" y="237" text-anchor="start" class="sans dim s">wakes A</text>
+  <path d="M548 262 V208" class="flow" marker-end="url(#arrow)"/>
+  <path d="M852 204 V362" class="flow" marker-end="url(#arrow)"/>
+  <path d="M868 204 V260" class="flow" marker-end="url(#arrow)"/>
+  <path d="M944 262 V208" class="flow" marker-end="url(#arrow)"/>
+  <path d="M170 440 H976" class="flow" stroke-opacity="0.5" marker-end="url(#arrow)"/>
+  <text x="976" y="460" text-anchor="end" class="sans dim s">time</text>
   <g filter="url(#shadow)">
-    <rect x="190" y="452" width="786" height="48" rx="12" fill="#1c2e2d" stroke="#36615d"/>
+    <rect x="24" y="484" width="468" height="104" rx="12" fill="#20282a" stroke="#e8e9e4" stroke-width="1.5"/>
   </g>
-  <rect x="206" y="462" width="130" height="28" rx="8" fill="#20282a" stroke="#36615d"/>
-  <text x="271" y="481" text-anchor="middle" class="sans ink s">an existing file</text>
-  <rect x="560" y="462" width="256" height="28" rx="8" fill="#20282a" stroke="#6cc4bb"/>
-  <text x="576" y="481" text-anchor="start" class="sans ink s">a new file</text>
-  <text x="660" y="481" text-anchor="start" class="sans teal s">names its activation</text>
-  <path d="M190 528 H976" class="flow" stroke-opacity="0.5" marker-end="url(#arrow)"/>
-  <text x="976" y="548" text-anchor="end" class="sans dim s">time</text>
+  <text x="42" y="514" text-anchor="start" class="sans ink n">The record · durable</text>
+  <text x="42" y="540" text-anchor="start" class="sans ink s">Every message, close, summary, and lease entry. A</text>
+  <text x="42" y="561" text-anchor="start" class="sans ink s">lease entry names its harness session. Every</text>
+  <text x="42" y="582" text-anchor="start" class="sans ink s">activation reads the record. A restart replays it.</text>
+  <g filter="url(#shadow)">
+    <rect x="508" y="484" width="468" height="104" rx="12" fill="#1c2e2d" stroke="#36615d" stroke-width="1.5"/>
+  </g>
+  <text x="526" y="514" text-anchor="start" class="sans teal n">The session · a cache</text>
+  <text x="526" y="540" text-anchor="start" class="sans ink s">What the model saw and did, for one exchange. On</text>
+  <text x="526" y="561" text-anchor="start" class="sans ink s">Node: the local disk. On Cloudflare: memory. When it</text>
+  <text x="526" y="582" text-anchor="start" class="sans ink s">is lost, the next activation reads the record.</text>
+  <g filter="url(#shadow)">
+    <rect x="24" y="604" width="468" height="104" rx="12" fill="#20282a" stroke="#384143" stroke-width="1.5"/>
+  </g>
+  <text x="42" y="634" text-anchor="start" class="sans ink n">The workspace · files</text>
+  <text x="42" y="660" text-anchor="start" class="sans ink s">A file stays in the workspace, and a message cites</text>
+  <text x="42" y="681" text-anchor="start" class="sans ink s">it with a ref. An opt-in audit log names the</text>
+  <text x="42" y="702" text-anchor="start" class="sans ink s">activation that wrote it.</text>
+  <g filter="url(#shadow)">
+    <rect x="508" y="604" width="468" height="104" rx="12" fill="#20282a" stroke="#384143" stroke-width="1.5"/>
+  </g>
+  <text x="526" y="634" text-anchor="start" class="sans ink n">The trace · the host's logs</text>
+  <text x="526" y="660" text-anchor="start" class="sans ink s">The steps of each activation go to the logger that</text>
+  <text x="526" y="681" text-anchor="start" class="sans ink s">the host passes in. No model in the room reads them.</text>
 </svg>
