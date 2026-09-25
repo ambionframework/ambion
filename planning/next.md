@@ -43,8 +43,7 @@ message.
 itself with `after`, and the room delivers the say back to it when it is
 due. The delivery opens an exchange for the person who owned the exchange
 of the say. An agent checks a long process this way, and the room needs no
-event source. The notice and delegation between rooms wait in the
-[backlog](backlog.md#wake-sources-and-delegation).
+event source.
 
 **0.3.0 also gives each deployment shape one package.** The local shape
 is one node that runs the host and every agent:
@@ -67,9 +66,7 @@ commit.** The phases below deliver them; the items explain them.
 | S A scheduled say        | An agent says to itself with `after`, and the room refuses every other use of `after` and every other say to oneself. The room writes a `returned` entry when the say is due, and the entry wakes the seat. The returned say opens an exchange for the owner of the exchange of the say when no exchange is open. A kill between the say and the returned say keeps one delivery, and the Cloudflare room object delivers it through its alarm. The agent, the host, and a person see each pending say by its handle and dismiss it. |
 
 **Two journal format changes.** A said entry takes `after`, and the
-`returned` entry is new (S1). The `dismissed` entry is new (S5). The notice
-kind and the `awaiting` outcome that names a room stay in the backlog with
-W1 and D1.
+`returned` entry is new (S1). The `dismissed` entry is new (S5).
 
 **Deployment models.** The same rules serve four placements.
 
@@ -85,16 +82,7 @@ W1 and D1.
 **These wait in the [backlog](backlog.md).** The backlog states the
 condition that brings each one back.
 
-- **The notice and delegation (W1, D1).** The notice from a resource and
-  delegation by reference stay in the
-  [backlog](backlog.md#wake-sources-and-delegation). A process follows the
-  pull model of Codex's unified exec, and a host that wants a wake posts a
-  message.
-- **A scheduled say that waits on a process.** A returned say wakes the seat
-  on the clock alone. A guard that holds a say while its process runs is
-  an optimization, and it waits in the
-  [backlog](backlog.md#wake-sources-and-delegation).
-- **The checkpoint entry.** The resume measurement of S1 decides it.
+- **The checkpoint entry.** A measured resume time decides it.
 - **The conformance fixtures (M5) and the billing annotation (L3).** Both
   carry over from 0.2.0 with a condition each.
 - **A repeatable release from CI (R1).** The owner runs the release.
@@ -169,8 +157,8 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Four phases remain, and the git and simulator phases hold no open
-step.** Background processes (B1 and B2) needed no phase. The release needs
+**The release is the one open phase.** The git, simulator, and scheduled
+say phases hold no open step. Background processes (B1 and B2) needed no phase. The release needs
 the git, simulator, and scheduled say phases. A step names the steps it
 needs; a step with no "Needs" line starts now. **P1** carries the release
 story.
@@ -243,12 +231,12 @@ see a pending say and dismiss it.
 
 - [x] **1.** The agent sees its pending says: the say result names its seq
       as a handle, and each response activation lists the pending says of
-      the seat. P1. (S4)
+      the seat. P1. (S4) Landed in #335.
 - [x] **2.** A seat dismisses its own pending say with `dismiss`, and the
       host dismisses any pending say with `room.dismiss` and reads them
-      with `room.scheduled`. Needs 1. P1. (S5)
+      with `room.scheduled`. Needs 1. P1. (S5) Landed in #336.
 - [x] **3.** The workbench shows the pending says of a room, and a person
-      dismisses one. Needs 2. P1. (S6)
+      dismisses one. Needs 2. P1. (S6) Landed in #337.
 
 **Evidence:** the tests and the golden journals that S1 and S5 name hold
 on `main`, and the docs state each change.
@@ -373,13 +361,12 @@ workstation, and the test of a wait on several handles. #320, #321, and
 
 **E1. A simulator for evals.** A live test sends one fixed question and
 matches the answer with a regex. It cannot follow up on an answer, and
-a regex cannot grade a meaning. PR #153 tried a larger package and stays
-a draft. `@ambionframework/simulator` runs a loop of one exchange at a
+a regex cannot grade a meaning. PR #153 tried a larger package, and
+`@ambionframework/simulator` replaced it. The simulator runs a loop of one exchange at a
 time. An actor plays a person, checks in code read the run, and a judge
 grades the criteria that code cannot decide. The actor and the judge are
 agents on Pi's `AgentHarness`, configured with tools and bundles like any
 agent. **Evidence:** the assistant's live suite runs on the simulator.
-Then close PR #153 with a comment that names the new package.
 
 ### S. A scheduled say
 
@@ -387,8 +374,7 @@ Then close PR #153 with a comment that names the new package.
 only when a person speaks or a seat addresses it. An agent that starts a
 build of three hours can wait 570 seconds inside one activation, and then
 it must end. Nothing brings it back unless a person speaks or a host posts
-a message. The backlog's timer (W2) needed a notice kind and a host call
-first.
+a message.
 
 - **A say to oneself with `after` schedules the say.** The room refuses a
   say to oneself today (`addressRefusal` in `room/transition.ts`), so the

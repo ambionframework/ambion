@@ -51,102 +51,25 @@ from the owner's machine, or a user who asks for provenance.
 - npmjs holds a trusted publisher setting for each of the eleven
   packages.
 
-## Wake sources and delegation
-
-**These items left the 0.3.0 plan by decision.** Background processes in
-0.3.0 follow the pull model of Codex's unified exec: an agent waits for its
-result inside the activation, and nothing wakes a seat when a process ends
-([Processes](../docs/processes.md#the-end-of-a-process)). A host that wants
-a wake posts a message. The scheduled say of 0.3.0 (S1 in
-[next.md](next.md#s-a-scheduled-say)) gives the journal a clock: the fold
-holds the pending says, and the room's alarm takes the earliest due time.
-The items here build on it.
-**Condition:** an application that must react to a change outside the room
-with no person present, where a message that the host posts does not serve.
-
-**The order is the notice, then the delegation.** The delegating message
-needs the notice. The `awaiting` expiry and the guard need only the clock
-of the scheduled say, so each one can come first.
-
-**W1. A notice from a resource.** A room wakes only when a person speaks,
-so an agent cannot react when a brief changes or a run completes. Add a
-message kind with a ref and no author, routed by attention. One host call
-delivers it with a stable key, so a retried delivery lands once. An
-application scheduler calls the same host call, so the kernel needs no
-scheduler of its own. A notice opens no exchange by itself and arrives
-through no hidden timeout. **Evidence:** a scripted test and a chaos case
-for the kind and for the host call, with its durable start and its restart
-semantics.
-
-**W2. The `awaiting` expiry.** An `awaiting` exchange waits for ever. The
-close schedules an expiry on the clock of the scheduled say, and the room
-writes it when it is due. A measurement records the resume cost of a room
-with many pending says. **Condition:** an application that must act on an
-`awaiting` exchange that nobody answers. **Evidence:** a kill between the
-close and the expiry keeps the expiry.
-
-**W3. A guard that holds a scheduled say while its process runs.** Each
-due say costs one activation, and an agent that checks a build of three
-hours every ten minutes pays for eighteen activations. A bundle hook, such as
-`ToolBundle.due`, reads the state of the processes that the say names and
-holds the say until one ends. No model runs while it holds. **Condition:**
-a measured cost of due says that find their process still running.
-**Evidence:** a scripted case where the guard holds a say twice and
-delivers it once, with one activation.
-
-**D1. Delegation by reference.** PR #151 stored tasks in the journal and
-scanned every task on each reconcile pass. Use a ref and the `awaiting`
-outcome. The delegating message carries a ref to
-`ambion://room/<working>/message/<from>`. The origin exchange closes as
-`awaiting` that room. The working room closes with one message that
-carries a ref back. Status is a read of the exchange that the referenced
-message opened. **Evidence:** the workbench delegates one question to a
-second room; a restart in the middle keeps the work. Then close PR #151
-with a comment that names the new route.
-
-**Decisions the items carry.**
-
-- **A notice is the scheduler ingress.** The application owns its
-  schedule and delivers a notice through one host call. The kernel adds no
-  scheduler.
-- **Delegation has no task database.** A working room is a room, and a ref
-  connects the two.
-- **W2 decides `exchangeOutcome`.** If the `awaiting` expiry writes on the
-  `awaiting` outcome, the rule gates a write and stays verified. Otherwise
-  it leaves the rules file, as the 0.2.0 sweep states for read views.
-
-**Each item but W3 changes a format.** Each change lands with a golden journal of
-the new shape, and the changelog names each one.
-
-| Change                                  | Item | Kind                       |
-| --------------------------------------- | ---- | -------------------------- |
-| The notice message kind                 | W1   | A new message union member |
-| The `awaiting` expiry                   | W2   | A new entry kind           |
-| An `awaiting` outcome that names a room | D1   | A new outcome union member |
-
 ## Designs with a shape
 
 **The checkpoint entry.** A checkpoint entry lets a resume skip settled
 history, and full replay stays the reference. It is a format change, so it
-lands with a golden journal of the new format. **Condition:** the resume
-measurement of S1 in [next.md](next.md#s-a-scheduled-say) or of item W2
-above comes near the default
-`limits.lease.ttl` of 60 seconds ([envelope.md](../docs/envelope.md)). Past
+lands with a golden journal of the new format. **Condition:** a measured
+resume time comes near the default `limits.lease.ttl` of 60 seconds ([envelope.md](../docs/envelope.md)). Past
 that point, replay sets the recovery time.
 
-**Processes linked to the room, more kinds of process, and the end of a
-process as a notice.** A process runs until it ends, times out, or gets a
+**Processes linked to the room, and more kinds of process.** A process runs until it ends, times out, or gets a
 cancel ([Processes](../docs/processes.md)). An exchange closes when no
 activation is live, so a cancel at the close stops a process at the first
 quiet moment. A link to the room needs its own design. The handle is
 `<kind>-<random>`, and `bash` is the one kind. A clone that runs past its call
 and a SQL export are candidate kinds. The end of a process wakes no seat, by
 decision: the agent waits, and a host can post a message
-([Processes](../docs/processes.md#the-end-of-a-process)). The notice of item
-W1 above can carry it later. The table has no fence: two runs of the host over
-one account adopt the same processes. **Condition:** a seat that must wake
-when a process ends, a process that must stop with its exchange, or a second
-kind of work that outlives its call.
+([Processes](../docs/processes.md#the-end-of-a-process)). The table has no
+fence: two runs of the host over one account adopt the same processes.
+**Condition:** a process that must stop with its exchange, or a second kind
+of work that outlives its call.
 
 **One record for a live process in the table.** The table keeps a process
 of this run and an adopted process in two maps, with two stop paths and two
@@ -268,10 +191,3 @@ today. **Condition:** a fault that one of them would have caught.
 - A provider-neutral plugin ecosystem beyond the executor contract.
 - A second live-tier provider job. Add one only if a provider-specific
   defect turns up.
-
-## Open pull requests
-
-| PR   | Title                                           | Decision                                                      |
-| ---- | ----------------------------------------------- | ------------------------------------------------------------- |
-| #151 | Exchange-scoped tasks and Relay background work | Close with item D1 above; delegation by reference replaces it |
-| #153 | Room simulation evals (draft)                   | Close when phase 2 of the 0.3.0 plan lands                    |
