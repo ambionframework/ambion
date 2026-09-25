@@ -57,12 +57,23 @@ export function stateLine(process: ProcessStatus): string {
 	}
 }
 
-/**
- * The note for a running process that can run longer than the activation
- * lets the agent wait, when the room takes a say with `after`.
- */
+/** The note for a running process that can run longer than the activation lets the agent wait. */
 export const LATER_LINE =
-	'It can run longer than your activation lets you wait. To look at it later, say to yourself with after, in seconds.';
+	'The process can run longer. To look at it later, say to yourself with after, in seconds.';
+
+/**
+ * The note near the end of the activation: the seconds `left` before the
+ * room ends it, the wait that the deadline `cut`, and the scheduled say
+ * when the process runs `later` than a wait can reach. Empty when the wait
+ * was not cut and no say helps. The seconds show once.
+ */
+export function deadlineNote(left: number, cut: boolean, later: boolean): string {
+	if (!cut && !later) return '';
+	const time = cut
+		? `The wait stopped early, because your activation ends in ${left} seconds. Answer before then.`
+		: `Your activation ends in ${left} seconds.`;
+	return later ? `${time} ${LATER_LINE}` : time;
+}
 
 /** The end of a finished process, for the reminder. */
 function endedAs(process: ProcessStatus): string {

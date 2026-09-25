@@ -185,13 +185,17 @@ takes a say with `after`. `wait` with `handles` adds the note once when one
 running process qualifies. `cancel` adds no note.
 
 ```text
-It can run longer than your activation lets you wait. To look at it later, say to yourself with after, in seconds.
+Your activation ends in 540 seconds. The process can run longer. To look at it later, say to yourself with after, in seconds.
 ```
+
+**The note names the seconds left before the deadline.** The agent weighs
+a last `wait` against a say with `after` by that number. When the deadline
+also cut the wait, the note starts with the line of the cut, which names
+the same seconds. The seconds show once.
 
 **The note shows only where a say with `after` helps.** Outside a room
 there is no `say`. A process that ends inside the reach of a wait needs a
-`wait`, and each returned say costs one activation. The text is fixed, so
-the clock changes only whether the note shows.
+`wait`, and each returned say costs one activation.
 
 **The view keeps the last 2000 lines or 50 KB of the new output.** These
 are the limits of Pi's `bash` tool. When the view cuts the new output, the
@@ -540,7 +544,8 @@ seconds by default, and counts it as a failed attempt. `ToolContext.deadline`
 carries that time. `bash` and `wait` wait for the shorter of the time the call
 gives and the time left before the margin. A process that still runs then
 gives `running`, and the result line adds `The wait stopped early, because
-your activation ends in <n> seconds. Answer before then.` The margin also
+your activation ends in <n> seconds. Answer before then.` When the process
+can outlast the activation, the note of a scheduled say follows. The margin also
 covers the skew between the clock of the room's host and the clock of the
 seat's host.
 

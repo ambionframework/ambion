@@ -552,14 +552,19 @@ describe('a wait near the end of the activation', () => {
 			/is running\..*The wait stopped early, because your activation ends in \d+ seconds\./s,
 		);
 		// Less than the margin is left: wait returns at once.
-		const late = callAs('alpha', { deadline: Date.now() + 10_000 });
+		// In an open exchange the note also points to a scheduled say, and names the seconds once.
+		const late = callAs('alpha', {
+			deadline: Date.now() + 10_000,
+			exchange: { owner: 'priya', from: 4 },
+		});
 		const before = Date.now();
 		const waited = await invokeText(toolOf(workspace, 'wait'), { handle, timeout: 60 }, late);
 		expect(Date.now() - before).toBeLessThan(2_000);
 		// The note rounds the time left, and a loaded runner can take a second.
 		expect(waited).toMatch(
-			/The wait stopped early, because your activation ends in (9|10) seconds\. Answer before then\./,
+			/The wait stopped early, because your activation ends in (9|10) seconds\. Answer before then\. The process can run longer\./,
 		);
+		expect(waited).not.toContain('Your activation ends in');
 	});
 });
 
@@ -584,7 +589,11 @@ describe('the note that points to a scheduled say', () => {
 			await invokeText(toolOf(workspace, 'wait'), { handle, timeout: 0 }, inside),
 			await invokeText(toolOf(workspace, 'wait'), { handles: [other, handle], timeout: 0 }, inside),
 		];
-		for (const text of texts) expect(text.includes(LATER_LINE)).toBe(shows);
+		for (const text of texts) {
+			// The note names the seconds left before the deadline, and a loaded runner can take a second.
+			expect(/Your activation ends in (599|600) seconds\./.test(text)).toBe(shows);
+			expect(text.includes(LATER_LINE)).toBe(shows);
+		}
 	});
 });
 
