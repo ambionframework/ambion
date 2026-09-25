@@ -158,7 +158,7 @@ host call needs the notice kind, the timer needs the host call, and the
 delegating message needs the notice. The git backend on the workstation
 needed none of them, and phase 4 landed it beside phases 1 to 3.
 Background processes (B1) needed no phase, and landed first. The
-simulator (phase 6) needs no other phase. A step names the
+simulator (phase 5) needs no other phase. A step names the
 steps it needs; a step with no "Needs" line starts now. **P0** blocks the tag. **P1**
 carries the release story. **P2** moves to the backlog when it is late.
 
@@ -212,7 +212,7 @@ with the SSH harness, and the tier proves the checks that
 [Workstation git](../docs/workstation-git.md#tests) lists. The workbench
 runs on `justGitBackend`. The evidence holds on `main`.
 
-### Phase 6. The simulator (P1)
+### Phase 5. The simulator (P1)
 
 **Goal:** an eval drives a room as a person, checks the run in code, and
 asks a judge for the rest.
@@ -231,12 +231,12 @@ asks a judge for the rest.
 every claim of the assistant's live suite, and one live run of the file
 prints the cost of each case.
 
-### Phase 5. Release (P1)
+### Phase 6. Release (P1)
 
 **Goal:** the tag names a commit that a live run tested.
 
 - [ ] **1.** The changelog entry for 0.3.0 names each format change and
-      each export that changed. Needs phases 1, 2, 3, and 4. P1. (R0)
+      each export that changed. Needs phases 1 to 5. P1. (R0)
 - [ ] **2.** The live run on `main` after the last merge passes for Pi,
       Claude, and Codex. Needs 1. P1. (R0)
 

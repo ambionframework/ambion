@@ -178,4 +178,4 @@ today. **Condition:** a fault that one of them would have caught.
 | PR   | Title                                           | Decision                                                    |
 | ---- | ----------------------------------------------- | ----------------------------------------------------------- |
 | #151 | Exchange-scoped tasks and Relay background work | Close in 0.3.0 item D1; delegation by reference replaces it |
-| #153 | Room simulation evals (draft)                   | Close when phase 6 of the 0.3.0 plan lands                  |
+| #153 | Room simulation evals (draft)                   | Close when phase 5 of the 0.3.0 plan lands                  |

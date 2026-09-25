@@ -1,12 +1,10 @@
 # The simulator
 
 **This page designs `@ambionframework/simulator`. The package does not exist
-yet.** The [backlog](../planning/backlog.md) holds the condition that
-schedules it. Until it lands, the live tests in `packages/*/test/live` are
-the only behavioral evidence.
-
-**Phase 6 of [the 0.3.0 plan](../planning/next.md) builds the package.**
-[The order of work](#the-order-of-work) names its four pull requests.
+yet.** Phase 5 of [the 0.3.0 plan](../planning/next.md) builds it, in the
+four pull requests of [the order of work](#the-order-of-work). Until it
+lands, the live tests in `packages/*/test/live` are the only behavioral
+evidence.
 
 **The rewrite of the assistant's live suite validates the design.** The
 package lands when `packages/assistant/test/live/behavior.test.ts` runs on
@@ -348,7 +346,12 @@ export function runAgent(
 - **The loop.** `runAgent` opens one harness session, prompts it once, and
   closes it after the run. It has no steer, no resume, and no
   `readThrough`. A tool in `ends` returns `terminate: true`, and the
-  harness stops after it.
+  harness stops after it. The first call in `ends` to succeed ends the
+  run. A call after it gets a result that ends the run too, and the run
+  keeps no record of it. When a sequential batch holds another call
+  before the end, the harness sends one more request.
+- **The output limit.** A run that stops at the output limit with no call
+  in `ends` rejects, and the error names the limit.
 - **The tool context.** Each call gets `{ agent, callId, signal, onUpdate
 }`, with no `room`, `activation`, or `exchange`. `ToolContext` allows
   their absence, and the workspace audit log accepts it. `runAgent`
@@ -646,16 +649,19 @@ a `scriptedActor`. The judge is a function.
 
 **`runAgent` runs on the scripted Pi stream.**
 
-| Case                             | What it asserts                                            |
-| -------------------------------- | ---------------------------------------------------------- |
-| A tool in `ends` is called       | The run returns that call, and the calls before it         |
-| The signal aborts                | The promise rejects                                        |
-| Several requests                 | `usage` sums every request                                 |
-| A bundle tool has an `ends` name | The run fails at once with a duplicate name                |
-| A tool is called                 | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
-| Two names on one scripted stream | Each run answers from the script for its `name`            |
-| The agent stops with no end call | The promise rejects, and names the tools in `ends`         |
-| Two ending calls run at once     | The first call to succeed ends the run                     |
+| Case                                  | What it asserts                                            |
+| ------------------------------------- | ---------------------------------------------------------- |
+| A tool in `ends` is called            | The run returns that call, and the calls before it         |
+| The signal aborts                     | The promise rejects                                        |
+| Several requests                      | `usage` sums every request                                 |
+| A bundle tool has an `ends` name      | The run fails at once with a duplicate name                |
+| A tool is called                      | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
+| Two names on one scripted stream      | Each run answers from the script for its `name`            |
+| The agent stops with no end call      | The promise rejects, and names the tools in `ends`         |
+| Two ending calls run at once          | The first call to succeed ends the run                     |
+| A batch holds a call before the end   | The run returns after one more request                     |
+| The signal aborts while the run opens | The promise rejects, and no request goes out               |
+| The output reaches its limit          | The promise rejects, and names the limit                   |
 
 **The agent actor and the agent judge run on the scripted Pi stream.**
 The cases cover the prompt text, the name each request carries, and a

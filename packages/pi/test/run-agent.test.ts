@@ -111,6 +111,22 @@ describe('runAgent', () => {
 		expect(requests).toBe(1);
 	});
 
+	it('ends after a sequential batch that holds another call before the end', async () => {
+		let requests = 0;
+		const script: Script = () => {
+			requests += 1;
+			if (requests > 1) return quiet();
+			return fauxAssistantMessage(
+				[fauxToolCall('lookup', { key: 'thursday' }), fauxToolCall('finish', { answer: 'dry' })],
+				{ stopReason: 'toolUse' },
+			);
+		};
+		const result = await runAgent(services(script), request());
+		expect(result.end).toEqual({ tool: 'finish', args: { answer: 'dry' } });
+		expect(result.calls).toEqual([{ tool: 'lookup', args: { key: 'thursday' } }]);
+		expect(requests).toBe(2);
+	});
+
 	it('routes each run on its name, and shows the model the system prompt with the guidance', async () => {
 		const systems: string[] = [];
 		const script = byAgent({
@@ -140,7 +156,41 @@ describe('runAgent', () => {
 		).rejects.toThrow('The move passed its timeout.');
 	});
 
+	it('rejects a signal that aborts while the run opens, and sends no request', async () => {
+		let requests = 0;
+		const script: Script = () => {
+			requests += 1;
+			return callTool('finish', { answer: 'dry' });
+		};
+		const controller = new AbortController();
+		const base = services(script);
+		// The abort lands between the first check of the signal and the prompt.
+		const opening = {
+			...base,
+			sessions: {
+				open: base.sessions.open,
+				create: (...args: Parameters<typeof base.sessions.create>) => {
+					controller.abort(new Error('The move passed its timeout.'));
+					return base.sessions.create(...args);
+				},
+			},
+		};
+		await expect(runAgent(opening, request({ signal: controller.signal }))).rejects.toThrow(
+			'The move passed its timeout.',
+		);
+		expect(requests).toBe(0);
+	});
+
 	it.each([
+		[
+			'reaches the output limit',
+			// The output reaches the limit of the stub model, so the harness does not compact and retry.
+			() => {
+				const cut = fauxAssistantMessage('Thursday looks', { stopReason: 'length' });
+				return { ...cut, usage: { ...cut.usage, output: 64_000, totalTokens: 64_000 } };
+			},
+			/reached the output limit with no call to 'finish'/,
+		],
 		['stops with no call to a tool in ends', () => quiet(), /stopped with no call to 'finish'/],
 		[
 			'fails on the provider',
@@ -176,11 +226,11 @@ describe('runAgent', () => {
 			parameters: Type.Object({}),
 			execute: () => 'said',
 		});
-		await expect(
-			runAgent(
-				services(() => quiet()),
-				request({ tools: [say, finish] }),
-			),
-		).rejects.toThrow(AmbionError);
+		const run = runAgent(
+			services(() => quiet()),
+			request({ tools: [say, finish] }),
+		);
+		await expect(run).rejects.toThrow(AmbionError);
+		await expect(run).rejects.toThrow("brings a tool named 'say'");
 	});
 });

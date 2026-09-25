@@ -7,7 +7,10 @@
  *   name, and a name the room keeps for itself.
  * - **The end.** A tool that `ends` names ends the run when it succeeds. The
  *   run returns that call, and every call before it. A tool that the model
- *   calls after the end gets a result that ends the run too.
+ *   calls after the end gets a result that ends the run too, and the run
+ *   keeps no record of it. When a sequential batch holds another call
+ *   before the end, the harness sends one more request, and the model can
+ *   only end the run.
  * - **Context.** Each call receives the agent, the call id, the signal, and
  *   the update callback. A run has no room, no activation, and no exchange,
  *   so it resolves no reminder.
@@ -118,7 +121,8 @@ export async function runAgent(
 	const abort = () => void opened.lane.abort(CONTEXT).catch(noop);
 	request.signal?.addEventListener('abort', abort, { once: true });
 	try {
-		if (request.signal?.aborted) abort();
+		// An abort that landed while the run opened ends it here. No await stands between this and the prompt.
+		request.signal?.throwIfAborted();
 		const result = await opened.lane.prompt(request.prompt, undefined, CONTEXT);
 		return run.result(result, request.signal);
 	} finally {
@@ -218,6 +222,11 @@ class Run {
 		const outcome = passOutcome(result, this.last);
 		if (outcome.failed) throw outcome.error;
 		const names = [...this.ends].join("', '");
+		if (outcome.stop === 'length') {
+			throw new Error(
+				`The agent '${this.definition.name}' reached the output limit with no call to '${names}'.`,
+			);
+		}
 		throw new Error(`The agent '${this.definition.name}' stopped with no call to '${names}'.`);
 	}
 }
