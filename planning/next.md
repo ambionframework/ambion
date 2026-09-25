@@ -1,7 +1,7 @@
-# Next: the scope for 0.3.0
+# Next: the scope for 0.4.0
 
-> **No compatibility promise before 1.0.0.** 0.2.0 shipped on 2026-09-24
-> from commit 10a4f44, with eleven packages on npmjs. Until 1.0.0, any
+> **No compatibility promise before 1.0.0.** 0.3.0 shipped on 2026-09-25
+> from commit 2eb30a3, with eleven packages on npmjs. Until 1.0.0, any
 > release may change any export, entry point, journal body, stored format,
 > or package API.
 >
@@ -16,10 +16,10 @@
 >   that nobody intended. A deliberate change updates them in the same
 >   commit.
 
-This file holds the open work for 0.3.0: the scope, the order of the work,
+This file holds the open work for 0.4.0: the scope, the order of the work,
 the evidence each step needs, and the reason for each item. What landed
 leaves the phases, and the [changelog](../CHANGELOG.md) records it.
-[backlog.md](backlog.md) holds everything after 0.3.0.
+[backlog.md](backlog.md) holds everything after 0.4.0.
 
 **An item lands with its evidence or stays open.** Every checkbox names an
 item in [the items](#the-items). A phase closes when its evidence line
@@ -33,40 +33,53 @@ holds on main.
 is new. Ambion is reactive: a seat acts when a person speaks, when a seat
 addresses it, or when a say that it scheduled comes due.
 
-**0.3.0 lets the work of a seat outlive its activation.** A seat's shell
-work runs as a background process between its activations. The agent
-waits for the result that its answer needs inside the activation, and
-nothing wakes a seat when a process ends. A host that wants a wake posts a
-message.
-
-**0.3.0 lets an agent come back to its work later.** An agent says to
-itself with `after`, and the room delivers the say back to it when it is
-due. The delivery opens an exchange for the person who owned the exchange
-of the say. An agent checks a long process this way, and the room needs no
-event source.
-
-**0.3.0 also gives each deployment shape one package.** The local shape
-is one node that runs the host and every agent:
-`@ambionframework/just-bash`, with the git backend of 0.2.0 in its `./git`
-entry. The lab shape is a host on one machine and a workstation on
-another: `@ambionframework/workstation`, with a git backend that keeps the
-repositories in one account on the server. Each agent reaches them with
-`git` over SSH.
+**0.4.0 is a release of simplification.** It adds no capability. It
+removes each second path to a fact of the room. Every item in the
+[backlog](backlog.md) waits until after 0.4.0, unless its condition holds
+first.
 
 ## The scope
 
-**Four themes, each with the acceptance it must meet on the tagged
-commit.** The phases below deliver them; the items explain them.
+**The journal holds five facts, and one fold reads them.** The facts are
+messages, lease changes, closes, cancellations, and compositions. One pure
+`decide` admits one entry for each command inside the journal queue, and
+the reconcile runs `decide` until nothing changes. A review of the code
+found a second path beside most of these mechanisms. Each second path
+needs a consistency test, a conformance case, or a doc paragraph to hold
+it to the first, and some copies had already drifted:
 
-| Theme                    | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317.                                                                                                                   |
-| B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).                                                                                                                           |
-| E Evals                  | The assistant's live suite runs on `@ambionframework/simulator`, with three cases over several exchanges and five cases of the assistant's purpose. It must pass on two model families at `medium` thinking, each graded by the other. [Simulator](../docs/simulator.md) holds the design.                                                                                                                                                                                                                                           |
-| S A scheduled say        | An agent says to itself with `after`, and the room refuses every other use of `after` and every other say to oneself. The room writes a `returned` entry when the say is due, and the entry wakes the seat. The returned say opens an exchange for the owner of the exchange of the say when no exchange is open. A kill between the say and the returned say keeps one delivery, and the Cloudflare room object delivers it through its alarm. The agent, the host, and a person see each pending say by its handle and dismiss it. |
+- The three classifiers of a permanent failure disagree on the API key,
+  the login, and the quota.
+- A seat of an unknown executor kind under `composeExecutions` gets its
+  wake again after each resend window, with no end.
+- `defineHuman` trims preferences, and `captureHuman` does not.
 
-**Two journal format changes.** A said entry takes `after`, and the
-`returned` entry is new (S1). The `dismissed` entry is new (S5).
+**Acceptance.** Each fact of the room has one derivation, each rule one
+home, and each seat one boundary. `pnpm check` passes, the coverage of
+each changed package holds, and the changelog states the measured count
+of lines that the release removes.
+
+**Journal bodies.** A close carries `cancelled`, a cancel entry carries
+no close (C3), and a composition carries no `version` (C9). The body
+schemas refuse the old shapes, and the journal carries no format number
+(C12). Ambion supports no downgrade.
+
+**The `assistant` room option stays.** It is shorthand for `agents`,
+`summary`, and `broadcast` attention. The owner keeps it for now.
+
+**These pairs stay.**
+
+- **`pi()` and `piExecution()`.** The first is definition data that
+  crosses the wire. The second holds host functions and paths.
+- **The two stop mechanisms of a process.** A process of this run stops
+  by an abort, since just-bash has no pid. An adopted process stops by its
+  pid.
+- **The step mapping of each harness.** Each harness has its own wire
+  format.
+- **The view interfaces of the room host.** `RoomBase`, `ControlHost`,
+  `DispatchHost`, `PeopleHost`, and `WaitsHost` keep `control.ts`,
+  `dispatch.ts`, `people.ts`, and `waits.ts` below `room-host/room.ts` in
+  the layers that Biome holds.
 
 **Deployment models.** The same rules serve four placements.
 
@@ -83,9 +96,11 @@ commit.** The phases below deliver them; the items explain them.
 condition that brings each one back.
 
 - **The checkpoint entry.** A measured resume time decides it.
-- **The conformance fixtures (M5) and the billing annotation (L3).** Both
-  carry over from 0.2.0 with a condition each.
+- **The billing annotation (L3).** It carries over from 0.2.0 with its
+  condition.
 - **A repeatable release from CI (R1).** The owner runs the release.
+- **The `python3` abort on Node 26.9 (K1).** It waits for a report or a
+  failed gate.
 - **A generated API reference.** It adds a build step and a CI check, and
   the typed README examples already hold the surface.
 - **The open proofs.** The stop-loop and pass measures, unique roster
@@ -157,326 +172,374 @@ means two things or two names mean one.
 
 ## The order of work
 
-**The release is the one open phase.** The git, simulator, and scheduled
-say phases hold no open step. Background processes (B1 and B2) needed no phase. The release needs
-the git, simulator, and scheduled say phases. A step names the steps it
-needs; a step with no "Needs" line starts now. **P1** carries the release
-story.
+**Three phases.** Phase 1 changes no extension contract. Phase 2 changes
+the hosting exports, the executor contract, an option of `defineAgent`,
+and the process tools. A step names the steps it needs; a step with no
+"Needs" line starts now.
 
-### Phase 1. Git on the workstation (P1)
+### Phase 1. The drift
 
-**Goal:** an agent on a workstation clones and pushes over SSH to one
-account on its own server, and the host opens no port.
+- [ ] **1.** The fold becomes a test oracle, and `RoomState` exposes
+      `due` alone. (C1)
+- [ ] **2.** The copies of the verified rules go. (C2)
+- [ ] **3.** A cancellation has one shape. Needs 1. (C3)
+- [ ] **4.** A seat of an unknown executor kind fails at once, on each
+      of the three routers. (C5)
+- [ ] **5.** A composition carries no `version`, one capture serves a
+      definition, and one registry serves the waiters. (C9)
+- [ ] **6.** One record for a live process in the table. (C11)
+- [ ] **7.** The body schemas guard the journal, and the format number
+      goes. Needs 3 and 5. (C12)
+- [ ] **8.** The assistant works a request after its owner leaves. (A1)
 
-**Phase 1 holds no open step.** G1 landed in #312 and #314. G2 landed in
-#316 and #317, and its docs landed after them.
+**Evidence:** each step keeps `pnpm check` green and holds the coverage
+of each changed package, measured before and after as `CLAUDE.md`
+states. A step that changes a rule runs `pnpm rule:check`. A step that
+changes a journal body updates the golden journals and the export
+snapshot in the same commit, and the changelog names it. Steps 1, 3, 5, and 7
+pass `pnpm chaos` and the Cloudflare tests in workerd.
 
-**Evidence:** the `workstation` CI job runs `gitConformance` on OpenSSH
-with the SSH harness, and the tier proves the checks that
-[Workstation git](../docs/workstation-git.md#tests) lists. The workbench
-runs on `justGitBackend`. The evidence holds on `main`.
+### Phase 2. The contracts
 
-### Phase 2. The simulator (P1)
+Each step states the change to
+[Executors](../docs/executors.md#the-hosting-entry-exports) or to the
+page it changes in the same commit.
 
-**Goal:** an eval drives a room as a person, checks the run in code, and
-asks a judge for the rest.
+- [ ] **1.** `decide` builds every journal body and makes every authority
+      decision. Needs phase 1 step 3. (C4)
+- [ ] **2.** One lease shape in the rules. Needs phase 1 step 3. (C2)
+- [ ] **3.** The remote call is an `Execution`, and `Transport` goes.
+      Needs phase 1 step 4. (C5)
+- [ ] **4.** The room applies the token limit, and the paging of a view
+      goes. (C7)
+- [ ] **5.** The core owns the activation state. Needs 3 and 4. (C6)
+- [ ] **6.** The workspace keeps one SQL path and the ports that a
+      backend uses. (C8)
+- [ ] **7.** Cloudflare reuses the core, and one scripted room serves the
+      conformance suites. Needs 1 and 3. (C9)
+- [ ] **8.** One tool for `status` and `wait`. (C10)
 
-- [x] **1.** `runAgent` in `@ambionframework/pi`: one agent run outside a
-      room, until the agent calls a tool that ends it. P1. (E1) Landed in
-      #319.
-- [x] **2.** `@ambionframework/simulator` with `simulate` and
-      `scriptedActor`, proven on the scripted tier. P1. (E1) Landed in
-      #324.
-- [x] **3.** `agentActor`, `agentJudge`, and their tools `send`, `stop`,
-      and `grade`, with one live case. Needs 1 and 2. P1. (E1) Landed in
-      #326.
-- [x] **4.** The assistant's live suite on the simulator. Needs 3. P1.
-      (E1) Landed in #327.
-- [x] **5.** The assistant held to its purpose: passive at `broadcast`,
-      membership and summaries, an answer when a participant addresses it. Five
-      purpose cases, a thinking level for Pi seats, and the suite passes on
-      `anthropic/claude-sonnet-5` and `openai/gpt-5.6-luna` at `medium`,
-      each graded by the other. Needs 4. P1. (E1) Landed in #331.
+**Evidence:** the evidence of phase 1 holds for each step. Steps 3 and 7
+pass `transportConformance` on `rpcTransport` in workerd. Steps 5 and 8
+pass one live file on each of Pi, Claude, and Codex before they merge.
 
-**The results of step 5.** Each cell counts the passing cases, with one
-sample for each case. Each model is graded by the other family.
+### Phase 3. Release
 
-| Guidance                                          | Sonnet 5, `medium` | Luna 5.6, `medium` |
-| ------------------------------------------------- | ------------------ | ------------------ |
-| Before the change, 18 cases                       | 13                 | 12                 |
-| Membership first                                  | 16                 | 16                 |
-| Each reaction at `broadcast` named                | 17                 | 18                 |
-| A constraint stays until withdrawn                | 17                 | 18                 |
-| The rule for each specialist, and its questions   | 17                 | 17                 |
-| A specialist that addresses the assistant, 19     | 19                 | 18                 |
-| No redirect of a specialist that cannot do work   | 17 (a)             | 18 (a)             |
-| The specialists read only the words of the person | 19                 | 19                 |
-
-(a) Two scripted specialists read the words of the assistant. The last row
-fixes the scripts, and it runs the same guidance.
-
-**Evidence:** each step states its cases in
-[Simulator](../docs/simulator.md#the-order-of-work). The last step keeps
-every claim of the assistant's live suite, and one live run of the file
-prints the cost of each case.
-
-### Phase 3. A scheduled say (P1)
-
-**Goal:** an agent checks a long process later, and no event source and no
-host code wake it.
-
-**S1 to S3 landed in #332, #333, and #334.** An agent schedules a say, and
-the room returns it. The steps below let the agent, the host, and a person
-see a pending say and dismiss it.
-
-- [x] **1.** The agent sees its pending says: the say result names its seq
-      as a handle, and each response activation lists the pending says of
-      the seat. P1. (S4) Landed in #335.
-- [x] **2.** A seat dismisses its own pending say with `dismiss`, and the
-      host dismisses any pending say with `room.dismiss` and reads them
-      with `room.scheduled`. Needs 1. P1. (S5) Landed in #336.
-- [x] **3.** The workbench shows the pending says of a room, and a person
-      dismisses one. Needs 2. P1. (S6) Landed in #337.
-
-**Evidence:** the tests and the golden journals that S1 and S5 name hold
-on `main`, and the docs state each change.
-
-### Phase 4. Release (P1)
-
-**Goal:** the tag names a commit that a live run tested.
-
-- [ ] **1.** The live run on `main` after the last merge passes for Pi,
-      Claude, and Codex. P1. (R0)
-
-**Evidence:** the notes of the GitHub release link the live run on the
-tagged commit and name any case that failed.
+- [ ] **1.** The changelog entry for 0.4.0 names each export and each
+      journal body that changed, and the count of lines removed. Needs
+      phases 1 and 2.
+- [ ] **2.** The live run on `main` after the last merge passes for Pi,
+      Claude, and Codex. Needs 1.
 
 ## The items
 
-Each item states the problem, the solution, and the impact.
+**Each item removes one kind of second path.** Each states the problem,
+the change, and the evidence.
 
-### G. Git on the workstation
+**C1. One derivation of the room state.** `room/fold.ts` derives every
+fact from the whole journal, and `room/projection.ts` derives the same
+facts one entry at a time. Nearly every fact has a pair: `foldPeople`
+and `advancePeople`, `openExchange` and `exchangeAfter`, `pendingWakes`
+and `wakes.ts`, `foldScheduled` and `scheduleStep`. Production reads both:
+`readRoom` in `room.ts` folds, and the live room advances the projection.
 
-**G1. The git backend in the host's process joins just-bash, and it pairs
-with just-bash alone.** `gitBackend` defaults to
-`http://git.ambion.invalid`, which never resolves. Beside a workstation,
-`connect` succeeds, and the first `git clone` of an agent fails on DNS in
-the middle of an activation. A host that serves `handler` to fix it opens
-an inbound port and sends each token over HTTP.
+- **`readRoom` reads `projectState(replay(...))`.** `foldRoom` and
+  `project` move to `test/support`, and `projection-equivalence.test.ts`
+  keeps them as its oracle. The projection imports `applyEvent`, `older`,
+  `BaseFacts`, `reseat`, and `reserveOf` from `fold.ts`, so those stay in
+  `src/`.
+- **`RoomState` exposes `due` alone.** Only tests read `pending` and
+  `owed`. `PendingWake.seq`, `Owed.writer`, and `Owed.through` repeat
+  other fields, and the `OwedEntry` and `WakeCandidate` wrappers go.
+- **The open proof of unique roster names follows the projection.**
+  [Proofs to write](backlog.md#proofs-to-write) names `foldRoster`, and the proof
+  states the rule for `rosterAfter` when `foldRoster` leaves `src/`.
 
-- **One package holds the local shape.** `@ambionframework/just-bash/git`
-  exports `justGitBackend` and `sqliteGitStorage`. The package already
-  depends on the `just-git` library. `@ambionframework/git` goes.
-- **The root entry of just-bash loads no `node:sqlite`.** A Biome
-  override lets `packages/just-bash/src/git/` alone import `node:sqlite`
-  and `@ambionframework/workspace/git`. The root entry reads the git
-  access through an `import type` alone, and a test of the built chunks
-  holds the rule.
-- **The backend serves the process it runs in.** `handler` and the `url`
-  option go. The clone URLs keep the base `http://git.ambion.invalid`.
-- **The template helpers and the name rules move to
-  `@ambionframework/workspace/git`.** The workstation needs them and must
-  not install `just-git`. `tipHashes` reads `just-git/repo`, so it stays
-  in just-bash.
-- **The core knows a transport by its name.** `GitAccess` in
-  `@ambionframework/workspace` holds `transport` alone. `JustGitAccess` in
-  `@ambionframework/just-bash/git` adds `prefix`, `fetch`, and
-  `credentialFor` for `in-process`. `credentialsFor` goes, since no
-  client reads a credential file.
-- **`gitConformance` stays blind to transports.** The four cases that
-  touch a credential call hooks of the harness, and the package of each
-  pair implements them. The suite names the life of a credential in
-  credential terms: `credentialTtl` and `shortestCredentialTtl`.
-- **A bash backend declares its transports, and `openWorkspace` checks
-  them.** `BashBackend.gitTransports` lists them. The just-bash backends
-  and the test helper of the workspace carry `in-process`. The
-  workstation carries none until G2. A pair that does not match throws
-  when the workspace opens. Neither backend has a name, so the error
-  names the `transport` and the `server` of the git backend, and the
-  transports that the bash backend carries.
-- **The workstation's HTTP path goes.** `git-credentials.ts`, its tests,
-  and the git case of the OpenSSH tier go with it.
+The two read paths can no longer differ. **Evidence:** `pnpm chaos`
+passes with the oracle in `test/support`, `golden.test.ts` compares
+`projectState(replay(...))`, and `src/` holds no `foldRoom`.
 
-G1 landed in two steps. G1a (#312) moved the code and kept the shape of
-`GitAccess`. G1b (#314) changed the contract. The owner deprecates
-`@ambionframework/git` on npmjs with a message that names
-`@ambionframework/just-bash/git`. **Evidence:** a scripted case that
-pairs `justGitBackend` with a bash backend that carries `ssh` or no
-transport and gets the error, `gitConformance` on the just-bash backends
-under the new names, and a root chunk of just-bash without `node:sqlite`.
+**C2. One home for each rule.** A rule that the room decides by lives in
+`rules.verified.ts`, and the caller runs its body. Some callers hold a
+copy of the rule or feed it a constant.
 
-**G2. A git backend on the workstation.** After G1, a workstation has no
-git backend. [Workstation git](../docs/workstation-git.md) designs one in
-`@ambionframework/workstation`. One account on the server owns every
-repository, and each agent reaches it with `git` over SSH on the loopback
-address. A forced command decides each request by the namespace rule. The
-backend issues one Ed25519 key for each agent, limited by `from` and
-`expiry-time`. The key generator retries a pair that `ssh2` cannot read.
-A fork or a template lands with one rename, so the backend keeps no
-registry table.
+- **The unverified copies go.** `cameToNothing` in `room/lease.ts`
+  repeats a rule of `rules.verified.ts`, and `countsAgainst` serves both
+  callers. `acknowledged` repeats the `Math.max` of `applyChange`, which
+  alone keeps `readThrough` from moving back. `seatOf` in `lease.ts` and
+  `seatOfLease` in `transition.ts` are one function.
+- **`summaryVerdict` loses its constant input.** `summaryCompletion` in
+  `room/exchange.ts` returns before the rule when a summary exists, so it
+  passes `covered` as `false` every time, and the branch after the rule
+  never runs. `covered` and the `published` arm go.
+- **One search finds a covering summary.** `summaryCompletion`,
+  `summariesOf`, and `isCoveringSummary` in `transition.ts` each search
+  with `coversExchange`.
+- **`answerView` reads the activation once.** It calls `activationSpec`
+  twice and compares two seats that come from the same id.
+- **The rules read one lease shape.** They read a lease as `Hold`,
+  `Taken`, `Draft`, and `LiveLease`, and `takenOf`, `draftsOf`, and
+  `liveLeases` convert between them. One `RuleLease` replaces the four.
+  This sub-item re-proves the rules that read them, and it follows the
+  cancelled close of C3, which changes what `Hold` holds. Phase 2 holds it.
+- **The lease `since` takes its name in the same proof edit.**
+  [Deferred by decision](backlog.md#deferred-by-decision) holds the name until a
+  proof edit renames it, and this sub-item is that edit.
 
-G2 landed in two steps. G2a (#316) built the server side, and its tests drive
-the git backend alone. G2b (#317) made the bash backend write the key files,
-and it added the OpenSSH tier. Only the `workstation` CI job runs that
-tier, so a step of G2 merged only with that job green. The OpenSSH
-harness removes the repositories and the agent keys of the git account
-between cases. **Evidence:** `gitConformance` and the checks of the
-design pass in the OpenSSH tier. The backend renders `expiry-time` in the
-server's time zone, from the server's clock, since the `Z` suffix for UTC
-needs OpenSSH 9.1.
+**Evidence:** `pnpm rule:check` on each changed rules file, and
+`pnpm check:lemmascript`.
 
-### B. Background processes
+**C3. One shape for a cancellation.** A `cancel` entry can carry a
+close. That close needs its own schema in `journal/validate.ts`, its own
+branch in the fold and the projection, and the list
+`RoomState.cancelClosed`, which exists only so that `exchangeOutcome` can
+ask whether a cancellation wrote a close. The room also applies a
+cancellation twice: at once through `cancelHold` and an empty wake list,
+and later as a `survivesCancellation` filter in four places. In the
+projection, the filter in `pendingOf` is always true.
 
-**B1. A shell command in the background.** Pi's `bash` tool held the bash
-owner until the command ended, and stopped it after 30 seconds, so a
-build or a test run held every other tool call of the workspace. `bash`
-now starts a process that runs off the owner, with its output in a file,
-and gives a handle. `ps`, `status`, `wait`, and `cancel` reach it, the
-host sees the processes of this run through `workspace.processes`, and
-each activation starts with a reminder of the seat's processes
-([Processes](../docs/processes.md)). The files of the bash backend hold
-the table, so a new run of the host adopts the live processes of an
-earlier run. A process has no link to an exchange yet; the backlog holds
-that design. **Evidence:** `packages/workspace/test/processes.test.ts`,
-the Pi continuity test of the reminder, and the timeout, cancel, and
-adoption on OpenSSH. Landed in #307.
+- **A close carries `cancelled`.** The cancellation writes a close with
+  `cancelled: true` into `closes`. `cancelClosed` and the second close
+  schema go.
+- **Each fact takes one mechanism.** Wakes and scheduled says drop at
+  the cancellation. A grant keeps the filter, since it reads an id against
+  the whole record.
 
-**B2. An agent waits for its result inside the activation.** No message
-wakes a seat when a process ends, as in Codex's unified exec. A wait
-could run past the room's deadline for the activation, each poll resent
-the same 50 KB tail, and an agent polled a sweep one process at a time.
-`bash` and `wait` now stop 30 seconds before the deadline that
-`ToolContext.deadline` carries. Each result gives the new output after a
-cursor that the files keep. `wait` takes `handles` and returns at the
-first end. The guidance states that nothing pushes, and
-[Processes](../docs/processes.md#the-end-of-a-process) shows how a host
-posts a message to wake the owner seat. **Evidence:** the deadline tests
-in the core and the workspace, the cursor tests on just-bash and on the
-workstation, and the test of a wait on several handles. #320, #321, and
-#322 carry the code.
+**Evidence:** the `cancelled` golden journal and its `.fold.json` change
+shape, `pnpm rule:check` on the room rules, `pnpm chaos` on both
+storages, and the Cloudflare tests in workerd.
 
-### E. Evals
+**C4. `decide` is the one decision point.** The reconcile in
+`transition.ts` builds the bodies of returned says, closes, and lease
+endings, and `control.ts` discards each body and submits a command that
+decides again. `dueSays` and `returning` check the same condition, and so
+do the close in `planReconciliation` and `admitsClose`. The seat protocol
+in `answers.ts` checks liveness, the grant, and the roster that
+`transition.ts` checks again. `validatePresence` runs the `decide` that
+the commit runs again. `room.ts` repeats the name and summary checks of
+`transition.compose`.
 
-**E1. A simulator for evals.** A live test sends one fixed question and
-matches the answer with a regex. It cannot follow up on an answer, and
-a regex cannot grade a meaning. PR #153 tried a larger package, and
-`@ambionframework/simulator` replaced it. The simulator runs a loop of one exchange at a
-time. An actor plays a person, checks in code read the run, and a judge
-grades the criteria that code cannot decide. The actor and the judge are
-agents on Pi's `AgentHarness`, configured with tools and bundles like any
-agent. **Evidence:** the assistant's live suite runs on the simulator.
+- **The reconcile emits commands.** `return`, `close`, and `end` go to
+  `decide`, and `decide` alone builds a body.
+- **A seat release is a command.** `answers.ts` maps a refusal to its
+  answer, and one pure `seatAuthority` in `room/` serves `view`.
+- **`seatAuthority` answers a missing grant in the `stale` category.**
+  [Executors](../docs/executors.md) states that an adapter aborts on
+  `stale` and continues on `refused`, so a seat whose grant is gone stops
+  at once, as it does today.
+- **One `decideAndAppend` serves the host.** It replaces about nine
+  hand-written `submit(() => decide(...))` wrappers, and it takes the
+  `gone()` guard as an option, since stop still writes revocations and
+  departures. `end` takes one object in place of six positional
+  arguments.
 
-### S. A scheduled say
+**Evidence:** the refusal tests and the history walk of
+`consistency.test.ts` pass unchanged, and the Cloudflare tests pass in
+workerd.
 
-**S1. The room delivers a say back to its author.** A room wakes a seat
-only when a person speaks or a seat addresses it. An agent that starts a
-build of three hours can wait 570 seconds inside one activation, and then
-it must end. Nothing brings it back unless a person speaks or a host posts
-a message.
+**C5. One boundary between the room and a seat.** Three routers pick an
+execution by executor kind: `composeExecutions` and
+`defaultExecutionFactory` in `host/runtime.ts`, and `missingConnector` in
+`room.ts`. They fail in two ways. `composeExecutions` throws in
+`connect`, `portFor` in `room-host/dispatch.ts` reports a
+`delivery_error`, and the wake stays due, so the room sends it again after
+each resend window with no end. `missingConnector` fails the activation
+at once. `composeConnector` also builds the executor and hands it to the
+`Transport`. Cloudflare's `rpcTransport` keeps only `room` and `seat`, and
+the seat object builds the executor a second time in `configure.ts` and
+`seat-object.ts`.
 
-- **A say to oneself with `after` schedules the say.** The room refuses a
-  say to oneself today (`addressRefusal` in `room/transition.ts`), so the
-  pair has no earlier meaning. `say` takes `after` in seconds from the
-  `at` that the room stamps, so a replay computes the same due time on any
-  clock.
-- **The room decides who may schedule.** The commit path takes a
-  response activation while an exchange is open. A summarize activation
-  and an activation outside every exchange get a refusal.
-  `limits.schedule` bounds `after` and the pending says of one seat. A
-  retry of the same key with another `after` is a conflict.
-- **The said entry is an ordinary message.** It lands in the range of the
-  exchange that its activation serves. The room stamps the owner of that
-  exchange on it, so the fold and the projection read the owner from one
-  field. Routing skips its author, so it wakes nobody.
-- **The `returned` entry records the moment.** The reconcile writes
-  `returned { to, message, owner, text, refs }` when the say is due. The
-  room writes it, so it has no `from`. It copies the text and the refs of
-  the say, so a record window, a summary, and a steer carry them. It
-  stores `owner`, so `opensExchange` in `room/rules.verified.ts` stays a
-  check of one entry. The entry wakes the seat that `to` names and steers
-  no other seat. The name `due` already means an activation that the room
-  owes.
-- **A returned say opens an exchange like a question.** `opensExchange`
-  and its proofs accept it, and the projection, `room.exchange`, and the
-  routing read it. The reconcile writes it after a close of the same pass,
-  so it lands after the close. A harness session never crosses an
-  exchange, so the returned activation starts a fresh session. The
-  process reminder carries the state of the work.
-- **A pending say is not live work.** The origin exchange closes while the
-  say waits. An unseating of the author drops its says, and a cancel drops
-  the says before it. A recomposition that leaves the author out writes no
-  unseating, so its says wait until the seat is on the roster again.
-- **A say returns after every ending of its pass.** A pass that ends a
-  lease returns no say, so the returned say lands after the close, and
-  the record is the same whether the host crashed.
-- **The reconcile decides each write again.** The write decides inside the
-  journal queue, and it writes nothing when the fold holds the entry
-  already. The fence refuses a second run. `nextAlarm` takes the earliest
-  due time, and the Cloudflare room object's alarm follows it with no new
-  code.
+- **A kind with no execution fails its activation at once, on every
+  router.** `composeExecutions` returns a port whose activation fails,
+  as `missingConnector` does. This fix changes no contract, and phase 1
+  holds it.
+- **The remote call is an `Execution`.** Its connector returns a port
+  over RPC, and the seat object calls the execution of its own host.
+  `Transport`, `inProcessTransport`, and the transport options of the
+  runtime and the hosting go. [Executors](../docs/executors.md) states
+  the new hosting exports.
+- **One router serves every kind.** `defineExecution(kind, build)`
+  returns an `Execution` and registers the default for its kind.
+- **Every execution keeps the host's trace limits.** Claude and Codex
+  pass `DEFAULT_TRACE_LIMITS` today, and `ConnectorComposition` exists
+  for that difference.
 
-**Evidence:** scripted tests of each refusal and of each path through the
-reconcile on an injected clock; a golden journal of a say, the close of
-its exchange, the returned say, and the exchange that it opens; a crash
-and a stop between the say and the returned say, on memory and on
-SQLite, that find one returned say after the resume; the Cloudflare room
-object returns a say in workerd;
-the rules pass `pnpm check:lemmascript`.
+**Evidence:** a scripted case of an unknown kind under
+`composeExecutions` that ends the activation, `transportConformance` on
+`rpcTransport` in workerd, and the hosting export snapshot.
 
-**S2. The agent and the person see the schedule.** The say result names
-the due time. The render shows a scheduled say with its due time, and a
-returned say with its text, its refs, and the person it returns for.
-When a returned say opened the exchange, the render says that the say
-is the agent's own. A read lists the pending says, and the workbench shows each one
-until it returns. **Evidence:** the render tests, the prompt snapshot, the
-executor conformance on Pi, Claude, and Codex, and a read test of the
-pending says.
+**C6. The core owns the activation state.** Each of the Pi, Claude, and
+Codex executors re-implements the `readThrough` and `cancelled` state,
+the refresh test, the binding of the room tools, the `error` event, the
+freshness of a steer, and the assembly of a prompt. The runner emits the
+`error` event again. The core already causes or observes each of these
+facts, and no executor calls `room.view` or `room.lease`.
 
-**S3. The guidance and the docs state the scheduled say.** The process
-guidance tells an agent to say to itself with `after` to check a long
-process later. [Exchange](../docs/exchange.md) states that a returned
-entry opens an exchange, and [Trust](../docs/trust.md),
-[Processes](../docs/processes.md), [Presence](../docs/presence.md),
-[Durability](../docs/durability.md), the README, and the changelog state
-what shipped. **Evidence:** the doc tests pass, and no page calls a timer
-future work.
+- **A pass receives what the core decides.** The core hands a pass its
+  rendered prompt, its room tools, its resume token, its abort signal,
+  and its trace. The executor calls `read(range)` when the model consumes
+  a range and `delivered(call)` when a tool result reaches the model.
+- **The executor hosts the tools.** Pi runs them in its harness, Claude
+  in an MCP server in the process, and Codex in the stdio server of
+  `room-tools-server.ts`. The contract hands over tool values, and each
+  executor hosts them in or out of its process.
+- **Freshness moves into the core with no Pi type.** `pi/src/freshness.ts`
+  holds the algorithm, and the core imports no model library. Claude's
+  echo check is a weaker copy of it.
+- **The core derives the tool events from the steps.** The pairing of
+  call ids is copied in `claude-trace.ts` and `codex-trace.ts`. One rule
+  sets which room tools raise no tool event. Today Codex also exempts
+  `seat` and `unseat`.
+- **One classifier names a permanent failure.** The three copies of
+  `PERMANENT_TEXT` disagree on the API key, the login, and the quota.
+- **An executor keeps its harness alone:** the step mapping, the resume,
+  how it hosts the tools, and the signal that the model consumed input.
 
-**S4. The agent sees its pending says.** A harness session never crosses
-an exchange, so an agent that schedules a say forgets it by the time it
-returns. It can schedule the same check twice, and it learns the cap only
-from a refusal. The say result now names the seq of the say as its handle,
-and the view of each response activation carries the pending says of the
-seat. The render lists each one with its handle, its due time, its text,
-and its refs, and a continued Pi session reads the list beside the delta.
-**Evidence:** a view test that lists the seat's own says and no other
-seat's, a render test, the prompt snapshot, the Pi continuity test, and
-the handle in the say result of the scheduled-say test.
+A third-party adapter builds on this contract, and the changelog names
+each member that changes. **Evidence:** [Executors](../docs/executors.md)
+states the new `pass` contract, `executorConformance` tests it on the
+three executors, the prompt snapshot holds, and one live file passes on
+each harness.
 
-**S5. A seat or the host dismisses a pending say.** A correction to long work leaves
-the says that the agent scheduled before it. Their text is fixed, and
-nothing can remove them. `dismiss` takes a handle, and the room writes a
-`dismissed` entry. A seat dismisses its own pending say. The host
-dismisses any pending say with `room.dismiss`, and the entry has no
-author, as a host seating has none. `room.scheduled` gives the pending
-says of the room. The fold drops a dismissed say, so it frees its place
-under the cap. **Evidence:** the refusals, a dismissal that races the due
-time, a golden journal, and the host calls on a real room. **Landed:** the
-transition tests of the seat and the host dismissal, the refusals, and the
-race; the `dismissed` golden journal; the key test; and `room.dismiss` and
-`room.scheduled` in the scheduled-say test and on the Cloudflare room
-object.
+**C7. One windowing rule.** `room/view.ts` keeps the newest messages,
+never splits a summarised range, and keeps the open exchange whole. The
+runner applies the same rule by tokens in `windowedView` and
+`windowToLimit`, and the `ViewRange` paging of `room.view` exists only
+for it. On Cloudflare each page is an RPC round trip.
 
-**S6. A person sees and dismisses a pending say in the workbench.** The
-workbench notes each pending say with its handle, and `/dismiss <handle>`
-calls `room.dismiss`. **Evidence:** a session test of the note and the
-command, and a host test on a real room. **Landed:** the session test of
-the note, the palette, and `/dismiss`; the palette test; the timeline test
-of the `dismissed` mark; and the host test that dismisses a say on a real
-room.
+- **The room applies the token limit** inside the view, and the paging
+  and the optional `range` of `RoomProtocol.view` go.
+- **`estimateTokens` becomes a name.** A function does not cross the
+  wire, so the room host holds a registry of named estimators. The
+  executor options of `pi()`, `claude()`, and `codex()` take the name,
+  and the Cloudflare room object reads the registry of its runtime.
+- **The decision in [Definitions and tools](../docs/agent.md) changes.**
+  It states that the seat runs `estimateTokens`. The item rewrites it,
+  and [Pi](../docs/pi.md), [Claude](../docs/claude.md), and
+  [Codex](../docs/codex.md) state the name.
 
-### R. Release
+**Evidence:** the window tests of the room and the runner merge, the
+rendered record of each case stays the same, and the export snapshot
+names the changed option.
 
-**R0. The release.** The owner tags the commit and runs
-`scripts/release.mjs`, as [Toolchain](../docs/toolchain.md#9-release-and-publishing)
-describes. The changelog entry states the end state once, and the live
-run on the tagged commit is the evidence.
+**C8. The workspace keeps one SQL path and the ports that a backend
+uses.**
+
+- **One SQL path.** `sql-resource.ts`, the `./sql` export, opens
+  `node:sqlite` beside `sqliteBackend`, with a second copy of the preview
+  and the table render. The workbench and
+  [Resources](../docs/resources.md) use it. Append-only and provenance
+  become options of `sqliteBackend`, the workbench moves to them, and
+  `sqlConformance` moves into the SQLite tests until a second SQL backend
+  exists.
+- **The spill file goes.** Only tests and conformance ask for
+  `capture.spill`, since every `bash` call writes its output to a
+  process file. One `runScript` helper replaces six copies of the
+  collect-and-check code, and one shell quote replaces three.
+- **`BashBackend.tools` goes.** No backend sets it.
+- **`openWorkspace` alone checks a git transport.** The second check in
+  `justGitAccess` and `sshAccess` goes. The G theme holds the
+  `openWorkspace` check.
+- **`template-sources` stays inside just-bash.** It is a storage detail
+  of `justGitBackend`, and today the shared name rules, the workstation,
+  and a `gitConformance` hook each know it.
+
+**Evidence:** `workspaceConformance` and `gitConformance` on each
+backend, the workbench tests on the new SQL options, and the export
+snapshot of `@ambionframework/workspace`.
+
+**C9. The host keeps one mechanism for each concern.**
+
+- **A composition carries no `version`.** No other format exists. The
+  refusal of the legacy assistant field in `journal/validate.ts` is a
+  reader for an older format, and it goes with `version`.
+- **One capture serves a definition.** `defineHuman` and `captureHuman`
+  apply the same trim, and so do `defineAgent` and `captureAgent`.
+- **One registry serves the waiters.** `waitForClose` runs the loop that
+  `responseFor` runs, and `publish` notifies after each effect in place
+  of eleven `notifyExchangeWaiters` calls placed by hand.
+- **Cloudflare reuses the core.** `recoveryCall` and `releaseRecovered`
+  repeat the call of the runner, `RoomObject.visits` repeats the visits
+  of the room, and `reconcileRoom` repeats `Room.reconcile()`. Phase 2
+  holds this sub-item.
+- **One scripted room serves the conformance suites.** `scriptedRoom` and
+  `executorRoom` merge, and the transport suite keeps the cases that a
+  transport adds. `conformance.ts` and `conformance-executor-room.ts` each
+  hold their own question, participants block, and `stale` constant; the
+  merged room holds one of each, and `until` accepts an async predicate.
+  This sub-item closes M5 of 0.2.0. Phase 2 holds it.
+
+**Evidence:** the golden journals change for `version` alone, the
+coverage of the core holds, and the Cloudflare tests pass in workerd.
+
+**C10. One tool for `status` and `wait`.** `status` gives what `wait`
+with a timeout of 0 gives. `ps` gives what `wait` with no handle and a
+timeout of 0 would give. The process tools shrink to `bash`, `wait`, and
+`cancel`, and the table of tool counts in `defaultToolGuidance` shrinks
+with them. The acceptance of B in 0.3.0 and
+[Processes](../docs/processes.md) name `status` and `ps`, so the item
+rewrites both. **Evidence:** the process tests, the prompt snapshot, and
+one live file on each harness that shows no loss in the use of a process.
+
+**C11. One record for a live process in the table.** The table keeps a
+process of this run and an adopted process in two maps, with two stop
+paths and two end paths. One record with an optional controller removes
+about 50 lines, and each fix to a stop then lands once. The two stop
+mechanisms stay: an abort for a process of this run, since just-bash has
+no pid, and the pid for an adopted process. A lost process keeps its
+`pid` and no end file, so each listing runs `ps` for it until a start
+forgets it. A `stop` line that the first read writes ends that cost.
+**Evidence:** the process tests on just-bash and on the workstation, and
+the adoption on OpenSSH.
+
+**C12. The body schemas guard the journal.** Each `run` entry carries
+`format`, and `validateRunFormat` refuses a format that the runtime does
+not know. [Durability](../docs/durability.md#journal-format) states that
+a body change raises the format and adds no reader for the older one. A
+raise protects only a downgrade, and Ambion supports none. A raise also
+refuses every journal of the release before. 0.3.0 changed three bodies
+and kept format 1.
+
+- **The format number goes.** `JOURNAL_FORMAT`, `Fence.format`, and
+  `validateRunFormat` go, and a `run` entry carries `at` alone.
+- **A schema refuses an old shape that a runtime would misread.** A body
+  schema accepts extra fields, so an old field that a new runtime does
+  not read disappears without an error. A change that removes or
+  redefines a field makes its schema refuse the old field. The cancel
+  schema of C3 refuses `close`. The composition of C9 needs no refusal,
+  since no runtime reads `version`.
+- **[Durability](../docs/durability.md#journal-format) states the rule.**
+  The section names the schemas as the guard, and it states that Ambion
+  supports no downgrade before 1.0.0.
+
+**Evidence:** a journal validation case for each refused old shape, the
+golden journals with no `format`, and `pnpm chaos` on both storages.
+
+**A1. The assistant works a request after its owner leaves.** This item
+fixes a defect and adds no capability. A room stays available between
+interactions, so a person who asks and leaves gets the answer later.
+
+- **The problem.** On 2026-09-25, a Workbench test sent `/try` in the four
+  sample rooms and switched rooms at once. Each switch wrote `left` for the
+  person two seqs after the question. In `bringup` and `power`, the
+  assistant released its activation with no say and no seat. Its closing
+  summary read "this exchange closed with no answer … you left before the
+  datasheets and design specialists could be engaged". In `sensing`, the
+  same `left` came, and the assistant routed the work. The same question,
+  sent with the person present, got a full answer in both rooms. The
+  guidance of `packages/assistant` says nothing about presence, so the
+  model decides.
+- **The change.** The membership guidance states that the presence of the
+  owner does not change the work. The assistant seats and routes as it
+  does for a person who stays, and the closing summary goes to the owner.
+- **Seen in the same run, not in scope.** In `firmware`, the assistant
+  forked, edited, and pushed the work itself and sent nothing to a
+  specialist, while [Default assistant](../docs/assistant.md) keeps it to
+  membership and summaries. The Workbench gives every seat the same tools.
+  In `power`, `design` said "Working the sum + margin now … one moment."
+  before its answer, and its instructions forbid an acknowledgment.
+
+**Evidence:** a case in `packages/assistant/test/live/behavior.test.ts`,
+at pass^3, where the person asks and leaves before the first activation.
+The assistant sends a directed request to a specialist, and the closing
+summary answers the question. The live suite of the assistant stays green.
