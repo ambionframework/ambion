@@ -60,6 +60,7 @@ const kinds = (messages: readonly Message[]) =>
 
 describe.each(storages)('a scheduled say on $name', (storage) => {
 	const setup = async () => {
+		results.length = 0;
 		const opened = await openFor(storage);
 		const clock = fakeClock();
 		const runtime = () => createRuntime({ clock, storage: opened.storage });

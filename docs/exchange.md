@@ -118,7 +118,8 @@ after the close of the same pass.
 say as its handle: `scheduled 41: the room gives this say back to you at
 <time>`. The view of each response activation carries the pending says of
 the seat in `scheduled`, and the render lists each one with its handle, its
-due time, and its text. A closing activation reads none.
+due time, its text, and its refs. A continued Pi session reads the list
+beside the delta. A closing activation reads none.
 
 **A say can stop waiting.** An unseating of its author drops it, and a
 cancellation drops every say before it. A recomposition that leaves the author

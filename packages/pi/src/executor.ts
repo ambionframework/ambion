@@ -52,6 +52,7 @@ import type {
 import {
 	renderActivation,
 	renderDelta,
+	renderPending,
 	resolveReminders,
 	sessionToResume,
 } from '@ambionframework/ambion/hosting';
@@ -382,8 +383,8 @@ export class Activation implements ExecutorSession {
 	 * model the whole view. A later pass, and a response in a continued
 	 * session, hand it the delta, and none when nothing is new. The first
 	 * pass of a response in a continued session also hands it the reminders
-	 * of the tool bundles, which the whole view holds. A closing activation
-	 * reads the whole view.
+	 * of the tool bundles and the seat's pending says, which the whole view
+	 * holds. A closing activation reads the whole view.
 	 */
 	private async promptFor(input: PassInput): Promise<AgentMessage[]> {
 		const { view } = input;
@@ -392,9 +393,10 @@ export class Activation implements ExecutorSession {
 			const delta = renderDelta(view, after);
 			if (delta === undefined) return [];
 			// The bundle reminders resolve only when the pass has something to send.
-			const reminders =
-				input.kind === 'delta' ? undefined : await resolveReminders(view, this.definition);
-			const text = reminders === undefined ? delta : `${reminders}\n\n${delta}`;
+			const first = input.kind !== 'delta';
+			const reminders = first ? await resolveReminders(view, this.definition) : undefined;
+			const pending = first ? renderPending(view) : undefined;
+			const text = [reminders, pending, delta].filter((part) => part !== undefined).join('\n\n');
 			return [recordMessage({ after, through: view.through }, text, this.options.now())];
 		}
 		const reminders = await resolveReminders(view, this.definition);

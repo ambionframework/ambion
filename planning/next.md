@@ -66,9 +66,10 @@ commit.** The phases below deliver them; the items explain them.
 | E Evals                  | The assistant's live suite runs on `@ambionframework/simulator`, with three cases over several exchanges and five cases of the assistant's purpose. It must pass on two model families at `medium` thinking, each graded by the other. [Simulator](../docs/simulator.md) holds the design.                                                                                                                                                                                                                                           |
 | S A scheduled say        | An agent says to itself with `after`, and the room refuses every other use of `after` and every other say to oneself. The room writes a `returned` entry when the say is due, and the entry wakes the seat. The returned say opens an exchange for the owner of the exchange of the say when no exchange is open. A kill between the say and the returned say keeps one delivery, and the Cloudflare room object delivers it through its alarm. The agent, the host, and a person see each pending say by its handle and dismiss it. |
 
-**One journal format change.** A said entry takes `after`, and the
-`returned` entry is new (S1). The notice kind and the `awaiting` outcome that
-names a room stay in the backlog with W1 and D1.
+**Two journal format changes.** A said entry takes `after`, and the
+`returned` entry is new (S1). The `dismissed` entry is new (S5). The notice
+kind and the `awaiting` outcome that names a room stay in the backlog with
+W1 and D1.
 
 **Deployment models.** The same rules serve four placements.
 
@@ -461,12 +462,13 @@ an exchange, so an agent that schedules a say forgets it by the time it
 returns. It can schedule the same check twice, and it learns the cap only
 from a refusal. The say result now names the seq of the say as its handle,
 and the view of each response activation carries the pending says of the
-seat. The render lists each one with its handle, its due time, and its
-text. **Evidence:** a view test that lists the seat's own says and no
-other seat's, a render test, and the handle in the say result of the
-scheduled-say test.
+seat. The render lists each one with its handle, its due time, its text,
+and its refs, and a continued Pi session reads the list beside the delta.
+**Evidence:** a view test that lists the seat's own says and no other
+seat's, a render test, the prompt snapshot, the Pi continuity test, and
+the handle in the say result of the scheduled-say test.
 
-**S5. A pending say can be dismissed.** A correction to long work leaves
+**S5. A seat or the host dismisses a pending say.** A correction to long work leaves
 the says that the agent scheduled before it. Their text is fixed, and
 nothing can remove them. `dismiss` takes a handle, and the room writes a
 `dismissed` entry. A seat dismisses its own pending say. The host

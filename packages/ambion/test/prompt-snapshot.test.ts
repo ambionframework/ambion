@@ -50,7 +50,20 @@ const worker = defineAgent({
 const respond: ActivationView = {
 	spec: { id: 'a', seat: 'worker', attempt: 1, purpose: { kind: 'respond', message: 2 } },
 	through: 3,
-	context: { ...context, exchange: { owner: 'priya', from: 2 } },
+	context: {
+		...context,
+		exchange: { owner: 'priya', from: 2 },
+		scheduled: [
+			{
+				seq: 4,
+				seat: 'worker',
+				owner: 'priya',
+				due: '2026-01-01T10:00:00.000Z',
+				text: 'Check the pour log.',
+				refs: ['file:///pours.log'],
+			},
+		],
+	},
 };
 const summarize: ActivationView = {
 	spec: {

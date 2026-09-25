@@ -14,7 +14,7 @@
  * comes in resolved (`reminders.ts`).
  */
 
-import type { ActivationView, CollaborationContext, ContextParticipant } from '../protocol.ts';
+import type { ActivationView, ContextParticipant } from '../protocol.ts';
 import { messageUri, roomUri } from '../refs.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
 import {
@@ -419,7 +419,7 @@ function renderTurnContext(
 			context.omitted,
 		),
 		``,
-		...paragraph(renderScheduled(context.scheduled)),
+		...paragraph(renderPending(view)),
 		...paragraph(view.spec.purpose.kind === 'respond' ? reminders : undefined),
 		askOf(view, def),
 	].join('\n');
@@ -430,12 +430,18 @@ function paragraph(text: string | undefined): string[] {
 	return text === undefined ? [] : [text, ``];
 }
 
-/** The says of this seat that wait to return, by handle, or nothing when none waits. */
-function renderScheduled(scheduled: CollaborationContext['scheduled']): string | undefined {
-	if (scheduled === undefined || scheduled.length === 0) return undefined;
+/**
+ * The says of this seat that wait to return, by handle, or nothing when none
+ * waits. A seat that continues its session reads it beside the delta, so the
+ * list is current at every response activation.
+ */
+export function renderPending(view: ActivationView): string | undefined {
+	const { scheduled } = view.context;
+	if (view.spec.purpose.kind !== 'respond' || scheduled === undefined) return undefined;
+	if (scheduled.length === 0) return undefined;
 	return [
 		`Your says that wait to return. The room gives each back to you at its due time:`,
-		...scheduled.map((say) => `- ${say.seq}, due ${say.due}: ${say.text}`),
+		...scheduled.map((say) => `- ${say.seq}, due ${say.due}: ${say.text}${refsOf(say)}`),
 	].join('\n');
 }
 

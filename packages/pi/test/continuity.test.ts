@@ -15,6 +15,7 @@ import type {
 } from '@ambionframework/ambion';
 import type {
 	ActivationSpec,
+	ActivationView,
 	CommitRequest,
 	CommitResult,
 	HarnessSession,
@@ -138,7 +139,11 @@ function seatOn(
 		now: () => 0,
 		sessions,
 	});
-	const run = async (id: string, spec: Partial<ActivationSpec> = {}) => {
+	const run = async (
+		id: string,
+		spec: Partial<ActivationSpec> = {},
+		context: Partial<ActivationView['context']> = {},
+	) => {
 		const answer = await room.view(id);
 		if (!('view' in answer)) throw new Error('The room answered stale.');
 		const session = executor.open({
@@ -149,7 +154,11 @@ function seatOn(
 			},
 			trace: noTrace,
 		});
-		const view = { ...answer.view, spec: { ...answer.view.spec, ...spec } };
+		const view = {
+			...answer.view,
+			spec: { ...answer.view.spec, ...spec },
+			context: { ...answer.view.context, ...context },
+		};
 		const result = await session.pass({ kind: 'view', view });
 		const recorded = { result, session: session.session, readThrough: session.readThrough };
 		session.close?.();
@@ -172,13 +181,24 @@ const summary = {
 } as const;
 
 describe.each(stores)('exchange continuity on sessions in %s', (_name, store) => {
-	it('continues the session the room names, prompts the reminders and the delta, and records it', async () => {
-		// A bundle reminder reaches the model on a continued session too, before the delta.
+	it('continues the session the room names, prompts the reminders, the pending says, and the delta, and records it', async () => {
+		// A bundle reminder and the pending says reach the model on a continued session too, before the delta.
 		const remind = (seat: ReminderSeat) => `Reminder for ${seat.activation}.`;
 		const definition = scriptedAgent('product', 'Product.', { bundles: [{ tools: [], remind }] });
 		const { seen, run } = seatOn(new TwoQuestions(), await store(), undefined, definition);
 		const first = await run('message:1:product:1');
-		const second = await run('message:2:product:1', { resume: first.session });
+		const later = {
+			seq: 1,
+			seat: 'product',
+			owner: 'andrei',
+			due: 'soon',
+			text: 'Check the pump.',
+		};
+		const second = await run(
+			'message:2:product:1',
+			{ resume: first.session },
+			{ scheduled: [later] },
+		);
 		expect(first.session).toEqual(began(1));
 		expect(second.session).toEqual(began(1));
 		expect(second.readThrough).toBe(2);
@@ -187,7 +207,9 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		expect(prompts[0]).toContain("The record of 'memory' so far:");
 		expect(prompts[0]).toContain('Reminder for message:1:product:1.');
 		expect(prompts.at(-1)).toBe(
-			'Reminder for message:2:product:1.\n\n[new] [andrei] And the pump?',
+			'Reminder for message:2:product:1.\n\n' +
+				'Your says that wait to return. The room gives each back to you at its due time:\n' +
+				'- 1, due soon: Check the pump.\n\n[new] [andrei] And the pump?',
 		);
 		// The position the session read never reaches the model.
 		expect(prompts.join('\n')).not.toContain('through');
