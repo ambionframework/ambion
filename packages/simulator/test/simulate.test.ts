@@ -3,7 +3,7 @@
  * and the run it returns. Every room is a real room on the scripted
  * execution, and every person is a `scriptedActor` or a plain function.
  */
-import { isSpoken, type Message } from '@ambionframework/ambion';
+import { defineHuman, isSpoken, type Message } from '@ambionframework/ambion';
 import {
 	byAgent,
 	isClosing,
@@ -173,6 +173,48 @@ describe('simulate', () => {
 		expect(run.ended).toBe('failed');
 		expect(run.error).toMatch(error);
 		expect(run.exchanges).toEqual([]);
+	});
+
+	it('ends with `failed` when the message joins an exchange that was already open', async () => {
+		const room = await open(byAgent({ desk: () => forever() }), ['desk']);
+		const sam = defineHuman({ name: 'sam', identity: 'Another manager.' });
+		await (await room.visit(sam)).send({ text: 'Sam asks first.' });
+		const run = await simulate(room, {
+			person: priya,
+			actor: scriptedActor(['Priya asks second.']),
+			exchanges: 1,
+		});
+		expect(run.ended).toBe('failed');
+		expect(run.error).toMatch(/joined the open exchange/);
+		expect(run.exchanges).toEqual([]);
+	});
+
+	it('ends with `failed` when the room stops while the abort at the deadline runs', async () => {
+		const script = byAgent({
+			desk: (step) => (step.results.length > 0 ? quiet() : speak('Thursday is dry.')),
+			editor: (step) => (isClosing(step.view) ? forever() : quiet()),
+		});
+		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
+		// The room itself, stopped before its abort runs: the abort then rejects.
+		const stopping = new Proxy(room, {
+			get(target, key) {
+				if (key === 'abort')
+					return async () => {
+						await target.stop();
+						return target.abort();
+					};
+				const value: unknown = Reflect.get(target, key);
+				return typeof value === 'function' ? value.bind(target) : value;
+			},
+		});
+		const run = await simulate(stopping, {
+			person: priya,
+			actor: scriptedActor(['Can we pour?']),
+			exchanges: 1,
+			exchangeMs: 2_000,
+		});
+		expect(run.ended).toBe('failed');
+		expect(run.error).toMatch(/abort at the deadline failed: .*stopped/);
 	});
 
 	it('ends with `failed` when the room refuses a send', async () => {
