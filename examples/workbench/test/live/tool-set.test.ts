@@ -43,10 +43,12 @@ const QUIET_MS = 150_000;
 /** The assistant and the specialists, each with the family it runs on. */
 const specialists = ['assistant', 'datasheets', 'design', 'experiments'] as const;
 
-/** Native tool names of the three harnesses. No seat holds one. */
+/**
+ * Native tool names of the three harnesses. No seat holds one. The list omits
+ * the native `wait` of Codex: the workspace process tool has the same name.
+ */
 const NATIVE = [
 	'exec',
-	'wait',
 	'shell',
 	'Bash',
 	'Read',
@@ -176,9 +178,9 @@ describe.skipIf(available.length === 0)('Workbench tool set on every family', ()
 			for (const seat of available) lists.set(seat, namesIn(await ask(opened.room, seat, LIST)));
 			const [first, ...rest] = available.map((seat) => lists.get(seat) ?? []);
 			expect(first?.length).toBeGreaterThan(0);
-			for (const list of rest) expect(list).toEqual(first);
-			for (const list of lists.values())
-				for (const name of NATIVE) expect(list).not.toContain(name);
+			for (const [index, list] of rest.entries()) expect(list, available[index + 1]).toEqual(first);
+			for (const [seat, list] of lists)
+				for (const name of NATIVE) expect(list, seat).not.toContain(name);
 		} finally {
 			await opened.close();
 		}
