@@ -408,11 +408,41 @@ describe('Session scheduled says', () => {
 		await session.refresh();
 		expect(session.blocks).toContainEqual({
 			type: 'note',
-			text: 'bench comes back at soon for mira: Check the build.',
+			text: 'bench comes back at soon for mira: Check the build. (/dismiss 5)',
 		});
+		expect(session.suggestions('/dismiss ').map((row) => row.insert)).toEqual(['/dismiss 5']);
 		host.table.set('bringup', view('bringup'));
 		await session.refresh();
 		expect(blockTypes(session)).not.toContain('note');
+	});
+
+	it('dismisses a say by the handle that the note shows, and refuses any other', async () => {
+		const { host, session } = await started();
+		const say = { seq: 5, seat: 'bench', owner: 'mira', due: 'soon', text: 'Check the build.' };
+		host.table.set('bringup', view('bringup', { scheduled: [say] }));
+		await session.refresh();
+		for (const typed of ['/dismiss 6', '/dismiss']) {
+			await session.submit(typed);
+			expect(session.notice).toMatch(/^Use \/dismiss <n>/);
+		}
+		await session.submit('/dismiss 5');
+		expect(session.notice).toBe('Dismissed say 5. bench does not come back to it.');
+		host.dismissed = false;
+		await session.submit('/dismiss 5');
+		expect(session.notice).toBe('Say 5 no longer waits.');
+		expect(host.calls.filter((call) => call.startsWith('dismiss'))).toEqual([
+			'dismiss:bringup:5',
+			'dismiss:bringup:5',
+		]);
+		host.dismiss = async () => {
+			throw new Error('Resume this room first.');
+		};
+		await session.submit('/dismiss 5');
+		expect(session.error).toBe('Resume this room first.');
+		host.table.set('bringup', view('bringup', { scheduled: [say], status: 'stopped' }));
+		await session.refresh();
+		await session.submit('/dismiss 5');
+		expect(session.notice).toBe('bringup is not running. Use /resume first.');
 	});
 });
 

@@ -74,6 +74,9 @@ exchange for the owner of the first one. See
   `scheduledSays`, because Workers keep the name `scheduled`.
   `DismissedMessage` is a new export, and `/hosting` exports `DISMISS`.
 - **The workbench shows a returned say, and notes each say that waits.**
+  Each note names the handle of the say. `/dismiss <n>` dismisses the say,
+  and the palette lists the says that wait. A dismissed say reads
+  `dismissed` in place of its return time.
 - **`ps`, `status`, `wait`, and `cancel` join `bash`.** `ps` lists the
   running processes of the caller. The handle tools take a handle of the
   caller. `bash` takes an optional `name`, a label that `ps` and the

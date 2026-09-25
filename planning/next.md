@@ -247,7 +247,7 @@ see a pending say and dismiss it.
 - [x] **2.** A seat dismisses its own pending say with `dismiss`, and the
       host dismisses any pending say with `room.dismiss` and reads them
       with `room.scheduled`. Needs 1. P1. (S5)
-- [ ] **3.** The workbench shows the pending says of a room, and a person
+- [x] **3.** The workbench shows the pending says of a room, and a person
       dismisses one. Needs 2. P1. (S6)
 
 **Evidence:** the tests and the golden journals that S1 and S5 name hold
@@ -485,7 +485,10 @@ object.
 **S6. A person sees and dismisses a pending say in the workbench.** The
 workbench notes each pending say with its handle, and `/dismiss <handle>`
 calls `room.dismiss`. **Evidence:** a session test of the note and the
-command, and a host test on a real room.
+command, and a host test on a real room. **Landed:** the session test of
+the note, the palette, and `/dismiss`; the palette test; the timeline test
+of the `dismissed` mark; and the host test that dismisses a say on a real
+room.
 
 ### R. Release
 

@@ -13,6 +13,8 @@ export interface MessageBlock {
 	type: 'message';
 	message: Message;
 	role: Role;
+	/** Set on a scheduled say that its seat or the host dismissed. It does not return. */
+	dismissed?: true;
 }
 
 /** The thread between a question and its summary. It opens and closes. */
@@ -160,11 +162,16 @@ class Builder {
 	private readonly index: Index;
 	private readonly blocks: Block[] = [];
 	private readonly done = new Set<Group>();
+	/** The seqs of the scheduled says that a dismissal names. */
+	private readonly dismissed: ReadonlySet<number>;
 
 	constructor(input: TimelineInput) {
 		this.input = input;
 		this.groups = groupsOf(input);
 		this.index = indexGroups(this.groups);
+		this.dismissed = new Set(
+			input.messages.flatMap((message) => (message.kind === 'dismissed' ? [message.message] : [])),
+		);
 	}
 
 	build(): Block[] {
@@ -183,6 +190,13 @@ class Builder {
 		return inThread ? 'steer' : 'question';
 	};
 
+	private blockOf = (message: Message, inThread: boolean): MessageBlock => ({
+		type: 'message',
+		message,
+		role: this.roleOf(message, inThread),
+		...(this.dismissed.has(message.seq) ? { dismissed: true } : {}),
+	});
+
 	/** Put one message in its place: in a thread, in the open, or nowhere when a summary shows it. */
 	private place(message: Message): void {
 		const grouped = this.index.bySource.get(message.seq);
@@ -191,7 +205,7 @@ class Builder {
 			return;
 		}
 		if (this.index.summarySeqs.has(message.seq)) return;
-		this.blocks.push({ type: 'message', message, role: this.roleOf(message, false) });
+		this.blocks.push(this.blockOf(message, false));
 		const opening = this.index.byOpening.get(message.seq);
 		if (opening) this.emit(opening);
 	}
@@ -199,7 +213,7 @@ class Builder {
 	private emit(group: Group): void {
 		if (this.done.has(group)) return;
 		this.done.add(group);
-		if (!group.direct) this.blocks.push(...groupBlocks(group, this.input, this.roleOf));
+		if (!group.direct) this.blocks.push(...groupBlocks(group, this.input, this.blockOf));
 	}
 }
 
@@ -219,7 +233,7 @@ export function buildTimeline(input: TimelineInput): Block[] {
 function groupBlocks(
 	group: Group,
 	input: TimelineInput,
-	roleOf: (message: Message, inThread: boolean) => Role,
+	blockOf: (message: Message, inThread: boolean) => MessageBlock,
 ): Block[] {
 	const summary: Block[] = group.summary
 		? [{ type: 'message', message: group.summary, role: 'summary' }]
@@ -237,11 +251,7 @@ function groupBlocks(
 		cost: formatUsage(group.exchange.usage),
 		activations: group.exchange.activations.length,
 		expanded: input.expanded.has(key),
-		items: group.source.map((message) => ({
-			type: 'message',
-			message,
-			role: roleOf(message, true),
-		})),
+		items: group.source.map((message) => blockOf(message, true)),
 	};
 	return [discussion, ...summary];
 }

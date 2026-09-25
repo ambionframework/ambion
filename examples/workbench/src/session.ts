@@ -3,6 +3,7 @@ import { attachCommand, type StagedAttachment } from './attachments.ts';
 import { attentionOf, newest, pick } from './attention.ts';
 import { FileBrowser } from './browser.ts';
 import { type Choices, type Parsed, parse, type Suggestion, suggest } from './commands.ts';
+import { dismissCommand } from './dismiss.ts';
 import { RoomFeed } from './feed.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
 import { holderOf, type Known, labUri, type RefItem, refItems, shows, tableOfUri } from './refs.ts';
@@ -222,6 +223,7 @@ export class Session {
 			})),
 			people: this.host.people.map((person) => ({ name: person.name, role: person.role })),
 			files: this.files,
+			says: this.view?.scheduled ?? [],
 		};
 	}
 
@@ -287,12 +289,16 @@ export class Session {
 				return this.openFiles();
 			case 'open':
 				return this.openFile(argument);
-			case 'attach': {
-				const attached = await attachCommand(this.host, this, argument);
-				return void ('error' in attached ? this.fail(attached.error) : this.say(attached.notice));
+			case 'attach':
+			case 'dismiss': {
+				const done = await (name === 'attach'
+					? attachCommand(this.host, this, argument)
+					: dismissCommand(this.host, this.view, argument));
+				return void ('error' in done ? this.fail(done.error) : this.say(done.notice));
 			}
 			case 'try':
-				return this.tryPrompt();
+				if (this.view?.prompt) return { type: 'compose', text: this.view.prompt };
+				return void this.say('This room has no suggested question.');
 			case 'abort':
 			case 'stop':
 			case 'resume':
@@ -448,15 +454,6 @@ export class Session {
 		} catch (error) {
 			this.fail(error);
 		}
-	}
-
-	private tryPrompt(): Intent | undefined {
-		const prompt = this.view?.prompt;
-		if (!prompt) {
-			this.say('This room has no suggested question.');
-			return undefined;
-		}
-		return { type: 'compose', text: prompt };
 	}
 
 	// Files

@@ -1,9 +1,11 @@
+import type { PendingSay } from '@ambionframework/ambion';
+
 /** A slash command the composer understands. */
 interface Command {
 	name: string;
 	summary: string;
 	/** What the command takes after its name. A command with nothing runs at once. */
-	argument?: 'room' | 'person' | 'file' | 'text';
+	argument?: 'room' | 'person' | 'file' | 'say' | 'text';
 }
 
 const COMMANDS: readonly Command[] = [
@@ -16,6 +18,7 @@ const COMMANDS: readonly Command[] = [
 	{ name: 'attach', summary: 'Attach a local file to your next message', argument: 'text' },
 	{ name: 'try', summary: 'Fill the composer with the room’s suggested question' },
 	{ name: 'abort', summary: 'Cancel the open exchange' },
+	{ name: 'dismiss', summary: 'Dismiss a say that waits to return: /dismiss <n>', argument: 'say' },
 	{ name: 'stop', summary: 'Stop the room' },
 	{ name: 'resume', summary: 'Resume the room' },
 	{ name: 'steps', summary: 'Show the steps of an activation: /steps [n]', argument: 'text' },
@@ -69,10 +72,15 @@ export interface Choices {
 	rooms: readonly RoomChoice[];
 	people: readonly PersonChoice[];
 	files: readonly FileChoice[];
+	/** The says of the open room that wait to return. */
+	says: readonly PendingSay[];
 }
 
 /** What a palette row completes to. It names the palette. */
-type Kind = 'command' | 'room' | 'person' | 'file';
+type Kind = 'command' | 'room' | 'person' | 'file' | 'say';
+
+/** The palette of each command that takes a choice. `/room` lists the rooms, and any other command completes to nothing. */
+const KINDS: Readonly<Record<string, Kind>> = { user: 'person', open: 'file', dismiss: 'say' };
 
 /** One row of the palette above the composer. */
 export interface Suggestion {
@@ -102,7 +110,7 @@ function commandSuggestions(prefix: string): Suggestion[] {
 
 function argumentSuggestions(name: string, wanted: string, choices: Choices): Suggestion[] {
 	const text = wanted.trim().toLowerCase();
-	const kind: Kind = name === 'user' ? 'person' : name === 'open' ? 'file' : 'room';
+	const kind: Kind = KINDS[name] ?? 'room';
 	const row = (label: string, detail: string): Suggestion => ({
 		kind,
 		label,
@@ -122,13 +130,17 @@ function argumentSuggestions(name: string, wanted: string, choices: Choices): Su
 		return choices.files
 			.filter((file) => file.path.toLowerCase().includes(text))
 			.map((file) => row(file.path, bytes(file.size)));
+	if (name === 'dismiss')
+		return choices.says
+			.filter((say) => String(say.seq).startsWith(text))
+			.map((say) => row(String(say.seq), `${say.seat}: ${say.text}`));
 	return [];
 }
 
 /**
  * The rows the palette shows for what the person has typed so far. Only a single
- * line that starts with a slash opens the palette. `/room `, `/user `, and `/open `
- * list what they can take.
+ * line that starts with a slash opens the palette. `/room `, `/user `, `/open `,
+ * and `/dismiss ` list what they can take.
  */
 export function suggest(input: string, choices: Choices): Suggestion[] {
 	if (!input.startsWith('/') || input.startsWith('//') || input.includes('\n')) return [];

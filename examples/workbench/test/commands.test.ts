@@ -17,6 +17,22 @@ const choices: Choices = {
 		{ path: '/library/led-5mm.md', size: 797 },
 		{ path: '/shared/notes.md', size: 2048 },
 	],
+	says: [
+		{
+			seq: 41,
+			seat: 'bench',
+			owner: 'mira',
+			due: '2026-09-25T10:00:00.000Z',
+			text: 'Check the sweep.',
+		},
+		{
+			seq: 57,
+			seat: 'bench',
+			owner: 'mira',
+			due: '2026-09-25T11:00:00.000Z',
+			text: 'Read the log.',
+		},
+	],
 };
 
 describe('parse', () => {
@@ -49,6 +65,7 @@ describe('suggest', () => {
 				'/attach',
 				'/try',
 				'/abort',
+				'/dismiss',
 				'/stop',
 				'/resume',
 				'/steps',
@@ -94,6 +111,15 @@ describe('suggest', () => {
 		expect(suggest('/open NOTES', choices).map((row) => row.insert)).toEqual([
 			'/open /shared/notes.md',
 		]);
+	});
+
+	it('lists the says that wait after /dismiss, with their seat and text, in their own palette', () => {
+		const rows = suggest('/dismiss ', choices);
+		expect(rows.map((row) => [row.label, row.detail, row.insert, row.kind])).toEqual([
+			['41', 'bench: Check the sweep.', '/dismiss 41', 'say'],
+			['57', 'bench: Read the log.', '/dismiss 57', 'say'],
+		]);
+		expect(suggest('/dismiss 5', choices).map((row) => row.label)).toEqual(['57']);
 	});
 
 	it('only completes /new, which takes free text', () => {

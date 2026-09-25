@@ -14,6 +14,7 @@ export const HELP = [
 	'  /attach <path>    copy a local file into the workspace and cite it in your next message',
 	'  /try              fill the composer with the room’s suggested question',
 	'  /abort            cancel the open exchange in this room',
+	'  /dismiss <n>      dismiss the say n that waits to return. The agent does not come back to it.',
 	'  /stop             stop the room. /resume starts it again.',
 	'  /steps [n]        show the steps of the newest activation of exchange n, oldest first.',
 	'                    Without n, the latest exchange. /steps off hides them.',
@@ -79,5 +80,5 @@ function pendingLine(say: PendingSay): string {
 				hour: '2-digit',
 				minute: '2-digit',
 			});
-	return `${say.seat} comes back at ${time} for ${say.owner}: ${say.text}`;
+	return `${say.seat} comes back at ${time} for ${say.owner}: ${say.text} (/dismiss ${say.seq})`;
 }
