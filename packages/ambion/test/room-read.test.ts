@@ -63,6 +63,7 @@ function state(
 		pending: [],
 		owed: [],
 		due: [],
+		scheduled: [],
 		messages,
 		lastSeq: messages.at(-1)?.seq ?? 0,
 	};

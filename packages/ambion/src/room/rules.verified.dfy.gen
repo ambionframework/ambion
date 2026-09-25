@@ -20,7 +20,7 @@ function MathMin(a: int, b: int): int { if a <= b then a else b }
 
 function MathMax(a: int, b: int): int { if a >= b then a else b }
 
-datatype Message = Message(kind: string, seq_: int, from: string, at: string)
+datatype Message = Message(kind: string, seq_: int, from: string, owner: string, at: string)
 
 datatype LeasePhase = running | ended
 
@@ -823,12 +823,19 @@ lemma lastOf_ensures(seqs: seq<int>)
 
 function opensExchange(message: Message, people: seq<string>, closedThrough: int): bool
 {
-  (((message.kind == "said") && (message.from in people)) && (message.seq_ > closedThrough))
+  if (message.seq_ <= closedThrough) then
+    false
+  else
+    if (message.kind == "returned") then
+      (message.owner in people)
+    else
+      ((message.kind == "said") && (message.from in people))
 }
 
 lemma opensExchange_ensures(message: Message, people: seq<string>, closedThrough: int)
-  ensures (opensExchange(message, people, closedThrough) <==> (((message.kind == "said") && (message.from in people)) && (message.seq_ > closedThrough)))
-  ensures ((message.kind != "said") ==> !(opensExchange(message, people, closedThrough)))
+  ensures ((message.kind == "said") ==> (opensExchange(message, people, closedThrough) <==> ((message.from in people) && (message.seq_ > closedThrough))))
+  ensures ((message.kind == "returned") ==> (opensExchange(message, people, closedThrough) <==> ((message.owner in people) && (message.seq_ > closedThrough))))
+  ensures ((message.kind != "said") ==> (message.kind != "returned") ==> !(opensExchange(message, people, closedThrough)))
   ensures ((message.seq_ <= closedThrough) ==> !(opensExchange(message, people, closedThrough)))
 {
 }
@@ -841,7 +848,7 @@ function openingQuestion(messages: seq<Message>, people: seq<string>, closedThro
 
 lemma openingQuestion_ensures(messages: seq<Message>, people: seq<string>, closedThrough: int)
   requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |messages|) ==> (messages[i].seq_ < messages[j].seq_))
-  ensures (match openingQuestion(messages, people, closedThrough) { case Some(i_result_val) => (((i_result_val.kind == "said") && (i_result_val.from in people)) && (i_result_val.seq_ > closedThrough)) case None => true })
+  ensures (match openingQuestion(messages, people, closedThrough) { case Some(i_result_val) => (opensExchange(i_result_val, people, closedThrough) && (i_result_val.seq_ > closedThrough)) case None => true })
   ensures ((match openingQuestion(messages, people, closedThrough) { case Some(i_) => false case None => true }) <==> !(exists i: int :: (((0 <= i) && (i < |messages|)) && opensExchange(messages[i], people, closedThrough))))
   ensures (match openingQuestion(messages, people, closedThrough) { case Some(i_result_val) => exists i: int :: ((((0 <= i) && (i < |messages|)) && (messages[i] == i_result_val)) && forall j: int :: ((0 <= j) ==> (j < i) ==> !(opensExchange(messages[j], people, closedThrough)))) case None => true })
   ensures (match openingQuestion(messages, people, closedThrough) { case Some(i_result_val) => ((|messages| > 0) && (i_result_val.seq_ <= messages[(|messages| - 1)].seq_)) case None => true })

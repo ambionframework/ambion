@@ -91,7 +91,12 @@ export async function writeCommit(
 		() =>
 			decide(
 				host.state(),
-				{ type: 'commit', commit, bytes: host.runtime.limits.message.bytes },
+				{
+					type: 'commit',
+					commit,
+					bytes: host.runtime.limits.message.bytes,
+					schedule: host.runtime.limits.schedule,
+				},
 				host.now(),
 			),
 		spaced('commit', commit.key),
@@ -271,7 +276,23 @@ function applyEvent(
 		).then((result) => {
 			return requireEnd(result);
 		});
+	if (event.kind === 'message' && event.body.kind === 'returned')
+		return returnSay(host, event.body.message);
 	return event.kind === 'close' ? closeExchange(host, event.body) : Promise.resolve(false);
+}
+
+/**
+ * The room gives one scheduled say back to its author. The write decides
+ * again inside the journal queue, so a say that another write returned
+ * first writes nothing, and the fence refuses a run that lost the room.
+ */
+async function returnSay(host: ControlHost, seq: Seq): Promise<boolean> {
+	const written = await submit(host.journal, 'message', () => {
+		if (host.gone()) return { event: undefined };
+		return decide(host.state(), { type: 'return', message: seq }, host.now());
+	});
+	requireSubmission(written);
+	return 'entry' in written;
 }
 
 function requireEnd(result: boolean | { refusal: Refusal }): boolean {

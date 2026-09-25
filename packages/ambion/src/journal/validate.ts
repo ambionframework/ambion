@@ -41,6 +41,20 @@ const messageSchemas: Record<string, TSchema> = {
 			to: Type.Optional(Type.String()),
 			text: Type.String(),
 			refs,
+			after: Type.Optional(Type.Integer({ minimum: 1 })),
+			owner: Type.Optional(Type.String()),
+		},
+		extra,
+	),
+	returned: Type.Object(
+		{
+			...commonMessage,
+			kind: Type.Literal('returned'),
+			to: Type.String(),
+			message: Type.Integer({ minimum: 1 }),
+			owner: Type.String(),
+			text: Type.String(),
+			refs,
 		},
 		extra,
 	),
@@ -173,10 +187,10 @@ export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 	return true;
 }
 
-/** The refs of a spoken message or a summary follow the grammar the commit path applies. */
+/** The refs of a message with text follow the grammar the commit path applies. */
 function validateRefs(kind: string, body: Record<string, unknown> | undefined): void {
 	if (kind !== 'message' || body === undefined) return;
-	if (body.kind !== 'said' && body.kind !== 'summary') return;
+	if (body.kind !== 'said' && body.kind !== 'summary' && body.kind !== 'returned') return;
 	if (body.refs === undefined) return;
 	const reason = refsRefusal(body.refs);
 	if (reason === undefined) return;

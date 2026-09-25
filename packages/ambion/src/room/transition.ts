@@ -12,6 +12,8 @@ import type {
 	HarnessSession,
 	Message,
 	PresenceMessage,
+	ScheduleLimits,
+	Seq,
 	Usage,
 } from '../types.ts';
 import { activationSpec } from './activation.ts';
@@ -35,6 +37,7 @@ import {
 	onRecord,
 	stampedSummary,
 } from './rules.verified.ts';
+import { ownerOf, returnedBody, returning, scheduleRefusal } from './scheduled.ts';
 
 type ProposedEvent<K extends Kind = Kind> = {
 	[P in K]: { kind: P; body: Bodies[P] };
@@ -44,7 +47,8 @@ type PresenceChange = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 type MessageCommand =
 	| { type: 'deliver'; from: string; to?: string; text: string; refs?: string[]; bytes?: number }
 	| { type: 'presence'; change: PresenceChange; route: boolean }
-	| { type: 'commit'; commit: CommitRequest; bytes?: number };
+	| { type: 'commit'; commit: CommitRequest; bytes?: number; schedule?: ScheduleLimits }
+	| { type: 'return'; message: Seq };
 type LeaseCommand =
 	| { type: 'claim'; id: string; expiry: number; deadline: number }
 	| { type: 'renew'; id: string; expiry: number; deadline: number; readThrough?: number }
@@ -93,8 +97,8 @@ export type RoomDecision<K extends Kind> =
 	| { unchanged: { kind: 'seated' | 'unseated'; name: string } };
 
 export type ReconcileDecision = {
-	events: ProposedEvent<'lease' | 'close'>[];
-	effects: Omit<Reconciliation, 'expired' | 'abandoned' | 'close'>;
+	events: ProposedEvent<'lease' | 'close' | 'message'>[];
+	effects: Omit<Reconciliation, 'expired' | 'abandoned' | 'close' | 'returns'>;
 };
 
 export function decide(
@@ -128,7 +132,9 @@ export function decide(
 		case 'presence':
 			return presence(state, command, now);
 		case 'commit':
-			return commit(state, command.commit, now, command.bytes);
+			return commit(state, command, now);
+		case 'return':
+			return returnSay(state, command.message, now);
 		case 'claim':
 			return claim(state, command, now);
 		case 'renew':
@@ -356,12 +362,10 @@ function arrivalRefusal(
 	return undefined;
 }
 
-function commit(
-	state: RoomState,
-	request: CommitRequest,
-	now: number,
-	bytes?: number,
-): RoomDecision<'message'> {
+type CommitCommand = Extract<MessageCommand, { type: 'commit' }>;
+
+function commit(state: RoomState, command: CommitCommand, now: number): RoomDecision<'message'> {
+	const { commit: request, bytes } = command;
 	const spec = activationSpec(request.activation, state);
 	const live = liveSpec(state, request.activation, spec, now);
 	if ('refusal' in live) return live;
@@ -370,7 +374,7 @@ function commit(
 	const purpose = live.purpose;
 	if (intent.kind === 'said' && purpose.kind === 'summarize')
 		return closingCommit(state, request, live, purpose, now, bytes);
-	return ordinaryCommit(state, request, live, now, bytes);
+	return ordinaryCommit(state, command, live, now);
 }
 
 function closingCommit(
@@ -383,6 +387,7 @@ function closingCommit(
 ): RoomDecision<'message'> {
 	const intent = request.intent;
 	if (intent.kind !== 'said') return refused('This activation cannot submit that intent.');
+	if (intent.after !== undefined) return refused('A closing response cannot schedule a say.');
 	const recipient = intent.to ?? purpose.person;
 	if (!purpose.people.includes(recipient))
 		return refused('A closing response must address a person who spoke in the exchange.');
@@ -407,21 +412,22 @@ function closingCommit(
 
 function ordinaryCommit(
 	state: RoomState,
-	request: CommitRequest,
+	command: CommitCommand,
 	live: ActivationSpec,
 	now: number,
-	bytes?: number,
 ): RoomDecision<'message'> {
+	const { commit: request, bytes, schedule } = command;
 	const { intent } = request;
 	const fresh = speechFreshness(state, request);
 	if (fresh !== undefined) return fresh;
 	const stamp = { at: iso(now), activationId: request.activation, from: live.seat };
 	if (intent.kind === 'seated') return seating(state, intent.name, stamp, now);
 	if (intent.kind === 'unseated') return unseating(state, intent.name, stamp, now);
-	const refusal = addressRefusal(state, live.seat, intent.to);
+	const refusal = addressRefusal(state, live.seat, intent, schedule);
 	if (refusal !== undefined) return refusal;
 	const { refs, ...rest } = intent;
-	return message(state, { ...rest, ...refsField(refs), ...stamp }, now, true, bytes);
+	const body = { ...rest, ...refsField(refs), ...ownerOf(intent, state.exchange), ...stamp };
+	return message(state, body, now, true, bytes);
 }
 
 function isCoveringSummary(
@@ -544,11 +550,18 @@ function unseating(
 	return message(state, { kind: 'unseated', subject: name, ...stamp }, now);
 }
 
+/** A say goes to someone who hears it. A say with `after` goes to its author, within the bounds. */
 function addressRefusal(
 	state: RoomState,
 	seat: string,
-	target: string | undefined,
+	intent: { to?: string; after?: number },
+	schedule?: ScheduleLimits,
 ): { refusal: Refusal } | undefined {
+	const target = intent.to;
+	if (intent.after !== undefined) {
+		const reason = scheduleRefusal(state.exchange, state.scheduled, seat, intent, schedule);
+		return reason === undefined ? undefined : refused(reason);
+	}
 	if (target === undefined) return undefined;
 	const found = state.roster.find((candidate) => candidate.name === target);
 	if (!state.people.has(target) && found === undefined)
@@ -556,7 +569,7 @@ function addressRefusal(
 			`Unknown participant '${target}'. Address someone from the roster.`,
 			'unknown_participant',
 		);
-	if (target === seat) return refused('You cannot address yourself.');
+	if (target === seat) return refused('You cannot address yourself without `after`.');
 	return found?.attention === 'none'
 		? refused(`'${target}' wakes for nothing said. Say it to the room, or to somebody else.`)
 		: undefined;
@@ -690,7 +703,7 @@ function compose(state: RoomState, composition: Body<Composition>): RoomDecision
 }
 
 function reconcile(state: RoomState, command: ReconcileCommand, now: number): ReconcileDecision {
-	const { expired, abandoned, close, ...effects } = planReconciliation(state, {
+	const { expired, abandoned, close, returns, ...effects } = planReconciliation(state, {
 		...command.options,
 		now,
 	});
@@ -699,7 +712,15 @@ function reconcile(state: RoomState, command: ReconcileCommand, now: number): Re
 			...effects.revoked.map((body) => ({ kind: 'lease' as const, body })),
 			...[...expired, ...abandoned].map((body) => ({ kind: 'lease' as const, body })),
 			...(close === undefined ? [] : [{ kind: 'close' as const, body: close }]),
+			// After the close: a say that returns to a quiet room opens the next exchange.
+			...returns.map((say) => ({ kind: 'message' as const, body: returnedBody(say, now) })),
 		],
 		effects,
 	};
+}
+
+/** The write of one returned say, decided again inside the journal queue. */
+function returnSay(state: RoomState, seq: Seq, now: number): RoomDecision<'message'> {
+	const body = returning(state.scheduled, state.roster, seq, now);
+	return body === undefined ? { event: undefined } : message(state, body, now);
 }

@@ -9,18 +9,16 @@
  */
 import { IsSchema, type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
-import type { Reminder, ToolBundle } from './bundle.ts';
-import { AmbionError } from './errors.ts';
 import type {
-	AgentDefinition,
-	AgentExecutor,
 	AmbionTool,
-	HumanDefinition,
+	Reminder,
+	ToolBundle,
 	ToolContext,
 	ToolExecutionMode,
 	ToolResult,
-	TracePolicy,
-} from './types.ts';
+} from './bundle.ts';
+import { AmbionError } from './errors.ts';
+import type { AgentDefinition, AgentExecutor, HumanDefinition, TracePolicy } from './types.ts';
 
 export interface DefineAgentOptions {
 	/** Identifies the agent inside a room and on the record. */
@@ -283,7 +281,7 @@ function copyProperties(from: object, to: object, seen: WeakMap<object, unknown>
 export const SAY = {
 	name: 'say' as const,
 	description:
-		'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`.',
+		'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. To come back to your work later, set `to` to your own name and `after` to a number of seconds: the room gives the say back to you then, for the person who owns the exchange.',
 	parameters: Type.Object({
 		to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
 		text: Type.String(),
@@ -293,6 +291,13 @@ export const SAY = {
 					description: 'A URI the message cites: a file, a table, a room, or an exchange.',
 				}),
 			),
+		),
+		after: Type.Optional(
+			Type.Integer({
+				minimum: 1,
+				description:
+					'Seconds until the room gives this say back to you. Set `to` to your own name.',
+			}),
 		),
 	}),
 };

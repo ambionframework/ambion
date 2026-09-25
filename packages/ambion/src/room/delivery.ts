@@ -28,11 +28,13 @@ export function messageDelivery(
 		if (parsed === undefined) continue;
 		const { source, seat } = parsed;
 		// A message steers an ordinary lease that was at work when it landed, and
-		// never the author's seat or a seat it wakes. The first lease at a seat,
-		// in journal order, is the one it steers.
+		// never the author's seat or a seat it wakes. A returned say steers
+		// only the seat that scheduled it. The first lease at a seat, in journal
+		// order, is the one it steers.
 		const steers =
 			source === 'message' &&
 			seat !== message.from &&
+			(message.kind !== 'returned' || seat === message.to) &&
 			!wakes.has(seat) &&
 			atWork(lease, message.seq);
 		if (steers && !steered.has(seat)) steered.set(seat, lease.id);

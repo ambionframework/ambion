@@ -26,7 +26,13 @@ import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework
 import type { Executor } from '../execution/executor.ts';
 import type { TraceOpener } from '../execution/trace.ts';
 import type { AgentPort, RoomProtocol } from '../protocol.ts';
-import type { AgentDefinition, Clock, ExecutionEvent, TraceLogger } from '../types.ts';
+import type {
+	AgentDefinition,
+	Clock,
+	ExecutionEvent,
+	ScheduleLimits,
+	TraceLogger,
+} from '../types.ts';
 import { systemClock } from './clock.ts';
 import { defaultExecutionFactory } from './defaults.ts';
 
@@ -123,6 +129,12 @@ export interface Limits {
 	 * refuses a longer text with `message_too_large`. `Infinity` is unbounded.
 	 */
 	readonly message: { readonly bytes: number };
+	/**
+	 * The bounds on a scheduled say: `after` from `minAfter` to `maxAfter`
+	 * seconds, and at most `pending` says of one seat that wait to return.
+	 * `maxAfter` and `pending` may be `Infinity`.
+	 */
+	readonly schedule: ScheduleLimits;
 	/** How many bytes of tool output a step keeps, and how many steps one pass keeps. */
 	readonly trace: { readonly toolOutputBytes: number; readonly stepsPerPass: number };
 }
@@ -317,6 +329,9 @@ function validateCaps(limits: Limits): void {
 	for (const [name, value] of [
 		['context.messages', limits.context.messages],
 		['message.bytes', limits.message.bytes],
+		['schedule.minAfter', limits.schedule.minAfter],
+		['schedule.maxAfter', limits.schedule.maxAfter],
+		['schedule.pending', limits.schedule.pending],
 	] as const) {
 		if (value !== Number.POSITIVE_INFINITY && !(Number.isSafeInteger(value) && value > 0)) {
 			throw new Error(`Runtime limits.${name} must be a positive integer or Infinity.`);
@@ -341,6 +356,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		call: callLimits(given.call),
 		context: { messages: Number.POSITIVE_INFINITY, ...given.context },
 		message: { bytes: Number.POSITIVE_INFINITY, ...given.message },
+		schedule: { minAfter: 60, maxAfter: 604_800, pending: 4, ...given.schedule },
 		trace: { ...DEFAULT_TRACE_LIMITS, ...given.trace },
 	};
 	// The runtime establishes these bounds here, once, for every room it runs.
@@ -354,6 +370,9 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		);
 	}
 	validateCaps(limits);
+	if (limits.schedule.maxAfter < limits.schedule.minAfter) {
+		throw new Error('Runtime limits.schedule.maxAfter must be at least limits.schedule.minAfter.');
+	}
 	const intervals = {
 		'delivery.resend': limits.delivery.resend,
 		'lease.ttl': limits.lease.ttl,

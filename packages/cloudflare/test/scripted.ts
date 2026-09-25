@@ -3,6 +3,8 @@
  * activation, and every other seat stays quiet. It routes on the model id,
  * the way the runtime's own test support does.
  *
+ * The `checker` seat schedules a say to itself, and answers when it returns.
+ *
  * The `slow` seat waits before it answers. Its activation is then provably
  * in flight while a test takes the room object away, so the commit that
  * follows is served by the room that came back.
@@ -20,9 +22,22 @@ let answers = 0;
 /** How long the `slow` seat thinks. Long enough for a test to take the room away. */
 const SLOW_MS = 1_000;
 
+/** The checker says to itself with `after`, and answers when the say comes back. */
+function check(context: Context) {
+	const returned = context.messages.some(
+		(message) =>
+			message.role === 'user' && JSON.stringify(message.content).includes('[returned → checker'),
+	);
+	const say = returned
+		? { to: 'priya', text: 'The check came back.' }
+		: { to: 'checker', text: 'Check the pour log.', after: 1 };
+	return fauxAssistantMessage([fauxToolCall('say', say)], { stopReason: 'toolUse' });
+}
+
 /** The product answers on the first call of every pass; a call after a tool result is quiet. */
 function answer(agent: string, context: Context) {
 	const inPass = context.messages.some((message) => message.role === 'toolResult');
+	if (agent === 'checker' && !inPass) return check(context);
 	if (agent === 'slow' && !inPass)
 		return fauxAssistantMessage([fauxToolCall('say', { text: 'The slow answer stands.' })], {
 			stopReason: 'toolUse',

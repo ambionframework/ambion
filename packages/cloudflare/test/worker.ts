@@ -25,12 +25,19 @@ export const slow = defineAgent({
 	executor: pi({ instructions: 'Answer what is asked.', model: 'scripted/slow' }),
 });
 
+export const checker = defineAgent({
+	name: 'checker',
+	identity: 'Checks the work later.',
+	executor: pi({ instructions: 'Check later.', model: 'scripted/checker' }),
+});
+
 /** The configuration of the tier. A test that configures its own restores this one. */
 export const configuration = {
-	agents: [assistant, product, slow],
+	agents: [assistant, product, slow, checker],
 	stream: scripted,
-	// Alarms fire on their own in workerd: a wake nobody takes is sent again this often.
-	limits: { delivery: { resend: 50 } },
+	// Alarms fire on their own in workerd: a wake nobody takes is sent again this often,
+	// and a scheduled say may return one second after it lands.
+	limits: { delivery: { resend: 50 }, schedule: { minAfter: 1 } },
 };
 
 configure(configuration);

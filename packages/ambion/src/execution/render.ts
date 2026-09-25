@@ -17,7 +17,14 @@
 import type { ActivationView, ContextParticipant } from '../protocol.ts';
 import { messageUri, roomUri } from '../refs.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
-import { isSpoken, isSummary, type Message, type Seq, type SummaryMessage } from '../types.ts';
+import {
+	isReturned,
+	isSpoken,
+	isSummary,
+	type Message,
+	type Seq,
+	type SummaryMessage,
+} from '../types.ts';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -48,12 +55,20 @@ function plural(n: number, unit: string): string {
  * reader nothing.
  */
 export function renderLine(message: Message): string {
+	if (isReturned(message)) {
+		return `[returned → ${message.to}, for ${message.owner}] ${message.text}${refsOf(message)}`;
+	}
 	if (isSpoken(message) || isSummary(message)) {
-		const refs = message.refs === undefined ? '' : ` (refs: ${message.refs.join(' ')})`;
-		return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}${refs}`;
+		const after = isSpoken(message) && message.after !== undefined;
+		const returns = after ? ` (returns after ${message.after} s)` : '';
+		return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}${refsOf(message)}${returns}`;
 	}
 	const by = message.from === undefined || message.from === message.subject;
 	return `· ${message.subject} ${message.kind}${by ? '' : ` by ${message.from}`}`;
+}
+
+function refsOf(message: { readonly refs?: readonly string[] }): string {
+	return message.refs === undefined ? '' : ` (refs: ${message.refs.join(' ')})`;
 }
 
 /** One block of the rendered record: a message on its own, or the run one summary stands for. */

@@ -51,6 +51,7 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 		'defineHuman',
 		'defineTool',
 		'isPresence',
+		'isReturned',
 		'isSpoken',
 		'isSummary',
 		'loggedToolResult',

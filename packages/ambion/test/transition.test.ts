@@ -315,3 +315,178 @@ describe('room transition', () => {
 		expect(afterClose.owed).toEqual([]);
 	});
 });
+
+describe('a scheduled say', () => {
+	const schedule = { minAfter: 60, maxAfter: 3_600, pending: 1 };
+	const say = (
+		state: RoomState,
+		intent: CommitRequest['intent'],
+		activation = 'message:3:product:1',
+	) =>
+		decide(
+			state,
+			{
+				type: 'commit',
+				commit: { activation, key: 'say', readThrough: state.lastSeq, intent },
+				schedule,
+			},
+			now,
+		);
+	const because = (reason: RegExp) => ({ refusal: { category: 'refused', reason } });
+	const later = (to = 'product', after = 600) =>
+		({ kind: 'said', to, text: 'Check the build.', after }) as const;
+	const scheduled = (seq = 5, after = 600) =>
+		message(seq, {
+			kind: 'said',
+			from: 'product',
+			to: 'product',
+			text: 'Check the build.',
+			refs: ['file:///out.log'],
+			after,
+			owner: 'priya',
+			activationId: 'message:3:product:1',
+		});
+	/** A question, the say that the answering seat scheduled, and the close of the exchange. */
+	/** A seat at `presence` hears every arrival, and still no returned say of another seat. */
+	const watcher = { ...writer, attention: 'presence' } as const;
+	const waiting = (...more: Entry[]) =>
+		fold(
+			composition(undefined, [product, watcher]),
+			person(),
+			question(),
+			lease('message:3:product:1', 4),
+			scheduled(),
+			...more,
+		);
+	/** The close of the exchange, with no summary owed, so nothing else waits on the clock. */
+	const quietClose = (seq: number, through: number): Entry => ({
+		kind: 'close',
+		seq,
+		body: { owner: 'priya', from: 3, through, at },
+	});
+	const reconcile = (state: RoomState, at: number) =>
+		decide(
+			state,
+			{
+				type: 'reconcile',
+				options: { resend: 5_000, attempts: 3, sent: new Map(), stopped: false },
+			},
+			at,
+		);
+	const released = (seq: number): Entry => ({
+		kind: 'lease',
+		seq,
+		body: { id: 'message:3:product:1', phase: 'ended', reason: 'released', at, readThrough: 5 },
+	});
+	const due = now + 600_000;
+
+	it('stamps the owner of the open exchange on a say to oneself, and wakes nobody', () => {
+		expect(say(answering(), later())).toEqual({
+			event: {
+				kind: 'message',
+				body: {
+					kind: 'said',
+					to: 'product',
+					text: 'Check the build.',
+					after: 600,
+					owner: 'priya',
+					at,
+					activationId: 'message:3:product:1',
+					from: 'product',
+				},
+			},
+		});
+	});
+
+	it.each([
+		['to another seat', answering(), later('writer'), /goes to yourself/],
+		['to a person', answering(), later('priya'), /goes to yourself/],
+		['to the room', answering(), { kind: 'said', text: 'Hi.', after: 600 } as const, /yourself/],
+		[
+			'to oneself with no after',
+			answering(),
+			{ kind: 'said', to: 'product', text: 'Hi.' } as const,
+			/cannot address yourself.*`after`/,
+		],
+		['under the least after', answering(), later('product', 59), /from 60 to 3600 seconds/],
+		['over the most after', answering(), later('product', 3_601), /from 60 to 3600 seconds/],
+		['in a part of a second', answering(), later('product', 60.5), /whole number/],
+		['past the pending says of the seat', waiting(), later(), /at most 1 for one seat/],
+	] as const)('refuses a say %s', (_case, state, intent, reason) => {
+		expect(say(state, intent)).toMatchObject(because(reason));
+	});
+
+	it('refuses a say with after outside every exchange, and in a closing response', () => {
+		const quiet = fold(composition(), person(), lease('message:2:product:1', 3));
+		expect(say(quiet, later(), 'message:2:product:1')).toMatchObject(because(/No exchange/));
+		expect(summary(closing(), { kind: 'said', text: 'Later.', after: 600 })).toMatchObject(
+			because(/cannot schedule/),
+		);
+	});
+
+	it('waits outside live work, returns when due after the close, and opens an exchange for its owner', () => {
+		const closedWaiting = waiting(released(6), quietClose(7, 6));
+		expect(closedWaiting.scheduled).toEqual([
+			{
+				seq: 5,
+				seat: 'product',
+				owner: 'priya',
+				dueAt: due,
+				text: 'Check the build.',
+				refs: ['file:///out.log'],
+			},
+		]);
+		const early = reconcile(closedWaiting, now + 1_000);
+		expect(early.events).toEqual([]);
+		expect(early.effects.alarmAt).toBe(due);
+		const returned = {
+			kind: 'returned',
+			at: new Date(due).toISOString(),
+			to: 'product',
+			message: 5,
+			owner: 'priya',
+			text: 'Check the build.',
+			refs: ['file:///out.log'],
+		};
+		expect(reconcile(closedWaiting, due).events).toEqual([{ kind: 'message', body: returned }]);
+		const written = decide(closedWaiting, { type: 'return', message: 5 }, due);
+		expect(written).toEqual({
+			event: { kind: 'message', body: { ...returned, wakes: ['product'] } },
+		});
+		const after = evolve(closedWaiting, event(written, 8), options);
+		expect(after.scheduled).toEqual([]);
+		expect(after.exchange).toEqual({ owner: 'priya', from: 8, at: returned.at });
+		expect(after.due.map((owed) => owed.id)).toEqual(['message:8:product:1']);
+		expect(decide(after, { type: 'return', message: 5 }, due)).toEqual({ event: undefined });
+	});
+
+	it('returns the say after the close that the same pass writes', () => {
+		const events = reconcile(waiting(released(6)), due).events;
+		expect(events.map((entry) => entry.kind)).toEqual(['close', 'message']);
+	});
+
+	it('steers only the seat that scheduled it while both seats work', () => {
+		const state = fold(
+			composition(undefined, [product, watcher]),
+			person(),
+			question(),
+			lease('message:3:product:1', 4),
+			lease('message:3:writer:1', 5),
+			scheduled(6),
+			message(7, { kind: 'returned', to: 'product', message: 6, owner: 'priya', text: 'Check.' }),
+		);
+		expect(state.deliveries.get(7)).toEqual({
+			wakes: [],
+			steers: [{ seat: 'product', activation: 'message:3:product:1' }],
+		});
+	});
+
+	it.each([
+		['an unseating of its seat', message(6, { kind: 'unseated', subject: 'product' })],
+		['a cancellation after it', { kind: 'cancel', seq: 6, body: { at } } as Entry],
+	])('drops a say at %s', (_case, entry) => {
+		const state = waiting(entry);
+		expect(state.scheduled).toEqual([]);
+		expect(decide(state, { type: 'return', message: 5 }, due)).toEqual({ event: undefined });
+	});
+});

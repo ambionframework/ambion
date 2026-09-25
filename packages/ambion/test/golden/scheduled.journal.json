@@ -1,0 +1,339 @@
+[
+	{
+		"kind": "run",
+		"body": {
+			"at": "2026-01-01T09:00:00.000Z",
+			"format": 1
+		},
+		"seq": 1,
+		"run": "run-1"
+	},
+	{
+		"kind": "composition",
+		"body": {
+			"version": 2,
+			"summary": "assistant",
+			"agents": [
+				{
+					"name": "worker",
+					"identity": "Answers the question.",
+					"attention": "broadcast"
+				},
+				{
+					"name": "assistant",
+					"identity": "Writes a closing summary.",
+					"attention": "none"
+				}
+			],
+			"available": [],
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 2,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "arrived",
+			"from": "priya",
+			"subject": "priya",
+			"identity": "Project manager.",
+			"at": "2026-01-01T09:00:00.000Z"
+		},
+		"seq": 3,
+		"key": "key-1",
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "said",
+			"at": "2026-01-01T09:00:00.000Z",
+			"from": "priya",
+			"text": "Is the slab poured?",
+			"wakes": ["worker"]
+		},
+		"seq": 4,
+		"key": "key-2",
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:4:worker:1",
+			"phase": "running",
+			"expiresAt": 1767258060000,
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 0
+		},
+		"seq": 5,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "said",
+			"to": "worker",
+			"text": "Check the pour log.",
+			"after": 600,
+			"owner": "priya",
+			"at": "2026-01-01T09:00:00.000Z",
+			"activationId": "message:4:worker:1",
+			"from": "worker"
+		},
+		"seq": 6,
+		"key": "key-3",
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:4:worker:1",
+			"phase": "running",
+			"expiresAt": 1767258060000,
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 6
+		},
+		"seq": 7,
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:4:worker:1",
+			"phase": "ended",
+			"reason": "released",
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 6,
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			},
+			"session": {
+				"harness": "pi",
+				"id": "message:4:worker:1"
+			}
+		},
+		"seq": 8,
+		"run": "run-1"
+	},
+	{
+		"kind": "close",
+		"body": {
+			"owner": "priya",
+			"from": 4,
+			"through": 6,
+			"at": "2026-01-01T09:00:00.000Z",
+			"summary": "assistant"
+		},
+		"seq": 9,
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "closed:6:assistant:1",
+			"phase": "running",
+			"expiresAt": 1767258060000,
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 0
+		},
+		"seq": 10,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "summary",
+			"text": "The worker checks the pour later.",
+			"to": "priya",
+			"covers": {
+				"from": 4,
+				"through": 6
+			},
+			"at": "2026-01-01T09:00:00.000Z",
+			"activationId": "closed:6:assistant:1",
+			"from": "assistant"
+		},
+		"seq": 11,
+		"key": "key-4",
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "closed:6:assistant:1",
+			"phase": "ended",
+			"reason": "released",
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 6,
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			},
+			"session": {
+				"harness": "pi",
+				"id": "closed:6:assistant:1"
+			}
+		},
+		"seq": 12,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "returned",
+			"at": "2026-01-01T09:10:00.000Z",
+			"to": "worker",
+			"message": 6,
+			"owner": "priya",
+			"text": "Check the pour log.",
+			"wakes": ["worker"]
+		},
+		"seq": 13,
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:13:worker:1",
+			"phase": "running",
+			"expiresAt": 1767258660000,
+			"at": "2026-01-01T09:10:00.000Z",
+			"readThrough": 0
+		},
+		"seq": 14,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "said",
+			"text": "The slab is poured.",
+			"at": "2026-01-01T09:10:00.000Z",
+			"activationId": "message:13:worker:1",
+			"from": "worker"
+		},
+		"seq": 15,
+		"key": "key-5",
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:13:worker:1",
+			"phase": "running",
+			"expiresAt": 1767258660000,
+			"at": "2026-01-01T09:10:00.000Z",
+			"readThrough": 15
+		},
+		"seq": 16,
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:13:worker:1",
+			"phase": "ended",
+			"reason": "released",
+			"at": "2026-01-01T09:10:00.000Z",
+			"readThrough": 15,
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			},
+			"session": {
+				"harness": "pi",
+				"id": "message:13:worker:1"
+			}
+		},
+		"seq": 17,
+		"run": "run-1"
+	},
+	{
+		"kind": "close",
+		"body": {
+			"owner": "priya",
+			"from": 13,
+			"through": 15,
+			"at": "2026-01-01T09:10:00.000Z",
+			"summary": "assistant"
+		},
+		"seq": 18,
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "closed:15:assistant:1",
+			"phase": "running",
+			"expiresAt": 1767258660000,
+			"at": "2026-01-01T09:10:00.000Z",
+			"readThrough": 0
+		},
+		"seq": 19,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "summary",
+			"text": "The worker checks the pour later.",
+			"to": "priya",
+			"covers": {
+				"from": 13,
+				"through": 15
+			},
+			"at": "2026-01-01T09:10:00.000Z",
+			"activationId": "closed:15:assistant:1",
+			"from": "assistant"
+		},
+		"seq": 20,
+		"key": "key-6",
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "closed:15:assistant:1",
+			"phase": "ended",
+			"reason": "released",
+			"at": "2026-01-01T09:10:00.000Z",
+			"readThrough": 15,
+			"usage": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"cost": 0
+			},
+			"session": {
+				"harness": "pi",
+				"id": "closed:15:assistant:1"
+			}
+		},
+		"seq": 21,
+		"run": "run-1"
+	},
+	{
+		"kind": "message",
+		"body": {
+			"kind": "left",
+			"from": "priya",
+			"subject": "priya",
+			"at": "2026-01-01T09:10:00.000Z"
+		},
+		"seq": 22,
+		"key": "key-7",
+		"run": "run-1"
+	}
+]

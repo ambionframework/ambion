@@ -3,7 +3,9 @@
  *
  * A seeded walk writes journal entries straight at the fold layer: people
  * come and go, messages are directed at people, seats are seated and unseated, a summary lands long after its
- * close, a cancellation cuts running work, and new leases follow it. After
+ * close, a cancellation cuts running work, and new leases follow it. A seat
+ * schedules a say, and the room returns one, possibly after an unseating or
+ * a cancellation dropped it. After
  * every entry the projection that `advance` built must equal `foldRoom` over
  * the whole history. At a random cut the walk drops the projection and
  * rebuilds it with `replay`, as a resumed room does, and goes on. A state a
@@ -34,6 +36,7 @@ class Walk {
 	private readonly messages: number[] = [];
 	private readonly closes: Close[] = [];
 	private readonly leases: string[] = [];
+	private readonly scheduledSays: { seq: number; seat: string }[] = [];
 
 	constructor(private readonly random: () => number) {}
 
@@ -67,6 +70,7 @@ class Walk {
 		if (r < 0.74) return this.close() ?? this.said();
 		if (r < 0.8) return this.summary() ?? this.said();
 		if (r < 0.84) return this.cancel();
+		if (r < 0.9) return this.returned();
 		return this.said();
 	}
 
@@ -116,7 +120,35 @@ class Walk {
 		});
 	}
 
+	/** A seat says to itself with `after`, stamped with the owner the room would give it. */
+	private scheduled(): Entry {
+		const seat = this.pick(SEATS);
+		this.scheduledSays.push({ seq: this.seq, seat });
+		return this.message({
+			kind: 'said',
+			from: seat,
+			to: seat,
+			text: 'Check later.',
+			after: 1 + Math.floor(this.random() * 600),
+			owner: this.pick(PEOPLE),
+		});
+	}
+
+	/** The room returns a say: often a scheduled one, sometimes one that no longer waits. */
+	private returned(): Entry {
+		const say = this.scheduledSays.length ? this.pick(this.scheduledSays) : undefined;
+		if (say === undefined) return this.scheduled();
+		return this.message({
+			kind: 'returned',
+			to: say.seat,
+			message: say.seq,
+			owner: this.pick(PEOPLE),
+			text: 'Check later.',
+		});
+	}
+
 	private said(): Entry {
+		if (this.chance(0.15)) return this.scheduled();
 		const from = this.chance(0.55) ? this.pick(PEOPLE) : this.pick(SEATS);
 		const wakes = SEATS.filter(() => this.chance(0.3));
 		const to = this.chance(0.3) ? this.pick([...PEOPLE, ...SEATS]) : undefined;

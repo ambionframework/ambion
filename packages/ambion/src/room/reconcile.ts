@@ -23,6 +23,7 @@ import {
 	seatOf,
 } from './lease.ts';
 import { endingOf, exchangeLive, type LiveLease, type OwedActivation } from './rules.verified.ts';
+import type { ScheduledSay } from './scheduled.ts';
 import { summaryWriter } from './summary.ts';
 
 export interface ReconcileOptions {
@@ -54,6 +55,8 @@ export interface Reconciliation {
 	abandoned: Ended[];
 	/** The exchange the room closes, when nothing is live and one is open. */
 	close: Omit<Close, 'seq'> | undefined;
+	/** The scheduled says the room returns in this pass, after the close: the due ones of seated seats. */
+	returns: ScheduledSay[];
 	sends: Send[];
 	/**
 	 * Wakes this room waited on and no longer does: nothing the fold says is
@@ -146,11 +149,13 @@ export function planReconciliation(state: RoomState, options: ReconcileOptions):
 			? undefined
 			: closing(state, options.now);
 	const sends = options.stopped ? [] : dueWakes(state, options);
+	const returns = options.stopped ? [] : dueSays(state, options.now);
 	return {
 		revoked,
 		expired,
 		abandoned,
 		close,
+		returns,
 		sends,
 		forget: forgotten(state, options),
 		alarmAt: options.stopped ? undefined : nextAlarm(state, options),
@@ -288,10 +293,22 @@ function retryTimes(state: RoomState, options: ReconcileOptions): number[] {
 	});
 }
 
+/**
+ * The scheduled says due now. A say of a seat that is not on the roster
+ * waits: the room returns it when the seat takes its seat again.
+ */
+function dueSays(state: RoomState, now: number): ScheduledSay[] {
+	const seated = new Set(state.roster.map((seat) => seat.name));
+	return state.scheduled.filter((say) => say.dueAt <= now && seated.has(say.seat));
+}
+
 function nextAlarm(state: RoomState, options: ReconcileOptions): number | undefined {
 	const expiries = [...state.leases.values()].flatMap((lease) =>
 		lease.phase === 'running' && isLive(lease, options.now) ? [lease.expiresAt] : [],
 	);
-	const future = [...expiries, ...retryTimes(state, options)].filter((at) => at > options.now);
+	const says = state.scheduled.map((say) => say.dueAt);
+	const future = [...expiries, ...retryTimes(state, options), ...says].filter(
+		(at) => at > options.now,
+	);
 	return future.length === 0 ? undefined : Math.min(...future);
 }

@@ -11,7 +11,7 @@ const BUDGET = 600;
 /** Files over the budget today. Each entry names why. A new entry needs a reason. */
 const GRANDFATHERED = {
 	// The pure decision table for the room. One switch per command.
-	'packages/ambion/src/room/transition.ts': 720,
+	'packages/ambion/src/room/transition.ts': 740,
 	// The seat runner. One activation from claim to end.
 	'packages/ambion/src/execution/runner.ts': 680,
 };

@@ -26,6 +26,7 @@ import {
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
 import { cancelHold, draftsClose, lastOf, survivesCancellation } from './rules.verified.ts';
+import { foldScheduled, type ScheduledSay } from './scheduled.ts';
 
 /** A summary one person is owed, and how the room has tried to write it. */
 export interface Owed extends PendingActivation {
@@ -55,6 +56,8 @@ export interface RoomState {
 	readonly owed: Owed[];
 	/** Every activation the room owes, whatever caused it: the wakes and the drafts as one list. */
 	readonly due: PendingActivation[];
+	/** The scheduled says that wait to return, in the order they landed. None of them is live work. */
+	readonly scheduled: readonly ScheduledSay[];
 	readonly messages: readonly Message[];
 	readonly lastSeq: Seq;
 }
@@ -154,6 +157,7 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		pending,
 		owed,
 		due: [...pending, ...owed],
+		scheduled: foldScheduled(messages, cancelledAt),
 		messages,
 		lastSeq: lastOf(messages.map((message) => message.seq)),
 	};
