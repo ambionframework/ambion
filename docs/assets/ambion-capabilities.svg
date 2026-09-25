@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="740" viewBox="0 0 1000 740" role="img" aria-labelledby="title desc">
   <title id="title">A room and its workspace, by capability</title>
-  <desc id="desc">A room activates an agent. The room&#x27;s journal holds a person&#x27;s question, what an agent says, the close, and an optional summary. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. Every workspace gives an agent background work, new in 0.3.0. bash starts a process that outlives the activation. ps lists it, and status, wait, and cancel take its handle. At the start of each activation, a reminder lists the seat&#x27;s processes. An optional shared database adds sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files, with read, write, and edit. The other capabilities write their files there: a process writes its output, sql writes a CSV export, and fork clones a working copy. Each agent has a home. On a workstation, no other agent reads it. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. The host is application code. It lists and cancels processes, and hears each start and end. It can post a message to the room, for example when a process ends. A message cites a file with a ref. A restart replays the room&#x27;s entries.</desc>
+  <desc id="desc">A room activates an agent. The room&#x27;s journal holds a person&#x27;s question, what an agent says, a say to itself, the close, an optional summary, and the returned say. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. An agent says to itself with a delay. The exchange closes while the say waits. When the say is due, the room gives it back, and the returned say opens an exchange. Every workspace gives an agent processes. bash starts a process that outlives the activation. ps lists it, and status, wait, and cancel take its handle. At the start of each activation, a reminder lists the seat&#x27;s processes. An optional shared database adds sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files, with read, write, and edit. The other capabilities write their files there: a process writes its output, sql writes a CSV export, and fork clones a working copy. Each agent has a home. On a workstation, no other agent reads it. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. A person and the host steer the room. A person on a visit asks a question and reads results. The host is application code. It lists and cancels processes, and hears each start and end. Each one posts a message to the room, and the host can post one when a process ends. A message cites a file with a ref. A restart replays the room&#x27;s entries.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#666d6b"/></marker>
     <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#2f817a"/></marker>
@@ -32,18 +32,27 @@
   <text x="44.0" y="54.0" text-anchor="start" class="sans ink t">Room</text>
   <text x="113.3" y="54.0" text-anchor="start" class="sans dim x">the journal</text>
   <text x="956.0" y="54.0" text-anchor="end" class="sans dim x">A restart replays the entries.</text>
-  <text x="44.0" y="90.0" text-anchor="start" class="mono dim c">1</text>
-  <text x="62.0" y="90.0" text-anchor="start" class="sans ink b">Person asks</text>
-  <text x="62.0" y="108.0" text-anchor="start" class="sans dim x">opens the exchange</text>
-  <text x="240.0" y="90.0" text-anchor="start" class="mono dim c">2</text>
-  <text x="258.0" y="90.0" text-anchor="start" class="sans ink b">Agent says</text>
-  <text x="258.0" y="108.0" text-anchor="start" class="sans teal x">cites what it made</text>
-  <text x="436.0" y="90.0" text-anchor="start" class="mono dim c">3</text>
-  <text x="454.0" y="90.0" text-anchor="start" class="sans ink b">Close</text>
-  <text x="454.0" y="108.0" text-anchor="start" class="sans dim x">no work left</text>
-  <text x="632.0" y="90.0" text-anchor="start" class="mono dim c">4</text>
-  <text x="650.0" y="90.0" text-anchor="start" class="sans ink b">Summary</text>
-  <text x="650.0" y="108.0" text-anchor="start" class="sans dim x">optional</text>
+  <text x="44.0" y="94.0" text-anchor="start" class="mono dim c">1</text>
+  <text x="62.0" y="94.0" text-anchor="start" class="sans ink b">Person asks</text>
+  <text x="62.0" y="112.0" text-anchor="start" class="sans dim x">opens the exchange</text>
+  <text x="196.0" y="94.0" text-anchor="start" class="mono dim c">2</text>
+  <text x="214.0" y="94.0" text-anchor="start" class="sans ink b">Agent says</text>
+  <text x="214.0" y="112.0" text-anchor="start" class="sans teal x">cites what it made</text>
+  <text x="348.0" y="94.0" text-anchor="start" class="mono dim c">3</text>
+  <text x="366.0" y="94.0" text-anchor="start" class="sans ink b">Say to itself</text>
+  <text x="366.0" y="112.0" text-anchor="start" class="sans teal x">waits for its time</text>
+  <text x="500.0" y="94.0" text-anchor="start" class="mono dim c">4</text>
+  <text x="518.0" y="94.0" text-anchor="start" class="sans ink b">Close</text>
+  <text x="518.0" y="112.0" text-anchor="start" class="sans dim x">no work left</text>
+  <text x="652.0" y="94.0" text-anchor="start" class="mono dim c">5</text>
+  <text x="670.0" y="94.0" text-anchor="start" class="sans ink b">Summary</text>
+  <text x="670.0" y="112.0" text-anchor="start" class="sans dim x">optional</text>
+  <text x="804.0" y="94.0" text-anchor="start" class="mono dim c">6</text>
+  <text x="822.0" y="94.0" text-anchor="start" class="sans ink b">Say returns</text>
+  <text x="822.0" y="112.0" text-anchor="start" class="sans teal x">opens an exchange</text>
+  <path d="M352.0 80.0 L352.0 70.0 L808.0 70.0 L808.0 80.0" class="flow-teal" marker-end="url(#arrow-teal)"/>
+  <rect x="459.0" y="61.0" width="242.0" height="18" fill="#fbfaf6"/>
+  <text x="580.0" y="74.0" text-anchor="middle" class="sans teal x">the room gives it back after 600 s</text>
   <g filter="url(#shadow)">
   <rect x="60.0" y="180.0" width="160.0" height="130.0" rx="14" fill="#fbfaf6" stroke="#8fa8ef" stroke-width="2"/>
   </g>
@@ -65,6 +74,13 @@
   <text x="78.0" y="524.0" text-anchor="start" class="sans dim x">hears each start</text>
   <text x="78.0" y="541.0" text-anchor="start" class="sans dim x">and end.</text>
   <g filter="url(#shadow)">
+  <rect x="60.0" y="590.0" width="160.0" height="110.0" rx="14" fill="#fbfaf6" stroke="#9aa3a1" stroke-width="1.5"/>
+  </g>
+  <text x="78.0" y="618.0" text-anchor="start" class="sans ink n">Person</text>
+  <text x="78.0" y="638.0" text-anchor="start" class="sans dim x">on a visit</text>
+  <text x="78.0" y="664.0" text-anchor="start" class="sans dim x">asks a question</text>
+  <text x="78.0" y="681.0" text-anchor="start" class="sans dim x">and reads results.</text>
+  <g filter="url(#shadow)">
   <rect x="296.0" y="180.0" width="680.0" height="534.0" rx="16" fill="#fbfaf6" stroke="#2f817a" stroke-width="1.5"/>
   </g>
   <text x="316.0" y="212.0" text-anchor="start" class="sans ink t">Workspace</text>
@@ -75,8 +91,7 @@
   <text x="740.9" y="212.0" text-anchor="start" class="sans dim x">in every workspace</text>
   <line x1="296.0" y1="250.0" x2="976.0" y2="250.0" class="rule"/>
   <rect x="326.0" y="266.0" width="197.3" height="162.0" rx="12" fill="#eef5f4" stroke="#2f817a" stroke-width="1.5"/>
-  <text x="340.0" y="292.0" text-anchor="start" class="sans ink n">Background work</text>
-  <text x="340.0" y="313.0" text-anchor="start" class="sans teal x">new in 0.3.0</text>
+  <text x="340.0" y="292.0" text-anchor="start" class="sans ink n">Processes</text>
   <rect x="340.0" y="324.0" width="47.3" height="24" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
   <text x="363.7" y="340.5" text-anchor="middle" class="mono code c">bash</text>
   <rect x="393.3" y="324.0" width="31.7" height="24" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
@@ -138,7 +153,9 @@
   <path d="M220.0 214.0 L296.0 214.0" class="flow" marker-end="url(#arrow)"/>
   <path d="M326.0 290.0 L220.0 290.0" class="flow-dash" marker-end="url(#arrow)"/>
   <path d="M220.0 412.0 L326.0 412.0" class="flow" marker-end="url(#arrow)"/>
-  <path d="M60.0 470.0 L40.0 470.0 L40.0 124.0" class="flow" marker-end="url(#arrow)"/>
+  <path d="M60.0 645.0 L40.0 645.0 L40.0 124.0" class="flow" marker-end="url(#arrow)"/>
+  <path d="M60.0 470.0 L40.0 470.0" class="flow"/>
+  <circle cx="40.0" cy="470.0" r="4" fill="#9aa3a1"/>
   <path d="M424.7 428.0 L424.7 468.0" class="flow" marker-end="url(#arrow)"/>
   <path d="M636.0 428.0 L636.0 468.0" class="flow" marker-end="url(#arrow)"/>
   <path d="M847.3 428.0 L847.3 468.0" class="flow" marker-end="url(#arrow)"/>
@@ -156,9 +173,9 @@
   <text x="258.0" y="344.0" text-anchor="middle" class="sans dim x">activation</text>
   <rect x="224.7" y="390.0" width="66.5" height="18" fill="#f4f3ee"/>
   <text x="258.0" y="403.0" text-anchor="middle" class="sans dim x">oversees</text>
-  <rect x="44.0" y="337.0" width="66.4" height="34" fill="#f4f3ee"/>
-  <text x="48.0" y="350.0" text-anchor="start" class="sans dim x">posts a</text>
-  <text x="48.0" y="366.0" text-anchor="start" class="sans dim x">message</text>
+  <rect x="44.0" y="337.0" width="72.0" height="34" fill="#f4f3ee"/>
+  <text x="48.0" y="350.0" text-anchor="start" class="sans dim x">each posts</text>
+  <text x="48.0" y="366.0" text-anchor="start" class="sans dim x">a message</text>
   <rect x="428.7" y="440.0" width="50.9" height="18" fill="#fbfaf6"/>
   <text x="432.7" y="453.0" text-anchor="start" class="sans dim x">output</text>
   <rect x="640.0" y="440.0" width="56.9" height="18" fill="#fbfaf6"/>
