@@ -26,6 +26,12 @@ activation starts with a reminder of the seat's processes. See
   each view, and `ToolContext.deadline` carries it to each tool call: when
   the room ends the activation, in milliseconds on the wall clock. `bash`
   and `wait` stop their wait 30 seconds before it, and the result says so.
+- **A result gives the new output.** `bash`, `status`, `wait`, and
+  `cancel` give the output after a cursor that the process keeps in
+  `~/.processes/<handle>/cursor`, and move it. `details.read` holds the
+  byte range. A poll of a long build gives each part once. Each read goes
+  through the shell capture, which removes escape sequences and carriage
+  returns, as Pi's `bash` tool does.
 - **`Workspace.processes` is the host's view.** `list`, `subscribe`, and
   `cancel` reach the processes of the agents that used the workspace in
   this run. `list` returns a promise. The root entry of

@@ -7,7 +7,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
 import { openWorkspace, type Workspace, type WorkspaceEnv } from '@ambionframework/workspace';
@@ -392,8 +392,15 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		expect(process.output).toBe(
 			join(started.homes.get('ada') ?? '', '.processes', process.handle, 'out'),
 		);
+		// Each read gives the output after the last one. The test writes the next part itself.
+		await appendFile(process.output, 'second\n');
+		const later = await call('status', { handle: process.handle });
+		expect(later).toMatch(
+			/^second\n\n\[Process .* is running\..* starts at byte 6 of the output\./s,
+		);
+		expect(await call('status', { handle: process.handle })).toMatch(/^\(no new output\)\n\n/);
 		expect(await call('cancel', { handle: process.handle })).toContain('is cancelled.');
-		expect(await readFile(process.output, 'utf8')).toBe('first\n');
+		expect(await readFile(process.output, 'utf8')).toBe('first\nsecond\n');
 		// The table holds the timeout, and stops the process the way a cancel does.
 		const timed = await call('bash', {
 			command: 'echo second; exec sleep 30',
