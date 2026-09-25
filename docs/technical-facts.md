@@ -1,7 +1,7 @@
 # Technical facts
 
 This page lists the key technical facts of Ambion, what is new, the
-packages, and the limits of the 0.2.0 release. The [README](../README.md)
+packages, and the limits of the 0.3.0 release. The [README](../README.md)
 holds the positioning and the headline of what is new.
 
 ## Key technical facts
@@ -85,6 +85,14 @@ holds the positioning and the headline of what is new.
   every tool call the workspace served. A room mirror copies its own
   messages to a file the room never sees. An agent reads either one the
   way it reads any artifact.
+- **Work that outlives the activation.** A shell command runs as a
+  background process with a handle. The files of the bash backend hold the
+  process table, so a new run of the host adopts the live processes. See
+  [Processes](processes.md).
+- **A clock that the agent sets.** An agent says to itself with `after`,
+  and the room returns the say when it is due. The journal holds the
+  schedule, and the host arms one alarm. See
+  [Exchange](exchange.md#6-a-scheduled-say).
 - **Waiting on a person as a derived outcome.** An exchange whose last word
   is a question to a person reads as awaiting them, which gives approval a
   representation with no new entry kind.

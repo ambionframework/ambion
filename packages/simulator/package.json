@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/simulator",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"type": "module",
 	"description": "Evals for Ambion rooms: an actor plays a person, checks read the run, and a judge grades the rest.",
 	"license": "Apache-2.0",

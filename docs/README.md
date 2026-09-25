@@ -14,7 +14,7 @@ each page.
 | Document                              | Use it for                                                                  |
 | ------------------------------------- | --------------------------------------------------------------------------- |
 | [Room](room.md)                       | Overview, glossary, and the room-wide mechanisms                            |
-| [Technical facts](technical-facts.md) | Key facts, what is new, packages, and the limits of 0.2.0                   |
+| [Technical facts](technical-facts.md) | Key facts, what is new, packages, and the limits of 0.3.0                   |
 | [Definitions and tools](agent.md)     | Definitions and tools                                                       |
 | [Executors](executors.md)             | The executor contract, steps, the trace, and adapters                       |
 | [Pi executor](pi.md)                  | The Pi package: options, exchange continuity, testing                       |
