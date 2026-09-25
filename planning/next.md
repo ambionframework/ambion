@@ -184,7 +184,7 @@ asks a judge for the rest.
       membership and summaries, an answer when a participant addresses it. Five
       purpose cases, a thinking level for Pi seats, and the suite passes on
       `anthropic/claude-sonnet-5` and `openai/gpt-5.6-luna` at `medium`,
-      each graded by the other. Needs 4. P1. (E1)
+      each graded by the other. Needs 4. P1. (E1) Landed in #331.
 
 **The results of step 5.** Each cell counts the passing cases, with one
 sample for each case. Each model is graded by the other family.
