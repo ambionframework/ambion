@@ -101,6 +101,18 @@ describe('room journal body validation', () => {
 		['message', { kind: 'said', at, from: 'alpha', text: 'x', after: 1.5 }, 'body.after'],
 		['message', { ...returned, message: 0 }, 'body.message'],
 		['message', { kind: 'returned', at, to: 'alpha', message: 3, text: 'x' }, 'body.owner'],
+		['message', { ...returned, from: 'alpha' }, 'body.from'],
+		[
+			'message',
+			{ kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', after: 60 },
+			'body.owner',
+		],
+		['message', { kind: 'said', at, from: 'alpha', text: 'x', owner: 'andrei' }, 'body.after'],
+		[
+			'message',
+			{ kind: 'said', at, from: 'alpha', to: 'beta', text: 'x', after: 60, owner: 'andrei' },
+			'body.to',
+		],
 		['message', { kind: 'seated', at, subject: 'andrei', fixed: 'yes' }, 'body.fixed'],
 		[
 			'message',

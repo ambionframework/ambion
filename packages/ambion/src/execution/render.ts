@@ -435,6 +435,14 @@ function renderReserve(reserve: readonly { name: string; identity: string }[]): 
 	];
 }
 
+/** When a returned say opened the exchange, the model reads that the say is its own. */
+function returnedOpening({ context }: ActivationView): string {
+	const from = context.exchange?.from;
+	const opening = context.messages.find((message) => message.seq === from);
+	if (opening?.kind !== 'returned') return '';
+	return `Message ${opening.seq} is a say you scheduled, and the room returned it: do its work for ${opening.owner}. `;
+}
+
 /** What this activation is for, in the last line the model reads. */
 function askOf(view: ActivationView, def: AgentDefinition): string {
 	const { context, spec } = view;
@@ -448,7 +456,7 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 	}
 	// A seat seated during an exchange reads which question it was seated for.
 	const open = context.exchange
-		? `${context.exchange.owner}'s exchange opened by message ${context.exchange.from} is active; the marked request is the current human direction. The opening message's URI is ${messageUri(context.name, context.exchange.from)}. `
+		? `${context.exchange.owner}'s exchange opened by message ${context.exchange.from} is active; the marked request is the current human direction. The opening message's URI is ${messageUri(context.name, context.exchange.from)}. ${returnedOpening(view)}`
 		: '';
 	return (
 		`${open}Take your turn, ${def.name}: this is ordinary work. ` +

@@ -199,7 +199,7 @@ export interface SpokenMessage extends Landed {
 	after?: number;
 	/**
 	 * On a scheduled say, the owner of the exchange it landed in: the person
-	 * the say returns for. The room stamps it, never the seat.
+	 * the say returns for. The room stamps it from the open exchange.
 	 */
 	owner?: string;
 }

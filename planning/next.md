@@ -358,7 +358,11 @@ first.
   process reminder carries the state of the work.
 - **A pending say is not live work.** The origin exchange closes while the
   say waits. An unseating of the author drops its says, and a cancel drops
-  the says before it.
+  the says before it. A recomposition that leaves the author out writes no
+  unseating, so its says wait until the seat is on the roster again.
+- **A say returns after every ending of its pass.** A pass that ends a
+  lease writes no returned entry, so the entry lands after the close, and
+  the record is the same whether the host crashed.
 - **The reconcile decides each write again.** The write decides inside the
   journal queue, and it writes nothing when the fold holds the entry
   already. The fence refuses a second run. `nextAlarm` takes the earliest
@@ -367,9 +371,10 @@ first.
 
 **Evidence:** scripted tests of each refusal and of each path through the
 reconcile on an injected clock; a golden journal of a say, the close of
-its exchange, the returned entry, and the exchange that it opens; a chaos
-case that kills the host between the say and the returned entry and finds
-one returned entry; the Cloudflare room object returns a say in workerd;
+its exchange, the returned entry, and the exchange that it opens; a crash
+and a stop between the say and the returned entry, on memory and on
+SQLite, that find one returned entry after the resume; the Cloudflare room
+object returns a say in workerd;
 the rules pass `pnpm check:lemmascript`.
 
 **S2. The agent and the person see the schedule.** The say result names

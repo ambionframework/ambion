@@ -465,6 +465,38 @@ describe('a scheduled say', () => {
 		expect(events.map((entry) => entry.kind)).toEqual(['close', 'message']);
 	});
 
+	it('writes the ending of a lease first, then the close, then the returned say', () => {
+		// A crash left the lease running past its expiry. The say returns only
+		// after the close, so the record is the same whether the host crashed.
+		const expired = waiting();
+		expect(reconcile(expired, due).events.map((entry) => entry.kind)).toEqual(['lease']);
+		const [ending] = reconcile(expired, due).events;
+		if (ending === undefined) throw new Error('Expected the ending.');
+		const ended = evolve(expired, { ...ending, seq: 6 } as Entry, options);
+		expect(reconcile(ended, due).events.map((entry) => entry.kind)).toEqual(['close', 'message']);
+	});
+
+	it("joins another person's open exchange, and leaves its owner", () => {
+		const sam = [
+			message(8, { kind: 'arrived', from: 'sam', subject: 'sam', identity: 'Person.' }),
+			message(9, { kind: 'said', from: 'sam', text: 'Another question.' }),
+		];
+		const state = waiting(released(6), quietClose(7, 6), ...sam);
+		const written = decide(state, { type: 'return', message: 5 }, due);
+		const after = evolve(state, event(written, 10), options);
+		expect(after.exchange).toMatchObject({ owner: 'sam', from: 9 });
+		expect(after.scheduled).toEqual([]);
+	});
+
+	it('waits for its seat to take its seat again, then returns', () => {
+		const empty = composition(undefined, [watcher]);
+		const away = waiting(released(6), quietClose(7, 6), { ...empty, seq: 8 });
+		expect(away.scheduled).toHaveLength(1);
+		expect(reconcile(away, due).events).toEqual([]);
+		const back = evolve(away, { ...composition(undefined, [product, watcher]), seq: 9 }, options);
+		expect(reconcile(back, due).events.map((entry) => entry.kind)).toEqual(['message']);
+	});
+
 	it('steers only the seat that scheduled it while both seats work', () => {
 		const state = fold(
 			composition(undefined, [product, watcher]),

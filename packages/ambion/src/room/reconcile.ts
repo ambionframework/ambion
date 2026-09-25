@@ -149,7 +149,8 @@ export function planReconciliation(state: RoomState, options: ReconcileOptions):
 			? undefined
 			: closing(state, options.now);
 	const sends = options.stopped ? [] : dueWakes(state, options);
-	const returns = options.stopped ? [] : dueSays(state, options.now);
+	// A say returns after the fold holds every ending, so it lands after the close it follows.
+	const returns = options.stopped || ended > 0 ? [] : dueSays(state, options.now);
 	return {
 		revoked,
 		expired,

@@ -14,6 +14,7 @@ import {
 	type Runtime,
 	readRoom,
 	startRoom,
+	systemClock,
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, assistant, messagesOf, roomName, waitForRoom } from './support/room.ts';
@@ -30,6 +31,24 @@ const quietRoom = (name: string, runtime: Runtime) =>
 	});
 
 type Limits = NonNullable<CreateRuntimeOptions['limits']>;
+
+describe('the system clock', () => {
+	it('waits the longest delay a timer takes, and no less, for an alarm past it', () => {
+		// A timer over 2^31 - 1 ms fires at once, and the room would reconcile in a loop.
+		const clock = systemClock();
+		let fired = false;
+		const cancel = clock.alarm(clock.now() + 30 * 86_400_000, () => {
+			fired = true;
+		});
+		onTestFinished(cancel);
+		return new Promise<void>((resolve) =>
+			setTimeout(() => {
+				expect(fired).toBe(false);
+				resolve();
+			}, 20),
+		);
+	});
+});
 
 describe('createRuntime', () => {
 	it.each<[string, Limits, RegExp]>([
@@ -54,6 +73,18 @@ describe('createRuntime', () => {
 			/limits.context.messages/,
 		],
 		['a message of no bytes', { message: { bytes: 0 } }, /limits.message.bytes/],
+		['a scheduled say of no seconds', { schedule: { minAfter: 0 } }, /limits.schedule.minAfter/],
+		[
+			'a least after with no bound',
+			{ schedule: { minAfter: Number.POSITIVE_INFINITY } },
+			/limits.schedule.minAfter/,
+		],
+		[
+			'a most after below the least',
+			{ schedule: { minAfter: 600, maxAfter: 60 } },
+			/limits.schedule.maxAfter/,
+		],
+		['no pending says', { schedule: { pending: 0 } }, /limits.schedule.pending/],
 	])('refuses %s', (_, limits, error) => {
 		expect(() => createRuntime({ limits })).toThrow(error);
 	});
@@ -68,6 +99,7 @@ describe('createRuntime', () => {
 		expect(limits.context).toEqual({ messages: Number.POSITIVE_INFINITY });
 		expect(limits.message).toEqual({ bytes: Number.POSITIVE_INFINITY });
 		expect(limits.trace).toEqual({ toolOutputBytes: 65_536, stepsPerPass: 1_000 });
+		expect(limits.schedule).toEqual({ minAfter: 60, maxAfter: 604_800, pending: 4 });
 
 		const overridden = hostingOf(
 			createRuntime({

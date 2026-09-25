@@ -339,6 +339,14 @@ function validateCaps(limits: Limits): void {
 	}
 }
 
+/** A scheduled say waits a finite least time, and the most is at least the least. */
+function validateSchedule({ minAfter, maxAfter }: ScheduleLimits): void {
+	if (!Number.isFinite(minAfter))
+		throw new Error('Runtime limits.schedule.minAfter must be a positive integer.');
+	if (maxAfter < minAfter)
+		throw new Error('Runtime limits.schedule.maxAfter must be at least limits.schedule.minAfter.');
+}
+
 export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	const running = new Map<string, RunningRoom>();
 	const storage = options.storage ?? memoryJournals();
@@ -370,9 +378,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		);
 	}
 	validateCaps(limits);
-	if (limits.schedule.maxAfter < limits.schedule.minAfter) {
-		throw new Error('Runtime limits.schedule.maxAfter must be at least limits.schedule.minAfter.');
-	}
+	validateSchedule(limits.schedule);
 	const intervals = {
 		'delivery.resend': limits.delivery.resend,
 		'lease.ttl': limits.lease.ttl,

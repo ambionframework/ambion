@@ -75,13 +75,18 @@ async function claimedWorker(storage: Storage, agents = [worker]) {
 	const say = async (
 		key: string,
 		text: string,
-		extra: { refs?: string[]; readThrough?: number } = {},
+		extra: { refs?: string[]; readThrough?: number; after?: number } = {},
 	) =>
 		world.peer.commit({
 			activation,
 			key,
 			readThrough: extra.readThrough ?? (await through()),
-			intent: { kind: 'said', text, ...(extra.refs === undefined ? {} : { refs: extra.refs }) },
+			intent: {
+				kind: 'said',
+				text,
+				...(extra.refs === undefined ? {} : { refs: extra.refs }),
+				...(extra.after === undefined ? {} : { to: worker.name, after: extra.after }),
+			},
 		});
 	return { ...world, exchange, activation, say, first };
 }
@@ -231,7 +236,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		expect(await keyed({ room }, input.key)).toHaveLength(1);
 	});
 
-	it('binds an agent commit key to its text and refs, in a key space apart from deliveries', async () => {
+	it('binds an agent commit key to its text, refs, and after, in a key space apart from deliveries', async () => {
 		const world = await claimedWorker(storage);
 		// The question used this key for a delivery; the agent commit is a separate operation.
 		expect(await world.say('cross-operation', 'An answer.')).toHaveProperty('committed');
@@ -256,6 +261,13 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		const stored = await keyed(world, 'refs-key');
 		expect(stored).toHaveLength(1);
 		expect(stored[0]).toMatchObject({ refs: ['https://x/a'] });
+
+		const later = await world.say('after-key', 'Check later.', { after: 600 });
+		expect(later).toMatchObject({ committed: { after: 600, owner: person.name } });
+		expect(await world.say('after-key', 'Check later.', { after: 600 })).toEqual(later);
+		expect(await world.say('after-key', 'Check later.', { after: 900 })).toEqual(
+			differentOperation,
+		);
 	});
 
 	it('binds membership keys to the committed subject and operation', async () => {

@@ -184,7 +184,25 @@ export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 	validateActivationId(kind, objectBody(body));
 	validateRanges(kind, objectBody(body));
 	validateRefs(kind, objectBody(body));
+	validateSchedule(kind, objectBody(body));
 	return true;
+}
+
+/**
+ * A scheduled say goes to its author and carries both `after` and `owner`.
+ * The room writes a returned say, so it has no author.
+ */
+function validateSchedule(kind: string, body: Record<string, unknown> | undefined): void {
+	if (kind !== 'message' || body === undefined) return;
+	const fail = (path: string, reason: string) => {
+		throw new Error(`Invalid room journal body for kind '${kind}' at ${path}: ${reason}.`);
+	};
+	if (body.kind === 'returned' && body.from !== undefined) fail('body.from', 'expected no author');
+	if (body.kind !== 'said') return;
+	const scheduled = body.after !== undefined;
+	if (scheduled !== (body.owner !== undefined))
+		fail(scheduled ? 'body.owner' : 'body.after', 'expected after and owner together');
+	if (scheduled && body.to !== body.from) fail('body.to', 'expected the author');
 }
 
 /** The refs of a message with text follow the grammar the commit path applies. */
