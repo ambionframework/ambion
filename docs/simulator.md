@@ -3,9 +3,9 @@
 **This page designs `@ambionframework/simulator`.** Phase 5 of
 [the 0.3.0 plan](../planning/next.md) builds it, in the four pull requests
 of [the order of work](#the-order-of-work). The package holds `simulate`,
-`scriptedActor`, `agentActor`, and `agentJudge`. The port of the
-assistant's live suite is open. Until step 4 lands, the live tests in
-`packages/*/test/live` are the only behavioral evidence.
+`scriptedActor`, `agentActor`, and `agentJudge`, and the assistant's live
+suite runs on it. The first live run of that suite is the evidence that
+validates the design.
 
 **The rewrite of the assistant's live suite validates the design.** The
 package lands when `packages/assistant/test/live/behavior.test.ts` runs on
@@ -558,15 +558,18 @@ the provider, and the specialist returns one fixed `say`.
   for each seat name over the life of its runtime. A shared runtime shares
   the counter between cases.
 
-**The specialist script reads the view, and ignores the counter.** The
-`call` argument counts every step of the seat in the runtime, so a script
-that speaks at `call === 1` answers the first exchange only. A script for a
-case with several exchanges speaks once in each exchange:
+**The specialist script reads the view and its results, and ignores the
+counter.** The `call` argument counts every step of the seat in the
+runtime, so a script that speaks at `call === 1` answers the first exchange
+only. The view of a later step in one activation may not hold the say the
+seat just made, so the script also stops once the activation has a result.
+A script for a case with several exchanges speaks once in each exchange:
 
 ```ts
 const answers =
   (fact: string): Script =>
-  ({ view }) => {
+  ({ view, results }) => {
+    if (results.length > 0) return quiet();
     const from = view.context.exchange?.from ?? 0;
     const spoke = view.context.messages.some(
       (m) => m.kind === 'said' && m.from === 'inventory' && m.seq >= from,
@@ -574,6 +577,11 @@ const answers =
     return spoke ? quiet() : speak(fact, 'assistant');
   };
 ```
+
+`packages/assistant/test/live/support.ts` holds this script, the room, the
+evidence of a failed case, and the cost line.
+`packages/assistant/test/eval-support.test.ts` runs the support with a
+scripted Pi assistant, so its plumbing needs no key.
 
 **An exact fact stays a check. A regex that lists wordings becomes a
 criterion.** A check such as `/8|eight/` decides a fact. A regex that lists
@@ -593,11 +601,11 @@ needs more than one exchange.
 [Assistant evaluation](assistant.md#integration-and-evaluation) lists
 them.
 
-| New case                                    | Actor                                                   | Checks                                                                     | Criteria for the judge                                                                                     |
-| ------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| A person revises the request                | Scripted: the question, then the revision               | At `named`, the assistant says once to `inventory` in the second exchange. | The request to `inventory` carries the revision. The second summary uses it.                               |
-| A constraint survives into a later exchange | Scripted: a no-dispatch constraint, then a plan request | At `named`, the assistant says once to `inventory` in the second exchange. | That request carries the no-dispatch constraint. The second summary keeps it.                              |
-| The assistant needs a material fact         | `agentActor`, with the fact in the brief                | Two exchanges run. The second message the person sent carries the fact.    | The first summary asks for the fact, or reports that the work waits on it. The last summary uses the fact. |
+| New case                                    | Actor                                                   | Checks                                                                                                                  | Criteria for the judge                                                                                     |
+| ------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| A person revises the request                | Scripted: the question, then the revision               | At `named`, the assistant says once to `inventory` in the second exchange, and names SKU B. The second summary names 5. | The second summary answers for SKU B.                                                                      |
+| A constraint survives into a later exchange | Scripted: a no-dispatch constraint, then a plan request | At `named`, the assistant says once to `inventory` in the second exchange.                                              | That request carries the no-dispatch constraint. The second summary keeps it.                              |
+| The assistant needs a material fact         | `agentActor`, with the fact in the brief                | Two exchanges run. The second message the person sent carries the fact.                                                 | The first summary asks for the fact, or reports that the work waits on it. The last summary uses the fact. |
 
 **The specialist asks for the material fact.** In the third case, its
 script says in the first exchange that it needs the fact. The assistant can

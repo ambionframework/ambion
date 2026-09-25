@@ -4,6 +4,7 @@ export default defineConfig({
 	test: {
 		include: ['test/live/**/*.test.ts'],
 		fileParallelism: false,
-		testTimeout: 120_000,
+		// Up to three exchanges of 90 s each, an actor, and a grade.
+		testTimeout: 600_000,
 	},
 });
