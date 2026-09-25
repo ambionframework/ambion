@@ -184,8 +184,9 @@ execution has started.
 
 **`await room.abort()` confirms one durable cancellation boundary.** The journal
 orders cancellation with messages and executor commits. Work before that boundary
-loses publication authority, including expired leases, pending retries, and unread
-steering. Messages recorded afterward can start fresh work. Membership and human
+loses publication authority, including expired leases, pending retries, unread
+steering, and scheduled says that wait to return. Messages recorded afterward can
+start fresh work. Membership and human
 presence remain unchanged.
 
 Cancellation closes the current exchange without assigning a summary. An existing
@@ -212,6 +213,11 @@ Completion needs a confirmed journal read with no execution obligations left.
 
 - **Stop preserves an open exchange.** A resumed run closes it and assigns a
   new summary through reconciliation. A summary that stop revoked stays failed.
+- **Stop preserves a scheduled say.** The say stays on the journal. A resumed
+  run arms the room's alarm for its due time, and returns a say that fell due
+  while no run held the room at its first reconcile. A crash does the same.
+  [`scheduled-say.test.ts`](../packages/ambion/test/scheduled-say.test.ts)
+  finds one returned entry after each.
 
 [`deployment.md`](deployment.md) holds the host steps.
 

@@ -48,6 +48,13 @@ a view. An optional git backend gives repositories and adds `repos` and
 pushes. See [Workspace](docs/workspace.md), [Processes](docs/processes.md),
 and [Git](docs/git.md).
 
+**An agent comes back to its work later.** It says to itself with `after`,
+in seconds. The exchange closes while the say waits. When the say is due,
+the room gives it back, and the returned say opens an exchange for the
+person who owned the first one. An agent checks a long build this way with
+no event source and no host code. The scheduled say is part of 0.3.0. See
+[Exchange](docs/exchange.md#6-a-scheduled-say).
+
 **The host lists and cancels processes through `workspace.processes`.** It
 hears when each process starts and ends. Host code can post a message to
 the owner seat when a process ends. The message starts an activation of
@@ -200,8 +207,8 @@ later**, the floor `@opentui/core` sets for its terminal renderer. See
 - The journal owns no domain transactions and no credentials.
 - Tools can act before a contribution commits. Applications own effect
   idempotency.
-- Native timers, external event subscriptions, and scheduler ingress are
-  future work.
+- A scheduled say is the one clock an agent sets. External event
+  subscriptions and scheduler ingress are future work.
 
 [Technical facts](docs/technical-facts.md) lists every limit.
 

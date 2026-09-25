@@ -21,8 +21,10 @@ reconcile multiple tabs or connections before calling Ambion. The runtime has
 no idle timer and a crash writes no departure.
 
 The room can continue between visits. An agent can address a known absent person;
-the message remains on the record for their return. Native timers, external
-subscriptions, and scheduler ingress are host concerns.
+the message remains on the record for their return. An agent can schedule a
+say for itself, which the room returns while the person is away
+([Exchange](exchange.md#6-a-scheduled-say)). External subscriptions and
+scheduler ingress are host concerns.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/ambion-room-lifetime-dark.svg">

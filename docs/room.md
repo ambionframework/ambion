@@ -18,24 +18,25 @@ call is work that the room does not replay.
 
 ## Glossary
 
-| Term       | Meaning                                                              | Specified in                                     |
-| ---------- | -------------------------------------------------------------------- | ------------------------------------------------ |
-| Definition | An immutable value: a name, an identity, and an executor             | [agent.md](agent.md)                             |
-| Room       | Participants that collaborate through one ordered journal            | This page                                        |
-| Seat       | An agent's membership in a room, with its attention                  | [roster.md](roster.md)                           |
-| Attention  | Which messages wake an idle seat                                     | [roster.md](roster.md)                           |
-| Reserve    | The definitions that the room knows and has not seated               | [roster.md](roster.md)                           |
-| Visit      | A person's speaking identity and presence lifetime                   | [presence.md](presence.md)                       |
-| Exchange   | A person's question and every activation until the room is quiet     | [exchange.md](exchange.md)                       |
-| Activation | The room waking one seat: a bounded execution with one room grant    | This page                                        |
-| Step       | One recorded unit of an activation's work                            | [executors.md](executors.md)                     |
-| Resource   | Application data that an agent's tools reach, with provenance        | [resources.md](resources.md)                     |
-| Journal    | The ordered, append-only record that the room folds into its state   | [durability.md](durability.md)                   |
-| Entry      | One item that the journal holds                                      | [durability.md](durability.md)                   |
-| Message    | Spoken text with an author, a position, routing facts, and refs      | [agent.md](agent.md), [presence.md](presence.md) |
-| Summary    | A closing message that stands for a closed exchange in agent context | [summary.md](summary.md)                         |
-| Lease      | The time-limited right of one activation to run and commit           | [durability.md](durability.md)                   |
-| Ref        | One absolute URI that a message cites                                | [agent.md](agent.md)                             |
+| Term         | Meaning                                                                            | Specified in                                     |
+| ------------ | ---------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Definition   | An immutable value: a name, an identity, and an executor                           | [agent.md](agent.md)                             |
+| Room         | Participants that collaborate through one ordered journal                          | This page                                        |
+| Seat         | An agent's membership in a room, with its attention                                | [roster.md](roster.md)                           |
+| Attention    | Which messages wake an idle seat                                                   | [roster.md](roster.md)                           |
+| Reserve      | The definitions that the room knows and has not seated                             | [roster.md](roster.md)                           |
+| Visit        | A person's speaking identity and presence lifetime                                 | [presence.md](presence.md)                       |
+| Exchange     | A person's question and every activation until the room is quiet                   | [exchange.md](exchange.md)                       |
+| Activation   | The room waking one seat: a bounded execution with one room grant                  | This page                                        |
+| Step         | One recorded unit of an activation's work                                          | [executors.md](executors.md)                     |
+| Resource     | Application data that an agent's tools reach, with provenance                      | [resources.md](resources.md)                     |
+| Journal      | The ordered, append-only record that the room folds into its state                 | [durability.md](durability.md)                   |
+| Entry        | One item that the journal holds                                                    | [durability.md](durability.md)                   |
+| Message      | Spoken text with an author, a position, routing facts, and refs                    | [agent.md](agent.md), [presence.md](presence.md) |
+| Summary      | A closing message that stands for a closed exchange in agent context               | [summary.md](summary.md)                         |
+| Returned say | A say that an agent scheduled for itself, which the room gives back when it is due | [exchange.md](exchange.md#6-a-scheduled-say)     |
+| Lease        | The time-limited right of one activation to run and commit                         | [durability.md](durability.md)                   |
+| Ref          | One absolute URI that a message cites                                              | [agent.md](agent.md)                             |
 
 ## Controlled vocabulary
 
@@ -53,10 +54,10 @@ call is work that the room does not replay.
 
 ## The two spans
 
-| Span           | Starts                                                    | Ends                                         |
-| -------------- | --------------------------------------------------------- | -------------------------------------------- |
-| **activation** | The room wakes one seat                                   | That seat's work ends                        |
-| **exchange**   | A person's spoken message lands while no exchange is open | The room reaches quiescence or terminal work |
+| Span           | Starts                                                                      | Ends                                         |
+| -------------- | --------------------------------------------------------------------------- | -------------------------------------------- |
+| **activation** | The room wakes one seat                                                     | That seat's work ends                        |
+| **exchange**   | A person's spoken message or a returned say lands while no exchange is open | The room reaches quiescence or terminal work |
 
 An activation may contain more than one provider request. The exchange spans
 every activation from its opening question to its durable close. See
@@ -103,7 +104,8 @@ recorded entries. A host can resume the same behavior by replaying the
 journal.
 
 The journal records messages, membership changes, leases, exchange closes,
-composition, cancellation boundaries, and run fences. It also records the
+composition, cancellation boundaries, and run fences. A returned say is a
+message that the room writes when a scheduled say is due. It also records the
 activation id that authorized an agent contribution. The room stamps
 provenance fields. A caller cannot claim the name of another participant.
 

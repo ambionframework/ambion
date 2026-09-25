@@ -35,7 +35,7 @@ the assignment rules.
 
 **`awaiting` differs from `complete`.** A closed exchange that still waits
 on a person reads `awaiting` and carries the `person`.
-[The outcome contract](exchange.md#6-the-edges-a-host-sees) states the
+[The outcome contract](exchange.md#7-the-edges-a-host-sees) states the
 derivation and the clearing.
 
 **`pendingFor` lists the waits.** `pendingFor(read, person)` and
@@ -50,7 +50,7 @@ with `say({ to })` and ends its activation. The exchange closes and reads
 `awaiting`. `pendingFor` shows the request to that person. The person must
 differ from the exchange owner. A message to the owner answers the owner's
 question, so the exchange reads `complete`. See
-[exchange outcomes](exchange.md#6-the-edges-a-host-sees).
+[exchange outcomes](exchange.md#7-the-edges-a-host-sees).
 
 **The person's reply is the approval.** A message from the person clears
 `awaiting` and lets the agent act in a later activation. The record holds the

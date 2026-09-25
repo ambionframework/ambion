@@ -311,7 +311,7 @@ passes. The room records no tool call of the person, so a check reads
 **A question to the person is in the discussion, and the brief decides
 the answer.** The person owns every exchange that the actor opens. A
 message to the owner answers the owner's question, so the exchange closes
-as `complete` ([Exchange](exchange.md#6-the-edges-a-host-sees)). The
+as `complete` ([Exchange](exchange.md#7-the-edges-a-host-sees)). The
 outcome `awaiting` never names the actor. The actor reads the question in
 the discussion, and its next move answers it or stops.
 

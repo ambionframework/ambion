@@ -11,7 +11,28 @@ wakes a seat when a process ends: the agent waits for the result inside
 the activation, and the guidance says so. A host that wants a wake posts a
 message. See [Processes](docs/processes.md).
 
+**An agent comes back to its work later.** An agent says to itself with
+`after`, in seconds. The exchange closes while the say waits. When the say
+is due, the room writes a returned say, which wakes the agent and opens an
+exchange for the owner of the first one. See
+[Exchange](docs/exchange.md#6-a-scheduled-say).
+
 ### New
+
+- **`say` takes `after`.** A say to oneself with `after` schedules it. The
+  room stamps `owner`, the owner of the open exchange, on the said entry,
+  and refuses `after` in any other say. The result names the due time.
+- **The `returned` message kind.** The room writes `{ to, message, owner,
+  text, refs }` when a scheduled say is due. It has no `from`. It wakes
+  and steers the seat that `to` names alone, and it opens an exchange for
+  `owner` when none is open. `isReturned` and `ReturnedMessage` are new
+  exports.
+- **`limits.schedule`** bounds `after` from `minAfter` to `maxAfter`
+  seconds, 60 to 604,800 by default, and the says of one seat that wait,
+  `pending`, 4 by default.
+- **`RoomRead.scheduled` lists the says that wait to return**, each a
+  `PendingSay` with its due time. `PendingSay` is a new export.
+- **The workbench shows a returned say, and notes each say that waits.**
 
 - **`ps`, `status`, `wait`, and `cancel` join `bash`.** `ps` lists the
   running processes of the caller. The handle tools take a handle of the
@@ -78,6 +99,15 @@ message. See [Processes](docs/processes.md).
 
 ### Breaking changes
 
+- **The journal changes.** A said entry takes `after` and `owner`, and the
+  `returned` message kind is new. A returned say opens an exchange, so the
+  verified rule `opensExchange` accepts it.
+- **`Message` has a fourth member, `ReturnedMessage`.** Code that switches
+  on `kind` meets `returned`.
+- **`RoomRead` has `scheduled`.** A value that builds a read by hand adds
+  it.
+- **`say` has an `after` parameter.** A tool schema that a test pins lists
+  it.
 - **`bash` returns a handle, and waits up to `wait` seconds, 10 by
   default.** A command that runs longer keeps running, and the result
   says so. A process can run for `timeout` seconds, 600 by default. Before,

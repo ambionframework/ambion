@@ -59,8 +59,9 @@ snapshot and the golden journals in the same commit, and name the change in
 the changelog. The note at the top of [`planning/next.md`](planning/next.md)
 holds the rule.
 
-Ambient means a room remains available between interactions. Native timers,
-external event subscriptions, and scheduler ingress remain future work.
+Ambient means a room remains available between interactions. A scheduled say
+lets an agent come back to its work on the room's clock. External event
+subscriptions and scheduler ingress remain future work.
 
 [`planning/next.md`](planning/next.md) defines the 0.3.0 scope and owns the
 work and its evidence. [`planning/backlog.md`](planning/backlog.md) holds

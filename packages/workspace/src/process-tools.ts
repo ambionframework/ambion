@@ -78,6 +78,7 @@ export function processToolGuidance(): string {
 		`No message tells you when a process ends. When your answer needs the result, call wait before you answer.`,
 		`A wait stops before your activation ends.`,
 		`A process that outlives your activation shows in the reminder at the start of your next activation.`,
+		`To check a long process later, say to yourself with after, in seconds. The room gives the say back to you then.`,
 	].join('\n');
 }
 

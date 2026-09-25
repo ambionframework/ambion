@@ -434,6 +434,21 @@ seconds.
 A message of a person or of another seat starts that activation. Until
 then, the end stays in the files.
 
+### The agent can come back later
+
+**An agent schedules its own next activation.** It says to itself with
+`after`, in seconds, before its activation ends. The room gives the say
+back when it is due, and the returned say starts an activation for the
+same seat ([Exchange](exchange.md#6-a-scheduled-say)). That activation
+reads the process in its reminder, and `status` gives the output. When the
+process still runs, the agent can schedule another say. The guidance
+states this to the agent.
+
+**Each returned say costs one activation.** The room does not look at the
+process before it returns the say. A guard that holds the say while its
+process runs waits in the
+[backlog](../planning/backlog.md#wake-sources-and-delegation).
+
 ### A host can wake the owner seat
 
 **A host that wants a wake posts a message when a process ends.**
@@ -582,6 +597,7 @@ A process keeps running after your activation ends. It stops after timeout secon
 No message tells you when a process ends. When your answer needs the result, call wait before you answer.
 A wait stops before your activation ends.
 A process that outlives your activation shows in the reminder at the start of your next activation.
+To check a long process later, say to yourself with after, in seconds. The room gives the say back to you then.
 ```
 
 ## Out of scope
@@ -613,6 +629,7 @@ the three handle tools stay as they are.
 | A name is a label, and the handle is the key                   | Two processes can have one name with no rule for which one a call takes                            |
 | `ps` writes an audit entry                                     | The audit log records every tool call                                                              |
 | A process wakes no seat, and the agent waits for its result    | The kernel adds no wake source for the end of a process, and a host that wants one posts a message |
+| The agent comes back to a long process with a scheduled say    | The room keeps one clock, and the agent chooses when to look again                                 |
 
 **The host owns the cleanup of `~/.processes` past the limit of 64.** A
 start removes the oldest finished processes of the agent that starts it,
