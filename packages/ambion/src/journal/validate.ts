@@ -194,6 +194,7 @@ export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 	validateRanges(kind, objectBody(body));
 	validateRefs(kind, objectBody(body));
 	validateSchedule(kind, objectBody(body));
+	validateDismissal(kind, objectBody(body));
 	return true;
 }
 
@@ -212,6 +213,17 @@ function validateSchedule(kind: string, body: Record<string, unknown> | undefine
 	if (scheduled !== (body.owner !== undefined))
 		fail(scheduled ? 'body.owner' : 'body.after', 'expected after and owner together');
 	if (scheduled && body.to !== body.from) fail('body.to', 'expected the author');
+}
+
+/** A seat's dismissal names its author and its activation. The host's names neither. */
+function validateDismissal(kind: string, body: Record<string, unknown> | undefined): void {
+	if (kind !== 'message' || body?.kind !== 'dismissed') return;
+	const seat = body.from !== undefined;
+	if (seat === (body.activationId !== undefined)) return;
+	const path = seat ? 'body.activationId' : 'body.from';
+	throw new Error(
+		`Invalid room journal body for kind '${kind}' at ${path}: expected from and activationId together.`,
+	);
 }
 
 /** The refs of a message with text follow the grammar the commit path applies. */

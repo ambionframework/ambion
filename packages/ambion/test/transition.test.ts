@@ -556,12 +556,14 @@ describe('a scheduled say', () => {
 	});
 
 	it('lets the host dismiss any pending say with no author, and write nothing for one gone', () => {
-		const state = waiting();
+		// A running lease of another seat: an entry with no author steers no seat.
+		const state = waiting(lease('message:3:writer:1', 6));
 		const decision = decide(state, { type: 'dismiss', message: 5 }, now);
 		expect(decision).toEqual({
 			event: { kind: 'message', body: { kind: 'dismissed', message: 5, at } },
 		});
-		const after = evolve(state, event(decision, 6), options);
+		const after = evolve(state, event(decision, 7), options);
+		expect(after.deliveries.get(7)).toEqual({ wakes: [], steers: [] });
 		expect(after.scheduled).toEqual([]);
 		expect(decide(after, { type: 'dismiss', message: 5 }, now)).toEqual({ event: undefined });
 	});

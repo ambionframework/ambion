@@ -343,13 +343,15 @@ function arm(host: ControlHost, at: number | undefined): void {
  * looks again, so its alarm drops the due time of the say.
  */
 export async function dismissSay(host: ControlHost, handle: Seq): Promise<boolean> {
+	await host.ready;
 	host.assertRunning();
-	await host.journal.ready;
 	const written = await submit(host.journal, 'message', () => {
 		if (host.gone()) return { event: undefined };
 		return decide(host.state(), { type: 'dismiss', message: handle }, host.now());
 	});
 	requireSubmission(written);
+	if (host.gone() && !('entry' in written))
+		throw new AmbionError('room_stopped', `Room '${host.name}' stopped before the dismissal.`);
 	if (!('entry' in written)) return false;
 	await host.reconcile();
 	return true;

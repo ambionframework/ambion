@@ -56,13 +56,16 @@ const checksLater: Script = (context) => {
 };
 
 /**
- * The worker schedules a check, then thinks better of it and dismisses the
- * say by the handle that the say result names.
+ * The worker schedules a check, then dismisses the say by the handle that
+ * the say result names. It tells the person in the same activation, so the
+ * dismissal must not leave its say behind the record.
  */
 const changesItsMind: Script = (context) => {
 	const last = toolResultTexts(context).at(-1);
+	if (last !== undefined) results.push(last);
 	const handle = /^scheduled (\d+):/.exec(last ?? '')?.[1];
 	if (handle !== undefined) return callTool('dismiss', { handle: Number(handle) });
+	if (last?.startsWith('dismissed')) return speak('I dropped the check.', 'priya');
 	if (last !== undefined) return quiet();
 	return callTool('say', { to: 'worker', text: 'Check the build.', after: AFTER });
 };
@@ -192,8 +195,14 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		await clock.advance(AFTER * 1000);
 		await waitForRoom(room);
 		const { messages } = await room.read({ messages: {} });
-		expect(kinds(messages)).toEqual(['said', 'said', 'dismissed']);
-		expect(messages.at(-1)).toMatchObject(by === 'seat' ? { from: 'worker' } : {});
-		expect(messages.at(-1)).not.toHaveProperty(by === 'host' ? 'from' : 'text');
+		const dismissed = messages.find((message) => message.kind === 'dismissed');
+		if (by === 'seat') {
+			expect(kinds(messages)).toEqual(['said', 'said', 'dismissed', 'said']);
+			expect(dismissed).toMatchObject({ from: 'worker' });
+			expect(results.at(-1)).toBe('delivered');
+		} else {
+			expect(kinds(messages)).toEqual(['said', 'said', 'dismissed']);
+			expect(dismissed).not.toHaveProperty('from');
+		}
 	});
 });

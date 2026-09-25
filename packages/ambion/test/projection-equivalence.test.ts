@@ -145,7 +145,7 @@ class Walk {
 			return this.message({
 				kind: 'dismissed',
 				message: say.seq,
-				...(this.chance(0.5) ? { from: say.seat } : {}),
+				...(this.chance(0.5) ? { from: say.seat, activationId: `message:1:${say.seat}:1` } : {}),
 			});
 		return this.message({
 			kind: 'returned',

@@ -72,8 +72,7 @@ exchange for the owner of the first one. See
   returns whether it wrote the entry. `room.scheduled()` lists the pending
   says. The Cloudflare room object serves them as `dismiss` and
   `scheduledSays`, because Workers keep the name `scheduled`.
-  `DismissedMessage` and `Unchanged` are new exports, and `/hosting`
-  exports `DISMISS`.
+  `DismissedMessage` is a new export, and `/hosting` exports `DISMISS`.
 - **The workbench shows a returned say, and notes each say that waits.**
 - **`ps`, `status`, `wait`, and `cancel` join `bash`.** `ps` lists the
   running processes of the caller. The handle tools take a handle of the
@@ -160,7 +159,8 @@ exchange for the owner of the first one. See
   assistant. Seats and unseats specialists as the request needs, and
   summarizes each exchange." See [Default assistant](docs/assistant.md).
 - **The journal changes.** A said entry takes `after` and `owner`, and the
-  `returned` and `dismissed` entries are new. A returned say opens an exchange, so the
+  `returned` and `dismissed` entries are new. A returned say opens an
+  exchange, so the
   verified rule `opensExchange` accepts it.
 - **`Message` has two more members, `ReturnedMessage` and
   `DismissedMessage`.** Code that switches on `kind` meets `returned` and

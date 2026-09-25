@@ -309,7 +309,12 @@ function dismissTool(binding: RoomToolBinding): RoomTool {
 				key: call,
 				intent: { kind: 'dismissed', message: handle },
 			});
-			if ('committed' in response) return text(`dismissed ${handle}`);
+			if ('committed' in response) {
+				// The result shows the entry, so a record read up to it is read through it.
+				const { seq } = response.committed;
+				if (binding.readThrough === seq - 1) binding.resultExpected(call, seq);
+				return text(`dismissed ${handle}`);
+			}
 			if ('unchanged' in response) return text(`${handle} no longer waits`);
 			return landed(binding, response);
 		},
