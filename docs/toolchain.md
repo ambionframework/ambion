@@ -17,6 +17,7 @@ packages/
   journal/      append-only journal storage
   just-bash/    workspace bash backends over just-bash, and a git backend in the process
   pi/           Pi executor: pi() and piExecution()
+  simulator/    evals: simulate() and the actors that play a person
   workspace/    workspace resource, tool bundles, and backend helpers
   workstation/  workspace bash backend over SSH, one account for each agent
 examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
@@ -26,7 +27,7 @@ planning/       the plan for the next release and the backlog
 .github/        CI, live, and dev-release workflows
 ```
 
-The ten `packages/*` entries are publishable and share a lockstep version.
+The eleven `packages/*` entries are publishable and share a lockstep version.
 Examples are private. The package graph is:
 
 ```text
@@ -39,6 +40,7 @@ workspace ──▶ ambion
 just-bash ──▶ workspace
 workstation ──▶ workspace
 assistant ──▶ ambion, pi
+simulator ──▶ ambion
 ```
 
 **A test reaches a package that depends on the tested package by relative

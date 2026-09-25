@@ -1,8 +1,10 @@
 # The simulator
 
-**This page designs `@ambionframework/simulator`. The package does not exist
-yet.** Phase 5 of [the 0.3.0 plan](../planning/next.md) builds it, in the
-four pull requests of [the order of work](#the-order-of-work). Until it
+**This page designs `@ambionframework/simulator`.** Phase 5 of
+[the 0.3.0 plan](../planning/next.md) builds it, in the four pull requests
+of [the order of work](#the-order-of-work). The package holds `simulate`
+and `scriptedActor`. `agentActor`, `agentJudge`, and the port of the
+assistant's live suite are open. Until it
 lands, the live tests in `packages/*/test/live` are the only behavioral
 evidence.
 
@@ -611,18 +613,20 @@ its evidence below.
 
 **The package depends on `ambion` and `pi`.** The package graph in
 [Toolchain](toolchain.md#1-repository-layout) gains one line:
-`simulator ──▶ ambion, pi`. `packages/pi/src/run-agent.ts` holds
+`simulator ──▶ ambion, pi`. Until step 3, the package depends on `ambion`
+alone. `packages/pi/src/run-agent.ts` holds
 `runAgent`, the one change to the Pi package.
 
-| File                      | What it holds                                  |
-| ------------------------- | ---------------------------------------------- |
-| `src/simulate.ts`         | `simulate`, `Run`, `Seen`, `Move`              |
-| `src/actor.ts`            | `scriptedActor`, `agentActor`, `send`, `stop`  |
-| `src/judge.ts`            | `agentJudge`, `Verdict`, and `grade`           |
-| `src/index.ts`            | The one entry                                  |
-| `test/simulate.test.ts`   | The loop on a scripted room                    |
-| `test/agent.test.ts`      | The agent actor and judge on a scripted stream |
-| `test/live/agent.test.ts` | One live case of the actor and the judge       |
+| File                      | What it holds                                   |
+| ------------------------- | ----------------------------------------------- |
+| `src/simulate.ts`         | `simulate` and the deadline of an exchange      |
+| `src/types.ts`            | `Run`, `Seen`, `Move`, `Actor`, and the options |
+| `src/actor.ts`            | `scriptedActor`, `agentActor`, `send`, `stop`   |
+| `src/judge.ts`            | `agentJudge`, `Verdict`, and `grade`            |
+| `src/index.ts`            | The one entry                                   |
+| `test/simulate.test.ts`   | The loop on a scripted room                     |
+| `test/agent.test.ts`      | The agent actor and judge on a scripted stream  |
+| `test/live/agent.test.ts` | One live case of the actor and the judge        |
 
 **The assistant package takes the simulator as a dev dependency.** Its
 live suite is the first consumer.

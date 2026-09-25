@@ -11,6 +11,13 @@ activation starts with a reminder of the seat's processes. See
 
 ### New
 
+- **`@ambionframework/simulator` runs evals on a room.** `simulate(room,
+  options)` drives a room that the test started. An actor plays a person,
+  one exchange at a time, and the loop waits for the close and the summary
+  under one deadline, `exchangeMs`. The run holds the moves, each exchange
+  with its closed view, one read of the room, the events, and the usage.
+  It ends with `stopped`, `limit`, `timeout`, or `failed`. `scriptedActor`
+  plays a fixed list of moves. See [Simulator](docs/simulator.md).
 - **`runAgent` runs one Pi agent outside a room.** It takes a model, a
   routing name, the agent that the tools see, a system prompt, one prompt,
   tools and bundles, and the names of the tools that end the run. It runs
