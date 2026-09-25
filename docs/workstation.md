@@ -102,9 +102,14 @@ adapter gets no workstation in v1.
 
 ## Credentials
 
-**The host owns every credential.** The workspace states the rule for
-every backend: the host owns credentials for external services. The
-backend takes one resolver and holds no credential of its own.
+**The host owns the key of each account on the server.** The workspace
+states the rule for every backend: the host owns credentials for external
+services. The bash backend takes one resolver and holds no credential of
+its own.
+
+**The git backend owns the git key of each agent.** It issues the key,
+rotates it, and the key works only on the server until it expires
+([A git backend](#a-git-backend)).
 
 ```ts
 import type { WorkspaceLayout } from '@ambionframework/workspace';
@@ -137,8 +142,8 @@ The host gives it an account and a key, the same as an agent.
 **The host provisions each account and each key before the first
 connection.** The resolver reads them from the store the application
 already uses: a secrets manager, an environment variable, or a file. The
-backend awaits the resolver each time it builds a client for an agent. It
-stores, issues, and rotates no credential.
+bash backend awaits the resolver each time it builds a client for an
+agent. It stores, issues, and rotates no account key.
 
 **The backend refuses to start without a host key.** `ssh2` accepts every
 host key when its `hostVerifier` option is unset. The backend always sets
@@ -431,9 +436,25 @@ set of grants.
 
 ## A git backend
 
-**The workstation carries the git transport `ssh` of
-`workstationGitBackend`.** [Workstation git](workstation-git.md) describes
-the backend.
+**`workstationGitBackend` keeps the repositories of the workspace on the
+server.** One more account, such as `lab-git`, owns every repository, and
+the host reaches it with its own key. [Workstation git](workstation-git.md)
+describes the backend.
+
+**The bash backend carries the git transport `ssh`.** Its
+`gitTransports` is `['ssh']`. At each `connect` with the git backend, it
+asks `identityFor` for the agent's key. It writes the key, a
+`known_hosts` file, and an ssh configuration for the alias into the
+agent's `~/.ssh` with mode `0600`, and it makes `Include ambion-git.conf`
+the first line of `~/.ssh/config`. A failure of either step fails the
+`connect`.
+
+**Each agent key works only on the server, until it expires.** Its line
+in `authorized_keys.ambion` of the git account holds `from` for the
+loopback address, `expiry-time`, and the forced command `serve`. The git
+backend issues a new key at a `connect` when the old key has 10 minutes
+or half of its life left, whichever is less. A restart of the host issues
+new keys.
 
 ## Guidance
 
@@ -517,8 +538,9 @@ Linux and skips on a machine without `setsid`, such as macOS.
 **The integration tier runs in a CI job of its own.** Only root creates
 the accounts, and only an `sshd` that runs as root logs in as more than
 one user. `pnpm check` runs without root. The `workstation` job runs
-`test/sshd/setup.sh` with `sudo` on its runner. The script adds four
-accounts and one group, makes the two layout folders, and starts `sshd` on
+`test/sshd/setup.sh` with `sudo` on its runner. The script adds one
+account for each agent of the tier, the git account `lab-git`, and one
+group, makes the two layout folders, and starts `sshd` on
 port 2222. The tier runs only when `AMBION_WORKSTATION_SSHD` names the file
 the script writes. It proves what only OpenSSH can:
 
@@ -532,11 +554,15 @@ the script writes. It proves what only OpenSSH can:
 - that an agent cannot write under `layout.rooms`
 - that the audit log records each agent's tool call as that agent
 
+**The same job runs the tier of the git backend.** It runs
+`gitConformance` on the same server, and
+[Workstation git](workstation-git.md#tests) lists its other checks.
+
 ## Out of v1
 
 - A SQL backend over a database server, or over the server's own
   `sqlite3`.
-- Credential issuance and rotation, and OpenSSH certificates.
+- OpenSSH certificates.
 - A workspace across two or more servers.
 - A workstation under workerd.
 - Concurrent operations on the bash owner. The

@@ -32,7 +32,7 @@ each page.
 | [Processes](processes.md)             | Background processes: `bash`, `ps`, handles, the host's view, and reminders |
 | [Workstation](workstation.md)         | A remote server as a workspace over SSH, one account for each agent         |
 | [Git](git.md)                         | A git backend: read-only templates, forks, clones, and pushes               |
-| [Workstation git](workstation-git.md) | Proposed: a git backend on the workstation, reached over SSH                |
+| [Workstation git](workstation-git.md) | The git backend on the workstation: one account, git over SSH, agent keys   |
 | [Example](example.md)                 | The one runnable example: an agentic lab workspace                          |
 | [Durability](durability.md)           | Journal guarantees, recovery, leases, and failure evidence                  |
 | [Formal](formal.md)                   | The verified rules, their proofs, and how the gate runs them                |
@@ -50,7 +50,8 @@ filesystem binding and the just-bash backends of
 background processes it starts, and `ps`. `workstation.md` is the bash
 backend for a workspace on a remote server over SSH. `git.md` is the git
 backend of `@ambionframework/just-bash/git`: read-only templates, forks,
-clones, and pushes.
+clones, and pushes. `workstation-git.md` is `workstationGitBackend`, the
+git backend on the workstation.
 
 `assistant.md` describes the assistant package, the room configuration
 shorthand, and how the workbench example evaluates it.

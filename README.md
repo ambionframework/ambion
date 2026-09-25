@@ -51,7 +51,8 @@ table. Background processes are part of 0.3.0
 The `sql` tool exists only when the workspace has a SQL backend. SQLite is the
 default. The `repos` and `fork` tools exist only when the workspace has a git
 backend: an agent forks a read-only template, clones it, and pushes with
-[`@ambionframework/just-bash/git`](docs/git.md). See
+[`@ambionframework/just-bash/git`](docs/git.md), or on a workstation with
+[`workstationGitBackend`](docs/workstation-git.md). See
 [Workspace](docs/workspace.md).
 
 <picture>

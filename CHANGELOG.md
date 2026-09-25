@@ -52,7 +52,7 @@ activation starts with a reminder of the seat's processes. See
   `restrict`, `from`, `expiry-time`, and `command`.
   `@ambionframework/workstation` exports `workstationGitBackend`,
   `WorkstationGitOptions`, `WorkstationGitAccess`, and
-  `WorkstationGitIdentity`.
+  `WorkstationGitIdentity`. See [Workstation git](docs/workstation-git.md).
 - **`workstationBackend` carries the git transport `ssh`.** Its
   `gitTransports` is `['ssh']`, so it pairs with `workstationGitBackend`.
   At each `connect`, it writes the agent's key, a `known_hosts` file, and
@@ -87,8 +87,8 @@ activation starts with a reminder of the seat's processes. See
   `namespaceOf`, `assertAgent`, `readOnly`, `TEMPLATES`, `SOURCES`,
   `TemplateRegistration`, `TemplateSource`, and `TemplateFiles`. Import
   `fromDirectory` from there.
-- **The workstation writes no `~/.git-credentials`.** It carries no git
-  transport, so a git backend beside it gives each agent's `git` no access.
+- **The workstation writes no `~/.git-credentials`.** Its agents reach
+  git through `workstationGitBackend` and the `ssh` transport.
 - **`GitAccess` holds `transport` alone.** `prefix`, `fetch`, and
   `credentialFor` move to `JustGitAccess`, and `credentialsFor` goes.
   `GitFetch` and `GitCredential` leave the root entry of
