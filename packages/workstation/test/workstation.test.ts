@@ -7,7 +7,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
 import { openWorkspace, type Workspace, type WorkspaceEnv } from '@ambionframework/workspace';
@@ -76,6 +76,9 @@ function processState(pid: number): string {
 	const ps = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
 	return ps.stdout.trim();
 }
+
+/** The process has ended: no process has the pid, or a zombie that its parent has not reaped yet. */
+const ended = (pid: number): boolean => /^(Z.*)?$/.test(processState(pid));
 
 const until = async (check: () => boolean, ms = 2_000) => {
 	const end = Date.now() + ms;
@@ -246,9 +249,8 @@ describe.skipIf(!hasSetsid)('a workstation command', () => {
 		expect(timedOut).toMatchObject({ ok: false, error: { code: 'timeout' } });
 		const pid = Number((await readFile(join(home, 'child.pid'), 'utf8')).trim());
 		// A killed child that no init reaps stays a zombie, and `kill(pid, 0)` still finds it.
-		const gone = () => /^(Z.*)?$/.test(processState(pid));
-		await until(gone);
-		expect(gone()).toBe(true);
+		await until(() => ended(pid));
+		expect(ended(pid)).toBe(true);
 	});
 });
 
@@ -362,10 +364,10 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		// A read adopts what it finds: ps reads both. The one past its timeout stops at once.
 		await toolOf(workspace, 'ps').invoke({}, context('ada'));
 		expect(await call('status', { handle: 'bash-00000000000c' })).toBe('running');
-		await until(() => processState(late) === '', 15_000);
+		await until(() => ended(late), 15_000);
 		expect(await call('status', { handle: 'bash-00000000000d' })).toBe('timed_out');
 		expect(await call('cancel', { handle: 'bash-00000000000c' })).toBe('cancelled');
-		expect(processState(kept)).toBe('');
+		expect(ended(kept)).toBe(true);
 	});
 
 	it("writes a running process's output to its file in the home, and a cancel and a timeout kill the process", async () => {
@@ -390,8 +392,15 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		expect(process.output).toBe(
 			join(started.homes.get('ada') ?? '', '.processes', process.handle, 'out'),
 		);
+		// Each read gives the output after the last one. The test writes the next part itself.
+		await appendFile(process.output, 'second\n');
+		const later = await call('status', { handle: process.handle });
+		expect(later).toMatch(
+			/^second\n\n\[Process .* is running\..* starts at byte 6 of the output\./s,
+		);
+		expect(await call('status', { handle: process.handle })).toMatch(/^\(no new output\)\n\n/);
 		expect(await call('cancel', { handle: process.handle })).toContain('is cancelled.');
-		expect(await readFile(process.output, 'utf8')).toBe('first\n');
+		expect(await readFile(process.output, 'utf8')).toBe('first\nsecond\n');
 		// The table holds the timeout, and stops the process the way a cancel does.
 		const timed = await call('bash', {
 			command: 'echo second; exec sleep 30',

@@ -1,6 +1,6 @@
 # The simulator
 
-**This page designs `@ambionframework/simulator`.** Phase 5 of
+**This page designs `@ambionframework/simulator`.** Phase 2 of
 [the 0.3.0 plan](../planning/next.md) builds it, in the four pull requests
 of [the order of work](#the-order-of-work). The package holds `simulate`,
 `scriptedActor`, `agentActor`, and `agentJudge`. The port of the

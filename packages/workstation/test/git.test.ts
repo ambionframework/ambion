@@ -6,7 +6,7 @@
  * `serve` and the key lines have files of their own.
  */
 
-import { cp, mkdir, readdir, readFile, stat, utimes, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { type WorkstationGitOptions, workstationGitBackend } from '../src/index.ts';
@@ -103,20 +103,45 @@ describe.skipIf(!hasGitTools)('workstationGitBackend', () => {
 		expect(await readdir(staging)).toEqual(['new']);
 	});
 
-	it('writes nothing for a template with the same source, and fails with the name of a changed one', async () => {
-		const { options } = await gitServer();
-		const tip = async (backend: ReturnType<typeof gitBackend>) =>
-			(await (await backend.connect(ANALYST)).get('templates/blank'))?.branches.main;
-		const before = await tip(gitBackend(options));
+	it('writes nothing for a template with the same source, and fast-forwards a changed one', async () => {
+		const { home, options } = await gitServer();
+		const blank = async (backend: ReturnType<typeof gitBackend>) =>
+			(await backend.connect(ANALYST)).get('templates/blank');
+		const before = (await blank(gitBackend(options)))?.branches.main;
 		expect(before).toMatch(/^[0-9a-f]{40}$/);
-		expect(await tip(gitBackend(options))).toBe(before);
-		const changed = gitBackend({
+		expect((await blank(gitBackend(options)))?.branches.main).toBe(before);
+		const changed: WorkstationGitOptions = {
 			...options,
-			templates: { ...options.templates, blank: { source: { 'README.md': 'changed\n' } } },
-		});
-		await expect(changed.connect(ANALYST)).rejects.toThrow(/'blank' changed/);
-		// A failed preparation lets the next call try again, and it fails the same way.
-		await expect(changed.access.identityFor(ANALYST)).rejects.toThrow(/'blank' changed/);
+			templates: {
+				...options.templates,
+				blank: { description: 'An empty start.', source: { 'NOTES.md': 'changed\n' } },
+			},
+		};
+		const updated = await blank(gitBackend(changed));
+		expect(updated?.description).toBe('An empty start.');
+		const repo = join(home, 'repos', 'templates', 'blank.git');
+		expect(git(repo, 'rev-parse', 'main~1').trim()).toBe(before);
+		expect(git(repo, 'ls-tree', '-r', '--name-only', 'main')).toBe('NOTES.md\n');
+		expect(await readdir(join(home, 'repos', '.staging'))).toEqual([]);
+		expect((await blank(gitBackend(changed)))?.branches.main).toBe(updated?.branches.main);
+	});
+
+	it('names the error of git when the move of main fails, and a later registration moves it', async () => {
+		const { home, options } = await gitServer();
+		await gitBackend(options).connect(ANALYST);
+		const repo = join(home, 'repos', 'templates', 'blank.git');
+		const lock = join(repo, 'refs', 'heads', 'main.lock');
+		await writeFile(lock, '');
+		const changed: WorkstationGitOptions = {
+			...options,
+			templates: { ...options.templates, blank: { source: { 'NOTES.md': 'changed\n' } } },
+		};
+		await expect(gitBackend(changed).connect(ANALYST)).rejects.toThrow(
+			/git update-ref failed: .*main\.lock/s,
+		);
+		await rm(lock);
+		await gitBackend(changed).connect(ANALYST);
+		expect(git(repo, 'ls-tree', '-r', '--name-only', 'main')).toBe('NOTES.md\n');
 	});
 
 	it.each<[string, WorkstationGitOptions['templates'], RegExp]>([
@@ -124,7 +149,10 @@ describe.skipIf(!hasGitTools)('workstationGitBackend', () => {
 		['a path that leaves its root', { bad: { source: { '../x': 'y' } } }, /leaves its root/],
 	])('refuses a template with %s', async (_name, templates, message) => {
 		const { options } = await gitServer();
-		await expect(gitBackend({ ...options, templates }).connect(ANALYST)).rejects.toThrow(message);
+		const backend = gitBackend({ ...options, templates });
+		await expect(backend.connect(ANALYST)).rejects.toThrow(message);
+		// A failed preparation lets the next call try again, and it fails the same way.
+		await expect(backend.access.identityFor(ANALYST)).rejects.toThrow(message);
 	});
 
 	it('lands a fork with one rename, with its source in its config and its objects hard-linked', async () => {

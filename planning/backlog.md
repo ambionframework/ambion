@@ -51,12 +51,79 @@ from the owner's machine, or a user who asks for provenance.
 - npmjs holds a trusted publisher setting for each of the eleven
   packages.
 
+## Wake sources and delegation
+
+**These items left the 0.3.0 plan by decision.** Background processes in
+0.3.0 follow the pull model of Codex's unified exec: an agent waits for its
+result inside the activation, and nothing wakes a seat when a process ends
+([Processes](../docs/processes.md#the-end-of-a-process)). A host that wants
+a wake posts a message. The notice (W1) is the step that the timer (W2)
+and the delegation (D1) build on, so the three moved together.
+**Condition:** an application that must react to a change outside the room
+with no person present, where a message that the host posts does not serve.
+
+**The order is the notice, the timer, then the delegation.** The notice
+host call needs the notice kind, the timer needs the host call, and the
+delegating message needs the notice.
+
+**W1. A notice from a resource.** A room wakes only when a person speaks,
+so an agent cannot react when a brief changes or a run completes. Add a
+message kind with a ref and no author, routed by attention. One host call
+delivers it with a stable key, so a retried delivery lands once. An
+application scheduler calls the same host call, so the kernel needs no
+scheduler of its own. A notice opens no exchange by itself and arrives
+through no hidden timeout. **Evidence:** a scripted test and a chaos case
+for the kind and for the host call, with its durable start and its restart
+semantics.
+
+**W2. A timer that the journal records.** Nothing wakes a room on a clock,
+and an `awaiting` exchange waits for ever. A timer entry records the due
+time and the wake it owes. The host arms it and writes the wake when it is
+due. A restart reads the open timer entries and arms them again, so a
+crash loses no timer. The `awaiting` expiry is a timer that the close
+schedules. The Cloudflare adapter runs a timer through its alarm, and a
+measurement records the resume cost of a room with many timer wakes.
+**Evidence:** a kill between the timer entry and the wake keeps the wake;
+the docs that call timers future work say what shipped.
+
+**D1. Delegation by reference.** PR #151 stored tasks in the journal and
+scanned every task on each reconcile pass. Use a ref and the `awaiting`
+outcome. The delegating message carries a ref to
+`ambion://room/<working>/message/<from>`. The origin exchange closes as
+`awaiting` that room. The working room closes with one message that
+carries a ref back. Status is a read of the exchange that the referenced
+message opened. **Evidence:** the workbench delegates one question to a
+second room; a restart in the middle keeps the work. Then close PR #151
+with a comment that names the new route.
+
+**Decisions the items carry.**
+
+- **A notice is the scheduler ingress.** The application owns its
+  schedule and delivers a notice through one host call. The kernel adds no
+  scheduler.
+- **The journal records a timer, and the host runs it.** The host owns the
+  clock. A restart reads the timer entries and arms them again.
+- **Delegation has no task database.** A working room is a room, and a ref
+  connects the two.
+- **W2 decides `exchangeOutcome`.** If the `awaiting` expiry writes on the
+  `awaiting` outcome, the rule gates a write and stays verified. Otherwise
+  it leaves the rules file, as the 0.2.0 sweep states for read views.
+
+**Each item changes a format.** Each change lands with a golden journal of
+the new shape, and the changelog names each one.
+
+| Change                                  | Item | Kind                       |
+| --------------------------------------- | ---- | -------------------------- |
+| The notice message kind                 | W1   | A new message union member |
+| The timer entry                         | W2   | A new entry kind           |
+| An `awaiting` outcome that names a room | D1   | A new outcome union member |
+
 ## Designs with a shape
 
 **The checkpoint entry.** A checkpoint entry lets a resume skip settled
 history, and full replay stays the reference. It is a format change, so it
 lands with a golden journal of the new format. **Condition:** the resume
-measurement of 0.3.0 item W2 comes near the default
+measurement of item W2 above comes near the default
 `limits.lease.ttl` of 60 seconds ([envelope.md](../docs/envelope.md)). Past
 that point, replay sets the recovery time.
 
@@ -65,12 +132,13 @@ process as a notice.** A process runs until it ends, times out, or gets a
 cancel ([Processes](../docs/processes.md)). An exchange closes when no
 activation is live, so a cancel at the close stops a process at the first
 quiet moment. A link to the room needs its own design. The handle is
-`<kind>-<random>`, and `bash` is the one kind. A clone that runs past its
-call and a SQL export are candidate kinds. The end of a process wakes no
-seat: the seat calls `wait` or `status`. The notice of 0.3.0 item W1 can
-carry it. The table has no fence: two runs of the host over one account
-adopt the same processes. **Condition:** a seat that must wake when a
-process ends, a process that must stop with its exchange, or a second
+`<kind>-<random>`, and `bash` is the one kind. A clone that runs past its call
+and a SQL export are candidate kinds. The end of a process wakes no seat, by
+decision: the agent waits, and a host can post a message
+([Processes](../docs/processes.md#the-end-of-a-process)). The notice of item
+W1 above can carry it later. The table has no fence: two runs of the host over
+one account adopt the same processes. **Condition:** a seat that must wake
+when a process ends, a process that must stop with its exchange, or a second
 kind of work that outlives its call.
 
 **One record for a live process in the table.** The table keeps a process
@@ -80,6 +148,27 @@ and each fix to a stop then lands once. A lost process keeps its `pid` and
 no end file, so each listing runs `ps` for it until a start forgets it. A
 `stop` line that the first read writes ends that cost. **Condition:** the
 next change to a stop path, or a table with many lost processes.
+
+**Three process changes from a comparison with Codex unified exec.** Codex
+gives a model `exec_command` and `write_stdin` over a PTY, with sessions in
+memory ([Processes](../docs/processes.md) holds the Ambion design). Three
+of its mechanisms fit the process table and keep the five tools. The
+output cursor, a fourth, landed in 0.3.0.
+
+1. **An interactive kind of process.** A `pty-<random>` handle runs its
+   command on a PTY, and an `input` tool writes to it, Ctrl-C included.
+   The workstation gives the PTY. just-bash has none, so it refuses the
+   kind. Today stdin is `/dev/null`, so a command that prompts waits until
+   its timeout.
+2. **A graceful cancel.** `cancel` and the timeout send `SIGTERM` to the
+   group, and `SIGKILL` after the grace. Today a stop sends `SIGKILL`, so
+   a server or a database gets no time to flush.
+3. **The head and the tail in a result.** The result shows the first
+   lines of the output beside the last ones. The first lines often hold
+   the error that the last lines report.
+
+**Condition:** an agent that must drive a prompt or a REPL. The
+interactive kind comes first.
 
 **Tool execution provenance beyond the activation.** `ToolContext` carries
 the activation, the exchange, and the room. A purpose field, a retry-safe
@@ -175,7 +264,7 @@ today. **Condition:** a fault that one of them would have caught.
 
 ## Open pull requests
 
-| PR   | Title                                           | Decision                                                    |
-| ---- | ----------------------------------------------- | ----------------------------------------------------------- |
-| #151 | Exchange-scoped tasks and Relay background work | Close in 0.3.0 item D1; delegation by reference replaces it |
-| #153 | Room simulation evals (draft)                   | Close when phase 5 of the 0.3.0 plan lands                  |
+| PR   | Title                                           | Decision                                                      |
+| ---- | ----------------------------------------------- | ------------------------------------------------------------- |
+| #151 | Exchange-scoped tasks and Relay background work | Close with item D1 above; delegation by reference replaces it |
+| #153 | Room simulation evals (draft)                   | Close when phase 2 of the 0.3.0 plan lands                    |

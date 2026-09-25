@@ -58,11 +58,16 @@ async function messagesOf(workbench: Workbench, room: string) {
 	return (await workbench.read(room, 0)).messages;
 }
 
+/**
+ * The exchange runs several activations over real SQLite and directory
+ * I/O. Alone it takes about 300 ms. A loaded runner takes it past 1 s, so
+ * the wait allows 5 s and returns as soon as the summary lands.
+ */
 async function untilSummary(workbench: Workbench, room: string) {
 	await vi.waitFor(
 		async () =>
 			expect((await messagesOf(workbench, room)).some((m) => m.kind === 'summary')).toBe(true),
-		{ timeout: 1_000, interval: 10 },
+		{ timeout: 5_000, interval: 10 },
 	);
 }
 

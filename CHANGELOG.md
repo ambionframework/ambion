@@ -6,8 +6,10 @@
 a background process and returns a handle. A process outlives the call and
 the activation that started it. The files of the bash backend hold the
 process table, so a new run of the host reads the same table. Each
-activation starts with a reminder of the seat's processes. See
-[Processes](docs/processes.md).
+activation starts with a reminder of the seat's processes. No message
+wakes a seat when a process ends: the agent waits for the result inside
+the activation, and the guidance says so. A host that wants a wake posts a
+message. See [Processes](docs/processes.md).
 
 ### New
 
@@ -45,6 +47,19 @@ activation starts with a reminder of the seat's processes. See
   its process id. A process that ended with the earlier run, with no exit
   file, is `failed` with the message "The host run ended before the
   process did."
+- **A wait ends before the activation does.** The room puts `deadline` on
+  each view, and `ToolContext.deadline` carries it to each tool call: when
+  the room ends the activation, in milliseconds on the wall clock. `bash`
+  and `wait` stop their wait 30 seconds before it, and the result says so.
+- **A result gives the new output.** `bash`, `status`, `wait`, and
+  `cancel` give the output after a cursor that the process keeps in
+  `~/.processes/<handle>/cursor`, and move it. `details.read` holds the
+  byte range. A poll of a long build gives each part once. Each read goes
+  through the shell capture, which removes escape sequences and carriage
+  returns, as Pi's `bash` tool does.
+- **`wait` takes `handles`.** It returns when the first of up to 16
+  processes ends, with the new output of each process that ended and the
+  state of each one that still runs.
 - **`Workspace.processes` is the host's view.** `list`, `subscribe`, and
   `cancel` reach the processes of the agents that used the workspace in
   this run. `list` returns a promise. The root entry of
@@ -126,6 +141,14 @@ activation starts with a reminder of the seat's processes. See
   carries none. `memoryBackend` and `directoryBackend` carry
   `in-process`, and they refuse an access of another transport at
   `connect`.
+- **A registration with a changed source updates its template.** Before,
+  it failed with an error that named the template, and the host
+  registered the change under a new name. Now both git backends
+  fast-forward `templates/<name>` to a new commit whose parent is the old
+  tip. A changed description replaces the old one. A fork keeps the
+  commit it came from. `justGitBackend` commits the change to
+  `template-sources/<name>` and moves the template's ref. `Registry` gets
+  `describe`.
 - **`gitConformance` asks the harness for each credential fact.**
   `GitConformanceBackend` gets four hooks: `sourcesCredential`,
   `issueCredentials`, `writeCredential`, and `probeCredential`. Each hook
