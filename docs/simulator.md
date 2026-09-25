@@ -357,10 +357,13 @@ export function runAgent(
   their absence, and the workspace audit log accepts it. `runAgent`
   resolves no reminders, because a reminder needs a room.
 - **The bound.** `signal` aborts the run the way a cut aborts an
-  activation. `agentActor` and `agentJudge` abort at `timeoutMs`, and the
-  promise rejects.
-- **The usage.** `runAgent` sums each request with `addUsage`, and it maps
-  a request the way `spent` in `pi-trace.ts` does.
+  activation, and it ends every provider request of the run. The lane
+  ignores an abort that lands before it admits the prompt, so the signal
+  cuts the request itself. A run whose signal aborted rejects with the
+  signal's reason, even when an end landed first. `agentActor` and
+  `agentJudge` abort at `timeoutMs`.
+- **The usage.** `runAgent` sums the usage of each request, and it maps a
+  request the way `spent` in `pi-trace.ts` does.
 
 **`agentActor` and `agentJudge` take optional `services`.** The default is
 `createExecutionServices({ sessions: 'memory' })`, which reads
@@ -649,19 +652,20 @@ a `scriptedActor`. The judge is a function.
 
 **`runAgent` runs on the scripted Pi stream.**
 
-| Case                                  | What it asserts                                            |
-| ------------------------------------- | ---------------------------------------------------------- |
-| A tool in `ends` is called            | The run returns that call, and the calls before it         |
-| The signal aborts                     | The promise rejects                                        |
-| Several requests                      | `usage` sums every request                                 |
-| A bundle tool has an `ends` name      | The run fails at once with a duplicate name                |
-| A tool is called                      | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
-| Two names on one scripted stream      | Each run answers from the script for its `name`            |
-| The agent stops with no end call      | The promise rejects, and names the tools in `ends`         |
-| Two ending calls run at once          | The first call to succeed ends the run                     |
-| A batch holds a call before the end   | The run returns after one more request                     |
-| The signal aborts while the run opens | The promise rejects, and no request goes out               |
-| The output reaches its limit          | The promise rejects, and names the limit                   |
+| Case                                    | What it asserts                                            |
+| --------------------------------------- | ---------------------------------------------------------- |
+| A tool in `ends` is called              | The run returns that call, and the calls before it         |
+| The signal aborts                       | The promise rejects                                        |
+| Several requests                        | `usage` sums every request                                 |
+| A bundle tool has an `ends` name        | The run fails at once with a duplicate name                |
+| A tool is called                        | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
+| Two names on one scripted stream        | Each run answers from the script for its `name`            |
+| The agent stops with no end call        | The promise rejects, and names the tools in `ends`         |
+| Two ending calls run at once            | The first call to succeed ends the run                     |
+| A batch holds a call before the end     | The run returns after one more request                     |
+| The signal aborts while the run opens   | The promise rejects, and no request goes out               |
+| The signal aborts at each session write | The promise rejects with the signal's reason               |
+| The output reaches its limit            | The promise rejects, and names the limit                   |
 
 **The agent actor and the agent judge run on the scripted Pi stream.**
 The cases cover the prompt text, the name each request carries, and a
