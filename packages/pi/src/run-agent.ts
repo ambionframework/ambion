@@ -28,7 +28,12 @@ import {
 	type Usage,
 } from '@ambionframework/ambion';
 import { describeExecutor } from '@ambionframework/ambion/hosting';
-import type { HarnessEvent, RunResult, StreamFn } from '@earendil-works/pi-agent-core';
+import type {
+	HarnessEvent,
+	RunResult,
+	StreamFn,
+	ThinkingLevel,
+} from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, DEFAULT_COMPACTION_SETTINGS } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { passOutcome } from './failure.ts';
@@ -66,6 +71,8 @@ export interface RunAgentRequest {
 	readonly bundles?: readonly ToolBundle[];
 	/** The names of the tools that end the run. Each one names a tool of the run. */
 	readonly ends: readonly string[];
+	/** How much the model reasons before it answers. Absent, `off`. */
+	readonly thinking?: ThinkingLevel;
 	readonly signal?: AbortSignal;
 }
 
@@ -116,6 +123,7 @@ export async function runAgent(
 		tools: definition.executor.tools.map((tool) => run.tool(tool)),
 		systemPrompt: () => systemOf(definition),
 		compaction: DEFAULT_COMPACTION_SETTINGS,
+		...(request.thinking === undefined ? {} : { thinking: request.thinking }),
 		toProviderMessages: providerMessages,
 		onEvent: (event) => run.note(event),
 	}).catch(async (error: unknown) => {

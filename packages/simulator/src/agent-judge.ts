@@ -17,7 +17,12 @@
  *   `grade` rejects.
  */
 import { type AmbionTool, defineTool, type ToolBundle, type Usage } from '@ambionframework/ambion';
-import { createExecutionServices, type ExecutionServices, runAgent } from '@ambionframework/pi';
+import {
+	createExecutionServices,
+	type ExecutionServices,
+	type RunAgentRequest,
+	runAgent,
+} from '@ambionframework/pi';
 import { Type } from 'typebox';
 import { renderRecord } from './render.ts';
 import { deadlineSignal } from './signal.ts';
@@ -50,6 +55,8 @@ export type Judge = (run: Run, criteria: readonly string[]) => Promise<Verdict>;
 export interface AgentJudgeOptions {
 	/** A `provider/model-id`. It can name another model family than the model under test. */
 	readonly model: string;
+	/** How much the model reasons before it grades. Absent, `off`. */
+	readonly thinking?: RunAgentRequest['thinking'];
 	/** Tools to read the state the run left, such as `workspace.tools()`. */
 	readonly tools?: readonly AmbionTool[];
 	readonly bundles?: readonly ToolBundle[];
@@ -126,6 +133,7 @@ export function agentJudge(options: AgentJudgeOptions): Judge {
 				tools: [...(options.tools ?? []), gradeTool(criteria)],
 				...(options.bundles === undefined ? {} : { bundles: options.bundles }),
 				ends: ['grade'],
+				...(options.thinking === undefined ? {} : { thinking: options.thinking }),
 				signal: deadline.signal,
 			});
 			const { findings } = result.end.args as { findings: Omit<Finding, 'criterion'>[] };

@@ -6,6 +6,8 @@
  * `AMBION_MODEL` names the model of the assistant and of the actor, and
  * `JUDGE_MODEL` names the judge's model, `AMBION_MODEL` by default. A suite
  * that grades one model family names another family for the judge.
+ * `AMBION_THINKING` sets the thinking level of the assistant and the actor,
+ * and `JUDGE_THINKING` sets the judge's. Each one is `off` by default.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import {
@@ -14,19 +16,24 @@ import {
 	defineAgent,
 	defineHuman,
 	isSpoken,
+	type Message,
 	type Room,
 	type SpokenMessage,
 	startRoom,
 } from '@ambionframework/ambion';
 import { composeExecutions, type Execution } from '@ambionframework/ambion/hosting';
 import { byAgent, quiet, type Script, scripted, speak } from '@ambionframework/ambion/testing';
-import { piExecution } from '@ambionframework/pi';
+import { type PiOptions, piExecution } from '@ambionframework/pi';
 import type { Run, RunExchange, Verdict } from '@ambionframework/simulator';
 import { describe, onTestFailed, onTestFinished } from 'vitest';
 import { defineAssistant } from '../../src/index.ts';
 
 export const MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
 export const JUDGE_MODEL = process.env.JUDGE_MODEL ?? MODEL;
+
+type Thinking = NonNullable<PiOptions['thinking']>;
+export const THINKING = (process.env.AMBION_THINKING ?? 'off') as Thinking;
+export const JUDGE_THINKING = (process.env.JUDGE_THINKING ?? 'off') as Thinking;
 
 const keyOf = (model: string) =>
 	`${(model.split('/')[0] ?? '').toUpperCase().replace(/-/g, '_')}_API_KEY`;
@@ -71,7 +78,7 @@ export async function openRoom(options: RoomOptions): Promise<Room> {
 	});
 	const room = await startRoom({
 		name: `assistant-eval-${crypto.randomUUID()}`,
-		assistant: defineAssistant({ model, instructions: options.instructions }),
+		assistant: defineAssistant({ model, thinking: THINKING, instructions: options.instructions }),
 		agents: [inventory],
 		seats: options.attention === undefined ? {} : { inventory: options.attention },
 		runtime: createRuntime({ execution }),
@@ -81,12 +88,13 @@ export async function openRoom(options: RoomOptions): Promise<Room> {
 }
 
 /**
- * A specialist that says `evidence` to the assistant once in each exchange.
- * It reads the view: the step counter of `scripted()` spans the runtime, so
- * it cannot tell one exchange from the next.
+ * A specialist that says `evidence` to the assistant once in each exchange,
+ * and says nothing in an exchange where `evidence` gives no text. It reads
+ * the view: the step counter of `scripted()` spans the runtime, so it cannot
+ * tell one exchange from the next.
  */
 export const answers =
-	(evidence: (requests: readonly SpokenMessage[]) => string): Script =>
+	(evidence: (requests: readonly SpokenMessage[]) => string | undefined): Script =>
 	({ view, results }) => {
 		// One say for each activation: the view of a later step may not hold it yet.
 		if (results.length > 0) return quiet();
@@ -97,8 +105,19 @@ export const answers =
 			(message): message is SpokenMessage => isSpoken(message) && message.seq >= from,
 		);
 		if (exchange.some((message) => message.from === 'inventory')) return quiet();
-		return speak(evidence(exchange), 'assistant');
+		const text = evidence(exchange);
+		return text === undefined ? quiet() : speak(text, 'assistant');
 	};
+
+/** The presence entries of one kind about `subject` in one exchange, in record order. */
+export const presence = (
+	exchange: RunExchange | undefined,
+	kind: 'seated' | 'unseated',
+	subject: string,
+): Message[] =>
+	(exchange?.discussion ?? []).filter(
+		(message) => message.kind === kind && 'subject' in message && message.subject === subject,
+	);
 
 /** What one participant said in one exchange, in record order. */
 export const saidBy = (exchange: RunExchange | undefined, name: string): SpokenMessage[] =>
@@ -117,7 +136,7 @@ export interface Evidence {
  * gives what the room, the actor, and the judge spent. It goes to stdout
  * directly: vitest keeps what a passing test logs through `console`.
  *
- * When the case fails, the evidence goes to `test/live/runs/<name>.json`,
+ * When the case fails, the evidence goes to `test/live/runs/<model>/<name>.json`,
  * which git ignores, and the path goes to stdout. The repository forbids a
  * second live run to chase a flake, so the file is the record of the first.
  */
@@ -127,11 +146,11 @@ export function track(name: string): Evidence {
 		const cost = (usage: { cost?: number } | undefined) => (usage?.cost ?? 0).toFixed(4);
 		const { run, verdict } = evidence;
 		process.stdout.write(
-			`assistant eval · ${name}: room $${cost(run?.usage.room)}, actor $${cost(run?.usage.actor)}, judge $${cost(verdict?.usage)}\n`,
+			`assistant eval · ${MODEL} · ${name}: room $${cost(run?.usage.room)}, actor $${cost(run?.usage.actor)}, judge $${cost(verdict?.usage)}\n`,
 		);
 	});
 	onTestFailed(() => {
-		const dir = new URL('./runs/', import.meta.url);
+		const dir = new URL(`./runs/${MODEL.replace(/[^a-z0-9.-]+/gi, '-')}/`, import.meta.url);
 		mkdirSync(dir, { recursive: true });
 		const path = new URL(`${name.replace(/[^a-z0-9-]+/gi, '-')}.json`, dir);
 		const replacer = (_key: string, value: unknown) =>

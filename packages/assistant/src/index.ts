@@ -2,7 +2,10 @@ import { type AgentDefinition, defineAgent } from '@ambionframework/ambion';
 import { type PiOptions, pi } from '@ambionframework/pi';
 
 /** Options for the reusable room assistant definition. */
-export interface DefineAssistantOptions extends Pick<PiOptions, 'model' | 'tools' | 'bundles'> {
+export interface DefineAssistantOptions extends Pick<
+	PiOptions,
+	'model' | 'thinking' | 'tools' | 'bundles'
+> {
 	/** The assistant name in a room. Defaults to `assistant`. */
 	readonly name?: string;
 	/** The identity that specialists read in the room roster. */
@@ -61,6 +64,7 @@ export function defineAssistant(options: DefineAssistantOptions): AgentDefinitio
 					? ASSISTANT_INSTRUCTIONS
 					: `${ASSISTANT_INSTRUCTIONS}\n\nApplication instructions:\n${instructions}`,
 			model: options.model,
+			...(options.thinking === undefined ? {} : { thinking: options.thinking }),
 			tools: options.tools,
 			bundles: [{ tools: [], guidance: ORDINARY_GUIDANCE }, ...(options.bundles ?? [])],
 		}),

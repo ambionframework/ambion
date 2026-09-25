@@ -7,7 +7,7 @@
 import type { AgentExecutor, AmbionTool } from '@ambionframework/ambion';
 import { defineTool } from '@ambionframework/ambion';
 import { type AgentExecutorBaseOptions, describeExecutor } from '@ambionframework/ambion/hosting';
-import type { AgentTool, CompactionSettings } from '@earendil-works/pi-agent-core';
+import type { AgentTool, CompactionSettings, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { DEFAULT_COMPACTION_SETTINGS } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
 
@@ -19,6 +19,12 @@ export interface PiOptions extends AgentExecutorBaseOptions {
 	 * `DEFAULT_COMPACTION_SETTINGS`.
 	 */
 	compaction?: CompactionSettings;
+	/**
+	 * How much the model reasons before it answers. Absent, `off`. The
+	 * provider maps each level to its own setting, and a model with no
+	 * reasoning ignores it.
+	 */
+	thinking?: ThinkingLevel;
 }
 
 /**
@@ -30,7 +36,22 @@ export interface PiExecutor extends AgentExecutor {
 	readonly kind: 'pi';
 	readonly model: string;
 	readonly compaction?: CompactionSettings;
+	readonly thinking?: ThinkingLevel;
 }
+
+/** Every level of `thinking`, from none to the most. */
+const THINKING: readonly ThinkingLevel[] = [
+	'off',
+	'minimal',
+	'low',
+	'medium',
+	'high',
+	'xhigh',
+	'max',
+];
+
+const isThinking = (value: unknown): value is ThinkingLevel =>
+	THINKING.some((level) => level === value);
 
 const isCount = (value: unknown): boolean => Number.isSafeInteger(value) && Number(value) >= 0;
 
@@ -43,13 +64,17 @@ function checkCompaction(settings: CompactionSettings): void {
 
 /** The Pi executor: Pi's `AgentHarness`, model, instructions, and tools. */
 export function pi(options: PiOptions): PiExecutor {
-	const { compaction, ...rest } = options;
+	const { compaction, thinking, ...rest } = options;
 	if (compaction !== undefined) checkCompaction(compaction);
+	if (thinking !== undefined && !isThinking(thinking)) {
+		throw new RangeError(`Thinking must be one of ${THINKING.join(', ')}.`);
+	}
 	return Object.freeze({
 		...describeExecutor({ ...rest, kind: 'pi' }),
 		kind: 'pi' as const,
 		model: options.model,
 		...(compaction === undefined ? {} : { compaction: Object.freeze({ ...compaction }) }),
+		...(thinking === undefined ? {} : { thinking }),
 	});
 }
 
@@ -87,6 +112,11 @@ export function modelOf(executor: AgentExecutor): string {
 export function compactionOf(executor: AgentExecutor): CompactionSettings {
 	if ('compaction' in executor && isCompaction(executor.compaction)) return executor.compaction;
 	return DEFAULT_COMPACTION_SETTINGS;
+}
+
+/** The thinking level `pi()` gave the executor, or `off`. */
+export function thinkingOf(executor: AgentExecutor): ThinkingLevel {
+	return 'thinking' in executor && isThinking(executor.thinking) ? executor.thinking : 'off';
 }
 
 function isCompaction(value: unknown): value is CompactionSettings {

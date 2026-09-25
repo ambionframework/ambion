@@ -14,6 +14,7 @@ import {
 	type HarnessEvent,
 	MemorySessionRepo,
 	type StreamFn,
+	type ThinkingLevel,
 } from '@earendil-works/pi-agent-core';
 import type { Context, SimpleStreamOptions } from '@earendil-works/pi-ai';
 import { createAssistantMessageEventStream, fauxAssistantMessage } from '@earendil-works/pi-ai';
@@ -38,8 +39,8 @@ const said = (seq: number, text: string): Message => ({
 const tool = (name: string) =>
 	defineTool({ name, description: name, parameters: Type.Object({}), execute: () => name });
 
-/** A worker with a tool of its own and a bundle, on the compaction settings given. */
-const workerWith = (compaction?: CompactionSettings) =>
+/** A worker with a tool of its own and a bundle, on the compaction settings and the thinking level given. */
+const workerWith = (compaction?: CompactionSettings, thinking?: ThinkingLevel) =>
 	defineAgent({
 		name: 'worker',
 		identity: 'Works.',
@@ -49,6 +50,7 @@ const workerWith = (compaction?: CompactionSettings) =>
 			tools: [tool('book')],
 			bundles: [{ tools: [tool('inspect')], guidance: 'Inspect first.' }],
 			...(compaction === undefined ? {} : { compaction }),
+			...(thinking === undefined ? {} : { thinking }),
 		}),
 	});
 
@@ -94,8 +96,8 @@ function recording(script: Script) {
 	return { requests, stream };
 }
 
-function seat(stream: StreamFn, compaction?: CompactionSettings) {
-	const definition = workerWith(compaction);
+function seat(stream: StreamFn, compaction?: CompactionSettings, thinking?: ThinkingLevel) {
+	const definition = workerWith(compaction, thinking);
 	const executor = createPiExecutor({ definition, model: stubModel, stream, now: () => 0 });
 	const open = (id: string): ExecutorSession =>
 		executor.open({ id, room: unusedRoom, emit: () => {}, trace: noTrace });
@@ -178,6 +180,27 @@ describe('the harness of an activation', () => {
 		expect(contextText(last)).not.toContain('Can we ship?');
 		expect(contextText(last)).toContain('[new] [andrei] And the hose?');
 		expect(session.readThrough).toBe(3);
+	});
+
+	it.each([
+		['no level', undefined, undefined],
+		['the level of the definition', 'medium', 'medium'],
+	] as const)('sends %s of thinking to the provider', async (_name, thinking, reasoning) => {
+		const { requests, stream } = recording(() => quiet());
+		const session = seat(stream, undefined, thinking).open('message:1:worker:1');
+		await session.pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
+		expect(requests[0]?.options?.reasoning).toBe(reasoning);
+		expect(workerWith(undefined, thinking).executor).toEqual(
+			thinking === undefined
+				? expect.not.objectContaining({ thinking: expect.anything() })
+				: expect.objectContaining({ thinking }),
+		);
+	});
+
+	it('refuses a thinking level that Pi does not name', () => {
+		expect(() => workerWith(undefined, 'huge' as ThinkingLevel)).toThrow(
+			'Thinking must be one of off, minimal, low, medium, high, xhigh, max.',
+		);
 	});
 
 	it('writes compaction on the executor only when the definition gives it', () => {

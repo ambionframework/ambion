@@ -8,6 +8,7 @@ import { type AmbionTool, defineTool, type ToolBundle } from '@ambionframework/a
 import {
 	createExecutionServices,
 	type ExecutionServices,
+	type RunAgentRequest,
 	type RunAgentResult,
 	runAgent,
 } from '@ambionframework/pi';
@@ -25,6 +26,8 @@ export const ACTOR = 'actor';
 export interface AgentActorOptions {
 	/** A `provider/model-id`. */
 	readonly model: string;
+	/** How much the model reasons before each move. Absent, `off`. */
+	readonly thinking?: RunAgentRequest['thinking'];
 	/** The private goal of the person. It has the role of `instructions`. */
 	readonly brief: string;
 	readonly tools?: readonly AmbionTool[];
@@ -78,6 +81,7 @@ export function agentActor(options: AgentActorOptions): Actor {
 				tools: [...(options.tools ?? []), send, stop],
 				...(options.bundles === undefined ? {} : { bundles: options.bundles }),
 				ends: ['send', 'stop'],
+				...(options.thinking === undefined ? {} : { thinking: options.thinking }),
 				signal: deadline.signal,
 			});
 			return moveOf(result);
