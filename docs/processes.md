@@ -166,7 +166,7 @@ slab pour Thu
 ```text
 compiling 14 of 120
 
-[Process bash-3f9a2c1d0b7e (tests) is running. Output: /home/writer/.processes/bash-3f9a2c1d0b7e/out. Call status, wait or cancel with its handle.]
+[Process bash-3f9a2c1d0b7e (tests) is running. Output: /home/writer/.processes/bash-3f9a2c1d0b7e/out. Call status, wait or cancel with its handle, or ps to list your processes.]
 ```
 
 | State       | The bracketed line, where `<h>` is the handle and the name |
@@ -176,6 +176,22 @@ compiling 14 of 120
 | `timed_out` | `Process <h> timed out after <timeout> seconds.`           |
 | `cancelled` | `Process <h> is cancelled.`                                |
 | `failed`    | `Process <h> failed: <message>.`                           |
+
+**The result of a running process can point to a scheduled say.** `bash`,
+`status` and `wait` add one note when two facts hold. The timeout of the
+process ends past the reach of a wait, 30 seconds before
+`ToolContext.deadline`. The context carries an open exchange, so the room
+takes a say with `after`. `wait` with `handles` adds the note once when one
+running process qualifies. `cancel` adds no note.
+
+```text
+It can run longer than your activation lets you wait. To look at it later, say to yourself with after, in seconds.
+```
+
+**The note shows only where a say with `after` helps.** Outside a room
+there is no `say`. A process that ends inside the reach of a wait needs a
+`wait`, and each returned say costs one activation. The text is fixed, so
+the clock changes only whether the note shows.
 
 **The view keeps the last 2000 lines or 50 KB of the new output.** These
 are the limits of Pi's `bash` tool. When the view cuts the new output, the
@@ -442,7 +458,8 @@ back when it is due, and the returned say starts an activation for the
 same seat ([Exchange](exchange.md#6-a-scheduled-say)). That activation
 reads the process in its reminder, and `status` gives the output. When the
 process still runs, the agent can schedule another say. The guidance
-states this to the agent.
+states this to the agent, and the result of a process that can outlast
+the activation states it again.
 
 **Each returned say costs one activation.** The room does not look at the
 process before it returns the say.

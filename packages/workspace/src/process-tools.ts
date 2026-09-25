@@ -30,7 +30,7 @@ import type { WorkspaceEnv } from './backend.ts';
 import { PROCESSES_DIR, type ProcessStatus } from './process-files.ts';
 import { readOutput } from './process-output.ts';
 import type { ProcessTable } from './process-table.ts';
-import { psTable, stateLine } from './process-text.ts';
+import { LATER_LINE, psTable, stateLine } from './process-text.ts';
 import type { WorkspaceResource } from './resource.ts';
 import { recordedOnShell } from './tools.ts';
 
@@ -179,9 +179,10 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			description:
 				'Give the state of a process and its new output: the output after your last result for it.',
 			parameters: handleSchema,
-			execute: recorded('status', async (params: HandleParams, ctx) =>
-				described(options, await table.find(ctx.agent, params.handle, ctx.signal), ctx),
-			),
+			execute: recorded('status', async (params: HandleParams, ctx) => {
+				const process = await table.find(ctx.agent, params.handle, ctx.signal);
+				return described(options, process, ctx, laterLine(process, ctx));
+			}),
 		}),
 		defineTool({
 			name: 'wait',
@@ -232,6 +233,27 @@ function cutLine(wait: { cut: boolean }, process: ProcessStatus, ctx: ToolContex
 }
 
 /**
+ * The note that points a running process to a scheduled say. It shows when
+ * the timeout of the process ends past the reach of a wait in this
+ * activation, and the room would take a say with `after`: the call runs in
+ * an activation, and an exchange is open.
+ */
+function laterLine(process: ProcessStatus, ctx: ToolContext): string {
+	if (process.state !== 'running' || ctx.deadline === undefined || ctx.exchange === undefined) {
+		return '';
+	}
+	const ends = Date.parse(process.startedAt) + process.timeout * 1000;
+	return ends > ctx.deadline - DEADLINE_MARGIN_SECONDS * 1000 ? LATER_LINE : '';
+}
+
+/** The notes of a wait on one process: the cut of the wait, then the later line. */
+function waitLines(wait: { cut: boolean }, process: ProcessStatus, ctx: ToolContext): string {
+	return [cutLine(wait, process, ctx), laterLine(process, ctx)]
+		.filter((line) => line !== '')
+		.join(' ');
+}
+
+/**
  * Start the process, wait up to `wait` seconds, and describe it. A process
  * that ended in that time with a code other than 0, with a timeout, or with
  * a failure makes the call fail with the same text.
@@ -262,7 +284,7 @@ async function started(
 		wait.seconds,
 		ctx.signal,
 	);
-	const result = await described(options, ended, ctx, cutLine(wait, ended, ctx));
+	const result = await described(options, ended, ctx, waitLines(wait, ended, ctx));
 	if (unsuccessful(ended)) throw new Error(textOf(result));
 	return result;
 }
@@ -285,13 +307,15 @@ async function waited(
 	const [first] = processes;
 	if (first === undefined) throw new Error('Invalid handles: give at least one handle.');
 	if (params.handles === undefined)
-		return described(options, first, ctx, cutLine(wait, first, ctx));
+		return described(options, first, ctx, waitLines(wait, first, ctx));
 	const ended: AgentToolResult<ProcessDetails>[] = [];
 	for (const process of processes) {
 		if (process.state !== 'running') ended.push(await described(options, process, ctx));
 	}
 	const running = processes.filter((process) => process.state === 'running');
-	const note = ended.length === 0 ? cutLine(wait, first, ctx) : '';
+	const cut = ended.length === 0 ? cutLine(wait, first, ctx) : '';
+	const later = running.some((process) => laterLine(process, ctx) !== '') ? LATER_LINE : '';
+	const note = [cut, later].filter((line) => line !== '').join(' ');
 	const text = [
 		...ended.map(textOf),
 		...running.map((process) => `[${stateLine(process)}]`),

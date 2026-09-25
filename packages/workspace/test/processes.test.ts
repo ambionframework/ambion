@@ -14,7 +14,7 @@ import {
 	writeSpec,
 	writeStop,
 } from '../src/process-files.ts';
-import { FINISHED_IN_REMINDER } from '../src/process-text.ts';
+import { FINISHED_IN_REMINDER, LATER_LINE } from '../src/process-text.ts';
 import type { ProcessDetails, PsDetails, WaitDetails } from '../src/process-tools.ts';
 import { MAX_FINISHED_PROCESSES, MAX_RUNNING_PROCESSES } from '../src/processes.ts';
 import { openWorkspace, type Workspace } from '../src/workspace.ts';
@@ -133,7 +133,11 @@ describe('bash', () => {
 		const { handle } = started.details.process;
 		expect(started.details.process.state).toBe('running');
 		expect(started.text).toContain(`Process ${handle} is running.`);
-		expect(started.text).toContain('Call status, wait or cancel with its handle.');
+		expect(started.text).toContain(
+			'Call status, wait or cancel with its handle, or ps to list your processes.',
+		);
+		// Outside a room there is no say, so the result points to none.
+		expect(started.text).not.toContain(LATER_LINE);
 		expect((await call(workspace, 'status', { handle })).details.process.state).toBe('running');
 		// A running process holds no operation of the bash owner.
 		expect(await workspace.use({ name: 'alpha' }, () => 'free')).toBe('free');
@@ -556,6 +560,31 @@ describe('a wait near the end of the activation', () => {
 		expect(waited).toMatch(
 			/The wait stopped early, because your activation ends in (9|10) seconds\. Answer before then\./,
 		);
+	});
+});
+
+describe('the note that points to a scheduled say', () => {
+	const exchange = { owner: 'priya', from: 4 };
+	it.each([
+		['can run past the wait of the activation, in an exchange', 600, { exchange }, true],
+		['ends before the wait of the activation ends', 60, { exchange }, false],
+		['runs in an activation with no open exchange', 600, {}, false],
+	])('for a process that %s', async (_case, timeout, context, shows) => {
+		const workspace = site();
+		const inside = callAs('alpha', { deadline: Date.now() + 600_000, ...context });
+		const bash = toolOf(workspace, 'bash');
+		const started = await bash.invoke({ command: 'sleep 30', timeout, wait: 0 }, inside);
+		if (typeof started === 'string') throw new Error('A process tool gives a structured result.');
+		const { handle } = (started.details as ProcessDetails).process;
+		const other = (await call(workspace, 'bash', { command: 'sleep 30', timeout, wait: 0 })).details
+			.process.handle;
+		const texts = [
+			await invokeText(bash, { command: 'sleep 30', timeout, wait: 0 }, inside),
+			await invokeText(toolOf(workspace, 'status'), { handle }, inside),
+			await invokeText(toolOf(workspace, 'wait'), { handle, timeout: 0 }, inside),
+			await invokeText(toolOf(workspace, 'wait'), { handles: [other, handle], timeout: 0 }, inside),
+		];
+		for (const text of texts) expect(text.includes(LATER_LINE)).toBe(shows);
 	});
 });
 

@@ -45,7 +45,7 @@ export function stateLine(process: ProcessStatus): string {
 	const where = `Output: ${process.output}.`;
 	switch (process.state) {
 		case 'running':
-			return `${who} is running. ${where} Call status, wait or cancel with its handle.`;
+			return `${who} is running. ${where} Call status, wait or cancel with its handle, or ps to list your processes.`;
 		case 'exited':
 			return `${who} exited with code ${process.exitCode}. ${where}`;
 		case 'timed_out':
@@ -56,6 +56,13 @@ export function stateLine(process: ProcessStatus): string {
 			return `${who} failed: ${process.error}. ${where}`;
 	}
 }
+
+/**
+ * The note for a running process that can run longer than the activation
+ * lets the agent wait, when the room takes a say with `after`.
+ */
+export const LATER_LINE =
+	'It can run longer than your activation lets you wait. To look at it later, say to yourself with after, in seconds.';
 
 /** The end of a finished process, for the reminder. */
 function endedAs(process: ProcessStatus): string {
