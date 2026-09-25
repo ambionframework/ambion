@@ -1,15 +1,18 @@
 /**
  * The just-bash adapter beyond the conformance suite: path queries, the
  * working directory of one command, temporary names, the default timeout,
- * the scripting commands, git, the memory limit, and the shared homes. Then the
- * memory backend's seed function and `readFiles`.
+ * the scripting commands, git, the memory limit, the shared homes, and a
+ * change that a host makes while a script ends. Then the memory backend's
+ * seed function and `readFiles`.
  */
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { BACKGROUND_CONTEXT, DEFAULT_TIMEOUT_SECONDS } from '@ambionframework/workspace';
 import { Bash, InMemoryFs } from 'just-bash';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { BashEnv } from '../src/bash-env.ts';
-import { MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
-import { backends, sh } from './support/backends.ts';
+import { directoryBackend, MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
+import { backends, sh, tempDir } from './support/backends.ts';
 
 const ctx = BACKGROUND_CONTEXT;
 
@@ -159,6 +162,30 @@ describe('the just-bash adapter', () => {
 		const again = await backend.connect({ name: 'alpha' });
 		expect(await again.exists('.', ctx)).toEqual({ ok: true, value: true });
 		expect(await sh(again, 'ls ~')).toMatchObject({ ok: true, output: '' });
+	});
+
+	it('ends a change that the host asks for while the last change of a script runs', async () => {
+		const { dir, dispose } = await tempDir('ambion-drive-');
+		onTestFinished(dispose);
+		const backend = directoryBackend(dir);
+		const alpha = await backend.connect({ name: 'alpha' });
+		await sh(alpha, 'mkdir src && for i in $(seq 1 300); do echo $i > src/f$i; done');
+		// `cp -r` is one change for the whole copy, and it is the last command of the script.
+		const copy = sh(alpha, 'cp -r src dst');
+		while (!existsSync(join(dir, 'home', 'alpha', 'dst'))) {
+			await new Promise((resolve) => setImmediate(resolve));
+		}
+		// The `mkdir -p` of the home in `connect` waits for the copy. The end of the copy
+		// starts it, in the context of the script, and the script then ends.
+		const beta = backend.connect({ name: 'beta' });
+		expect(await copy).toMatchObject({ ok: true, exitCode: 0 });
+		const settles = (work: Promise<unknown>) =>
+			Promise.race([
+				work.then(() => 'settled'),
+				new Promise((resolve) => setTimeout(() => resolve('pending'), 2_000)),
+			]);
+		expect(await settles(beta)).toBe('settled');
+		expect(await settles(alpha.writeFile('after.txt', 'x', ctx))).toBe('settled');
 	});
 });
 
