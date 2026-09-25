@@ -241,10 +241,10 @@ host code wake it.
 the room returns it. The steps below let the agent, the host, and a person
 see a pending say and dismiss it.
 
-- [ ] **1.** The agent sees its pending says: the say result names its seq
+- [x] **1.** The agent sees its pending says: the say result names its seq
       as a handle, and each response activation lists the pending says of
       the seat. P1. (S4)
-- [ ] **2.** A seat dismisses its own pending say with `dismiss`, and the
+- [x] **2.** A seat dismisses its own pending say with `dismiss`, and the
       host dismisses any pending say with `room.dismiss` and reads them
       with `room.scheduled`. Needs 1. P1. (S5)
 - [ ] **3.** The workbench shows the pending says of a room, and a person
@@ -476,7 +476,11 @@ dismisses any pending say with `room.dismiss`, and the entry has no
 author, as a host seating has none. `room.scheduled` gives the pending
 says of the room. The fold drops a dismissed say, so it frees its place
 under the cap. **Evidence:** the refusals, a dismissal that races the due
-time, a golden journal, and the host calls on a real room.
+time, a golden journal, and the host calls on a real room. **Landed:** the
+transition tests of the seat and the host dismissal, the refusals, and the
+race; the `dismissed` golden journal; the key test; and `room.dismiss` and
+`room.scheduled` in the scheduled-say test and on the Cloudflare room
+object.
 
 **S6. A person sees and dismisses a pending say in the workbench.** The
 workbench notes each pending say with its handle, and `/dismiss <handle>`

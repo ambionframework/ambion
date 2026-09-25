@@ -11,6 +11,7 @@ import type {
 	Clock,
 	ExchangeRef,
 	Message,
+	PendingSay,
 	ReadRoomOptions,
 	Room,
 	RoomRead,
@@ -217,6 +218,20 @@ export class RoomObject extends DurableObject<Env> {
 
 	async abort(): Promise<void> {
 		await this.running().abort();
+	}
+
+	/** Dismiss one scheduled say by its handle. True when the room dismissed it now. */
+	async dismiss(handle: Seq): Promise<boolean> {
+		return await this.running().dismiss(handle);
+	}
+
+	/**
+	 * The scheduled says that wait to return, including those of a stopped
+	 * record. Workers keep the name `scheduled` for the cron handler, and RPC
+	 * does not expose it, so this method has a name of its own.
+	 */
+	async scheduledSays(): Promise<PendingSay[]> {
+		return [...(await this.read({ messages: false })).scheduled];
 	}
 
 	async stop(): Promise<void> {

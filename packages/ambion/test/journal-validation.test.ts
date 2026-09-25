@@ -52,6 +52,11 @@ describe('room journal body validation', () => {
 			{ kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', after: 600, owner: 'andrei' },
 		],
 		['message', { ...returned, refs: ['https://x/a'], wakes: ['alpha'] }],
+		['message', { kind: 'dismissed', at, message: 3 }],
+		[
+			'message',
+			{ kind: 'dismissed', at, from: 'alpha', message: 3, activationId: 'message:1:alpha:1' },
+		],
 		['message', { kind: 'arrived', at, subject: 'andrei' }],
 		['message', { kind: 'left', at, subject: 'andrei' }],
 		['message', { kind: 'seated', at, subject: 'andrei' }],
@@ -102,6 +107,8 @@ describe('room journal body validation', () => {
 		['message', { ...returned, message: 0 }, 'body.message'],
 		['message', { kind: 'returned', at, to: 'alpha', message: 3, text: 'x' }, 'body.owner'],
 		['message', { ...returned, from: 'alpha' }, 'body.from'],
+		['message', { kind: 'dismissed', at, message: 0 }, 'body.message'],
+		['message', { kind: 'dismissed', at, message: 3, text: 'x' }, 'body: must not have additional'],
 		[
 			'message',
 			{ kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', after: 60 },

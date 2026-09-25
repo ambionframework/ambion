@@ -46,6 +46,15 @@ const messageSchemas: Record<string, TSchema> = {
 		},
 		extra,
 	),
+	dismissed: Type.Object(
+		{
+			...commonMessage,
+			kind: Type.Literal('dismissed'),
+			from: Type.Optional(Type.String()),
+			message: Type.Integer({ minimum: 1 }),
+		},
+		{ additionalProperties: false },
+	),
 	returned: Type.Object(
 		{
 			...commonMessage,

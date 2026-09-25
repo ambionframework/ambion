@@ -38,6 +38,7 @@ function spoken(message: RoutedMessage): message is Extract<RoutedMessage, { kin
 function reachOf(message: RoutedMessage): Attention {
 	if (message.kind === 'summary') return 'none';
 	if (message.kind === 'returned') return 'named';
+	if (message.kind === 'dismissed') return 'none';
 	if (!spoken(message)) return 'presence';
 	return message.to === undefined ? 'broadcast' : 'named';
 }

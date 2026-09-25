@@ -55,6 +55,7 @@ import {
 } from '../room/read.ts';
 import { liveWork } from '../room/reconcile.ts';
 import { decide, type Refusal } from '../room/transition.ts';
+import type { PendingSay } from '../scheduling.ts';
 import type {
 	AgentDefinition,
 	ClosedExchange,
@@ -132,6 +133,14 @@ export interface Room {
 	 * record says it left, and its definition remains in the reserve.
 	 */
 	unseat(name: string): Promise<void>;
+	/**
+	 * Dismiss one scheduled say that waits to return, by its handle: the seq
+	 * of the say. True when the room dismissed it now. False when it no longer
+	 * waits: it returned, or somebody dismissed it, or the room dropped it.
+	 */
+	dismiss(handle: Seq): Promise<boolean>;
+	/** The scheduled says that wait to return. A detached read: it waits for no work. */
+	scheduled(): Promise<PendingSay[]>;
 	/** Fold, decide, write, send. The room runs it on its own; a host on a platform with its own alarms calls it. */
 	reconcile(): Promise<void>;
 }
@@ -436,6 +445,14 @@ export class RoomHost implements Room, RunningRoom {
 
 	async pendingFor(person: string): Promise<ClosedExchangeView[]> {
 		return pendingFor(await this.read({ messages: false }), person);
+	}
+
+	async scheduled(): Promise<PendingSay[]> {
+		return [...(await this.read({ messages: false })).scheduled];
+	}
+
+	dismiss(handle: Seq): Promise<boolean> {
+		return control.dismissSay(this, handle);
 	}
 
 	exchange(from: Seq): waits.ExchangeHandle | undefined {

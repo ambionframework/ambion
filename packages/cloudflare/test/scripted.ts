@@ -22,15 +22,18 @@ let answers = 0;
 /** How long the `slow` seat thinks. Long enough for a test to take the room away. */
 const SLOW_MS = 1_000;
 
-/** The checker says to itself with `after`, and answers when the say comes back. */
+/**
+ * The checker says to itself with `after`, and answers when the say comes
+ * back. A question about tomorrow waits an hour, so a test can dismiss it.
+ */
 function check(context: Context) {
-	const returned = context.messages.some(
-		(message) =>
-			message.role === 'user' && JSON.stringify(message.content).includes('[returned → checker'),
-	);
-	const say = returned
+	const has = (text: string) =>
+		context.messages.some(
+			(message) => message.role === 'user' && JSON.stringify(message.content).includes(text),
+		);
+	const say = has('[returned → checker')
 		? { to: 'priya', text: 'The check came back.' }
-		: { to: 'checker', text: 'Check the pour log.', after: 1 };
+		: { to: 'checker', text: 'Check the pour log.', after: has('tomorrow') ? 3600 : 1 };
 	return fauxAssistantMessage([fauxToolCall('say', say)], { stopReason: 'toolUse' });
 }
 

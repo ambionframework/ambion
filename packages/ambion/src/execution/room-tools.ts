@@ -13,7 +13,7 @@
  */
 
 import type { AmbionTool, ToolContext, ToolResult, ToolUpdate } from '../bundle.ts';
-import { SAY, SEAT, UNSEAT } from '../define.ts';
+import { DISMISS, SAY, SEAT, UNSEAT } from '../define.ts';
 import {
 	type ActivationView,
 	type CommitResult,
@@ -103,6 +103,7 @@ export function roomTools(
 		sayTool(binding, options),
 		membershipTool(binding, 'seated'),
 		membershipTool(binding, 'unseated'),
+		dismissTool(binding),
 	];
 }
 
@@ -290,6 +291,26 @@ function membershipTool(binding: RoomToolBinding, kind: 'seated' | 'unseated'): 
 				key: call,
 				intent: { kind, name: (args as { name: string }).name.trim() },
 			});
+			return landed(binding, response);
+		},
+	};
+}
+
+/** The room tool that dismisses one pending say of the seat, by its handle. */
+function dismissTool(binding: RoomToolBinding): RoomTool {
+	return {
+		name: DISMISS.name,
+		description: DISMISS.description,
+		parameters: DISMISS.parameters,
+		run: async (args, call) => {
+			const handle = (args as { handle: number }).handle;
+			const response = await binding.room.commit({
+				activation: binding.id,
+				key: call,
+				intent: { kind: 'dismissed', message: handle },
+			});
+			if ('committed' in response) return text(`dismissed ${handle}`);
+			if ('unchanged' in response) return text(`${handle} no longer waits`);
 			return landed(binding, response);
 		},
 	};

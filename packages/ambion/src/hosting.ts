@@ -24,7 +24,15 @@
  */
 
 export type { AgentExecutorBaseOptions, ExecutorOptions } from './define.ts';
-export { DEFAULT_TRACE, describeExecutor, executorOfKind, SAY, SEAT, UNSEAT } from './define.ts';
+export {
+	DEFAULT_TRACE,
+	DISMISS,
+	describeExecutor,
+	executorOfKind,
+	SAY,
+	SEAT,
+	UNSEAT,
+} from './define.ts';
 export type { ConnectorComposition, SeatContextInput } from './execution/connector.ts';
 export { composeConnector, seatContext } from './execution/connector.ts';
 export type {

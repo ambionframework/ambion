@@ -72,6 +72,7 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'AgentRunner',
 		'DEFAULT_TRACE',
 		'DEFAULT_TRACE_LIMITS',
+		'DISMISS',
 		'PERMANENT_STATUS',
 		'REMINDER_TIMEOUT_MS',
 		'SAY',
