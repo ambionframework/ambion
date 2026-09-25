@@ -15,7 +15,7 @@ import {
 	writeStop,
 } from '../src/process-files.ts';
 import { FINISHED_IN_REMINDER } from '../src/process-text.ts';
-import type { ProcessDetails, PsDetails } from '../src/process-tools.ts';
+import type { ProcessDetails, PsDetails, WaitDetails } from '../src/process-tools.ts';
 import { MAX_FINISHED_PROCESSES, MAX_RUNNING_PROCESSES } from '../src/processes.ts';
 import { openWorkspace, type Workspace } from '../src/workspace.ts';
 import { callAs, invokeText, toolOf, wrapped } from './support/backends.ts';
@@ -466,6 +466,62 @@ describe('a process on a backend that misbehaves', () => {
 			expect(details.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		}
 		expect(await workspace.processes.list({ running: true })).toEqual([]);
+	});
+});
+
+describe('a wait on several handles', () => {
+	it('returns when the first process ends, with its output and the state of the others', async () => {
+		const workspace = site();
+		const start = async (command: string) =>
+			(await call(workspace, 'bash', { command, wait: 0 })).details.process.handle;
+		const slow = await start('sleep 30');
+		const fast = await start('sleep 0.2; echo swept');
+		const other = await start('sleep 30');
+		const before = Date.now();
+		const result = await toolOf(workspace, 'wait').invoke(
+			{ handles: [slow, fast, other, fast], timeout: 20 },
+			callAs('alpha'),
+		);
+		if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
+		expect(Date.now() - before).toBeLessThan(10_000);
+		const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+		expect(text.split('\n\n')).toEqual([
+			'swept',
+			expect.stringMatching(new RegExp(`^\\[Process ${fast} exited with code 0\\.`)),
+			expect.stringMatching(new RegExp(`^\\[Process ${slow} is running\\.`)),
+			expect.stringMatching(new RegExp(`^\\[Process ${other} is running\\.`)),
+		]);
+		const details = result.details as WaitDetails;
+		expect(details.processes.map((process) => process.handle)).toEqual([slow, fast, other]);
+		expect(details.ended.map((ended) => ended.process.handle)).toEqual([fast]);
+		// With none ended, the time ends first, and each process gives its state.
+		const waited = await invokeText(
+			toolOf(workspace, 'wait'),
+			{ handles: [slow, other], timeout: 0.1 },
+			callAs('alpha'),
+		);
+		expect(waited.split('\n\n')).toHaveLength(2);
+		expect(waited).not.toContain('swept');
+	});
+
+	it.each([
+		[
+			'both handle and handles',
+			{ handle: 'bash-000000000001', handles: ['bash-000000000001'] },
+			/Invalid handles/,
+		],
+		['neither', { timeout: 1 }, /Invalid handles/],
+		[
+			'a handle of no process',
+			{ handles: ['bash-000000000001'] },
+			/You have no process bash-000000000001/,
+		],
+	])('refuses %s', async (_case, params, message) => {
+		const workspace = site();
+		await call(workspace, 'bash', { command: 'true' });
+		await expect(
+			Promise.resolve().then(() => toolOf(workspace, 'wait').invoke(params, callAs('alpha'))),
+		).rejects.toThrow(message);
 	});
 });
 

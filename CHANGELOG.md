@@ -32,6 +32,9 @@ activation starts with a reminder of the seat's processes. See
   byte range. A poll of a long build gives each part once. Each read goes
   through the shell capture, which removes escape sequences and carriage
   returns, as Pi's `bash` tool does.
+- **`wait` takes `handles`.** It returns when the first of up to 16
+  processes ends, with the new output of each process that ended and the
+  state of each one that still runs.
 - **`Workspace.processes` is the host's view.** `list`, `subscribe`, and
   `cancel` reach the processes of the agents that used the workspace in
   this run. `list` returns a promise. The root entry of

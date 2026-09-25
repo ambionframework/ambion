@@ -52,7 +52,7 @@ states the owner and the backends that a process runs on.
 | `bash`   | `command`, `name?`, `timeout?`, `wait?` | Starts a process, waits up to `wait` seconds, and gives its state    |
 | `ps`     | None                                    | Lists the caller's running processes                                 |
 | `status` | `handle`                                | Gives the state of the process and its new output                    |
-| `wait`   | `handle`, `timeout?`                    | Waits up to `timeout` seconds for the process to end, then as status |
+| `wait`   | `handle` or `handles`, `timeout?`       | Waits up to `timeout` seconds for the process to end, then as status |
 | `cancel` | `handle`                                | Stops a running process, waits for it to end, then as status         |
 
 | Value                | Default | Range                         |
@@ -421,6 +421,15 @@ host cancels it, or the workspace disposes.
 **`wait` gives the state when the process ends or when the time ends.** A
 process that is still running gives `running`. An abort of the call stops
 the wait, and the process keeps running.
+
+**`wait` with `handles` returns when the first of several processes
+ends.** It takes 1 to 16 handles in place of `handle`, and counts a handle
+that repeats once. The result gives the new output and the bracketed line
+of each process that ended, then the bracketed line of each one that still
+runs. `details.processes` holds every status in the order of the handles,
+and `details.ended` holds the details of each process that ended. An agent
+that runs a parameter sweep as four processes waits for all four with one
+call, and gets each result as it comes.
 
 **A wait ends 30 seconds before the room ends the activation.** The room
 ends an activation `limits.lease.deadline` after its first claim, 600

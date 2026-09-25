@@ -50,29 +50,9 @@ import {
 	unreadable,
 	within,
 } from './process-run.ts';
+import type { ProcessEvent, ProcessTable, ProcessTableOptions } from './process-table.ts';
 import { FINISHED_IN_REMINDER, reminderText } from './process-text.ts';
-import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
-
-/** A process that started, or one that ended. */
-export type ProcessEvent =
-	| { readonly type: 'started'; readonly process: ProcessStatus }
-	| { readonly type: 'ended'; readonly process: ProcessStatus };
-
-/** What `bash` asks the table to run. */
-interface BashProcessSpec {
-	readonly command: string;
-	readonly name?: string;
-	readonly timeout: number;
-	readonly room?: string;
-}
-
-/** Which processes the host's list holds. */
-export interface ProcessQuery {
-	/** The owner agent. Absent lists the processes of every agent of this run. */
-	readonly agent?: string;
-	/** `true` lists the running processes alone. */
-	readonly running?: boolean;
-}
+import type { WorkspaceAgent } from './resource.ts';
 
 /**
  * The most processes one agent can have in the `running` state at one
@@ -92,61 +72,6 @@ const STOP_GRACE_MS = 10_000;
 const POLL_MS = 500;
 
 const CLOSED = 'Workspace is no longer available.';
-
-/** Connect one agent's environment outside the queue of the bash owner. */
-type ProcessConnect = (agent: WorkspaceAgent) => Promise<WorkspaceEnv>;
-
-/** What the table needs from the workspace: a connect of its own, and the bash owner. */
-export interface ProcessTableOptions {
-	readonly connect: ProcessConnect;
-	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
-}
-
-/** The background processes of one workspace. */
-export interface ProcessTable {
-	/**
-	 * Start a bash process for `agent`. `env` is the agent's environment on
-	 * the bash owner: the table reads the agent's files and writes the new
-	 * process's `spec` through it. The process runs on an environment of its own.
-	 */
-	start(agent: WorkspaceAgent, env: WorkspaceEnv, spec: BashProcessSpec): Promise<ProcessStatus>;
-	/** The processes of `agent`, in the order they started. */
-	list(agent: WorkspaceAgent, signal?: AbortSignal): Promise<readonly ProcessStatus[]>;
-	/** One process of `agent`. Throws when `agent` has no process `handle`. */
-	find(agent: WorkspaceAgent, handle: string, signal?: AbortSignal): Promise<ProcessStatus>;
-	/**
-	 * Wait up to `seconds` for a process of `agent` to end, and return its
-	 * status. The status is `running` when the time ends first. An abort of
-	 * `signal` rejects, and the process keeps running.
-	 */
-	wait(
-		agent: WorkspaceAgent,
-		handle: string,
-		seconds: number,
-		signal?: AbortSignal,
-	): Promise<ProcessStatus>;
-	/** Stop a process of `agent`, and return its status once it ends or the grace ends. */
-	cancel(agent: WorkspaceAgent, handle: string): Promise<ProcessStatus>;
-	/** Write `seen` for a process in a final state, through `env` on the bash owner. */
-	markSeen(env: WorkspaceEnv, process: ProcessStatus): Promise<void>;
-	/**
-	 * The reminder of one activation: the seat's running processes, and the
-	 * finished ones that no result showed. After `signal` aborts, it marks no
-	 * process `seen`, and a queued read does not start.
-	 */
-	remind(
-		seat: { agent: string; room: string; activation: string },
-		signal: AbortSignal,
-	): Promise<string | undefined>;
-	/** The host's list: the processes of the agents that used the workspace in this run. */
-	hostList(query?: ProcessQuery): Promise<readonly ProcessStatus[]>;
-	/** Call `listener` when a process starts and when it ends. Returns the unsubscribe. */
-	subscribe(listener: (event: ProcessEvent) => void): () => void;
-	/** Stop the process `handle` of any agent of this run: the host's cancel. */
-	hostCancel(handle: string): Promise<ProcessStatus>;
-	/** Refuse new processes, stop every running process, and wait up to the grace for each one to end. */
-	close(): Promise<void>;
-}
 
 /** A process that this run started. */
 interface Owned {
@@ -488,29 +413,38 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 
 	// -- waits and cancels ------------------------------------------------------
 
-	/** Read a process of an earlier run until it ends, the time ends, or `signal` aborts. */
-	const poll = async (
+	/** The statuses of `handles`, in their order: one read for one handle, one listing for more. */
+	const findAll = async (
 		agent: WorkspaceAgent,
-		handle: string,
-		ms: number,
+		handles: readonly string[],
 		signal?: AbortSignal,
-	): Promise<ProcessStatus> => {
-		const deadline = Date.now() + ms;
-		let status = await find(agent, handle, signal);
-		while (status.state === 'running' && Date.now() < deadline) {
-			await within(NEVER, Math.min(POLL_MS, deadline - Date.now()), signal);
-			status = await find(agent, handle, signal);
-		}
-		return status;
+	): Promise<readonly ProcessStatus[]> => {
+		const [only] = handles;
+		if (handles.length === 1 && only !== undefined) return [await find(agent, only, signal)];
+		const all = await list(agent, signal);
+		return handles.map((handle) => {
+			const found = all.find((one) => one.handle === handle);
+			if (found === undefined) throw unknown(handle);
+			return found;
+		});
 	};
 
-	const wait: ProcessTable['wait'] = async (agent, handle, seconds, signal) => {
-		const status = await find(agent, handle, signal);
-		if (status.state !== 'running') return status;
-		const own = owned.get(handle);
-		if (own === undefined) return poll(agent, handle, seconds * 1000, signal);
-		await within(own.ended, seconds * 1000, signal);
-		return find(agent, handle, signal);
+	/**
+	 * A process of this run ends through its promise. A process of an
+	 * earlier run ends in a read, so the wait reads again every `POLL_MS`.
+	 */
+	const wait: ProcessTable['wait'] = async (agent, handles, seconds, signal) => {
+		const deadline = Date.now() + seconds * 1000;
+		let statuses = await findAll(agent, handles, signal);
+		while (statuses.every((one) => one.state === 'running') && Date.now() < deadline) {
+			const ends = handles.map((handle) => owned.get(handle)?.ended);
+			const owns = ends.filter((end): end is Promise<void> => end !== undefined);
+			const left = deadline - Date.now();
+			const ms = owns.length === ends.length ? left : Math.min(POLL_MS, left);
+			await within(owns.length === 0 ? NEVER : Promise.race(owns), ms, signal);
+			statuses = await findAll(agent, handles, signal);
+		}
+		return statuses;
 	};
 
 	const cancel: ProcessTable['cancel'] = async (agent, handle) => {
