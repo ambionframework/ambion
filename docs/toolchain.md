@@ -17,6 +17,7 @@ packages/
   journal/      append-only journal storage
   just-bash/    workspace bash backends over just-bash, and a git backend in the process
   pi/           Pi executor: pi() and piExecution()
+  simulator/    evals: simulate() and the actors that play a person
   workspace/    workspace resource, tool bundles, and backend helpers
   workstation/  workspace bash backend over SSH, one account for each agent
 examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
@@ -26,7 +27,7 @@ planning/       the plan for the next release and the backlog
 .github/        CI, live, and dev-release workflows
 ```
 
-The ten `packages/*` entries are publishable and share a lockstep version.
+The eleven `packages/*` entries are publishable and share a lockstep version.
 Examples are private. The package graph is:
 
 ```text
@@ -39,6 +40,7 @@ workspace ──▶ ambion
 just-bash ──▶ workspace
 workstation ──▶ workspace
 assistant ──▶ ambion, pi
+simulator ──▶ ambion, pi
 ```
 
 **A test reaches a package that depends on the tested package by relative
@@ -249,7 +251,12 @@ change lands on `main`, on a weekly schedule, and by dispatch. It does not run
 on a pull request, because a real-model run costs money. It runs one
 job per harness. The `pi` and `claude` jobs read `ANTHROPIC_API_KEY` and use
 `AMBION_MODEL` (the default is `anthropic/claude-sonnet-5`). The `codex` job
-reads `CODEX_API_KEY`. The workflow cancels a superseded run. Run it locally
+reads `CODEX_API_KEY`. The `packages` job runs the live tier of every other
+package, with a limit of 90 minutes. It sets `AMBION_THINKING` and
+`JUDGE_THINKING` to `medium` for the assistant's evals. With an
+`OPENAI_API_KEY` secret, it sets `JUDGE_MODEL` to `openai/gpt-5.6-luna`, so
+another model family grades the assistant. The workflow cancels a superseded
+run. Run it locally
 with:
 
 ```sh

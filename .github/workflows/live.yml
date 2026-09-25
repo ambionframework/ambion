@@ -81,11 +81,18 @@ jobs:
   packages:
     name: Live tests of the packages
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The assistant's evals alone run 19 cases of up to three exchanges each.
+    timeout-minutes: 90
     env:
       AMBION_MODEL: ${{ inputs.model || 'anthropic/claude-sonnet-5' }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+      # The assistant's evals were measured at medium thinking, each model
+      # graded by another family. Without an OpenAI key, the model grades itself.
+      AMBION_THINKING: medium
+      JUDGE_THINKING: medium
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      JUDGE_MODEL: ${{ secrets.OPENAI_API_KEY != '' && 'openai/gpt-5.6-luna' || '' }}
     steps:
       # Every package tier skips a file whose key is empty. With both keys
       # empty the job skips, and the run says so.
