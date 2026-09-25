@@ -16,6 +16,8 @@ it("returns a scheduled say through the room object's alarm, for the owner of it
 	await stub.visit({ name: 'priya', identity: 'Project manager.' });
 	const first = await stub.send({ from: 'priya', text: 'Is the pour logged?', key: 'q1' });
 	await stub.waitForClose(first.from);
+	const before = await stub.read({ messages: false });
+	expect(before.scheduled).toMatchObject([{ seat: 'checker', owner: 'priya' }]);
 	const find = (test: (message: Message) => boolean) => async () =>
 		(await stub.read()).messages.find(test);
 	const returned = await until(find((message) => message.kind === 'returned'));

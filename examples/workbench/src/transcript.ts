@@ -82,7 +82,7 @@ function headerOf(block: MessageBlock, fill?: string): Chunk[] {
 	if (role === 'question') return [paint(from, { strong: true, fill }), at];
 	if (message.kind === 'returned')
 		return [
-			paint('returned', { color: palette.accent, strong: true, fill }),
+			paint('returned', { color: palette.green, strong: true, fill }),
 			paint(` → ${message.to}`, { color: palette.muted, fill }),
 			paint(` for ${message.owner}`, { color: palette.muted, fill }),
 			at,
@@ -111,7 +111,7 @@ const railOf: Record<Role, string> = {
 	said: palette.line,
 	summary: palette.summary,
 	steer: palette.accent,
-	returned: palette.accent,
+	returned: palette.green,
 };
 
 /** The conversation: the blocks of a room, with each discussion open or closed. */

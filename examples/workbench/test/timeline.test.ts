@@ -127,6 +127,24 @@ describe('buildTimeline', () => {
 		]);
 	});
 
+	it('keeps a returned say that lands in an open exchange inside its discussion', () => {
+		const returned = {
+			seq: 70,
+			kind: 'returned',
+			to: 'agent',
+			message: 61,
+			owner: 'mira',
+			text: 'Check the build.',
+			at: AT,
+		} as Message;
+		const scheduled = { ...said(61, 'agent', 'agent'), after: 600 } as Message;
+		const messages = [said(59, 'mira'), scheduled, returned, said(72, 'agent'), said(75, 'agent')];
+		expect(shape(build(messages, [closedExchange(59, 75, 'mira')]))).toEqual([
+			'question:59',
+			'discussion:59(4)',
+		]);
+	});
+
 	it('keeps the closing mark when a person is the only one who spoke after the question', () => {
 		// An exchange aborted after a follow-up: no agent replied, so there is nothing to show directly.
 		const exchange = closedExchange(4, 9, 'mira');

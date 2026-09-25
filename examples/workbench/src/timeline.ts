@@ -112,7 +112,9 @@ function groupsOf(input: TimelineInput): Group[] {
 		.map((exchange) => {
 			const source = input.messages.filter(
 				(message) =>
-					message.kind === 'said' && message.seq > exchange.from && message.seq <= exchange.through,
+					(message.kind === 'said' || message.kind === 'returned') &&
+					message.seq > exchange.from &&
+					message.seq <= exchange.through,
 			);
 			const published = exchange.summary.status === 'published';
 			return {

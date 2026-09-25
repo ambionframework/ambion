@@ -71,8 +71,13 @@ export function notesOf(attention: readonly string[], view: RoomView): Block[] {
 /** One say that waits to return, as the conversation notes it. */
 function pendingLine(say: PendingSay): string {
 	const due = new Date(say.due);
+	const later = due.valueOf() - Date.now() > 86_400_000;
 	const time = Number.isNaN(due.valueOf())
 		? say.due
-		: due.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+		: due.toLocaleString([], {
+				...(later ? { month: 'short', day: 'numeric' } : {}),
+				hour: '2-digit',
+				minute: '2-digit',
+			});
 	return `${say.seat} comes back at ${time} for ${say.owner}: ${say.text}`;
 }

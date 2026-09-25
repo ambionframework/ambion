@@ -63,9 +63,10 @@ export function readView(
 		initialized: true,
 		...(state.composition.goal === undefined ? {} : { goal: state.composition.goal }),
 		messages: selectMessages(state.messages, messages),
-		scheduled: state.scheduled.map(({ dueAt, ...say }) => ({
+		scheduled: state.scheduled.map(({ dueAt, refs, ...say }) => ({
 			...say,
 			due: new Date(dueAt).toISOString(),
+			...(refs === undefined ? {} : { refs: [...refs] }),
 		})),
 		participants: participantsOf({ state, live: liveWork(state, now).seats }),
 		exchanges,
