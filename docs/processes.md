@@ -51,7 +51,7 @@ states the owner and the backends that a process runs on.
 | -------- | --------------------------------------- | -------------------------------------------------------------------- |
 | `bash`   | `command`, `name?`, `timeout?`, `wait?` | Starts a process, waits up to `wait` seconds, and gives its state    |
 | `ps`     | None                                    | Lists the caller's running processes                                 |
-| `status` | `handle`                                | Gives the state of the process and the end of its output             |
+| `status` | `handle`                                | Gives the state of the process and its new output                    |
 | `wait`   | `handle`, `timeout?`                    | Waits up to `timeout` seconds for the process to end, then as status |
 | `cancel` | `handle`                                | Stops a running process, waits for it to end, then as status         |
 
@@ -81,14 +81,15 @@ agent is the agent's own home. A handle of another agent fails with
 
 **Each process is a directory: `~/.processes/<handle>/`.**
 
-| File   | Written by  | When                                                                 |
-| ------ | ----------- | -------------------------------------------------------------------- |
-| `spec` | The table   | At the start: the command, the name, the timeout, the room, the time |
-| `out`  | The command | While it runs. The just-bash backends write it when the command ends |
-| `pid`  | The wrapper | First: the pid of the shell that runs the command                    |
-| `exit` | The wrapper | After the command: the exit code and the time, whole or absent       |
-| `stop` | The table   | Before it stops the process: `cancelled`, `timed_out`, or `failed`   |
-| `seen` | The table   | When a result or a reminder showed the end                           |
+| File     | Written by  | When                                                                 |
+| -------- | ----------- | -------------------------------------------------------------------- |
+| `spec`   | The table   | At the start: the command, the name, the timeout, the room, the time |
+| `out`    | The command | While it runs. The just-bash backends write it when the command ends |
+| `pid`    | The wrapper | First: the pid of the shell that runs the command                    |
+| `exit`   | The wrapper | After the command: the exit code and the time, whole or absent       |
+| `stop`   | The table   | Before it stops the process: `cancelled`, `timed_out`, or `failed`   |
+| `seen`   | The table   | When a result or a reminder showed the end                           |
+| `cursor` | The table   | After each result: the byte offset of the output that results showed |
 
 **The wrapper writes the pid, runs the command, and writes the end.**
 
@@ -134,10 +135,21 @@ process.
 
 ## The result
 
-**Each result of `bash`, `status`, `wait`, and `cancel` is the end of the
-output, then one bracketed line.** The line states the process, its
-handle, its name when it has one, and its output file. A process that
-ended with no output shows `(no output)`.
+**Each result of `bash`, `status`, `wait`, and `cancel` is the new output,
+then one bracketed line.** The new output is the output after the cursor:
+the part that no earlier result of the agent showed. The line states the
+process, its handle, its name when it has one, and its output file. A
+process that ended with no output shows `(no output)`, and one that wrote
+nothing new since the last result shows `(no new output)`.
+
+**The cursor moves with each result.** A read gives the bytes from the
+cursor to the size of `out` when the read began, and writes that size to
+`cursor`. A result that starts past the start of the output adds `The text
+above starts at byte <n> of the output. An earlier result showed the bytes
+before it.` `details.read` holds `from` and `to`. Ten polls of a long build
+give ten new parts, and no part twice. The cursor is a file, so a new run
+of the host reads on from the same byte. A failed write of `cursor` gives
+the same bytes again on the next read.
 
 ```text
 /home/writer
@@ -160,11 +172,12 @@ compiling 14 of 120
 | `cancelled` | `Process <h> is cancelled.`                                |
 | `failed`    | `Process <h> failed: <message>.`                           |
 
-**The view keeps the last 2000 lines or 50 KB.** These are the limits of
-Pi's `bash` tool. When the view cuts the output, the bracketed line adds
-`The text above is the last <n> lines, <size> of <total>.` A file up to
-200 KB is read whole, and a larger one with `tail -c`. The agent reads the
-rest with `read`, which takes an offset and a limit.
+**The view keeps the last 2000 lines or 50 KB of the new output.** These
+are the limits of Pi's `bash` tool. When the view cuts the new output, the
+bracketed line adds `The text above is the last <n> lines, <size> of
+<total>.` One read takes at most 200 KB, with `head -c <size> | tail -c
+<count>`. The agent reads the rest with `read`, which takes an offset and a
+limit.
 
 **`details.process` is a `ProcessStatus`.** The host's view gives the
 same value.

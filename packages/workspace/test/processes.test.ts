@@ -50,17 +50,22 @@ async function call(
 }
 
 /** The handle that a failed call names in its text. */
-async function failedHandle(invoke: () => unknown): Promise<string> {
-	const error = await Promise.resolve()
+/** The text of the error a call fails with. */
+async function failure(invoke: () => unknown): Promise<string> {
+	return Promise.resolve()
 		.then(invoke)
 		.then(
 			() => {
 				throw new Error('The call must fail.');
 			},
-			(reason: unknown) => reason,
+			(reason: unknown) => String(reason),
 		);
-	const handle = HANDLE.exec(String(error))?.[0];
-	if (handle === undefined) throw new Error(`No handle in ${String(error)}`);
+}
+
+async function failedHandle(invoke: () => unknown): Promise<string> {
+	const error = await failure(invoke);
+	const handle = HANDLE.exec(error)?.[0];
+	if (handle === undefined) throw new Error(`No handle in ${error}`);
 	return handle;
 }
 
@@ -116,7 +121,19 @@ describe('bash', () => {
 		const waited = await call(workspace, 'wait', { handle, timeout: 5 });
 		expect(waited.details.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		expect(waited.text.startsWith('done\n\n[Process')).toBe(true);
-		expect((await call(workspace, 'status', { handle })).text).toBe(waited.text);
+		// The cursor stands after what wait showed, so status gives no output twice.
+		const again = await call(workspace, 'status', { handle });
+		expect(again.text.startsWith('(no new output)\n\n[Process')).toBe(true);
+		expect(again.details.read).toEqual({ from: 5, to: 5 });
+		// Output past the cursor comes back alone, with the byte it starts at.
+		await workspace.use({ name: 'alpha' }, (env) =>
+			env.writeFile(waited.details.process.output, 'done\nmore\n', BACKGROUND_CONTEXT),
+		);
+		const more = await call(workspace, 'status', { handle });
+		expect(more.text).toMatch(
+			/^more\n\n\[Process .* The text above starts at byte 5 of the output\./s,
+		);
+		expect(more.details.read).toEqual({ from: 5, to: 10 });
 	});
 
 	it('gives the running state when wait ends before the process', async () => {
@@ -141,15 +158,29 @@ describe('bash', () => {
 			const whole = await fileOf(workspace, 'alpha', details.process.output);
 			expect(whole.split('\n').length).toBe(lines + 1);
 			expect(details.truncation?.totalBytes).toBe(whole.length);
+			// A small new part of a long file comes back alone, from the cursor.
+			await workspace.use({ name: 'alpha' }, (env) =>
+				env.writeFile(details.process.output, `${whole}extra\n`, BACKGROUND_CONTEXT),
+			);
+			const next = await call(workspace, 'status', { handle: details.process.handle });
+			expect(next.text.startsWith('extra\n\n[Process')).toBe(true);
+			expect(next.details.read).toEqual({ from: whole.length, to: whole.length + 6 });
 		},
 	);
 
 	it.each([
-		['a code other than 0', { command: 'echo partial; exit 3' }, 'exited with code 3', 'partial'],
+		[
+			'a code other than 0',
+			{ command: 'echo partial; exit 3' },
+			'exited with code 3',
+			'partial',
+			'(no new output)',
+		],
 		[
 			'a timeout',
 			{ command: 'sleep 5', timeout: 0.1 },
 			'timed out after 0.1 seconds',
+			'(no output)',
 			'(no output)',
 		],
 		[
@@ -157,17 +188,18 @@ describe('bash', () => {
 			{ command: 'echo "unterminated' },
 			'exited with code 2',
 			'unexpected EOF',
+			'(no new output)',
 		],
 	])(
-		'fails the call on %s, and status reports the same process',
-		async (_case, params, state, output) => {
+		'fails the call on %s with the output, and status reports the same process',
+		async (_case, params, state, output, after) => {
 			const workspace = site();
-			const handle = await failedHandle(() =>
-				toolOf(workspace, 'bash').invoke(params, callAs('alpha')),
-			);
+			const error = await failure(() => toolOf(workspace, 'bash').invoke(params, callAs('alpha')));
+			expect(error).toContain(output);
+			const handle = HANDLE.exec(error)?.[0] ?? 'none';
 			const status = await call(workspace, 'status', { handle });
 			expect(status.text).toContain(`Process ${handle} ${state}.`);
-			expect(status.text).toContain(output);
+			expect(status.text.startsWith(`${after}\n\n[Process`)).toBe(true);
 		},
 	);
 
@@ -518,7 +550,8 @@ describe('the files as the source of truth', () => {
 			name: 'build',
 			command,
 		});
-		expect(status.text.startsWith('kept\n\n[Process')).toBe(true);
+		// The cursor lives in the files, so the new run gives no output that bash showed.
+		expect(status.text.startsWith('(no new output)\n\n[Process')).toBe(true);
 		// A stop that meets the end of the command writes no stop, and the end stays exited.
 		const doneDir = done.output.slice(0, done.output.lastIndexOf('/'));
 		await second.use({ name: 'alpha' }, (env) => writeStop(env, doneDir, stopLine('cancelled')));

@@ -21,19 +21,14 @@
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
 import {
 	type AgentToolResult,
-	applyShellOutputUpdate,
-	BACKGROUND_CONTEXT,
-	DEFAULT_MAX_BYTES,
-	DEFAULT_MAX_LINES,
 	formatSize,
 	type ShellOutputTruncation,
-	type ShellOutputView,
-	truncateTail,
 } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
-import { PROCESSES_DIR, type ProcessStatus, quoted } from './process-files.ts';
+import { PROCESSES_DIR, type ProcessStatus } from './process-files.ts';
+import { readOutput } from './process-output.ts';
 import { psTable, stateLine } from './process-text.ts';
 import type { ProcessTable } from './processes.ts';
 import type { WorkspaceResource } from './resource.ts';
@@ -57,9 +52,6 @@ const DEADLINE_MARGIN_SECONDS = 30;
 /** The largest timeout a Node timer holds, in seconds. */
 const MAX_TIMEOUT_SECONDS = 2_147_483;
 
-/** An output file up to this size is read whole. A larger one is read with `tail`. */
-const WHOLE_READ_BYTES = 4 * DEFAULT_MAX_BYTES;
-
 /** The tool names, in the order the tool line of the guidance lists them. */
 export const PROCESS_TOOL_NAMES = ['bash', 'ps', 'status', 'wait', 'cancel'] as const;
 
@@ -75,7 +67,7 @@ export function processToolGuidance(): string {
 	return [
 		`bash starts each command as a background process and returns its handle, such as bash-1a2b3c4d5e6f.`,
 		`Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.`,
-		`The call waits up to wait seconds, ${DEFAULT_BASH_WAIT_SECONDS} by default, and then gives the state of the process and the end of its output.`,
+		`The call waits up to wait seconds, ${DEFAULT_BASH_WAIT_SECONDS} by default, and then gives the state of the process and its output.`,
 		`The whole output of a process goes to ${PROCESSES_DIR}/<handle>/out. Read it with read.`,
 		`status, wait and cancel take a handle. status gives the state of the process, wait waits for it to end,`,
 		`and cancel stops it. ps lists your running processes.`,
@@ -128,6 +120,8 @@ type WaitParams = Static<typeof waitSchema>;
 /** What a handle tool gives in `details`. */
 export interface ProcessDetails {
 	process: ProcessStatus;
+	/** The bytes of the output that the result shows: from the cursor to the end the read saw. */
+	read: { from: number; to: number };
 	truncation?: ShellOutputTruncation;
 }
 
@@ -147,7 +141,7 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 		defineTool({
 			name: 'bash',
 			label: 'bash',
-			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and the end of its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out.`,
+			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out.`,
 			parameters: bashSchema,
 			execute: recorded('bash', (params: BashParams, ctx) => started(options, params, ctx)),
 		}),
@@ -161,7 +155,8 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 		defineTool({
 			name: 'status',
 			label: 'Process status',
-			description: 'Give the state of a process and the end of its output.',
+			description:
+				'Give the state of a process and its new output: the output after your last result for it.',
 			parameters: handleSchema,
 			execute: recorded('status', async (params: HandleParams, ctx) =>
 				described(options, await table.find(ctx.agent, params.handle, ctx.signal), ctx),
@@ -171,7 +166,7 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			name: 'wait',
 			label: 'Wait for a process',
 			description:
-				'Wait for a process to end, up to timeout seconds. Give its state and the end of its output. The process keeps running when the time ends first.',
+				'Wait for a process to end, up to timeout seconds. Give its state and its new output. The process keeps running when the time ends first.',
 			parameters: waitSchema,
 			execute: recorded('wait', async (params: WaitParams, ctx) => {
 				const asked = checkedSeconds(params.timeout, DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS);
@@ -184,7 +179,7 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			name: 'cancel',
 			label: 'Cancel a process',
 			description:
-				'Stop a running process, and give its state and the end of its output. A process that takes over 10 seconds to stop still shows running.',
+				'Stop a running process, and give its state and its new output. A process that takes over 10 seconds to stop still shows running.',
 			parameters: handleSchema,
 			execute: recorded('cancel', async (params: HandleParams, ctx) =>
 				described(options, await table.cancel(ctx.agent, params.handle), ctx),
@@ -271,83 +266,59 @@ async function listed(table: ProcessTable, ctx: ToolContext): Promise<AgentToolR
 	return { content: [{ type: 'text', text }], details: { processes } };
 }
 
-/** The end of the process's output, and the line that states the process. */
+/**
+ * The output after the cursor, and the line that states the process. The
+ * read moves the cursor, so the next result of the agent gives the output
+ * after this one.
+ */
 async function described(
 	options: ProcessToolOptions,
 	process: ProcessStatus,
 	ctx: ToolContext,
 	note = '',
 ): Promise<AgentToolResult<ProcessDetails>> {
-	const tail = await options.shell(
+	const dir = process.output.slice(0, process.output.lastIndexOf('/'));
+	const read = await options.shell(
 		ctx.agent,
 		async (env) => {
-			const read = await outputTail(env, process.output);
+			const output = await readOutput(env, dir);
 			await options.processes.markSeen(env, process);
-			return read;
+			return output;
 		},
 		ctx.signal,
 	);
-	const output = tail.text.endsWith('\n') ? tail.text.slice(0, -1) : tail.text;
-	const body = output === '' && process.state !== 'running' ? '(no output)' : output;
-	const notes = [stateLine(process), note, truncationLine(tail.truncation)].filter(
-		(line) => line !== '',
-	);
-	const text = [body, `[${notes.join(' ')}]`].filter((part) => part !== '').join('\n\n');
-	const details: ProcessDetails = tail.truncation.truncated
-		? { process, truncation: tail.truncation }
-		: { process };
+	const output = read.text.endsWith('\n') ? read.text.slice(0, -1) : read.text;
+	const notes = [
+		stateLine(process),
+		note,
+		output === '' ? '' : startLine(read.from),
+		truncationLine(read.truncation),
+	].filter((line) => line !== '');
+	const text = [bodyOf(output, process, read.from), `[${notes.join(' ')}]`]
+		.filter((part) => part !== '')
+		.join('\n\n');
+	const details: ProcessDetails = {
+		process,
+		read: { from: read.from, to: read.to },
+		...(read.truncation.truncated ? { truncation: read.truncation } : {}),
+	};
 	return { content: [{ type: 'text', text }], details };
+}
+
+/** The text before the state line: the new output, or a note for none. A running process with none gives nothing. */
+function bodyOf(output: string, process: ProcessStatus, from: number): string {
+	if (output !== '' || process.state === 'running') return output;
+	return from === 0 ? '(no output)' : '(no new output)';
+}
+
+/** The note for a result that starts past the start of the output. */
+function startLine(from: number): string {
+	return from === 0
+		? ''
+		: `The text above starts at byte ${from} of the output. An earlier result showed the bytes before it.`;
 }
 
 function truncationLine(truncation: ShellOutputTruncation): string {
 	if (!truncation.truncated) return '';
 	return `The text above is the last ${truncation.outputLines} lines, ${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}.`;
-}
-
-/**
- * The end of an output file, bounded to Pi's default view: 2000 lines or
- * 50 KB. A file that does not exist yet reads as empty. A file over four
- * times the byte limit is read with `tail`, so a large output does not
- * reach the host whole.
- */
-async function outputTail(
-	env: WorkspaceEnv,
-	path: string,
-): Promise<{ text: string; truncation: ShellOutputTruncation }> {
-	const info = await env.fileInfo(path, BACKGROUND_CONTEXT);
-	const size = info.ok ? info.value.size : 0;
-	const text = size > WHOLE_READ_BYTES ? await tailOf(env, path) : await wholeOf(env, path);
-	const { content, ...truncation } = truncateTail(text, {
-		maxLines: DEFAULT_MAX_LINES,
-		maxBytes: DEFAULT_MAX_BYTES,
-	});
-	return {
-		text: content,
-		truncation: {
-			...truncation,
-			truncated: truncation.truncated || size > WHOLE_READ_BYTES,
-			totalBytes: Math.max(truncation.totalBytes, size),
-		},
-	};
-}
-
-async function wholeOf(env: WorkspaceEnv, path: string): Promise<string> {
-	const read = await env.readTextFile(path, BACKGROUND_CONTEXT);
-	return read.ok ? read.value : '';
-}
-
-async function tailOf(env: WorkspaceEnv, path: string): Promise<string> {
-	let view: ShellOutputView | undefined;
-	await env.exec(
-		// just-bash's tail refuses `--`. The path is absolute, so it cannot read as an option.
-		`tail -c ${DEFAULT_MAX_BYTES} ${quoted(path)}`,
-		{
-			capture: { limits: { maxBytes: 2 * DEFAULT_MAX_BYTES, maxLines: 2 * DEFAULT_MAX_LINES } },
-			onUpdate: (update) => {
-				view = applyShellOutputUpdate(view, update);
-			},
-		},
-		BACKGROUND_CONTEXT,
-	);
-	return view?.text ?? '';
 }
