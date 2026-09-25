@@ -14,7 +14,7 @@ import {
 	writeSpec,
 	writeStop,
 } from '../src/process-files.ts';
-import { FINISHED_IN_REMINDER } from '../src/process-text.ts';
+import { FINISHED_IN_REMINDER, LATER_LINE } from '../src/process-text.ts';
 import type { ProcessDetails, PsDetails, WaitDetails } from '../src/process-tools.ts';
 import { MAX_FINISHED_PROCESSES, MAX_RUNNING_PROCESSES } from '../src/processes.ts';
 import { openWorkspace, type Workspace } from '../src/workspace.ts';
@@ -133,7 +133,11 @@ describe('bash', () => {
 		const { handle } = started.details.process;
 		expect(started.details.process.state).toBe('running');
 		expect(started.text).toContain(`Process ${handle} is running.`);
-		expect(started.text).toContain('Call status, wait or cancel with its handle.');
+		expect(started.text).toContain(
+			'Call status, wait or cancel with its handle, or ps to list your processes.',
+		);
+		// Outside a room there is no say, so the result points to none.
+		expect(started.text).not.toContain(LATER_LINE);
 		expect((await call(workspace, 'status', { handle })).details.process.state).toBe('running');
 		// A running process holds no operation of the bash owner.
 		expect(await workspace.use({ name: 'alpha' }, () => 'free')).toBe('free');
@@ -548,14 +552,61 @@ describe('a wait near the end of the activation', () => {
 			/is running\..*The wait stopped early, because your activation ends in \d+ seconds\./s,
 		);
 		// Less than the margin is left: wait returns at once.
-		const late = callAs('alpha', { deadline: Date.now() + 10_000 });
+		// In an open exchange the note also points to a scheduled say, and names the seconds once.
+		const late = callAs('alpha', {
+			deadline: Date.now() + 10_000,
+			exchange: { owner: 'priya', from: 4 },
+		});
 		const before = Date.now();
 		const waited = await invokeText(toolOf(workspace, 'wait'), { handle, timeout: 60 }, late);
 		expect(Date.now() - before).toBeLessThan(2_000);
 		// The note rounds the time left, and a loaded runner can take a second.
 		expect(waited).toMatch(
-			/The wait stopped early, because your activation ends in (9|10) seconds\. Answer before then\./,
+			/The wait stopped early, because your activation ends in (9|10) seconds\. Answer before then\. Process bash-[0-9a-f]{12} can run longer\./,
 		);
+		expect(waited).not.toContain('Your activation ends in');
+	});
+});
+
+describe('the note that points to a scheduled say', () => {
+	const exchange = { owner: 'priya', from: 4 };
+	it.each([
+		['can run past the wait of the activation, in an exchange', 100, 600, { exchange }, true],
+		['ends before the wait of the activation ends', 100, 60, { exchange }, false],
+		['runs in an activation with no open exchange', 100, 600, {}, false],
+		['runs over 120 seconds before the deadline', 600, 600, { exchange }, false],
+	])('for a process that %s', async (_case, seconds, timeout, context, shows) => {
+		const workspace = site();
+		const inside = callAs('alpha', { deadline: Date.now() + seconds * 1000, ...context });
+		const started = await toolOf(workspace, 'bash').invoke(
+			{ command: 'sleep 30', timeout, wait: 0 },
+			inside,
+		);
+		if (typeof started === 'string') throw new Error('A process tool gives a structured result.');
+		const { handle } = (started.details as ProcessDetails).process;
+		// Two processes run, under the limit of four. The ended one makes wait with handles return at once.
+		const other = (await call(workspace, 'bash', { command: 'sleep 30', timeout, wait: 0 })).details
+			.process.handle;
+		const ended = (await call(workspace, 'bash', { command: 'true' })).details.process.handle;
+		const wait = toolOf(workspace, 'wait');
+		const texts = [
+			started.content.map((part) => (part.type === 'text' ? part.text : '')).join(''),
+			await invokeText(toolOf(workspace, 'status'), { handle }, inside),
+			await invokeText(wait, { handle, timeout: 0 }, inside),
+			await invokeText(wait, { handles: [other, handle], timeout: 0 }, inside),
+			await invokeText(wait, { handles: [ended, other, handle], timeout: 0 }, inside),
+		];
+		for (const text of texts) {
+			const left = /Your activation ends in (\d+) seconds\./.exec(text)?.[1];
+			expect(left !== undefined).toBe(shows);
+			// A loaded runner can take some seconds between the calls.
+			if (left !== undefined) expect(Number(left)).toBeGreaterThan(80);
+			expect(text.includes(LATER_LINE)).toBe(shows);
+		}
+		if (shows) {
+			expect(texts[0]).toContain(`Process ${handle} can run longer.`);
+			expect(texts[3]).toContain(`Processes ${other}, ${handle} can run longer.`);
+		}
 	});
 });
 

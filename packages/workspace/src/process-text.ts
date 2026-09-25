@@ -45,7 +45,7 @@ export function stateLine(process: ProcessStatus): string {
 	const where = `Output: ${process.output}.`;
 	switch (process.state) {
 		case 'running':
-			return `${who} is running. ${where} Call status, wait or cancel with its handle.`;
+			return `${who} is running. ${where} Call status, wait or cancel with its handle, or ps to list your processes.`;
 		case 'exited':
 			return `${who} exited with code ${process.exitCode}. ${where}`;
 		case 'timed_out':
@@ -55,6 +55,29 @@ export function stateLine(process: ProcessStatus): string {
 		case 'failed':
 			return `${who} failed: ${process.error}. ${where}`;
 	}
+}
+
+/** The end of the note for running processes past the reach of a wait: the scheduled say. */
+export const LATER_LINE = 'To look at a process later, say to yourself with after, in seconds.';
+
+/** `Process <h> can run longer.`, or `Processes <h>, <h> can run longer.` */
+function longerLine(handles: readonly string[]): string {
+	const who = handles.length === 1 ? 'Process' : 'Processes';
+	return `${who} ${handles.join(', ')} can run longer. ${LATER_LINE}`;
+}
+
+/**
+ * The note near the end of the activation: the seconds `left` before the
+ * room ends it, the wait that the deadline `cut`, and the scheduled say for
+ * the processes `later` that run past the reach of a wait. Empty when the
+ * wait was not cut and no say helps. The seconds show once.
+ */
+export function deadlineNote(left: number, cut: boolean, later: readonly string[]): string {
+	if (!cut && later.length === 0) return '';
+	const time = cut
+		? `The wait stopped early, because your activation ends in ${left} seconds. Answer before then.`
+		: `Your activation ends in ${left} seconds.`;
+	return later.length === 0 ? time : `${time} ${longerLine(later)}`;
 }
 
 /** The end of a finished process, for the reminder. */

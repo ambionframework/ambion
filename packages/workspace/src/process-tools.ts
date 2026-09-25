@@ -30,7 +30,7 @@ import type { WorkspaceEnv } from './backend.ts';
 import { PROCESSES_DIR, type ProcessStatus } from './process-files.ts';
 import { readOutput } from './process-output.ts';
 import type { ProcessTable } from './process-table.ts';
-import { psTable, stateLine } from './process-text.ts';
+import { deadlineNote, psTable, stateLine } from './process-text.ts';
 import type { WorkspaceResource } from './resource.ts';
 import { recordedOnShell } from './tools.ts';
 
@@ -51,6 +51,12 @@ const MAX_WAIT_HANDLES = 16;
 
 /** Seconds a wait leaves before the room ends the activation, so the agent can still answer. */
 const DEADLINE_MARGIN_SECONDS = 30;
+
+/** Seconds before the deadline from which a result points a running process to a scheduled say. */
+const SAY_NOTE_SECONDS = 120;
+
+/** A call that did not wait, or whose wait the deadline did not cut. */
+const NOT_CUT = { cut: false } as const;
 
 /** The largest timeout a Node timer holds, in seconds. */
 const MAX_TIMEOUT_SECONDS = 2_147_483;
@@ -179,9 +185,10 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			description:
 				'Give the state of a process and its new output: the output after your last result for it.',
 			parameters: handleSchema,
-			execute: recorded('status', async (params: HandleParams, ctx) =>
-				described(options, await table.find(ctx.agent, params.handle, ctx.signal), ctx),
-			),
+			execute: recorded('status', async (params: HandleParams, ctx) => {
+				const process = await table.find(ctx.agent, params.handle, ctx.signal);
+				return described(options, process, ctx, deadlineLine(NOT_CUT, process, [process], ctx));
+			}),
 		}),
 		defineTool({
 			name: 'wait',
@@ -224,11 +231,36 @@ function withinActivation(asked: number, ctx: ToolContext): { seconds: number; c
 	return left < asked ? { seconds: left, cut: true } : { seconds: asked, cut: false };
 }
 
-/** The note for a wait that the deadline of the activation cut, while the process still runs. */
-function cutLine(wait: { cut: boolean }, process: ProcessStatus, ctx: ToolContext): string {
-	if (!wait.cut || process.state !== 'running' || ctx.deadline === undefined) return '';
+/**
+ * Whether a running process can run past the reach of a wait in this
+ * activation, and the room would take a say with `after`: the call runs in
+ * an activation, and an exchange is open.
+ */
+function outlasts(process: ProcessStatus, ctx: ToolContext): boolean {
+	if (process.state !== 'running' || ctx.deadline === undefined || ctx.exchange === undefined) {
+		return false;
+	}
+	const ends = Date.parse(process.startedAt) + process.timeout * 1000;
+	return ends > ctx.deadline - DEADLINE_MARGIN_SECONDS * 1000;
+}
+
+/**
+ * The note near the end of the activation for `running`: the seconds left,
+ * the wait that the deadline cut while `cut` still runs, and the scheduled
+ * say for each of `running` that outlasts the reach of a wait. The say
+ * shows in the last `SAY_NOTE_SECONDS` of the activation.
+ */
+function deadlineLine(
+	wait: { cut: boolean },
+	cut: ProcessStatus,
+	running: readonly ProcessStatus[],
+	ctx: ToolContext,
+): string {
+	if (ctx.deadline === undefined) return '';
 	const left = Math.max(0, Math.round((ctx.deadline - Date.now()) / 1000));
-	return `The wait stopped early, because your activation ends in ${left} seconds. Answer before then.`;
+	const near = left <= SAY_NOTE_SECONDS;
+	const later = near ? running.filter((one) => outlasts(one, ctx)).map((one) => one.handle) : [];
+	return deadlineNote(left, wait.cut && cut.state === 'running', later);
 }
 
 /**
@@ -262,7 +294,7 @@ async function started(
 		wait.seconds,
 		ctx.signal,
 	);
-	const result = await described(options, ended, ctx, cutLine(wait, ended, ctx));
+	const result = await described(options, ended, ctx, deadlineLine(wait, ended, [ended], ctx));
 	if (unsuccessful(ended)) throw new Error(textOf(result));
 	return result;
 }
@@ -285,13 +317,13 @@ async function waited(
 	const [first] = processes;
 	if (first === undefined) throw new Error('Invalid handles: give at least one handle.');
 	if (params.handles === undefined)
-		return described(options, first, ctx, cutLine(wait, first, ctx));
+		return described(options, first, ctx, deadlineLine(wait, first, [first], ctx));
 	const ended: AgentToolResult<ProcessDetails>[] = [];
 	for (const process of processes) {
 		if (process.state !== 'running') ended.push(await described(options, process, ctx));
 	}
 	const running = processes.filter((process) => process.state === 'running');
-	const note = ended.length === 0 ? cutLine(wait, first, ctx) : '';
+	const note = deadlineLine(ended.length === 0 ? wait : NOT_CUT, first, running, ctx);
 	const text = [
 		...ended.map(textOf),
 		...running.map((process) => `[${stateLine(process)}]`),
