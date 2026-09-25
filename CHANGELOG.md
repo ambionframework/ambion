@@ -25,8 +25,9 @@ message. See [Processes](docs/processes.md).
   runs on `runAgent`. The actor ends each move with `send` or `stop`, and
   the tools see the person in `ctx.agent`. The judge reads the record
   between two lines that carry a random token, and ends with `grade`: one
-  finding for each criterion, reason first. `grade` refuses a list that
-  misses or reorders a criterion. `@ambionframework/simulator` now depends
+  finding for each criterion, in the order of the list, reason first. The
+  judge attaches each criterion, and `grade` refuses a list of the wrong
+  length. `@ambionframework/simulator` now depends
   on `@ambionframework/pi`.
 - **`runAgent` runs one Pi agent outside a room.** It takes a model, a
   routing name, the agent that the tools see, a system prompt, one prompt,
