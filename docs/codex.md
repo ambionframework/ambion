@@ -294,8 +294,9 @@ runs do not show whether `output_tokens` includes them. A field that an older
 pulls a three-digit HTTP status out of the text when the text names one,
 such as "status 401", and applies the shared status rule to it.
 
-**The Codex text set names a quota or an authentication refusal.** The
-patterns are `insufficient_quota`, `exceeded your current quota`, `credit
+**The Codex text set names a quota, a usage limit, or an authentication
+refusal.** The patterns are `insufficient_quota`, `exceeded your current
+quota`, `usage limit`, `credit
 balance`, `authentication_error`, `permission_error`,
 `invalid_request_error`, an invalid API key, `unauthorized`, `permission
 denied`, `not logged in`, and `missing bearer`.

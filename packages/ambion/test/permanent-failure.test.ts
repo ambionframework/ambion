@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { hostingOf } from '../src/hosting.ts';
+import { hostingOf, providerMessage } from '../src/hosting.ts';
 import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
 import { collect, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
@@ -28,6 +28,11 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			'does not read a rate-limit token count as a permanent status',
 			'429 rate limit of 400,000 input tokens per minute exceeded',
 			'transient',
+		],
+		[
+			'abandons a spent usage limit in one attempt',
+			'400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits."}}',
+			'permanent',
 		],
 		['retries a transient failure to the cap', '503 the provider is overloaded', 'transient'],
 	] as const)('%s', async (_case, message, cause) => {
@@ -63,4 +68,23 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 		expect(errors.length).toBeGreaterThan(0);
 		expect(errors.every((event) => event.cause === cause)).toBe(true);
 	});
+});
+
+it.each([
+	[
+		'an Anthropic body',
+		'400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits."},"request_id":"req_1"}',
+		'400 invalid_request_error: You have reached your specified API usage limits. (request req_1)',
+	],
+	[
+		'an OpenAI body',
+		'429 {"error":{"message":"You exceeded your current quota.","type":"insufficient_quota","code":"insufficient_quota"}}',
+		'429 insufficient_quota: You exceeded your current quota.',
+	],
+	['a body with no message', '500 {"error":{}}', '500 {"error":{}}'],
+	['a text that is no JSON', 'overloaded {529', 'overloaded {529'],
+	['a plain text', 'Your credit balance is too low', 'Your credit balance is too low'],
+	['no text', undefined, undefined],
+])('names the failure from %s in the provider’s words', (_name, text, expected) => {
+	expect(providerMessage(text)).toBe(expected);
 });

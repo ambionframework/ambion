@@ -1,9 +1,18 @@
 import type { ExchangeActivation, ExchangeView } from '@ambionframework/ambion';
 import type { Approval, RoomView } from './workbench.ts';
 
-/** The newest activation of an exchange, or undefined when it has none. */
-export const newest = (exchange: ExchangeView | undefined): ExchangeActivation | undefined =>
-	exchange?.activations.at(-1);
+/**
+ * The newest activation of an exchange that ran, or undefined when it has
+ * none. The room abandons an attempt without running it, so an abandoned
+ * attempt has no steps. It counts only when no other activation exists.
+ */
+export function newest(exchange: ExchangeView | undefined): ExchangeActivation | undefined {
+	const activations = exchange?.activations ?? [];
+	return (
+		activations.findLast((activation) => activation.outcome.status !== 'abandoned') ??
+		activations.at(-1)
+	);
+}
 
 /** The exchange a person names: by ordinal, oldest first, or the latest with an activation. */
 export function pick(

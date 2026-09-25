@@ -177,7 +177,7 @@ activation sends the whole view in its first pass.
 SDK reports. `maxBudgetUsd` caps one activation. A spent budget is a permanent
 failure.
 
-**Failures.** Credit or authentication text and an `api_error_status` of 400,
+**Failures.** Credit, usage-limit, or authentication text and an `api_error_status` of 400,
 401, 402, 403, 404, 405, or 422 are permanent. A length stop is not a failure.
 Every other failure is transient.
 

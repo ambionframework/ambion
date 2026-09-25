@@ -50,6 +50,20 @@ it.each([
 		},
 		{ ...permanent, message: 'Your credit balance is too low' },
 	],
+	[
+		'a spent usage limit as permanent, in the provider’s words',
+		{
+			is_error: true,
+			result:
+				'API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits."}}',
+			api_error_status: 400,
+		},
+		{
+			...permanent,
+			message:
+				'API Error: 400 invalid_request_error: You have reached your specified API usage limits.',
+		},
+	],
 ])('ends %s', (_what, fields, expected) => {
 	expect(passResultOf(result(fields))).toEqual(expected);
 });
@@ -59,4 +73,8 @@ it('reads a status only from a status, and never from free text', () => {
 	expect(causeOf('bad request', 400)).toBe('permanent');
 	expect(causeOf('overloaded', 529)).toBe('transient');
 	expect(causeOf('invalid x-api-key')).toBe('permanent');
+	expect(causeOf('You have reached your specified API usage limits.', 400)).toBe('permanent');
+	expect(causeOf('Claude AI usage limit reached|1790380800', 429)).toBe('permanent');
+	expect(causeOf('billing_error: add a payment method')).toBe('permanent');
+	expect(causeOf('rate_limit_error: slow down', 429)).toBe('transient');
 });

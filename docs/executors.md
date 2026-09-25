@@ -319,15 +319,22 @@ retries to the cap of the room.
 [Durability](durability.md#permanent-and-transient-failure) states what the
 room does with the cause.
 
-| Failure                                                                           | Cause       |
-| --------------------------------------------------------------------------------- | ----------- |
-| An error text that names a credit, a quota, a credential, or a permission refusal | `permanent` |
-| A status of 400, 401, 402, 403, 404, 405, or 422                                  | `permanent` |
-| An error of the executor, such as a lost room call or a lost process              | `transient` |
-| Every other failure                                                               | `transient` |
+| Failure                                                                                          | Cause       |
+| ------------------------------------------------------------------------------------------------ | ----------- |
+| An error text that names a credit, a quota, a usage limit, a credential, or a permission refusal | `permanent` |
+| A status of 400, 401, 402, 403, 404, 405, or 422                                                 | `permanent` |
+| An error of the executor, such as a lost room call or a lost process                             | `transient` |
+| Every other failure                                                                              | `transient` |
 
 **A status decides the cause when no text matches.** An uncertain failure
 is transient, so the room retries it.
+
+**The message of a failure names the provider's words.** A provider error
+often arrives as a status and a JSON body. `providerMessage` from
+`@ambionframework/ambion/hosting` makes it `400 invalid_request_error:
+<message> (request <id>)`, and leaves another text as it is. The Pi, Claude,
+and Codex executors put this text in the pass result. Classify the cause
+from the original text.
 
 **A length stop is no failure.** The pass reports `stop: 'length'`.
 

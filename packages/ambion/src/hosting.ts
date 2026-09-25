@@ -42,7 +42,7 @@ export type {
 	PassInput,
 	PassResult,
 } from './execution/executor.ts';
-export { classifyCause, PERMANENT_STATUS } from './execution/failure.ts';
+export { classifyCause, PERMANENT_STATUS, providerMessage } from './execution/failure.ts';
 export { REMINDER_TIMEOUT_MS, resolveReminders } from './execution/reminders.ts';
 export type { RenderedPrompt } from './execution/render.ts';
 export {

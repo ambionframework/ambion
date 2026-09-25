@@ -16,6 +16,7 @@ export const view = (name: string, extra: Record<string, unknown> = {}) =>
 		goal: `${name} goal`,
 		status: 'running',
 		activity: [],
+		failures: new Map(),
 		prompt: `Try ${name}`,
 		messages: [],
 		scheduled: [],

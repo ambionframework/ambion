@@ -1,4 +1,4 @@
-import type { ExchangeView, Message } from '@ambionframework/ambion';
+import type { ExchangeActivation, ExchangeView, Message } from '@ambionframework/ambion';
 import { formatUsage, type PassView } from './steps.ts';
 
 type ClosedView = Extract<ExchangeView, { status: 'closed' }>;
@@ -71,6 +71,8 @@ export interface TimelineInput {
 	expanded: ReadonlySet<string>;
 	/** Blocks that follow the closed exchanges, before the live block. */
 	tail?: readonly Block[];
+	/** Why each failed activation failed, by activation id, as this process heard it. */
+	failures?: ReadonlyMap<string, string>;
 }
 
 interface Group {
@@ -87,9 +89,35 @@ function waitingOn(exchange: ClosedView): string | undefined {
 	return exchange.outcome.kind === 'awaiting' ? `Waiting on ${exchange.outcome.person}` : undefined;
 }
 
+/** The newest activation of a purpose that failed, or undefined when none did. */
+const lastFailed = (
+	exchange: ClosedView,
+	purpose: ExchangeActivation['purpose'],
+): ExchangeActivation | undefined =>
+	exchange.activations.findLast(
+		(activation) => activation.purpose === purpose && activation.outcome.status === 'failed',
+	);
+
+/** The seat whose reply the room gave up on, or undefined when the room gave up on none. */
+const gaveUpOn = (exchange: ClosedView): ExchangeActivation | undefined =>
+	exchange.outcome.kind === 'exhausted' ? lastFailed(exchange, 'respond') : undefined;
+
+/**
+ * One failed activation: the seat, whether the room tried it again, and the
+ * reason when this process heard it. A permanent failure runs once.
+ */
+function failureText(activation: ExchangeActivation, failures?: ReadonlyMap<string, string>) {
+	const permanent = 'cause' in activation.outcome && activation.outcome.cause === 'permanent';
+	const tries = permanent ? 'the room does not retry this' : `after ${activation.attempt} attempts`;
+	const reason = failures?.get(activation.id);
+	return `${activation.seat} failed, ${tries}${reason ? `: ${reason}` : ''}`;
+}
+
 function flagFor(exchange: ClosedView): string {
 	const waiting = waitingOn(exchange);
 	if (waiting) return waiting;
+	const failed = gaveUpOn(exchange);
+	if (failed) return `${failed.seat} failed`;
 	const status = exchange.summary.status;
 	if (status === 'published') return '';
 	if (status === 'pending') return 'Summary pending';
@@ -97,13 +125,22 @@ function flagFor(exchange: ClosedView): string {
 	return 'No summary';
 }
 
-function noteFor(exchange: ClosedView): string {
+/**
+ * The line under a closed exchange with no reply. A reply the room gave up on
+ * comes first, with its reason, because it is why the exchange has no reply.
+ */
+function noteFor(exchange: ClosedView, failures?: ReadonlyMap<string, string>): string {
 	const cost = formatUsage(exchange.usage);
 	const suffix = cost ? ` · ${cost}` : '';
 	const waiting = waitingOn(exchange);
 	if (waiting) return `${waiting}${suffix}`;
+	const failed = gaveUpOn(exchange);
+	if (failed) return `Closed, ${failureText(failed, failures)}${suffix}`;
 	const status = exchange.summary.status;
 	if (status === 'pending') return `Closed, summary pending${suffix}`;
+	const summary = lastFailed(exchange, 'summary');
+	if (status === 'failed' && summary)
+		return `Closed, summary failed: ${failureText(summary, failures)}${suffix}`;
 	if (status === 'failed') return `Closed, summary failed${suffix}`;
 	return `Closed without a summary${suffix}`;
 }
@@ -239,7 +276,9 @@ function groupBlocks(
 		? [{ type: 'message', message: group.summary, role: 'summary' }]
 		: [];
 	if (group.source.length === 0)
-		return summary.length > 0 ? summary : [{ type: 'note', text: noteFor(group.exchange) }];
+		return summary.length > 0
+			? summary
+			: [{ type: 'note', text: noteFor(group.exchange, input.failures) }];
 	const key = String(group.exchange.from);
 	const voices = [...new Set(group.source.map((message) => message.from ?? ''))].filter(Boolean);
 	const discussion: DiscussionBlock = {

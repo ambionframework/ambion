@@ -157,9 +157,9 @@ activation does not fail. On Node the session is a JSONL file under
 **Usage.** One `usage` step follows each provider request, with the cost from
 the price table of the model.
 
-**Failures.** Credit or authentication text, and a diagnostic status of 400,
-401, 402, 403, 404, 405, or 422, are permanent. Every other failure is
-transient.
+**Failures.** Credit, quota, usage-limit, or authentication text, a
+diagnostic status of 400, 401, 402, 403, 404, 405, or 422, and an unknown
+model are permanent. Every other failure is transient.
 
 ## Test
 

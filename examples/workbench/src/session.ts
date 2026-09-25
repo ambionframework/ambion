@@ -210,6 +210,7 @@ export class Session {
 			activity: activity ? `${activity.agent ?? 'room'}: ${activity.text}` : undefined,
 			expanded: this.expanded,
 			tail: this.tail(view),
+			failures: view.failures,
 		});
 		this.changed();
 	}

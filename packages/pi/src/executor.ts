@@ -60,7 +60,7 @@ import type { AgentMessage, HarnessEvent, Session, StreamFn } from '@earendil-wo
 import { BACKGROUND_CONTEXT, getOrUndefined } from '@earendil-works/pi-agent-core';
 import type { Api, AssistantMessage, Message, Model } from '@earendil-works/pi-ai';
 import { compactionOf, modelOf, thinkingOf } from './define.ts';
-import { passOutcome } from './failure.ts';
+import { passOutcome, UnknownModel } from './failure.ts';
 import { Freshness, providerMessages, READ, recordMessage } from './freshness.ts';
 import { type OpenHarness, openHarness } from './harness.ts';
 import { streamModels } from './models.ts';
@@ -548,17 +548,13 @@ export class Activation implements ExecutorSession {
 	/**
 	 * Record an execution failure and notify the host. A broken pass is a local
 	 * fault, such as a lost room call or a build error, so its cause is
-	 * transient and the room tries the activation again.
+	 * transient and the room tries the activation again. A model id the
+	 * registry does not hold is permanent, because a retry reads the same id.
 	 */
 	private broke(error: Error): PassResult {
-		this.emit({
-			type: 'error',
-			agent: this.definition.name,
-			activation: this.id,
-			error,
-			cause: 'transient',
-		});
-		return { failed: true, cause: 'transient', message: error.message };
+		const cause = error instanceof UnknownModel ? 'permanent' : 'transient';
+		this.emit({ type: 'error', agent: this.definition.name, activation: this.id, error, cause });
+		return { failed: true, cause, message: error.message };
 	}
 }
 

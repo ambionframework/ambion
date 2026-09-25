@@ -24,6 +24,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { deferred, tick } from '../../ambion/test/support/room.ts';
 import { contextText, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
+import { UnknownModel } from '../src/failure.ts';
 import { stubModel } from '../src/services.ts';
 import { deaf, ok, playSeat, until, worker } from './support/runner.ts';
 
@@ -515,15 +516,21 @@ describe('async seat model resolution', () => {
 		expect(room.of('release')).toEqual([expect.objectContaining({ reason: 'released' })]);
 	});
 
-	it('ends the lease as failed when model resolution rejects', async () => {
-		const { room, actor } = playSeat({
-			model: async () => {
-				throw new Error('catalog failed');
-			},
-		});
-		await actor.run(first);
-		expect(room.of('release')).toEqual([expect.objectContaining({ reason: 'failed' })]);
-	});
+	it.each([
+		['a catalog fault, as transient', new Error('catalog failed'), 'transient'],
+		['an unknown model, as permanent', new UnknownModel("Unknown model 'x/y'"), 'permanent'],
+	])(
+		'ends the lease as failed when model resolution rejects with %s',
+		async (_what, error, cause) => {
+			const { room, actor } = playSeat({
+				model: async () => {
+					throw error;
+				},
+			});
+			await actor.run(first);
+			expect(room.of('release')).toEqual([expect.objectContaining({ reason: 'failed', cause })]);
+		},
+	);
 
 	it('keeps a steer held during model resolution and acknowledges it at provider input', async () => {
 		const ready = pending<Model<Api>>();
