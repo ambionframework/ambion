@@ -127,9 +127,10 @@ The room promises no trace.
 ### Permanent and transient failure
 
 **The executor classifies a failure and the room acts on the cause.** A
-`FailureCause` is `permanent` or `transient`. A permanent cause is an
-authentication or bad-request failure that a retry cannot fix. A transient
-cause is a rate limit, a server error, or a lost connection.
+`FailureCause` is `permanent` or `transient`. A permanent cause is a
+failure that a retry cannot fix: an authentication refusal, a bad request,
+a spent credit, quota, or usage limit, or a fault in the configuration. A
+transient cause is a rate limit, a server error, or a lost connection.
 
 - **A permanent failure ends in one attempt.** The room records `abandoned`
   at once. A permanent cause on any failed lease makes the whole activation
@@ -139,8 +140,8 @@ cause is a rate limit, a server error, or a lost connection.
 - **A room without an execution fails every activation as permanent.** The
   error code is `no_execution`.
 - **The Pi executor reads a status only from a provider diagnostic.** It
-  treats 400, 401, 402, 403, 404, 405, and 422 as permanent, and credit or
-  authentication text as permanent. It never reads a status from free error
+  treats 400, 401, 402, 403, 404, 405, and 422 as permanent, and credit,
+  quota, usage-limit, or authentication text as permanent. It never reads a status from free error
   text, because a rate limit names a token count that looks like a 400.
   Every uncertain failure is transient.
 

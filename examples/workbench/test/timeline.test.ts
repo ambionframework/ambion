@@ -176,6 +176,73 @@ describe('buildTimeline', () => {
 		expect(blocks[1]).toMatchObject({ text: 'Closed without a summary' });
 	});
 
+	describe('a failed activation', () => {
+		const attempt = (
+			id: string,
+			purpose: string,
+			status: string,
+			cause: string,
+			attempt = 1,
+		): object => ({ id, seat: 'assistant', purpose, attempt, outcome: { status, cause } });
+		const limit = '400 invalid_request_error: You have reached your specified API usage limits.';
+		const failures = new Map([
+			['m1', limit],
+			['s1', limit],
+		]);
+		const exhausted = (activations: object[], summary: object = { status: 'failed' }) =>
+			({
+				...closedExchange(75, 75, 'theo', summary),
+				outcome: { kind: 'exhausted' },
+				activations,
+			}) as ExchangeView;
+
+		it.each([
+			[
+				'names the seat the room gave up on, that it does not retry, and why',
+				exhausted([
+					attempt('m1', 'respond', 'failed', 'permanent'),
+					attempt('m2', 'respond', 'abandoned', 'permanent', 2),
+					attempt('s1', 'summary', 'failed', 'permanent'),
+				]),
+				failures,
+				`Closed, assistant failed, the room does not retry this: ${limit}`,
+			],
+			[
+				'counts the attempts of a transient failure',
+				exhausted([attempt('m3', 'respond', 'failed', 'transient', 3)]),
+				failures,
+				'Closed, assistant failed, after 3 attempts',
+			],
+			[
+				'names why a summary failed after a reply',
+				{
+					...closedExchange(75, 75, 'theo', { status: 'failed' }),
+					activations: [attempt('s1', 'summary', 'failed', 'permanent')],
+				} as ExchangeView,
+				failures,
+				`Closed, summary failed: assistant failed, the room does not retry this: ${limit}`,
+			],
+			[
+				'keeps the plain line when this process heard no reason',
+				exhausted([attempt('m1', 'respond', 'failed', 'permanent')]),
+				undefined,
+				'Closed, assistant failed, the room does not retry this',
+			],
+		])('%s', (_what, exchange, known, text) => {
+			const blocks = build([said(75, 'theo')], [exchange], { failures: known });
+			expect(blocks[1]).toMatchObject({ type: 'note', text });
+		});
+
+		it('flags a discussion whose reply the room gave up on', () => {
+			const exchange = {
+				...closed,
+				outcome: { kind: 'exhausted' },
+				activations: [attempt('m1', 'respond', 'failed', 'permanent')],
+			} as ExchangeView;
+			expect(build(thread, [exchange])[1]).toMatchObject({ flag: 'assistant failed' });
+		});
+	});
+
 	it('flags a discussion whose summary is pending or failed', () => {
 		const pending = closedExchange(98, 134, 'theo', { status: 'pending' });
 		const blocks = build(thread.slice(0, -1), [pending]);

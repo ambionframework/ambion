@@ -398,6 +398,23 @@ describe('Session steps', () => {
 		await session.showSteps('4');
 		expect(session.steps?.id).toBe('act-4');
 	});
+
+	it('opens the attempt that ran, and not the attempt the room abandoned after it', async () => {
+		const { host, session } = await started();
+		const attempt = (id: string, status: string, attempt: number) => ({
+			id,
+			seat: 'assistant',
+			purpose: 'respond',
+			attempt,
+			outcome: { status, cause: 'permanent' },
+		});
+		const activations = [attempt('act-4', 'failed', 1), attempt('act-4b', 'abandoned', 2)];
+		host.table.set('bringup', view('bringup', { exchanges: [closedExchange(4, { activations })] }));
+		host.traces.set('act-4', trace('act-4', true));
+		await session.refresh();
+		await session.submit('/steps');
+		expect(session.steps?.id).toBe('act-4');
+	});
 });
 
 describe('Session scheduled says', () => {

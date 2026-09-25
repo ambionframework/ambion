@@ -7,6 +7,7 @@ import {
 	readRoom,
 	resumeRoom,
 	startRoom,
+	type TraceStep,
 } from '@ambionframework/ambion';
 import { composeExecutions, type Execution } from '@ambionframework/ambion/hosting';
 import { claudeExecution } from '@ambionframework/claude';
@@ -58,6 +59,12 @@ interface HostedRoom extends CatalogEntry {
 	lifecycle: HostLifecycle;
 	team: ReturnType<typeof team>;
 	activity: Activity[];
+	/**
+	 * Why each failed activation failed, by activation id, from the `end` step
+	 * of its trace. The journal holds only the cause, so a restart loses the
+	 * reason. The oldest go first past a fixed count.
+	 */
+	failures: Map<string, string>;
 	tail: Promise<unknown>;
 	/** The change listeners a caller registered with `watch`. They survive a stop. */
 	watchers: Set<() => void>;
@@ -131,6 +138,7 @@ export async function openRooms(
 		logger: (record) => {
 			log.logger(record);
 			const entry = entries.get(record.room);
+			if (entry) recordFailure(entry, record.step);
 			if (entry) for (const watcher of [...entry.watchers]) watcher();
 		},
 	});
@@ -184,6 +192,7 @@ export async function openRooms(
 			lifecycle: { status: 'stopped' as const },
 			team: roomTeam,
 			activity: [],
+			failures: new Map<string, string>(),
 			tail: Promise.resolve(),
 			watchers: new Set<() => void>(),
 		};
@@ -373,6 +382,7 @@ function roomView(
 		goal: snapshot.initialized ? snapshot.goal : entry.goal,
 		status: entry.lifecycle.status,
 		activity: [...entry.activity],
+		failures: new Map(entry.failures) as ReadonlyMap<string, string>,
 		pattern: scenarios.find((scenario) => scenario.name === entry.name)?.pattern,
 		prompt: scenarios.find((scenario) => scenario.name === entry.name)?.prompt,
 	};
@@ -387,6 +397,19 @@ export function liveRoom(entry: HostedRoom): Room {
 function notify(entry: HostedRoom, event: RoomNotification): void {
 	recordActivity(entry, event);
 	for (const watcher of [...entry.watchers]) watcher();
+}
+
+/** How many failure reasons a room keeps. */
+const FAILURES_KEPT = 100;
+
+/** Keep the reason of an activation that ended on a failure. */
+function recordFailure(entry: HostedRoom, step: TraceStep): void {
+	if (step.type !== 'end' || step.failure === undefined) return;
+	entry.failures.set(step.activation, step.failure.message);
+	for (const oldest of entry.failures.keys()) {
+		if (entry.failures.size <= FAILURES_KEPT) break;
+		entry.failures.delete(oldest);
+	}
 }
 
 function recordActivity(entry: HostedRoom, event: RoomNotification): void {

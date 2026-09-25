@@ -3,6 +3,8 @@
  * transient by its text and by the status its diagnostics report. A run
  * that fails with no such message is transient, and a cut run is no failure.
  */
+
+import { providerMessage } from '@ambionframework/ambion/hosting';
 import type { OperationResultRecord, RunResult } from '@earendil-works/pi-agent-core';
 import { LaneBusy } from '@earendil-works/pi-agent-core';
 import { type AssistantMessage, fauxAssistantMessage } from '@earendil-works/pi-ai';
@@ -37,6 +39,25 @@ describe('the outcome of a run', () => {
 	it.each([
 		['a credit refusal in the text', 'Your credit balance is too low', {}, 'permanent'],
 		['an authentication refusal in the text', 'authentication_error: bad key', {}, 'permanent'],
+		[
+			'a spent usage limit, as Anthropic words it',
+			'400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-10-01 at 00:00 UTC."}}',
+			{},
+			'permanent',
+		],
+		['a billing refusal', 'billing_error: add a payment method', {}, 'permanent'],
+		[
+			'a spent quota, as OpenAI words it, with its 429',
+			'You exceeded your current quota, please check your plan. (insufficient_quota)',
+			{ diagnostics: [{ details: { status: 429 } }] },
+			'permanent',
+		],
+		[
+			'a rate limit with its 429',
+			'rate_limit_error: This request would exceed the rate limit for your organization.',
+			{ diagnostics: [{ details: { status: 429 } }] },
+			'transient',
+		],
 		[
 			'a 401 in a diagnostic',
 			'Refused.',
@@ -73,7 +94,7 @@ describe('the outcome of a run', () => {
 		expect(passOutcome(run('failed', assistantError), failed(text, extra))).toMatchObject({
 			failed: true,
 			cause,
-			error: new Error(text),
+			error: new Error(providerMessage(text)),
 		});
 	});
 
@@ -89,10 +110,22 @@ describe('the outcome of a run', () => {
 			},
 		],
 		[
-			'a failed run with no failed provider message, such as a model the harness cannot find',
+			'a failed run with no failed provider message',
+			run('failed', { code: 'harness_fault', message: 'The harness failed.' }),
+			fauxAssistantMessage('Earlier.'),
+			{ failed: true, cause: 'transient', error: new Error('The harness failed.') },
+		],
+		[
+			'a failed run for a model the harness cannot find',
 			run('failed', { code: 'model_unavailable', message: 'The model is unavailable.' }),
 			fauxAssistantMessage('Earlier.'),
-			{ failed: true, cause: 'transient', error: new Error('The model is unavailable.') },
+			{ failed: true, cause: 'permanent', error: new Error('The model is unavailable.') },
+		],
+		[
+			'a failed run for a tool the harness cannot find',
+			run('failed', { code: 'configured_tools_unavailable', message: 'A tool is unavailable.' }),
+			undefined,
+			{ failed: true, cause: 'permanent', error: new Error('A tool is unavailable.') },
 		],
 		[
 			'a failed run with no error',

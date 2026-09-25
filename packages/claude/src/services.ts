@@ -3,12 +3,12 @@
  * reports, its cause, and the length stop.
  */
 import type { FailureCause, HarnessSession, PassResult } from '@ambionframework/ambion/hosting';
-import { classifyCause } from '@ambionframework/ambion/hosting';
+import { classifyCause, providerMessage } from '@ambionframework/ambion/hosting';
 import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 
-/** Error text that names a credit or an authentication refusal, in phrases a retry cannot clear. */
+/** Error text that names a credit, a usage limit, or an authentication refusal, in phrases a retry cannot clear. */
 const PERMANENT_TEXT =
-	/credit balance|authentication_error|permission_error|invalid_request_error|invalid[_\s-]?api[_\s-]?key|x-api-key|unauthorized|permission denied|not logged in/i;
+	/credit balance|billing_error|usage[_\s-]?limit|authentication_error|permission_error|invalid_request_error|invalid[_\s-]?api[_\s-]?key|x-api-key|unauthorized|permission denied|not logged in/i;
 
 /**
  * Whether a failure is permanent or transient. A credit or authentication
@@ -38,14 +38,18 @@ function statusOf(result: SDKResultMessage): number | null | undefined {
  */
 export function passResultOf(result: SDKResultMessage): PassResult {
 	if (result.subtype === 'error_max_budget_usd') {
-		return { failed: true, cause: 'permanent', message: failureText(result) };
+		return { failed: true, cause: 'permanent', message: providerMessage(failureText(result)) };
 	}
 	if (result.subtype === 'error_max_turns' || result.stop_reason === 'max_tokens') {
 		return { failed: false, stop: 'length' };
 	}
 	if (result.is_error || result.subtype !== 'success') {
 		const message = failureText(result);
-		return { failed: true, cause: causeOf(message, statusOf(result)), message };
+		return {
+			failed: true,
+			cause: causeOf(message, statusOf(result)),
+			message: providerMessage(message),
+		};
 	}
 	return { failed: false };
 }

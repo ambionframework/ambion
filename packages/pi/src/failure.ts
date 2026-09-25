@@ -3,7 +3,7 @@
  * failure the room classifies as permanent or transient.
  */
 import type { FailureCause } from '@ambionframework/ambion/hosting';
-import { classifyCause } from '@ambionframework/ambion/hosting';
+import { classifyCause, providerMessage } from '@ambionframework/ambion/hosting';
 import type { RunResult } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 
@@ -19,10 +19,34 @@ const transient = (message: string): PassOutcome => ({
 });
 
 /**
+ * A model id the registry does not hold. The id comes from the seat's
+ * definition, so a retry reads the same id and fails the same way.
+ */
+export class UnknownModel extends Error {}
+
+/**
+ * The run error codes that name a fault in the configuration of the harness:
+ * a model or a tool this process does not have. A retry runs in the same
+ * process with the same configuration, so these failures are permanent.
+ */
+const CONFIGURATION_CODES: ReadonlySet<string> = new Set([
+	'model_unavailable',
+	'configured_tools_unavailable',
+]);
+
+/** A failed run with no provider message: permanent for a fault in the configuration. */
+function runFailure(error: { code: string; message: string } | undefined): PassOutcome {
+	if (error !== undefined && CONFIGURATION_CODES.has(error.code))
+		return { failed: true, cause: 'permanent', error: new Error(error.message) };
+	return transient(error?.message ?? 'The activation failed.');
+}
+
+/**
  * The outcome of one run, given the last assistant message it produced. A
  * failed provider message names the failure and its cause. A run that fails
- * with no such message, such as a model the harness cannot find, is
- * transient. A cut run is no failure.
+ * with no such message is transient, unless its code names a fault in the
+ * configuration, such as a model the harness cannot find. A cut run is no
+ * failure.
  */
 export function passOutcome(result: RunResult, last: AssistantMessage | undefined): PassOutcome {
 	if (!result.ok) return transient(result.error.message);
@@ -31,7 +55,7 @@ export function passOutcome(result: RunResult, last: AssistantMessage | undefine
 	if (run.status === 'aborted') return { failed: false };
 	if (run.status === 'failed') {
 		if (last?.stopReason === 'error') return failureOf(last);
-		return transient(run.error?.message ?? 'The activation failed.');
+		return runFailure(run.error);
 	}
 	return last?.stopReason === 'length' ? { failed: false, stop: 'length' } : { failed: false };
 }
@@ -41,7 +65,7 @@ function failureOf(message: AssistantMessage): PassOutcome {
 	return {
 		failed: true,
 		cause: providerCause(message),
-		error: new Error(message.errorMessage || 'The activation failed.'),
+		error: new Error(providerMessage(message.errorMessage) || 'The activation failed.'),
 	};
 }
 
@@ -102,6 +126,11 @@ function httpStatus(value: unknown): number | undefined {
 	return parsed >= 400 && parsed <= 599 ? parsed : undefined;
 }
 
-/** Error text that names a credit or an authentication refusal, in phrases a retry cannot clear. */
+/**
+ * Error text that names a credit, a quota, a usage limit, or an authentication
+ * refusal, in phrases a retry cannot clear. Pi reaches more than one provider,
+ * so the list holds the words of each: a quota refusal from OpenAI comes
+ * with a 429, and only its text tells it from a rate limit.
+ */
 const PERMANENT_TEXT =
-	/credit balance|authentication_error|permission_error|invalid_request_error|invalid[_\s]?api[_\s]?key|unauthorized|permission denied/i;
+	/credit balance|billing_error|usage[_\s-]?limit|insufficient_quota|exceeded your current quota|authentication_error|permission_error|invalid_request_error|invalid[_\s]?api[_\s]?key|unauthorized|permission denied/i;

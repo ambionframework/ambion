@@ -6,11 +6,11 @@
  * The text is the only evidence, so the classification reads it.
  */
 import type { FailureCause, PassResult } from '@ambionframework/ambion/hosting';
-import { classifyCause } from '@ambionframework/ambion/hosting';
+import { classifyCause, providerMessage } from '@ambionframework/ambion/hosting';
 
-/** Error text that names a quota or an authentication refusal, in phrases a retry cannot clear. */
+/** Error text that names a quota, a usage limit, or an authentication refusal, in phrases a retry cannot clear. */
 const PERMANENT_TEXT =
-	/insufficient_quota|exceeded your current quota|credit balance|authentication_error|permission_error|invalid_request_error|invalid[_\s-]?api[_\s-]?key|unauthorized|permission denied|not logged in|missing bearer/i;
+	/insufficient_quota|exceeded your current quota|usage[_\s-]?limit|credit balance|authentication_error|permission_error|invalid_request_error|invalid[_\s-]?api[_\s-]?key|unauthorized|permission denied|not logged in|missing bearer/i;
 
 /** Error text that names a full context window or a spent output limit. */
 const LENGTH_TEXT =
@@ -40,5 +40,5 @@ export function causeOf(text: string, status?: number | null): FailureCause {
 export function passResultOf(error?: string, status?: number | null): PassResult {
 	if (error === undefined) return { failed: false };
 	if (LENGTH_TEXT.test(error)) return { failed: false, stop: 'length' };
-	return { failed: true, cause: causeOf(error, status), message: error };
+	return { failed: true, cause: causeOf(error, status), message: providerMessage(error) };
 }

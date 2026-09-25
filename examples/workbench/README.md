@@ -41,6 +41,14 @@ of the terminal marks that seat with `no key`. An activation of that seat
 fails at once with the name of the missing variable, and the room keeps
 running.
 
+**A closed exchange with no reply says why.** When the room gave up on a
+reply, the line under the exchange names the seat, whether the room
+retried, and the reason, as in `Closed, assistant failed, the room does
+not retry this: 400 invalid_request_error: You have reached your specified
+API usage limits.` The reason comes from the trace, so a restart loses it.
+A spent credit, quota, or usage limit fails once. A rate limit or a server
+error retries to the cap.
+
 The terminal reads its colors from the repository brand kit in the root
 [`brand/`](../../brand) directory. The example has no HTTP interface.
 
@@ -165,7 +173,7 @@ the record, so a restart keeps them.
 - **Cost.** A discussion shows what its exchange spent: dollars when the
   provider reports a cost, else a token count.
 - **Steps.** `/steps` or `s` on a chosen discussion shows the passes and steps
-  of the newest activation of an exchange. The host keeps the steps that its
+  of the newest activation of an exchange that ran. The host keeps the steps that its
   logger receives, in memory, for the latest 200 activations. A running
   activation shows the steps so far and reads again on each step. A restart
   loses the steps.

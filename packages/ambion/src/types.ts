@@ -21,7 +21,8 @@ export type EndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandon
 /**
  * Why an activation failed. A permanent failure does not pass on a retry, so
  * the room abandons it at once. A transient failure may pass, so the room
- * retries it to the cap. An authentication or a bad request is permanent. A
+ * retries it to the cap. An authentication, a bad request, a spent credit,
+ * quota or usage limit, and a fault in the configuration are permanent. A
  * rate limit, a server error, or a lost connection is transient.
  */
 export type FailureCause = 'permanent' | 'transient';

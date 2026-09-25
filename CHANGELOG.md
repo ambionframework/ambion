@@ -196,6 +196,26 @@ ends with `stopped`, `limit`, `timeout`, or `failed`. See
 
 ### Fixes
 
+- **A spent usage limit, a billing refusal, or a spent quota fails in one
+  attempt.** The Pi, Claude, and Codex executors read `usage limit` and
+  `billing_error` as permanent. Pi also reads `insufficient_quota` and
+  `exceeded your current quota`. OpenAI sends a spent quota with a 429, so
+  before this change a Pi seat on OpenAI retried it to the cap. A rate limit
+  stays transient.
+- **A Pi seat with a model the registry does not hold fails in one
+  attempt.** `Unknown model`, and the harness codes `model_unavailable` and
+  `configured_tools_unavailable`, are permanent. A retry reads the same
+  configuration. Before this change, the room retried them to the cap.
+- **A failed activation names the failure in the provider's words.** A
+  provider error that arrives as a status and a JSON body, as in `400
+  {"type":"error",...}`, now reads `400 invalid_request_error: <message>
+  (request <id>)`. The Pi, Claude, and Codex executors give this text to the
+  trace, the `error` event, and the pass result. `providerMessage` in
+  `@ambionframework/ambion/hosting` makes the text for another executor.
+- **The Workbench shows why a closed exchange has no reply.** When the room
+  gave up on a reply, the line under the exchange names the seat, whether
+  the room retried, and the reason from the trace. `/steps` opens the
+  attempt that ran, and not the attempt the room abandoned after it.
 - **`directoryBackend` runs each filesystem change as trusted code of
   just-bash.** just-bash 3.4.2 starts a queued change in the async context
   of the change before it. When a script made that earlier change and then

@@ -370,7 +370,7 @@ never gives one, because a rate limit names a token count that reads like a
 status.
 
 **A failed result whose text matches one of these patterns is permanent.**
-`credit balance`, `authentication_error`, `permission_error`,
+`credit balance`, `billing_error`, `usage limit`, `authentication_error`, `permission_error`,
 `invalid_request_error`, an invalid API key, `x-api-key`, `unauthorized`,
 `permission denied`, and `not logged in`.
 

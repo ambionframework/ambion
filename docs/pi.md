@@ -368,13 +368,22 @@ price table. A provider that reports no usage gives zeros.
 limit names a token count that reads like a status, so free text never
 gives one. The last diagnostic with a status wins.
 
-**A text that names a credit or an authentication refusal is permanent.**
-The patterns are `credit balance`, `authentication_error`,
-`permission_error`, `invalid_request_error`, an invalid API key,
-`unauthorized`, and `permission denied`.
+**A text that names a credit, a quota, a usage limit, or an authentication
+refusal is permanent.** The patterns are `credit balance`, `billing_error`,
+`usage limit`, `insufficient_quota`, `exceeded your current quota`,
+`authentication_error`, `permission_error`, `invalid_request_error`, an
+invalid API key, `unauthorized`, and `permission denied`. Pi reaches more
+than one provider, so the list holds the words of each. OpenAI sends a
+spent quota with a 429, and only the text tells it from a rate limit.
 
-An unknown model id fails on the first pass as `transient`, so the room
-retries it to the cap.
+**A fault in the configuration is permanent.** An unknown model id fails
+on the first pass, and the room does not retry it. The harness codes
+`model_unavailable` and `configured_tools_unavailable` are permanent for
+the same reason: a retry reads the same configuration.
+
+**The failure names the provider's words.** A provider error that arrives
+as a status and a JSON body reads `400 invalid_request_error: <message>
+(request <id>)`. The cause reads the original text.
 
 ## Testing
 
@@ -452,8 +461,8 @@ Pi seats.
 | Symptom                                                             | Cause                                                                                                      |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `piExecution()`.       |
-| `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is transient, so the room retries it. |
-| The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY` and the credit of the account.     |
+| `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is permanent.                         |
+| The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY`, the credit, and the usage limit.  |
 | `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat ran under `piExecution()`. Route with `composeExecutions`.                                   |
 | `An agent estimateTokens needs an activationTokenLimit.`            | `estimateTokens` is set with no limit.                                                                     |
 | The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.       |

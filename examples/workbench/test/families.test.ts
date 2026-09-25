@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { describeUnavailable, keyVariable, seatFamilies } from '../src/families.ts';
+import { buildTimeline } from '../src/timeline.ts';
 import { openHost } from './hosting.ts';
 
 describe('Workbench executor families', () => {
@@ -46,6 +47,27 @@ describe('Workbench with no key', () => {
 				"Seat 'assistant' cannot run: ANTHROPIC_API_KEY is not set",
 			);
 			expect(view.status).toBe('running');
+		});
+		// The exchange closes on the failure, and its note keeps the reason.
+		const missing = "Seat 'assistant' cannot run: ANTHROPIC_API_KEY is not set";
+		await vi.waitFor(async () => {
+			const view = await workbench.read('sensing', 0);
+			const closed = view.exchanges.find((exchange) => exchange.status === 'closed');
+			expect(closed).toMatchObject({ outcome: { kind: 'exhausted' } });
+			const blocks = buildTimeline({
+				messages: view.messages,
+				exchanges: view.exchanges,
+				humans: new Set(['theo']),
+				working: [],
+				expanded: new Set(),
+				failures: view.failures,
+			});
+			expect(blocks).toContainEqual({
+				type: 'note',
+				text: expect.stringContaining(
+					`Closed, assistant failed, the room does not retry this: ${missing}`,
+				),
+			});
 		});
 	});
 });

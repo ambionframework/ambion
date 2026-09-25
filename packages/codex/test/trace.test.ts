@@ -176,6 +176,9 @@ it.each([
 	['You exceeded your current quota, please check your plan.', undefined, 'permanent'],
 	['Not logged in. Run codex login.', undefined, 'permanent'],
 	['insufficient_quota', undefined, 'permanent'],
+	["You've hit your usage limit. Try again later.", undefined, 'permanent'],
+	['unexpected status 429: usage_limit_reached', undefined, 'permanent'],
+	['unexpected status 429: rate_limit_exceeded', undefined, 'transient'],
 	['stream error: 529 overloaded_error: try again later', undefined, 'transient'],
 	['connection reset by peer', undefined, 'transient'],
 	['something unknown went wrong', undefined, 'transient'],
@@ -203,6 +206,15 @@ it.each([
 		'an overloaded provider as a transient failure',
 		'stream error: 529 overloaded_error',
 		{ failed: true, cause: 'transient', message: 'stream error: 529 overloaded_error' },
+	],
+	[
+		'a spent quota as a permanent failure, in the provider’s words',
+		'unexpected status 429: {"error":{"message":"You exceeded your current quota.","type":"insufficient_quota"}}',
+		{
+			failed: true,
+			cause: 'permanent',
+			message: 'unexpected status 429: insufficient_quota: You exceeded your current quota.',
+		},
 	],
 ])('passResultOf reports %s', (_what, error, expected) => {
 	expect(passResultOf(error)).toEqual(expected);
