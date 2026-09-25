@@ -277,7 +277,8 @@ async function probeRoom(attention: 'broadcast' | 'presence', script: Script, as
 }
 
 describe('a running tool', () => {
-	it('reads the agent, the call signal, the room, the activation, the open exchange, the bundle guidance, and the bundle reminder', async () => {
+	it('reads the agent, the call signal, the room, the activation, the open exchange, the deadline, the bundle guidance, and the bundle reminder', async () => {
+		const before = Date.now();
 		const prompts: string[] = [];
 		const reads: string[] = [];
 		const { room, seen, frozen, events, reminded } = await probeRoom(
@@ -304,6 +305,9 @@ describe('a running tool', () => {
 				agent: { name: 'worker', identity: 'Worker.' },
 			});
 			expect(ctx.signal).toBeInstanceOf(AbortSignal);
+			// The room ends the activation 600 s after its first claim, the default lease deadline.
+			expect(ctx.deadline).toBeGreaterThan(before + 590_000);
+			expect(ctx.deadline).toBeLessThanOrEqual(Date.now() + 600_000);
 		}
 		const starts = events.filter(
 			(event) => event.type === 'activation_start' && event.agent === 'worker',

@@ -281,36 +281,36 @@ before the rules existed.
 record: it decides an entry, an admission, or the `due` list that
 `admitsLease` reads. A rule that only shapes a read leaves the file, and
 it lives beside its caller with an ordinary test. The sweep for 0.2.0
-found no such rule. `exchangeOutcome` waits for the `awaiting` expiry in
-0.3.0, which decides whether it gates a write.
+found no such rule. `exchangeOutcome` waits for the `awaiting` expiry of
+the backlog's timer item (W2), which decides whether it gates a write.
 
-| Rule                   | The write it gates                                             |
-| ---------------------- | -------------------------------------------------------------- |
-| `applyChange`          | The lease that the fold holds after each lease entry           |
-| `cancelHold`           | The lease that the fold holds after a cancellation             |
-| `mayEnd`               | An end entry for a lease                                       |
-| `leaseExpiry`          | The expiry that a claim entry or a renewal entry stores        |
-| `acknowledged`         | The read position that a lease entry stores                    |
-| `onRecord`             | The read position that a claim, a renewal, or an end may carry |
-| `admitsLease`          | A claim entry or a renewal entry                               |
-| `isExpired`            | An expiry entry that a pass writes                             |
-| `isLive`               | A commit, a claim, and the seats that a pass routes to         |
-| `endingOf`             | A revocation entry or an expiry entry that a pass writes       |
-| `wellFormed`           | The ids that a claim and a commit may carry                    |
-| `nextActivationId`     | The id that each claim carries                                 |
-| `coversAttempt`        | The leases that answer a wake, so the wakes that the room owes |
-| `wakeAnswered`         | The wakes that the room owes                                   |
-| `countsAgainst`        | The attempt number in the next id, and the attempt limit       |
-| `draftsClose`          | The attempt number of a summary draft, and the summary verdict |
-| `survivesCancellation` | The wakes and the grants that a cancellation leaves            |
-| `closeFor`             | The grant of a closing activation                              |
-| `activationGrant`      | A claim entry and a commit entry                               |
-| `speechFreshness`      | A message entry that an activation writes                      |
-| `stampedSummary`       | The recipient and the range of a summary entry                 |
-| `coversExchange`       | A second summary entry, and the summaries that the room owes   |
-| `summaryVerdict`       | The summaries that the room owes                               |
-| `lastOf`               | The last seq, which a close entry and a commit of speech read  |
-| `openingQuestion`      | The open exchange that a close entry closes                    |
-| `exchangeLive`         | A close entry                                                  |
-| `admitsClose`          | A close entry                                                  |
-| `exchangeOutcome`      | None today; the `awaiting` expiry in 0.3.0 decides it          |
+| Rule                   | The write it gates                                              |
+| ---------------------- | --------------------------------------------------------------- |
+| `applyChange`          | The lease that the fold holds after each lease entry            |
+| `cancelHold`           | The lease that the fold holds after a cancellation              |
+| `mayEnd`               | An end entry for a lease                                        |
+| `leaseExpiry`          | The expiry that a claim entry or a renewal entry stores         |
+| `acknowledged`         | The read position that a lease entry stores                     |
+| `onRecord`             | The read position that a claim, a renewal, or an end may carry  |
+| `admitsLease`          | A claim entry or a renewal entry                                |
+| `isExpired`            | An expiry entry that a pass writes                              |
+| `isLive`               | A commit, a claim, and the seats that a pass routes to          |
+| `endingOf`             | A revocation entry or an expiry entry that a pass writes        |
+| `wellFormed`           | The ids that a claim and a commit may carry                     |
+| `nextActivationId`     | The id that each claim carries                                  |
+| `coversAttempt`        | The leases that answer a wake, so the wakes that the room owes  |
+| `wakeAnswered`         | The wakes that the room owes                                    |
+| `countsAgainst`        | The attempt number in the next id, and the attempt limit        |
+| `draftsClose`          | The attempt number of a summary draft, and the summary verdict  |
+| `survivesCancellation` | The wakes and the grants that a cancellation leaves             |
+| `closeFor`             | The grant of a closing activation                               |
+| `activationGrant`      | A claim entry and a commit entry                                |
+| `speechFreshness`      | A message entry that an activation writes                       |
+| `stampedSummary`       | The recipient and the range of a summary entry                  |
+| `coversExchange`       | A second summary entry, and the summaries that the room owes    |
+| `summaryVerdict`       | The summaries that the room owes                                |
+| `lastOf`               | The last seq, which a close entry and a commit of speech read   |
+| `openingQuestion`      | The open exchange that a close entry closes                     |
+| `exchangeLive`         | A close entry                                                   |
+| `admitsClose`          | A close entry                                                   |
+| `exchangeOutcome`      | None today; the `awaiting` expiry of backlog item W2 decides it |

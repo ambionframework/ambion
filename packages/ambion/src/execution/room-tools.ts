@@ -160,6 +160,7 @@ export function toolContext(
 		...(exchange === undefined
 			? {}
 			: { exchange: Object.freeze({ owner: exchange.owner, from: exchange.from }) }),
+		...(view.deadline === undefined ? {} : { deadline: view.deadline }),
 	});
 }
 

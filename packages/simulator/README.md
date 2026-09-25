@@ -37,4 +37,4 @@ exchange. The loop waits for the close and the summary under one deadline,
 The test stops the room.
 
 **This release holds the loop and `scriptedActor`.** `agentActor` and
-`agentJudge` are phase 5 step 3 of [the plan](../../planning/next.md).
+`agentJudge` are phase 2 step 3 of [the plan](../../planning/next.md).

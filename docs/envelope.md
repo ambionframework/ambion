@@ -34,7 +34,8 @@ refuses a text over `limits.message.bytes` with `message_too_large`.
 
 **Three limits change how work ends.** The room renews no lease past
 `limits.lease.deadline`, so an activation that runs on expires and counts
-as an attempt. `limits.activation.attempts` caps those attempts. The
+as an attempt. The view carries that time as `deadline`, so a tool that
+waits returns before it. `limits.activation.attempts` caps those attempts. The
 journal stays authoritative when a timed out call reached the room.
 [Durability](durability.md) owns the lease, retry, and delivery rules.
 

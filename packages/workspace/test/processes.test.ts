@@ -4,9 +4,18 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { tempDir } from '../../just-bash/test/support/backends.ts';
-import { LOST, type ProcessFiles, statusOf, stopLine, writeStop } from '../src/process-files.ts';
+import {
+	LOST,
+	type ProcessFiles,
+	processesDir,
+	statusOf,
+	stopLine,
+	writeExit,
+	writeSpec,
+	writeStop,
+} from '../src/process-files.ts';
 import { FINISHED_IN_REMINDER } from '../src/process-text.ts';
-import type { ProcessDetails, PsDetails } from '../src/process-tools.ts';
+import type { ProcessDetails, PsDetails, WaitDetails } from '../src/process-tools.ts';
 import { MAX_FINISHED_PROCESSES, MAX_RUNNING_PROCESSES } from '../src/processes.ts';
 import { openWorkspace, type Workspace } from '../src/workspace.ts';
 import { callAs, invokeText, toolOf, wrapped } from './support/backends.ts';
@@ -41,28 +50,52 @@ async function call(
 }
 
 /** The handle that a failed call names in its text. */
-async function failedHandle(invoke: () => unknown): Promise<string> {
-	const error = await Promise.resolve()
+/** The text of the error a call fails with. */
+async function failure(invoke: () => unknown): Promise<string> {
+	return Promise.resolve()
 		.then(invoke)
 		.then(
 			() => {
 				throw new Error('The call must fail.');
 			},
-			(reason: unknown) => reason,
+			(reason: unknown) => String(reason),
 		);
-	const handle = HANDLE.exec(String(error))?.[0];
-	if (handle === undefined) throw new Error(`No handle in ${String(error)}`);
+}
+
+async function failedHandle(invoke: () => unknown): Promise<string> {
+	const error = await failure(invoke);
+	const handle = HANDLE.exec(error)?.[0];
+	if (handle === undefined) throw new Error(`No handle in ${error}`);
 	return handle;
 }
 
 /** Start a process with a wait of 0, and resolve once it ends: no result shows its end. */
+let gates = 0;
+
+/**
+ * Start `command` behind a gate file, so `bash` returns while the process
+ * still runs and no result shows its end. The test then opens the gate, and
+ * waits for the end. A command that ended before `bash` read it would give
+ * its end in the result, and the reminder would skip it.
+ */
 async function endedUnseen(workspace: Workspace, command: string): Promise<string> {
+	gates += 1;
+	const gate = `~/gate-${gates}`;
 	const done = Promise.withResolvers<void>();
 	let handle = '';
 	const unsubscribe = workspace.processes.subscribe((event) => {
 		if (event.type === 'ended' && event.process.handle === handle) done.resolve();
 	});
-	handle = (await call(workspace, 'bash', { command, wait: 0 })).details.process.handle;
+	const gated = `until [ -f ${gate} ]; do sleep 0.01; done; ${command}`;
+	const started = await call(workspace, 'bash', { command: gated, wait: 0 });
+	expect(started.details.process.state).toBe('running');
+	handle = started.details.process.handle;
+	await workspace.use({ name: 'alpha' }, async (env) => {
+		const path = await env.absolutePath(gate, BACKGROUND_CONTEXT);
+		if (!path.ok) throw path.error;
+		const written = await env.writeFile(path.value, '', BACKGROUND_CONTEXT);
+		if (!written.ok) throw written.error;
+	});
 	const running = await workspace.processes.list({ running: true });
 	if (running.every((one) => one.handle !== handle)) {
 		done.resolve();
@@ -107,7 +140,19 @@ describe('bash', () => {
 		const waited = await call(workspace, 'wait', { handle, timeout: 5 });
 		expect(waited.details.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		expect(waited.text.startsWith('done\n\n[Process')).toBe(true);
-		expect((await call(workspace, 'status', { handle })).text).toBe(waited.text);
+		// The cursor stands after what wait showed, so status gives no output twice.
+		const again = await call(workspace, 'status', { handle });
+		expect(again.text.startsWith('(no new output)\n\n[Process')).toBe(true);
+		expect(again.details.read).toEqual({ from: 5, to: 5 });
+		// Output past the cursor comes back alone, with the byte it starts at.
+		await workspace.use({ name: 'alpha' }, (env) =>
+			env.writeFile(waited.details.process.output, 'done\nmore\n', BACKGROUND_CONTEXT),
+		);
+		const more = await call(workspace, 'status', { handle });
+		expect(more.text).toMatch(
+			/^more\n\n\[Process .* The text above starts at byte 5 of the output\./s,
+		);
+		expect(more.details.read).toEqual({ from: 5, to: 10 });
 	});
 
 	it('gives the running state when wait ends before the process', async () => {
@@ -132,15 +177,29 @@ describe('bash', () => {
 			const whole = await fileOf(workspace, 'alpha', details.process.output);
 			expect(whole.split('\n').length).toBe(lines + 1);
 			expect(details.truncation?.totalBytes).toBe(whole.length);
+			// A small new part of a long file comes back alone, from the cursor.
+			await workspace.use({ name: 'alpha' }, (env) =>
+				env.writeFile(details.process.output, `${whole}extra\n`, BACKGROUND_CONTEXT),
+			);
+			const next = await call(workspace, 'status', { handle: details.process.handle });
+			expect(next.text.startsWith('extra\n\n[Process')).toBe(true);
+			expect(next.details.read).toEqual({ from: whole.length, to: whole.length + 6 });
 		},
 	);
 
 	it.each([
-		['a code other than 0', { command: 'echo partial; exit 3' }, 'exited with code 3', 'partial'],
+		[
+			'a code other than 0',
+			{ command: 'echo partial; exit 3' },
+			'exited with code 3',
+			'partial',
+			'(no new output)',
+		],
 		[
 			'a timeout',
 			{ command: 'sleep 5', timeout: 0.1 },
 			'timed out after 0.1 seconds',
+			'(no output)',
 			'(no output)',
 		],
 		[
@@ -148,17 +207,18 @@ describe('bash', () => {
 			{ command: 'echo "unterminated' },
 			'exited with code 2',
 			'unexpected EOF',
+			'(no new output)',
 		],
 	])(
-		'fails the call on %s, and status reports the same process',
-		async (_case, params, state, output) => {
+		'fails the call on %s with the output, and status reports the same process',
+		async (_case, params, state, output, after) => {
 			const workspace = site();
-			const handle = await failedHandle(() =>
-				toolOf(workspace, 'bash').invoke(params, callAs('alpha')),
-			);
+			const error = await failure(() => toolOf(workspace, 'bash').invoke(params, callAs('alpha')));
+			expect(error).toContain(output);
+			const handle = HANDLE.exec(error)?.[0] ?? 'none';
 			const status = await call(workspace, 'status', { handle });
 			expect(status.text).toContain(`Process ${handle} ${state}.`);
-			expect(status.text).toContain(output);
+			expect(status.text.startsWith(`${after}\n\n[Process`)).toBe(true);
 		},
 	);
 
@@ -204,8 +264,18 @@ describe('the process table', () => {
 	it(`keeps ${MAX_FINISHED_PROCESSES} finished processes for each agent, and removes the output file of a process it forgets`, async () => {
 		const workspace = site();
 		const first = (await call(workspace, 'bash', { command: 'echo first' })).details.process;
-		for (let i = 1; i < MAX_FINISHED_PROCESSES; i++)
-			await call(workspace, 'bash', { command: 'true' });
+		// The files are the table, so the test writes the other finished processes as files.
+		// Sixty-three more calls of bash took a loaded CI runner past the 20 s limit.
+		await workspace.use({ name: 'alpha' }, async (env) => {
+			const root = await processesDir(env);
+			for (let i = 1; i < MAX_FINISHED_PROCESSES; i++) {
+				const startedAt = new Date(Date.parse(first.startedAt) + i).toISOString();
+				const handle = `bash-${i.toString(16).padStart(12, '0')}`;
+				const spec = { handle, kind: 'bash' as const, agent: 'alpha', command: 'true' };
+				await writeExit(env, await writeSpec(env, root, { ...spec, timeout: 600, startedAt }), 0);
+			}
+		});
+		expect(await workspace.processes.list({ agent: 'alpha' })).toHaveLength(MAX_FINISHED_PROCESSES);
 		expect((await call(workspace, 'status', { handle: first.handle })).details.process.state).toBe(
 			'exited',
 		);
@@ -341,7 +411,7 @@ describe('the reminder', () => {
 			),
 			expect.stringMatching(
 				new RegExp(
-					`^- ${failed} exited with code 3 at \\d\\d:\\d\\d:\\d\\d UTC: sleep 0.05; exit 3$`,
+					`^- ${failed} exited with code 3 at \\d\\d:\\d\\d:\\d\\d UTC: until .*; sleep 0.05; exit 3$`,
 				),
 			),
 			'Call status, wait or cancel with a handle. Call ps to list processes.',
@@ -396,6 +466,96 @@ describe('a process on a backend that misbehaves', () => {
 			expect(details.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		}
 		expect(await workspace.processes.list({ running: true })).toEqual([]);
+	});
+});
+
+describe('a wait on several handles', () => {
+	it('returns when the first process ends, with its output and the state of the others', async () => {
+		const workspace = site();
+		const start = async (command: string) =>
+			(await call(workspace, 'bash', { command, wait: 0 })).details.process.handle;
+		const slow = await start('sleep 30');
+		const fast = await start('sleep 0.2; echo swept');
+		const other = await start('sleep 30');
+		const before = Date.now();
+		const result = await toolOf(workspace, 'wait').invoke(
+			{ handles: [slow, fast, other, fast], timeout: 20 },
+			callAs('alpha'),
+		);
+		if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
+		expect(Date.now() - before).toBeLessThan(10_000);
+		const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+		expect(text.split('\n\n')).toEqual([
+			'swept',
+			expect.stringMatching(new RegExp(`^\\[Process ${fast} exited with code 0\\.`)),
+			expect.stringMatching(new RegExp(`^\\[Process ${slow} is running\\.`)),
+			expect.stringMatching(new RegExp(`^\\[Process ${other} is running\\.`)),
+		]);
+		const details = result.details as WaitDetails;
+		expect(details.processes.map((process) => process.handle)).toEqual([slow, fast, other]);
+		expect(details.ended.map((ended) => ended.process.handle)).toEqual([fast]);
+		// With none ended, the time ends first, and each process gives its state.
+		const waited = await invokeText(
+			toolOf(workspace, 'wait'),
+			{ handles: [slow, other], timeout: 0.1 },
+			callAs('alpha'),
+		);
+		expect(waited.split('\n\n')).toHaveLength(2);
+		expect(waited).not.toContain('swept');
+	});
+
+	it.each([
+		[
+			'both handle and handles',
+			{ handle: 'bash-000000000001', handles: ['bash-000000000001'] },
+			/Invalid handles/,
+		],
+		['neither', { timeout: 1 }, /Invalid handles/],
+		[
+			'a handle of no process',
+			{ handles: ['bash-000000000001'] },
+			/You have no process bash-000000000001/,
+		],
+		[
+			'a handle of no process beside a known one, through the listing',
+			{ handles: ['KNOWN', 'bash-000000000001'] },
+			/You have no process bash-000000000001/,
+		],
+	])('refuses %s', async (_case, params, message) => {
+		const workspace = site();
+		const known = (await call(workspace, 'bash', { command: 'true' })).details.process.handle;
+		const handles =
+			'handles' in params ? params.handles.map((one) => one.replace('KNOWN', known)) : undefined;
+		const given = handles === undefined ? params : { ...params, handles };
+		await expect(
+			Promise.resolve().then(() => toolOf(workspace, 'wait').invoke(given, callAs('alpha'))),
+		).rejects.toThrow(message);
+	});
+});
+
+describe('a wait near the end of the activation', () => {
+	it('stops the wait of bash and of wait before the deadline, and says why', async () => {
+		const workspace = site();
+		// 32 s are left: the wait stops 30 s before the deadline, so bash waits about 2 s of its 10.
+		const near = callAs('alpha', { deadline: Date.now() + 32_000 });
+		const started = Date.now();
+		const run = await toolOf(workspace, 'bash').invoke({ command: 'sleep 30' }, near);
+		if (typeof run === 'string') throw new Error('A process tool gives a structured result.');
+		const handle = (run.details as ProcessDetails).process.handle;
+		const text = run.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+		expect(Date.now() - started).toBeLessThan(8_000);
+		expect(text).toMatch(
+			/is running\..*The wait stopped early, because your activation ends in \d+ seconds\./s,
+		);
+		// Less than the margin is left: wait returns at once.
+		const late = callAs('alpha', { deadline: Date.now() + 10_000 });
+		const before = Date.now();
+		const waited = await invokeText(toolOf(workspace, 'wait'), { handle, timeout: 60 }, late);
+		expect(Date.now() - before).toBeLessThan(2_000);
+		// The note rounds the time left, and a loaded runner can take a second.
+		expect(waited).toMatch(
+			/The wait stopped early, because your activation ends in (9|10) seconds\. Answer before then\./,
+		);
 	});
 });
 
@@ -473,7 +633,8 @@ describe('the files as the source of truth', () => {
 			name: 'build',
 			command,
 		});
-		expect(status.text.startsWith('kept\n\n[Process')).toBe(true);
+		// The cursor lives in the files, so the new run gives no output that bash showed.
+		expect(status.text.startsWith('(no new output)\n\n[Process')).toBe(true);
 		// A stop that meets the end of the command writes no stop, and the end stays exited.
 		const doneDir = done.output.slice(0, done.output.lastIndexOf('/'));
 		await second.use({ name: 'alpha' }, (env) => writeStop(env, doneDir, stopLine('cancelled')));

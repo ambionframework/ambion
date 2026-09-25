@@ -174,7 +174,8 @@ harness.** Each family adapts them to its own tool shape.
 - **`agentTools(view, agent, signal, current)`** returns the tools of the
   definition in the same form. A closing activation gets none.
 - **`toolContext(agent, view, call, signal, onUpdate?)`** builds the
-  `ToolContext` of one call of a definition tool.
+  `ToolContext` of one call of a definition tool. It carries the view's
+  `deadline`: when the room ends the activation, on the wall clock.
 
 **A `RoomToolResult` holds the content that the model reads.** `isError`
 marks an error result. `terminate` marks an activation that has nothing more
