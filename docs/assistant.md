@@ -10,8 +10,8 @@ evidence needed to evaluate it.
 
 **The assistant keeps the membership of the room fit for the request, and
 summarizes closed exchanges.** It seats a reserve specialist when the request
-needs one, and unseats a specialist when the person asks or the scope no
-longer needs it. It is passive when the specialists are seated at `broadcast`
+needs one. It unseats a specialist when the person asks or the scope no longer
+needs it. It is passive when the specialists are seated at `broadcast`
 or `presence` attention. It speaks during an exchange only when a person
 addresses it, or when an idle specialist at `named` attention needs a
 directed request.
@@ -25,7 +25,7 @@ The package introduces no privileged role or separate execution lifecycle.
 | -------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | Membership     | Seat specialists whose expertise can materially affect the result. Unseat on request or on a clear change of scope.    |
 | Routing        | Send one directed request to an idle specialist at `named` attention, with every constraint that is still in force.    |
-| Answers        | Answer a message that a person addresses to the assistant, in one message to that person.                              |
+| Answers        | Answer a message that a person addresses to the assistant. The summary answers a question to the room.                 |
 | Summaries      | Answer the opening question, and report corrections, conflicts, constraints, open questions, and unresolved work.      |
 | Silence        | Call no `say` at `broadcast` or `presence` attention: no correction, no relay, no question to the person, no steering. |
 
@@ -169,19 +169,18 @@ A name inside `text` does not route the message. Seating an agent that is
 already seated does not activate it. Check the roster before choosing the
 operation.
 
-| Situation                                                       | Assistant behavior                                                       |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| A relevant specialist already receives the request              | Let it work without repeating the request.                               |
-| Seating creates work for a specialist during the exchange       | Let it read the existing request. Send no assignment after the seating.  |
-| An idle specialist needs to be named to activate                | Send one concise directed request.                                       |
-| A person addresses a named specialist directly                  | Stay silent. The message already activates the specialist.               |
-| A specialist result relies on a superseded fact or a constraint | Stay silent. The summary states the conflict and the value that applies. |
-| A specialist asks for information that only the person can give | Stay silent. The summary asks the person for it.                         |
+| Situation                                                       | Assistant behavior                                                      |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| A relevant specialist already receives the request              | Let it work without repeating the request.                              |
+| Seating creates work for a specialist during the exchange       | Let it read the existing request. Send no assignment after the seating. |
+| An idle specialist needs to be named to activate                | Send one concise directed request.                                      |
+| A person addresses a named specialist directly                  | Stay silent. The message already activates the specialist.              |
+| A specialist result relies on a superseded fact or a constraint | Stay silent. The summary states the conflict and the fact that applies. |
+| A specialist asks for information that only the person can give | Stay silent. The summary asks the person for it.                        |
 
-Independent contributions can proceed concurrently. Dependent contributions
-must have their required inputs. Avoid announcements, acknowledgements,
-repeated assignments, and coordination messages that create further work
-without advancing the request.
+Avoid announcements, acknowledgements, repeated assignments, and
+coordination messages that create further work without advancing the
+request.
 
 **A specialist's answer needs no forwarding.** Even a result addressed to
 the assistant is visible in the shared record. During ordinary work, do not
@@ -214,14 +213,13 @@ included. The person reads every message too. A correction from the
 assistant repeats what both already have, and it starts more work.
 
 The assistant does not correct, verify, or question a specialist during the
-exchange, and it does not ask the person a question. A specialist message to
-the assistant is a report, not a request. When a result relies on a superseded
+exchange, and it does not ask the person a question. The assistant reads a
+specialist message to it as a report. When a result relies on a superseded
 fact, breaks a constraint, or needs information from the person, the closing
 summary reports it. The person then decides what happens next.
 
-Treat specialist statements as reports until tool evidence supports them.
-When sources conflict, the summary preserves and qualifies the contradiction.
-It does not state the unsupported claim as fact.
+When a specialist report conflicts with evidence already in the record, the
+summary states both. It does not state the unsupported claim as fact.
 
 **The assistant observes through ordinary attention and activation rules.**
 It has no continuous view of specialist execution or private tool use.
@@ -230,11 +228,11 @@ It does not guarantee that every omission or failure will be detected before
 closure. A closing activation can report an incomplete result but cannot
 repair it through further investigation.
 
-**The live suite measured the change.** On the earlier guidance, which let
-the assistant give one minimal correction, both models tested corrected a
-specialist at `broadcast` in each of three samples, and both asked the
-person for a missing fact during the exchange. See
-[Validation commands](#validation-commands) for the models and the results.
+**The live suite measured the change.** The earlier guidance let the
+assistant give one minimal correction. On it, both models tested corrected a
+specialist at `broadcast` in each of three samples. Both also asked the
+person for a missing fact during the exchange. Phase 2 step 5 of
+[the plan](../planning/next.md) records the models and the results.
 
 ## Membership and completion
 
@@ -259,11 +257,11 @@ and membership restrictions require enforcement outside the prompt.
 
 **The room goal and the user's current request guide ordinary work.** Later
 user corrections can change the requested outcome. An explicit change from
-the user is new direction, not evidence of agent divergence.
+the user is new direction.
 
 **A constraint stays in force until the person withdraws it in words.** A new
-request does not withdraw an earlier constraint, and a plan is not permission
-to act. The assistant carries each constraint that is still in force into a
+request does not withdraw an earlier constraint. A request for a plan, a
+proposal, or an estimate does not permit the action that it describes. The assistant carries each constraint that is still in force into a
 directed request, and the summary keeps it.
 
 **The summary carries a question for the person.** The assistant asks no
@@ -331,23 +329,25 @@ specialist selection, silence, summary fidelity, and restraint.
 Evaluate redundant routing explicitly: a specialist that already receives
 the user's request must not require an assistant restatement.
 
-Include named activation, dependent review, changed user instructions,
-unresolved disagreement, conservative unseating, and successful silence.
+Include named activation, changed user instructions, unresolved
+disagreement, conservative unseating, and successful silence.
 Include specialist failure and incomplete results. Check that the assistant
 reports gaps accurately without inventing success or repeatedly assigning work.
 
 Include explicit constraints that must survive seating and handoff, including
-an item scoped draft with a no-file-edits instruction. Include a known artifact
-that a specialist incorrectly reports as missing after an unhelpful broad
-search; the assistant should qualify the report using the checked path. Include
-a human revision and check that it causes one concise directed activation.
+an item scoped draft with a no-file-edits instruction. Include a human revision
+and check that it causes one concise directed activation.
 
 Include a specialist result that relies on a superseded constraint, and one
 that asks for information from the person. Require silence during the
 exchange, and a summary that states the conflict or asks the question.
-Include a question that a person addresses to the assistant, a question that
-a person addresses to a named specialist, an unseat on request, and a request
-that needs no specialist.
+
+Include these cases of the purpose:
+
+- A question that a person addresses to the assistant.
+- A question that a person addresses to a named specialist.
+- An unseat on request.
+- A request that needs no specialist.
 
 Evaluate explicit application overrides of assistant defaults, including
 the silence at `broadcast`. Check that kernel authority remains unchanged.

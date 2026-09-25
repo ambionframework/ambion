@@ -234,6 +234,7 @@ describe('the harness of an activation', () => {
 			tools: [],
 			systemPrompt: () => '',
 			compaction: settings,
+			thinking: 'off',
 			toProviderMessages: () => [],
 			onEvent: () => {},
 		});
@@ -267,6 +268,7 @@ describe('the harness of an activation', () => {
 				tools: [],
 				systemPrompt: () => '',
 				compaction: DEFAULT_COMPACTION_SETTINGS,
+				thinking: 'off',
 				toProviderMessages: () => [],
 				onEvent: () => {},
 			}),
@@ -421,6 +423,7 @@ describe('the harness of an activation', () => {
 			tools: [],
 			systemPrompt: () => '',
 			compaction: DEFAULT_COMPACTION_SETTINGS,
+			thinking: 'off' as const,
 			toProviderMessages: (messages: AgentMessage[]) => convertToLlm(messages),
 			onEvent,
 		});

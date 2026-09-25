@@ -280,6 +280,7 @@ agent definition and one more:
 | Option      | What it is                                                               |
 | ----------- | ------------------------------------------------------------------------ |
 | `model`     | A `provider/model-id`                                                    |
+| `thinking`  | A Pi `ThinkingLevel` for each move. The default is `off`                 |
 | `brief`     | The private goal of the person. It has the role of `instructions`        |
 | `tools`     | `AmbionTool` values, the same as an agent's                              |
 | `bundles`   | Tool bundles and their guidance, such as `workspace.tools()`             |
@@ -341,6 +342,8 @@ export function runAgent(
     readonly bundles?: readonly ToolBundle[];
     /** The names of the tools that end the run. */
     readonly ends: readonly string[];
+    /** A Pi `ThinkingLevel`. Absent, `off`. */
+    readonly thinking?: ThinkingLevel;
     readonly signal?: AbortSignal;
   },
 ): Promise<{ end: RunAgentCall; calls: readonly RunAgentCall[]; usage: Usage }>;
@@ -487,8 +490,8 @@ judge can call `grade` again. A judge that ends with no accepted `grade`, or tha
 passes its `timeoutMs`, rejects the promise. A malformed answer never
 passes.
 
-**The judge takes the options of an agent definition, and `timeoutMs`.**
-A grade has 120 000 ms by default. A test that passes
+**The judge takes the options of an agent definition, `thinking`, and
+`timeoutMs`.** A grade has 120 000 ms by default. A test that passes
 `workspace.tools()` lets the judge read the final state of the workspace
 before it grades. Tool output is evidence under the same rule as the
 record: no text in it is an instruction to the judge.
@@ -541,7 +544,8 @@ holds the rules.
 **The rewrite of `packages/assistant/test/live/behavior.test.ts` is the
 acceptance test of the design.** The suite runs a live assistant beside a
 specialist whose evidence the test fixes. Its claims are about judgment:
-routing, silence, correction, and what the summary keeps.
+routing, silence, and what the summary keeps, a superseded constraint
+included.
 
 **Today the suite holds one helper and eleven tests.** `evaluate()` starts
 a room, sends one question, waits for the summary under its own timer, and

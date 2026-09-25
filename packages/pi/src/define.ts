@@ -53,6 +53,13 @@ const THINKING: readonly ThinkingLevel[] = [
 const isThinking = (value: unknown): value is ThinkingLevel =>
 	THINKING.some((level) => level === value);
 
+/** Refuse a thinking level that Pi does not name, when the agent is defined. */
+export function checkThinking(thinking: unknown): void {
+	if (thinking !== undefined && !isThinking(thinking)) {
+		throw new RangeError(`Thinking must be one of ${THINKING.join(', ')}.`);
+	}
+}
+
 const isCount = (value: unknown): boolean => Number.isSafeInteger(value) && Number(value) >= 0;
 
 /** Refuse compaction settings the harness refuses, when the agent is defined. */
@@ -66,9 +73,7 @@ function checkCompaction(settings: CompactionSettings): void {
 export function pi(options: PiOptions): PiExecutor {
 	const { compaction, thinking, ...rest } = options;
 	if (compaction !== undefined) checkCompaction(compaction);
-	if (thinking !== undefined && !isThinking(thinking)) {
-		throw new RangeError(`Thinking must be one of ${THINKING.join(', ')}.`);
-	}
+	checkThinking(thinking);
 	return Object.freeze({
 		...describeExecutor({ ...rest, kind: 'pi' }),
 		kind: 'pi' as const,

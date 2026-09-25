@@ -268,6 +268,11 @@ describe('runAgent', () => {
 			request({ bundles: [{ tools: [finish] }] }),
 			/duplicate tools named 'finish'/,
 		],
+		[
+			'a thinking level that Pi does not name',
+			request({ thinking: 'huge' as RunAgentRequest['thinking'] }),
+			/Thinking must be one of/,
+		],
 	] as const)('refuses %s before any request', async (_case, bad, error) => {
 		let requests = 0;
 		const script: Script = () => {

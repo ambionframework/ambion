@@ -106,9 +106,9 @@ message. See [Processes](docs/processes.md).
 ### Breaking changes
 
 - **The default assistant is passive at `broadcast`, and keeps to
-  membership and summaries.** It calls no `say` when the specialists that a
-  request needs are at `broadcast` or `presence` attention: no correction,
-  no relay, and no question to the person. The summary reports a superseded
+  membership and summaries.** It sends nothing to a specialist at
+  `broadcast` or `presence` attention. It sends no correction, no relay,
+  and no question to the person during the exchange. The summary reports a superseded
   fact, a broken constraint, and a question for the person. The assistant
   answers a message that a person addresses to it, and it sends one directed
   request to an idle specialist at `named` attention. A constraint stays in

@@ -49,8 +49,8 @@ export interface HarnessInput {
 	/** The system prompt of the pass that runs now. */
 	readonly systemPrompt: () => string;
 	readonly compaction: CompactionSettings;
-	/** How much the model reasons before it answers. Absent, `off`. */
-	readonly thinking?: ThinkingLevel;
+	/** How much the model reasons before it answers. */
+	readonly thinking: ThinkingLevel;
 	/** The provider messages of one request. */
 	readonly toProviderMessages: (messages: AgentMessage[]) => Message[];
 	readonly onEvent: (event: HarnessEvent) => void;
@@ -74,7 +74,7 @@ export async function openHarness(input: HarnessInput): Promise<OpenHarness> {
 			session: input.session,
 			models: input.models,
 			model: input.model,
-			thinkingLevel: input.thinking ?? 'off',
+			thinkingLevel: input.thinking,
 			tools: [...input.tools],
 			activeToolNames: input.tools.map((tool) => tool.name),
 			systemPrompt: () => input.systemPrompt(),
