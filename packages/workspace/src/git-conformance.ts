@@ -401,36 +401,74 @@ const abortedForkRejects: Body = async ({ workspace }) => {
 	check(again.ok || again.reason === 'name_taken', 'a fork after an abort was refused');
 };
 
-const sameSourceWritesNothing = async <B extends GitBackend>(
+/** Open a workspace over `store` with `templates`, run `body` in it, and dispose it. */
+async function registered<T>(
+	store: GitConformanceStore,
+	templates: GitConformanceOptions['templates'],
+	body: (workspace: Workspace) => Promise<T>,
+): Promise<T> {
+	const workspace = openWorkspace({
+		name: 'git-conformance',
+		backend: { bash: store.bash, git: store.backend({ templates }) },
+	});
+	try {
+		return await body(workspace);
+	} finally {
+		await workspace.dispose();
+	}
+}
+
+/** The commit at the tip of `main` in the repository `id`. */
+async function mainOf(workspace: Workspace, id: string): Promise<string | undefined> {
+	return (await git(workspace, ANALYST, (env) => env.get(id)))?.branches.main;
+}
+
+const CHANGED: GitConformanceOptions['templates'] = {
+	...TEMPLATES,
+	blank: { description: 'An empty start.', files: { 'NOTES.md': 'changed\n' } },
+};
+
+/** Fork the updated `templates/blank` as `late`, clone it, and check its files and its history. */
+async function checkLateFork(workspace: Workspace, before: string): Promise<void> {
+	const url = await forkAs(workspace, ANALYST, 'templates/blank', 'late');
+	const clone = await sh(
+		workspace,
+		ANALYST,
+		`git clone ${url} ~/late && cd ~/late && git log --format=%H`,
+	);
+	check(clone.code === 0, `the clone of the updated template failed: ${clone.output}`);
+	check(clone.output.includes(before), 'the update did not fast-forward from the old tip');
+	const notes = await workspace.use(ANALYST, (env) => env.readTextFile('~/late/NOTES.md', ctx));
+	check(notes.ok && notes.value === 'changed\n', 'a fork after the update lacks the new file');
+	const readme = await workspace.use(ANALYST, (env) => env.readTextFile('~/late/README.md', ctx));
+	check(!readme.ok, 'a fork after the update keeps a file that the source removed');
+}
+
+const registrationFollowsSource = async <B extends GitBackend>(
 	harness: GitConformanceBackend<B>,
 ): Promise<void> => {
 	const store = await harness.open();
 	try {
-		const first = openWorkspace({
-			name: 'git-conformance',
-			backend: { bash: store.bash, git: store.backend({ templates: TEMPLATES }) },
+		const before = await registered(store, TEMPLATES, async (workspace) => {
+			await forkAs(workspace, ANALYST, 'templates/blank', 'early');
+			return mainOf(workspace, 'templates/blank');
 		});
-		const before = await git(first, ANALYST, (env) => env.get('templates/blank'));
-		await first.dispose();
-		const second = openWorkspace({
-			name: 'git-conformance',
-			backend: { bash: store.bash, git: store.backend({ templates: TEMPLATES }) },
+		check(typeof before === 'string', 'the first registration made no template');
+		const again = await registered(store, TEMPLATES, (w) => mainOf(w, 'templates/blank'));
+		check(again === before, 'a second registration wrote a commit');
+		const updated = await registered(store, CHANGED, async (workspace) => {
+			const template = await git(workspace, ANALYST, (env) => env.get('templates/blank'));
+			check(template?.description === 'An empty start.', 'the description did not update');
+			check(
+				(await mainOf(workspace, 'analyst/early')) === before,
+				'the update moved a fork made before it',
+			);
+			await checkLateFork(workspace, before ?? '');
+			return template?.branches.main;
 		});
-		const after = await git(second, ANALYST, (env) => env.get('templates/blank'));
-		await second.dispose();
-		check(typeof before?.branches.main === 'string', 'the first registration made no template');
-		check(after?.branches.main === before?.branches.main, 'a second registration wrote a commit');
-		const changed = { ...TEMPLATES, blank: { files: { 'README.md': 'changed\n' } } };
-		const third = openWorkspace({
-			name: 'git-conformance',
-			backend: { bash: store.bash, git: store.backend({ templates: changed }) },
-		});
-		const message = await git(third, ANALYST, (env) => env.list()).then(
-			() => '',
-			(error: unknown) => (error instanceof Error ? error.message : String(error)),
-		);
-		await third.dispose();
-		check(message.includes('blank'), `a changed template did not fail with its name: ${message}`);
+		check(updated !== undefined && updated !== before, 'a changed source did not update');
+		const last = await registered(store, CHANGED, (w) => mainOf(w, 'templates/blank'));
+		check(last === updated, 'a registration after the update wrote a commit');
 	} finally {
 		await store.dispose();
 	}
@@ -483,8 +521,8 @@ export function gitConformance<B extends GitBackend>(
 	return [
 		...CASES.map(([name, body]) => ({ name, run: () => withWorkspace(harness, body) })),
 		{
-			name: 'a registration with the same source writes nothing, and a changed one fails with its name',
-			run: () => sameSourceWritesNothing(harness),
+			name: 'a registration with the same source writes nothing, and a changed one fast-forwards the template',
+			run: () => registrationFollowsSource(harness),
 		},
 		{ name: 'a credential is refused after it expires', run: () => credentialExpires(harness) },
 	];

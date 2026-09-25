@@ -5,13 +5,18 @@
  * template it takes the first case that holds.
  *
  * 1. The template exists, and its tree equals the source. Nothing happens.
- * 2. The template exists, and its tree differs. Registration fails with an
- *    error that names the template.
+ * 2. The template exists, and its tree differs. `template-sources/<name>`
+ *    gets the source at its tip, and `templates/<name>` fast-forwards to
+ *    that commit.
  * 3. The template does not exist. `template-sources/<name>` gets the source
  *    at its tip, and the backend forks it to `templates/<name>`.
  *
- * A crash between the steps of case 3 leaves a state that case 3 finishes
- * at the next registration.
+ * The commit goes to `template-sources/<name>`, because a fork reads its
+ * objects from the root of its fork tree. A fork of the template then reads
+ * the new objects. A fork made before the update keeps its own refs.
+ *
+ * A crash between the steps of case 2 or case 3 leaves a state that the
+ * same case finishes at the next registration.
  */
 
 import {
@@ -21,6 +26,7 @@ import {
 	SOURCES,
 	sameFiles,
 	TEMPLATES,
+	type TemplateFiles,
 	type TemplateRegistration,
 	validName,
 } from '@ambionframework/workspace/git';
@@ -94,27 +100,57 @@ async function registerOne(
 	const wanted = hashesOf(files);
 	const template = `${TEMPLATES}/${name}`;
 	const row = await settledRow(store, template);
+	if (row !== undefined && row.description !== registration.description) {
+		store.registry.describe(template, registration.description);
+	}
 	const existing = row === undefined ? null : await server.repo(template);
+	if (existing !== null && sameFiles(await tipHashes(existing), wanted)) return;
+	const source = await commitSource(store, server, name, files);
 	if (existing !== null) {
-		if (sameFiles(await tipHashes(existing), wanted)) return;
-		throw new Error(
-			`The template '${name}' changed since its registration. A template never changes: register the change under a new name, such as '${name}-2'.`,
-		);
-	}
-	const source = `${SOURCES}/${name}`;
-	if (!(await store.storage.hasRepo(source))) {
-		await server.createRepo(source, { defaultBranch: DEFAULT_BRANCH });
-	}
-	const tip = await tipHashes(await server.requireRepo(source));
-	if (!sameFiles(tip, wanted)) {
-		await server.commit(source, {
-			files: changeTo(files, tip),
-			message: `Register the template ${name}\n`,
-			author: BACKEND_AUTHOR,
-			branch: DEFAULT_BRANCH,
-		});
+		await fastForward(server, name, (await readHead(existing)).hash, source.head);
+		return;
 	}
 	if (row === undefined) store.registry.begin(template, undefined, registration.description);
-	await server.forkRepo(source, template);
+	await server.forkRepo(source.id, template);
 	store.registry.ready(template);
+}
+
+/** Make the tip of `template-sources/<name>` hold `files`, and give the repository and its tip. */
+async function commitSource(
+	store: OpenGitStorage,
+	server: GitServer<TokenClaims>,
+	name: string,
+	files: TemplateFiles,
+): Promise<{ readonly id: string; readonly head: string | null }> {
+	const id = `${SOURCES}/${name}`;
+	if (!(await store.storage.hasRepo(id))) {
+		await server.createRepo(id, { defaultBranch: DEFAULT_BRANCH });
+	}
+	const repo = await server.requireRepo(id);
+	const tip = await tipHashes(repo);
+	if (sameFiles(tip, hashesOf(files))) return { id, head: (await readHead(repo)).hash };
+	const { hash } = await server.commit(id, {
+		files: changeTo(files, tip),
+		message: `Register the template ${name}\n`,
+		author: BACKEND_AUTHOR,
+		branch: DEFAULT_BRANCH,
+	});
+	return { id, head: hash };
+}
+
+/** Move the default branch of `templates/<name>` from `from` to `to`, or fail with the template's name. */
+async function fastForward(
+	server: GitServer<TokenClaims>,
+	name: string,
+	from: string | null,
+	to: string | null,
+): Promise<void> {
+	if (to === null) throw new Error(`The source of the template '${name}' has no commit.`);
+	const { refResults } = await server.updateRefs(`${TEMPLATES}/${name}`, [
+		{ ref: `refs/heads/${DEFAULT_BRANCH}`, newHash: to, oldHash: from },
+	]);
+	const refused = refResults.find((result) => !result.ok);
+	if (refused !== undefined) {
+		throw new Error(`The template '${name}' did not move to its new source: ${refused.error}`);
+	}
 }

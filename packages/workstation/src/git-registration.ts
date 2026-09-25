@@ -7,18 +7,21 @@
  *
  * 1. The template exists, and `git ls-tree -r` of its tip gives the blob
  *    hashes of the source. Nothing happens.
- * 2. The template exists, and the hashes differ. Registration fails with an
- *    error that names the template.
+ * 2. The template exists, and the hashes differ. The backend writes the
+ *    files into a staging folder over SFTP, commits them on the tip of
+ *    `main` as `ambion`, and moves `main` to that commit. A fork is a clone,
+ *    so a fork made before the update keeps its own objects and refs.
  * 3. The template does not exist. The backend writes the files into a
  *    staging folder over SFTP, commits them to a new bare repository on
  *    `main` as `ambion`, writes the description, installs a `pre-receive`
  *    hook that refuses every push, and renames the repository to
  *    `templates/<name>.git`.
  *
- * The rename is the one step that publishes a template. A crash leaves a
- * folder in `.staging`, and the sweep removes it. When two host processes
- * register one template at once, one rename wins, and each compares the
- * template that landed.
+ * Each case writes the description when it differs. The rename is the one
+ * step that publishes a template, and the move of `main` compares the old
+ * commit. A crash leaves a folder in `.staging`, and the sweep removes it.
+ * When two host processes register one template at once, one rename or one
+ * move wins, and each compares the template that landed.
  */
 
 import { randomName } from '@ambionframework/workspace';
@@ -34,11 +37,18 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type GitAccount, runIn, tagged } from './git-account.ts';
 import type { SshEnv } from './ssh-env.ts';
 
-/** Print the files at the tip of a template, as `git ls-tree -r -z` in base64. Print nothing when it does not exist. */
+/**
+ * Write the description of a template when it differs, and print the files
+ * at its tip, as `git ls-tree -r -z` in base64. Print nothing when the
+ * template does not exist.
+ */
 const TIP_SCRIPT = [
 	'set -euo pipefail',
 	'repo="$HOME/$AMBION_ROOT/templates/$AMBION_NAME.git"',
 	'[ -f "$repo/HEAD" ] || exit 0',
+	'if [ "$(cat "$repo/description" 2>/dev/null || true)" != "$AMBION_DESCRIPTION" ]; then',
+	`  printf '%s' "$AMBION_DESCRIPTION" >"$repo/description"`,
+	'fi',
 	"tree=''",
 	'if git --git-dir="$repo" rev-parse -q --verify HEAD >/dev/null; then',
 	'  tree=$(git --git-dir="$repo" ls-tree -r -z --full-tree HEAD | base64 -w0)',
@@ -75,6 +85,27 @@ const BUILD_SCRIPT = [
 	'',
 ].join('\n');
 
+/** Commit the files of the staging folder on the tip of a template's `main`, and move `main` if no other write moved it. */
+const UPDATE_SCRIPT = [
+	'set -euo pipefail',
+	'root="$HOME/$AMBION_ROOT"',
+	'stage="$root/.staging/$AMBION_STAGE"',
+	'repo="$root/templates/$AMBION_NAME.git"',
+	'mkdir -p "$stage/files"',
+	'old=$(git --git-dir="$repo" rev-parse -q --verify refs/heads/main || true)',
+	'export GIT_DIR="$repo" GIT_WORK_TREE="$stage/files" GIT_INDEX_FILE="$stage/index"',
+	'git add -A',
+	'tree=$(git write-tree)',
+	'export GIT_AUTHOR_NAME=ambion GIT_AUTHOR_EMAIL=ambion@ambion.invalid',
+	'export GIT_COMMITTER_NAME=ambion GIT_COMMITTER_EMAIL=ambion@ambion.invalid',
+	'if [ -n "$old" ]; then set -- -p "$old"; else set --; fi',
+	String.raw`commit=$(printf 'Register the template %s\n' "$AMBION_NAME" | git commit-tree "$tree" "$@")`,
+	'git update-ref refs/heads/main "$commit" "$old" 2>/dev/null || true',
+	'unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE',
+	'rm -rf -- "$stage"',
+	'',
+].join('\n');
+
 /** Refuse a path that leaves the root of the template. */
 function checkPaths(name: string, files: TemplateFiles): void {
 	for (const path of Object.keys(files)) {
@@ -101,8 +132,13 @@ async function tipOf(
 	account: GitAccount,
 	root: string,
 	name: string,
+	description: string | undefined,
 ): Promise<ReadonlyMap<string, string> | undefined> {
-	const output = await account.run(TIP_SCRIPT, { AMBION_ROOT: root, AMBION_NAME: name });
+	const output = await account.run(TIP_SCRIPT, {
+		AMBION_ROOT: root,
+		AMBION_NAME: name,
+		AMBION_DESCRIPTION: description ?? '',
+	});
 	const tree = tagged(output, 'AMBION_TREE')[0];
 	return tree === undefined ? undefined : blobsOf(Buffer.from(tree, 'base64'));
 }
@@ -115,22 +151,23 @@ async function writeFiles(env: SshEnv, folder: string, files: TemplateFiles): Pr
 	}
 }
 
-/** Build the template in `.staging`, and rename it into `templates`. */
-async function build(
+/** Write the files of a template into a new folder in `.staging`, and run `script` over it. */
+async function stageAndRun(
 	account: GitAccount,
 	root: string,
 	name: string,
+	registration: TemplateRegistration,
 	files: TemplateFiles,
-	description: string | undefined,
+	script: string,
 ): Promise<void> {
 	const stage = `template.${randomName()}`;
 	await account.use(async (env, session) => {
 		await writeFiles(env, `${session.home}/${root}/.staging/${stage}/files`, files);
-		await runIn(env, BUILD_SCRIPT, {
+		await runIn(env, script, {
 			AMBION_ROOT: root,
 			AMBION_STAGE: stage,
 			AMBION_NAME: name,
-			AMBION_DESCRIPTION: description ?? '',
+			AMBION_DESCRIPTION: registration.description ?? '',
 		});
 	});
 }
@@ -144,17 +181,16 @@ async function registerOne(
 	if (!validName(name)) throw new Error(`'${name}' is not a valid template name.`);
 	const files = await filesOf(registration);
 	checkPaths(name, files);
-	let tip = await tipOf(account, root, name);
-	if (tip === undefined) {
-		await build(account, root, name, files, registration.description);
-		tip = await tipOf(account, root, name);
-	}
-	if (tip === undefined)
+	const wanted = hashesOf(files);
+	const tip = await tipOf(account, root, name, registration.description);
+	if (tip !== undefined && sameFiles(tip, wanted)) return;
+	const script = tip === undefined ? BUILD_SCRIPT : UPDATE_SCRIPT;
+	await stageAndRun(account, root, name, registration, files, script);
+	const landed = await tipOf(account, root, name, registration.description);
+	if (landed === undefined)
 		throw new Error(`The template '${name}' is missing after its registration.`);
-	if (!sameFiles(tip, hashesOf(files))) {
-		throw new Error(
-			`The template '${name}' changed since its registration. A template never changes: register the change under a new name, such as '${name}-2'.`,
-		);
+	if (!sameFiles(landed, wanted)) {
+		throw new Error(`Another registration of the template '${name}' wrote other files.`);
 	}
 }
 
