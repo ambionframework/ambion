@@ -161,8 +161,6 @@ async function runStatements(
 	files: WorkspaceFiles,
 	context: Context,
 ): Promise<SqlOutcome> {
-	// SQLite stops reading at a NUL, so the statements after one would not run.
-	if (sql.includes('\0')) throw new Refusal('The SQL holds a NUL character. Remove it.');
 	let rest = sql;
 	while (!blank(rest)) {
 		const signal = context.abortSignal;
@@ -216,7 +214,7 @@ function importTable(db: DatabaseSync): SqlImportTable {
 	};
 }
 
-/** Stage the import of `options`, if it names one, and then run the statements. */
+/** Refuse SQL with a NUL, stage the import of `options` if it names one, and then run the statements. */
 async function runWithImport(
 	db: DatabaseSync,
 	sql: string,
@@ -224,6 +222,8 @@ async function runWithImport(
 	files: WorkspaceFiles,
 	context: Context,
 ): Promise<SqlOutcome> {
+	// SQLite stops reading at a NUL, so the statements after one would not run.
+	if (sql.includes('\0')) throw new Refusal('The SQL holds a NUL character. Remove it.');
 	if (options.import === undefined) return runStatements(db, sql, options, files, context);
 	const staged = await sqlImport(options.import, files, importTable(db), context);
 	if (!staged.ok) return staged;

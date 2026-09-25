@@ -11,8 +11,9 @@
  * with a native export can write through `WorkspaceFiles` itself.
  *
  * The CSV follows RFC 4180: a header, one record per row, and a quoted
- * value for a comma, a double quote, or a line break. A NULL reads as `\N`,
- * so a NULL stays apart from an empty string, and a blob reads as hex.
+ * value for a comma, a double quote, or a line break. A NULL reads as a
+ * bare `\N`, so a NULL stays apart from an empty string. The text `\N` is
+ * quoted, so it stays apart from a NULL. A blob reads as hex.
  *
  * This module imports no database driver.
  */
@@ -36,7 +37,8 @@ const yieldTurn = (): Promise<void> => new Promise((resolve) => setImmediate(res
 function csvField(value: SqlValue | undefined): string {
 	if (value === null || value === undefined) return NULL_SENTINEL;
 	if (value instanceof Uint8Array) return Buffer.from(value).toString('hex');
-	return csvText(String(value));
+	const text = String(value);
+	return text === NULL_SENTINEL ? `"${text}"` : csvText(text);
 }
 
 function csvText(text: string): string {

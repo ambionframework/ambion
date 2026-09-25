@@ -20,6 +20,8 @@ every value stays text. See
   `sqlImport` from the root entry, or refuses the option.
 - **The root entry exports `sqlImport`, and the types `SqlImported`,
   `SqlImportTable`, and `WorkspaceRead`.**
+- **An export quotes the text `\N` as `"\N"`.** A bare `\N` is a NULL
+  alone, so the text `\N` reads back as text.
 
 ## 0.3.0 (2026-09-25)
 

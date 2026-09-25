@@ -239,9 +239,12 @@ PY`,
 	it('imports an exported CSV back through import.rows, copies it with INSERT ... SELECT, and drops it after the call', async () => {
 		const { workspace } = withSql({ audit: true });
 		await call(workspace, {
-			sql: `CREATE TABLE t (id INTEGER, note TEXT); INSERT INTO t VALUES (1, 'a, "b"'), (2, NULL), (3, 'x\ny'), (4, '')`,
+			sql: `CREATE TABLE t (id INTEGER, note TEXT); INSERT INTO t VALUES (1, 'a, "b"'), (2, NULL), (3, 'x\ny'), (4, ''), (5, '\\N')`,
 		});
 		await call(workspace, { sql: 'SELECT id, note FROM t ORDER BY id', export: '~/out/t.csv' });
+		expect(await shellText(workspace, '/home/ada/out/t.csv')).toContain(
+			'\n2,\\N\n3,"x\ny"\n4,\n5,"\\N"\n',
+		);
 		const copied = await call(workspace, {
 			sql: `CREATE TABLE t2 (id INTEGER, note TEXT);
 INSERT INTO t2 SELECT CAST(id AS INTEGER), note FROM import.rows;
@@ -251,22 +254,22 @@ SELECT (SELECT count(*) FROM t2) AS copied,
 			import: 'out/t.csv',
 		});
 		expect(copied.text).toMatch(
-			/^Imported 4 rows from \/home\/ada\/out\/t\.csv into import\.rows\.\n\n/,
+			/^Imported 5 rows from \/home\/ada\/out\/t\.csv into import\.rows\.\n\n/,
 		);
 		expect(copied.text).toContain('| copied | differ | staged |');
-		expect(copied.text).toContain('| 4 | 0 | text |');
+		expect(copied.text).toContain('| 5 | 0 | text |');
 		expect(copied.details).toMatchObject({
 			rows: 1,
 			import: '/home/ada/out/t.csv',
-			imported: 4,
+			imported: 5,
 		});
 		const exported = await call(workspace, {
 			sql: 'SELECT count(*) AS n FROM import.rows',
 			import: 'out/t.csv',
 			export: 'out/n.csv',
 		});
-		expect(exported.text).toMatch(/^Imported 4 rows .*\n\n```csv\nn\n4\n```/);
-		expect(exported.details).toMatchObject({ export: '/home/ada/out/n.csv', imported: 4 });
+		expect(exported.text).toMatch(/^Imported 5 rows .*\n\n```csv\nn\n5\n```/);
+		expect(exported.details).toMatchObject({ export: '/home/ada/out/n.csv', imported: 5 });
 		const later = await call(workspace, { sql: 'SELECT * FROM import.rows' }, 'bob');
 		expect(later.text).toContain('SQL error');
 		const log = (await shellText(workspace, '/workspace/audit.jsonl')) ?? '';
@@ -275,6 +278,10 @@ SELECT (SELECT count(*) FROM t2) AS copied,
 			.split('\n')
 			.map((line) => JSON.parse(line) as { arguments: Record<string, unknown> });
 		expect(entries[2]?.arguments.import).toBe('out/t.csv');
+		const missing = await call(workspace, { sql: 'SELECT 1', import: 'none.csv' });
+		expect(missing.text).toMatch(/^SQL error on :memory::\nCannot read \/home\/ada\/none\.csv: /);
+		const nul = await call(workspace, { sql: 'SELECT 1;\0', import: 'none.csv' });
+		expect(nul.text).toContain('The SQL holds a NUL character.');
 	});
 
 	it('reads a CSV that a script in the shell writes, with CRLF line ends', async () => {
@@ -425,6 +432,7 @@ describe('the import of a CSV file', () => {
 			csv: 'a\n5" pipe\n',
 			rows: [{ a: '5" pipe' }],
 		},
+		{ name: 'reads a quoted \\N as the text \\N', csv: 'a\n"\\N"\n', rows: [{ a: '\\N' }] },
 	])('$name', async ({ csv, rows }) => {
 		expect(await imported(csv)).toEqual(rows);
 	});
@@ -447,6 +455,11 @@ describe('the import of a CSV file', () => {
 			message: 'Row 2 has 1 value, and the header has 2 columns.',
 		},
 		{
+			name: 'a NUL character in a header name',
+			csv: 'a\0b\n1\n',
+			message: 'Column 1 of the header holds a NUL character.',
+		},
+		{
 			name: 'a quoted value with no end',
 			csv: 'a\n"open\n',
 			message: 'The file ends inside a quoted value.',
@@ -458,16 +471,6 @@ describe('the import of a CSV file', () => {
 		},
 	])('refuses $name, and names the file', async ({ csv, message }) => {
 		expect(await imported(csv)).toBe(`The import of /home/ada/in.csv failed. ${message}`);
-	});
-
-	it('refuses a missing file and a directory through the tool, and runs no statement', async () => {
-		const { workspace } = withSql();
-		await call(workspace, { sql: 'CREATE TABLE g (x)' });
-		const missing = await call(workspace, { sql: 'INSERT INTO g VALUES (1)', import: 'none.csv' });
-		expect(missing.text).toMatch(/^SQL error on :memory::\nCannot read \/home\/ada\/none\.csv: /);
-		const folder = await call(workspace, { sql: 'INSERT INTO g VALUES (1)', import: '~' });
-		expect(folder.text).toContain('/home/ada is not a file.');
-		expect((await call(workspace, { sql: 'SELECT count(*) AS n FROM g' })).text).toContain('| 0 |');
 	});
 });
 

@@ -9,10 +9,10 @@
  * parses.
  *
  * The CSV is the one that an export writes: RFC 4180, a header first, and
- * `\N` for a NULL. A quoted value holds a comma, a double quote, or a line
- * break. A line ends with LF, CRLF, or CR, and a byte order mark at the
- * start is skipped. Every other value stays text, so the statements CAST
- * it. A malformed file gives an `ok: false` outcome that names the record,
+ * a bare `\N` for a NULL. A quoted `"\N"` is the text `\N`. A quoted
+ * value holds a comma, a double quote, or a line break. A line ends with
+ * LF, CRLF, or CR, and a byte order mark at the start is skipped. Every
+ * other value stays text, so the statements CAST it. A malformed file gives an `ok: false` outcome that names the record,
  * and the backend drops what it staged.
  *
  * The file enters memory whole, so `MAX_IMPORT_BYTES` bounds it. The rows
@@ -52,11 +52,11 @@ class CsvReader {
 	private at: number;
 
 	constructor(private readonly text: string) {
-		this.at = text.startsWith('﻿') ? 1 : 0;
+		this.at = text.startsWith('\uFEFF') ? 1 : 0;
 	}
 
-	/** The next record, or undefined at the end of the text. */
-	next(): string[] | undefined {
+	/** The next record, or undefined at the end of the text. A bare `\N` is null. */
+	next(): (string | null)[] | undefined {
 		if (this.at >= this.text.length) return undefined;
 		const fields = [this.field()];
 		while (this.text[this.at] === ',') {
@@ -67,8 +67,10 @@ class CsvReader {
 		return fields;
 	}
 
-	private field(): string {
-		return this.text[this.at] === '"' ? this.quoted() : this.bare();
+	private field(): string | null {
+		if (this.text[this.at] === '"') return this.quoted();
+		const value = this.bare();
+		return value === NULL_SENTINEL ? null : value;
 	}
 
 	/** A value with no quotes: the text up to the next comma or line break. */
@@ -110,18 +112,27 @@ class CsvReader {
 	}
 }
 
-/** The columns of the header. Each needs a name, and no two names match without regard to case. */
+/**
+ * The columns of the header. Each needs a name with no NUL character, and
+ * no two names match without regard to case.
+ */
 function headerOf(reader: CsvReader): string[] {
 	const header = reader.next();
 	if (header === undefined) throw new CsvRefusal('The file is empty. It needs a header.');
 	const seen = new Set<string>();
-	header.forEach((name, index) => {
-		if (name === '') throw new CsvRefusal(`Column ${index + 1} of the header has no name.`);
+	return header.map((name, index) => {
+		if (name === null || name === '') {
+			throw new CsvRefusal(`Column ${index + 1} of the header has no name.`);
+		}
+		// SQLite stops reading a statement at a NUL, so the name would cut the CREATE TABLE.
+		if (name.includes('\0')) {
+			throw new CsvRefusal(`Column ${index + 1} of the header holds a NUL character.`);
+		}
 		const key = name.toLowerCase();
 		if (seen.has(key)) throw new CsvRefusal(`The header names the column '${name}' twice.`);
 		seen.add(key);
+		return name;
 	});
-	return header;
 }
 
 /** `n` and `noun`, with an s for any count but one. */
@@ -129,14 +140,14 @@ function counted(n: number, noun: string): string {
 	return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }
 
-/** One record as a row: `\N` is NULL. A record with the wrong field count is an error. */
-function rowOf(record: string[], width: number, number: number): (string | null)[] {
+/** One record as a row. A record with the wrong field count is an error. */
+function rowOf(record: (string | null)[], width: number, number: number): (string | null)[] {
 	if (record.length !== width) {
 		throw new CsvRefusal(
 			`Row ${number} has ${counted(record.length, 'value')}, and the header has ${counted(width, 'column')}.`,
 		);
 	}
-	return record.map((value) => (value === NULL_SENTINEL ? null : value));
+	return record;
 }
 
 /** Give every record after the header to `table`, in batches. Gives the row count. */

@@ -390,8 +390,8 @@ tool returns a preview.** Set it when a script or another tool needs the
 rows. The SQL backend streams every row as CSV to the calling agent's
 files through `WorkspaceFiles`, and gives back the first `maxRows` rows and
 the row count. The tool shows the head of the file. A failed query leaves
-an existing file unchanged. A NULL value reads as `\N`, and a blob reads
-as hex.
+an existing file unchanged. A NULL value reads as a bare `\N`, and the
+text `\N` reads as `"\N"`. A blob reads as hex.
 
 **A result never enters memory whole.** The backend keeps the first
 `maxRows` rows and counts the rest. An export streams in chunks.
@@ -399,8 +399,8 @@ as hex.
 **`import` reads a CSV file of the workspace into the table `import.rows`
 for one call.** The backend reads the file through `WorkspaceFiles`, as
 the calling agent, before the first statement runs. The statements then
-copy what they need into the shared tables, and the table goes after the
-call. The first line of the report names the file and counts its rows.
+copy what they need into the shared tables. The backend drops the table
+after the call. The first line of the report names the file and counts its rows.
 
 ```text
 sql:    CREATE TABLE sweep (step INTEGER, ohms REAL, ma REAL);
@@ -414,12 +414,14 @@ import: sweep/results.csv
   choose the columns, CAST each value, and handle a duplicate with the
   dialect's own `INSERT`.
 - **The CSV is the one that `export` writes.** RFC 4180, a header first,
-  and `\N` for NULL. A line ends with LF, CRLF, or CR, and a byte order
-  mark is skipped. An export reads back as the same values.
-- **Every other value is text.** A column of `import.rows` has no type.
-  A blob that an export wrote as hex stays hex text.
-- **The header names the columns.** Each column needs a name, and no two
-  names match without regard to case.
+  and a bare `\N` for NULL. A quoted `"\N"` is the text `\N`. A line
+  ends with LF, CRLF, or CR, and a byte order mark is skipped.
+- **Every other value is text.** A column of `import.rows` has no type,
+  so a number reads back as text until a CAST. A blob that an export
+  wrote as hex stays hex text. Text and NULL read back as they were.
+- **The header names the columns.** Each column needs a name with no NUL
+  character, and no two names match without regard to case. A header
+  over the column limit of the database gives the database's message.
 - **A malformed file runs no statement.** A missing file, a directory, a
   row with the wrong count of values, and a quoted value with no end give
   an `ok: false` outcome that names the file. No statement of the call
@@ -427,7 +429,7 @@ import: sweep/results.csv
 - **An import reads at most 32 MiB.** The file enters memory whole, so
   `WorkspaceFiles` checks its size before it reads. The rows go to the
   table in batches, and the import yields to the event loop between
-  batches, so an abort and the time limit can fire.
+  batches, so an abort and the time limit can fire during the staging.
 - **A process can still write the file.** Wait for the process that
   writes the file before the import. The guidance of the tool says so.
 
@@ -463,6 +465,10 @@ import: sweep/results.csv
   value above 0 and at most 2147483. A timeout is an `ok: false` outcome,
   and an abort rejects. A stopped export removes its temporary file and
   leaves the target unchanged.
+- **A call does not stop while it waits for the bash owner.** An export
+  and an import wait for the running shell operation to end. The time
+  limit applies when the wait ends, and the SQL owner stays held for the
+  wait.
 - **One statement that gives no rows runs to its end.** `node:sqlite` has no
   hook to stop a statement, so the backend cannot stop such a statement
   early. For example, an aggregate over an unbounded recursive query does
@@ -517,7 +523,8 @@ A backend passes the path, `files`, and a `SqlImportTable`: `create`
 makes the table with the columns of the header, and `insert` adds one
 batch of rows. `sqlImport` reads the file, parses it, and gives back the
 path and the row count, or `{ ok: false, message }`. The table must be
-`import.rows` to the statements of the call, and must go after the call.
+`import.rows` to the statements of the call, and the backend drops it
+after the call.
 A backend with a native import, such as `COPY`, reads through `files`
 itself.
 
