@@ -339,8 +339,9 @@ first.
   `limits.schedule` bounds `after` and the pending says of one seat. A
   retry of the same key with another `after` is a conflict.
 - **The said entry is an ordinary message.** It lands in the range of the
-  exchange that its activation serves. Routing skips its author, so it
-  wakes nobody.
+  exchange that its activation serves. The room stamps the owner of that
+  exchange on it, so the fold and the projection read the owner from one
+  field. Routing skips its author, so it wakes nobody.
 - **The `returned` entry records the moment.** The reconcile writes
   `returned { to, message, owner, text, refs }` when the say is due. The
   room writes it, so it has no `from`. It copies the text and the refs of
