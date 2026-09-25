@@ -29,36 +29,48 @@ workspace. See the [Workbench repository](https://github.com/fastforwardengine/w
 ## A room and its workspace
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-room-and-workspace-dark.svg">
-  <img alt="Two people use one room. The room journal records a question, activates three agents on Pi, the Claude Agent SDK, and the Codex SDK, and records what two of them say. The third agent has nothing to add. The agents call the tools of a shared workspace. A required bash backend holds the files, the audit log, and the room mirrors. An optional SQL backend holds the tables and writes CSV exports through the bash backend. A message names what it cites, and a change names the activation that made it. A restart replays the journal." src="docs/assets/ambion-room-and-workspace.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-capabilities-dark.svg">
+  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, the close, and an optional summary. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. Every workspace gives an agent background work, new in 0.3.0. bash starts a process that outlives the activation. ps lists it, and status, wait, and cancel take its handle. At the start of each activation, a reminder lists the seat's processes. An optional shared database adds sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files, with read, write, and edit. The other capabilities write their files there: a process writes its output, sql writes a CSV export, and fork clones a working copy. Each agent has a home. On a workstation, no other agent reads it. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. The host is application code. It lists and cancels processes, and hears each start and end. It can post a message to the room, for example when a process ends. A message cites a file with a ref. A restart replays the room's entries." src="docs/assets/ambion-capabilities.svg">
 </picture>
 
-**The journal records what is said. The workspace holds what is made.** Agents
-speak through `say` and work through tools. A message names the artifact it
-cites or changes. A room is a shared journal with rules for taking part.
+**The journal records what is said. The workspace holds what is made, and a
+message cites it.** Agents speak through `say` and work through tools. A
+room is a shared journal with rules for taking part.
 
-**A workspace has one bash backend, and it can have one SQL backend and
-one git backend.** Eight tools run on the bash backend: in memory or on a
-directory with `@ambionframework/just-bash`, or on a remote server over SSH
-with [`@ambionframework/workstation`](docs/workstation.md). `read`, `write`,
-and `edit` work on files. `bash` starts each command as a background
-process, with its output in a file, and returns a handle for `status`,
-`wait`, and `cancel`. `ps` lists the running processes, and each activation
-starts with a reminder of the seat's processes. The files of the bash
-backend hold the process table, so a new run of the host reads the same
-table. Background processes are part of 0.3.0
-([Processes](docs/processes.md)).
-The `sql` tool exists only when the workspace has a SQL backend. SQLite is the
-default. The `repos` and `fork` tools exist only when the workspace has a git
-backend: an agent forks a read-only template, clones it, and pushes with
-[`@ambionframework/just-bash/git`](docs/git.md), or on a workstation with
-[`workstationGitBackend`](docs/workstation-git.md). See
-[Workspace](docs/workspace.md).
+**Every workspace gives an agent files and background work.** `read`,
+`write`, and `edit` reach the files. `bash` starts a process that outlives
+the activation. `ps` lists it, and `status`, `wait`, and `cancel` take its
+handle. Each activation starts with a reminder of the seat's processes.
+Background work is part of 0.3.0. An optional SQL backend gives a shared
+database and adds `sql`: agents pass work to each other through a table or
+a view. An optional git backend gives repositories and adds `repos` and
+`fork`: an agent forks a read-only template, clones it into its home, and
+pushes. See [Workspace](docs/workspace.md), [Processes](docs/processes.md),
+and [Git](docs/git.md).
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-workspace-backends-dark.svg">
-  <img alt="Workspace backends. Every workspace has eight tools: read, write, and edit for files, and bash, ps, status, wait, and cancel for background processes, which the host lists, follows, and cancels through workspace.processes. memoryBackend and directoryBackend run just-bash in the host's process, as one user with no network, and write a process's output when it ends. workstationBackend runs real bash over SSH on one server, with one Unix account for each agent, and streams a process's output to its file. The files in ~/.processes hold the process table: on the next host run, memoryBackend starts empty, directoryBackend reads the processes of the earlier run as failed, and workstationBackend adopts the processes that still run. A SQL backend adds sql, and a git backend adds repos and fork." src="docs/assets/ambion-workspace-backends.svg">
-</picture>
+**The host lists and cancels processes through `workspace.processes`.** It
+hears when each process starts and ends. Host code can post a message to
+the owner seat when a process ends. The message starts an activation of
+that seat. See [The host's view](docs/processes.md#the-hosts-view).
+
+**Two deployment shapes give the same tools and differ in reach.**
+
+| What an agent gets             | One node: `@ambionframework/just-bash`                               | A remote server: `@ambionframework/workstation`            |
+| ------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Where the files are            | In the host's memory, or in a directory on the host                  | On the server                                              |
+| Isolation between agents       | None: every agent reads and writes every home                        | One Unix account for each agent, and a private home        |
+| Network                        | None                                                                 | The server's network                                       |
+| Commands                       | A simulated shell with a fixed set                                   | A real bash with the server's commands                     |
+| Output of a running process    | Shows when the process ends                                          | Shows while the process runs                               |
+| Output after cancel or timeout | The file stays empty                                                 | The file keeps the output so far                           |
+| Work after a host restart      | Memory: none. Directory: the files; earlier processes read as failed | The files, and the processes that still run                |
+| Repositories                   | In the host's process, with `justGitBackend`                         | In one account on the server, with `workstationGitBackend` |
+
+0.3.0 adds the rows "Output of a running process" and "Output after cancel
+or timeout", the processes in "Work after a host restart", and
+`workstationGitBackend`. See
+[Workspace](docs/workspace.md), [Workstation](docs/workstation.md),
+[Processes](docs/processes.md), and [Trust](docs/trust.md).
 
 ## One team on three harnesses
 
@@ -133,16 +145,11 @@ builds its team the same way and runs it in a terminal.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-exchange-dark.svg">
-  <img alt="One exchange on a time axis. visit.send() records the question as entry 1. The room activates three agents, and they reason in parallel. Agent A says, entry 2. The first say of Agent B read only entry 1, so it comes back missed with entry 2. Agent B reconsiders, writes a file, and says, entry 3. Agent C has nothing to add. The room closes the exchange, and waitForClose() returns. An optional summary returns from waitForSummary()." src="docs/assets/ambion-exchange.svg">
+  <img alt="Two exchanges on a time axis. A person asks with visit.send(), entry 1. The room activates Agent A, on Pi, and Agent B, on the Claude Agent SDK, and they reason in parallel. A reads a file and says, entry 2. The first say of B read only entry 1, so it comes back missed with entry 2. B reads entry 2, writes a new file, and says to A, entry 3. Entry 3 wakes A, and A resumes the harness session of its first activation. A reads only entry 3 and answers the person, entry 4. The room closes the exchange, entry 5, and waitForClose() returns. A summary follows, entry 6, and waitForSummary() returns it. The person asks again, entry 7. A starts a fresh session, reads the summary and entry 7, and says, entry 8. B has nothing to add and stays silent. The record is durable. The session is a cache for one exchange. The workspace keeps the files. The trace goes to the host's logs." src="docs/assets/ambion-exchange.svg">
 </picture>
 
 **An exchange runs from `visit.send()` to `waitForClose()`.** A room started
 with `summary` adds a closing summary, and `waitForSummary()` returns it.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-context-dark.svg">
-  <img alt="A room over two exchanges on a time axis. A person asks, entry 1. Agents A, on Pi, and B read the record. A says, entry 2. B says to A, entry 3, which wakes A again. A's second activation resumes the harness session of its first and reads only entries 2 and 3. A says, entry 4. The exchange closes, entry 5, and a summary follows, entry 6. The person asks again, entry 7, which opens exchange 2. A's third activation starts a fresh session and reads the summary and entry 7. B stays silent. The record is durable. The trace goes to the host's logs. The session is a cache for one exchange." src="docs/assets/ambion-context.svg">
-</picture>
 
 **The record is durable, and every activation reads it.** It holds every
 message, close, summary and lease entry. A restart replays it. A summary
