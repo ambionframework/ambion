@@ -618,8 +618,8 @@ them.
 **The specialist asks for the material fact.** In the third case, its
 script asks the person for the fact in the first exchange. The kernel's
 speaking policy directs a question that only one participant can answer, so
-the specialist addresses the person. The assistant says nothing, so the check reads the second
-message and the judge reads the first summary.
+the specialist addresses the person. The assistant says nothing, so the
+check reads the second message and the judge reads the first summary.
 
 **Five cases hold the rest of the assistant's purpose.** The assistant is
 passive at `broadcast`, it answers a participant who addresses it, and it
