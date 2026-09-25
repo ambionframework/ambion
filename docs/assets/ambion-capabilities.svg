@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="640" viewBox="0 0 1260 640" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="600" viewBox="0 0 1260 600" role="img" aria-labelledby="title desc">
   <title id="title">A room and its workspace, by capability</title>
-  <desc id="desc">A room activates an agent. The agent calls the tools of a shared workspace, and it says what it finds, with refs to what it names. Every workspace gives an agent background work. bash starts a process that continues past the activation. ps lists it, and status, wait, and cancel take its handle. Each activation starts with a reminder of the seat&#x27;s processes. An optional SQL backend gives a shared database: agents pass work to each other through a table or a view, with the sql tool. An optional git backend gives repositories: an agent forks a read-only template, clones it into its home, and pushes, with the repos and fork tools. Every workspace gives an agent files, with read, write, and edit. The other capabilities leave their files here: a background process leaves its output, a database export leaves a CSV file, and a fork leaves a cloned working copy. An opt-in audit log holds one line for every tool call, and an opt-in room mirror holds the room&#x27;s messages. The host, outside the room and the workspace, lists an agent&#x27;s processes, hears when one ends, and can cancel one; it can also post a message that opens or joins an exchange. A message names what it cites, and a tool call names the activation that made it. A restart replays the room&#x27;s entries.</desc>
+  <desc id="desc">A room activates an agent. The room&#x27;s journal holds a person&#x27;s question, what an agent says, the close, and an optional summary. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. Every workspace gives an agent background work, new in 0.3.0. bash starts a process that outlives the activation. ps lists it, and status, wait, and cancel take its handle. At the start of each activation, a reminder lists the seat&#x27;s processes. An optional shared database adds sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files, with read, write, and edit. The other capabilities write their files there: a process writes its output, sql writes a CSV export, and fork clones a working copy. Each agent has a home. On a workstation, no other agent reads it. An opt-in audit log holds one line for each tool call. An opt-in room mirror holds one line for each message. The host is application code. It lists and cancels processes, and hears each start and end. It can post a message to the room, for example when a process ends. A message cites a file with a ref. The audit log names the activation of each tool call. A restart replays the room&#x27;s entries.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#666d6b"/></marker>
     <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#2f817a"/></marker>
@@ -12,162 +12,159 @@
       .dim { fill: #666d6b; }
       .teal { fill: #2f817a; }
       .code { fill: #3f5bb5; }
-      .lab { font-size: 13px; font-weight: 700; letter-spacing: 1.2px; }
       .t { font-size: 18px; font-weight: 700; }
       .n { font-size: 15px; font-weight: 700; }
-      .b { font-size: 15px; }
-      .s { font-size: 13.5px; }
-      .x { font-size: 12.5px; }
-      .e { font-size: 11.5px; }
+      .b { font-size: 14px; }
+      .s { font-size: 13px; }
+      .x { font-size: 12px; }
+      .c { font-size: 12px; }
+      .lab { font-size: 12px; font-weight: 700; letter-spacing: 1.2px; }
       .flow { fill: none; stroke: #666d6b; stroke-width: 2; }
       .flow-dash { fill: none; stroke: #666d6b; stroke-width: 2; stroke-dasharray: 6 5; }
       .flow-teal { fill: none; stroke: #2f817a; stroke-width: 2; stroke-dasharray: 6 5; }
       .rule { stroke: #e2e0d8; stroke-width: 1.5; }
     </style>
   </defs>
-  <rect width="1260" height="640" rx="20" fill="#f4f3ee"/>
-  <text x="24" y="34" text-anchor="start" class="sans dim lab">ROOM</text>
-  <text x="274" y="34" text-anchor="start" class="sans dim lab">AGENT</text>
-  <text x="564" y="34" text-anchor="start" class="sans dim lab">WORKSPACE · CAPABILITIES</text>
+  <rect width="1260" height="600" rx="20" fill="#f4f3ee"/>
   <g filter="url(#shadow)">
-  <rect x="24" y="52" width="190" height="500" rx="16" fill="#fbfaf6" stroke="#232a2b" stroke-width="1.5"/>
+  <rect x="24.0" y="24.0" width="184.0" height="520.0" rx="16" fill="#fbfaf6" stroke="#232a2b" stroke-width="1.5"/>
   </g>
-  <text x="44" y="86" text-anchor="start" class="sans ink t">Room</text>
-  <text x="44" y="106" text-anchor="start" class="sans dim x">APPEND-ONLY</text>
-  <text x="44" y="120" text-anchor="start" class="sans dim x">JOURNAL</text>
-  <line x1="24" y1="132" x2="214" y2="132" class="rule"/>
-  <text x="44" y="162" text-anchor="start" class="mono dim s">1</text>
-  <text x="70" y="162" text-anchor="start" class="sans ink b">Person asks</text>
-  <text x="70" y="182" text-anchor="start" class="sans dim x">opens the exchange</text>
-  <text x="44" y="248" text-anchor="start" class="mono dim s">2</text>
-  <text x="70" y="248" text-anchor="start" class="sans ink b">Agent says</text>
-  <text x="70" y="268" text-anchor="start" class="sans teal x">cites what it made</text>
-  <text x="44" y="334" text-anchor="start" class="mono dim s">3</text>
-  <text x="70" y="334" text-anchor="start" class="sans ink b">Close</text>
-  <text x="70" y="354" text-anchor="start" class="sans dim x">no seat has work left</text>
-  <text x="44" y="420" text-anchor="start" class="mono dim s">4</text>
-  <text x="70" y="420" text-anchor="start" class="sans ink b">Summary</text>
-  <text x="70" y="440" text-anchor="start" class="sans dim x">for the person</text>
-  <line x1="24" y1="466" x2="214" y2="466" class="rule"/>
-  <text x="44" y="490" text-anchor="start" class="sans dim x">A restart replays</text>
-  <text x="44" y="506" text-anchor="start" class="sans dim x">the entries.</text>
+  <text x="42.0" y="58.0" text-anchor="start" class="sans ink t">Room</text>
+  <text x="42.0" y="78.0" text-anchor="start" class="sans dim x">the journal</text>
+  <line x1="24.0" y1="94.0" x2="208.0" y2="94.0" class="rule"/>
+  <text x="42.0" y="132.0" text-anchor="start" class="mono dim c">1</text>
+  <text x="64.0" y="132.0" text-anchor="start" class="sans ink b">Person asks</text>
+  <text x="64.0" y="150.0" text-anchor="start" class="sans dim x">opens the exchange</text>
+  <text x="42.0" y="192.0" text-anchor="start" class="mono dim c">2</text>
+  <text x="64.0" y="192.0" text-anchor="start" class="sans ink b">Agent says</text>
+  <text x="64.0" y="210.0" text-anchor="start" class="sans teal x">cites what it made</text>
+  <text x="42.0" y="252.0" text-anchor="start" class="mono dim c">3</text>
+  <text x="64.0" y="252.0" text-anchor="start" class="sans ink b">Close</text>
+  <text x="64.0" y="270.0" text-anchor="start" class="sans dim x">no work left</text>
+  <text x="42.0" y="312.0" text-anchor="start" class="mono dim c">4</text>
+  <text x="64.0" y="312.0" text-anchor="start" class="sans ink b">Summary</text>
+  <text x="64.0" y="330.0" text-anchor="start" class="sans dim x">optional</text>
+  <line x1="24.0" y1="490.0" x2="208.0" y2="490.0" class="rule"/>
+  <text x="42.0" y="514.0" text-anchor="start" class="sans dim x">A restart replays</text>
+  <text x="42.0" y="530.0" text-anchor="start" class="sans dim x">the entries.</text>
   <g filter="url(#shadow)">
-  <rect x="274" y="170" width="140" height="130" rx="14" fill="#fbfaf6" stroke="#8fa8ef" stroke-width="2"/>
+  <rect x="324.0" y="44.0" width="164.0" height="176.0" rx="14" fill="#fbfaf6" stroke="#8fa8ef" stroke-width="2"/>
   </g>
-  <text x="292" y="202" text-anchor="start" class="sans ink t">Agent</text>
-  <text x="292" y="224" text-anchor="start" class="sans dim x">one seat, one</text>
-  <text x="292" y="240" text-anchor="start" class="sans dim x">activation</text>
-  <line x1="274" y1="254" x2="414" y2="254" class="rule"/>
-  <text x="292" y="278" text-anchor="start" class="sans dim x">runs on any</text>
-  <text x="292" y="294" text-anchor="start" class="sans dim x">framework</text>
+  <text x="342.0" y="76.0" text-anchor="start" class="sans ink t">Agent</text>
+  <text x="342.0" y="98.0" text-anchor="start" class="sans dim x">holds a seat</text>
+  <text x="342.0" y="114.0" text-anchor="start" class="sans dim x">in the room</text>
+  <line x1="324.0" y1="130.0" x2="488.0" y2="130.0" class="rule"/>
+  <text x="342.0" y="154.0" text-anchor="start" class="sans dim x">runs on any</text>
+  <text x="342.0" y="170.0" text-anchor="start" class="sans dim x">framework</text>
   <g filter="url(#shadow)">
-  <rect x="274" y="390" width="140" height="150" rx="14" fill="#fbfaf6" stroke="#9aa3a1" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <rect x="324.0" y="356.0" width="164.0" height="172.0" rx="14" fill="#fbfaf6" stroke="#9aa3a1" stroke-width="1.5"/>
   </g>
-  <text x="292" y="420" text-anchor="start" class="sans ink n">Host</text>
-  <text x="292" y="438" text-anchor="start" class="sans dim x">application code</text>
-  <rect x="292" y="450" width="104" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="344" y="465" text-anchor="middle" class="mono code e">processes</text>
-  <text x="292" y="494" text-anchor="start" class="sans dim x">lists, hears endings,</text>
-  <text x="292" y="510" text-anchor="start" class="sans dim x">cancels. It can wake</text>
-  <text x="292" y="526" text-anchor="start" class="sans dim x">a seat when one ends.</text>
+  <text x="342.0" y="384.0" text-anchor="start" class="sans ink n">Host</text>
+  <text x="342.0" y="403.0" text-anchor="start" class="sans dim x">application code</text>
+  <rect x="342.0" y="414.0" width="81.0" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="382.5" y="429.0" text-anchor="middle" class="mono code c">processes</text>
+  <text x="342.0" y="458.0" text-anchor="start" class="sans dim x">lists processes,</text>
+  <text x="342.0" y="474.0" text-anchor="start" class="sans dim x">cancels one, and</text>
+  <text x="342.0" y="490.0" text-anchor="start" class="sans dim x">hears each start</text>
+  <text x="342.0" y="506.0" text-anchor="start" class="sans dim x">and end.</text>
   <g filter="url(#shadow)">
-  <rect x="564" y="52" width="688" height="500" rx="16" fill="#fbfaf6" stroke="#2f817a" stroke-width="1.5"/>
+  <rect x="592.0" y="24.0" width="644.0" height="520.0" rx="16" fill="#fbfaf6" stroke="#2f817a" stroke-width="1.5"/>
   </g>
-  <text x="584" y="86" text-anchor="start" class="sans ink t">Workspace</text>
-  <text x="584" y="108" text-anchor="start" class="sans dim lab">WHAT AN AGENT CAN DO</text>
-  <line x1="564" y1="124" x2="1252" y2="124" class="rule"/>
-  <rect x="584.0" y="140" width="204.0" height="150" rx="12" fill="#eef5f4" stroke="#2f817a" stroke-width="1.5"/>
-  <text x="598.0" y="160" text-anchor="start" class="sans ink n">Background work</text>
-  <text x="776.0" y="181" text-anchor="end" class="sans dim e">0.3.0</text>
-  <rect x="598.0" y="194" width="38" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="617.0" y="209" text-anchor="middle" class="mono code e">bash</text>
-  <rect x="642.0" y="194" width="24" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="654.0" y="209" text-anchor="middle" class="mono code e">ps</text>
-  <rect x="672.0" y="194" width="44" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="694.0" y="209" text-anchor="middle" class="mono code e">status</text>
-  <rect x="598.0" y="222" width="34" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="615.0" y="237" text-anchor="middle" class="mono code e">wait</text>
-  <rect x="638.0" y="222" width="48" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="662.0" y="237" text-anchor="middle" class="mono code e">cancel</text>
-  <text x="598.0" y="256" text-anchor="start" class="sans dim e">Continues past the activation.</text>
-  <rect x="806.0" y="140" width="204.0" height="150" rx="12" fill="#fbfaf6" stroke="#e0a94e" stroke-width="1.5"/>
-  <text x="820.0" y="160" text-anchor="start" class="sans ink n">Shared database</text>
-  <rect x="820.0" y="168" width="58" height="18" rx="9" fill="#fbfaf6"/>
-  <text x="849.0" y="181" text-anchor="middle" class="mono teal e">optional</text>
-  <rect x="820.0" y="194" width="32" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="836.0" y="209" text-anchor="middle" class="mono code e">sql</text>
-  <text x="820.0" y="228" text-anchor="start" class="sans dim e">Passes work between agents.</text>
-  <rect x="1028.0" y="140" width="204.0" height="150" rx="12" fill="#fbfaf6" stroke="#e0a94e" stroke-width="1.5"/>
-  <text x="1042.0" y="160" text-anchor="start" class="sans ink n">Repositories</text>
-  <rect x="1042.0" y="168" width="58" height="18" rx="9" fill="#fbfaf6"/>
-  <text x="1071.0" y="181" text-anchor="middle" class="mono teal e">optional</text>
-  <rect x="1042.0" y="194" width="42" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="1063.0" y="209" text-anchor="middle" class="mono code e">repos</text>
-  <rect x="1090.0" y="194" width="34" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="1107.0" y="209" text-anchor="middle" class="mono code e">fork</text>
-  <text x="1042.0" y="228" text-anchor="start" class="sans dim e">Fork a template, clone it, push.</text>
-  <rect x="584.0" y="330" width="648.0" height="210" rx="12" fill="#eef5f4" stroke="#2f817a" stroke-width="1.5"/>
-  <text x="598.0" y="354" text-anchor="start" class="sans ink n">Files</text>
-  <rect x="598.0" y="366" width="46" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="621.0" y="381" text-anchor="middle" class="mono code e">read</text>
-  <rect x="650.0" y="366" width="54" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="677.0" y="381" text-anchor="middle" class="mono code e">write</text>
-  <rect x="710.0" y="366" width="42" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
-  <text x="731.0" y="381" text-anchor="middle" class="mono code e">edit</text>
-  <text x="598.0" y="406" text-anchor="start" class="sans dim e">The other capabilities leave their files here.</text>
-  <rect x="600.0" y="420" width="196.0" height="50" rx="8" fill="#fbfaf6" stroke="#bcd9d5"/>
-  <text x="698.0" y="440" text-anchor="middle" class="sans ink s">Homes</text>
-  <text x="698.0" y="457" text-anchor="middle" class="sans dim e">one per agent</text>
-  <rect x="810.0" y="420" width="196.0" height="50" rx="8" fill="#fbfaf6" stroke="#bcd9d5"/>
-  <text x="908.0" y="440" text-anchor="middle" class="sans ink s">Process output</text>
-  <text x="908.0" y="457" text-anchor="middle" class="sans dim e">a file bash writes</text>
-  <rect x="1020.0" y="420" width="196.0" height="50" rx="8" fill="#fbfaf6" stroke="#bcd9d5"/>
-  <text x="1118.0" y="440" text-anchor="middle" class="sans ink s">CSV exports</text>
-  <text x="1118.0" y="457" text-anchor="middle" class="sans dim e">a file sql writes</text>
-  <rect x="600.0" y="482" width="196.0" height="50" rx="8" fill="#fbfaf6" stroke="#bcd9d5"/>
-  <text x="698.0" y="502" text-anchor="middle" class="sans ink s">Working copies</text>
-  <text x="698.0" y="519" text-anchor="middle" class="sans dim e">a fork, cloned in</text>
-  <rect x="810.0" y="482" width="196.0" height="50" rx="8" fill="#fbfaf6" stroke="#bcd9d5"/>
-  <text x="908.0" y="502" text-anchor="middle" class="sans ink s">Audit log</text>
-  <text x="908.0" y="519" text-anchor="middle" class="sans dim e">opt-in, every call</text>
-  <rect x="1020.0" y="482" width="196.0" height="50" rx="8" fill="#fbfaf6" stroke="#bcd9d5"/>
-  <text x="1118.0" y="502" text-anchor="middle" class="sans ink s">Room mirror</text>
-  <text x="1118.0" y="519" text-anchor="middle" class="sans dim e">opt-in, its messages</text>
-  <path d="M214 168 H274" class="flow" marker-end="url(#arrow)"/>
-  <rect x="212.0" y="146.0" width="64.0" height="17" fill="#f4f3ee"/>
-  <text x="244.0" y="158" text-anchor="middle" class="sans dim e">activates</text>
-  <path d="M274 228 H214" class="flow-teal" marker-end="url(#arrow-teal)"/>
-  <rect x="194.0" y="234.0" width="100.0" height="17" fill="#f4f3ee"/>
-  <text x="244.0" y="246" text-anchor="middle" class="sans teal e">says, with refs</text>
-  <path d="M414 190 H564" class="flow" marker-end="url(#arrow)"/>
-  <rect x="418.0" y="168.0" width="142.0" height="17" fill="#f4f3ee"/>
-  <text x="489.0" y="180" text-anchor="middle" class="sans dim e">starts, waits, cancels</text>
-  <path d="M564 220 H414" class="flow-dash" marker-end="url(#arrow)"/>
-  <rect x="409.0" y="226.0" width="160.0" height="17" fill="#f4f3ee"/>
-  <text x="489.0" y="238" text-anchor="middle" class="sans dim e">reminder, next activation</text>
-  <path d="M414 325 H564" class="flow" marker-end="url(#arrow)"/>
-  <rect x="433.0" y="303.0" width="112.0" height="17" fill="#f4f3ee"/>
-  <text x="489.0" y="315" text-anchor="middle" class="sans dim e">read, write, edit</text>
-  <path d="M414 306 H1085.1" class="flow"/>
-  <path d="M863.1 306 V290" class="flow" marker-end="url(#arrow)"/>
-  <rect x="864.1" y="306.0" width="52.0" height="17" fill="#fbfaf6"/>
-  <text x="869.1" y="318" text-anchor="start" class="sans dim e">queries</text>
-  <path d="M1085.1 306 V290" class="flow" marker-end="url(#arrow)"/>
-  <rect x="1086.1" y="306.0" width="40.0" height="17" fill="#fbfaf6"/>
-  <text x="1091.1" y="318" text-anchor="start" class="sans dim e">forks</text>
-  <path d="M696.2 290 V330" class="flow" marker-end="url(#arrow)"/>
-  <rect x="697.2" y="310.0" width="46.0" height="17" fill="#fbfaf6"/>
-  <text x="702.2" y="322" text-anchor="start" class="sans dim e">output</text>
-  <path d="M965.1 290 V330" class="flow" marker-end="url(#arrow)"/>
-  <rect x="966.1" y="310.0" width="52.0" height="17" fill="#fbfaf6"/>
-  <text x="971.1" y="322" text-anchor="start" class="sans dim e">exports</text>
-  <path d="M1187.1 290 V330" class="flow" marker-end="url(#arrow)"/>
-  <rect x="1188.1" y="310.0" width="64.0" height="17" fill="#fbfaf6"/>
-  <text x="1193.1" y="322" text-anchor="start" class="sans dim e">clones in</text>
-  <path d="M414 415 H470 V165 H584.0" class="flow-dash" marker-end="url(#arrow)"/>
-  <rect x="441.0" y="343.0" width="58.0" height="17" fill="#fbfaf6"/>
-  <text x="470.0" y="355" text-anchor="middle" class="sans dim e">oversees</text>
-  <path d="M274 460 H240 V180 H214" class="flow-dash" marker-end="url(#arrow)"/>
-  <path d="M139.0 552 V580 H908.0 V540" class="flow-teal" marker-start="url(#arrow-teal)" marker-end="url(#arrow-teal)"/>
-  <text x="523.5" y="574" text-anchor="middle" class="sans teal s">a message names what it cites · a tool call names its activation</text>
+  <text x="612.0" y="58.0" text-anchor="start" class="sans ink t">Workspace</text>
+  <text x="612.0" y="80.0" text-anchor="start" class="sans dim lab">WHAT AN AGENT CAN DO</text>
+  <rect x="1147.4" y="47" width="14" height="14" rx="4" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="1167.4" y="58.0" text-anchor="start" class="sans dim x">optional</text>
+  <rect x="994.6" y="47" width="14" height="14" rx="4" fill="#eef5f4" stroke="#2f817a" stroke-width="1.5"/>
+  <text x="1014.6" y="58.0" text-anchor="start" class="sans dim x">in every workspace</text>
+  <line x1="592.0" y1="96.0" x2="1236.0" y2="96.0" class="rule"/>
+  <rect x="622.0" y="112.0" width="185.3" height="156.0" rx="12" fill="#eef5f4" stroke="#2f817a" stroke-width="1.5"/>
+  <text x="636.0" y="138.0" text-anchor="start" class="sans ink n">Background work</text>
+  <text x="636.0" y="158.0" text-anchor="start" class="sans teal x">new in 0.3.0</text>
+  <rect x="636.0" y="170.0" width="44.9" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="658.4" y="185.0" text-anchor="middle" class="mono code c">bash</text>
+  <rect x="686.9" y="170.0" width="30.4" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="702.1" y="185.0" text-anchor="middle" class="mono code c">ps</text>
+  <rect x="723.3" y="170.0" width="59.3" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="753.0" y="185.0" text-anchor="middle" class="mono code c">status</text>
+  <rect x="636.0" y="198.0" width="44.9" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="658.4" y="213.0" text-anchor="middle" class="mono code c">wait</text>
+  <rect x="686.9" y="198.0" width="59.3" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="716.5" y="213.0" text-anchor="middle" class="mono code c">cancel</text>
+  <text x="636.0" y="242.0" text-anchor="start" class="sans dim x">A process outlives</text>
+  <text x="636.0" y="258.0" text-anchor="start" class="sans dim x">the activation.</text>
+  <rect x="821.3" y="112.0" width="185.3" height="156.0" rx="12" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="835.3" y="138.0" text-anchor="start" class="sans ink n">Shared database</text>
+  <rect x="835.3" y="170.0" width="37.7" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="854.2" y="185.0" text-anchor="middle" class="mono code c">sql</text>
+  <text x="835.3" y="242.0" text-anchor="start" class="sans dim x">Agents pass work</text>
+  <text x="835.3" y="258.0" text-anchor="start" class="sans dim x">in a table or a view.</text>
+  <rect x="1020.7" y="112.0" width="185.3" height="156.0" rx="12" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="1034.7" y="138.0" text-anchor="start" class="sans ink n">Repositories</text>
+  <rect x="1034.7" y="170.0" width="52.1" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="1060.7" y="185.0" text-anchor="middle" class="mono code c">repos</text>
+  <rect x="1092.8" y="170.0" width="44.9" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="1115.2" y="185.0" text-anchor="middle" class="mono code c">fork</text>
+  <text x="1034.7" y="242.0" text-anchor="start" class="sans dim x">An agent forks a</text>
+  <text x="1034.7" y="258.0" text-anchor="start" class="sans dim x">template, then pushes.</text>
+  <rect x="608.0" y="308.0" width="612.0" height="220.0" rx="12" fill="#eef5f4" stroke="#2f817a" stroke-width="1.5"/>
+  <text x="622.0" y="334.0" text-anchor="start" class="sans ink n">Files</text>
+  <rect x="622.0" y="346.0" width="44.9" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="644.4" y="361.0" text-anchor="middle" class="mono code c">read</text>
+  <rect x="672.9" y="346.0" width="52.1" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="698.9" y="361.0" text-anchor="middle" class="mono code c">write</text>
+  <rect x="731.0" y="346.0" width="44.9" height="22" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="753.4" y="361.0" text-anchor="middle" class="mono code c">edit</text>
+  <text x="791.8" y="361.0" text-anchor="start" class="sans dim x">The other capabilities write their files here.</text>
+  <rect x="622.0" y="384.0" width="185.3" height="54.0" rx="8" fill="#fbfaf6" stroke="#bcd9d5" stroke-width="1.2"/>
+  <text x="714.7" y="406.0" text-anchor="middle" class="sans ink s">Process output</text>
+  <text x="714.7" y="424.0" text-anchor="middle" class="sans dim x">one file per process</text>
+  <rect x="821.3" y="384.0" width="185.3" height="54.0" rx="8" fill="#fbfaf6" stroke="#bcd9d5" stroke-width="1.2"/>
+  <text x="914.0" y="406.0" text-anchor="middle" class="sans ink s">CSV exports</text>
+  <text x="914.0" y="424.0" text-anchor="middle" class="sans dim x">what sql exports</text>
+  <rect x="1020.7" y="384.0" width="185.3" height="54.0" rx="8" fill="#fbfaf6" stroke="#bcd9d5" stroke-width="1.2"/>
+  <text x="1113.3" y="406.0" text-anchor="middle" class="sans ink s">Working copies</text>
+  <text x="1113.3" y="424.0" text-anchor="middle" class="sans dim x">a clone of a fork</text>
+  <rect x="622.0" y="448.0" width="185.3" height="68.0" rx="8" fill="#fbfaf6" stroke="#bcd9d5" stroke-width="1.2"/>
+  <text x="714.7" y="470.0" text-anchor="middle" class="sans ink s">Homes</text>
+  <text x="714.7" y="488.0" text-anchor="middle" class="sans dim x">one per agent,</text>
+  <text x="714.7" y="504.0" text-anchor="middle" class="sans dim x">private on a workstation</text>
+  <rect x="821.3" y="448.0" width="185.3" height="68.0" rx="8" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="914.0" y="470.0" text-anchor="middle" class="sans ink s">Audit log</text>
+  <text x="914.0" y="488.0" text-anchor="middle" class="sans dim x">opt-in: one line</text>
+  <text x="914.0" y="504.0" text-anchor="middle" class="sans dim x">for each tool call</text>
+  <rect x="1020.7" y="448.0" width="185.3" height="68.0" rx="8" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="1113.3" y="470.0" text-anchor="middle" class="sans ink s">Room mirror</text>
+  <text x="1113.3" y="488.0" text-anchor="middle" class="sans dim x">opt-in: one line</text>
+  <text x="1113.3" y="504.0" text-anchor="middle" class="sans dim x">for each message</text>
+  <path d="M208.0 138.0 L324.0 138.0" class="flow" marker-end="url(#arrow)"/>
+  <path d="M324.0 198.0 L208.0 198.0" class="flow-teal" marker-end="url(#arrow-teal)"/>
+  <path d="M488.0 70.0 L592.0 70.0" class="flow" marker-end="url(#arrow)"/>
+  <path d="M622.0 176.0 L488.0 176.0" class="flow-dash" marker-end="url(#arrow)"/>
+  <path d="M488.0 384.0 L540.0 384.0 L540.0 248.0 L622.0 248.0" class="flow" marker-end="url(#arrow)"/>
+  <path d="M324.0 404.0 L208.0 404.0" class="flow" marker-end="url(#arrow)"/>
+  <path d="M714.7 268.0 L714.7 308.0" class="flow" marker-end="url(#arrow)"/>
+  <path d="M914.0 268.0 L914.0 308.0" class="flow" marker-end="url(#arrow)"/>
+  <path d="M1113.3 268.0 L1113.3 308.0" class="flow" marker-end="url(#arrow)"/>
+  <path d="M116.0 544.0 L116.0 576.0 L914.0 576.0 L914.0 528.0" class="flow-teal" marker-start="url(#arrow-teal)" marker-end="url(#arrow-teal)"/>
+  <rect x="234.6" y="117.0" width="62.8" height="16" fill="#f4f3ee"/>
+  <text x="266.0" y="129.0" text-anchor="middle" class="sans dim x">activates</text>
+  <rect x="218.8" y="206.0" width="94.4" height="16" fill="#f4f3ee"/>
+  <text x="266.0" y="218.0" text-anchor="middle" class="sans teal x">says, with refs</text>
+  <rect x="497.1" y="49.0" width="85.7" height="16" fill="#f4f3ee"/>
+  <text x="540.0" y="61.0" text-anchor="middle" class="sans dim x">calls its tools</text>
+  <rect x="489.9" y="183.0" width="100.2" height="31" fill="#f4f3ee"/>
+  <text x="540.0" y="195.0" text-anchor="middle" class="sans dim x">reminder at</text>
+  <text x="540.0" y="210.0" text-anchor="middle" class="sans dim x">each activation</text>
+  <rect x="509.0" y="310.0" width="62.1" height="16" fill="#f4f3ee"/>
+  <text x="540.0" y="322.0" text-anchor="middle" class="sans dim x">oversees</text>
+  <rect x="211.4" y="383.0" width="109.1" height="16" fill="#f4f3ee"/>
+  <text x="266.0" y="395.0" text-anchor="middle" class="sans dim x">posts a message</text>
+  <rect x="718.7" y="281.0" width="47.6" height="16" fill="#fbfaf6"/>
+  <text x="722.7" y="293.0" text-anchor="start" class="sans dim x">output</text>
+  <rect x="918.0" y="281.0" width="53.2" height="16" fill="#fbfaf6"/>
+  <text x="922.0" y="293.0" text-anchor="start" class="sans dim x">exports</text>
+  <rect x="1117.3" y="281.0" width="61.3" height="16" fill="#fbfaf6"/>
+  <text x="1121.3" y="293.0" text-anchor="start" class="sans dim x">clones in</text>
+  <rect x="231.5" y="554.0" width="567.0" height="16" fill="#f4f3ee"/>
+  <text x="515.0" y="566.0" text-anchor="middle" class="sans teal s">a message cites a file with a ref  ·  the audit log names the activation of each tool call</text>
 </svg>

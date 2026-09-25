@@ -30,7 +30,7 @@ workspace. See the [Workbench repository](https://github.com/fastforwardengine/w
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-capabilities-dark.svg">
-  <img alt="A room and its workspace, by capability. A room activates an agent. The agent calls the tools of a shared workspace and says what it finds, with refs to what it names. Every workspace gives an agent background work: bash starts a process that continues past the activation. ps lists it, and status, wait, and cancel take its handle. Each activation starts with a reminder of the seat's processes. An optional SQL backend gives a shared database: agents pass work to each other through a table or a view. An optional git backend gives repositories: an agent forks a read-only template, clones it into its home, and pushes. Every workspace gives an agent files, with read, write, and edit. The other capabilities leave their files here: a background process leaves its output, a database export leaves a CSV file, and a fork leaves a cloned working copy. An opt-in audit log holds one line for every tool call, and an opt-in room mirror holds the room's messages. The host, outside the room and the workspace, lists an agent's processes, hears when one ends, and can cancel one; it can also post a message that opens or joins an exchange. A message names what it cites, and a tool call names the activation that made it. A restart replays the room's entries." src="docs/assets/ambion-capabilities.svg">
+  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, the close, and an optional summary. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. Every workspace gives an agent background work, new in 0.3.0. bash starts a process that outlives the activation. ps lists it, and status, wait, and cancel take its handle. At the start of each activation, a reminder lists the seat's processes. An optional shared database adds sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files, with read, write, and edit. The other capabilities write their files there: a process writes its output, sql writes a CSV export, and fork clones a working copy. Each agent has a home. On a workstation, no other agent reads it. An opt-in audit log holds one line for each tool call. An opt-in room mirror holds one line for each message. The host is application code. It lists and cancels processes, and hears each start and end. It can post a message to the room, for example when a process ends. A message cites a file with a ref. The audit log names the activation of each tool call. A restart replays the room's entries." src="docs/assets/ambion-capabilities.svg">
 </picture>
 
 **The journal records what is said. The workspace holds what is made, and a
@@ -38,33 +38,38 @@ message cites it.** Agents speak through `say` and work through tools. A
 room is a shared journal with rules for taking part.
 
 **Every workspace gives an agent files and background work.** `read`,
-`write`, and `edit` reach the files. `bash` starts a process that continues
-past the activation. `ps` lists it, and `status`, `wait`, and `cancel` take
-its handle. Each activation starts with a reminder of the seat's
-processes. Background work is part of 0.3.0
-([Processes](docs/processes.md)). An optional SQL backend gives a shared
+`write`, and `edit` reach the files. `bash` starts a process that outlives
+the activation. `ps` lists it, and `status`, `wait`, and `cancel` take its
+handle. Each activation starts with a reminder of the seat's processes.
+Background work is part of 0.3.0. An optional SQL backend gives a shared
 database and adds `sql`: agents pass work to each other through a table or
 a view. An optional git backend gives repositories and adds `repos` and
 `fork`: an agent forks a read-only template, clones it into its home, and
 pushes. See [Workspace](docs/workspace.md), [Processes](docs/processes.md),
 and [Git](docs/git.md).
 
+**The host lists and cancels processes through `workspace.processes`.** It
+hears when each process starts and ends. Host code can post a message to
+the owner seat when a process ends. The message starts an activation of
+that seat. See [The host's view](docs/processes.md#the-hosts-view).
+
 **Two deployment shapes give the same tools and differ in reach.**
 
-| What an agent gets             | One node: `@ambionframework/just-bash`                               | A remote server: `@ambionframework/workstation` |
-| ------------------------------ | -------------------------------------------------------------------- | ----------------------------------------------- |
-| Files                          | In the host's memory, or a directory on the host                     | In the owner agent's home, on the server        |
-| Isolation between agents       | None: every agent reads and writes every home                        | One Unix account for each agent                 |
-| Network                        | None                                                                 | The server's network                            |
-| Commands                       | A simulated shell with a fixed set                                   | A real bash with the server's commands          |
-| Output of a running process    | Shows when the process ends                                          | Shows while the process runs                    |
-| Output after cancel or timeout | The file stays empty                                                 | The file keeps what ran                         |
-| Work after a host restart      | Memory: none. Directory: the files; earlier processes read as failed | The files, and the processes that still run     |
-| Git backend                    | `justGitBackend`, in the host                                        | `workstationGitBackend`, on the server (0.3.0)  |
+| What an agent gets             | One node: `@ambionframework/just-bash`                               | A remote server: `@ambionframework/workstation`            |
+| ------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Where the files are            | In the host's memory, or in a directory on the host                  | On the server                                              |
+| Isolation between agents       | None: every agent reads and writes every home                        | One Unix account for each agent, and a private home        |
+| Network                        | None                                                                 | The server's network                                       |
+| Commands                       | A simulated shell with a fixed set                                   | A real bash with the server's commands                     |
+| Output of a running process    | Shows when the process ends                                          | Shows while the process runs                               |
+| Output after cancel or timeout | The file stays empty                                                 | The file keeps the output so far                           |
+| Work after a host restart      | Memory: none. Directory: the files; earlier processes read as failed | The files, and the processes that still run                |
+| Repositories                   | In the host's process, with `justGitBackend`                         | In one account on the server, with `workstationGitBackend` |
 
-Process rows are part of 0.3.0. See [Workspace](docs/workspace.md),
-[Workstation](docs/workstation.md), [Processes](docs/processes.md), and
-[Trust](docs/trust.md).
+The two output rows, the processes in the restart row, and
+`workstationGitBackend` are part of 0.3.0. See
+[Workspace](docs/workspace.md), [Workstation](docs/workstation.md),
+[Processes](docs/processes.md), and [Trust](docs/trust.md).
 
 ## One team on three harnesses
 
