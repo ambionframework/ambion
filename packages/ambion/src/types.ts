@@ -126,9 +126,25 @@ export type ExchangeView =
 /** A closed exchange view: the one that carries an outcome. */
 export type ClosedExchangeView = Extract<ExchangeView, { readonly status: 'closed' }>;
 
+/** A say that waits to return to its author, as a read shows it. */
+export interface PendingSay {
+	/** The seq of the say. */
+	readonly seq: Seq;
+	/** The seat that said it, and the seat it returns to. */
+	readonly seat: string;
+	/** The person it returns for. */
+	readonly owner: string;
+	/** When it is due, ISO. */
+	readonly due: string;
+	readonly text: string;
+	readonly refs?: readonly string[];
+}
+
 interface RoomReadFields {
 	readonly name: string;
 	readonly messages: readonly Message[];
+	/** The scheduled says that wait to return, in the order they landed. */
+	readonly scheduled: readonly PendingSay[];
 	readonly participants: readonly ParticipantInfo[];
 	readonly exchanges: readonly ExchangeView[];
 	readonly exchange: Extract<ExchangeView, { readonly status: 'open' }> | undefined;
@@ -142,6 +158,7 @@ export type RoomRead =
 			readonly initialized: false;
 			readonly goal?: undefined;
 			readonly messages: readonly [];
+			readonly scheduled: readonly [];
 			readonly participants: readonly [];
 			readonly exchanges: readonly [];
 			readonly exchange: undefined;

@@ -39,6 +39,7 @@ export function readView(
 			name,
 			initialized: false,
 			messages: [],
+			scheduled: [],
 			participants: [],
 			exchanges: [],
 			exchange: undefined,
@@ -62,6 +63,10 @@ export function readView(
 		initialized: true,
 		...(state.composition.goal === undefined ? {} : { goal: state.composition.goal }),
 		messages: selectMessages(state.messages, messages),
+		scheduled: state.scheduled.map(({ dueAt, ...say }) => ({
+			...say,
+			due: new Date(dueAt).toISOString(),
+		})),
 		participants: participantsOf({ state, live: liveWork(state, now).seats }),
 		exchanges,
 		exchange: current,

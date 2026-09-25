@@ -18,6 +18,7 @@ export const view = (name: string, extra: Record<string, unknown> = {}) =>
 		activity: [],
 		prompt: `Try ${name}`,
 		messages: [],
+		scheduled: [],
 		participants: [],
 		exchanges: [],
 		exchange: undefined,

@@ -1,4 +1,4 @@
-import type { ParticipantInfo } from '@ambionframework/ambion';
+import type { ParticipantInfo, PendingSay } from '@ambionframework/ambion';
 import type { RoomAction, RoomView } from './workbench.ts';
 
 export const HELP = [
@@ -59,4 +59,13 @@ export const workingAgents = (view: RoomView | undefined): string[] =>
 export function emptyText(view: RoomView): string {
 	const start = 'Nothing here yet. Ask a question below, or type / for commands.';
 	return view.prompt ? `${start}\nTry: ${view.prompt}  (type /try to use it)` : start;
+}
+
+/** One say that waits to return, as the conversation notes it. */
+export function pendingLine(say: PendingSay): string {
+	const due = new Date(say.due);
+	const time = Number.isNaN(due.valueOf())
+		? say.due
+		: due.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+	return `${say.seat} comes back at ${time} for ${say.owner}: ${say.text}`;
 }

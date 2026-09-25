@@ -3,8 +3,11 @@ import { formatUsage, type PassView } from './steps.ts';
 
 type ClosedView = Extract<ExchangeView, { status: 'closed' }>;
 
-/** How a message reads in the conversation. A steer is a person's message inside a thread. */
-export type Role = 'question' | 'said' | 'summary' | 'steer';
+/**
+ * How a message reads in the conversation. A steer is a person's message
+ * inside a thread. A returned say is the room giving an agent's say back to it.
+ */
+export type Role = 'question' | 'said' | 'summary' | 'steer' | 'returned';
 
 export interface MessageBlock {
 	type: 'message';
@@ -75,7 +78,8 @@ interface Group {
 	direct: boolean;
 }
 
-const spoken = (message: Message): boolean => message.kind === 'said' || message.kind === 'summary';
+const spoken = (message: Message): boolean =>
+	message.kind === 'said' || message.kind === 'summary' || message.kind === 'returned';
 
 function waitingOn(exchange: ClosedView): string | undefined {
 	return exchange.outcome.kind === 'awaiting' ? `Waiting on ${exchange.outcome.person}` : undefined;
@@ -172,6 +176,7 @@ class Builder {
 
 	private roleOf = (message: Message, inThread: boolean): Role => {
 		if (message.kind === 'summary') return 'summary';
+		if (message.kind === 'returned') return 'returned';
 		if (!this.input.humans.has(message.from ?? '')) return 'said';
 		return inThread ? 'steer' : 'question';
 	};

@@ -106,6 +106,27 @@ describe('buildTimeline', () => {
 		expect(shape(build(messages, [exchange]))).toEqual(['question:59', 'said:61']);
 	});
 
+	it('shows a returned say as the opening of its own exchange, and the answer after it', () => {
+		const scheduled = { ...said(61, 'agent', 'agent'), after: 600 } as Message;
+		const returned = {
+			seq: 70,
+			kind: 'returned',
+			to: 'agent',
+			message: 61,
+			owner: 'mira',
+			text: 'Check the build.',
+			at: AT,
+		} as Message;
+		const messages = [said(59, 'mira'), scheduled, returned, said(72, 'agent', 'mira')];
+		const exchanges = [closedExchange(59, 61, 'mira'), closedExchange(70, 72, 'mira')];
+		expect(shape(build(messages, exchanges))).toEqual([
+			'question:59',
+			'said:61',
+			'returned:70',
+			'said:72',
+		]);
+	});
+
 	it('keeps the closing mark when a person is the only one who spoke after the question', () => {
 		// An exchange aborted after a follow-up: no agent replied, so there is nothing to show directly.
 		const exchange = closedExchange(4, 9, 'mira');

@@ -400,6 +400,22 @@ describe('Session steps', () => {
 	});
 });
 
+describe('Session scheduled says', () => {
+	it('notes each say that waits to return, with its seat, its time, and its owner', async () => {
+		const { host, session } = await started();
+		const say = { seq: 5, seat: 'bench', owner: 'mira', due: 'soon', text: 'Check the build.' };
+		host.table.set('bringup', view('bringup', { scheduled: [say] }));
+		await session.refresh();
+		expect(session.blocks).toContainEqual({
+			type: 'note',
+			text: 'bench comes back at soon for mira: Check the build.',
+		});
+		host.table.set('bringup', view('bringup'));
+		await session.refresh();
+		expect(blockTypes(session)).not.toContain('note');
+	});
+});
+
 describe('Session awaiting and approval', () => {
 	it('shows an awaiting exchange and a pending operation to the person they wait on only', async () => {
 		const { host, session } = await started();
