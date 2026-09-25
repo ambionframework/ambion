@@ -17,6 +17,7 @@ floor.
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/ambion`         | The runtime. One file per concern, in layers Biome holds; `room.ts` composes them                                                                                    |
 | `packages/assistant`      | The default assistant definition: membership guidance and closing summaries over the core                                                                            |
+| `packages/simulator`      | Evals: `simulate()` drives a room as a person, one exchange at a time, and returns the run that checks read                                                          |
 | `packages/cloudflare`     | A room as Durable Objects: one object per room, one per seat. Publishable; tested in workerd                                                                         |
 | `packages/journal`        | An append-only journal: one queue, fenced by run, with conditional commits                                                                                           |
 | `packages/pi`             | The Pi executor: `pi()` and `piExecution()` over Pi's AgentHarness; the kernel imports no model library                                                              |
@@ -31,6 +32,7 @@ floor.
 | `docs/exchange.md`        | Design contract for the exchange, the room's unit of work — read with `agent.md`                                                                                     |
 | `docs/presence.md`        | Design contract for presence and visits — read with `agent.md`                                                                                                       |
 | `docs/summary.md`         | Design contract for optional summaries of closed exchanges                                                                                                           |
+| `docs/simulator.md`       | Design contract for the simulator: the loop, the actor, the run, the judge, and the validation on the assistant's live suite                                         |
 | `docs/workspace.md`       | Design contract for the workspace an agent's tools reach into — read with `agent.md`                                                                                 |
 | `docs/processes.md`       | Design contract for background processes: `bash`, `ps`, `status`, `wait`, `cancel`, handles, output files, the host's view, and reminders — read with `workspace.md` |
 | `docs/workstation.md`     | Design contract for the workspace backend over SSH to one remote server, one Unix account for each agent — read with `workspace.md`                                  |

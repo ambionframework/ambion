@@ -19,21 +19,48 @@ exchange for the owner of the first one. See
 
 ### New
 
+- **`@ambionframework/simulator` runs evals on a room.** `simulate(room,
+  options)` drives a room that the test started. An actor plays a person,
+  one exchange at a time, and the loop waits for the close and the summary
+  under one deadline, `exchangeMs`. The run holds the moves, each exchange
+  with its closed view, one read of the room, the events, and the usage.
+  It ends with `stopped`, `limit`, `timeout`, or `failed`. `scriptedActor`
+  plays a fixed list of moves. See [Simulator](docs/simulator.md).
+- **`agentActor` and `agentJudge` run the person and the grade on a model.**
+  Each takes `model`, `tools`, `bundles`, `services`, and `timeoutMs`, and
+  runs on `runAgent`. The actor ends each move with `send` or `stop`, and
+  the tools see the person in `ctx.agent`. The judge reads the record
+  between two lines that carry a random token, and ends with `grade`: one
+  finding for each criterion, in the order of the list, reason first. The
+  judge attaches each criterion, and `grade` refuses a list of the wrong
+  length. `@ambionframework/simulator` now depends
+  on `@ambionframework/pi`.
+- **`runAgent` runs one Pi agent outside a room.** It takes a model, a
+  routing name, the agent that the tools see, a system prompt, one prompt,
+  tools and bundles, and the names of the tools that end the run. It runs
+  Pi's `AgentHarness` until the agent calls one of them, and returns that
+  call, the calls before it, and the usage of every request. A `signal`
+  aborts the run. `@ambionframework/pi` exports `runAgent`,
+  `RunAgentRequest`, `RunAgentResult`, and `RunAgentCall`. The simulator of
+  [Simulator](docs/simulator.md) builds its actor and its judge on it.
+- **A Pi seat takes a thinking level.** `pi({ thinking })` takes a Pi
+  `ThinkingLevel`, and the harness sends it to the provider. Absent, the
+  level is `off`, as before. `runAgent`, `defineAssistant`, `agentActor`,
+  and `agentJudge` take `thinking` too.
 - **`say` takes `after`.** A say to oneself with `after` schedules it. The
   room stamps `owner`, the owner of the open exchange, on the said entry,
   and refuses `after` in any other say. The result names the due time.
 - **The `returned` entry.** The room writes `{ to, message, owner,
   text, refs }` when a scheduled say is due. It has no `from`. It wakes
   one seat, the one that `to` names, and steers no other. It opens an
-  exchange for `owner` when none is open. `isReturned` and `ReturnedMessage` are new
-  exports.
+  exchange for `owner` when none is open. `isReturned` and
+  `ReturnedMessage` are new exports.
 - **`limits.schedule`** bounds `after` from `minAfter` to `maxAfter`
   seconds, 60 to 604,800 by default, and the says of one seat that wait,
   `pending`, 4 by default.
 - **`RoomRead.scheduled` lists the says that wait to return**, each a
   `PendingSay` with its due time. `PendingSay` is a new export.
 - **The workbench shows a returned say, and notes each say that waits.**
-
 - **`ps`, `status`, `wait`, and `cancel` join `bash`.** `ps` lists the
   running processes of the caller. The handle tools take a handle of the
   caller. `bash` takes an optional `name`, a label that `ps` and the
@@ -97,8 +124,27 @@ exchange for the owner of the first one. See
   it keeps the other lines. The agent's own `git` then clones and pushes
   over SSH to the git account on the loopback address.
 
+### Fixes
+
+- **`directoryBackend` runs each filesystem change as trusted code of
+  just-bash.** just-bash 3.4.2 starts a queued change in the async context
+  of the change before it. When a script made that earlier change and then
+  ended, the defense layer of just-bash blocked the queued change. Each
+  later change on the directory then waited with no end, and so did the
+  workspace owner, `wait`, and the host's list of processes.
+
 ### Breaking changes
 
+- **The default assistant is passive at `broadcast`, and keeps to
+  membership and summaries.** It sends nothing to a specialist at
+  `broadcast` or `presence` attention. It sends no correction, no relay,
+  and no question to the person during the exchange. The summary reports a superseded
+  fact, a broken constraint, and a question for the person. The assistant
+  answers a person or a specialist that addresses it, and it sends one directed
+  request to an idle specialist at `named` attention. A constraint stays in
+  force until the person withdraws it. Its identity now reads "Room
+  assistant. Seats and unseats specialists as the request needs, and
+  summarizes each exchange." See [Default assistant](docs/assistant.md).
 - **The journal changes.** A said entry takes `after` and `owner`, and the
   `returned` entry is new. A returned say opens an exchange, so the
   verified rule `opensExchange` accepts it.

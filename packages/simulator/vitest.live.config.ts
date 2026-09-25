@@ -4,7 +4,7 @@ export default defineConfig({
 	test: {
 		include: ['test/live/**/*.test.ts'],
 		fileParallelism: false,
-		// One exchange of 90 s and a grade. A case of more exchanges sets its own.
-		testTimeout: 300_000,
+		// Three moves, the exchanges, and a grade, each with its own bound.
+		testTimeout: 600_000,
 	},
 });

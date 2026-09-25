@@ -9,7 +9,7 @@
  * fields: the harness prepares and checks the arguments, and passes the
  * signal of the run and the updates.
  */
-import type { AmbionTool } from '@ambionframework/ambion';
+import type { AmbionTool, ToolContext, ToolUpdate } from '@ambionframework/ambion';
 import type {
 	ActivationView,
 	AgentDefinition,
@@ -61,11 +61,15 @@ function textOf(part: RoomToolContent): string {
 	return part.type === 'text' ? part.text : '';
 }
 
-/**
- * A harness tool from a normalized tool. The tool reads the view of the pass
- * that runs it, so the room and the open exchange it names are current.
- */
-function toPiTool(tool: AmbionTool, agent: AgentDefinition, current: () => ActivationView): PiTool {
+/** The context one call of a normalized tool receives. */
+export type ContextOf = (
+	call: string,
+	signal: AbortSignal | undefined,
+	onUpdate?: ToolUpdate,
+) => ToolContext;
+
+/** A harness tool from a normalized tool. `contextOf` gives each call its context. */
+export function fromAmbionTool(tool: AmbionTool, contextOf: ContextOf): PiTool {
 	return {
 		name: tool.name,
 		label: tool.label,
@@ -74,13 +78,22 @@ function toPiTool(tool: AmbionTool, agent: AgentDefinition, current: () => Activ
 		...(tool.prepareArguments === undefined ? {} : { prepareArguments: tool.prepareArguments }),
 		...(tool.executionMode === undefined ? {} : { executionMode: tool.executionMode }),
 		execute: async (toolCallId, params, onUpdate, _toolContext, _invocation, run) => {
-			const context = toolContext(agent, current(), toolCallId, run.abortSignal, onUpdate);
-			const result = await tool.invoke(params, context);
+			const result = await tool.invoke(params, contextOf(toolCallId, run.abortSignal, onUpdate));
 			return typeof result === 'string'
 				? { content: [{ type: 'text', text: result }], details: {} }
 				: result;
 		},
 	};
+}
+
+/**
+ * A harness tool from a normalized tool. The tool reads the view of the pass
+ * that runs it, so the room and the open exchange it names are current.
+ */
+function toPiTool(tool: AmbionTool, agent: AgentDefinition, current: () => ActivationView): PiTool {
+	return fromAmbionTool(tool, (call, signal, onUpdate) =>
+		toolContext(agent, current(), call, signal, onUpdate),
+	);
 }
 
 /**

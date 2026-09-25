@@ -101,6 +101,7 @@ holds the positioning and the headline of what is new.
 | `@ambionframework/just-bash`   | The just-bash shell and filesystem in the process, and a git backend in `/git`        |
 | `@ambionframework/workstation` | A bash backend over SSH, with one Unix account for each agent, and a git backend      |
 | `@ambionframework/assistant`   | A default assistant that guides membership and writes summaries                       |
+| `@ambionframework/simulator`   | Evals: an actor plays a person in a room, and the run holds what the room did         |
 | `@ambionframework/journal`     | The append-only journal and its storage contract                                      |
 | `@ambionframework/cloudflare`  | Rooms and seats as Durable Objects                                                    |
 

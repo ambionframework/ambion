@@ -96,6 +96,7 @@ scripted stream, custom storage, a transport, or limits passes
 | `activationTokenLimit` | The whole record              | The token limit of the record one activation reads.    |
 | `estimateTokens`       | `Math.ceil(text.length / 4)`  | Counts tokens against the limit. It needs the limit.   |
 | `compaction`           | `DEFAULT_COMPACTION_SETTINGS` | When the harness compacts the session.                 |
+| `thinking`             | `off`                         | How much the model reasons, a Pi `ThinkingLevel`.      |
 
 `piExecution({ stream, sessions, sessionDir })` takes three options.
 Without a `stream`, the Pi registry answers. A scripted `stream` makes a

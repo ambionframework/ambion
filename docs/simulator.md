@@ -1,13 +1,11 @@
 # The simulator
 
-**This page designs `@ambionframework/simulator`. The package does not exist
-yet.** The [backlog](../planning/backlog.md) holds the condition that
-schedules it. Until it lands, the live tests in `packages/*/test/live` are
-the only behavioral evidence.
-
-**The package is outside the 0.3.0 scope.** [The plan](../planning/next.md)
-names the evals package out of scope. A change to that scope comes before
-the first pull request.
+**This page designs `@ambionframework/simulator`.** Phase 2 of
+[the 0.3.0 plan](../planning/next.md) builds it, in the four pull requests
+of [the order of work](#the-order-of-work). The package holds `simulate`,
+`scriptedActor`, `agentActor`, and `agentJudge`, and the assistant's live
+suite runs on it. The evidence that validates the design waits on the first
+live run of that suite on `main`.
 
 **The rewrite of the assistant's live suite validates the design.** The
 package lands when `packages/assistant/test/live/behavior.test.ts` runs on
@@ -223,17 +221,24 @@ export function simulate(room: Room, options: SimulateOptions): Promise<Run>;
 2. Call `room.visit(person)` once.
 3. Call `actor(seen)`. A `stop` move ends the loop with `ended: 'stopped'`.
 4. Call `visit.send(move)`. The loop sends the next move only after the
-   exchange closes, so each move opens one exchange.
+   exchange closes, so each move opens one exchange. A message that joins
+   an exchange that was already open, such as one the test left open,
+   ends the loop with `ended: 'failed'`.
 5. Wait on `handle.waitForClose()`, then on `handle.waitForSummary()`.
    Both waits share one deadline, `exchangeMs` after the send, because the
    summary is the answer a person reads. In a room with no summary writer,
    `waitForSummary()` returns `undefined` when the close lands.
-6. At the deadline, call `room.abort()`, and end with `ended: 'timeout'`
-   after operation 7. Before the close, the abort writes a close with the
-   outcome `cancelled`, and the summary wait returns `undefined`. After the
-   close, the abort fails the pending summary, and `waitForSummary()`
-   rejects. The loop reads that one rejection as the timeout. The closed
-   view then shows the summary as `failed`.
+6. At the deadline, call `room.abort()`. Before the close, the abort
+   writes a close with the outcome `cancelled`, and the summary wait
+   returns `undefined`. After the close, the abort fails the pending
+   summary, and `waitForSummary()` rejects. The loop waits for the abort
+   to land, so it cancels no later work. The loop ends with
+   `ended: 'timeout'` after operation 7 when the outcome is `cancelled`, or
+   when the landed abort cut the summary. The closed view then shows the
+   summary as `failed`. An exchange that ended by itself before the abort
+   landed keeps its summary, and the loop goes on. An abort that rejects,
+   or a close that does not land in a second period of `exchangeMs`, ends
+   the loop with `ended: 'failed'`.
 7. Read the closed `ExchangeView` from `room.read()`. Add the exchange to
    `run.exchanges`, and add the discussion and the summary to `seen`.
 8. Go back to operation 3. After `exchanges` messages, end the loop with
@@ -275,6 +280,7 @@ agent definition and one more:
 | Option      | What it is                                                               |
 | ----------- | ------------------------------------------------------------------------ |
 | `model`     | A `provider/model-id`                                                    |
+| `thinking`  | A Pi `ThinkingLevel` for each move. The default is `off`                 |
 | `brief`     | The private goal of the person. It has the role of `instructions`        |
 | `tools`     | `AmbionTool` values, the same as an agent's                              |
 | `bundles`   | Tool bundles and their guidance, such as `workspace.tools()`             |
@@ -332,13 +338,15 @@ export function runAgent(
     readonly agent: { readonly name: string; readonly identity: string };
     readonly system: string;
     readonly prompt: string;
-    readonly tools: readonly AmbionTool[];
+    readonly tools?: readonly AmbionTool[];
     readonly bundles?: readonly ToolBundle[];
     /** The names of the tools that end the run. */
     readonly ends: readonly string[];
+    /** A Pi `ThinkingLevel`. Absent, `off`. */
+    readonly thinking?: ThinkingLevel;
     readonly signal?: AbortSignal;
   },
-): Promise<{ end: Call; calls: readonly Call[]; usage: Usage }>;
+): Promise<{ end: RunAgentCall; calls: readonly RunAgentCall[]; usage: Usage }>;
 ```
 
 - **The model.** `services.model(model, name)` resolves it. Over a scripted
@@ -349,16 +357,24 @@ export function runAgent(
 - **The loop.** `runAgent` opens one harness session, prompts it once, and
   closes it after the run. It has no steer, no resume, and no
   `readThrough`. A tool in `ends` returns `terminate: true`, and the
-  harness stops after it.
+  harness stops after it. The first call in `ends` to succeed ends the
+  run. A call after it gets a result that ends the run too, and the run
+  keeps no record of it. When a sequential batch holds another call
+  before the end, the harness sends one more request.
+- **The output limit.** A run that stops at the output limit with no call
+  in `ends` rejects, and the error names the limit.
 - **The tool context.** Each call gets `{ agent, callId, signal, onUpdate
 }`, with no `room`, `activation`, or `exchange`. `ToolContext` allows
   their absence, and the workspace audit log accepts it. `runAgent`
   resolves no reminders, because a reminder needs a room.
 - **The bound.** `signal` aborts the run the way a cut aborts an
-  activation. `agentActor` and `agentJudge` abort at `timeoutMs`, and the
-  promise rejects.
-- **The usage.** `runAgent` sums each request with `addUsage`, and it maps
-  a request the way `spent` in `pi-trace.ts` does.
+  activation, and it ends every provider request of the run. The lane
+  ignores an abort that lands before it admits the prompt, so the signal
+  cuts the request itself. A run whose signal aborted rejects with the
+  signal's reason, even when an end landed first. `agentActor` and
+  `agentJudge` abort at `timeoutMs`.
+- **The usage.** `runAgent` sums the usage of each request, and it maps a
+  request the way `spent` in `pi-trace.ts` does.
 
 **`agentActor` and `agentJudge` take optional `services`.** The default is
 `createExecutionServices({ sessions: 'memory' })`, which reads
@@ -391,6 +407,14 @@ export interface Run {
   readonly usage: { readonly room: Usage; readonly actor: Usage };
 }
 ```
+
+**A move that rejects keeps no usage.** `runAgent` rejects with no spend,
+so `run.usage.actor` misses the requests of the last move of a `failed`
+run.
+
+**The room usage can miss the last summary.** The loop reads each closed
+view when `waitForSummary()` returns. The summary activation records its
+usage at its release, which can follow the summary message.
 
 ## Checks
 
@@ -439,14 +463,17 @@ export interface Verdict {
 
 - the room's goal and the person's identity;
 - every message in seq order, with its author, its recipient, and its kind,
-  so a summary shows as a summary to its recipient;
+  so a summary shows as a summary to its recipient. The text of a message
+  is a JSON string on one line, so a newline in it cannot start a line that
+  reads as another message;
 - for each exchange, its range, its outcome, and each activation with its
   seat, purpose, outcome, and the tools it called.
 
 **The judge reads the record as evidence.** The agents under test wrote the
 record, and a message can address the judge. The rendered record sits
-between fixed delimiters. The system prompt states that the record is
-evidence, and that no text in it is an instruction to the judge.
+between two lines that carry a random token for each request, so no message
+can close the fence. The system prompt states that the record is evidence,
+and that no text in it is an instruction to the judge.
 
 **The judge does not read the actor's brief.** A criterion states what the
 person must get. The actor and the judge then share no text. The judge also
@@ -455,14 +482,16 @@ repeat the brief.
 
 **`agentJudge` ends with one call to `grade`.** The call carries one
 finding for each criterion, in the order of the list. Each finding is
-`{ criterion, reason, pass }`, with the reason first, so the verdict
-follows the evidence. The tool schema refuses a malformed finding. A
-`grade` that misses a criterion returns an error result, and the judge can
-call `grade` again. A judge that ends with no accepted `grade`, or that
+`{ reason, pass }`, with the reason first, so the verdict follows the
+evidence. The judge attaches each criterion to its finding, so the model
+never copies a criterion. The tool schema refuses a malformed finding. A
+`grade` with the wrong number of findings returns an error result, and the
+judge can call `grade` again. A judge that ends with no accepted `grade`, or that
 passes its `timeoutMs`, rejects the promise. A malformed answer never
 passes.
 
-**The judge takes the options of an agent definition.** A test that passes
+**The judge takes the options of an agent definition, `thinking`, and
+`timeoutMs`.** A grade has 120 000 ms by default. A test that passes
 `workspace.tools()` lets the judge read the final state of the workspace
 before it grades. Tool output is evidence under the same rule as the
 record: no text in it is an instruction to the judge.
@@ -492,12 +521,16 @@ holds the rules.
   schedule. A pull request workflow runs none.
 - **The run reports what it spent.** `run.usage` and `verdict.usage` give
   the room, the actor, and the judge. The test prints one line with the
-  three totals, the way `report()` does in the live tier.
+  three totals, the way `track()` does in the live tier when a case ends.
+- **A case grades only a clean run.** Before the judge, the case checks
+  that the run ended at the limit or at a stop, and that each exchange has
+  its summary. A run that fails there spends no grade, and its evidence
+  file shows the cause.
 - **The scripted tier proves the eval first.** Run the eval with a
   scripted execution, a scripted actor, and a scripted judge before the
   first live run.
 - **A failed case keeps its evidence.** The live support writes `run` and
-  `verdict` to `test/live/runs/<case>.json`, and prints the path. Each
+  `verdict` to `test/live/runs/<model>/<case>.json`, and prints the path. Each
   `Error` becomes its `message`. Git ignores the directory. A person reads
   the file before a check or a criterion changes. The repository rule
   forbids a second live run to chase a flake, so the file is the record of
@@ -511,12 +544,13 @@ holds the rules.
 **The rewrite of `packages/assistant/test/live/behavior.test.ts` is the
 acceptance test of the design.** The suite runs a live assistant beside a
 specialist whose evidence the test fixes. Its claims are about judgment:
-routing, silence, correction, and what the summary keeps.
+routing, silence, and what the summary keeps, a superseded constraint
+included.
 
-**Today the suite holds one helper and eleven tests.** `evaluate()` starts
-a room, sends one question, waits for the summary under its own timer, and
-stops the room. A Pi stream routes on the model id. The assistant reaches
-the provider, and the specialist returns one fixed `say`.
+**Before the port, the suite held one helper and eleven tests.** `evaluate()` started
+a room, sent one question, waited for the summary under its own timer,
+and stopped the room. A Pi stream routed on the model id. The assistant
+reached the provider, and the specialist returned one fixed `say`.
 
 **The rewrite removes both mechanisms.**
 
@@ -532,52 +566,75 @@ the provider, and the specialist returns one fixed `say`.
   for each seat name over the life of its runtime. A shared runtime shares
   the counter between cases.
 
-**The specialist script reads the view, and ignores the counter.** The
-`call` argument counts every step of the seat in the runtime, so a script
-that speaks at `call === 1` answers the first exchange only. A script for a
-case with several exchanges speaks once in each exchange:
+**The specialist script reads the view and its results, and ignores the
+counter.** The `call` argument counts every step of the seat in the
+runtime, so a script that speaks at `call === 1` answers the first exchange
+only. The view of a later step in one activation may not hold the say the
+seat just made, so the script also stops once the activation has a result.
+A script for a case with several exchanges speaks once in each exchange:
 
 ```ts
 const answers =
   (fact: string): Script =>
-  ({ view }) => {
-    const from = view.context.exchange?.from ?? 0;
+  ({ view, results }) => {
+    if (results.length > 0 || view.context.exchange === undefined) return quiet();
+    const { from } = view.context.exchange;
     const spoke = view.context.messages.some(
       (m) => m.kind === 'said' && m.from === 'inventory' && m.seq >= from,
     );
-    return spoke ? quiet() : speak(fact, 'assistant');
+    return spoke ? quiet() : speak(fact);
   };
 ```
+
+`packages/assistant/test/live/support.ts` holds this script, the room, the
+evidence of a failed case, and the cost line.
+`packages/assistant/test/eval-support.test.ts` runs the support with a
+scripted Pi assistant, so its plumbing needs no key.
 
 **An exact fact stays a check. A regex that lists wordings becomes a
 criterion.** A check such as `/8|eight/` decides a fact. A regex that lists
 eight ways to say "not verified" grades a meaning.
 
-| Case today                                      | Checks                                                                                                                      | Criteria for the judge                                                               |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Routes participation, five samples              | The specialist spoke. At `named`, the assistant says once, to `inventory`, and says nothing otherwise. The summary names 8. | None                                                                                 |
-| The reserve sample of the five                  | The record holds a `seated` entry for `inventory` from `assistant`.                                                         | None                                                                                 |
-| Corrects a superseded constraint, three samples | The assistant says once, and names 8. The summary names 8.                                                                  | None                                                                                 |
-| Does not steer valid work                       | The assistant says nothing.                                                                                                 | The summary says that the dispatch capacity is unknown, and it reports no success.   |
-| Honors an application override                  | The assistant says the exact override text once. The summary names 8.                                                       | None                                                                                 |
-| Keeps the verification limits                   | The assistant says nothing. The summary matches `/source\|static/`.                                                         | The summary says that runtime behavior is unverified, and that nothing was released. |
+| Case today                                                   | Checks                                                                                                                      | Criteria for the judge                                                                                                                                         |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Routes participation, five samples                           | The specialist spoke. At `named`, the assistant says once, to `inventory`, and says nothing otherwise. The summary names 8. | None                                                                                                                                                           |
+| The reserve sample of the five                               | The record holds a `seated` entry for `inventory` from `assistant`.                                                         | None                                                                                                                                                           |
+| Leaves a superseded constraint to the summary, three samples | The assistant says nothing. The summary names 8.                                                                            | The summary reports that inventory planned on the withdrawn limit, states the limit of 8, and does not accept the plan.                                        |
+| Does not steer valid work                                    | The assistant says nothing.                                                                                                 | The summary says that the dispatch capacity is unknown, and it reports no success.                                                                             |
+| Honors an application override                               | The assistant says the exact override text once. The summary names 8.                                                       | None                                                                                                                                                           |
+| Keeps the verification limits                                | The assistant says nothing.                                                                                                 | The summary says that the check was a source inspection of a static prototype, that runtime behavior is unverified, and that nothing was released or deployed. |
 
 **The rewrite adds the cases that `evaluate()` cannot express.** Each one
 needs more than one exchange.
 [Assistant evaluation](assistant.md#integration-and-evaluation) lists
 them.
 
-| New case                                    | Actor                                                   | Checks                                                                     | Criteria for the judge                                                                                     |
-| ------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| A person revises the request                | Scripted: the question, then the revision               | At `named`, the assistant says once to `inventory` in the second exchange. | The request to `inventory` carries the revision. The second summary uses it.                               |
-| A constraint survives into a later exchange | Scripted: a no-dispatch constraint, then a plan request | At `named`, the assistant says once to `inventory` in the second exchange. | That request carries the no-dispatch constraint. The second summary keeps it.                              |
-| The assistant needs a material fact         | `agentActor`, with the fact in the brief                | Two exchanges run. The second message the person sent carries the fact.    | The first summary asks for the fact, or reports that the work waits on it. The last summary uses the fact. |
+| New case                                    | Actor                                                   | Checks                                                                                                                  | Criteria for the judge                                                                                     |
+| ------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| A person revises the request                | Scripted: the question, then the revision               | At `named`, the assistant says once to `inventory` in the second exchange, and names SKU B. The second summary names 5. | The second summary answers for SKU B.                                                                      |
+| A constraint survives into a later exchange | Scripted: a no-dispatch constraint, then a plan request | At `named`, the assistant says once to `inventory` in the second exchange.                                              | That request carries the no-dispatch constraint. The second summary keeps it.                              |
+| The assistant needs a material fact         | `agentActor`, with the fact in the brief                | Two or more exchanges run. The assistant says nothing. A message the person sent after the first carries the fact.      | The first summary asks for the fact, or reports that the work waits on it. The last summary uses the fact. |
 
 **The specialist asks for the material fact.** In the third case, its
-script says in the first exchange that it needs the fact. The assistant can
-relay the question in a `say` or in the summary. Both reach the person, and
-neither makes the exchange `awaiting`, so the check reads the second
-message and the judge reads the first summary.
+script asks the person for the fact in the first exchange. The kernel's
+speaking policy directs a question that only one participant can answer, so
+the specialist addresses the person. The assistant says nothing, so the
+check reads the second message and the judge reads the first summary.
+
+**Five cases hold the rest of the assistant's purpose.** The assistant is
+passive at `broadcast`, it answers a participant who addresses it, and it
+changes membership on request and on need only. The scripted specialist
+reports to the room, and it addresses a participant only with a question for
+that participant. It picks its reply from the words of the person, so the
+words of an agent never change the evidence.
+
+| Purpose case                                | Actor                                             | Checks                                                                                                       | Criteria for the judge                                                              |
+| ------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| A person asks the assistant at `broadcast`  | Scripted: a question with `to: 'assistant'`       | The assistant says once, to the person. The specialist says nothing. No `seated` or `unseated` entry.        | The answer names `inventory` as the agent that checks stock, and says it is seated. |
+| A person asks a `named` specialist directly | Scripted: a question with `to: 'inventory'`       | The assistant says nothing. The specialist spoke. The summary names 8.                                       | None                                                                                |
+| An unseat on request, and not before        | Scripted: a question, then a request to remove it | No `unseated` entry in the first exchange, one from the assistant in the second. The assistant says nothing. | The second summary says that `inventory` left the room.                             |
+| No seat without need                        | Scripted: a note that needs no specialist         | No `seated` entry. The specialist and the assistant say nothing.                                             | None                                                                                |
+| A specialist asks the assistant             | Scripted: a question about the north warehouse    | The specialist asks the assistant which warehouse. The assistant says once, to `inventory`, and names north. | None                                                                                |
 
 **Samples stay in the test.** `it.each` keeps the sample numbers of today.
 The simulator repeats nothing. `it.each` over k samples measures pass^k:
@@ -588,6 +645,7 @@ the case passes when every sample passes.
 - The file no longer holds `evaluate()` or the routing stream.
 - Every claim of the eleven tests holds as a check or a criterion.
 - The three new cases run, and each one has more than one exchange.
+- The five purpose cases run.
 - `pnpm check` passes, and one live run of the file prints the cost of each
   case: the room, the actor, and the judge.
 - A gap that the port finds changes this page first, and the package
@@ -600,7 +658,7 @@ its evidence below.
 
 | Pull request              | What it adds                                                 | Evidence                                            |
 | ------------------------- | ------------------------------------------------------------ | --------------------------------------------------- |
-| 1. Pi: `runAgent`         | `packages/pi/src/run-agent.ts`, the export, a changelog line | [The `runAgent` cases](#tests), the export snapshot |
+| 1. Pi: `runAgent`         | `packages/pi/src/run-agent.ts`, the export, a changelog line | [The `runAgent` cases](#tests)                      |
 | 2. Simulator: the loop    | `simulate`, `scriptedActor`, the package and its graph line  | The scripted-tier table                             |
 | 3. Simulator: the agents  | `agentActor`, `agentJudge`, `send`, `stop`, `grade`          | The scripted-stream cases, and one live case        |
 | 4. Assistant: the rewrite | The port of `behavior.test.ts`                               | [Validation](#validation-the-assistants-live-suite) |
@@ -612,15 +670,19 @@ its evidence below.
 `simulator ──▶ ambion, pi`. `packages/pi/src/run-agent.ts` holds
 `runAgent`, the one change to the Pi package.
 
-| File                      | What it holds                                  |
-| ------------------------- | ---------------------------------------------- |
-| `src/simulate.ts`         | `simulate`, `Run`, `Seen`, `Move`              |
-| `src/actor.ts`            | `scriptedActor`, `agentActor`, `send`, `stop`  |
-| `src/judge.ts`            | `agentJudge`, `Verdict`, and `grade`           |
-| `src/index.ts`            | The one entry                                  |
-| `test/simulate.test.ts`   | The loop on a scripted room                    |
-| `test/agent.test.ts`      | The agent actor and judge on a scripted stream |
-| `test/live/agent.test.ts` | One live case of the actor and the judge       |
+| File                      | What it holds                                   |
+| ------------------------- | ----------------------------------------------- |
+| `src/simulate.ts`         | `simulate` and the deadline of an exchange      |
+| `src/types.ts`            | `Run`, `Seen`, `Move`, `Actor`, and the options |
+| `src/actor.ts`            | `scriptedActor`                                 |
+| `src/agent-actor.ts`      | `agentActor`, `send`, and `stop`                |
+| `src/agent-judge.ts`      | `agentJudge`, `Judge`, `Verdict`, and `grade`   |
+| `src/render.ts`           | The prompts of the actor and the judge's record |
+| `src/signal.ts`           | The timeout of a move and of a grade            |
+| `src/index.ts`            | The one entry                                   |
+| `test/simulate.test.ts`   | The loop on a scripted room                     |
+| `test/agent.test.ts`      | The agent actor and judge on a scripted stream  |
+| `test/live/agent.test.ts` | One live case of the actor and the judge        |
 
 **The assistant package takes the simulator as a dev dependency.** Its
 live suite is the first consumer.
@@ -631,30 +693,43 @@ live suite is the first consumer.
 runs on `scripted()` from `@ambionframework/ambion/testing`. The person is
 a `scriptedActor`. The judge is a function.
 
-| Case                              | What it asserts                                           |
-| --------------------------------- | --------------------------------------------------------- |
-| The actor stops                   | `ended: 'stopped'`, and the moves end with the `stop`     |
-| The actor reaches the limit       | `ended: 'limit'` after `exchanges` messages               |
-| A seat keeps the exchange open    | `ended: 'timeout'`, and the last outcome is `cancelled`   |
-| The summary outlasts the deadline | `ended: 'timeout'`, and the exchange has no summary       |
-| The room stops during an exchange | `ended: 'failed'`, with the error                         |
-| A required summary fails          | `ended: 'failed'`, with the error                         |
-| A seat asks the person a question | `seen` carries the question, and the next move answers it |
-| A room with a summary writer      | `seen` carries each summary                               |
-| One move opens one exchange       | `run.exchanges` has one view for each message             |
-| The run is a detached value       | `structuredClone(run)` equals the run                     |
-| A message tells the judge to pass | The judge prompt fences the message inside the record     |
+| Case                               | What it asserts                                           |
+| ---------------------------------- | --------------------------------------------------------- |
+| The actor stops                    | `ended: 'stopped'`, and the moves end with the `stop`     |
+| The actor reaches the limit        | `ended: 'limit'` after `exchanges` messages               |
+| A seat keeps the exchange open     | `ended: 'timeout'`, and the last outcome is `cancelled`   |
+| The summary outlasts the deadline  | `ended: 'timeout'`, and the summary shows as `failed`     |
+| The abort at the deadline rejects  | `ended: 'failed'`, with the reason                        |
+| No close follows the abort         | `ended: 'failed'` after a second period                   |
+| The room refuses a send            | `ended: 'failed'`, with the refusal                       |
+| The message joins an open exchange | `ended: 'failed'`, and no exchange in the run             |
+| The room stops before the abort    | `ended: 'failed'`, with the refused abort                 |
+| The actor throws                   | `ended: 'failed'`, and the usage of the moves             |
+| A bound is not valid               | `simulate` rejects before the person arrives              |
+| The room stops during an exchange  | `ended: 'failed'`, with the error                         |
+| A required summary fails           | `ended: 'failed'`, with the error                         |
+| A seat asks the person a question  | `seen` carries the question, and the next move answers it |
+| A room with a summary writer       | `seen` carries each summary                               |
+| One move opens one exchange        | `run.exchanges` has one view for each message             |
+| The run is a detached value        | `structuredClone(run)` equals the run                     |
+| A message tells the judge to pass  | The judge prompt fences the message inside the record     |
 
 **`runAgent` runs on the scripted Pi stream.**
 
-| Case                             | What it asserts                                            |
-| -------------------------------- | ---------------------------------------------------------- |
-| A tool in `ends` is called       | The run returns that call, and the calls before it         |
-| The signal aborts                | The promise rejects                                        |
-| Several requests                 | `usage` sums every request                                 |
-| A bundle tool has an `ends` name | The run fails at once with a duplicate name                |
-| A workspace tool is called       | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
-| Two names on one scripted stream | Each run answers from the script for its `name`            |
+| Case                                    | What it asserts                                            |
+| --------------------------------------- | ---------------------------------------------------------- |
+| A tool in `ends` is called              | The run returns that call, and the calls before it         |
+| The signal aborts                       | The promise rejects                                        |
+| Several requests                        | `usage` sums every request                                 |
+| A bundle tool has an `ends` name        | The run fails at once with a duplicate name                |
+| A tool is called                        | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
+| Two names on one scripted stream        | Each run answers from the script for its `name`            |
+| The agent stops with no end call        | The promise rejects, and names the tools in `ends`         |
+| Two ending calls run at once            | The first call to succeed ends the run                     |
+| A batch holds a call before the end     | The run returns after one more request                     |
+| The signal aborts while the run opens   | The promise rejects, and no request goes out               |
+| The signal aborts at each session write | The promise rejects with the signal's reason               |
+| The output reaches its limit            | The promise rejects, and names the limit                   |
 
 **The agent actor and the agent judge run on the scripted Pi stream.**
 The cases cover the prompt text, the name each request carries, and a
@@ -684,5 +759,11 @@ tool calls on a real provider.
 - A panel of judges with a majority vote.
 - Statistics across samples beyond pass^k, such as pass@k and confidence
   intervals.
+- The names of the participants in the actor's prompt, and a `send` that
+  refuses a `to` that names nobody. The actor learns a name when its owner
+  speaks.
+- A clock option for `simulate`, so a test can fire the deadline in the
+  same tick as a summary.
+- The usage of a move that rejects.
 - A budget in money that stops a run.
 - A report format, a command-line tool, and a CI workflow for evals.

@@ -56,13 +56,14 @@ repositories in one account on the server. Each agent reaches them with
 
 ## The scope
 
-**Three themes, each with the acceptance it must meet on the tagged
+**Four themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
 | Theme                    | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317.                              |
 | B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).                                      |
+| E Evals                  | The assistant's live suite runs on `@ambionframework/simulator`, with three cases over several exchanges and five cases of the assistant's purpose. It must pass on two model families at `medium` thinking, each graded by the other. [Simulator](../docs/simulator.md) holds the design.                                                                                                                                                      |
 | S A scheduled say        | An agent says to itself with `after`, and the room refuses every other use of `after` and every other say to oneself. The room writes a `returned` entry when the say is due, and the entry wakes the seat. The returned say opens an exchange for the owner of the exchange of the say when no exchange is open. A kill between the say and the returned say keeps one delivery, and the Cloudflare room object delivers it through its alarm. |
 
 **One journal format change.** A said entry takes `after`, and the
@@ -98,8 +99,6 @@ condition that brings each one back.
 - **A repeatable release from CI (R1).** The owner runs the release.
 - **A generated API reference.** It adds a build step and a CI check, and
   the typed README examples already hold the surface.
-- **The evals package.** PR #153 is a draft, conflicts with main, and
-  carries its own list of open work.
 - **The open proofs.** The stop-loop and pass measures, unique roster
   names, `seatLive`, and `storedIdAccepted` remove no defect today.
 - **A backend profile and concurrent operations.** A profile that lets the
@@ -169,10 +168,11 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Three phases remain, and the git phase holds no open step.** Background
-processes (B1 and B2) needed no phase. The release needs the git phase and
-the scheduled say. A step names the steps it needs; a step with no "Needs"
-line starts now. **P1** carries the release story.
+**Four phases remain, and the git and simulator phases hold no open
+step.** Background processes (B1 and B2) needed no phase. The release needs
+the git, simulator, and scheduled say phases. A step names the steps it
+needs; a step with no "Needs" line starts now. **P1** carries the release
+story.
 
 ### Phase 1. Git on the workstation (P1)
 
@@ -187,7 +187,51 @@ with the SSH harness, and the tier proves the checks that
 [Workstation git](../docs/workstation-git.md#tests) lists. The workbench
 runs on `justGitBackend`. The evidence holds on `main`.
 
-### Phase 2. A scheduled say (P1)
+### Phase 2. The simulator (P1)
+
+**Goal:** an eval drives a room as a person, checks the run in code, and
+asks a judge for the rest.
+
+- [x] **1.** `runAgent` in `@ambionframework/pi`: one agent run outside a
+      room, until the agent calls a tool that ends it. P1. (E1) Landed in
+      #319.
+- [x] **2.** `@ambionframework/simulator` with `simulate` and
+      `scriptedActor`, proven on the scripted tier. P1. (E1) Landed in
+      #324.
+- [x] **3.** `agentActor`, `agentJudge`, and their tools `send`, `stop`,
+      and `grade`, with one live case. Needs 1 and 2. P1. (E1) Landed in
+      #326.
+- [x] **4.** The assistant's live suite on the simulator. Needs 3. P1.
+      (E1) Landed in #327.
+- [x] **5.** The assistant held to its purpose: passive at `broadcast`,
+      membership and summaries, an answer when a participant addresses it. Five
+      purpose cases, a thinking level for Pi seats, and the suite passes on
+      `anthropic/claude-sonnet-5` and `openai/gpt-5.6-luna` at `medium`,
+      each graded by the other. Needs 4. P1. (E1) Landed in #331.
+
+**The results of step 5.** Each cell counts the passing cases, with one
+sample for each case. Each model is graded by the other family.
+
+| Guidance                                          | Sonnet 5, `medium` | Luna 5.6, `medium` |
+| ------------------------------------------------- | ------------------ | ------------------ |
+| Before the change, 18 cases                       | 13                 | 12                 |
+| Membership first                                  | 16                 | 16                 |
+| Each reaction at `broadcast` named                | 17                 | 18                 |
+| A constraint stays until withdrawn                | 17                 | 18                 |
+| The rule for each specialist, and its questions   | 17                 | 17                 |
+| A specialist that addresses the assistant, 19     | 19                 | 18                 |
+| No redirect of a specialist that cannot do work   | 17 (a)             | 18 (a)             |
+| The specialists read only the words of the person | 19                 | 19                 |
+
+(a) Two scripted specialists read the words of the assistant. The last row
+fixes the scripts, and it runs the same guidance.
+
+**Evidence:** each step states its cases in
+[Simulator](../docs/simulator.md#the-order-of-work). The last step keeps
+every claim of the assistant's live suite, and one live run of the file
+prints the cost of each case.
+
+### Phase 3. A scheduled say (P1)
 
 **Goal:** an agent checks a long process later, and no event source and no
 host code wake it.
@@ -203,12 +247,12 @@ host code wake it.
 **Evidence:** the tests and the golden journal that S1 names hold on
 `main`, and the docs that call timers future work state what shipped.
 
-### Phase 3. Release (P1)
+### Phase 4. Release (P1)
 
 **Goal:** the tag names a commit that a live run tested.
 
 - [ ] **1.** The changelog entry for 0.3.0 names each export that
-      changed. Needs phases 1 and 2. P1. (R0)
+      changed. Needs phases 1, 2, and 3. P1. (R0)
 - [ ] **2.** The live run on `main` after the last merge passes for Pi,
       Claude, and Codex. Needs 1. P1. (R0)
 
@@ -318,6 +362,18 @@ posts a message to wake the owner seat. **Evidence:** the deadline tests
 in the core and the workspace, the cursor tests on just-bash and on the
 workstation, and the test of a wait on several handles. #320, #321, and
 #322 carry the code.
+
+### E. Evals
+
+**E1. A simulator for evals.** A live test sends one fixed question and
+matches the answer with a regex. It cannot follow up on an answer, and
+a regex cannot grade a meaning. PR #153 tried a larger package and stays
+a draft. `@ambionframework/simulator` runs a loop of one exchange at a
+time. An actor plays a person, checks in code read the run, and a judge
+grades the criteria that code cannot decide. The actor and the judge are
+agents on Pi's `AgentHarness`, configured with tools and bundles like any
+agent. **Evidence:** the assistant's live suite runs on the simulator.
+Then close PR #153 with a comment that names the new package.
 
 ### S. A scheduled say
 
