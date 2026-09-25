@@ -9,7 +9,8 @@
  * - **Deadline.** One deadline covers the close and the summary. At the
  *   deadline the loop calls `room.abort()`. The abort closes an open
  *   exchange, or it fails a pending summary, and the loop ends with
- *   `timeout`.
+ *   `timeout`. An abort that fails, or a close that does not land in a
+ *   second period, ends the loop with `failed`.
  * - **Failure.** A rejected wait, a refused send, and an actor that throws
  *   end the loop with `failed`, and the run keeps the message.
  * - **The room.** The test started the room, and the test stops it.
@@ -130,10 +131,10 @@ class Loop {
 		const deadline = new Deadline(this.room, this.options.exchangeMs ?? DEFAULT_EXCHANGE_MS);
 		let summary: RunExchange['summary'];
 		try {
-			const discussion = await handle.waitForClose();
-			summary = await handle.waitForSummary().catch((error: unknown) => {
+			const discussion = Object.freeze(await deadline.race(handle.waitForClose()));
+			summary = await deadline.race(handle.waitForSummary()).catch((error: unknown) => {
 				// The abort at the deadline fails a pending summary. That rejection is the timeout.
-				if (deadline.passed) return undefined;
+				if (deadline.passed && !(error instanceof DeadlineFailure)) return undefined;
 				throw error;
 			});
 			deadline.clear();
@@ -158,20 +159,56 @@ class Loop {
 	}
 }
 
-/** The deadline of one exchange. When it passes, it aborts the room's work. */
+/** The deadline could not end the exchange: the abort failed, or no close followed it. */
+class DeadlineFailure extends Error {
+	override readonly name = 'DeadlineFailure';
+}
+
+/**
+ * The deadline of one exchange. When it passes, it aborts the room's work.
+ * When the abort rejects, or the close does not land within a second
+ * period of the same length, `race` rejects, so the loop never waits for
+ * ever.
+ */
 class Deadline {
 	passed = false;
-	private readonly timer: ReturnType<typeof setTimeout>;
+	private readonly failed: Promise<never>;
+	private fail: (error: DeadlineFailure) => void = noop;
+	private readonly timers: ReturnType<typeof setTimeout>[] = [];
+	private cleared = false;
 
 	constructor(room: Room, ms: number) {
-		this.timer = setTimeout(() => {
-			this.passed = true;
-			room.abort().catch(noop);
-		}, ms);
+		this.failed = new Promise<never>((_, reject) => {
+			this.fail = reject;
+		});
+		// A deadline that never fails leaves the promise unread.
+		this.failed.catch(noop);
+		this.timers.push(setTimeout(() => this.pass(room, ms), ms));
+	}
+
+	/** `promise`, unless the deadline fails first. */
+	race<T>(promise: Promise<T>): Promise<T> {
+		return Promise.race([promise, this.failed]);
 	}
 
 	clear(): void {
-		clearTimeout(this.timer);
+		this.cleared = true;
+		for (const timer of this.timers) clearTimeout(timer);
+	}
+
+	private pass(room: Room, ms: number): void {
+		this.passed = true;
+		room.abort().then(
+			() => {
+				if (this.cleared) return;
+				const late = new DeadlineFailure(`The exchange did not close ${ms} ms after the abort.`);
+				this.timers.push(setTimeout(() => this.fail(late), ms));
+			},
+			(error: unknown) => {
+				const message = error instanceof Error ? error.message : String(error);
+				this.fail(new DeadlineFailure(`The abort at the deadline failed: ${message}`));
+			},
+		);
 	}
 }
 

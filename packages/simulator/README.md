@@ -2,7 +2,8 @@
 
 `@ambionframework/simulator` runs evals on an Ambion room. An actor plays a
 person, one exchange at a time, and `simulate` returns a run that checks in
-code read. [Simulator](../../docs/simulator.md) holds the design.
+code read. [Simulator](../../docs/simulator.md) holds the design. The example
+below elides the definition of the `weather` agent.
 
 ```sh
 npm install @ambionframework/ambion @ambionframework/simulator

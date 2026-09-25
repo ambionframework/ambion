@@ -4,9 +4,8 @@
 [the 0.3.0 plan](../planning/next.md) builds it, in the four pull requests
 of [the order of work](#the-order-of-work). The package holds `simulate`
 and `scriptedActor`. `agentActor`, `agentJudge`, and the port of the
-assistant's live suite are open. Until it
-lands, the live tests in `packages/*/test/live` are the only behavioral
-evidence.
+assistant's live suite are open. Until step 4 lands, the live tests in
+`packages/*/test/live` are the only behavioral evidence.
 
 **The rewrite of the assistant's live suite validates the design.** The
 package lands when `packages/assistant/test/live/behavior.test.ts` runs on
@@ -232,7 +231,10 @@ export function simulate(room: Room, options: SimulateOptions): Promise<Run>;
    outcome `cancelled`, and the summary wait returns `undefined`. After the
    close, the abort fails the pending summary, and `waitForSummary()`
    rejects. The loop reads that one rejection as the timeout. The closed
-   view then shows the summary as `failed`.
+   view then shows the summary as `failed`. A summary that lands before
+   the cancellation entry stays on the exchange. An abort that rejects, or
+   a close that does not land in a second period of `exchangeMs`, ends
+   the loop with `ended: 'failed'`.
 7. Read the closed `ExchangeView` from `room.read()`. Add the exchange to
    `run.exchanges`, and add the discussion and the summary to `seen`.
 8. Go back to operation 3. After `exchanges` messages, end the loop with
@@ -395,6 +397,10 @@ export interface Run {
   readonly usage: { readonly room: Usage; readonly actor: Usage };
 }
 ```
+
+**The room usage can miss the last summary.** The loop reads each closed
+view when `waitForSummary()` returns. The summary activation records its
+usage at its release, which can follow the summary message.
 
 ## Checks
 
@@ -642,7 +648,12 @@ a `scriptedActor`. The judge is a function.
 | The actor stops                   | `ended: 'stopped'`, and the moves end with the `stop`     |
 | The actor reaches the limit       | `ended: 'limit'` after `exchanges` messages               |
 | A seat keeps the exchange open    | `ended: 'timeout'`, and the last outcome is `cancelled`   |
-| The summary outlasts the deadline | `ended: 'timeout'`, and the exchange has no summary       |
+| The summary outlasts the deadline | `ended: 'timeout'`, and the summary shows as `failed`     |
+| The abort at the deadline rejects | `ended: 'failed'`, with the reason                        |
+| No close follows the abort        | `ended: 'failed'` after a second period                   |
+| The room refuses a send           | `ended: 'failed'`, with the refusal                       |
+| The actor throws                  | `ended: 'failed'`, and the usage of the moves             |
+| A bound is not valid              | `simulate` rejects before the person arrives              |
 | The room stops during an exchange | `ended: 'failed'`, with the error                         |
 | A required summary fails          | `ended: 'failed'`, with the error                         |
 | A seat asks the person a question | `seen` carries the question, and the next move answers it |

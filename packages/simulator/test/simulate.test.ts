@@ -135,14 +135,56 @@ describe('simulate', () => {
 			person: priya,
 			actor: scriptedActor(['Can we pour?', 'And Friday?']),
 			exchanges: 2,
-			exchangeMs: 300,
+			// Long enough for the desk to speak on a loaded runner before the deadline.
+			exchangeMs: 2_000,
 		});
 		expect(run.ended).toBe('timeout');
 		expect(run.moves).toHaveLength(1);
 		const exchange = run.exchanges[0];
 		expect(exchange?.view.outcome.kind).toBe(outcome);
 		expect(exchange?.summary).toBeUndefined();
+		if (outcome === 'complete') expect(exchange?.view.summary.status).toBe('failed');
 		expect(run.error).toBeUndefined();
+	});
+
+	it.each([
+		[
+			'the abort rejects',
+			() => Promise.reject(new Error('The journal refused the cancel.')),
+			/abort at the deadline failed: The journal refused the cancel/,
+		],
+		['no close follows the abort', () => Promise.resolve(), /did not close 200 ms after the abort/],
+	] as const)('ends with `failed` when %s', async (_case, abort, error) => {
+		const room = await open(byAgent({ desk: () => forever() }), ['desk']);
+		// The room itself, with an abort that cannot end the exchange.
+		const stuck = new Proxy(room, {
+			get(target, key) {
+				if (key === 'abort') return abort;
+				const value: unknown = Reflect.get(target, key);
+				return typeof value === 'function' ? value.bind(target) : value;
+			},
+		});
+		const run = await simulate(stuck, {
+			person: priya,
+			actor: scriptedActor(['Can we pour?']),
+			exchanges: 1,
+			exchangeMs: 200,
+		});
+		expect(run.ended).toBe('failed');
+		expect(run.error).toMatch(error);
+		expect(run.exchanges).toEqual([]);
+	});
+
+	it('ends with `failed` when the room refuses a send', async () => {
+		const room = await open(answering, ['desk']);
+		const run = await simulate(room, {
+			person: priya,
+			actor: scriptedActor([{ text: '   ' }]),
+			exchanges: 1,
+		});
+		expect(run.ended).toBe('failed');
+		expect(run.error).toMatch(/blank|empty|text/i);
+		expect(run.exchanges).toEqual([]);
 	});
 
 	it('ends with `failed` when the room stops during an exchange', async () => {
