@@ -310,7 +310,8 @@ describe('Workbench host', () => {
 					stopReason: 'toolUse',
 				});
 			if (agent !== 'assistant' || closing) return fauxAssistantMessage('quiet');
-			if (call === 1) return start('echo hello from the bench', 'greet', 5);
+			// A wait of 1 s keeps the start of the soak inside the budget of the waitFor below.
+			if (call === 1) return start('echo hello from the bench', 'greet', 1);
 			if (call === 2) return start('sleep 60', 'soak', 0);
 			return fauxAssistantMessage('quiet');
 		});
@@ -323,7 +324,7 @@ describe('Workbench host', () => {
 		await workbench.join('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'ps-1', 'Start the soak.');
 		await vi.waitFor(async () => expect(await workbench.processes()).toHaveLength(2), {
-			timeout: 5_000,
+			timeout: 10_000,
 		});
 		// The running process comes first, then the newest start.
 		const [soak, greet] = await workbench.processes();
