@@ -217,8 +217,9 @@ runs on `justGitBackend`. The evidence holds on `main`.
 **Goal:** an eval drives a room as a person, checks the run in code, and
 asks a judge for the rest.
 
-- [ ] **1.** `runAgent` in `@ambionframework/pi`: one agent run outside a
-      room, until the agent calls a tool that ends it. P1. (E1)
+- [x] **1.** `runAgent` in `@ambionframework/pi`: one agent run outside a
+      room, until the agent calls a tool that ends it. P1. (E1) Landed in
+      #319.
 - [ ] **2.** `@ambionframework/simulator` with `simulate` and
       `scriptedActor`, proven on the scripted tier. P1. (E1)
 - [ ] **3.** `agentActor`, `agentJudge`, and their tools `send`, `stop`,
