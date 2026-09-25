@@ -180,28 +180,28 @@ asks a judge for the rest.
       #326.
 - [x] **4.** The assistant's live suite on the simulator. Needs 3. P1.
       (E1) Landed in #327.
-- [ ] **5.** The assistant held to its purpose: passive at `broadcast`,
+- [x] **5.** The assistant held to its purpose: passive at `broadcast`,
       membership and summaries, an answer when a participant addresses it. Five
       purpose cases, a thinking level for Pi seats, and the suite passes on
       `anthropic/claude-sonnet-5` and `openai/gpt-5.6-luna` at `medium`,
       each graded by the other. Needs 4. P1. (E1)
 
-**The results of step 5 so far.** Each cell counts the passing cases of 18,
-with one sample for each case.
+**The results of step 5.** Each cell counts the passing cases, with one
+sample for each case. Each model is graded by the other family.
 
-| Guidance                                   | Sonnet 5, `medium` | Luna 5.6, `medium` |
-| ------------------------------------------ | ------------------ | ------------------ |
-| Before the change                          | 13                 | 12                 |
-| Membership first                           | 16                 | 16                 |
-| Each reaction at `broadcast` named         | 17                 | 18                 |
-| A constraint stays until withdrawn         | 17                 | 18                 |
-| The summary restates a constraint          | 1 of 1 run (a)     | Not run            |
-| The rule for each specialist               | 9, then no credit  | 17 (b)             |
-| The questions of a specialist reach people | Not run            | 18 (b)             |
+| Guidance                                          | Sonnet 5, `medium` | Luna 5.6, `medium` |
+| ------------------------------------------------- | ------------------ | ------------------ |
+| Before the change, 18 cases                       | 13                 | 12                 |
+| Membership first                                  | 16                 | 16                 |
+| Each reaction at `broadcast` named                | 17                 | 18                 |
+| A constraint stays until withdrawn                | 17                 | 18                 |
+| The rule for each specialist, and its questions   | 17                 | 17                 |
+| A specialist that addresses the assistant, 19     | 19                 | 18                 |
+| No redirect of a specialist that cannot do work   | 17 (a)             | 18 (a)             |
+| The specialists read only the words of the person | 19                 | 19                 |
 
-(a) Only the case that failed before. (b) A Luna judge: the Anthropic
-account had no credit for the Sonnet judge. Step 5 closes after one full run
-of the last guidance on both models, each graded by the other.
+(a) Two scripted specialists read the words of the assistant. The last row
+fixes the scripts, and it runs the same guidance.
 
 **Evidence:** each step states its cases in
 [Simulator](../docs/simulator.md#the-order-of-work). The last step keeps
