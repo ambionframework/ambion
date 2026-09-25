@@ -1,4 +1,5 @@
-import type { ParticipantInfo } from '@ambionframework/ambion';
+import type { ParticipantInfo, PendingSay } from '@ambionframework/ambion';
+import type { Block } from './timeline.ts';
 import type { RoomAction, RoomView } from './workbench.ts';
 
 export const HELP = [
@@ -59,4 +60,24 @@ export const workingAgents = (view: RoomView | undefined): string[] =>
 export function emptyText(view: RoomView): string {
 	const start = 'Nothing here yet. Ask a question below, or type / for commands.';
 	return view.prompt ? `${start}\nTry: ${view.prompt}  (type /try to use it)` : start;
+}
+
+/** The notes after the closed exchanges: what waits on the person, then each say that waits. */
+export function notesOf(attention: readonly string[], view: RoomView): Block[] {
+	const notes = [...attention, ...view.scheduled.map(pendingLine)];
+	return notes.map((text) => ({ type: 'note', text }));
+}
+
+/** One say that waits to return, as the conversation notes it. */
+function pendingLine(say: PendingSay): string {
+	const due = new Date(say.due);
+	const later = due.valueOf() - Date.now() > 86_400_000;
+	const time = Number.isNaN(due.valueOf())
+		? say.due
+		: due.toLocaleString([], {
+				...(later ? { month: 'short', day: 'numeric' } : {}),
+				hour: '2-digit',
+				minute: '2-digit',
+			});
+	return `${say.seat} comes back at ${time} for ${say.owner}: ${say.text}`;
 }

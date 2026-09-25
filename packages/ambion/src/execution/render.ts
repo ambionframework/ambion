@@ -59,8 +59,10 @@ export function renderLine(message: Message): string {
 		return `[returned → ${message.to}, for ${message.owner}] ${message.text}${refsOf(message)}`;
 	}
 	if (isSpoken(message) || isSummary(message)) {
-		const after = isSpoken(message) && message.after !== undefined;
-		const returns = after ? ` (returns after ${message.after} s)` : '';
+		const returns =
+			isSpoken(message) && message.after !== undefined
+				? ` (returns at ${new Date(Date.parse(message.at) + message.after * 1000).toISOString()})`
+				: '';
 		return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}${refsOf(message)}${returns}`;
 	}
 	const by = message.from === undefined || message.from === message.subject;

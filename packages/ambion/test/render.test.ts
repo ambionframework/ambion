@@ -62,6 +62,34 @@ describe('one line of the record', () => {
 		expect(renderLine(said)).toBe('[a → b] Done. (refs: https://x/1 file:///2)');
 	});
 
+	it('reads a scheduled say with the time it returns, and a returned say with its owner', () => {
+		const later: Message = {
+			kind: 'said',
+			seq: 3,
+			at,
+			from: 'worker',
+			to: 'worker',
+			text: 'Check the build.',
+			after: 600,
+			owner: 'priya',
+		};
+		const returns = new Date(Date.parse(at) + 600_000).toISOString();
+		expect(renderLine(later)).toBe(`[worker → worker] Check the build. (returns at ${returns})`);
+		const returned: Message = {
+			kind: 'returned',
+			seq: 9,
+			at,
+			to: 'worker',
+			message: 3,
+			owner: 'priya',
+			text: 'Check the build.',
+			refs: ['file:///out.log'],
+		};
+		expect(renderLine(returned)).toBe(
+			'[returned → worker, for priya] Check the build. (refs: file:///out.log)',
+		);
+	});
+
 	it('reads a summary the way it reads anything addressed to one person', () => {
 		const summary: Message = {
 			kind: 'summary',
@@ -120,6 +148,27 @@ describe('the URIs a prompt states', () => {
 		expect(rendered.context).toContain('opened by message 4');
 		expect(rendered.context).toContain(messageUri('site', 4));
 		expect(rendered.context).not.toContain('/exchange/');
+		expect(rendered.context).not.toContain('a say you scheduled');
+	});
+
+	it('states that a returned say that opened the exchange is the seat’s own', () => {
+		const returned: Message = {
+			kind: 'returned',
+			seq: 4,
+			at,
+			to: 'worker',
+			message: 2,
+			owner: 'priya',
+			text: 'Check the build.',
+		};
+		const view: ActivationView = {
+			spec: { ...spec, purpose: { kind: 'respond', message: 4 } },
+			through: 4,
+			context: { ...context, messages: [returned], exchange: { owner: 'priya', from: 4 } },
+		};
+		expect(renderActivation(view, worker).context).toContain(
+			'Message 4 is a say you scheduled, and the room returned it: do its work for priya.',
+		);
 	});
 
 	it('states the covered exchange for a summary', () => {

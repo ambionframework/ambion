@@ -435,8 +435,9 @@ the rules pass `pnpm check:lemmascript`.
 
 **S2. The agent and the person see the schedule.** The say result names
 the due time. The render shows a scheduled say with its due time, and a
-returned entry with its text and refs, the due time, and the time it
-landed. A read lists the pending says, and the workbench shows each one
+returned entry with its text, its refs, and the person it returns for.
+When a returned entry opened the exchange, the render says that the say
+is the agent's own. A read lists the pending says, and the workbench shows each one
 until it returns. **Evidence:** the render tests, the prompt snapshot, the
 executor conformance on Pi, Claude, and Codex, and a read test of the
 pending says.

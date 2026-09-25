@@ -57,6 +57,7 @@ export type {
 	HumanParticipantInfo,
 	Message,
 	ParticipantInfo,
+	PendingSay,
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,

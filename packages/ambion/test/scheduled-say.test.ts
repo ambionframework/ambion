@@ -14,6 +14,7 @@ import {
 	type Message,
 	type Room,
 	type Runtime,
+	readRoom,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
@@ -88,6 +89,16 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		await first.waitForClose();
 		const [say] = stateOf(room).scheduled;
 		expect(say).toMatchObject({ seat: 'worker', owner: 'priya', text: 'Check the build.' });
+		expect((await room.read({ messages: false })).scheduled).toEqual([
+			{
+				seq: say?.seq,
+				seat: 'worker',
+				owner: 'priya',
+				due: new Date(clock.now() + AFTER * 1000).toISOString(),
+				text: 'Check the build.',
+				refs: ['file:///builds/out.log'],
+			},
+		]);
 
 		// The room's own alarm returns the say: nothing here calls reconcile.
 		const opened = new Promise<number>((resolve) => {
@@ -119,7 +130,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 			{ kind: 'returned' },
 			{ kind: 'said', from: 'worker', to: 'priya', text: 'The build passed.' },
 		]);
-		expect(stateOf(room).scheduled).toEqual([]);
+		expect((await room.read({ messages: false })).scheduled).toEqual([]);
 	});
 
 	it.each([
@@ -134,6 +145,8 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		await (await (await room.visit(priya)).send({ text: 'Is the build green?' })).waitForClose();
 		if (end === 'stop') await room.stop();
 		else crash(first, room);
+		const read = await readRoom(room.name, { runtime: runtime() });
+		expect(read.scheduled).toMatchObject([{ seat: 'worker', owner: 'priya' }]);
 		await clock.advance(stopped);
 		const resumed = await resume(room, runtime());
 		await clock.advance(AFTER * 1000);

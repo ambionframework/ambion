@@ -103,6 +103,7 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 			name: missingName,
 			initialized: false,
 			messages: [],
+			scheduled: [],
 			participants: [],
 			exchanges: [],
 			exchange: undefined,

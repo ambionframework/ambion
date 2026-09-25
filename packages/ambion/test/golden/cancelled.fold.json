@@ -2,6 +2,7 @@
 	"name": "golden",
 	"initialized": true,
 	"messages": [],
+	"scheduled": [],
 	"participants": [
 		{
 			"kind": "agent",

@@ -63,7 +63,15 @@ const clock = (at: string | undefined): string => {
 };
 
 function bodyOf(message: Message): string {
-	return message.kind === 'said' || message.kind === 'summary' ? (message.text ?? '') : '';
+	if (message.kind === 'said' || message.kind === 'summary' || message.kind === 'returned')
+		return message.text ?? '';
+	return '';
+}
+
+/** When a say to oneself returns, as a clock time after its header. */
+function returnsAt(message: Message): string {
+	if (message.kind !== 'said' || message.after === undefined) return '';
+	return `  returns ${clock(new Date(Date.parse(message.at) + message.after * 1000).toISOString())}`;
 }
 
 function headerOf(block: MessageBlock, fill?: string): Chunk[] {
@@ -72,6 +80,13 @@ function headerOf(block: MessageBlock, fill?: string): Chunk[] {
 	const to = message.kind === 'said' || message.kind === 'summary' ? message.to : undefined;
 	const at = paint(`  ${clock(message.at)}`, { color: palette.dim, fill });
 	if (role === 'question') return [paint(from, { strong: true, fill }), at];
+	if (message.kind === 'returned')
+		return [
+			paint('returned', { color: palette.green, strong: true, fill }),
+			paint(` → ${message.to}`, { color: palette.muted, fill }),
+			paint(` for ${message.owner}`, { color: palette.muted, fill }),
+			at,
+		];
 	const arrow = to ? paint(` → ${to}`, { color: palette.muted, fill }) : paint('', { fill });
 	if (role === 'summary')
 		return [
@@ -87,7 +102,8 @@ function headerOf(block: MessageBlock, fill?: string): Chunk[] {
 			arrow,
 			at,
 		];
-	return [paint(from, { color: palette.accent, fill }), arrow, at];
+	const returns = paint(returnsAt(message), { color: palette.accent, fill });
+	return [paint(from, { color: palette.accent, fill }), arrow, returns, at];
 }
 
 const railOf: Record<Role, string> = {
@@ -95,6 +111,7 @@ const railOf: Record<Role, string> = {
 	said: palette.line,
 	summary: palette.summary,
 	steer: palette.accent,
+	returned: palette.green,
 };
 
 /** The conversation: the blocks of a room, with each discussion open or closed. */
