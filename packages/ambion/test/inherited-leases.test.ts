@@ -111,6 +111,10 @@ async function interrupted(storage: Storage): Promise<InterruptedRoom> {
 	expect(claimed).toHaveProperty('ok');
 	const view = await calls.view(question.activation);
 	if (!('view' in view)) throw new Error('The claimed question has no view.');
+	// The room states its deadline on the wall clock: the 10 s of its fake clock remain.
+	const left = (view.view.deadline ?? 0) - Date.now();
+	expect(left).toBeGreaterThan(9_000);
+	expect(left).toBeLessThanOrEqual(10_000);
 	return {
 		opened,
 		clock,

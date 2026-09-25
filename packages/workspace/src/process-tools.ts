@@ -21,21 +21,16 @@
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
 import {
 	type AgentToolResult,
-	applyShellOutputUpdate,
-	BACKGROUND_CONTEXT,
-	DEFAULT_MAX_BYTES,
-	DEFAULT_MAX_LINES,
 	formatSize,
 	type ShellOutputTruncation,
-	type ShellOutputView,
-	truncateTail,
 } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
-import { PROCESSES_DIR, type ProcessStatus, quoted } from './process-files.ts';
+import { PROCESSES_DIR, type ProcessStatus } from './process-files.ts';
+import { readOutput } from './process-output.ts';
+import type { ProcessTable } from './process-table.ts';
 import { psTable, stateLine } from './process-text.ts';
-import type { ProcessTable } from './processes.ts';
 import type { WorkspaceResource } from './resource.ts';
 import { recordedOnShell } from './tools.ts';
 
@@ -51,11 +46,14 @@ const DEFAULT_WAIT_SECONDS = 30;
 /** The longest one call waits for a process. A longer wait holds the activation open. */
 const MAX_WAIT_SECONDS = 600;
 
+/** The most handles one `wait` call takes. */
+const MAX_WAIT_HANDLES = 16;
+
+/** Seconds a wait leaves before the room ends the activation, so the agent can still answer. */
+const DEADLINE_MARGIN_SECONDS = 30;
+
 /** The largest timeout a Node timer holds, in seconds. */
 const MAX_TIMEOUT_SECONDS = 2_147_483;
-
-/** An output file up to this size is read whole. A larger one is read with `tail`. */
-const WHOLE_READ_BYTES = 4 * DEFAULT_MAX_BYTES;
 
 /** The tool names, in the order the tool line of the guidance lists them. */
 export const PROCESS_TOOL_NAMES = ['bash', 'ps', 'status', 'wait', 'cancel'] as const;
@@ -72,11 +70,14 @@ export function processToolGuidance(): string {
 	return [
 		`bash starts each command as a background process and returns its handle, such as bash-1a2b3c4d5e6f.`,
 		`Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.`,
-		`The call waits up to wait seconds, ${DEFAULT_BASH_WAIT_SECONDS} by default, and then gives the state of the process and the end of its output.`,
+		`The call waits up to wait seconds, ${DEFAULT_BASH_WAIT_SECONDS} by default, and then gives the state of the process and its output.`,
 		`The whole output of a process goes to ${PROCESSES_DIR}/<handle>/out. Read it with read.`,
 		`status, wait and cancel take a handle. status gives the state of the process, wait waits for it to end,`,
 		`and cancel stops it. ps lists your running processes.`,
 		`A process keeps running after your activation ends. It stops after timeout seconds, ${DEFAULT_TIMEOUT_SECONDS} by default.`,
+		`No message tells you when a process ends. When your answer needs the result, call wait before you answer.`,
+		`A wait stops before your activation ends.`,
+		`A process that outlives your activation shows in the reminder at the start of your next activation.`,
 	].join('\n');
 }
 
@@ -110,7 +111,15 @@ const psSchema = Type.Object({});
 const handleSchema = Type.Object({ handle });
 
 const waitSchema = Type.Object({
-	handle,
+	handle: Type.Optional(handle),
+	handles: Type.Optional(
+		Type.Array(handle, {
+			minItems: 1,
+			maxItems: MAX_WAIT_HANDLES,
+			description:
+				'Several handles, in place of handle. The call returns when the first of these processes ends.',
+		}),
+	),
 	timeout: Type.Optional(
 		Type.Number({
 			description: `Seconds to wait for the process to end. The default is ${DEFAULT_WAIT_SECONDS}.`,
@@ -125,7 +134,15 @@ type WaitParams = Static<typeof waitSchema>;
 /** What a handle tool gives in `details`. */
 export interface ProcessDetails {
 	process: ProcessStatus;
+	/** The bytes of the output that the result shows: from the cursor to the end the read saw. */
+	read: { from: number; to: number };
 	truncation?: ShellOutputTruncation;
+}
+
+/** What `wait` with `handles` gives in `details`: every status in the order of the handles, and each process that ended. */
+export interface WaitDetails {
+	processes: readonly ProcessStatus[];
+	ended: readonly ProcessDetails[];
 }
 
 /** What `ps` gives in `details`. */
@@ -144,7 +161,7 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 		defineTool({
 			name: 'bash',
 			label: 'bash',
-			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and the end of its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out.`,
+			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out.`,
 			parameters: bashSchema,
 			execute: recorded('bash', (params: BashParams, ctx) => started(options, params, ctx)),
 		}),
@@ -158,7 +175,8 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 		defineTool({
 			name: 'status',
 			label: 'Process status',
-			description: 'Give the state of a process and the end of its output.',
+			description:
+				'Give the state of a process and its new output: the output after your last result for it.',
 			parameters: handleSchema,
 			execute: recorded('status', async (params: HandleParams, ctx) =>
 				described(options, await table.find(ctx.agent, params.handle, ctx.signal), ctx),
@@ -168,19 +186,15 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			name: 'wait',
 			label: 'Wait for a process',
 			description:
-				'Wait for a process to end, up to timeout seconds. Give its state and the end of its output. The process keeps running when the time ends first.',
+				'Wait for a process to end, up to timeout seconds. Give its state and its new output. The process keeps running when the time ends first. Give handles in place of handle to wait for the first of several processes to end.',
 			parameters: waitSchema,
-			execute: recorded('wait', async (params: WaitParams, ctx) => {
-				const seconds = checkedSeconds(params.timeout, DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS);
-				const process = await table.wait(ctx.agent, params.handle, seconds, ctx.signal);
-				return described(options, process, ctx);
-			}),
+			execute: recorded('wait', (params: WaitParams, ctx) => waited(options, params, ctx)),
 		}),
 		defineTool({
 			name: 'cancel',
 			label: 'Cancel a process',
 			description:
-				'Stop a running process, and give its state and the end of its output. A process that takes over 10 seconds to stop still shows running.',
+				'Stop a running process, and give its state and its new output. A process that takes over 10 seconds to stop still shows running.',
 			parameters: handleSchema,
 			execute: recorded('cancel', async (params: HandleParams, ctx) =>
 				described(options, await table.cancel(ctx.agent, params.handle), ctx),
@@ -199,6 +213,24 @@ function checkedSeconds(value: number | undefined, fallback: number, max: number
 }
 
 /**
+ * The seconds a call may wait: the seconds it asks for, or fewer when the
+ * room ends the activation sooner. The wait then ends
+ * `DEADLINE_MARGIN_SECONDS` before the deadline.
+ */
+function withinActivation(asked: number, ctx: ToolContext): { seconds: number; cut: boolean } {
+	if (ctx.deadline === undefined) return { seconds: asked, cut: false };
+	const left = Math.max(0, (ctx.deadline - Date.now()) / 1000 - DEADLINE_MARGIN_SECONDS);
+	return left < asked ? { seconds: left, cut: true } : { seconds: asked, cut: false };
+}
+
+/** The note for a wait that the deadline of the activation cut, while the process still runs. */
+function cutLine(wait: { cut: boolean }, process: ProcessStatus, ctx: ToolContext): string {
+	if (!wait.cut || process.state !== 'running' || ctx.deadline === undefined) return '';
+	const left = Math.max(0, Math.round((ctx.deadline - Date.now()) / 1000));
+	return `The wait stopped early, because your activation ends in ${left} seconds. Answer before then.`;
+}
+
+/**
  * Start the process, wait up to `wait` seconds, and describe it. A process
  * that ended in that time with a code other than 0, with a timeout, or with
  * a failure makes the call fail with the same text.
@@ -210,7 +242,7 @@ async function started(
 ): Promise<AgentToolResult<ProcessDetails>> {
 	const timeout = checkedSeconds(params.timeout, DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS);
 	if (timeout === 0) throw new Error('Invalid timeout: give a number of seconds above 0.');
-	const wait = checkedSeconds(params.wait, DEFAULT_BASH_WAIT_SECONDS, MAX_WAIT_SECONDS);
+	const asked = checkedSeconds(params.wait, DEFAULT_BASH_WAIT_SECONDS, MAX_WAIT_SECONDS);
 	const spec = {
 		command: params.command,
 		timeout,
@@ -222,10 +254,64 @@ async function started(
 		(env) => options.processes.start(ctx.agent, env, spec),
 		ctx.signal,
 	);
-	const ended = await options.processes.wait(ctx.agent, process.handle, wait, ctx.signal);
-	const result = await described(options, ended, ctx);
+	const wait = withinActivation(asked, ctx);
+	const [ended = process] = await options.processes.wait(
+		ctx.agent,
+		[process.handle],
+		wait.seconds,
+		ctx.signal,
+	);
+	const result = await described(options, ended, ctx, cutLine(wait, ended, ctx));
 	if (unsuccessful(ended)) throw new Error(textOf(result));
 	return result;
+}
+
+/**
+ * Wait for one process, or for the first of several to end. With
+ * `handles`, the result gives the new output of each process that ended,
+ * and the state line of each one that still runs. A handle that repeats
+ * counts once.
+ */
+async function waited(
+	options: ProcessToolOptions,
+	params: WaitParams,
+	ctx: ToolContext,
+): Promise<AgentToolResult<ProcessDetails | WaitDetails>> {
+	const handles = handlesOf(params);
+	const asked = checkedSeconds(params.timeout, DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS);
+	const wait = withinActivation(asked, ctx);
+	const processes = await options.processes.wait(ctx.agent, handles, wait.seconds, ctx.signal);
+	const [first] = processes;
+	if (first === undefined) throw new Error('Invalid handles: give at least one handle.');
+	if (params.handles === undefined)
+		return described(options, first, ctx, cutLine(wait, first, ctx));
+	const ended: AgentToolResult<ProcessDetails>[] = [];
+	for (const process of processes) {
+		if (process.state !== 'running') ended.push(await described(options, process, ctx));
+	}
+	const running = processes.filter((process) => process.state === 'running');
+	const note = ended.length === 0 ? cutLine(wait, first, ctx) : '';
+	const text = [
+		...ended.map(textOf),
+		...running.map((process) => `[${stateLine(process)}]`),
+		...(note === '' ? [] : [`[${note}]`]),
+	].join('\n\n');
+	return {
+		content: [{ type: 'text', text }],
+		details: { processes, ended: ended.map((result) => result.details) },
+	};
+}
+
+/** The handles of a `wait` call: `handle` or `handles`, one of the two. */
+function handlesOf(params: WaitParams): readonly string[] {
+	if ((params.handle === undefined) === (params.handles === undefined)) {
+		throw new Error('Invalid handles: give handle or handles, and not both.');
+	}
+	const handles = params.handle === undefined ? [...new Set(params.handles)] : [params.handle];
+	if (handles.length === 0 || handles.length > MAX_WAIT_HANDLES) {
+		throw new Error(`Invalid handles: give 1 to ${MAX_WAIT_HANDLES} handles.`);
+	}
+	return handles;
 }
 
 function unsuccessful(process: ProcessStatus): boolean {
@@ -248,80 +334,65 @@ async function listed(table: ProcessTable, ctx: ToolContext): Promise<AgentToolR
 	return { content: [{ type: 'text', text }], details: { processes } };
 }
 
-/** The end of the process's output, and the line that states the process. */
+/**
+ * The output after the cursor, and the line that states the process. The
+ * read moves the cursor, so the next result of the agent gives the output
+ * after this one.
+ */
 async function described(
 	options: ProcessToolOptions,
 	process: ProcessStatus,
 	ctx: ToolContext,
+	note = '',
 ): Promise<AgentToolResult<ProcessDetails>> {
-	const tail = await options.shell(
+	const dir = process.output.slice(0, process.output.lastIndexOf('/'));
+	const read = await options.shell(
 		ctx.agent,
 		async (env) => {
-			const read = await outputTail(env, process.output);
+			const output = await readOutput(env, dir);
 			await options.processes.markSeen(env, process);
-			return read;
+			return output;
 		},
 		ctx.signal,
 	);
-	const output = tail.text.endsWith('\n') ? tail.text.slice(0, -1) : tail.text;
-	const body = output === '' && process.state !== 'running' ? '(no output)' : output;
-	const notes = [stateLine(process), truncationLine(tail.truncation)].filter((note) => note !== '');
-	const text = [body, `[${notes.join(' ')}]`].filter((part) => part !== '').join('\n\n');
-	const details: ProcessDetails = tail.truncation.truncated
-		? { process, truncation: tail.truncation }
-		: { process };
+	const output = read.text.endsWith('\n') ? read.text.slice(0, -1) : read.text;
+	const notes = [
+		stateLine(process),
+		note,
+		output === '' || read.truncation.truncated ? '' : startLine(read.from),
+		truncationLine(read.truncation, read.from),
+	].filter((line) => line !== '');
+	const text = [bodyOf(output, process, read.from), `[${notes.join(' ')}]`]
+		.filter((part) => part !== '')
+		.join('\n\n');
+	const details: ProcessDetails = {
+		process,
+		read: { from: read.from, to: read.to },
+		...(read.truncation.truncated ? { truncation: read.truncation } : {}),
+	};
 	return { content: [{ type: 'text', text }], details };
 }
 
-function truncationLine(truncation: ShellOutputTruncation): string {
-	if (!truncation.truncated) return '';
-	return `The text above is the last ${truncation.outputLines} lines, ${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}.`;
-}
-
 /**
- * The end of an output file, bounded to Pi's default view: 2000 lines or
- * 50 KB. A file that does not exist yet reads as empty. A file over four
- * times the byte limit is read with `tail`, so a large output does not
- * reach the host whole.
+ * The text before the state line: the new output, or a note for none. A
+ * running process that has written nothing yet gives nothing.
  */
-async function outputTail(
-	env: WorkspaceEnv,
-	path: string,
-): Promise<{ text: string; truncation: ShellOutputTruncation }> {
-	const info = await env.fileInfo(path, BACKGROUND_CONTEXT);
-	const size = info.ok ? info.value.size : 0;
-	const text = size > WHOLE_READ_BYTES ? await tailOf(env, path) : await wholeOf(env, path);
-	const { content, ...truncation } = truncateTail(text, {
-		maxLines: DEFAULT_MAX_LINES,
-		maxBytes: DEFAULT_MAX_BYTES,
-	});
-	return {
-		text: content,
-		truncation: {
-			...truncation,
-			truncated: truncation.truncated || size > WHOLE_READ_BYTES,
-			totalBytes: Math.max(truncation.totalBytes, size),
-		},
-	};
+function bodyOf(output: string, process: ProcessStatus, from: number): string {
+	if (output !== '') return output;
+	if (from > 0) return '(no new output)';
+	return process.state === 'running' ? '' : '(no output)';
 }
 
-async function wholeOf(env: WorkspaceEnv, path: string): Promise<string> {
-	const read = await env.readTextFile(path, BACKGROUND_CONTEXT);
-	return read.ok ? read.value : '';
+/** The note for a result that starts past the start of the output. */
+function startLine(from: number): string {
+	return from === 0
+		? ''
+		: `The text above starts at byte ${from} of the output. An earlier result showed the bytes before it.`;
 }
 
-async function tailOf(env: WorkspaceEnv, path: string): Promise<string> {
-	let view: ShellOutputView | undefined;
-	await env.exec(
-		// just-bash's tail refuses `--`. The path is absolute, so it cannot read as an option.
-		`tail -c ${DEFAULT_MAX_BYTES} ${quoted(path)}`,
-		{
-			capture: { limits: { maxBytes: 2 * DEFAULT_MAX_BYTES, maxLines: 2 * DEFAULT_MAX_LINES } },
-			onUpdate: (update) => {
-				view = applyShellOutputUpdate(view, update);
-			},
-		},
-		BACKGROUND_CONTEXT,
-	);
-	return view?.text ?? '';
+/** The note for a view that keeps only the end of the new output: `totalBytes` counts the bytes after `from`. */
+function truncationLine(truncation: ShellOutputTruncation, from: number): string {
+	if (!truncation.truncated) return '';
+	const after = from === 0 ? '' : ` after byte ${from}`;
+	return `The text above is the last ${truncation.outputLines} lines, ${formatSize(truncation.outputBytes)} of the ${formatSize(truncation.totalBytes)}${after}.`;
 }

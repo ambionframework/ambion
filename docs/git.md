@@ -63,8 +63,8 @@ that is still in the home, or it clones the fork again
 
 - **One agent pushes to a repository: its owner.** A peer reads the
   repository and forks it. Two agents work on one task through two forks.
-- **A template never changes.** A change registers a new template under a
-  new name. A fork keeps the template it came from.
+- **A registration updates its template.** A changed source fast-forwards
+  `templates/<name>` to a new commit. A fork keeps the commit it came from.
 - **A clone URL is opaque.** The tools give each URL, and no agent builds
   one. Each implementation picks its own URL shape.
 - **A credential names one agent, and it expires.** The server checks
@@ -216,7 +216,7 @@ agent holds a credential for it. An agent forks a template.
 
 ## Templates
 
-**A template is a repository that nobody changes after registration.** No
+**A template is a repository that only its registration changes.** No
 credential grants write on it. `justGitBackend` also refuses every push to a
 template in its pre-receive hook.
 
@@ -244,9 +244,10 @@ template, the backend builds the git tree of the source in memory with
 
 1. The template exists, and the tree at its tip equals the source tree.
    The backend writes nothing.
-2. The template exists, and the trees differ. Registration fails with an
-   error that names the template. The host registers the change under a
-   new name, such as `weekly-report-2`.
+2. The template exists, and the trees differ. The backend makes
+   `template-sources/<template>` hold the source tree at its tip. It then
+   moves the default branch of `templates/<template>` to that commit, and
+   the move compares the old commit.
 3. The template does not exist. The backend makes
    `template-sources/<template>` hold the source tree at its tip: it
    creates the repository when it is absent, and it commits the source
@@ -254,8 +255,21 @@ template, the backend builds the git tree of the source in memory with
    `templates/<template>`, read-only, and waits until the fork can be
    cloned.
 
-A crash between the steps of case 3 leaves a state that case 3 finishes
-at the next registration.
+**Each case writes the description of the registration.** A changed
+description replaces the old one, and the tree can stay the same.
+
+**An update is a fast-forward.** The new commit has the old tip as its
+parent, so a clone of the template can pull it. The commit goes to
+`template-sources/<template>`, because a fork in `just-git` reads its
+objects from the root of its fork tree. A fork of the template made after
+the update then reads the new objects.
+
+**An update does not change a fork.** A fork holds its own refs from the
+moment it was made. It keeps the commit it came from, and its owner can
+merge the new tip of the template.
+
+A crash between the steps of case 2 or case 3 leaves a state that the
+same case finishes at the next registration.
 
 **`fromDirectory(path)` reads every file as bytes.** It skips `.git` and
 every symbolic link. `@ambionframework/workspace/git` exports it. A plain
@@ -707,9 +721,11 @@ the case opened.
   forks beside a loop of `issueCredentials` lose no repository. The owner
   then holds a write credential for its fork (the hook
   `writeCredential`).
-- A registration with the same source writes nothing, and one with a
-  changed source rejects the first operation with an error that names
-  the template.
+- A registration with the same source writes nothing. A registration with
+  a changed source fast-forwards the template and replaces its
+  description. A fork made before the update keeps its commit, and a
+  clone of a fork made after it has the new files and the old tip in its
+  history.
 - A credential is refused after it expires (the hook `probeCredential`).
   The harness names its shortest `credentialTtl`, and the case skips a
   backend whose shortest `credentialTtl` is longer than 5 seconds.
@@ -720,6 +736,7 @@ backends.** Its own tests add:
 - the tokens, and a `tokenTtl` that is not finite;
 - an access of another transport at `connect`;
 - a registration that stopped after the commit to `template-sources`;
+- an update that stopped after the commit to `template-sources`;
 - a restart over one git file;
 - a `GIT_HTTP_BEARER_TOKEN` that an agent sets;
 - a token on a path that names another repository;

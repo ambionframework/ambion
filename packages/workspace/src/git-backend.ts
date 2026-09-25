@@ -10,8 +10,8 @@
  * `openWorkspace` refuses a pair whose transport the bash backend does not
  * carry.
  *
- * A repository ID is `templates/<name>` or `<agent>/<name>`. A template
- * never changes after registration. Only the owner of a repository holds a
+ * A repository ID is `templates/<name>` or `<agent>/<name>`. Only its
+ * registration changes a template. Only the owner of a repository holds a
  * write credential for it, and every other agent holds a read credential.
  * A credential grants one scope on one repository, and it expires. The
  * package of each git backend defines its credentials.

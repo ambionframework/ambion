@@ -34,6 +34,8 @@ export interface Registry {
 	/** Write the row of a repository that is on its way. */
 	begin(id: string, source: string | undefined, description: string | undefined): void;
 	ready(id: string): void;
+	/** Replace the description of a repository. */
+	describe(id: string, description: string | undefined): void;
 	remove(id: string): void;
 }
 
@@ -81,6 +83,7 @@ function registryOver(db: DatabaseSync): Registry {
 		`INSERT INTO ambion_repositories (id, source, description, state) VALUES (?, ?, ?, 'forking')`,
 	);
 	const markReady = db.prepare(`UPDATE ambion_repositories SET state = 'ready' WHERE id = ?`);
+	const setDescription = db.prepare('UPDATE ambion_repositories SET description = ? WHERE id = ?');
 	const remove = db.prepare('DELETE FROM ambion_repositories WHERE id = ?');
 	return {
 		all: () => (all.all() as Row[]).map(rowOf),
@@ -93,6 +96,9 @@ function registryOver(db: DatabaseSync): Registry {
 		},
 		ready: (id) => {
 			markReady.run(id);
+		},
+		describe: (id, description) => {
+			setDescription.run(description ?? null, id);
 		},
 		remove: (id) => {
 			remove.run(id);

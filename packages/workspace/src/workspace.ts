@@ -12,13 +12,9 @@ import {
 	roomMirrorGuidance,
 } from './mirror.ts';
 import type { ProcessStatus } from './process-files.ts';
+import type { ProcessEvent, ProcessQuery, ProcessTable } from './process-table.ts';
 import { createProcessTools, processToolGuidance } from './process-tools.ts';
-import {
-	openProcessTable,
-	type ProcessEvent,
-	type ProcessQuery,
-	type ProcessTable,
-} from './processes.ts';
+import { openProcessTable } from './processes.ts';
 import {
 	openResource,
 	type ResourceBackend,

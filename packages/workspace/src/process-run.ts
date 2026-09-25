@@ -64,8 +64,13 @@ export function within(until: Promise<unknown>, ms: number, signal?: AbortSignal
 	});
 }
 
-/** A promise that never settles: `within` over it is a sleep. */
-export const NEVER = new Promise<never>(() => undefined);
+/**
+ * Wait `ms`, or until `signal` aborts. Each call waits on a promise of its
+ * own, so no call leaves a reaction behind on a promise that never settles.
+ */
+export function pause(ms: number, signal?: AbortSignal): Promise<void> {
+	return within(new Promise<void>(() => undefined), ms, signal);
+}
 
 export type Run = Result<ShellExecResult, ExecutionError> | { thrown: unknown };
 
