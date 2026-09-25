@@ -166,9 +166,18 @@ describe('the URIs a prompt states', () => {
 			through: 4,
 			context: { ...context, messages: [returned], exchange: { owner: 'priya', from: 4 } },
 		};
-		expect(renderActivation(view, worker).context).toContain(
+		const later = { seq: 6, seat: 'worker', owner: 'priya', due: at, text: 'Check again.' };
+		const rendered = renderActivation(
+			{ ...view, context: { ...view.context, scheduled: [later] } },
+			worker,
+		).context;
+		expect(rendered).toContain(
 			'Message 4 is a say you scheduled, and the room returned it: do its work for priya.',
 		);
+		expect(rendered).toContain(
+			`Your says that wait to return. The room gives each back to you at its due time:\n- 6, due ${at}: Check again.`,
+		);
+		expect(renderActivation(view, worker).context).not.toContain('Your says that wait');
 	});
 
 	it('states the covered exchange for a summary', () => {

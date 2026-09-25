@@ -59,16 +59,17 @@ repositories in one account on the server. Each agent reaches them with
 **Four themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
-| Theme                    | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317.                              |
-| B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).                                      |
-| E Evals                  | The assistant's live suite runs on `@ambionframework/simulator`, with three cases over several exchanges and five cases of the assistant's purpose. It must pass on two model families at `medium` thinking, each graded by the other. [Simulator](../docs/simulator.md) holds the design.                                                                                                                                                      |
-| S A scheduled say        | An agent says to itself with `after`, and the room refuses every other use of `after` and every other say to oneself. The room writes a `returned` entry when the say is due, and the entry wakes the seat. The returned say opens an exchange for the owner of the exchange of the say when no exchange is open. A kill between the say and the returned say keeps one delivery, and the Cloudflare room object delivers it through its alarm. |
+| Theme                    | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317.                                                                                                                   |
+| B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).                                                                                                                           |
+| E Evals                  | The assistant's live suite runs on `@ambionframework/simulator`, with three cases over several exchanges and five cases of the assistant's purpose. It must pass on two model families at `medium` thinking, each graded by the other. [Simulator](../docs/simulator.md) holds the design.                                                                                                                                                                                                                                           |
+| S A scheduled say        | An agent says to itself with `after`, and the room refuses every other use of `after` and every other say to oneself. The room writes a `returned` entry when the say is due, and the entry wakes the seat. The returned say opens an exchange for the owner of the exchange of the say when no exchange is open. A kill between the say and the returned say keeps one delivery, and the Cloudflare room object delivers it through its alarm. The agent, the host, and a person see each pending say by its handle and dismiss it. |
 
-**One journal format change.** A said entry takes `after`, and the
-`returned` entry is new (S1). The notice kind and the `awaiting` outcome that
-names a room stay in the backlog with W1 and D1.
+**Two journal format changes.** A said entry takes `after`, and the
+`returned` entry is new (S1). The `dismissed` entry is new (S5). The notice
+kind and the `awaiting` outcome that names a room stay in the backlog with
+W1 and D1.
 
 **Deployment models.** The same rules serve four placements.
 
@@ -236,16 +237,21 @@ prints the cost of each case.
 **Goal:** an agent checks a long process later, and no event source and no
 host code wake it.
 
-- [ ] **1.** The kernel: `after` on `say` and on a said entry, the
-      `returned` kind, the rule that opens an exchange, the commit path,
-      the fold, and the write in the reconcile. P1. (S1)
-- [ ] **2.** The read surface: the render of a scheduled say and a
-      returned say, the pending says in a read, and the workbench.
-      Needs 1. P1. (S2)
-- [ ] **3.** The guidance and the docs. Needs 2. P1. (S3)
+**S1 to S3 landed in #332, #333, and #334.** An agent schedules a say, and
+the room returns it. The steps below let the agent, the host, and a person
+see a pending say and dismiss it.
 
-**Evidence:** the tests and the golden journal that S1 names hold on
-`main`, and the docs that call timers future work state what shipped.
+- [ ] **1.** The agent sees its pending says: the say result names its seq
+      as a handle, and each response activation lists the pending says of
+      the seat. P1. (S4)
+- [ ] **2.** A seat dismisses its own pending say with `dismiss`, and the
+      host dismisses any pending say with `room.dismiss` and reads them
+      with `room.scheduled`. Needs 1. P1. (S5)
+- [ ] **3.** The workbench shows the pending says of a room, and a person
+      dismisses one. Needs 2. P1. (S6)
+
+**Evidence:** the tests and the golden journals that S1 and S5 name hold
+on `main`, and the docs state each change.
 
 ### Phase 4. Release (P1)
 
@@ -450,6 +456,32 @@ entry opens an exchange, and [Trust](../docs/trust.md),
 [Durability](../docs/durability.md), the README, and the changelog state
 what shipped. **Evidence:** the doc tests pass, and no page calls a timer
 future work.
+
+**S4. The agent sees its pending says.** A harness session never crosses
+an exchange, so an agent that schedules a say forgets it by the time it
+returns. It can schedule the same check twice, and it learns the cap only
+from a refusal. The say result now names the seq of the say as its handle,
+and the view of each response activation carries the pending says of the
+seat. The render lists each one with its handle, its due time, its text,
+and its refs, and a continued Pi session reads the list beside the delta.
+**Evidence:** a view test that lists the seat's own says and no other
+seat's, a render test, the prompt snapshot, the Pi continuity test, and
+the handle in the say result of the scheduled-say test.
+
+**S5. A seat or the host dismisses a pending say.** A correction to long work leaves
+the says that the agent scheduled before it. Their text is fixed, and
+nothing can remove them. `dismiss` takes a handle, and the room writes a
+`dismissed` entry. A seat dismisses its own pending say. The host
+dismisses any pending say with `room.dismiss`, and the entry has no
+author, as a host seating has none. `room.scheduled` gives the pending
+says of the room. The fold drops a dismissed say, so it frees its place
+under the cap. **Evidence:** the refusals, a dismissal that races the due
+time, a golden journal, and the host calls on a real room.
+
+**S6. A person sees and dismisses a pending say in the workbench.** The
+workbench notes each pending say with its handle, and `/dismiss <handle>`
+calls `room.dismiss`. **Evidence:** a session test of the note and the
+command, and a host test on a real room.
 
 ### R. Release
 

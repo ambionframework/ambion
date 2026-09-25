@@ -60,6 +60,11 @@ exchange for the owner of the first one. See
   `pending`, 4 by default.
 - **`RoomRead.scheduled` lists the says that wait to return**, each a
   `PendingSay` with its due time. `PendingSay` is a new export.
+- **The agent sees its pending says.** The say result names the seq of a
+  scheduled say as its handle. `CollaborationContext.scheduled` carries
+  the pending says of the seat in each response activation, and the render
+  lists them. `renderPending` in `/hosting` gives that list for a seat that
+  continues its session.
 - **The workbench shows a returned say, and notes each say that waits.**
 - **`ps`, `status`, `wait`, and `cancel` join `bash`.** `ps` lists the
   running processes of the caller. The handle tools take a handle of the

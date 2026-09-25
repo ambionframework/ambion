@@ -419,6 +419,7 @@ function renderTurnContext(
 			context.omitted,
 		),
 		``,
+		...paragraph(renderPending(view)),
 		...paragraph(view.spec.purpose.kind === 'respond' ? reminders : undefined),
 		askOf(view, def),
 	].join('\n');
@@ -427,6 +428,21 @@ function renderTurnContext(
 /** A text and the blank line after it, or nothing. */
 function paragraph(text: string | undefined): string[] {
 	return text === undefined ? [] : [text, ``];
+}
+
+/**
+ * The says of this seat that wait to return, by handle, or nothing when none
+ * waits. A seat that continues its session reads it beside the delta, so the
+ * list is current at every response activation.
+ */
+export function renderPending(view: ActivationView): string | undefined {
+	const { scheduled } = view.context;
+	if (view.spec.purpose.kind !== 'respond' || scheduled === undefined) return undefined;
+	if (scheduled.length === 0) return undefined;
+	return [
+		`Your says that wait to return. The room gives each back to you at its due time:`,
+		...scheduled.map((say) => `- ${say.seq}, due ${say.due}: ${say.text}${refsOf(say)}`),
+	].join('\n');
 }
 
 /** The agents that are available to seat. Every ordinary activation may read this list. */

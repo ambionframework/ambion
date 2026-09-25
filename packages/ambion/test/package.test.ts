@@ -94,6 +94,7 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'renderActivation',
 		'renderDelta',
 		'renderLine',
+		'renderPending',
 		'resolveReminders',
 		'roomTools',
 		'roundTrip',
