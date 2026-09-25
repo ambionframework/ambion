@@ -30,8 +30,8 @@ holds on main.
 **Ambion is a collaboration kernel for agents and humans.** The
 [README](../README.md) holds the statement, and
 [Technical facts](../docs/technical-facts.md) holds the key facts and what
-is new. Through 0.2.0, Ambion is reactive: a seat acts when a person
-speaks, or when a seat addresses it.
+is new. Ambion is reactive: a seat acts when a person speaks, or when a
+seat addresses it.
 
 **0.3.0 lets the work of a seat outlive its activation.** A seat's shell
 work runs as a background process between its activations. The agent
@@ -58,7 +58,7 @@ commit.** The phases below deliver them; the items explain them.
 | G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317. |
 | B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).         |
 
-**No format change.** The notice kind, the timer entry, and the `awaiting`
+**No journal format change.** The notice kind, the timer entry, and the `awaiting`
 outcome that names a room moved to the backlog with W1, W2, and D1.
 
 **Deployment models.** The same rules serve four placements.
@@ -149,8 +149,7 @@ means two things or two names mean one.
 **Two phases remain, and the git phase holds no open step.** Background
 processes (B1 and B2) needed no phase. The release needs the git phase. A
 step names the steps it needs; a step with no "Needs" line starts now.
-**P0** blocks the tag. **P1** carries the release story. **P2** moves to
-the backlog when it is late.
+**P1** carries the release story.
 
 ### Phase 1. Git on the workstation (P1)
 

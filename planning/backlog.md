@@ -62,7 +62,7 @@ and the delegation (D1) build on, so the three moved together.
 **Condition:** an application that must react to a change outside the room
 with no person present, where a message that the host posts does not serve.
 
-**The order stays the notice, the timer, then the delegation.** The notice
+**The order is the notice, the timer, then the delegation.** The notice
 host call needs the notice kind, the timer needs the host call, and the
 delegating message needs the notice.
 
@@ -132,13 +132,13 @@ process as a notice.** A process runs until it ends, times out, or gets a
 cancel ([Processes](../docs/processes.md)). An exchange closes when no
 activation is live, so a cancel at the close stops a process at the first
 quiet moment. A link to the room needs its own design. The handle is
-`<kind>-<random>`, and `bash` is the one kind. A clone that runs past its
-call and a SQL export are candidate kinds. The end of a process wakes no
-seat, by decision: the agent waits, and a host can post a message
-([Processes](../docs/processes.md#the-end-of-a-process)). The notice of
-item W1 above can carry it later. The table has no fence: two runs of the host over one account
-adopt the same processes. **Condition:** a seat that must wake when a
-process ends, a process that must stop with its exchange, or a second
+`<kind>-<random>`, and `bash` is the one kind. A clone that runs past its call
+and a SQL export are candidate kinds. The end of a process wakes no seat, by
+decision: the agent waits, and a host can post a message
+([Processes](../docs/processes.md#the-end-of-a-process)). The notice of item
+W1 above can carry it later. The table has no fence: two runs of the host over
+one account adopt the same processes. **Condition:** a seat that must wake
+when a process ends, a process that must stop with its exchange, or a second
 kind of work that outlives its call.
 
 **One record for a live process in the table.** The table keeps a process
@@ -149,29 +149,26 @@ no end file, so each listing runs `ps` for it until a start forgets it. A
 `stop` line that the first read writes ends that cost. **Condition:** the
 next change to a stop path, or a table with many lost processes.
 
-**Four process changes from a comparison with Codex unified exec.** Codex
+**Three process changes from a comparison with Codex unified exec.** Codex
 gives a model `exec_command` and `write_stdin` over a PTY, with sessions in
-memory ([Processes](../docs/processes.md) holds the Ambion design). Four
-of its mechanisms fit the process table and keep the five tools.
+memory ([Processes](../docs/processes.md) holds the Ambion design). Three
+of its mechanisms fit the process table and keep the five tools. The
+output cursor, a fourth, landed in 0.3.0.
 
 1. **An interactive kind of process.** A `pty-<random>` handle runs its
    command on a PTY, and an `input` tool writes to it, Ctrl-C included.
    The workstation gives the PTY. just-bash has none, so it refuses the
    kind. Today stdin is `/dev/null`, so a command that prompts waits until
    its timeout.
-2. **An output cursor.** `status` and `wait` give the output since the
-   last read by the same agent. The offset lives in the files of the
-   process, so it survives a restart. Today each read gives the same tail,
-   so each poll of a long build spends the same tokens.
-3. **A graceful cancel.** `cancel` and the timeout send `SIGTERM` to the
+2. **A graceful cancel.** `cancel` and the timeout send `SIGTERM` to the
    group, and `SIGKILL` after the grace. Today a stop sends `SIGKILL`, so
    a server or a database gets no time to flush.
-4. **The head and the tail in a result.** The result shows the first
+3. **The head and the tail in a result.** The result shows the first
    lines of the output beside the last ones. The first lines often hold
    the error that the last lines report.
 
-**Condition:** an agent that must drive a prompt or a REPL, or a live run
-that shows the cost of repeated polls. The first two come first.
+**Condition:** an agent that must drive a prompt or a REPL. The
+interactive kind comes first.
 
 **Tool execution provenance beyond the activation.** `ToolContext` carries
 the activation, the exchange, and the room. A purpose field, a retry-safe
