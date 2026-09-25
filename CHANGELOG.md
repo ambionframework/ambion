@@ -91,6 +91,15 @@ message. See [Processes](docs/processes.md).
   it keeps the other lines. The agent's own `git` then clones and pushes
   over SSH to the git account on the loopback address.
 
+### Fixes
+
+- **`directoryBackend` runs each filesystem change as trusted code of
+  just-bash.** just-bash 3.4.2 starts a queued change in the async context
+  of the change before it. When a script made that earlier change and then
+  ended, the defense layer of just-bash blocked the queued change. Each
+  later change on the directory then waited with no end, and so did the
+  workspace owner, `wait`, and the host's list of processes.
+
 ### Breaking changes
 
 - **`bash` returns a handle, and waits up to `wait` seconds, 10 by
