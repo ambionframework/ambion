@@ -226,8 +226,8 @@ asks a judge for the rest.
 - [x] **3.** `agentActor`, `agentJudge`, and their tools `send`, `stop`,
       and `grade`, with one live case. Needs 1 and 2. P1. (E1) Landed in
       #326.
-- [ ] **4.** The assistant's live suite on the simulator. Needs 3. P1.
-      (E1)
+- [x] **4.** The assistant's live suite on the simulator. Needs 3. P1.
+      (E1) Landed in #327. The first live run of the file is still open.
 
 **Evidence:** each step states its cases in
 [Simulator](../docs/simulator.md#the-order-of-work). The last step keeps
