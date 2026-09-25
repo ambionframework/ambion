@@ -15,13 +15,14 @@
  *   end the loop with `failed`, and the run keeps the message.
  * - **The room.** The test started the room, and the test stops it.
  */
-import type {
-	ClosedExchangeView,
-	Room,
-	RoomNotification,
-	Seq,
-	Usage,
-	Visit,
+import {
+	AmbionError,
+	type ClosedExchangeView,
+	type Room,
+	type RoomNotification,
+	type Seq,
+	type Usage,
+	type Visit,
 } from '@ambionframework/ambion';
 import type { Ended, Move, Run, RunExchange, Seen, SimulateOptions } from './types.ts';
 
@@ -128,16 +129,26 @@ class Loop {
 		const handle = await visit.send(
 			move.to === undefined ? { text: move.text } : { text: move.text, to: move.to },
 		);
+		if (!handle.opened) {
+			throw new Error(
+				`The message joined the open exchange at ${handle.from}. Close it before the simulation starts.`,
+			);
+		}
 		const deadline = new Deadline(this.room, this.options.exchangeMs ?? DEFAULT_EXCHANGE_MS);
-		let summary: RunExchange['summary'];
+		let lost = false;
 		try {
 			const discussion = Object.freeze(await deadline.race(handle.waitForClose()));
-			summary = await deadline.race(handle.waitForSummary()).catch((error: unknown) => {
-				// The abort at the deadline fails a pending summary. That rejection is the timeout.
-				if (deadline.passed && !(error instanceof DeadlineFailure)) return undefined;
-				throw error;
+			const summary = await deadline.race(handle.waitForSummary()).catch((error: unknown) => {
+				// The abort at the deadline fails a pending summary. That rejection, and no other, is the timeout.
+				if (!deadline.passed || !cutByAbort(error)) throw error;
+				lost = true;
+				return undefined;
 			});
 			deadline.clear();
+			// An abort in flight lands before the next message, so it cancels no later work.
+			// A cut summary counts as the timeout only when that abort landed.
+			await deadline.settled();
+			if (deadline.failure !== undefined) throw deadline.failure;
 			const view = await this.closedView(handle.from);
 			this.exchanges.push({
 				sent: move.text,
@@ -145,7 +156,7 @@ class Loop {
 				...(summary === undefined ? {} : { summary }),
 				view,
 			});
-			return deadline.passed;
+			return lost || (deadline.passed && view.outcome.kind === 'cancelled');
 		} finally {
 			deadline.clear();
 		}
@@ -157,6 +168,16 @@ class Loop {
 		if (view?.status !== 'closed') throw new Error(`The exchange at ${from} did not close.`);
 		return view;
 	}
+}
+
+/**
+ * Whether a summary wait failed because the loop's own abort cut the summary.
+ * A stopped room and a failed deadline reject with other errors.
+ */
+function cutByAbort(error: unknown): boolean {
+	return (
+		error instanceof Error && !(error instanceof AmbionError) && !(error instanceof DeadlineFailure)
+	);
 }
 
 /** The deadline could not end the exchange: the abort failed, or no close followed it. */
@@ -173,6 +194,9 @@ class DeadlineFailure extends Error {
 class Deadline {
 	passed = false;
 	private readonly failed: Promise<never>;
+	private aborting: Promise<void> | undefined;
+	/** Why the deadline could not end the exchange, once it failed. */
+	failure: DeadlineFailure | undefined;
 	private fail: (error: DeadlineFailure) => void = noop;
 	private readonly timers: ReturnType<typeof setTimeout>[] = [];
 	private cleared = false;
@@ -191,6 +215,11 @@ class Deadline {
 		return Promise.race([promise, this.failed]);
 	}
 
+	/** Wait for the abort of this deadline, when it started one. */
+	async settled(): Promise<void> {
+		await this.aborting;
+	}
+
 	clear(): void {
 		this.cleared = true;
 		for (const timer of this.timers) clearTimeout(timer);
@@ -198,7 +227,7 @@ class Deadline {
 
 	private pass(room: Room, ms: number): void {
 		this.passed = true;
-		room.abort().then(
+		this.aborting = room.abort().then(
 			() => {
 				if (this.cleared) return;
 				const late = new DeadlineFailure(`The exchange did not close ${ms} ms after the abort.`);
@@ -206,7 +235,8 @@ class Deadline {
 			},
 			(error: unknown) => {
 				const message = error instanceof Error ? error.message : String(error);
-				this.fail(new DeadlineFailure(`The abort at the deadline failed: ${message}`));
+				this.failure = new DeadlineFailure(`The abort at the deadline failed: ${message}`);
+				this.fail(this.failure);
 			},
 		);
 	}

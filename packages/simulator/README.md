@@ -2,17 +2,22 @@
 
 `@ambionframework/simulator` runs evals on an Ambion room. An actor plays a
 person, one exchange at a time, and `simulate` returns a run that checks in
-code read. [Simulator](../../docs/simulator.md) holds the design. The example
-below elides the definition of the `weather` agent.
+code read. [Simulator](../../docs/simulator.md) holds the design.
 
 ```sh
-npm install @ambionframework/ambion @ambionframework/simulator
+npm install @ambionframework/ambion @ambionframework/pi @ambionframework/simulator
 ```
 
 ```ts
-import { defineHuman, startRoom } from '@ambionframework/ambion';
+import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
+import { pi } from '@ambionframework/pi';
 import { scriptedActor, simulate } from '@ambionframework/simulator';
 
+const weather = defineAgent({
+  name: 'weather',
+  identity: 'Site weather desk.',
+  executor: pi({ model: 'anthropic/claude-sonnet-5', instructions: 'Answer with the forecast.' }),
+});
 const priya = defineHuman({ name: 'priya', identity: 'Site manager.' });
 const room = await startRoom({ name: 'pour', agents: [weather] });
 

@@ -7,7 +7,7 @@ import { AmbionError, defineTool, type ToolContext } from '@ambionframework/ambi
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { createExecutionServices, type RunAgentRequest, runAgent } from '../src/index.ts';
 import { byAgent, callTool, quiet, type Script, scripted } from '../src/testing.ts';
 
@@ -61,8 +61,11 @@ const spending = (message: AssistantMessage, input: number): AssistantMessage =>
 });
 
 describe('runAgent', () => {
-	it('returns the call that ends the run, the calls before it, and the spend of each request', async () => {
+	beforeEach(() => {
 		seen.length = 0;
+	});
+
+	it('returns the call that ends the run, the calls before it, and the spend of each request', async () => {
 		const script: Script = (_context, _agent, call) => {
 			if (call === 1) return spending(callTool('lookup', { key: 'thursday' }), 10);
 			if (call === 2) return spending(callTool('finish', { answer: '' }), 20);
@@ -87,14 +90,30 @@ describe('runAgent', () => {
 	});
 
 	it('keeps the first end when one message holds two, and sends no other request', async () => {
-		// Both calls run at once, and the second resolves last.
+		// Both calls are in flight at once. The first ends once the second has
+		// started, and the second ends after the first.
+		let secondStarted = () => {};
+		const started = new Promise<void>((resolve) => {
+			secondStarted = resolve;
+		});
+		let firstEnded = () => {};
+		const first = new Promise<void>((resolve) => {
+			firstEnded = resolve;
+		});
 		const parallel = defineTool({
 			name: 'finish',
 			description: 'End the run with an answer.',
 			parameters: Type.Object({ answer: Type.String() }),
 			executionMode: 'parallel',
 			execute: async ({ answer }) => {
-				await new Promise((resolve) => setTimeout(resolve, answer === 'first' ? 5 : 20));
+				if (answer === 'first') {
+					await started;
+					firstEnded();
+					return 'finished';
+				}
+				secondStarted();
+				await first;
+				await new Promise((resolve) => setTimeout(resolve, 0));
 				return 'finished';
 			},
 		});
@@ -180,6 +199,37 @@ describe('runAgent', () => {
 		);
 		expect(requests).toBe(0);
 	});
+
+	// The lane ignores an abort that lands before it admits the prompt. The
+	// abort lands at each session write in turn, the admission among them.
+	it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])(
+		'rejects a signal that aborts at session write %i',
+		async (write) => {
+			const controller = new AbortController();
+			const base = services(() => callTool('finish', { answer: 'dry' }));
+			let writes = 0;
+			const counting: typeof base.sessions = {
+				open: base.sessions.open,
+				create: async (...args) => {
+					const session = await base.sessions.create(...args);
+					return new Proxy(session, {
+						get(target, key) {
+							const value: unknown = Reflect.get(target, key);
+							if (key !== 'mutate' || typeof value !== 'function') return value;
+							return (...call: unknown[]) => {
+								writes += 1;
+								if (writes === write) controller.abort(new Error('The move passed its timeout.'));
+								return value.apply(target, call);
+							};
+						},
+					});
+				},
+			};
+			await expect(
+				runAgent({ ...base, sessions: counting }, request({ signal: controller.signal })),
+			).rejects.toThrow('The move passed its timeout.');
+		},
+	);
 
 	it.each([
 		[

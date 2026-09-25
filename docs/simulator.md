@@ -221,19 +221,23 @@ export function simulate(room: Room, options: SimulateOptions): Promise<Run>;
 2. Call `room.visit(person)` once.
 3. Call `actor(seen)`. A `stop` move ends the loop with `ended: 'stopped'`.
 4. Call `visit.send(move)`. The loop sends the next move only after the
-   exchange closes, so each move opens one exchange.
+   exchange closes, so each move opens one exchange. A message that joins
+   an exchange that was already open, such as one the test left open,
+   ends the loop with `ended: 'failed'`.
 5. Wait on `handle.waitForClose()`, then on `handle.waitForSummary()`.
    Both waits share one deadline, `exchangeMs` after the send, because the
    summary is the answer a person reads. In a room with no summary writer,
    `waitForSummary()` returns `undefined` when the close lands.
-6. At the deadline, call `room.abort()`, and end with `ended: 'timeout'`
-   after operation 7. Before the close, the abort writes a close with the
-   outcome `cancelled`, and the summary wait returns `undefined`. After the
-   close, the abort fails the pending summary, and `waitForSummary()`
-   rejects. The loop reads that one rejection as the timeout. The closed
-   view then shows the summary as `failed`. A summary that lands before
-   the cancellation entry stays on the exchange. An abort that rejects, or
-   a close that does not land in a second period of `exchangeMs`, ends
+6. At the deadline, call `room.abort()`. Before the close, the abort
+   writes a close with the outcome `cancelled`, and the summary wait
+   returns `undefined`. After the close, the abort fails the pending
+   summary, and `waitForSummary()` rejects. The loop waits for the abort
+   to land, so it cancels no later work. The loop ends with
+   `ended: 'timeout'` after operation 7 when the outcome is `cancelled`, or
+   when the landed abort cut the summary. The closed view then shows the
+   summary as `failed`. An exchange that ended by itself before the abort
+   landed keeps its summary, and the loop goes on. An abort that rejects,
+   or a close that does not land in a second period of `exchangeMs`, ends
    the loop with `ended: 'failed'`.
 7. Read the closed `ExchangeView` from `room.read()`. Add the exchange to
    `run.exchanges`, and add the discussion and the summary to `seen`.
@@ -361,10 +365,13 @@ export function runAgent(
   their absence, and the workspace audit log accepts it. `runAgent`
   resolves no reminders, because a reminder needs a room.
 - **The bound.** `signal` aborts the run the way a cut aborts an
-  activation. `agentActor` and `agentJudge` abort at `timeoutMs`, and the
-  promise rejects.
-- **The usage.** `runAgent` sums each request with `addUsage`, and it maps
-  a request the way `spent` in `pi-trace.ts` does.
+  activation, and it ends every provider request of the run. The lane
+  ignores an abort that lands before it admits the prompt, so the signal
+  cuts the request itself. A run whose signal aborted rejects with the
+  signal's reason, even when an end landed first. `agentActor` and
+  `agentJudge` abort at `timeoutMs`.
+- **The usage.** `runAgent` sums the usage of each request, and it maps a
+  request the way `spent` in `pi-trace.ts` does.
 
 **`agentActor` and `agentJudge` take optional `services`.** The default is
 `createExecutionServices({ sessions: 'memory' })`, which reads
@@ -647,40 +654,43 @@ live suite is the first consumer.
 runs on `scripted()` from `@ambionframework/ambion/testing`. The person is
 a `scriptedActor`. The judge is a function.
 
-| Case                              | What it asserts                                           |
-| --------------------------------- | --------------------------------------------------------- |
-| The actor stops                   | `ended: 'stopped'`, and the moves end with the `stop`     |
-| The actor reaches the limit       | `ended: 'limit'` after `exchanges` messages               |
-| A seat keeps the exchange open    | `ended: 'timeout'`, and the last outcome is `cancelled`   |
-| The summary outlasts the deadline | `ended: 'timeout'`, and the summary shows as `failed`     |
-| The abort at the deadline rejects | `ended: 'failed'`, with the reason                        |
-| No close follows the abort        | `ended: 'failed'` after a second period                   |
-| The room refuses a send           | `ended: 'failed'`, with the refusal                       |
-| The actor throws                  | `ended: 'failed'`, and the usage of the moves             |
-| A bound is not valid              | `simulate` rejects before the person arrives              |
-| The room stops during an exchange | `ended: 'failed'`, with the error                         |
-| A required summary fails          | `ended: 'failed'`, with the error                         |
-| A seat asks the person a question | `seen` carries the question, and the next move answers it |
-| A room with a summary writer      | `seen` carries each summary                               |
-| One move opens one exchange       | `run.exchanges` has one view for each message             |
-| The run is a detached value       | `structuredClone(run)` equals the run                     |
-| A message tells the judge to pass | The judge prompt fences the message inside the record     |
+| Case                               | What it asserts                                           |
+| ---------------------------------- | --------------------------------------------------------- |
+| The actor stops                    | `ended: 'stopped'`, and the moves end with the `stop`     |
+| The actor reaches the limit        | `ended: 'limit'` after `exchanges` messages               |
+| A seat keeps the exchange open     | `ended: 'timeout'`, and the last outcome is `cancelled`   |
+| The summary outlasts the deadline  | `ended: 'timeout'`, and the summary shows as `failed`     |
+| The abort at the deadline rejects  | `ended: 'failed'`, with the reason                        |
+| No close follows the abort         | `ended: 'failed'` after a second period                   |
+| The room refuses a send            | `ended: 'failed'`, with the refusal                       |
+| The message joins an open exchange | `ended: 'failed'`, and no exchange in the run             |
+| The room stops before the abort    | `ended: 'failed'`, with the refused abort                 |
+| The actor throws                   | `ended: 'failed'`, and the usage of the moves             |
+| A bound is not valid               | `simulate` rejects before the person arrives              |
+| The room stops during an exchange  | `ended: 'failed'`, with the error                         |
+| A required summary fails           | `ended: 'failed'`, with the error                         |
+| A seat asks the person a question  | `seen` carries the question, and the next move answers it |
+| A room with a summary writer       | `seen` carries each summary                               |
+| One move opens one exchange        | `run.exchanges` has one view for each message             |
+| The run is a detached value        | `structuredClone(run)` equals the run                     |
+| A message tells the judge to pass  | The judge prompt fences the message inside the record     |
 
 **`runAgent` runs on the scripted Pi stream.**
 
-| Case                                  | What it asserts                                            |
-| ------------------------------------- | ---------------------------------------------------------- |
-| A tool in `ends` is called            | The run returns that call, and the calls before it         |
-| The signal aborts                     | The promise rejects                                        |
-| Several requests                      | `usage` sums every request                                 |
-| A bundle tool has an `ends` name      | The run fails at once with a duplicate name                |
-| A tool is called                      | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
-| Two names on one scripted stream      | Each run answers from the script for its `name`            |
-| The agent stops with no end call      | The promise rejects, and names the tools in `ends`         |
-| Two ending calls run at once          | The first call to succeed ends the run                     |
-| A batch holds a call before the end   | The run returns after one more request                     |
-| The signal aborts while the run opens | The promise rejects, and no request goes out               |
-| The output reaches its limit          | The promise rejects, and names the limit                   |
+| Case                                    | What it asserts                                            |
+| --------------------------------------- | ---------------------------------------------------------- |
+| A tool in `ends` is called              | The run returns that call, and the calls before it         |
+| The signal aborts                       | The promise rejects                                        |
+| Several requests                        | `usage` sums every request                                 |
+| A bundle tool has an `ends` name        | The run fails at once with a duplicate name                |
+| A tool is called                        | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
+| Two names on one scripted stream        | Each run answers from the script for its `name`            |
+| The agent stops with no end call        | The promise rejects, and names the tools in `ends`         |
+| Two ending calls run at once            | The first call to succeed ends the run                     |
+| A batch holds a call before the end     | The run returns after one more request                     |
+| The signal aborts while the run opens   | The promise rejects, and no request goes out               |
+| The signal aborts at each session write | The promise rejects with the signal's reason               |
+| The output reaches its limit            | The promise rejects, and names the limit                   |
 
 **The agent actor and the agent judge run on the scripted Pi stream.**
 The cases cover the prompt text, the name each request carries, and a
