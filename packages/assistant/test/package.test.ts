@@ -8,7 +8,7 @@ it('builds the default ordinary assistant definition', () => {
 		name: 'assistant',
 		executor: { model: 'scripted/assistant', tools: [] },
 	});
-	expect(assistant.identity).toContain('room');
+	expect(assistant.identity).toContain('Seats and unseats specialists');
 	expect(assistant.executor.instructions).toContain('Application instructions take precedence');
 });
 
@@ -22,7 +22,7 @@ it('keeps application instructions after and alongside maintained defaults', () 
 
 	expect(assistant.name).toBe('guide');
 	expect(assistant.identity).toBe('A local guide.');
-	expect(assistant.executor.instructions).toContain('Help the room advance');
+	expect(assistant.executor.instructions).toContain("Keep the room's membership fit");
 	expect(assistant.executor.instructions).toContain('Application instructions:');
 	expect(assistant.executor.instructions).toContain('Prefer small changes.');
 });
