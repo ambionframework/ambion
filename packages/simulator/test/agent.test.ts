@@ -4,7 +4,7 @@
  * rejects. The rooms are real rooms on the scripted execution, and the
  * workspace is a real workspace in memory.
  */
-import { isSpoken } from '@ambionframework/ambion';
+import { isSpoken, type Message } from '@ambionframework/ambion';
 import {
 	byAgent as bySeat,
 	quiet as quietSeat,
@@ -25,6 +25,7 @@ import { BACKGROUND_CONTEXT, openWorkspace } from '@ambionframework/workspace';
 import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { agentActor, agentJudge, scriptedActor, simulate } from '../src/index.ts';
+import { renderRecord } from '../src/render.ts';
 import { forever, open, priya } from './support.ts';
 
 const services = (script: Script) =>
@@ -209,6 +210,27 @@ describe('agentJudge', () => {
 		expect(prompt).toContain('1. The desk states the forecast.');
 		expect(prompt).not.toContain('SECRET BRIEF');
 		expect(verdict.pass).toBe(false);
+	});
+
+	it('writes a returned say in the record as the room giving the say back', async () => {
+		const run = await injectedRun();
+		const returned: Message = {
+			kind: 'returned',
+			seq: 20,
+			at: '2026-01-01T09:10:00.000Z',
+			to: 'desk',
+			message: 3,
+			owner: 'priya',
+			text: 'Check the forecast.',
+		};
+		if (!run.room.initialized) throw new Error('The run read no room.');
+		const record = renderRecord({
+			...run,
+			room: { ...run.room, messages: [...run.room.messages, returned] },
+		});
+		expect(record).toContain(
+			'[20] the room returned a say to desk for priya: "Check the forecast."',
+		);
 	});
 
 	it('refuses a grade that misses a criterion or breaks the schema, and takes the next', async () => {

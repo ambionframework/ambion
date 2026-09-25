@@ -12,6 +12,7 @@
 import {
 	type ExchangeActivation,
 	type HumanDefinition,
+	isReturned,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -32,6 +33,9 @@ function messageLine(message: Message): string {
 	}
 	if (isSpoken(message)) {
 		return `[${message.seq}] ${message.from} to ${message.to ?? 'the room'}: ${text}`;
+	}
+	if (isReturned(message)) {
+		return `[${message.seq}] the room returned a say to ${message.to} for ${message.owner}: ${text}`;
 	}
 	const by =
 		message.from === undefined || message.from === message.subject ? '' : ` by ${message.from}`;
