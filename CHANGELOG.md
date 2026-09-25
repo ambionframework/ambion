@@ -18,6 +18,14 @@ activation starts with a reminder of the seat's processes. See
   with its closed view, one read of the room, the events, and the usage.
   It ends with `stopped`, `limit`, `timeout`, or `failed`. `scriptedActor`
   plays a fixed list of moves. See [Simulator](docs/simulator.md).
+- **`agentActor` and `agentJudge` run the person and the grade on a model.**
+  Each takes `model`, `tools`, `bundles`, `services`, and `timeoutMs`, and
+  runs on `runAgent`. The actor ends each move with `send` or `stop`, and
+  the tools see the person in `ctx.agent`. The judge reads the record
+  between two lines that carry a random token, and ends with `grade`: one
+  finding for each criterion, reason first. `grade` refuses a list that
+  misses or reorders a criterion. `@ambionframework/simulator` now depends
+  on `@ambionframework/pi`.
 - **`runAgent` runs one Pi agent outside a room.** It takes a model, a
   routing name, the agent that the tools see, a system prompt, one prompt,
   tools and bundles, and the names of the tools that end the run. It runs

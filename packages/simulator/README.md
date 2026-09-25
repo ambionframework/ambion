@@ -31,5 +31,7 @@ exchange. The loop waits for the close and the summary under one deadline,
 `exchangeMs`, and it ends with `stopped`, `limit`, `timeout`, or `failed`.
 The test stops the room.
 
-**This release holds the loop and `scriptedActor`.** `agentActor` and
-`agentJudge` are phase 5 step 3 of [the plan](../../planning/next.md).
+**`agentActor` plays a brief on a model, and `agentJudge` grades a run.**
+Both take the options of an agent definition, such as `workspace.tools()`,
+and run on Pi's `AgentHarness`. An eval with either one is a live test,
+and it costs money on each run.
