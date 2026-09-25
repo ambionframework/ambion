@@ -217,7 +217,7 @@ function withinActivation(asked: number, ctx: ToolContext): { seconds: number; c
 function cutLine(wait: { cut: boolean }, process: ProcessStatus, ctx: ToolContext): string {
 	if (!wait.cut || process.state !== 'running' || ctx.deadline === undefined) return '';
 	const left = Math.max(0, Math.round((ctx.deadline - Date.now()) / 1000));
-	return `The wait stopped early, because your activation ends in ${left} seconds.`;
+	return `The wait stopped early, because your activation ends in ${left} seconds. Answer before then.`;
 }
 
 /**

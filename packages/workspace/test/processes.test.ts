@@ -418,7 +418,10 @@ describe('a wait near the end of the activation', () => {
 		const before = Date.now();
 		const waited = await invokeText(toolOf(workspace, 'wait'), { handle, timeout: 60 }, late);
 		expect(Date.now() - before).toBeLessThan(2_000);
-		expect(waited).toContain('The wait stopped early, because your activation ends in 10 seconds.');
+		// The note rounds the time left, and a loaded runner can take a second.
+		expect(waited).toMatch(
+			/The wait stopped early, because your activation ends in (9|10) seconds\. Answer before then\./,
+		);
 	});
 });
 

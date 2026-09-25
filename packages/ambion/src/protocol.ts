@@ -137,7 +137,9 @@ export interface ActivationView {
 	/**
 	 * When the room ends this activation, whatever its renewals, in
 	 * milliseconds since the epoch on the wall clock: `Date.now()` plus the
-	 * time the room's own clock has left. A view that no room served has none.
+	 * time the room's own clock has left. A seat on another host reads its own
+	 * wall clock, so a tool that waits keeps a margin for the skew between the
+	 * two. A view that no room served has none.
 	 */
 	deadline?: number;
 }

@@ -78,15 +78,14 @@ export async function answerView(
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
 	const state = room.state();
+	const lease = state.leases.get(id);
 	const seat = liveSeatOf(room, id, state);
-	if (seat === undefined) return stale('the lease ended');
+	if (lease === undefined || seat === undefined) return stale('the lease ended');
 	const spec = activationSpec(id, state);
 	if (spec === undefined || spec.seat !== seat) return stale('the activation has no current grant');
 	const resume = exchangeSession(id, state.closes, state.exchange, state.leases);
 	const granted = resume === undefined ? spec : { ...spec, resume };
 	const view = viewOf(granted, facts(room, state), range);
-	const lease = state.leases.get(id);
-	if (lease === undefined) return { view };
 	// The room ends the lease on its own clock. The tools of a seat read the wall clock.
 	const left = Date.parse(lease.claimedAt) + room.limits.lease.deadline - room.now();
 	return { view: { ...view, deadline: Date.now() + left } };
