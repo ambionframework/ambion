@@ -181,7 +181,7 @@ asks a judge for the rest.
 - [x] **4.** The assistant's live suite on the simulator. Needs 3. P1.
       (E1) Landed in #327.
 - [ ] **5.** The assistant held to its purpose: passive at `broadcast`,
-      membership and summaries, an answer when a person addresses it. Four
+      membership and summaries, an answer when a participant addresses it. Five
       purpose cases, a thinking level for Pi seats, and the suite passes on
       `anthropic/claude-sonnet-5` and `openai/gpt-5.6-luna` at `medium`,
       each graded by the other. Needs 4. P1. (E1)
