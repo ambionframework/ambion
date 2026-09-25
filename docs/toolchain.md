@@ -40,7 +40,7 @@ workspace ──▶ ambion
 just-bash ──▶ workspace
 workstation ──▶ workspace
 assistant ──▶ ambion, pi
-simulator ──▶ ambion
+simulator ──▶ ambion, pi
 ```
 
 **A test reaches a package that depends on the tested package by relative

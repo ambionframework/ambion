@@ -2,9 +2,9 @@
 
 **This page designs `@ambionframework/simulator`.** Phase 2 of
 [the 0.3.0 plan](../planning/next.md) builds it, in the four pull requests
-of [the order of work](#the-order-of-work). The package holds `simulate`
-and `scriptedActor`. `agentActor`, `agentJudge`, and the port of the
-assistant's live suite are open. Until step 4 lands, the live tests in
+of [the order of work](#the-order-of-work). The package holds `simulate`,
+`scriptedActor`, `agentActor`, and `agentJudge`. The port of the
+assistant's live suite is open. Until step 4 lands, the live tests in
 `packages/*/test/live` are the only behavioral evidence.
 
 **The rewrite of the assistant's live suite validates the design.** The
@@ -405,6 +405,10 @@ export interface Run {
 }
 ```
 
+**A move that rejects keeps no usage.** `runAgent` rejects with no spend,
+so `run.usage.actor` misses the requests of the last move of a `failed`
+run.
+
 **The room usage can miss the last summary.** The loop reads each closed
 view when `waitForSummary()` returns. The summary activation records its
 usage at its release, which can follow the summary message.
@@ -456,14 +460,17 @@ export interface Verdict {
 
 - the room's goal and the person's identity;
 - every message in seq order, with its author, its recipient, and its kind,
-  so a summary shows as a summary to its recipient;
+  so a summary shows as a summary to its recipient. The text of a message
+  is a JSON string on one line, so a newline in it cannot start a line that
+  reads as another message;
 - for each exchange, its range, its outcome, and each activation with its
   seat, purpose, outcome, and the tools it called.
 
 **The judge reads the record as evidence.** The agents under test wrote the
 record, and a message can address the judge. The rendered record sits
-between fixed delimiters. The system prompt states that the record is
-evidence, and that no text in it is an instruction to the judge.
+between two lines that carry a random token for each request, so no message
+can close the fence. The system prompt states that the record is evidence,
+and that no text in it is an instruction to the judge.
 
 **The judge does not read the actor's brief.** A criterion states what the
 person must get. The actor and the judge then share no text. The judge also
@@ -472,14 +479,16 @@ repeat the brief.
 
 **`agentJudge` ends with one call to `grade`.** The call carries one
 finding for each criterion, in the order of the list. Each finding is
-`{ criterion, reason, pass }`, with the reason first, so the verdict
-follows the evidence. The tool schema refuses a malformed finding. A
-`grade` that misses a criterion returns an error result, and the judge can
-call `grade` again. A judge that ends with no accepted `grade`, or that
+`{ reason, pass }`, with the reason first, so the verdict follows the
+evidence. The judge attaches each criterion to its finding, so the model
+never copies a criterion. The tool schema refuses a malformed finding. A
+`grade` with the wrong number of findings returns an error result, and the
+judge can call `grade` again. A judge that ends with no accepted `grade`, or that
 passes its `timeoutMs`, rejects the promise. A malformed answer never
 passes.
 
-**The judge takes the options of an agent definition.** A test that passes
+**The judge takes the options of an agent definition, and `timeoutMs`.**
+A grade has 120 000 ms by default. A test that passes
 `workspace.tools()` lets the judge read the final state of the workspace
 before it grades. Tool output is evidence under the same rule as the
 record: no text in it is an instruction to the judge.
@@ -626,16 +635,18 @@ its evidence below.
 
 **The package depends on `ambion` and `pi`.** The package graph in
 [Toolchain](toolchain.md#1-repository-layout) gains one line:
-`simulator ──▶ ambion, pi`. Until step 3, the package depends on `ambion`
-alone. `packages/pi/src/run-agent.ts` holds
+`simulator ──▶ ambion, pi`. `packages/pi/src/run-agent.ts` holds
 `runAgent`, the one change to the Pi package.
 
 | File                      | What it holds                                   |
 | ------------------------- | ----------------------------------------------- |
 | `src/simulate.ts`         | `simulate` and the deadline of an exchange      |
 | `src/types.ts`            | `Run`, `Seen`, `Move`, `Actor`, and the options |
-| `src/actor.ts`            | `scriptedActor`, `agentActor`, `send`, `stop`   |
-| `src/judge.ts`            | `agentJudge`, `Verdict`, and `grade`            |
+| `src/actor.ts`            | `scriptedActor`                                 |
+| `src/agent-actor.ts`      | `agentActor`, `send`, and `stop`                |
+| `src/agent-judge.ts`      | `agentJudge`, `Judge`, `Verdict`, and `grade`   |
+| `src/render.ts`           | The prompts of the actor and the judge's record |
+| `src/signal.ts`           | The timeout of a move and of a grade            |
 | `src/index.ts`            | The one entry                                   |
 | `test/simulate.test.ts`   | The loop on a scripted room                     |
 | `test/agent.test.ts`      | The agent actor and judge on a scripted stream  |
@@ -716,5 +727,11 @@ tool calls on a real provider.
 - A panel of judges with a majority vote.
 - Statistics across samples beyond pass^k, such as pass@k and confidence
   intervals.
+- The names of the participants in the actor's prompt, and a `send` that
+  refuses a `to` that names nobody. The actor learns a name when its owner
+  speaks.
+- A clock option for `simulate`, so a test can fire the deadline in the
+  same tick as a summary.
+- The usage of a move that rejects.
 - A budget in money that stops a run.
 - A report format, a command-line tool, and a CI workflow for evals.

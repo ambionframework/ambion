@@ -289,7 +289,22 @@ importers:
       '@ambionframework/ambion':
         specifier: workspace:*
         version: link:../ambion
+      '@ambionframework/pi':
+        specifier: workspace:*
+        version: link:../pi
+      typebox:
+        specifier: ^1.3.18
+        version: 1.3.18
     devDependencies:
+      '@ambionframework/just-bash':
+        specifier: workspace:*
+        version: link:../just-bash
+      '@ambionframework/workspace':
+        specifier: workspace:*
+        version: link:../workspace
+      '@earendil-works/pi-ai':
+        specifier: ^0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       tsdown:
         specifier: ^0.22.14
         version: 0.22.14(oxc-resolver@11.24.2)(typescript@7.0.2)
