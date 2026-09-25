@@ -4,7 +4,16 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { tempDir } from '../../just-bash/test/support/backends.ts';
-import { LOST, type ProcessFiles, statusOf, stopLine, writeStop } from '../src/process-files.ts';
+import {
+	LOST,
+	type ProcessFiles,
+	processesDir,
+	statusOf,
+	stopLine,
+	writeExit,
+	writeSpec,
+	writeStop,
+} from '../src/process-files.ts';
 import { FINISHED_IN_REMINDER } from '../src/process-text.ts';
 import type { ProcessDetails, PsDetails } from '../src/process-tools.ts';
 import { MAX_FINISHED_PROCESSES, MAX_RUNNING_PROCESSES } from '../src/processes.ts';
@@ -204,8 +213,18 @@ describe('the process table', () => {
 	it(`keeps ${MAX_FINISHED_PROCESSES} finished processes for each agent, and removes the output file of a process it forgets`, async () => {
 		const workspace = site();
 		const first = (await call(workspace, 'bash', { command: 'echo first' })).details.process;
-		for (let i = 1; i < MAX_FINISHED_PROCESSES; i++)
-			await call(workspace, 'bash', { command: 'true' });
+		// The files are the table, so the test writes the other finished processes as files.
+		// Sixty-three more calls of bash took a loaded CI runner past the 20 s limit.
+		await workspace.use({ name: 'alpha' }, async (env) => {
+			const root = await processesDir(env);
+			for (let i = 1; i < MAX_FINISHED_PROCESSES; i++) {
+				const startedAt = new Date(Date.parse(first.startedAt) + i).toISOString();
+				const handle = `bash-${i.toString(16).padStart(12, '0')}`;
+				const spec = { handle, kind: 'bash' as const, agent: 'alpha', command: 'true' };
+				await writeExit(env, await writeSpec(env, root, { ...spec, timeout: 600, startedAt }), 0);
+			}
+		});
+		expect(await workspace.processes.list({ agent: 'alpha' })).toHaveLength(MAX_FINISHED_PROCESSES);
 		expect((await call(workspace, 'status', { handle: first.handle })).details.process.state).toBe(
 			'exited',
 		);
@@ -396,6 +415,32 @@ describe('a process on a backend that misbehaves', () => {
 			expect(details.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		}
 		expect(await workspace.processes.list({ running: true })).toEqual([]);
+	});
+});
+
+describe('a wait near the end of the activation', () => {
+	it('stops the wait of bash and of wait before the deadline, and says why', async () => {
+		const workspace = site();
+		// 32 s are left: the wait stops 30 s before the deadline, so bash waits about 2 s of its 10.
+		const near = callAs('alpha', { deadline: Date.now() + 32_000 });
+		const started = Date.now();
+		const run = await toolOf(workspace, 'bash').invoke({ command: 'sleep 30' }, near);
+		if (typeof run === 'string') throw new Error('A process tool gives a structured result.');
+		const handle = (run.details as ProcessDetails).process.handle;
+		const text = run.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+		expect(Date.now() - started).toBeLessThan(8_000);
+		expect(text).toMatch(
+			/is running\..*The wait stopped early, because your activation ends in \d+ seconds\./s,
+		);
+		// Less than the margin is left: wait returns at once.
+		const late = callAs('alpha', { deadline: Date.now() + 10_000 });
+		const before = Date.now();
+		const waited = await invokeText(toolOf(workspace, 'wait'), { handle, timeout: 60 }, late);
+		expect(Date.now() - before).toBeLessThan(2_000);
+		// The note rounds the time left, and a loaded runner can take a second.
+		expect(waited).toMatch(
+			/The wait stopped early, because your activation ends in (9|10) seconds\. Answer before then\./,
+		);
 	});
 });
 

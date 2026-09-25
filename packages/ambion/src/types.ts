@@ -515,6 +515,8 @@ export interface ToolContext {
 	 * outside a room, and absent when no exchange was open.
 	 */
 	readonly exchange?: Pick<ExchangeRef, 'owner' | 'from'>;
+	/** When the room ends the activation, in ms since the epoch on the wall clock. Absent outside a room. */
+	readonly deadline?: number;
 }
 
 /** One normalized tool definition used by the room executor. */

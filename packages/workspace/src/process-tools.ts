@@ -51,6 +51,9 @@ const DEFAULT_WAIT_SECONDS = 30;
 /** The longest one call waits for a process. A longer wait holds the activation open. */
 const MAX_WAIT_SECONDS = 600;
 
+/** Seconds a wait leaves before the room ends the activation, so the agent can still answer. */
+const DEADLINE_MARGIN_SECONDS = 30;
+
 /** The largest timeout a Node timer holds, in seconds. */
 const MAX_TIMEOUT_SECONDS = 2_147_483;
 
@@ -171,9 +174,10 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 				'Wait for a process to end, up to timeout seconds. Give its state and the end of its output. The process keeps running when the time ends first.',
 			parameters: waitSchema,
 			execute: recorded('wait', async (params: WaitParams, ctx) => {
-				const seconds = checkedSeconds(params.timeout, DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS);
-				const process = await table.wait(ctx.agent, params.handle, seconds, ctx.signal);
-				return described(options, process, ctx);
+				const asked = checkedSeconds(params.timeout, DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS);
+				const wait = withinActivation(asked, ctx);
+				const process = await table.wait(ctx.agent, params.handle, wait.seconds, ctx.signal);
+				return described(options, process, ctx, cutLine(wait, process, ctx));
 			}),
 		}),
 		defineTool({
@@ -199,6 +203,24 @@ function checkedSeconds(value: number | undefined, fallback: number, max: number
 }
 
 /**
+ * The seconds a call may wait: the seconds it asks for, or fewer when the
+ * room ends the activation sooner. The wait then ends
+ * `DEADLINE_MARGIN_SECONDS` before the deadline.
+ */
+function withinActivation(asked: number, ctx: ToolContext): { seconds: number; cut: boolean } {
+	if (ctx.deadline === undefined) return { seconds: asked, cut: false };
+	const left = Math.max(0, (ctx.deadline - Date.now()) / 1000 - DEADLINE_MARGIN_SECONDS);
+	return left < asked ? { seconds: left, cut: true } : { seconds: asked, cut: false };
+}
+
+/** The note for a wait that the deadline of the activation cut, while the process still runs. */
+function cutLine(wait: { cut: boolean }, process: ProcessStatus, ctx: ToolContext): string {
+	if (!wait.cut || process.state !== 'running' || ctx.deadline === undefined) return '';
+	const left = Math.max(0, Math.round((ctx.deadline - Date.now()) / 1000));
+	return `The wait stopped early, because your activation ends in ${left} seconds. Answer before then.`;
+}
+
+/**
  * Start the process, wait up to `wait` seconds, and describe it. A process
  * that ended in that time with a code other than 0, with a timeout, or with
  * a failure makes the call fail with the same text.
@@ -210,7 +232,7 @@ async function started(
 ): Promise<AgentToolResult<ProcessDetails>> {
 	const timeout = checkedSeconds(params.timeout, DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS);
 	if (timeout === 0) throw new Error('Invalid timeout: give a number of seconds above 0.');
-	const wait = checkedSeconds(params.wait, DEFAULT_BASH_WAIT_SECONDS, MAX_WAIT_SECONDS);
+	const asked = checkedSeconds(params.wait, DEFAULT_BASH_WAIT_SECONDS, MAX_WAIT_SECONDS);
 	const spec = {
 		command: params.command,
 		timeout,
@@ -222,8 +244,9 @@ async function started(
 		(env) => options.processes.start(ctx.agent, env, spec),
 		ctx.signal,
 	);
-	const ended = await options.processes.wait(ctx.agent, process.handle, wait, ctx.signal);
-	const result = await described(options, ended, ctx);
+	const wait = withinActivation(asked, ctx);
+	const ended = await options.processes.wait(ctx.agent, process.handle, wait.seconds, ctx.signal);
+	const result = await described(options, ended, ctx, cutLine(wait, ended, ctx));
 	if (unsuccessful(ended)) throw new Error(textOf(result));
 	return result;
 }
@@ -253,6 +276,7 @@ async function described(
 	options: ProcessToolOptions,
 	process: ProcessStatus,
 	ctx: ToolContext,
+	note = '',
 ): Promise<AgentToolResult<ProcessDetails>> {
 	const tail = await options.shell(
 		ctx.agent,
@@ -265,7 +289,9 @@ async function described(
 	);
 	const output = tail.text.endsWith('\n') ? tail.text.slice(0, -1) : tail.text;
 	const body = output === '' && process.state !== 'running' ? '(no output)' : output;
-	const notes = [stateLine(process), truncationLine(tail.truncation)].filter((note) => note !== '');
+	const notes = [stateLine(process), note, truncationLine(tail.truncation)].filter(
+		(line) => line !== '',
+	);
 	const text = [body, `[${notes.join(' ')}]`].filter((part) => part !== '').join('\n\n');
 	const details: ProcessDetails = tail.truncation.truncated
 		? { process, truncation: tail.truncation }

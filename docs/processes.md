@@ -407,6 +407,16 @@ host cancels it, or the workspace disposes.
 process that is still running gives `running`. An abort of the call stops
 the wait, and the process keeps running.
 
+**A wait ends 30 seconds before the room ends the activation.** The room
+ends an activation `limits.lease.deadline` after its first claim, 600
+seconds by default, and counts it as a failed attempt. `ToolContext.deadline`
+carries that time. `bash` and `wait` wait for the shorter of the time the call
+gives and the time left before the margin. A process that still runs then
+gives `running`, and the result line adds `The wait stopped early, because
+your activation ends in <n> seconds. Answer before then.` The margin also
+covers the skew between the clock of the room's host and the clock of the
+seat's host.
+
 **`cancel` stops the process and waits up to 10 seconds for it to end.**
 The state becomes `cancelled`. A process that has not ended after 10
 seconds still reads `running`, and a later `status` gives its end. A
