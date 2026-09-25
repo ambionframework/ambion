@@ -50,13 +50,14 @@ repositories in one account on the server. Each agent reaches them with
 
 ## The scope
 
-**Two themes, each with the acceptance it must meet on the tagged
+**Three themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
 | Theme                    | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317. |
 | B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).         |
+| E Evals                  | The assistant's live suite runs on `@ambionframework/simulator`. Every claim of its eleven tests holds as a check or a criterion, and three new cases run over several exchanges. [Simulator](../docs/simulator.md) holds the design.                                                                                                                                                                              |
 
 **No journal format change.** The notice kind, the timer entry, and the `awaiting`
 outcome that names a room moved to the backlog with W1, W2, and D1.
@@ -87,8 +88,6 @@ condition that brings each one back.
 - **A repeatable release from CI (R1).** The owner runs the release.
 - **A generated API reference.** It adds a build step and a CI check, and
   the typed README examples already hold the surface.
-- **The evals package.** PR #153 is a draft, conflicts with main, and
-  carries its own list of open work.
 - **The open proofs.** The stop-loop and pass measures, unique roster
   names, `seatLive`, and `storedIdAccepted` remove no defect today.
 - **A backend profile and concurrent operations.** A profile that lets the
@@ -146,9 +145,10 @@ means two things or two names mean one.
 
 ## The order of work
 
-**Two phases remain, and the git phase holds no open step.** Background
-processes (B1 and B2) needed no phase. The release needs the git phase. A
-step names the steps it needs; a step with no "Needs" line starts now.
+**Three phases remain, and the git phase holds no open step.** Background
+processes (B1 and B2) needed no phase, and the simulator (phase 2) needs
+none. The release needs the git and simulator phases. A step names the
+steps it needs; a step with no "Needs" line starts now.
 **P1** carries the release story.
 
 ### Phase 1. Git on the workstation (P1)
@@ -164,12 +164,32 @@ with the SSH harness, and the tier proves the checks that
 [Workstation git](../docs/workstation-git.md#tests) lists. The workbench
 runs on `justGitBackend`. The evidence holds on `main`.
 
-### Phase 2. Release (P1)
+### Phase 2. The simulator (P1)
+
+**Goal:** an eval drives a room as a person, checks the run in code, and
+asks a judge for the rest.
+
+- [x] **1.** `runAgent` in `@ambionframework/pi`: one agent run outside a
+      room, until the agent calls a tool that ends it. P1. (E1) Landed in
+      #319.
+- [ ] **2.** `@ambionframework/simulator` with `simulate` and
+      `scriptedActor`, proven on the scripted tier. P1. (E1)
+- [ ] **3.** `agentActor`, `agentJudge`, and their tools `send`, `stop`,
+      and `grade`, with one live case. Needs 1 and 2. P1. (E1)
+- [ ] **4.** The assistant's live suite on the simulator. Needs 3. P1.
+      (E1)
+
+**Evidence:** each step states its cases in
+[Simulator](../docs/simulator.md#the-order-of-work). The last step keeps
+every claim of the assistant's live suite, and one live run of the file
+prints the cost of each case.
+
+### Phase 3. Release (P1)
 
 **Goal:** the tag names a commit that a live run tested.
 
 - [ ] **1.** The changelog entry for 0.3.0 names each export that
-      changed. Needs phase 1. P1. (R0)
+      changed. Needs phases 1 and 2. P1. (R0)
 - [ ] **2.** The live run on `main` after the last merge passes for Pi,
       Claude, and Codex. Needs 1. P1. (R0)
 
@@ -279,6 +299,18 @@ posts a message to wake the owner seat. **Evidence:** the deadline tests
 in the core and the workspace, the cursor tests on just-bash and on the
 workstation, and the test of a wait on several handles. #320, #321, and
 #322 carry the code.
+
+### E. Evals
+
+**E1. A simulator for evals.** A live test sends one fixed question and
+matches the answer with a regex. It cannot follow up on an answer, and
+a regex cannot grade a meaning. PR #153 tried a larger package and stays
+a draft. `@ambionframework/simulator` runs a loop of one exchange at a
+time. An actor plays a person, checks in code read the run, and a judge
+grades the criteria that code cannot decide. The actor and the judge are
+agents on Pi's `AgentHarness`, configured with tools and bundles like any
+agent. **Evidence:** the assistant's live suite runs on the simulator.
+Then close PR #153 with a comment that names the new package.
 
 ### R. Release
 

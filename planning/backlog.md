@@ -196,17 +196,6 @@ comparison of the `edit` tool against an `apply_patch` prototype, on the
 same editing task, shows a real gain in tool-call success for a Codex
 seat. Build the tool only after that measurement.
 
-**The evals package.** PR #153 adds room simulations with human actors,
-judges, and offline regrading: 8,455 lines at alpha maturity by its own
-list of open work. That list holds the failure matrix, live acceptance,
-judge calibration, and twelve legacy variants. Its harness re-implements
-the scripted stream and polls for a quiet room, and the 0.1.0 testing entry
-removes both. **Condition:** a live-eval budget and an owner for the
-calibration. The package then starts again from main on the testing entry.
-[Simulator](../docs/simulator.md) designs that start: one loop, an agent
-actor, and an agent judge, with no calibration suite. The rewrite of the
-assistant's live suite validates it.
-
 **A durable subscription service across processes.** Subscriptions belong
 to one running host. A client that reconnects reads and reacquires its
 handles. **Condition:** a placement that serves one room from more than one
@@ -278,4 +267,4 @@ today. **Condition:** a fault that one of them would have caught.
 | PR   | Title                                           | Decision                                                      |
 | ---- | ----------------------------------------------- | ------------------------------------------------------------- |
 | #151 | Exchange-scoped tasks and Relay background work | Close with item D1 above; delegation by reference replaces it |
-| #153 | Room simulation evals (draft)                   | Hold; see the evals package above                             |
+| #153 | Room simulation evals (draft)                   | Close when phase 2 of the 0.3.0 plan lands                    |

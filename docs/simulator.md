@@ -1,13 +1,10 @@
 # The simulator
 
 **This page designs `@ambionframework/simulator`. The package does not exist
-yet.** The [backlog](../planning/backlog.md) holds the condition that
-schedules it. Until it lands, the live tests in `packages/*/test/live` are
-the only behavioral evidence.
-
-**The package is outside the 0.3.0 scope.** [The plan](../planning/next.md)
-names the evals package out of scope. A change to that scope comes before
-the first pull request.
+yet.** Phase 2 of [the 0.3.0 plan](../planning/next.md) builds it, in the
+four pull requests of [the order of work](#the-order-of-work). Until it
+lands, the live tests in `packages/*/test/live` are the only behavioral
+evidence.
 
 **The rewrite of the assistant's live suite validates the design.** The
 package lands when `packages/assistant/test/live/behavior.test.ts` runs on
@@ -332,13 +329,13 @@ export function runAgent(
     readonly agent: { readonly name: string; readonly identity: string };
     readonly system: string;
     readonly prompt: string;
-    readonly tools: readonly AmbionTool[];
+    readonly tools?: readonly AmbionTool[];
     readonly bundles?: readonly ToolBundle[];
     /** The names of the tools that end the run. */
     readonly ends: readonly string[];
     readonly signal?: AbortSignal;
   },
-): Promise<{ end: Call; calls: readonly Call[]; usage: Usage }>;
+): Promise<{ end: RunAgentCall; calls: readonly RunAgentCall[]; usage: Usage }>;
 ```
 
 - **The model.** `services.model(model, name)` resolves it. Over a scripted
@@ -349,16 +346,24 @@ export function runAgent(
 - **The loop.** `runAgent` opens one harness session, prompts it once, and
   closes it after the run. It has no steer, no resume, and no
   `readThrough`. A tool in `ends` returns `terminate: true`, and the
-  harness stops after it.
+  harness stops after it. The first call in `ends` to succeed ends the
+  run. A call after it gets a result that ends the run too, and the run
+  keeps no record of it. When a sequential batch holds another call
+  before the end, the harness sends one more request.
+- **The output limit.** A run that stops at the output limit with no call
+  in `ends` rejects, and the error names the limit.
 - **The tool context.** Each call gets `{ agent, callId, signal, onUpdate
 }`, with no `room`, `activation`, or `exchange`. `ToolContext` allows
   their absence, and the workspace audit log accepts it. `runAgent`
   resolves no reminders, because a reminder needs a room.
 - **The bound.** `signal` aborts the run the way a cut aborts an
-  activation. `agentActor` and `agentJudge` abort at `timeoutMs`, and the
-  promise rejects.
-- **The usage.** `runAgent` sums each request with `addUsage`, and it maps
-  a request the way `spent` in `pi-trace.ts` does.
+  activation, and it ends every provider request of the run. The lane
+  ignores an abort that lands before it admits the prompt, so the signal
+  cuts the request itself. A run whose signal aborted rejects with the
+  signal's reason, even when an end landed first. `agentActor` and
+  `agentJudge` abort at `timeoutMs`.
+- **The usage.** `runAgent` sums the usage of each request, and it maps a
+  request the way `spent` in `pi-trace.ts` does.
 
 **`agentActor` and `agentJudge` take optional `services`.** The default is
 `createExecutionServices({ sessions: 'memory' })`, which reads
@@ -600,7 +605,7 @@ its evidence below.
 
 | Pull request              | What it adds                                                 | Evidence                                            |
 | ------------------------- | ------------------------------------------------------------ | --------------------------------------------------- |
-| 1. Pi: `runAgent`         | `packages/pi/src/run-agent.ts`, the export, a changelog line | [The `runAgent` cases](#tests), the export snapshot |
+| 1. Pi: `runAgent`         | `packages/pi/src/run-agent.ts`, the export, a changelog line | [The `runAgent` cases](#tests)                      |
 | 2. Simulator: the loop    | `simulate`, `scriptedActor`, the package and its graph line  | The scripted-tier table                             |
 | 3. Simulator: the agents  | `agentActor`, `agentJudge`, `send`, `stop`, `grade`          | The scripted-stream cases, and one live case        |
 | 4. Assistant: the rewrite | The port of `behavior.test.ts`                               | [Validation](#validation-the-assistants-live-suite) |
@@ -647,14 +652,20 @@ a `scriptedActor`. The judge is a function.
 
 **`runAgent` runs on the scripted Pi stream.**
 
-| Case                             | What it asserts                                            |
-| -------------------------------- | ---------------------------------------------------------- |
-| A tool in `ends` is called       | The run returns that call, and the calls before it         |
-| The signal aborts                | The promise rejects                                        |
-| Several requests                 | `usage` sums every request                                 |
-| A bundle tool has an `ends` name | The run fails at once with a duplicate name                |
-| A workspace tool is called       | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
-| Two names on one scripted stream | Each run answers from the script for its `name`            |
+| Case                                    | What it asserts                                            |
+| --------------------------------------- | ---------------------------------------------------------- |
+| A tool in `ends` is called              | The run returns that call, and the calls before it         |
+| The signal aborts                       | The promise rejects                                        |
+| Several requests                        | `usage` sums every request                                 |
+| A bundle tool has an `ends` name        | The run fails at once with a duplicate name                |
+| A tool is called                        | `ctx.agent` is the `agent` given, and `ctx.room` is absent |
+| Two names on one scripted stream        | Each run answers from the script for its `name`            |
+| The agent stops with no end call        | The promise rejects, and names the tools in `ends`         |
+| Two ending calls run at once            | The first call to succeed ends the run                     |
+| A batch holds a call before the end     | The run returns after one more request                     |
+| The signal aborts while the run opens   | The promise rejects, and no request goes out               |
+| The signal aborts at each session write | The promise rejects with the signal's reason               |
+| The output reaches its limit            | The promise rejects, and names the limit                   |
 
 **The agent actor and the agent judge run on the scripted Pi stream.**
 The cases cover the prompt text, the name each request carries, and a

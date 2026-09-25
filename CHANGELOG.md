@@ -13,6 +13,14 @@ message. See [Processes](docs/processes.md).
 
 ### New
 
+- **`runAgent` runs one Pi agent outside a room.** It takes a model, a
+  routing name, the agent that the tools see, a system prompt, one prompt,
+  tools and bundles, and the names of the tools that end the run. It runs
+  Pi's `AgentHarness` until the agent calls one of them, and returns that
+  call, the calls before it, and the usage of every request. A `signal`
+  aborts the run. `@ambionframework/pi` exports `runAgent`,
+  `RunAgentRequest`, `RunAgentResult`, and `RunAgentCall`. The simulator of
+  [Simulator](docs/simulator.md) builds its actor and its judge on it.
 - **`ps`, `status`, `wait`, and `cancel` join `bash`.** `ps` lists the
   running processes of the caller. The handle tools take a handle of the
   caller. `bash` takes an optional `name`, a label that `ps` and the
