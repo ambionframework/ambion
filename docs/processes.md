@@ -139,15 +139,17 @@ process.
 then one bracketed line.** The new output is the output after the cursor:
 the part that no earlier result of the agent showed. The line states the
 process, its handle, its name when it has one, and its output file. A
-process that ended with no output shows `(no output)`, and one that wrote
-nothing new since the last result shows `(no new output)`.
+process that ended with no output shows `(no output)`. A process that wrote
+nothing new since the last result shows `(no new output)`. A running
+process that has written nothing yet shows only the bracketed line.
 
 **The cursor moves with each result.** A read gives the bytes from the
 cursor to the size of `out` when the read began, and writes that size to
 `cursor`. A result that starts past the start of the output adds `The text
 above starts at byte <n> of the output. An earlier result showed the bytes
 before it.` `details.read` holds `from` and `to`. Ten polls of a long build
-give ten new parts, and no part twice. The cursor is a file, so a new run
+give ten new parts, and no part twice. One read takes at most 200 KB, so a
+burst past that shows only its end, and `read` reaches the rest. The cursor is a file, so a new run
 of the host reads on from the same byte. A failed write of `cursor` gives
 the same bytes again on the next read.
 
@@ -174,10 +176,10 @@ compiling 14 of 120
 
 **The view keeps the last 2000 lines or 50 KB of the new output.** These
 are the limits of Pi's `bash` tool. When the view cuts the new output, the
-bracketed line adds `The text above is the last <n> lines, <size> of
-<total>.` One read takes at most 200 KB, with `head -c <size> | tail -c
-<count>`. The agent reads the rest with `read`, which takes an offset and a
-limit.
+bracketed line adds `The text above is the last <n> lines, <size> of the
+<total> after byte <n>.` in place of the start line. One read takes at
+most 200 KB, with `head -c <size> | tail -c <count>`. The agent reads the
+rest with `read`, which takes an offset and a limit.
 
 **`details.process` is a `ProcessStatus`.** The host's view gives the
 same value.

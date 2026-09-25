@@ -7,6 +7,12 @@
  * output after that offset, and moves the cursor to the end it read. The
  * whole output stays in `out`, and `read` reaches any part of it. The files
  * hold the cursor, so a new run of the host reads on from the same offset.
+ *
+ * One read takes at most 200 KB. A burst of output past that shows only its
+ * end in a result, and `read` reaches the rest. The cursor counts bytes,
+ * so a read can end inside a UTF-8 character that the process has not
+ * finished writing. That character then shows as two replacement marks,
+ * one at the end of each read, and no byte shows twice.
  */
 
 import {
@@ -52,7 +58,7 @@ export async function readOutput(env: WorkspaceEnv, dir: string): Promise<Output
 		maxLines: DEFAULT_MAX_LINES,
 		maxBytes: DEFAULT_MAX_BYTES,
 	});
-	await writeCursor(env, dir, size);
+	if (size !== cursor) await writeCursor(env, dir, size);
 	return {
 		text: content,
 		truncation: {
@@ -83,7 +89,8 @@ async function writeCursor(env: WorkspaceEnv, dir: string, offset: number): Prom
  * fixes the end at the size the read saw, so output that the process
  * writes during the read waits for the next read. just-bash's `tail`
  * refuses `--` and reads `-c +N` as `-c N`, so the command uses neither.
- * The path is absolute, so it cannot read as an option.
+ * The path is absolute, so it cannot read as an option. The error text of
+ * `head` goes nowhere, so a file that goes away reads as empty.
  */
 async function bytesOf(
 	env: WorkspaceEnv,
@@ -93,7 +100,7 @@ async function bytesOf(
 ): Promise<string> {
 	let view: ShellOutputView | undefined;
 	await env.exec(
-		`head -c ${size} ${quoted(path)} | tail -c ${count}`,
+		`head -c ${size} ${quoted(path)} 2>/dev/null | tail -c ${count}`,
 		{
 			capture: {
 				limits: { maxBytes: READ_BYTES, maxLines: Number.MAX_SAFE_INTEGER, retain: 'tail' },

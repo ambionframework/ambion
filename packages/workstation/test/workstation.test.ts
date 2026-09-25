@@ -7,7 +7,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
 import { openWorkspace, type Workspace, type WorkspaceEnv } from '@ambionframework/workspace';
@@ -384,10 +384,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
 			return result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
 		};
-		const running = await call('bash', {
-			command: 'echo first; sleep 1; echo second; exec sleep 30',
-			wait: 0.5,
-		});
+		const running = await call('bash', { command: 'echo first; exec sleep 30', wait: 1 });
 		const [process] = await workspace.processes.list();
 		if (process === undefined) throw new Error('No process in the table.');
 		expect(process.state).toBe('running');
@@ -395,11 +392,13 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		expect(process.output).toBe(
 			join(started.homes.get('ada') ?? '', '.processes', process.handle, 'out'),
 		);
-		// The output streams to the file, and each read gives the part after the last one.
-		const later = await call('wait', { handle: process.handle, timeout: 2 });
+		// Each read gives the output after the last one. The test writes the next part itself.
+		await appendFile(process.output, 'second\n');
+		const later = await call('status', { handle: process.handle });
 		expect(later).toMatch(
 			/^second\n\n\[Process .* is running\..* starts at byte 6 of the output\./s,
 		);
+		expect(await call('status', { handle: process.handle })).toMatch(/^\(no new output\)\n\n/);
 		expect(await call('cancel', { handle: process.handle })).toContain('is cancelled.');
 		expect(await readFile(process.output, 'utf8')).toBe('first\nsecond\n');
 		// The table holds the timeout, and stops the process the way a cancel does.

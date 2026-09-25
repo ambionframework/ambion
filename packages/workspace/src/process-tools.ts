@@ -291,8 +291,8 @@ async function described(
 	const notes = [
 		stateLine(process),
 		note,
-		output === '' ? '' : startLine(read.from),
-		truncationLine(read.truncation),
+		output === '' || read.truncation.truncated ? '' : startLine(read.from),
+		truncationLine(read.truncation, read.from),
 	].filter((line) => line !== '');
 	const text = [bodyOf(output, process, read.from), `[${notes.join(' ')}]`]
 		.filter((part) => part !== '')
@@ -305,10 +305,14 @@ async function described(
 	return { content: [{ type: 'text', text }], details };
 }
 
-/** The text before the state line: the new output, or a note for none. A running process with none gives nothing. */
+/**
+ * The text before the state line: the new output, or a note for none. A
+ * running process that has written nothing yet gives nothing.
+ */
 function bodyOf(output: string, process: ProcessStatus, from: number): string {
-	if (output !== '' || process.state === 'running') return output;
-	return from === 0 ? '(no output)' : '(no new output)';
+	if (output !== '') return output;
+	if (from > 0) return '(no new output)';
+	return process.state === 'running' ? '' : '(no output)';
 }
 
 /** The note for a result that starts past the start of the output. */
@@ -318,7 +322,9 @@ function startLine(from: number): string {
 		: `The text above starts at byte ${from} of the output. An earlier result showed the bytes before it.`;
 }
 
-function truncationLine(truncation: ShellOutputTruncation): string {
+/** The note for a view that keeps only the end of the new output: `totalBytes` counts the bytes after `from`. */
+function truncationLine(truncation: ShellOutputTruncation, from: number): string {
 	if (!truncation.truncated) return '';
-	return `The text above is the last ${truncation.outputLines} lines, ${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}.`;
+	const after = from === 0 ? '' : ` after byte ${from}`;
+	return `The text above is the last ${truncation.outputLines} lines, ${formatSize(truncation.outputBytes)} of the ${formatSize(truncation.totalBytes)}${after}.`;
 }
