@@ -75,6 +75,9 @@ export function processToolGuidance(): string {
 		`status, wait and cancel take a handle. status gives the state of the process, wait waits for it to end,`,
 		`and cancel stops it. ps lists your running processes.`,
 		`A process keeps running after your activation ends. It stops after timeout seconds, ${DEFAULT_TIMEOUT_SECONDS} by default.`,
+		`No message tells you when a process ends. When your answer needs the result, call wait before you answer.`,
+		`wait with handles returns when the first of several processes ends. A wait stops before your activation ends.`,
+		`A process that outlives your activation shows in the reminder at the start of your next activation.`,
 	].join('\n');
 }
 
