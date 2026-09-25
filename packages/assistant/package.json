@@ -45,6 +45,7 @@
 		"@ambionframework/pi": "workspace:*"
 	},
 	"devDependencies": {
+		"@ambionframework/simulator": "workspace:*",
 		"@earendil-works/pi-ai": "^0.85.1",
 		"tsdown": "^0.22.14",
 		"typescript": "^7.0.2",

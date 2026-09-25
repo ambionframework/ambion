@@ -113,6 +113,9 @@ importers:
         specifier: workspace:*
         version: link:../pi
     devDependencies:
+      '@ambionframework/simulator':
+        specifier: workspace:*
+        version: link:../simulator
       '@earendil-works/pi-ai':
         specifier: ^0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)

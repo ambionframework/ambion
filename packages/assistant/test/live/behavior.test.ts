@@ -1,88 +1,54 @@
+/**
+ * The default assistant, driven by the simulator. A live assistant sits
+ * beside the `inventory` specialist, whose evidence the test fixes, and a
+ * person asks. Checks in code decide the exact facts, and a judge grades
+ * the meaning that no regex can decide. See docs/simulator.md, Validation.
+ *
+ * `it.each` over k samples measures pass^k: a case passes when every
+ * sample passes.
+ */
 import {
-	type Attention,
-	createRuntime,
-	defineAgent,
-	defineHuman,
-	type Message,
-	startRoom,
-} from '@ambionframework/ambion';
+	agentActor,
+	agentJudge,
+	type Judge,
+	type Run,
+	scriptedActor,
+	simulate,
+} from '@ambionframework/simulator';
+import { expect, it } from 'vitest';
 import {
-	createExecutionServices,
-	type PiExecutionOptions,
-	pi,
-	piExecution,
-} from '@ambionframework/pi';
-import {
-	createAssistantMessageEventStream,
-	fauxAssistantMessage,
-	fauxToolCall,
-} from '@earendil-works/pi-ai';
-import { describe, expect, it } from 'vitest';
-import { defineAssistant } from '../../src/index.ts';
+	answers,
+	EXCHANGE_MS,
+	JUDGE_MODEL,
+	live,
+	MODEL,
+	openRoom,
+	priya,
+	saidBy,
+	track,
+} from './support.ts';
 
-const model = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
-const provider = model.split('/')[0]?.toUpperCase().replace(/-/g, '_');
-const live = describe.skipIf(!process.env[`${provider}_API_KEY`]);
-const person = defineHuman({ name: 'priya', identity: 'Owns the request.' });
+const judge: Judge = (run, criteria) => agentJudge({ model: JUDGE_MODEL })(run, criteria);
 
-/** Only the assistant uses the provider. The specialist supplies controlled evidence. */
-async function evaluate(options: {
-	question: string;
-	fact: string;
-	attention?: Attention;
-	instructions?: string;
-}) {
-	const services = createExecutionServices();
-	const resolved = await services.model(model, 'assistant');
-	let answered = false;
-	const stream: NonNullable<PiExecutionOptions['stream']> = (requested, context, settings) => {
-		if (requested.id === model) return services.stream(resolved, context, settings);
-		const result = createAssistantMessageEventStream();
-		const message = answered
-			? fauxAssistantMessage('', { stopReason: 'stop' })
-			: fauxAssistantMessage([fauxToolCall('say', { text: options.fact, to: 'assistant' })], {
-					stopReason: 'toolUse',
-				});
-		answered = true;
-		queueMicrotask(() => {
-			result.push({ type: 'start', partial: message });
-			result.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
-		});
-		return result;
-	};
-	const assistant = defineAssistant({ model, instructions: options.instructions });
-	const specialist = defineAgent({
-		name: 'inventory',
-		identity: 'Checks warehouse stock and prepares dispatch plans.',
-		executor: pi({ instructions: 'Report the stock evidence once.', model: 'scripted/inventory' }),
-	});
-	const room = await startRoom({
-		name: `assistant-eval-${crypto.randomUUID()}`,
-		assistant,
-		agents: [specialist],
-		seats: options.attention === undefined ? {} : { inventory: options.attention },
-		runtime: createRuntime({ execution: piExecution({ stream }) }),
-	});
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	try {
-		const exchange = await (await room.visit(person)).send({ text: options.question });
-		const summary = await Promise.race([
-			exchange.waitForSummary(),
-			new Promise<never>((_, reject) => {
-				timer = setTimeout(() => reject(new Error('The assistant did not finish.')), 90_000);
-			}),
-		]);
-		return { messages: await exchange.waitForClose(), summary };
-	} finally {
-		clearTimeout(timer);
-		await room.stop();
+const STOCK = 'The warehouse has 8 units of SKU A available to dispatch today.';
+const EIGHT = /\b8\b|\beight\b/i;
+const FIVE = /\b5\b|\bfive\b/i;
+const SKU_B = /SKU\s*B\b/i;
+
+/** Real milliseconds for a case of two exchanges and a grade. */
+const TWO_EXCHANGES_MS = 420_000;
+/** Real milliseconds for a case of three exchanges, three moves of the actor, and a grade. */
+const THREE_EXCHANGES_MS = 600_000;
+
+/** A run that the judge can grade: it ended cleanly, and each exchange has its summary. */
+function expectGradable(run: Run, ended: readonly Run['ended'][] = ['limit']): void {
+	expect(ended, run.error).toContain(run.ended);
+	for (const exchange of run.exchanges) {
+		expect(exchange.summary, JSON.stringify(exchange.discussion)).toBeDefined();
 	}
 }
 
-const assistantSpeech = (messages: readonly Message[]) =>
-	messages.filter((message) => message.kind === 'said' && message.from === 'assistant');
-
-live('default assistant judgment with controlled specialist evidence', () => {
+live('the default assistant, driven by the simulator', () => {
 	it.each([
 		['broadcast', 1],
 		['named', 1],
@@ -90,84 +56,257 @@ live('default assistant judgment with controlled specialist evidence', () => {
 		['named', 3],
 		[undefined, 1],
 	] as const)(
-		'routes %s participation without redundant prompt repetition (sample %i)',
-		async (attention, _sample) => {
-			const result = await evaluate({
-				attention,
-				question:
+		'routes %s participation without a restated prompt (sample %i)',
+		async (attention, sample) => {
+			const name = `routes-${attention ?? 'reserve'}-${sample}`;
+			const evidence = track(name);
+			const room = await openRoom({ specialist: answers(() => STOCK), attention });
+			const run = await simulate(room, {
+				person: priya,
+				actor: scriptedActor([
 					'How many units of SKU A can the warehouse dispatch today? Use current stock evidence.',
-				fact: 'The warehouse has 8 units of SKU A available to dispatch today.',
+				]),
+				exchanges: 1,
+				exchangeMs: EXCHANGE_MS,
 			});
-			expect(
-				result.messages.some((message) => message.kind === 'said' && message.from === 'inventory'),
-			).toBe(true);
-			const speech = assistantSpeech(result.messages);
+			evidence.run = run;
+			const [exchange] = run.exchanges;
+			expectGradable(run);
+			expect(saidBy(exchange, 'inventory')).not.toEqual([]);
+			const speech = saidBy(exchange, 'assistant');
 			if (attention === 'named') {
 				expect(speech, JSON.stringify(speech)).toHaveLength(1);
 				expect(speech[0]).toMatchObject({ to: 'inventory' });
 			} else {
 				expect(speech).toEqual([]);
 			}
-			expect(result.summary?.text).toMatch(/8|eight/i);
+			if (attention === undefined) {
+				// The specialist starts in the reserve, and the assistant seats it.
+				expect(run.room.messages).toContainEqual(
+					expect.objectContaining({ kind: 'seated', subject: 'inventory', from: 'assistant' }),
+				);
+			}
+			expect(exchange?.summary?.text).toMatch(EIGHT);
 		},
 	);
 
 	it.each([1, 2, 3])(
 		'corrects clear reliance on a superseded constraint once (sample %i)',
-		async () => {
-			const result = await evaluate({
+		async (sample) => {
+			const name = `corrects-${sample}`;
+			const evidence = track(name);
+			const room = await openRoom({
 				attention: 'broadcast',
-				question:
-					'Prepare a warehouse dispatch plan. Correction: the approved limit is now 8 units; the old 10-unit limit is withdrawn. Do not dispatch anything.',
-				fact: 'I will prepare a 10-unit dispatch plan using the old approved limit of 10.',
+				specialist: answers(
+					() => 'I will prepare a 10-unit dispatch plan using the old approved limit of 10.',
+				),
 			});
-			const speech = assistantSpeech(result.messages);
-			expect(speech, JSON.stringify(result.messages)).toHaveLength(1);
-			expect(speech[0]).toMatchObject({ text: expect.stringMatching(/8|eight/i) });
-			expect(result.summary?.text).toMatch(/8|eight/i);
+			const run = await simulate(room, {
+				person: priya,
+				actor: scriptedActor([
+					'Prepare a warehouse dispatch plan. Correction: the approved limit is now 8 units; the old 10-unit limit is withdrawn. Do not dispatch anything.',
+				]),
+				exchanges: 1,
+				exchangeMs: EXCHANGE_MS,
+			});
+			evidence.run = run;
+			const [exchange] = run.exchanges;
+			const speech = saidBy(exchange, 'assistant');
+			expect(speech, JSON.stringify(exchange?.discussion)).toHaveLength(1);
+			expect(speech[0]?.text).toMatch(EIGHT);
+			expect(exchange?.summary?.text).toMatch(EIGHT);
 		},
 	);
 
 	it('does not steer valid work or turn an incomplete result into success', async () => {
-		const result = await evaluate({
+		const evidence = track('incomplete');
+		const room = await openRoom({
 			attention: 'broadcast',
-			question: 'Check whether the warehouse can dispatch 8 units today. Do not dispatch anything.',
-			fact: 'I could not read current warehouse stock because the stock service is unavailable. Dispatch capacity remains unknown; nothing was dispatched.',
+			specialist: answers(
+				() =>
+					'I could not read current warehouse stock because the stock service is unavailable. Dispatch capacity remains unknown; nothing was dispatched.',
+			),
 		});
-		expect(assistantSpeech(result.messages)).toEqual([]);
-		expect(result.summary?.text).toMatch(
-			/unknown|unavailable|cannot|could not|couldn't|unable|unconfirmed/i,
-		);
+		const run = await simulate(room, {
+			person: priya,
+			actor: scriptedActor([
+				'Check whether the warehouse can dispatch 8 units today. Do not dispatch anything.',
+			]),
+			exchanges: 1,
+			exchangeMs: EXCHANGE_MS,
+		});
+		evidence.run = run;
+		expectGradable(run);
+		expect(saidBy(run.exchanges[0], 'assistant')).toEqual([]);
+		const verdict = await judge(run, [
+			'The summary to priya says that the dispatch capacity is unknown, and it reports no success.',
+		]);
+		evidence.verdict = verdict;
+		expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
 	});
 
 	it('honors an application override of default silence', async () => {
-		const result = await evaluate({
+		const evidence = track('override');
+		const room = await openRoom({
 			attention: 'broadcast',
-			question: 'Check warehouse stock for SKU A.',
-			fact: 'There are 8 units of SKU A in stock.',
+			specialist: answers(() => 'There are 8 units of SKU A in stock.'),
 			instructions:
 				'For this application, override default silence: publish exactly one ordinary message with the exact text "Inventory checkpoint recorded." for this exchange. Do not repeat it if it is already on the record. Write the closing summary normally.',
 		});
-		expect(assistantSpeech(result.messages)).toEqual([
+		const run = await simulate(room, {
+			person: priya,
+			actor: scriptedActor(['Check warehouse stock for SKU A.']),
+			exchanges: 1,
+			exchangeMs: EXCHANGE_MS,
+		});
+		evidence.run = run;
+		const [exchange] = run.exchanges;
+		expect(saidBy(exchange, 'assistant')).toEqual([
 			expect.objectContaining({ text: 'Inventory checkpoint recorded.' }),
 		]);
-		expect(result.summary?.text).toMatch(/8|eight/i);
+		expect(exchange?.summary?.text).toMatch(EIGHT);
 	});
 
 	it('preserves source-only verification limits in the closing summary', async () => {
-		const result = await evaluate({
+		const evidence = track('verification');
+		const room = await openRoom({
 			attention: 'broadcast',
-			question:
-				'Report what was verified about the warehouse dispatch prototype. Do not change files or release anything.',
-			fact: 'I inspected the source of the static dispatch prototype. The source contains a stock-count label. I did not render it in a browser, run tests, or deploy it. Runtime behavior remains unverified; no release occurred and no files changed.',
+			specialist: answers(
+				() =>
+					'I inspected the source of the static dispatch prototype. The source contains a stock-count label. I did not render it in a browser, run tests, or deploy it. Runtime behavior remains unverified; no release occurred and no files changed.',
+			),
 		});
-		expect(assistantSpeech(result.messages)).toEqual([]);
-		expect(result.summary?.text).toMatch(/source|static/i);
-		expect(result.summary?.text).toMatch(
-			/unverified|not (?:tested|verified|rendered)|no (?:runtime|browser|tests)|did not (?:render|run|test)/i,
-		);
-		expect(result.summary?.text).toMatch(
-			/not (?:deployed|released)|no (?:deployment|release)|did not (?:deploy|release)|nothing (?:was )?(?:deployed|released)/i,
-		);
+		const run = await simulate(room, {
+			person: priya,
+			actor: scriptedActor([
+				'Report what was verified about the warehouse dispatch prototype. Do not change files or release anything.',
+			]),
+			exchanges: 1,
+			exchangeMs: EXCHANGE_MS,
+		});
+		evidence.run = run;
+		expectGradable(run);
+		const [exchange] = run.exchanges;
+		expect(saidBy(exchange, 'assistant')).toEqual([]);
+		expect(exchange?.summary?.text).toMatch(/source|static/i);
+		const verdict = await judge(run, [
+			'The summary to priya says that the runtime behavior is unverified.',
+			'The summary to priya says that nothing was released or deployed.',
+		]);
+		evidence.verdict = verdict;
+		expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
 	});
+
+	// The cases below need more than one exchange, which the old helper could not run.
+
+	it(
+		'carries a revised request to the specialist in one directed message',
+		async () => {
+			const evidence = track('revision');
+			const room = await openRoom({
+				attention: 'named',
+				specialist: answers((exchange) =>
+					exchange.some((message) => SKU_B.test(message.text))
+						? 'The warehouse has 5 units of SKU B available to dispatch today.'
+						: STOCK,
+				),
+			});
+			const run = await simulate(room, {
+				person: priya,
+				actor: scriptedActor([
+					'How many units of SKU A can the warehouse dispatch today?',
+					'Correction: I need the count for SKU B, not SKU A.',
+				]),
+				exchanges: 2,
+				exchangeMs: EXCHANGE_MS,
+			});
+			evidence.run = run;
+			expectGradable(run);
+			const second = run.exchanges[1];
+			const speech = saidBy(second, 'assistant');
+			expect(speech, JSON.stringify(second?.discussion)).toHaveLength(1);
+			expect(speech[0]).toMatchObject({ to: 'inventory', text: expect.stringMatching(SKU_B) });
+			expect(second?.summary?.text).toMatch(FIVE);
+			const verdict = await judge(run, [
+				'The second summary to priya answers for SKU B, and does not give the SKU A count as the answer.',
+			]);
+			evidence.verdict = verdict;
+			expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
+		},
+		TWO_EXCHANGES_MS,
+	);
+
+	it(
+		'keeps a constraint of the first exchange in the second',
+		async () => {
+			const evidence = track('constraint');
+			const room = await openRoom({
+				attention: 'named',
+				specialist: answers((exchange) =>
+					exchange.some((message) => /plan/i.test(message.text))
+						? 'I prepared a plan to dispatch 8 units of SKU A.'
+						: STOCK,
+				),
+			});
+			const run = await simulate(room, {
+				person: priya,
+				actor: scriptedActor([
+					'Report the stock of SKU A. Do not dispatch anything this week.',
+					'Now prepare a dispatch plan for SKU A.',
+				]),
+				exchanges: 2,
+				exchangeMs: EXCHANGE_MS,
+			});
+			evidence.run = run;
+			expectGradable(run);
+			const speech = saidBy(run.exchanges[1], 'assistant');
+			expect(speech, JSON.stringify(run.exchanges[1]?.discussion)).toHaveLength(1);
+			expect(speech[0]).toMatchObject({ to: 'inventory' });
+			const verdict = await judge(run, [
+				"In the second exchange, the assistant's request to inventory carries the constraint that nothing is dispatched this week.",
+				'The second summary to priya keeps the constraint that nothing is dispatched this week.',
+			]);
+			evidence.verdict = verdict;
+			expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
+		},
+		TWO_EXCHANGES_MS,
+	);
+
+	it(
+		'asks the person for a material fact, and uses it once given',
+		async () => {
+			const evidence = track('material-fact');
+			const room = await openRoom({
+				attention: 'broadcast',
+				specialist: answers((exchange) =>
+					exchange.some((message) => /A-100/.test(message.text))
+						? 'The warehouse has 8 units of SKU A-100 available to dispatch today.'
+						: 'I need the SKU before I can check the stock.',
+				),
+			});
+			const run = await simulate(room, {
+				person: priya,
+				actor: agentActor({
+					model: MODEL,
+					brief:
+						'You want to know how many units the warehouse can dispatch today. The SKU is A-100. Give the SKU only when someone asks for it. Stop when you know the count.',
+				}),
+				exchanges: 3,
+				exchangeMs: EXCHANGE_MS,
+			});
+			evidence.run = run;
+			expectGradable(run, ['stopped', 'limit']);
+			// The actor gives the SKU in a later exchange. The first criterion reads whether the assistant asked.
+			expect(run.exchanges.slice(1).map((exchange) => exchange.sent)).toContainEqual(
+				expect.stringMatching(/A-100/),
+			);
+			const verdict = await judge(run, [
+				'The first summary to priya asks for the SKU, or says that the count waits on it, and reports no count.',
+				'The last summary to priya states that 8 units can be dispatched today.',
+			]);
+			evidence.verdict = verdict;
+			expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
+		},
+		THREE_EXCHANGES_MS,
+	);
 });
