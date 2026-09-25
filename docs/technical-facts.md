@@ -127,7 +127,8 @@ holds the positioning and the headline of what is new.
   server ([Trust](trust.md)). One host owns each resource.
 - A seat keeps its harness session for one exchange. The session holds
   state the record does not show.
-- A room remains available between interactions. Native timers, external
-  event subscriptions, and scheduler ingress are future work.
+- A room remains available between interactions. An agent schedules a say
+  for itself, and the room returns it when it is due. External event
+  subscriptions and scheduler ingress are future work.
 - The journal owns no domain transactions and no credentials. Browser-only
   execution and a managed service are not provided.

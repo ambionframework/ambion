@@ -297,7 +297,8 @@ the application must end pending work. See the
 Activation deadlines and retry limits do not bound the total exchange duration.
 Continuing contributions can keep a discussion open.
 
-Ambient rooms remain available between interactions. Native timers, external
-event subscriptions, and scheduler ingress remain future work. Browser-only
-execution, a managed service, arbitrary edge-platform support, and turnkey
-deployment commands are outside the current scope.
+Ambient rooms remain available between interactions. The room returns a
+scheduled say on the host's clock, and the Cloudflare room object on its
+alarm. External event subscriptions and scheduler ingress remain future
+work. Browser-only execution, a managed service, arbitrary edge-platform
+support, and turnkey deployment commands are outside the current scope.

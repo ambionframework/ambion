@@ -24,6 +24,9 @@ the table. `Limits` in
 | `limits.call.attempts`         | Retries of a claim or a release                             | 2                      |
 | `limits.context.messages`      | Messages one view holds beyond the open exchange            | unbounded (`Infinity`) |
 | `limits.message.bytes`         | UTF-8 bytes in one spoken message or summary text           | unbounded (`Infinity`) |
+| `limits.schedule.minAfter`     | The least `after` of a scheduled say, in seconds            | 60                     |
+| `limits.schedule.maxAfter`     | The most `after` of a scheduled say, in seconds             | 604,800 (7 days)       |
+| `limits.schedule.pending`      | Scheduled says of one seat that wait to return              | 4                      |
 | `limits.trace.toolOutputBytes` | Bytes of tool output that a logged step keeps               | 65,536                 |
 | `limits.trace.stepsPerPass`    | Steps that one pass logs                                    | 1,000                  |
 

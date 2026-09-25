@@ -170,7 +170,8 @@ harness.** Each family adapts them to its own tool shape.
 - **`RoomToolBinding`** is what the tools reach: the activation id, the
   room, `readThrough`, `acknowledgeThrough`, `resultExpected`, and `abort`.
 - **`RoomToolOptions`** adds to a say: `refs` changes the refs it cites,
-  and `spoke` runs when the room takes an ordinary say.
+  and `spoke` runs when the room takes an ordinary say. A scheduled say is
+  an ordinary say, so `spoke` runs for it too.
 - **`agentTools(view, agent, signal, current)`** returns the tools of the
   definition in the same form. A closing activation gets none.
 - **`toolContext(agent, view, call, signal, onUpdate?)`** builds the

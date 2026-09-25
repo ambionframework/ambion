@@ -32,9 +32,10 @@ stored field.
 
 ## 3. Three rules
 
-1. A person's question opens an exchange only when none is open. Agent speech,
-   arrivals, and departures do not open one. A question that lands while one is
-   open belongs to that exchange's work.
+1. A person's question or a returned say opens an exchange only when none
+   is open. Agent speech, arrivals, and departures do not open one. A
+   question or a returned say that lands while one is open belongs to that
+   exchange's work.
 2. Quiescence closes the current exchange. The room derives “live” from leases
    and pending wakes, then appends a close with the observed `through` boundary.
    Work that reaches a terminal state is handled the same way.
@@ -45,27 +46,85 @@ stored field.
 ```mermaid
 stateDiagram-v2
     quiet --> open : person's question
+    quiet --> open : returned say
     open --> open : message steers work
     open --> quiet : no live work
 ```
 
 ## 4. Who owns one
 
-The person whose question opened the exchange owns it. Ownership survives that
-person leaving the room, and the closing result remains addressed to them. A
-second person may speak into the open exchange without taking ownership; their
-next question owns a later exchange once the room is quiet.
+The person whose question opened the exchange owns it. A returned say opens
+an exchange for the owner that the room stamped on the say. Ownership
+survives that person leaving the room, and the closing result remains
+addressed to them. A second person may speak into the open exchange without
+taking ownership; their next question owns a later exchange once the room is
+quiet.
 
 ## 5. A fold over the journal
 
-`openExchange` finds the first spoken message from a known person after the
-last close. Closes, leases, messages, and pending work are all reconstructed
-from the journal, so a resumed room continues an exchange interrupted by a
+`openExchange` finds the first spoken message from a known person, or the
+first returned say for one, after the last close. Closes, leases, messages,
+and pending work are all reconstructed from the journal, so a resumed room continues an exchange interrupted by a
 process or host failure. Unexpired leases may continue; unclaimed or expired
 work follows the retry policy. A configured summary writer is scheduled only
 after the close is durable.
 
-## 6. The edges a host sees
+## 6. A scheduled say
+
+**An agent comes back to its work with a say to itself.** The agent calls
+`say` with `to` set to its own name and `after` set to a number of seconds.
+The room stamps the owner of the open exchange on the say as `owner`. The say
+wakes nobody, and it is not live work, so the exchange closes while it waits.
+
+```mermaid
+sequenceDiagram
+    participant P as priya
+    participant R as room
+    participant W as worker
+    P->>R: question (seq 4) opens exchange 4
+    R->>W: activation
+    W->>R: say to worker, after 600 (seq 6, owner priya)
+    R-->>R: close [4, 6]
+    Note over R: 600 seconds later, the alarm
+    R->>R: returned (seq 9, message 6, owner priya) opens exchange 9
+    R->>W: activation
+    W->>R: say to priya
+```
+
+**The room returns the say when it is due.** The reconcile writes a
+`returned` entry `{ to, message, owner, text, refs }`: the returned say. It
+copies the text and the refs of the say, so the agent reads them when the
+record window or a summary no longer shows the say. The room wrote it, so it
+has no `from`. It wakes one seat, the one that `to` names, and steers no
+other.
+
+**The due time comes from the record.** A say is due at its `at` plus
+`after` seconds. `nextAlarm` takes the earliest due time beside the lease
+expiries and the retry times, so a resumed room arms it again from the
+journal. A pass that ends a lease returns no say, so the returned say lands
+after the close of the same pass.
+
+**The room decides who may schedule.**
+
+- A say with `after` goes to its author. A say to oneself without `after`
+  gets a refusal.
+- The activation must answer a message while an exchange is open. A closing
+  activation cannot schedule.
+- `limits.schedule` bounds `after` from `minAfter` to `maxAfter` seconds, 60 to
+  604,800 by default, and holds at most `pending` says of one seat, 4 by
+  default.
+
+**A say can stop waiting.** An unseating of its author drops it, and a
+cancellation drops every say before it. A recomposition that leaves the author
+out writes no unseating, so its says wait until the seat is on the roster
+again. A read lists the says that wait in `scheduled`.
+
+**A returned say starts a fresh harness session.** A harness session never
+crosses an exchange, so the agent reads the record, the summary of the first
+exchange, and its reminders. The process reminder carries the state of a
+process that the say checks on.
+
+## 7. The edges a host sees
 
 `Visit.send()` returns a handle for the exchange containing the committed
 question. Persist `handle.from`; after restart, reacquire it with
@@ -172,7 +231,7 @@ is absent when the harness recorded none.
 **The steps of an activation go to the host's logger.** See
 [Executors](executors.md#the-trace-log).
 
-## 7. What reads one
+## 8. What reads one
 
 - The summary writer receives one dedicated closing activation and may write a
   summary through `say`.
@@ -186,14 +245,14 @@ is absent when the harness recorded none.
 The exchange covers only its own `[from, through]` range. What a person missed
 between visits is presence catch-up, not a synthetic exchange.
 
-## 8. A gap the room has
+## 9. A gap the room has
 
 Quiescence has no hard duration bound. Agents that keep producing work can keep
 an exchange open. The say lock rejects stale writes and forces reconsideration,
 but it does not guarantee that a model will stop. Hosts should monitor work and
 apply their own operational limits where needed.
 
-## 9. What proves it
+## 10. What proves it
 
 [`exchange-completion.test.ts`](../packages/ambion/test/exchange-completion.test.ts)
 checks opening ownership, quiescent close boundaries, steering, owner
@@ -203,3 +262,6 @@ covered by [`restart.test.ts`](../packages/ambion/test/restart.test.ts) and
 presence/reconnect cases by [`presence.test.ts`](../packages/ambion/test/presence.test.ts).
 [`exchange-outcome.test.ts`](../packages/ambion/test/exchange-outcome.test.ts)
 checks the outcome order, the `awaiting` clearing, and `pendingFor`.
+[`scheduled-say.test.ts`](../packages/ambion/test/scheduled-say.test.ts)
+checks a scheduled say: the close while it waits, the returned say on the
+room's alarm, the exchange it opens, and one return after a stop or a crash.

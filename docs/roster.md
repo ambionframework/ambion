@@ -70,6 +70,9 @@ also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
   request resolves without writing a new entry. A host `seat` that asks for
   other attention or fixing than the held seat has is refused.
 - Neither path writes another membership entry for that request.
+- An unseating drops the scheduled says of that seat
+  ([Exchange](exchange.md#6-a-scheduled-say)). A seating again does not bring
+  them back.
 
 ## Fixed seats
 

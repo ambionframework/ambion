@@ -71,9 +71,10 @@ const lookup = defineTool({
 
 Every ordinary activation receives `say`, `seat`, and `unseat`, plus the tools
 from its definition. A closing activation receives only `say`. `say` accepts
-`{ text, to?, refs? }`. The room stamps the author, activation, time, and routing
-facts. `seat` and `unseat` accept an agent name. The room validates operations
-at the commit boundary.
+`{ text, to?, refs?, after? }`. A say to oneself with `after` is a scheduled
+say ([Exchange](exchange.md#6-a-scheduled-say)). The room stamps the author,
+activation, time, and routing facts. `seat` and `unseat` accept an agent
+name. The room validates operations at the commit boundary.
 
 **A bundle adds tools, guidance, and a reminder.** `bundles: [shared.tools()]`
 adds the tools of a resource, such as the workspace. A bundle's `remind`

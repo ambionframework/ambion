@@ -20,7 +20,7 @@ mechanism. The [repository README](../README.md) holds the positioning.
 | Consult privately                   | Every message is visible to every seat                                 | A second room, by reference. The room has no private channel.                                        |
 | Delegate to a working group         | None in the kernel                                                     | Not built. The backlog holds it.                                                                     |
 | Vote, sign off, structured decision | Application tools and artifacts                                        | Outside the kernel by design. A tool can write the record of the decision.                           |
-| Scheduled check-in                  | None in the kernel                                                     | Not built. Timers are backlog work.                                                                  |
+| Scheduled check-in                  | A scheduled say ([Exchange](exchange.md#6-a-scheduled-say))            | The agent says to itself with `after`. The room returns the say when it is due.                      |
 
 ## Two people in one discussion
 
@@ -35,7 +35,7 @@ the assignment rules.
 
 **`awaiting` differs from `complete`.** A closed exchange that still waits
 on a person reads `awaiting` and carries the `person`.
-[The outcome contract](exchange.md#6-the-edges-a-host-sees) states the
+[The outcome contract](exchange.md#7-the-edges-a-host-sees) states the
 derivation and the clearing.
 
 **`pendingFor` lists the waits.** `pendingFor(read, person)` and
@@ -50,7 +50,7 @@ with `say({ to })` and ends its activation. The exchange closes and reads
 `awaiting`. `pendingFor` shows the request to that person. The person must
 differ from the exchange owner. A message to the owner answers the owner's
 question, so the exchange reads `complete`. See
-[exchange outcomes](exchange.md#6-the-edges-a-host-sees).
+[exchange outcomes](exchange.md#7-the-edges-a-host-sees).
 
 **The person's reply is the approval.** A message from the person clears
 `awaiting` and lets the agent act in a later activation. The record holds the
