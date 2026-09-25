@@ -1,0 +1,50 @@
+{
+	"name": "@ambionframework/simulator",
+	"version": "0.2.0",
+	"type": "module",
+	"description": "Evals for Ambion rooms: an actor plays a person, checks read the run, and a judge grades the rest.",
+	"license": "Apache-2.0",
+	"homepage": "https://ambionframework.com",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/ambionframework/ambion.git",
+		"directory": "packages/simulator"
+	},
+	"keywords": [
+		"agents",
+		"evals",
+		"simulation",
+		"testing"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"main": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"build": "tsdown",
+		"check:types": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@ambionframework/ambion": "workspace:*"
+	},
+	"devDependencies": {
+		"tsdown": "^0.22.14",
+		"typescript": "^7.0.2",
+		"vitest": "^4.1.11"
+	}
+}

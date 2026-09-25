@@ -172,8 +172,9 @@ asks a judge for the rest.
 - [x] **1.** `runAgent` in `@ambionframework/pi`: one agent run outside a
       room, until the agent calls a tool that ends it. P1. (E1) Landed in
       #319.
-- [ ] **2.** `@ambionframework/simulator` with `simulate` and
-      `scriptedActor`, proven on the scripted tier. P1. (E1)
+- [x] **2.** `@ambionframework/simulator` with `simulate` and
+      `scriptedActor`, proven on the scripted tier. P1. (E1) Landed in
+      #324.
 - [ ] **3.** `agentActor`, `agentJudge`, and their tools `send`, `stop`,
       and `grade`, with one live case. Needs 1 and 2. P1. (E1)
 - [ ] **4.** The assistant's live suite on the simulator. Needs 3. P1.

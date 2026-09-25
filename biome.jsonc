@@ -409,6 +409,7 @@
 				"packages/claude/src/**",
 				"packages/codex/src/**",
 				"packages/workspace/src/**",
+				"packages/simulator/src/**",
 				"examples/**/src/**"
 			],
 			"linter": {
