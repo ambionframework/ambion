@@ -22,10 +22,10 @@ exchange for the owner of the first one. See
 - **`say` takes `after`.** A say to oneself with `after` schedules it. The
   room stamps `owner`, the owner of the open exchange, on the said entry,
   and refuses `after` in any other say. The result names the due time.
-- **The `returned` message kind.** The room writes `{ to, message, owner,
+- **The `returned` entry.** The room writes `{ to, message, owner,
   text, refs }` when a scheduled say is due. It has no `from`. It wakes
-  and steers the seat that `to` names alone, and it opens an exchange for
-  `owner` when none is open. `isReturned` and `ReturnedMessage` are new
+  one seat, the one that `to` names, and steers no other. It opens an
+  exchange for `owner` when none is open. `isReturned` and `ReturnedMessage` are new
   exports.
 - **`limits.schedule`** bounds `after` from `minAfter` to `maxAfter`
   seconds, 60 to 604,800 by default, and the says of one seat that wait,
@@ -100,7 +100,7 @@ exchange for the owner of the first one. See
 ### Breaking changes
 
 - **The journal changes.** A said entry takes `after` and `owner`, and the
-  `returned` message kind is new. A returned say opens an exchange, so the
+  `returned` entry is new. A returned say opens an exchange, so the
   verified rule `opensExchange` accepts it.
 - **`Message` has a fourth member, `ReturnedMessage`.** Code that switches
   on `kind` meets `returned`.

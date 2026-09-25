@@ -59,14 +59,14 @@ repositories in one account on the server. Each agent reaches them with
 **Three themes, each with the acceptance it must meet on the tagged
 commit.** The phases below deliver them; the items explain them.
 
-| Theme                    | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317.                                  |
-| B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).                                          |
-| S A scheduled say        | An agent says to itself with `after`, and the room refuses every other use of `after` and every other say to oneself. The room writes a `returned` entry when the say is due, and the entry wakes the seat. The returned entry opens an exchange for the owner of the exchange of the say when no exchange is open. A kill between the say and the returned entry keeps one delivery, and the Cloudflare room object delivers it through its alarm. |
+| Theme                    | Acceptance                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G Git on the workstation | `openWorkspace` refuses a git backend whose transport the bash backend does not carry, and the error names the git backend's transport and server and the bash backend's transports. `workstationGitBackend` passes `gitConformance` on OpenSSH in the `workstation` CI job. No agent pushes outside its namespace, and no agent key works off the server or after `keyTtl`. Landed in #312, #314, #316, and #317.                              |
+| B Background processes   | `bash` starts a process that outlives its activation. `ps`, `status`, `wait`, and `cancel` reach it, the host sees the processes of this run, the files of the bash backend hold the table, and each activation starts with a reminder of its seat's processes. Landed in #307. An agent waits for its result inside the activation, a result gives the new output, and `wait` takes several handles (B2).                                      |
+| S A scheduled say        | An agent says to itself with `after`, and the room refuses every other use of `after` and every other say to oneself. The room writes a `returned` entry when the say is due, and the entry wakes the seat. The returned say opens an exchange for the owner of the exchange of the say when no exchange is open. A kill between the say and the returned say keeps one delivery, and the Cloudflare room object delivers it through its alarm. |
 
 **One journal format change.** A said entry takes `after`, and the
-`returned` message kind is new (S1). The notice kind and the `awaiting` outcome that
+`returned` entry is new (S1). The notice kind and the `awaiting` outcome that
 names a room stay in the backlog with W1 and D1.
 
 **Deployment models.** The same rules serve four placements.
@@ -118,10 +118,10 @@ condition that brings each one back.
   ([Processes](../docs/processes.md#the-end-of-a-process)).
 - **A scheduled say goes to its author alone.** `to` names the author if
   and only if `after` is set. The room stamps everything else: the author,
-  the returned entry, and the owner of the exchange that it opens.
+  the returned say, and the owner of the exchange that it opens.
   No seat speaks under the name of a person, and no seat schedules work
   for another seat.
-- **A returned entry is an ordinary message when it lands.** It opens an
+- **A returned say is an ordinary message when it lands.** It opens an
   exchange when none is open. When an exchange is open, it joins it and
   steers work, and the owner of that exchange stays the owner.
 - **The journal records the schedule, and the host arms the clock.** The
@@ -196,7 +196,7 @@ host code wake it.
       `returned` kind, the rule that opens an exchange, the commit path,
       the fold, and the write in the reconcile. P1. (S1)
 - [ ] **2.** The read surface: the render of a scheduled say and a
-      returned entry, the pending says in a read, and the workbench.
+      returned say, the pending says in a read, and the workbench.
       Needs 1. P1. (S2)
 - [ ] **3.** The guidance and the docs. Needs 2. P1. (S3)
 
@@ -350,7 +350,7 @@ first.
   check of one entry. The entry wakes the seat that `to` names and steers
   no other seat. The name `due` already means an activation that the room
   owes.
-- **A returned entry opens an exchange like a question.** `opensExchange`
+- **A returned say opens an exchange like a question.** `opensExchange`
   and its proofs accept it, and the projection, `room.exchange`, and the
   routing read it. The reconcile writes it after a close of the same pass,
   so it lands after the close. A harness session never crosses an
@@ -361,7 +361,7 @@ first.
   the says before it. A recomposition that leaves the author out writes no
   unseating, so its says wait until the seat is on the roster again.
 - **A say returns after every ending of its pass.** A pass that ends a
-  lease writes no returned entry, so the entry lands after the close, and
+  lease returns no say, so the returned say lands after the close, and
   the record is the same whether the host crashed.
 - **The reconcile decides each write again.** The write decides inside the
   journal queue, and it writes nothing when the fold holds the entry
@@ -371,16 +371,16 @@ first.
 
 **Evidence:** scripted tests of each refusal and of each path through the
 reconcile on an injected clock; a golden journal of a say, the close of
-its exchange, the returned entry, and the exchange that it opens; a crash
-and a stop between the say and the returned entry, on memory and on
-SQLite, that find one returned entry after the resume; the Cloudflare room
+its exchange, the returned say, and the exchange that it opens; a crash
+and a stop between the say and the returned say, on memory and on
+SQLite, that find one returned say after the resume; the Cloudflare room
 object returns a say in workerd;
 the rules pass `pnpm check:lemmascript`.
 
 **S2. The agent and the person see the schedule.** The say result names
 the due time. The render shows a scheduled say with its due time, and a
-returned entry with its text, its refs, and the person it returns for.
-When a returned entry opened the exchange, the render says that the say
+returned say with its text, its refs, and the person it returns for.
+When a returned say opened the exchange, the render says that the say
 is the agent's own. A read lists the pending says, and the workbench shows each one
 until it returns. **Evidence:** the render tests, the prompt snapshot, the
 executor conformance on Pi, Claude, and Codex, and a read test of the

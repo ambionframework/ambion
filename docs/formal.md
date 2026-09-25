@@ -281,8 +281,8 @@ before the rules existed.
 record: it decides an entry, an admission, or the `due` list that
 `admitsLease` reads. A rule that only shapes a read leaves the file, and
 it lives beside its caller with an ordinary test. The sweep for 0.2.0
-found no such rule. `exchangeOutcome` waits for the `awaiting` expiry of
-the backlog's timer item (W2), which decides whether it gates a write.
+found no such rule. `exchangeOutcome` waits for the `awaiting` expiry (W2)
+in the backlog, which decides whether it gates a write.
 
 | Rule                   | The write it gates                                              |
 | ---------------------- | --------------------------------------------------------------- |

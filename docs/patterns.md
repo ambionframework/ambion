@@ -20,7 +20,7 @@ mechanism. The [repository README](../README.md) holds the positioning.
 | Consult privately                   | Every message is visible to every seat                                 | A second room, by reference. The room has no private channel.                                        |
 | Delegate to a working group         | None in the kernel                                                     | Not built. The backlog holds it.                                                                     |
 | Vote, sign off, structured decision | Application tools and artifacts                                        | Outside the kernel by design. A tool can write the record of the decision.                           |
-| Scheduled check-in                  | None in the kernel                                                     | Not built. Timers are backlog work.                                                                  |
+| Scheduled check-in                  | A scheduled say ([Exchange](exchange.md#6-a-scheduled-say))            | The agent says to itself with `after`. The room returns the say when it is due.                      |
 
 ## Two people in one discussion
 

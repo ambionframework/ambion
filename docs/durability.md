@@ -217,7 +217,7 @@ Completion needs a confirmed journal read with no execution obligations left.
   run arms the room's alarm for its due time, and returns a say that fell due
   while no run held the room at its first reconcile. A crash does the same.
   [`scheduled-say.test.ts`](../packages/ambion/test/scheduled-say.test.ts)
-  finds one returned entry after each.
+  finds one returned say after each.
 
 [`deployment.md`](deployment.md) holds the host steps.
 
