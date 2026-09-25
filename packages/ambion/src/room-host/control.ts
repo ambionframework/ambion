@@ -16,7 +16,7 @@ import {
 	type Refusal,
 	stopWork as stopWorkDecision,
 } from '../room/transition.ts';
-import type { EndReason, FailureCause, Message, Seq } from '../types.ts';
+import type { EndReason, FailureCause, Intent, Message, Seq } from '../types.ts';
 import { copyMessage, type HarnessSession, type Usage } from '../types.ts';
 import {
 	messageKeyConflict,
@@ -51,6 +51,13 @@ export interface ControlHost extends RoomBase {
 	leaveEverybody(): Promise<void>;
 }
 
+/** Whether a stored message is the room operation that a seating or a dismissal names. */
+function operationMatches(intent: Exclude<Intent, { kind: 'said' }>, message: Message): boolean {
+	if (intent.kind === 'dismissed')
+		return message.kind === 'dismissed' && message.message === intent.message;
+	return message.kind === intent.kind && message.subject === intent.name;
+}
+
 function contributionMatches(commit: CommitRequest, message: Message): boolean {
 	const { activation, intent } = commit;
 	// This activation check is the primary guard. It pins the returned entry to
@@ -63,9 +70,7 @@ function contributionMatches(commit: CommitRequest, message: Message): boolean {
 	const parsed = decodeActivationId(activation);
 	if (parsed !== undefined && message.from !== parsed.seat) return false;
 
-	if (intent.kind === 'seated' || intent.kind === 'unseated') {
-		return message.kind === intent.kind && message.subject === intent.name;
-	}
+	if (intent.kind !== 'said') return operationMatches(intent, message);
 	if (message.kind === 'said') return saidContentMatches(message, intent);
 	// A closing agent says through the same `said` intent, but the room records
 	// its contribution as a summary addressed to the exchange owner. An omitted
@@ -331,6 +336,26 @@ function arm(host: ControlHost, at: number | undefined): void {
 }
 
 // -- control ----------------------------------------------------------------
+
+/**
+ * The host dismisses one pending say. The write decides again inside the
+ * journal queue, so a say that returned first writes nothing. The room then
+ * looks again, so its alarm drops the due time of the say.
+ */
+export async function dismissSay(host: ControlHost, handle: Seq): Promise<boolean> {
+	await host.ready;
+	host.assertRunning();
+	const written = await submit(host.journal, 'message', () => {
+		if (host.gone()) return { event: undefined };
+		return decide(host.state(), { type: 'dismiss', message: handle }, host.now());
+	});
+	requireSubmission(written);
+	if (host.gone() && !('entry' in written))
+		throw new AmbionError('room_stopped', `Room '${host.name}' stopped before the dismissal.`);
+	if (!('entry' in written)) return false;
+	await host.reconcile();
+	return true;
+}
 
 export async function abort(host: ControlHost): Promise<void> {
 	host.assertRunning();

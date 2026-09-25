@@ -90,6 +90,13 @@ describe('one line of the record', () => {
 		);
 	});
 
+	it.each([
+		['the seat', { from: 'worker' }, '· worker dismissed say 3'],
+		['the host', {}, '· the host dismissed say 3'],
+	])('reads a dismissal by %s with the handle it dismissed', (_by, from, line) => {
+		expect(renderLine({ kind: 'dismissed', seq: 9, at, message: 3, ...from })).toBe(line);
+	});
+
 	it('reads a summary the way it reads anything addressed to one person', () => {
 		const summary: Message = {
 			kind: 'summary',
@@ -175,7 +182,7 @@ describe('the URIs a prompt states', () => {
 			'Message 4 is a say you scheduled, and the room returned it: do its work for priya.',
 		);
 		expect(rendered).toContain(
-			`Your says that wait to return. The room gives each back to you at its due time:\n- 6, due ${at}: Check again.`,
+			`Your says that wait to return. The room gives each back to you at its due time. Call \`dismiss\` with the handle of one that no longer fits:\n- 6, due ${at}: Check again.`,
 		);
 		expect(renderActivation(view, worker).context).not.toContain('Your says that wait');
 	});

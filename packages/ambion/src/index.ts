@@ -38,6 +38,7 @@ export type {
 	Visit,
 } from './room.ts';
 export { readExchange, readRoom, resumeRoom, startRoom } from './room.ts';
+export type { PendingSay } from './scheduling.ts';
 export type {
 	ActivationOutcome,
 	AgentDefinition,
@@ -47,6 +48,7 @@ export type {
 	Clock,
 	ClosedExchange,
 	ClosedExchangeView,
+	DismissedMessage,
 	ExchangeActivation,
 	ExchangeOutcome,
 	ExchangeRef,
@@ -57,7 +59,6 @@ export type {
 	HumanParticipantInfo,
 	Message,
 	ParticipantInfo,
-	PendingSay,
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,

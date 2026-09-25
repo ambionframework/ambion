@@ -268,6 +268,19 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		expect(await world.say('after-key', 'Check later.', { after: 900 })).toEqual(
 			differentOperation,
 		);
+
+		const seq = 'committed' in later ? later.committed.seq : 0;
+		const dismiss = async (message: number) =>
+			world.peer.commit({
+				activation: world.activation,
+				key: 'dismiss-key',
+				readThrough: seq,
+				intent: { kind: 'dismissed', message },
+			});
+		const dismissed = await dismiss(seq);
+		expect(dismissed).toMatchObject({ committed: { kind: 'dismissed', message: seq } });
+		expect(await dismiss(seq)).toEqual(dismissed);
+		expect(await dismiss(seq - 1)).toEqual(differentOperation);
 	});
 
 	it('binds membership keys to the committed subject and operation', async () => {

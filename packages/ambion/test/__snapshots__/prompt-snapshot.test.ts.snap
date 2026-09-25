@@ -116,7 +116,7 @@ The record of 'site' so far:
 [priya] Is the pour on?  (5 minutes ago)
 [worker → priya] Yes, at nine.  (5 minutes ago)
 
-Your says that wait to return. The room gives each back to you at its due time:
+Your says that wait to return. The room gives each back to you at its due time. Call \`dismiss\` with the handle of one that no longer fits:
 - 4, due 2026-01-01T10:00:00.000Z: Check the pour log. (refs: file:///pours.log)
 
 priya's exchange opened by message 2 is active; the marked request is the current human direction. The opening message's URI is ambion://room/site/message/2. Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."

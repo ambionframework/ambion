@@ -65,6 +65,14 @@ exchange for the owner of the first one. See
   the pending says of the seat in each response activation, and the render
   lists them. `renderPending` in `/hosting` gives that list for a seat that
   continues its session.
+- **A seat or the host dismisses a pending say.** The `dismiss` tool takes
+  the handle of a pending say of the seat, and the room writes a
+  `dismissed` entry `{ from, message }`. The room does not return the say.
+  `room.dismiss(handle)` dismisses any pending say, with no `from`, and
+  returns whether it wrote the entry. `room.scheduled()` lists the pending
+  says. The Cloudflare room object serves them as `dismiss` and
+  `scheduledSays`, because Workers keep the name `scheduled`.
+  `DismissedMessage` is a new export, and `/hosting` exports `DISMISS`.
 - **The workbench shows a returned say, and notes each say that waits.**
 - **`ps`, `status`, `wait`, and `cancel` join `bash`.** `ps` lists the
   running processes of the caller. The handle tools take a handle of the
@@ -151,10 +159,16 @@ exchange for the owner of the first one. See
   assistant. Seats and unseats specialists as the request needs, and
   summarizes each exchange." See [Default assistant](docs/assistant.md).
 - **The journal changes.** A said entry takes `after` and `owner`, and the
-  `returned` entry is new. A returned say opens an exchange, so the
+  `returned` and `dismissed` entries are new. A returned say opens an
+  exchange, so the
   verified rule `opensExchange` accepts it.
-- **`Message` has a fourth member, `ReturnedMessage`.** Code that switches
-  on `kind` meets `returned`.
+- **`Message` has two more members, `ReturnedMessage` and
+  `DismissedMessage`.** Code that switches on `kind` meets `returned` and
+  `dismissed`.
+- **`Room` has `dismiss` and `scheduled`.** A value that implements `Room`
+  adds them. A respond activation has the `dismiss` tool, so a tool name
+  `dismiss` of an agent gets a refusal, and a tool list that a test pins
+  lists it.
 - **`RoomRead` has `scheduled`.** A value that builds a read by hand adds
   it.
 - **`say` has an `after` parameter.** A tool schema that a test pins lists

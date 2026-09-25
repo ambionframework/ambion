@@ -458,6 +458,8 @@ describe('a scheduled say', () => {
 		expect(after.exchange).toEqual({ owner: 'priya', from: 8, at: returned.at });
 		expect(after.due.map((owed) => owed.id)).toEqual(['message:8:product:1']);
 		expect(decide(after, { type: 'return', message: 5 }, due)).toEqual({ event: undefined });
+		// A dismissal that loses the race to the due time changes nothing.
+		expect(decide(after, { type: 'dismiss', message: 5 }, due)).toEqual({ event: undefined });
 	});
 
 	it('returns the say after the close that the same pass writes', () => {
@@ -495,6 +497,75 @@ describe('a scheduled say', () => {
 		expect(reconcile(away, due).events).toEqual([]);
 		const back = evolve(away, { ...composition(undefined, [product, watcher]), seq: 9 }, options);
 		expect(reconcile(back, due).events.map((entry) => entry.kind)).toEqual(['message']);
+	});
+
+	const dismiss = (state: RoomState, handle: number, activation = 'message:3:product:1') =>
+		decide(
+			state,
+			{
+				type: 'commit',
+				commit: { activation, key: 'dismiss', intent: { kind: 'dismissed', message: handle } },
+				schedule,
+			},
+			now,
+		);
+
+	it('lets a seat dismiss its own pending say: no wake, no return, a free place, and unchanged after', () => {
+		const state = waiting();
+		const decision = dismiss(state, 5);
+		expect(decision).toEqual({
+			event: {
+				kind: 'message',
+				body: {
+					kind: 'dismissed',
+					message: 5,
+					at,
+					activationId: 'message:3:product:1',
+					from: 'product',
+				},
+			},
+		});
+		const after = evolve(state, event(decision, 6), options);
+		expect(after.scheduled).toEqual([]);
+		expect(after.deliveries.get(6)).toEqual({ wakes: [], steers: [] });
+		expect(decide(after, { type: 'return', message: 5 }, due)).toEqual({ event: undefined });
+		expect(dismiss(after, 5)).toEqual({ unchanged: { kind: 'dismissed', message: 5 } });
+		expect(say(after, later())).toHaveProperty('event');
+		// A say that returned before the seat dismissed it reads the same way.
+		const raced = waiting();
+		const back = evolve(
+			raced,
+			event(decide(raced, { type: 'return', message: 5 }, due), 6),
+			options,
+		);
+		expect(dismiss(back, 5)).toEqual({ unchanged: { kind: 'dismissed', message: 5 } });
+	});
+
+	it.each([
+		['the say of another seat', 5, 'message:3:writer:1', /say of 'product'/],
+		['a handle that names no say', 3, 'message:3:product:1', /not the handle/],
+	])('refuses a seat that dismisses %s', (_case, handle, activation, reason) => {
+		const state = waiting(lease('message:3:writer:1', 6));
+		expect(dismiss(state, handle, activation)).toMatchObject(because(reason));
+	});
+
+	it('refuses a dismissal in a closing activation', () => {
+		expect(summary(closing(), { kind: 'dismissed', message: 5 })).toMatchObject(
+			because(/cannot submit/),
+		);
+	});
+
+	it('lets the host dismiss any pending say with no author, and write nothing for one gone', () => {
+		// A running lease of another seat: an entry with no author steers no seat.
+		const state = waiting(lease('message:3:writer:1', 6));
+		const decision = decide(state, { type: 'dismiss', message: 5 }, now);
+		expect(decision).toEqual({
+			event: { kind: 'message', body: { kind: 'dismissed', message: 5, at } },
+		});
+		const after = evolve(state, event(decision, 7), options);
+		expect(after.deliveries.get(7)).toEqual({ wakes: [], steers: [] });
+		expect(after.scheduled).toEqual([]);
+		expect(decide(after, { type: 'dismiss', message: 5 }, now)).toEqual({ event: undefined });
 	});
 
 	it("lists the seat's own pending says in its response view, with the seq as the handle", () => {

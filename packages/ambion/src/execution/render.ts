@@ -55,18 +55,24 @@ function plural(n: number, unit: string): string {
  * reader nothing.
  */
 export function renderLine(message: Message): string {
+	if (message.kind === 'dismissed') {
+		return `· ${message.from ?? 'the host'} dismissed say ${message.message}`;
+	}
 	if (isReturned(message)) {
 		return `[returned → ${message.to}, for ${message.owner}] ${message.text}${refsOf(message)}`;
 	}
-	if (isSpoken(message) || isSummary(message)) {
-		const returns =
-			isSpoken(message) && message.after !== undefined
-				? ` (returns at ${new Date(Date.parse(message.at) + message.after * 1000).toISOString()})`
-				: '';
-		return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}${refsOf(message)}${returns}`;
-	}
+	if (isSpoken(message) || isSummary(message)) return spokenLine(message);
 	const by = message.from === undefined || message.from === message.subject;
 	return `· ${message.subject} ${message.kind}${by ? '' : ` by ${message.from}`}`;
+}
+
+/** A said or summary line. A scheduled say names the time it returns. */
+function spokenLine(message: Extract<Message, { kind: 'said' | 'summary' }>): string {
+	const returns =
+		message.kind === 'said' && message.after !== undefined
+			? ` (returns at ${new Date(Date.parse(message.at) + message.after * 1000).toISOString()})`
+			: '';
+	return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}${refsOf(message)}${returns}`;
 }
 
 function refsOf(message: { readonly refs?: readonly string[] }): string {
@@ -440,7 +446,7 @@ export function renderPending(view: ActivationView): string | undefined {
 	if (view.spec.purpose.kind !== 'respond' || scheduled === undefined) return undefined;
 	if (scheduled.length === 0) return undefined;
 	return [
-		`Your says that wait to return. The room gives each back to you at its due time:`,
+		`Your says that wait to return. The room gives each back to you at its due time. Call \`dismiss\` with the handle of one that no longer fits:`,
 		...scheduled.map((say) => `- ${say.seq}, due ${say.due}: ${say.text}${refsOf(say)}`),
 	].join('\n');
 }

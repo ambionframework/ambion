@@ -56,6 +56,7 @@ describe('the tool list and domain tools', () => {
 		const { tools } = await client.listTools();
 		expect(tools.map((tool) => tool.name).sort()).toEqual([
 			'broken',
+			'dismiss',
 			'lookup',
 			'say',
 			'seat',

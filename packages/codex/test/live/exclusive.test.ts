@@ -30,7 +30,7 @@ import {
 } from './support.ts';
 
 /** The tools of the room. */
-const ROOM = ['say', 'seat', 'unseat'];
+const ROOM = ['say', 'seat', 'unseat', 'dismiss'];
 
 /** The tools of the room and the one tool of the application. */
 const ALLOWED = [...ROOM, 'lookup'];

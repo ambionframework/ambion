@@ -26,13 +26,8 @@ import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework
 import type { Executor } from '../execution/executor.ts';
 import type { TraceOpener } from '../execution/trace.ts';
 import type { AgentPort, RoomProtocol } from '../protocol.ts';
-import type {
-	AgentDefinition,
-	Clock,
-	ExecutionEvent,
-	ScheduleLimits,
-	TraceLogger,
-} from '../types.ts';
+import type { ScheduleLimits } from '../scheduling.ts';
+import type { AgentDefinition, Clock, ExecutionEvent, TraceLogger } from '../types.ts';
 import { systemClock } from './clock.ts';
 import { defaultExecutionFactory } from './defaults.ts';
 

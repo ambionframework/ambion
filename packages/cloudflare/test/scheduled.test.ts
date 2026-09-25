@@ -30,3 +30,21 @@ it("returns a scheduled say through the room object's alarm, for the owner of it
 	);
 	expect(second).toMatchObject({ owner: 'priya' });
 });
+
+it('lists the says that wait, and dismisses one through the room object', async () => {
+	const name = `${NAME}-dismissed`;
+	const stub = roomOf(name);
+	await stub.start({ name, seats: { checker: 'broadcast' }, agents: ['checker'] });
+	await stub.visit({ name: 'priya', identity: 'Project manager.' });
+	const first = await stub.send({ from: 'priya', text: 'Is the pour logged tomorrow?', key: 'q1' });
+	await stub.waitForClose(first.from);
+	const [say] = await stub.scheduledSays();
+	expect(say).toMatchObject({ seat: 'checker', owner: 'priya', text: 'Check the pour log.' });
+	expect(await stub.dismiss(say?.seq ?? 0)).toBe(true);
+	expect(await stub.dismiss(say?.seq ?? 0)).toBe(false);
+	expect(await stub.scheduledSays()).toEqual([]);
+	expect((await stub.read()).messages.at(-1)).toMatchObject({
+		kind: 'dismissed',
+		message: say?.seq,
+	});
+});

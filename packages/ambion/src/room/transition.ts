@@ -4,15 +4,15 @@ import { decodeActivationId } from '../activation-id.ts';
 import type { AmbionErrorCode } from '../errors.ts';
 import { type Close, type Composition, JOURNAL_FORMAT, type Seating } from '../journal/events.ts';
 import type { Bodies, Body, Kind } from '../journal/journal.ts';
-import type { ActivationSpec, CommitRequest } from '../protocol.ts';
+import type { ActivationSpec, CommitRequest, Unchanged } from '../protocol.ts';
 import { refsRefusal } from '../refs.ts';
+import type { ScheduleLimits } from '../scheduling.ts';
 import type {
 	EndReason,
 	FailureCause,
 	HarnessSession,
 	Message,
 	PresenceMessage,
-	ScheduleLimits,
 	Seq,
 	Usage,
 } from '../types.ts';
@@ -37,7 +37,7 @@ import {
 	onRecord,
 	stampedSummary,
 } from './rules.verified.ts';
-import { ownerOf, returnedBody, returning, scheduleRefusal } from './scheduled.ts';
+import { dismissal, ownerOf, returnedBody, returning, scheduleRefusal } from './scheduled.ts';
 
 type ProposedEvent<K extends Kind = Kind> = {
 	[P in K]: { kind: P; body: Bodies[P] };
@@ -48,7 +48,9 @@ type MessageCommand =
 	| { type: 'deliver'; from: string; to?: string; text: string; refs?: string[]; bytes?: number }
 	| { type: 'presence'; change: PresenceChange; route: boolean }
 	| { type: 'commit'; commit: CommitRequest; bytes?: number; schedule?: ScheduleLimits }
-	| { type: 'return'; message: Seq };
+	| { type: 'return'; message: Seq }
+	| { type: 'dismiss'; message: Seq };
+type DismissStamp = { at: string; activationId?: string; from?: string };
 type LeaseCommand =
 	| { type: 'claim'; id: string; expiry: number; deadline: number }
 	| { type: 'renew'; id: string; expiry: number; deadline: number; readThrough?: number }
@@ -92,9 +94,7 @@ export type Refusal =
 	{ category: RefusalCode; reason: string } | { category: 'missed'; missed: Message[] };
 
 export type RoomDecision<K extends Kind> =
-	| { event: ProposedEvent<K> | undefined }
-	| { refusal: Refusal }
-	| { unchanged: { kind: 'seated' | 'unseated'; name: string } };
+	{ event: ProposedEvent<K> | undefined } | { refusal: Refusal } | { unchanged: Unchanged };
 
 export type ReconcileDecision = {
 	events: ProposedEvent<'lease' | 'close' | 'message'>[];
@@ -135,6 +135,8 @@ export function decide(
 			return commit(state, command, now);
 		case 'return':
 			return returnSay(state, command.message, now);
+		case 'dismiss':
+			return dismissing(state, command.message, { at: iso(now) });
 		case 'claim':
 			return claim(state, command, now);
 		case 'renew':
@@ -423,6 +425,7 @@ function ordinaryCommit(
 	const stamp = { at: iso(now), activationId: request.activation, from: live.seat };
 	if (intent.kind === 'seated') return seating(state, intent.name, stamp, now);
 	if (intent.kind === 'unseated') return unseating(state, intent.name, stamp, now);
+	if (intent.kind === 'dismissed') return dismissing(state, intent.message, stamp);
 	const refusal = addressRefusal(state, live.seat, intent, schedule);
 	if (refusal !== undefined) return refusal;
 	const { refs, ...rest } = intent;
@@ -467,6 +470,7 @@ function permits(spec: ActivationSpec, kind: CommitRequest['intent']['kind']): b
 			return true;
 		case 'seated':
 		case 'unseated':
+		case 'dismissed':
 			return spec.purpose.kind === 'respond';
 	}
 }
@@ -717,6 +721,16 @@ function reconcile(state: RoomState, command: ReconcileCommand, now: number): Re
 		],
 		effects,
 	};
+}
+
+/** A dismissal reaches nobody. The host's has no `from`, and its retry writes nothing. */
+function dismissing(state: RoomState, seq: Seq, stamp: DismissStamp): RoomDecision<'message'> {
+	const answer = dismissal(state.scheduled, state.messages, stamp.from, seq);
+	const body = { kind: 'dismissed' as const, message: seq, ...stamp };
+	if (answer === 'dismiss') return { event: { kind: 'message', body } };
+	if (answer !== 'unchanged') return refused(answer);
+	if (stamp.from === undefined) return { event: undefined };
+	return { unchanged: { kind: 'dismissed', message: seq } };
 }
 
 /** The write of one returned say, decided again inside the journal queue. */

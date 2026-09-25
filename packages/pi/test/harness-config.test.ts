@@ -140,6 +140,7 @@ describe('the harness of an activation', () => {
 			'say',
 			'seat',
 			'unseat',
+			'dismiss',
 			'book',
 			'inspect',
 		]);

@@ -321,6 +321,19 @@ export const UNSEAT = {
 	}),
 };
 
+/** The room tool that dismisses one pending say of the seat. */
+export const DISMISS = {
+	name: 'dismiss' as const,
+	description:
+		'Dismiss one of your says that wait to return, by its handle. The room does not give it back to you.',
+	parameters: Type.Object({
+		handle: Type.Integer({ minimum: 1, description: 'The handle of a say that waits to return.' }),
+	}),
+};
+
+/** The names that the room supplies for an activation. An agent's own tool takes none of them. */
+const ROOM_TOOL_NAMES: readonly string[] = [SAY.name, SEAT.name, UNSEAT.name, DISMISS.name];
+
 function flattenTools(
 	tools: readonly AmbionTool[] | undefined,
 	bundles: readonly ToolBundle[] | undefined,
@@ -395,7 +408,7 @@ function assertAgentTools(agent: string, tools: readonly AmbionTool[]): void {
 			);
 		}
 		names.add(name);
-		const roomTool = name === SAY.name || name === SEAT.name || name === UNSEAT.name;
+		const roomTool = ROOM_TOOL_NAMES.includes(name);
 		if (roomTool)
 			throw new AmbionError(
 				'invalid_tool',

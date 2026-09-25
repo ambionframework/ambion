@@ -19,7 +19,7 @@ What is built:
 - **`RoomObject`** runs the room. Its constructor resumes an initialized room
   unless explicitly stopped; an uninitialized named record waits for
   an explicit `start`. It exposes `start`, `visit`, `send`, `leave`, `seat`,
-  `unseat`, `abort`, `read`, `exchange`,
+  `unseat`, `abort`, `read`, `exchange`, `dismiss`, `scheduledSays`,
   `waitForClose` and `waitForSummary` over RPC, and the three calls a seat makes: `view`, `commit`
   and `lease`. Its `alarm()` runs `reconcileRoom`.
   Identity and presence come from the room journal. Restart restores handles

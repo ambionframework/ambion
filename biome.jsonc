@@ -103,6 +103,7 @@
 				"packages/ambion/src/activation-id.ts",
 				"packages/ambion/src/refs.ts",
 				"packages/ambion/src/types.ts",
+				"packages/ambion/src/scheduling.ts",
 				"packages/ambion/src/bundle.ts",
 				"packages/ambion/src/protocol.ts",
 				"packages/ambion/src/define.ts",

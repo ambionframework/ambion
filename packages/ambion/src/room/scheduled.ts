@@ -9,14 +9,8 @@
  */
 
 import type { Body } from '../journal/journal.ts';
-import type {
-	ExchangeRef,
-	Message,
-	PendingSay,
-	ReturnedMessage,
-	ScheduleLimits,
-	Seq,
-} from '../types.ts';
+import type { PendingSay, ScheduleLimits } from '../scheduling.ts';
+import type { ExchangeRef, Message, ReturnedMessage, Seq } from '../types.ts';
 import { survivesCancellation } from './rules.verified.ts';
 
 /** One say that waits to return to its author. */
@@ -38,14 +32,16 @@ function isScheduled(message: Message): message is Extract<Message, { kind: 'sai
 	return message.kind === 'said' && message.after !== undefined;
 }
 
-/** Whether a message changes the list: a scheduled say, a returned say, or an unseating. */
+/** Whether a message changes the list: a scheduled say, a returned or dismissed say, or an unseating. */
 export function changesScheduled(message: Message): boolean {
-	return isScheduled(message) || message.kind === 'returned' || message.kind === 'unseated';
+	if (isScheduled(message) || message.kind === 'unseated') return true;
+	return message.kind === 'returned' || message.kind === 'dismissed';
 }
 
 /** The list after one message. */
 export function scheduleStep(list: readonly ScheduledSay[], message: Message): ScheduledSay[] {
-	if (message.kind === 'returned') return list.filter((say) => say.seq !== message.message);
+	if (message.kind === 'returned' || message.kind === 'dismissed')
+		return list.filter((say) => say.seq !== message.message);
 	if (message.kind === 'unseated') return list.filter((say) => say.seat !== message.subject);
 	if (!isScheduled(message) || message.after === undefined || message.owner === undefined)
 		return [...list];
@@ -155,4 +151,28 @@ export function returning(
 	const say = list.find((candidate) => candidate.seq === seq);
 	if (say === undefined || say.dueAt > now) return undefined;
 	return roster.some((seat) => seat.name === say.seat) ? returnedBody(say, now) : undefined;
+}
+
+/**
+ * What a dismissal of one handle does. A seat dismisses its own pending
+ * say, and the host, with no seat, any pending say. A say that no longer
+ * waits is `unchanged`, so a retry reads the same answer. Any other handle
+ * of a seat gets a refusal.
+ */
+export function dismissal(
+	list: readonly ScheduledSay[],
+	messages: readonly Message[],
+	seat: string | undefined,
+	seq: Seq,
+): 'dismiss' | 'unchanged' | string {
+	const say = list.find((candidate) => candidate.seq === seq);
+	if (seat === undefined) return say === undefined ? 'unchanged' : 'dismiss';
+	if (say !== undefined)
+		return say.seat === seat
+			? 'dismiss'
+			: `Say ${seq} is the say of '${say.seat}'. Dismiss only your own.`;
+	const own = messages.some(
+		(message) => message.seq === seq && isScheduled(message) && message.from === seat,
+	);
+	return own ? 'unchanged' : `${seq} is not the handle of a say that you scheduled.`;
 }

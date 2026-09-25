@@ -124,7 +124,24 @@ beside the delta. A closing activation reads none.
 **A say can stop waiting.** An unseating of its author drops it, and a
 cancellation drops every say before it. A recomposition that leaves the author
 out writes no unseating, so its says wait until the seat is on the roster
-again. A read lists the says that wait in `scheduled`.
+again. A read lists the says that wait in `scheduled`, and so does
+`room.scheduled()`.
+
+**The agent or the host dismisses a say.** A correction to long work can make
+a pending say wrong, and its text is fixed. The `dismiss` tool takes the
+handle of a pending say, and the room writes a `dismissed` entry
+`{ from, message }`. The entry wakes nobody. The fold drops the say, so it
+frees its place under `pending`.
+
+- A seat dismisses its own pending say, from a response activation. The
+  handle of another seat's say, or of no scheduled say, gets a refusal.
+- A dismissal of a say that returned or that the seat dismissed already
+  changes nothing. The tool result says that the say no longer waits.
+- The host dismisses any pending say with `room.dismiss(handle)`. The entry
+  has no `from`. The call returns `true` when it writes the entry and
+  `false` when the say no longer waits.
+- A dismissal and the due time race through the journal. The entry that
+  lands first decides, and the other changes nothing.
 
 **A returned say starts a fresh harness session.** A harness session never
 crosses an exchange, so the agent reads the record, the summary of the first

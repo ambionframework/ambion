@@ -35,6 +35,7 @@ export function messageDelivery(
 			source === 'message' &&
 			seat !== message.from &&
 			(message.kind !== 'returned' || seat === message.to) &&
+			message.kind !== 'dismissed' &&
 			!wakes.has(seat) &&
 			atWork(lease, message.seq);
 		if (steers && !steered.has(seat)) steered.set(seat, lease.id);

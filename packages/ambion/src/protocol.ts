@@ -12,6 +12,8 @@
  * context to one running activation, and `cut` stops an activation whose
  * lease the room ended.
  */
+
+import type { PendingSay } from './scheduling.ts';
 import type {
 	AgentParticipantInfo,
 	EndReason,
@@ -20,7 +22,6 @@ import type {
 	HumanParticipantInfo,
 	Intent,
 	Message,
-	PendingSay,
 	Seq,
 	Usage,
 	Without,
@@ -165,6 +166,10 @@ export function sessionToResume(view: ActivationView, harness: string): string |
 
 export type { Intent };
 
+/** A membership change or a dismissal that the record already holds. */
+export type Unchanged =
+	{ kind: 'seated' | 'unseated'; name: string } | { kind: 'dismissed'; message: Seq };
+
 export interface CommitRequest {
 	activation: string;
 	key: string;
@@ -181,7 +186,7 @@ export interface CommitRequest {
  */
 export type CommitResult =
 	| { committed: Message }
-	| { unchanged: { kind: 'seated' | 'unseated'; name: string } }
+	| { unchanged: Unchanged }
 	| { missed: Message[] }
 	| { refused: string }
 	| { unknown: string }

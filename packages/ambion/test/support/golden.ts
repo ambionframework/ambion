@@ -28,6 +28,7 @@ import {
 	scripted,
 	speak,
 	summarise,
+	toolResultTexts,
 } from './scripted.ts';
 import { memory } from './storage.ts';
 
@@ -220,6 +221,40 @@ const scheduled = (): Promise<readonly JournalEntry[]> =>
 		},
 	});
 
+/**
+ * The worker schedules two checks, then dismisses the first by the handle
+ * that its say result names.
+ */
+const changesItsMind: Script = (context) => {
+	const results = toolResultTexts(context);
+	const [first] = results.flatMap((text) => /^scheduled (\d+):/.exec(text)?.[1] ?? []);
+	if (results.length === 0)
+		return callTool('say', { to: worker.name, text: 'Check the pour log.', after: 600 });
+	if (results.length === 1)
+		return callTool('say', { to: worker.name, text: 'Check the crane log.', after: 1200 });
+	if (results.length === 2) return callTool('dismiss', { handle: Number(first) });
+	return quiet();
+};
+
+/**
+ * Two scheduled says and two dismissals. The worker dismisses its first say
+ * with the dismiss tool, and the host dismisses the second with
+ * `room.dismiss`. The room returns neither.
+ */
+const dismissed = (): Promise<readonly JournalEntry[]> =>
+	record({
+		agents: [worker],
+		seats: { worker: 'broadcast' },
+		stream: byAgent({ worker: changesItsMind }),
+		async drive(room, clock) {
+			await (await room.visit(priya)).send({ text: 'Is the slab poured?' });
+			await waitForRoom(room);
+			for (const say of await room.scheduled()) await room.dismiss(say.seq);
+			await clock.advance(1_200_000);
+			await waitForRoom(room);
+		},
+	});
+
 /** A room that stops and resumes: two runs, and the second fences the first. */
 async function resumed(): Promise<readonly JournalEntry[]> {
 	const opened = await memory.open();
@@ -263,6 +298,7 @@ export const goldenScenarios: Readonly<Record<string, () => Promise<readonly Jou
 	complete,
 	awaiting,
 	scheduled,
+	dismissed,
 	cancelled,
 	exhausted,
 	resumed,

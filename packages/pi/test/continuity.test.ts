@@ -208,7 +208,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		expect(prompts[0]).toContain('Reminder for message:1:product:1.');
 		expect(prompts.at(-1)).toBe(
 			'Reminder for message:2:product:1.\n\n' +
-				'Your says that wait to return. The room gives each back to you at its due time:\n' +
+				'Your says that wait to return. The room gives each back to you at its due time. Call `dismiss` with the handle of one that no longer fits:\n' +
 				'- 1, due soon: Check the pump.\n\n[new] [andrei] And the pump?',
 		);
 		// The position the session read never reaches the model.

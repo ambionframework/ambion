@@ -8,6 +8,7 @@
 
 import type { Seq as RecordSeq } from '@ambionframework/journal';
 import type { AmbionTool, Reminder } from './bundle.ts';
+import type { PendingSay } from './scheduling.ts';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = RecordSeq;
@@ -25,21 +26,12 @@ export type EndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandon
  */
 export type FailureCause = 'permanent' | 'transient';
 
-/**
- * The bounds on a scheduled say: `after` in whole seconds from `minAfter` to
- * `maxAfter`, and at most `pending` says of one seat that wait to return.
- */
-export interface ScheduleLimits {
-	readonly minAfter: number;
-	readonly maxAfter: number;
-	readonly pending: number;
-}
-
 /** What a seat asks the room to record. The room stamps everything else. */
 export type Intent =
 	| { kind: 'said'; to?: string; text: string; refs?: string[]; after?: number }
 	| { kind: 'seated'; name: string }
-	| { kind: 'unseated'; name: string };
+	| { kind: 'unseated'; name: string }
+	| { kind: 'dismissed'; message: Seq };
 
 /** A question the room is working on. */
 export interface ExchangeRef {
@@ -125,16 +117,6 @@ export type ExchangeView =
 
 /** A closed exchange view: the one that carries an outcome. */
 export type ClosedExchangeView = Extract<ExchangeView, { readonly status: 'closed' }>;
-
-/** A say that waits to return to its seat for its owner, as a read shows it: due is ISO. */
-export interface PendingSay {
-	readonly seq: Seq;
-	readonly seat: string;
-	readonly owner: string;
-	readonly due: string;
-	readonly text: string;
-	readonly refs?: readonly string[];
-}
 
 interface RoomReadFields {
 	readonly name: string;
@@ -302,7 +284,19 @@ export interface SummaryMessage extends Landed {
 }
 
 /** One entry on a room's record. */
-export type Message = SpokenMessage | PresenceMessage | SummaryMessage | ReturnedMessage;
+/**
+ * A seat or the host dismissed a scheduled say that waited to return. The
+ * room returns it no more. A dismissal by the host has no author.
+ */
+export interface DismissedMessage extends Landed {
+	kind: 'dismissed';
+	from?: string;
+	/** The seq of the scheduled say: its handle. */
+	message: Seq;
+}
+
+export type Message =
+	SpokenMessage | PresenceMessage | SummaryMessage | ReturnedMessage | DismissedMessage;
 
 /** Copy a recorded message before it crosses an ownership boundary. */
 export function copyMessage<T extends Message>(message: T): T {

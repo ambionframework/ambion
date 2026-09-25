@@ -8,13 +8,13 @@
  * item that Codex reports only at its end gives both steps at once.
  */
 import type { Step, Usage } from '@ambionframework/ambion';
-import { SAY, SEAT, UNSEAT } from '@ambionframework/ambion/hosting';
+import { DISMISS, SAY, SEAT, UNSEAT } from '@ambionframework/ambion/hosting';
 import type { ThreadEvent, ThreadItem } from '@openai/codex-sdk';
 
 /** The name of the MCP server that holds the room tools. */
 export const ROOM_SERVER = 'ambion';
 
-const ROOM_TOOLS: readonly string[] = [SAY.name, SEAT.name, UNSEAT.name];
+const ROOM_TOOLS: readonly string[] = [SAY.name, SEAT.name, UNSEAT.name, DISMISS.name];
 
 /** Whether a step names a tool the room reports as its own event. */
 export function isRoomTool(name: string): boolean {

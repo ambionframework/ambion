@@ -55,6 +55,21 @@ const checksLater: Script = (context) => {
 	});
 };
 
+/**
+ * The worker schedules a check, then dismisses the say by the handle that
+ * the say result names. It tells the person in the same activation, so the
+ * dismissal must not leave its say behind the record.
+ */
+const changesItsMind: Script = (context) => {
+	const last = toolResultTexts(context).at(-1);
+	if (last !== undefined) results.push(last);
+	const handle = /^scheduled (\d+):/.exec(last ?? '')?.[1];
+	if (handle !== undefined) return callTool('dismiss', { handle: Number(handle) });
+	if (last?.startsWith('dismissed')) return speak('I dropped the check.', 'priya');
+	if (last !== undefined) return quiet();
+	return callTool('say', { to: 'worker', text: 'Check the build.', after: AFTER });
+};
+
 const kinds = (messages: readonly Message[]) =>
 	messages.flatMap((message) => (message.kind === 'arrived' ? [] : [message.kind]));
 
@@ -66,14 +81,14 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		const runtime = () => createRuntime({ clock, storage: opened.storage });
 		return { clock, runtime };
 	};
-	const start = async (runtime: Runtime) =>
+	const start = async (runtime: Runtime, script: Script = checksLater) =>
 		stopAtEnd(
 			await startRoom({
 				name: roomName('scheduled'),
 				runtime,
 				agents: [worker],
 				seats: { worker: 'broadcast' },
-				execution: piExecution({ sessions: 'memory', stream: scripted(checksLater) }),
+				execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
 			}),
 		);
 	const resume = async (room: Room, runtime: Runtime) =>
@@ -161,5 +176,33 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		const { messages } = await resumed.read({ messages: {} });
 		expect(kinds(messages).filter((kind) => kind === 'returned')).toHaveLength(1);
 		expect(messages.at(-1)).toMatchObject({ from: 'worker', text: 'The build passed.' });
+	});
+
+	it.each([
+		['the seat, with the dismiss tool', 'seat'],
+		['the host, with room.dismiss', 'host'],
+	] as const)('never returns a say that %s dismisses', async (_case, by) => {
+		const { clock, runtime } = await setup();
+		const room = await start(runtime(), by === 'seat' ? changesItsMind : checksLater);
+		await (await (await room.visit(priya)).send({ text: 'Is the build green?' })).waitForClose();
+		if (by === 'host') {
+			const [say] = await room.scheduled();
+			expect(say).toMatchObject({ seat: 'worker', owner: 'priya' });
+			expect(await room.dismiss(say?.seq ?? 0)).toBe(true);
+			expect(await room.dismiss(say?.seq ?? 0)).toBe(false);
+		}
+		expect(await room.scheduled()).toEqual([]);
+		await clock.advance(AFTER * 1000);
+		await waitForRoom(room);
+		const { messages } = await room.read({ messages: {} });
+		const dismissed = messages.find((message) => message.kind === 'dismissed');
+		if (by === 'seat') {
+			expect(kinds(messages)).toEqual(['said', 'said', 'dismissed', 'said']);
+			expect(dismissed).toMatchObject({ from: 'worker' });
+			expect(results.at(-1)).toBe('delivered');
+		} else {
+			expect(kinds(messages)).toEqual(['said', 'said', 'dismissed']);
+			expect(dismissed).not.toHaveProperty('from');
+		}
 	});
 });
