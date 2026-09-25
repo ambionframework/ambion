@@ -79,7 +79,7 @@ export interface Choices {
 /** What a palette row completes to. It names the palette. */
 type Kind = 'command' | 'room' | 'person' | 'file' | 'say';
 
-/** The palette of each command that takes a choice. Any other command lists the rooms. */
+/** The palette of each command that takes a choice. `/room` lists the rooms, and any other command completes to nothing. */
 const KINDS: Readonly<Record<string, Kind>> = { user: 'person', open: 'file', dismiss: 'say' };
 
 /** One row of the palette above the composer. */

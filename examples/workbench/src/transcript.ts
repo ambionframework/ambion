@@ -68,7 +68,7 @@ function bodyOf(message: Message): string {
 	return '';
 }
 
-/** When a say to oneself returns, as a clock time after its header, or that it was dismissed. */
+/** When a say to oneself returns, as a clock time after its header, or `dismissed` when a dismissal names it. */
 function returnsAt({ message, dismissed }: MessageBlock): string {
 	if (message.kind !== 'said' || message.after === undefined) return '';
 	if (dismissed) return '  dismissed';

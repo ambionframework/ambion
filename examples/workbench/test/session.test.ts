@@ -421,8 +421,10 @@ describe('Session scheduled says', () => {
 		const say = { seq: 5, seat: 'bench', owner: 'mira', due: 'soon', text: 'Check the build.' };
 		host.table.set('bringup', view('bringup', { scheduled: [say] }));
 		await session.refresh();
-		await session.submit('/dismiss 6');
-		expect(session.notice).toMatch(/^Use \/dismiss <n>/);
+		for (const typed of ['/dismiss 6', '/dismiss']) {
+			await session.submit(typed);
+			expect(session.notice).toMatch(/^Use \/dismiss <n>/);
+		}
 		await session.submit('/dismiss 5');
 		expect(session.notice).toBe('Dismissed say 5. bench does not come back to it.');
 		host.dismissed = false;
@@ -432,6 +434,11 @@ describe('Session scheduled says', () => {
 			'dismiss:bringup:5',
 			'dismiss:bringup:5',
 		]);
+		host.dismiss = async () => {
+			throw new Error('Resume this room first.');
+		};
+		await session.submit('/dismiss 5');
+		expect(session.error).toBe('Resume this room first.');
 		host.table.set('bringup', view('bringup', { scheduled: [say], status: 'stopped' }));
 		await session.refresh();
 		await session.submit('/dismiss 5');
