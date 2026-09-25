@@ -178,8 +178,10 @@ compiling 14 of 120
 | `failed`    | `Process <h> failed: <message>.`                           |
 
 **The result of a running process can point to a scheduled say.** `bash`,
-`status` and `wait` add one note when two facts hold:
+`status` and `wait` add one note when three facts hold:
 
+- **The activation ends in 120 seconds or less.** Earlier, a `wait` still
+  has time, and the note would show on most results.
 - **The process runs past the reach of a wait.** The reach of a wait ends
   30 seconds before `ToolContext.deadline`. The timeout of the process
   ends after that time.
@@ -187,13 +189,8 @@ compiling 14 of 120
   `after`.
 
 ```text
-Your activation ends in 540 seconds. Process bash-3f9a2c1d0b7e can run longer. To look at a process later, say to yourself with after, in seconds.
+Your activation ends in 95 seconds. Process bash-3f9a2c1d0b7e can run longer. To look at a process later, say to yourself with after, in seconds.
 ```
-
-**The defaults show the note on each running process in an exchange.** The
-default timeout is 600 seconds, and the default lease deadline is 600
-seconds after the first claim. So the timeout of a new process always ends
-past the reach of a wait. A process with a shorter timeout gets no note.
 
 **The note names the seconds left before the deadline.** The agent weighs
 a last `wait` against a say with `after` by that number. When the deadline

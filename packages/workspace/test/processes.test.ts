@@ -571,12 +571,13 @@ describe('a wait near the end of the activation', () => {
 describe('the note that points to a scheduled say', () => {
 	const exchange = { owner: 'priya', from: 4 };
 	it.each([
-		['can run past the wait of the activation, in an exchange', 600, { exchange }, true],
-		['ends before the wait of the activation ends', 60, { exchange }, false],
-		['runs in an activation with no open exchange', 600, {}, false],
-	])('for a process that %s', async (_case, timeout, context, shows) => {
+		['can run past the wait of the activation, in an exchange', 100, 600, { exchange }, true],
+		['ends before the wait of the activation ends', 100, 60, { exchange }, false],
+		['runs in an activation with no open exchange', 100, 600, {}, false],
+		['runs over 120 seconds before the deadline', 600, 600, { exchange }, false],
+	])('for a process that %s', async (_case, seconds, timeout, context, shows) => {
 		const workspace = site();
-		const inside = callAs('alpha', { deadline: Date.now() + 600_000, ...context });
+		const inside = callAs('alpha', { deadline: Date.now() + seconds * 1000, ...context });
 		const started = await toolOf(workspace, 'bash').invoke(
 			{ command: 'sleep 30', timeout, wait: 0 },
 			inside,
@@ -599,7 +600,7 @@ describe('the note that points to a scheduled say', () => {
 			const left = /Your activation ends in (\d+) seconds\./.exec(text)?.[1];
 			expect(left !== undefined).toBe(shows);
 			// A loaded runner can take some seconds between the calls.
-			if (left !== undefined) expect(Number(left)).toBeGreaterThan(580);
+			if (left !== undefined) expect(Number(left)).toBeGreaterThan(80);
 			expect(text.includes(LATER_LINE)).toBe(shows);
 		}
 		if (shows) {

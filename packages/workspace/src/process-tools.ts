@@ -52,6 +52,9 @@ const MAX_WAIT_HANDLES = 16;
 /** Seconds a wait leaves before the room ends the activation, so the agent can still answer. */
 const DEADLINE_MARGIN_SECONDS = 30;
 
+/** Seconds before the deadline from which a result points a running process to a scheduled say. */
+const SAY_NOTE_SECONDS = 120;
+
 /** A call that did not wait, or whose wait the deadline did not cut. */
 const NOT_CUT = { cut: false } as const;
 
@@ -244,7 +247,8 @@ function outlasts(process: ProcessStatus, ctx: ToolContext): boolean {
 /**
  * The note near the end of the activation for `running`: the seconds left,
  * the wait that the deadline cut while `cut` still runs, and the scheduled
- * say for each of `running` that outlasts the reach of a wait.
+ * say for each of `running` that outlasts the reach of a wait. The say
+ * shows in the last `SAY_NOTE_SECONDS` of the activation.
  */
 function deadlineLine(
 	wait: { cut: boolean },
@@ -254,7 +258,8 @@ function deadlineLine(
 ): string {
 	if (ctx.deadline === undefined) return '';
 	const left = Math.max(0, Math.round((ctx.deadline - Date.now()) / 1000));
-	const later = running.filter((process) => outlasts(process, ctx)).map((one) => one.handle);
+	const near = left <= SAY_NOTE_SECONDS;
+	const later = near ? running.filter((one) => outlasts(one, ctx)).map((one) => one.handle) : [];
 	return deadlineNote(left, wait.cut && cut.state === 'running', later);
 }
 
