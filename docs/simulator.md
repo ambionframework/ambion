@@ -1,11 +1,10 @@
 # The simulator
 
-**This page designs `@ambionframework/simulator`.** Phase 2 of
-[the 0.3.0 plan](../planning/next.md) builds it, in the four pull requests
-of [the order of work](#the-order-of-work). The package holds `simulate`,
-`scriptedActor`, `agentActor`, and `agentJudge`, and the assistant's live
-suite runs on it. The evidence that validates the design waits on the first
-live run of that suite on `main`.
+**This page designs `@ambionframework/simulator`.** 0.3.0 ships it, built
+in the four pull requests of [the order of work](#the-order-of-work). The
+package holds `simulate`, `scriptedActor`, `agentActor`, and `agentJudge`,
+and the assistant's live suite runs on it. The evidence that validates the
+design waits on the first live run of that suite on `main`.
 
 **The rewrite of the assistant's live suite validates the design.** The
 package lands when `packages/assistant/test/live/behavior.test.ts` runs on

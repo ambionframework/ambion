@@ -37,7 +37,7 @@ jobs:
       - name: Stamp the dev version
         env:
           # The version of the next release. A dev build sorts below it.
-          DEV_BASE: 0.3.0
+          DEV_BASE: 0.4.0
           RUN_NUMBER: ${{ github.run_number }}
           SHA: ${{ github.sha }}
         run: |

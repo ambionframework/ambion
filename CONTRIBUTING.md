@@ -39,7 +39,7 @@ matching package versions.
 Versions move in lockstep across publishable packages.
 
 **A push to `main` publishes a dev build.** CI stamps the version
-`0.3.0-dev.<run>.g<sha7>` and publishes to GitHub Packages under `dev`.
+`0.4.0-dev.<run>.g<sha7>` and publishes to GitHub Packages under `dev`.
 
 **The owner publishes an official release from a local machine.** CI holds no
 npmjs token.

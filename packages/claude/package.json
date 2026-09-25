@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/claude",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"type": "module",
 	"description": "The Claude Agent SDK executor for Ambion rooms: claude() agents and claudeExecution().",
 	"license": "Apache-2.0",

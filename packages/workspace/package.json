@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/workspace",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"type": "module",
 	"description": "A workspace for Ambion: the workspace port, the tools an agent uses on it, and an optional SQLite database.",
 	"license": "Apache-2.0",

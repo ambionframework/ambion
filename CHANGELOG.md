@@ -1,97 +1,67 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-09-25)
+
+**The work of a seat outlives its activation.** A shell command runs as a
+background process, and an agent comes back to its work with a scheduled
+say. A workstation keeps git repositories for its agents, and the
+simulator runs evals on a room. Every library package needs Node 22.19 or
+newer.
+
+### Packages
+
+| Package                              | What it gives                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------------- |
+| `@ambionframework/ambion`            | The kernel: room, journal vocabulary, rules, and hosting                              |
+| `@ambionframework/journal`           | The append-only journal                                                               |
+| `@ambionframework/assistant`         | The default assistant                                                                 |
+| `@ambionframework/pi`                | The Pi executor, and `runAgent` for one agent outside a room                          |
+| `@ambionframework/claude`            | The Claude Agent SDK executor                                                         |
+| `@ambionframework/codex`             | The Codex SDK executor                                                                |
+| `@ambionframework/cloudflare`        | A room and its seats as Durable Objects                                               |
+| `@ambionframework/workspace`         | The workspace interface, its tools, a SQLite backend, and the git helpers in `./git`  |
+| `@ambionframework/just-bash`         | A shell and a filesystem in the process, and `justGitBackend` in `./git`              |
+| `@ambionframework/workstation`       | A shell over SSH on one server, one Unix account per agent, and `workstationGitBackend` |
+| `@ambionframework/simulator` (new)   | Evals: an actor plays a person in a room, and a judge grades the run                  |
+| `@ambionframework/git` (retired)     | Use `@ambionframework/just-bash/git`                                                  |
+
+### New
 
 **A shell command runs in the background.** `bash` starts every command as
 a background process and returns a handle. A process outlives the call and
 the activation that started it. The files of the bash backend hold the
-process table, so a new run of the host reads the same table. Each
-activation starts with a reminder of the seat's processes. No message
+process table, so a new run of the host reads the same table. No message
 wakes a seat when a process ends: the agent waits for the result inside
 the activation, and the guidance says so. A host that wants a wake posts a
 message. See [Processes](docs/processes.md).
 
-**An agent comes back to its work later.** An agent says to itself with
-`after`, in seconds. The exchange closes while the say waits. When the say
-is due, the room writes a returned say, which wakes the agent and opens an
-exchange for the owner of the first one. See
-[Exchange](docs/exchange.md#6-a-scheduled-say).
+```ts
+import { defineHuman } from '@ambionframework/ambion';
 
-### New
+const lab = defineHuman({
+  name: 'lab',
+  identity: 'The lab host. It reports each process that ends.',
+});
+const visit = await room.visit(lab);
+workspace.processes.subscribe((event) => {
+  const { handle, name, agent, state, room: started } = event.process;
+  if (event.type !== 'ended' || started !== room.name) return;
+  visit
+    .send({
+      to: agent,
+      text: `Process ${name ?? handle} is ${state}. Call status with ${handle} for its output.`,
+      key: `process-ended:${handle}`,
+    })
+    .catch((error: unknown) => log.error(error));
+});
+```
 
-- **`@ambionframework/simulator` runs evals on a room.** `simulate(room,
-  options)` drives a room that the test started. An actor plays a person,
-  one exchange at a time, and the loop waits for the close and the summary
-  under one deadline, `exchangeMs`. The run holds the moves, each exchange
-  with its closed view, one read of the room, the events, and the usage.
-  It ends with `stopped`, `limit`, `timeout`, or `failed`. `scriptedActor`
-  plays a fixed list of moves. See [Simulator](docs/simulator.md).
-- **`agentActor` and `agentJudge` run the person and the grade on a model.**
-  Each takes `model`, `tools`, `bundles`, `services`, and `timeoutMs`, and
-  runs on `runAgent`. The actor ends each move with `send` or `stop`, and
-  the tools see the person in `ctx.agent`. The judge reads the record
-  between two lines that carry a random token, and ends with `grade`: one
-  finding for each criterion, in the order of the list, reason first. The
-  judge attaches each criterion, and `grade` refuses a list of the wrong
-  length. `@ambionframework/simulator` now depends
-  on `@ambionframework/pi`.
-- **`runAgent` runs one Pi agent outside a room.** It takes a model, a
-  routing name, the agent that the tools see, a system prompt, one prompt,
-  tools and bundles, and the names of the tools that end the run. It runs
-  Pi's `AgentHarness` until the agent calls one of them, and returns that
-  call, the calls before it, and the usage of every request. A `signal`
-  aborts the run. `@ambionframework/pi` exports `runAgent`,
-  `RunAgentRequest`, `RunAgentResult`, and `RunAgentCall`. The simulator of
-  [Simulator](docs/simulator.md) builds its actor and its judge on it.
-- **A Pi seat takes a thinking level.** `pi({ thinking })` takes a Pi
-  `ThinkingLevel`, and the harness sends it to the provider. Absent, the
-  level is `off`, as before. `runAgent`, `defineAssistant`, `agentActor`,
-  and `agentJudge` take `thinking` too.
-- **`say` takes `after`.** A say to oneself with `after` schedules it. The
-  room stamps `owner`, the owner of the open exchange, on the said entry,
-  and refuses `after` in any other say. The result names the due time.
-- **The `returned` entry.** The room writes `{ to, message, owner,
-  text, refs }` when a scheduled say is due. It has no `from`. It wakes
-  one seat, the one that `to` names, and steers no other. It opens an
-  exchange for `owner` when none is open. `isReturned` and
-  `ReturnedMessage` are new exports.
-- **`limits.schedule`** bounds `after` from `minAfter` to `maxAfter`
-  seconds, 60 to 604,800 by default, and the says of one seat that wait,
-  `pending`, 4 by default.
-- **`RoomRead.scheduled` lists the says that wait to return**, each a
-  `PendingSay` with its due time. `PendingSay` is a new export.
-- **The agent sees its pending says.** The say result names the seq of a
-  scheduled say as its handle. `CollaborationContext.scheduled` carries
-  the pending says of the seat in each response activation, and the render
-  lists them. `renderPending` in `/hosting` gives that list for a seat that
-  continues its session.
-- **A seat or the host dismisses a pending say.** The `dismiss` tool takes
-  the handle of a pending say of the seat, and the room writes a
-  `dismissed` entry `{ from, message }`. The room does not return the say.
-  `room.dismiss(handle)` dismisses any pending say, with no `from`, and
-  returns whether it wrote the entry. `room.scheduled()` lists the pending
-  says. The Cloudflare room object serves them as `dismiss` and
-  `scheduledSays`, because Workers keep the name `scheduled`.
-  `DismissedMessage` is a new export, and `/hosting` exports `DISMISS`.
-- **The workbench shows a returned say, and notes each say that waits.**
-  Each note names the handle of the say. `/dismiss <n>` dismisses the say,
-  and the palette lists the says that wait. A dismissed say reads
-  `dismissed` in place of its return time.
 - **`ps`, `status`, `wait`, and `cancel` join `bash`.** `ps` lists the
   running processes of the caller. The handle tools take a handle of the
   caller. `bash` takes an optional `name`, a label that `ps` and the
   reminder show. Each process is a directory,
   `~/.processes/<handle>/`, that holds the spec, the whole output in
   `out`, the process id, and the end.
-- **A new run of the host adopts the live processes of an earlier run.**
-  The table re-arms the timeout of each one, and `cancel` stops it through
-  its process id. A process that ended with the earlier run, with no exit
-  file, is `failed` with the message "The host run ended before the
-  process did."
-- **A wait ends before the activation does.** The room puts `deadline` on
-  each view, and `ToolContext.deadline` carries it to each tool call: when
-  the room ends the activation, in milliseconds on the wall clock. `bash`
-  and `wait` stop their wait 30 seconds before it, and the result says so.
 - **A result gives the new output.** `bash`, `status`, `wait`, and
   `cancel` give the output after a cursor that the process keeps in
   `~/.processes/<handle>/cursor`, and move it. `details.read` holds the
@@ -101,44 +71,128 @@ exchange for the owner of the first one. See
 - **`wait` takes `handles`.** It returns when the first of up to 16
   processes ends, with the new output of each process that ended and the
   state of each one that still runs.
+- **A wait ends before the activation does.** The room puts `deadline` on
+  each view, and `ToolContext.deadline` carries it to each tool call: when
+  the room ends the activation, in milliseconds on the wall clock. `bash`
+  and `wait` stop their wait 30 seconds before it, and the result says so.
+- **A new run of the host adopts the live processes of an earlier run.**
+  The table re-arms the timeout of each one, and `cancel` stops it through
+  its process id. A process that ended with the earlier run, with no exit
+  file, is `failed` with the message "The host run ended before the
+  process did."
 - **`Workspace.processes` is the host's view.** `list`, `subscribe`, and
   `cancel` reach the processes of the agents that used the workspace in
   this run. `list` returns a promise. The root entry of
   `@ambionframework/workspace` exports `ProcessEvent`, `ProcessKind`,
   `ProcessQuery`, `ProcessState`, `ProcessStatus`, and
   `WorkspaceProcesses`.
-- **A tool bundle can remind a seat.** `ToolBundle.remind` gives text, or a
-  promise of text, for each respond activation, and `AgentExecutor.reminders`
-  holds the reminders of the bundles. The executor resolves them once for each
-  activation, with a bound of 5 seconds for each, and aborts the signal of a
-  reminder at the bound. `renderActivation` takes the resolved text as its
-  third argument and adds it before the ask line. The main entry exports
-  `Reminder` and `ReminderSeat`. The hosting entry exports `resolveReminders`
-  and `REMINDER_TIMEOUT_MS`. The Pi executor sends a continued session the
-  reminders before the delta.
+- **A tool bundle can remind a seat.** `ToolBundle.remind` gives text, or
+  a promise of text, for each respond activation, and
+  `AgentExecutor.reminders` holds the reminders of the bundles. The
+  executor resolves them once for each activation, with a bound of 5
+  seconds for each, and aborts the signal of a reminder at the bound.
+  `renderActivation` takes the resolved text as its third argument and
+  adds it before the ask line. The main entry exports `Reminder` and
+  `ReminderSeat`. The hosting entry exports `resolveReminders` and
+  `REMINDER_TIMEOUT_MS`. The Pi executor sends a continued session the
+  reminders before the delta. The workspace reminds each seat of its
+  processes.
 - **The workstation keeps a session open while any environment is open
   over it.** A process holds an environment for its whole run.
-- **The Workbench shows the background processes with `/ps`.** A side
+- **The workbench shows the background processes with `/ps`.** A side
   panel lists the processes of the agents, shows the end of the chosen
   output, and cancels a running process on a second `x`.
-- **`workstationGitBackend` keeps the repositories of a workspace on the
-  workstation.** One account on the server, such as `lab-git`, owns every
-  repository. The backend prepares the account, writes the forced command
-  `~/.ambion/serve`, registers each template by a rename, and runs
+
+**An agent comes back to its work later.** An agent says to itself with
+`after`, in seconds. The exchange closes while the say waits. When the say
+is due, the room writes a returned say, which wakes the agent and opens an
+exchange for the owner of the first one. See
+[Exchange](docs/exchange.md#6-a-scheduled-say).
+
+- **`say` takes `after`.** A say to oneself with `after` schedules it. The
+  room stamps `owner`, the owner of the open exchange, on the said entry,
+  and refuses `after` in any other say. The result names the due time and
+  the seq of the say as its handle.
+- **The `returned` entry.** The room writes `{ to, message, owner, text,
+  refs }` when a scheduled say is due. It has no `from`. It wakes one
+  seat, the one that `to` names, and steers no other. It opens an exchange
+  for `owner` when none is open. `isReturned` and `ReturnedMessage` are
+  new exports.
+- **`limits.schedule`** bounds `after` from `minAfter` to `maxAfter`
+  seconds, 60 to 604,800 by default, and the says of one seat that wait,
+  `pending`, 4 by default.
+- **The agent sees its pending says.** `CollaborationContext.scheduled`
+  carries the pending says of the seat in each response activation, and
+  the render lists them. `renderPending` in `/hosting` gives that list for
+  a seat that continues its session.
+- **A seat or the host dismisses a pending say.** The `dismiss` tool takes
+  the handle of a pending say of the seat, and the room writes a
+  `dismissed` entry `{ from, message }`. The room does not return the say.
+  `room.dismiss(handle)` dismisses any pending say, with no `from`, and
+  returns whether it wrote the entry. `room.scheduled()` lists the pending
+  says. The Cloudflare room object serves them as `dismiss` and
+  `scheduledSays`, because Workers keep the name `scheduled`.
+  `DismissedMessage` is a new export, and `/hosting` exports `DISMISS`.
+- **`RoomRead.scheduled` lists the says that wait to return**, each a
+  `PendingSay` with its due time. `PendingSay` is a new export.
+- **The workbench shows a returned say, and notes each say that waits.**
+  Each note names the handle of the say. `/dismiss <n>` dismisses the say,
+  and the palette lists the says that wait. A dismissed say reads
+  `dismissed` in place of its return time.
+
+**A workstation keeps the git repositories of its workspace.** One
+account on the server, such as `lab-git`, owns every repository. Each
+agent clones and pushes with its own `git` over SSH, with a key that works
+only from the server and only until `keyTtl`. The host opens no port. See
+[Workstation git](docs/workstation-git.md).
+
+- **`workstationGitBackend`** prepares the account, writes the forced
+  command `~/.ambion/serve`, registers each template by a rename, and runs
   `list`, `get`, and `fork` as scripts on the server. A fork lands with
   one rename. `identityFor` issues an Ed25519 key for each agent and
   writes its line to `~/.ssh/authorized_keys.ambion` under `flock`, with
   `restrict`, `from`, `expiry-time`, and `command`.
   `@ambionframework/workstation` exports `workstationGitBackend`,
   `WorkstationGitOptions`, `WorkstationGitAccess`, and
-  `WorkstationGitIdentity`. See [Workstation git](docs/workstation-git.md).
+  `WorkstationGitIdentity`.
 - **`workstationBackend` carries the git transport `ssh`.** Its
   `gitTransports` is `['ssh']`, so it pairs with `workstationGitBackend`.
   At each `connect`, it writes the agent's key, a `known_hosts` file, and
   an ssh configuration for the alias into `~/.ssh` with mode `0600`. It
   makes `Include ambion-git.conf` the first line of `~/.ssh/config`, and
-  it keeps the other lines. The agent's own `git` then clones and pushes
-  over SSH to the git account on the loopback address.
+  it keeps the other lines.
+
+**`@ambionframework/simulator` runs evals on a room.** `simulate(room,
+options)` drives a room that the test started. An actor plays a person,
+one exchange at a time, and the loop waits for the close and the summary
+under one deadline, `exchangeMs`. The run holds the moves, each exchange
+with its closed view, one read of the room, the events, and the usage. It
+ends with `stopped`, `limit`, `timeout`, or `failed`. See
+[Simulator](docs/simulator.md).
+
+- **`scriptedActor`** plays a fixed list of moves.
+- **`agentActor` and `agentJudge` run the person and the grade on a
+  model.** Each takes `model`, `tools`, `bundles`, `services`, and
+  `timeoutMs`, and runs on `runAgent`. The actor ends each move with
+  `send` or `stop`, and the tools see the person in `ctx.agent`. The judge
+  reads the record between two lines that carry a random token, and ends
+  with `grade`: one finding for each criterion, in the order of the list,
+  reason first. The judge attaches each criterion, and `grade` refuses a
+  list of the wrong length.
+- **`runAgent` runs one Pi agent outside a room.** It takes a model, a
+  routing name, the agent that the tools see, a system prompt, one prompt,
+  tools and bundles, and the names of the tools that end the run. It runs
+  Pi's `AgentHarness` until the agent calls one of them, and returns that
+  call, the calls before it, and the usage of every request. A `signal`
+  aborts the run. `@ambionframework/pi` exports `runAgent`,
+  `RunAgentRequest`, `RunAgentResult`, and `RunAgentCall`.
+- **A Pi seat takes a thinking level.** `pi({ thinking })` takes a Pi
+  `ThinkingLevel`, and the harness sends it to the provider. Absent, the
+  level is `off`, as before. `runAgent`, `defineAssistant`, `agentActor`,
+  and `agentJudge` take `thinking` too.
+- **The assistant's live suite runs on the simulator.** It passes on
+  `anthropic/claude-sonnet-5` and `openai/gpt-5.6-luna` at `medium`, and
+  each model grades the other.
 
 ### Fixes
 
@@ -151,31 +205,22 @@ exchange for the owner of the first one. See
 
 ### Breaking changes
 
-- **The default assistant is passive at `broadcast`, and keeps to
-  membership and summaries.** It sends nothing to a specialist at
-  `broadcast` or `presence` attention. It sends no correction, no relay,
-  and no question to the person during the exchange. The summary reports a superseded
-  fact, a broken constraint, and a question for the person. The assistant
-  answers a person or a specialist that addresses it, and it sends one directed
-  request to an idle specialist at `named` attention. A constraint stays in
-  force until the person withdraws it. Its identity now reads "Room
-  assistant. Seats and unseats specialists as the request needs, and
-  summarizes each exchange." See [Default assistant](docs/assistant.md).
+There is no compatibility promise before 1.0.0. Some journal bodies
+changed. A 0.3.0 runtime reads a 0.2.0 journal, and a 0.2.0 runtime must
+not read a 0.3.0 journal.
+
 - **The journal changes.** A said entry takes `after` and `owner`, and the
   `returned` and `dismissed` entries are new. A returned say opens an
-  exchange, so the
-  verified rule `opensExchange` accepts it.
+  exchange, so the verified rule `opensExchange` accepts it.
 - **`Message` has two more members, `ReturnedMessage` and
   `DismissedMessage`.** Code that switches on `kind` meets `returned` and
   `dismissed`.
-- **`Room` has `dismiss` and `scheduled`.** A value that implements `Room`
-  adds them. A respond activation has the `dismiss` tool, so a tool name
-  `dismiss` of an agent gets a refusal, and a tool list that a test pins
-  lists it.
-- **`RoomRead` has `scheduled`.** A value that builds a read by hand adds
-  it.
-- **`say` has an `after` parameter.** A tool schema that a test pins lists
-  it.
+- **`Room` has `dismiss` and `scheduled`, and `RoomRead` has
+  `scheduled`.** A value that implements `Room` or builds a read by hand
+  adds them.
+- **A respond activation has the `dismiss` tool, and `say` has an `after`
+  parameter.** A tool name `dismiss` of an agent gets a refusal, and a
+  tool list or schema that a test pins lists both.
 - **`bash` returns a handle, and waits up to `wait` seconds, 10 by
   default.** A command that runs longer keeps running, and the result
   says so. A process can run for `timeout` seconds, 600 by default. Before,
@@ -184,30 +229,28 @@ exchange for the owner of the first one. See
   backends.** The tool line of the guidance counts them.
 - **`dispose()` stops every running process of this run** before the bash
   backend releases its handles.
+- **The default assistant is passive at `broadcast`, and keeps to
+  membership and summaries.** It sends nothing to a specialist at
+  `broadcast` or `presence` attention. It sends no correction, no relay,
+  and no question to the person during the exchange. The summary reports
+  a superseded fact, a broken constraint, and a question for the person.
+  The assistant answers a person or a specialist that addresses it, and it
+  sends one directed request to an idle specialist at `named` attention. A
+  constraint stays in force until the person withdraws it. Its identity
+  now reads "Room assistant. Seats and unseats specialists as the request
+  needs, and summarizes each exchange." See
+  [Default assistant](docs/assistant.md).
 - **`@ambionframework/git` is gone.** Its git backend moves into the new
-  entry `@ambionframework/just-bash/git`. That entry exports
-  `justGitBackend`, `sqliteGitStorage`, `JustGitBackend`,
-  `JustGitBackendOptions`, `GitStorage`, `OpenGitStorage`, `Registry`, and
-  `RegistryRow`. The root entry of `@ambionframework/just-bash` loads no
-  `node:sqlite`.
-- **`gitBackend` is now `justGitBackend`, and `GitBackendOptions` is now
-  `JustGitBackendOptions`.** `justGitBackend` has no `handler` and no `url`
-  option. Every clone URL starts with `http://git.ambion.invalid`, and the
-  backend serves the process it runs in.
-- **The template helpers and the name rules move to the new entry
-  `@ambionframework/workspace/git`.** It exports `fromDirectory`,
-  `filesOf`, `hashesOf`, `sameFiles`, `changeTo`, `validName`,
-  `namespaceOf`, `assertAgent`, `readOnly`, `TEMPLATES`, `SOURCES`,
-  `TemplateRegistration`, `TemplateSource`, and `TemplateFiles`. Import
-  `fromDirectory` from there.
-- **The workstation writes no `~/.git-credentials`.** Its agents reach
-  git through `workstationGitBackend` and the `ssh` transport.
+  entry `@ambionframework/just-bash/git`, and the template helpers move
+  into the new entry `@ambionframework/workspace/git`. The root entry of
+  `@ambionframework/just-bash` loads no `node:sqlite`.
+- **`justGitBackend` has no `handler` and no `url` option.** Every clone
+  URL starts with `http://git.ambion.invalid`, and the backend serves the
+  process it runs in.
 - **`GitAccess` holds `transport` alone.** `prefix`, `fetch`, and
   `credentialFor` move to `JustGitAccess`, and `credentialsFor` goes.
-  `GitFetch` and `GitCredential` leave the root entry of
-  `@ambionframework/workspace`. `@ambionframework/just-bash/git` exports
-  them and `JustGitAccess`. `JustGitBackend.access` is a `JustGitAccess`,
-  whose `transport` is `in-process` and whose `fetch` is always set.
+  `JustGitBackend.access` is a `JustGitAccess`, whose `transport` is
+  `in-process` and whose `fetch` is always set.
 - **A bash backend lists the git transports it carries in
   `BashBackend.gitTransports`.** `openWorkspace` throws when the bash
   backend does not carry the `transport` of the git backend. The error
@@ -216,6 +259,8 @@ exchange for the owner of the first one. See
   carries none. `memoryBackend` and `directoryBackend` carry
   `in-process`, and they refuse an access of another transport at
   `connect`.
+- **The workstation writes no `~/.git-credentials`.** Its agents reach
+  git through `workstationGitBackend` and the `ssh` transport.
 - **A registration with a changed source updates its template.** Before,
   it failed with an error that named the template, and the host
   registered the change under a new name. Now both git backends
@@ -233,6 +278,25 @@ exchange for the owner of the first one. See
   `gitConformance` take the type of the git backend as a parameter.
   `GitConformanceOptions.tokenTtl` is now `credentialTtl`, and
   `GitConformanceBackend.shortestTokenTtl` is now `shortestCredentialTtl`.
+
+**Removed and moved names, by entry:**
+
+| Entry                        | Change                                                                                                                                                                                                                                                                           |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@ambionframework/git`       | Moved to `@ambionframework/just-bash/git`: `sqliteGitStorage`, `JustGitBackend`, `GitStorage`, `OpenGitStorage`, `Registry`, `RegistryRow`. Renamed there: `gitBackend` is `justGitBackend`, and `GitBackendOptions` is `JustGitBackendOptions`                                   |
+| `@ambionframework/git`       | Moved to `@ambionframework/workspace/git`: `fromDirectory`, `TemplateFiles`, `TemplateRegistration`, `TemplateSource`                                                                                                                                                            |
+| `@ambionframework/git`       | Gone: `PACKAGE_NAME`                                                                                                                                                                                                                                                             |
+| `@ambionframework/workspace` | Moved to `@ambionframework/just-bash/git`: `GitFetch`, `GitCredential`                                                                                                                                                                                                           |
+
+**New entries:** `@ambionframework/just-bash/git` and
+`@ambionframework/workspace/git`. The second also exports `filesOf`,
+`hashesOf`, `sameFiles`, `changeTo`, `validName`, `namespaceOf`,
+`assertAgent`, `readOnly`, `TEMPLATES`, and `SOURCES`.
+
+**Stored formats that changed:** a said entry takes `after` and `owner`,
+and the `returned` and `dismissed` entries are new. The journal format
+stays 1. A process of a workspace keeps its files in
+`~/.processes/<handle>/`.
 
 ## 0.2.0 (2026-09-24)
 

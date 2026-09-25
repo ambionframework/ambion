@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/just-bash",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"type": "module",
 	"description": "The just-bash backends for an Ambion workspace: a virtual Unix filesystem and shell, in memory or over a directory, and a git backend in the process.",
 	"license": "Apache-2.0",

@@ -245,10 +245,8 @@ on `main`, and the docs state each change.
 
 **Goal:** the tag names a commit that a live run tested.
 
-- [ ] **1.** The changelog entry for 0.3.0 names each export that
-      changed. Needs phases 1, 2, and 3. P1. (R0)
-- [ ] **2.** The live run on `main` after the last merge passes for Pi,
-      Claude, and Codex. Needs 1. P1. (R0)
+- [ ] **1.** The live run on `main` after the last merge passes for Pi,
+      Claude, and Codex. P1. (R0)
 
 **Evidence:** the notes of the GitHub release link the live run on the
 tagged commit and name any case that failed.
