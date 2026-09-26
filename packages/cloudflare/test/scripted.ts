@@ -10,7 +10,7 @@
  * follows is served by the room that came back.
  */
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import type { Context } from '@earendil-works/pi-ai';
+import type { Context, JsonObject } from '@earendil-works/pi-ai';
 import {
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,
@@ -31,7 +31,7 @@ function check(context: Context) {
 		context.messages.some(
 			(message) => message.role === 'user' && JSON.stringify(message.content).includes(text),
 		);
-	const say = has('[returned → checker')
+	const say: JsonObject = has('[returned → checker')
 		? { to: 'priya', text: 'The check came back.' }
 		: { to: 'checker', text: 'Check the pour log.', after: has('tomorrow') ? 3600 : 1 };
 	return fauxAssistantMessage([fauxToolCall('say', say)], { stopReason: 'toolUse' });

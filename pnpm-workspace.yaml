@@ -21,4 +21,4 @@ onlyBuiltDependencies: []
 
 # One typebox version in the tree. Pi pins an older one; the override lifts it.
 overrides:
-  typebox: ^1.3.18
+  typebox: ^1.3.34

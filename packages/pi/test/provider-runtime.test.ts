@@ -12,8 +12,8 @@ import { isSpoken, startRoom, systemClock } from '@ambionframework/ambion';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import {
 	type AssistantMessageEventStream,
-	type Context,
 	createAssistantMessageEventStream,
+	normalizeContext,
 } from '@earendil-works/pi-ai';
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.ts';
@@ -91,7 +91,7 @@ describe('default provider runtime', () => {
 			return stream;
 		};
 		const services = await freshServices(3);
-		const context: Context = { systemPrompt: '', messages: [] };
+		const context = normalizeContext({ systemPrompt: '', messages: [] });
 		const streams = await Promise.all(
 			services.map(async (one) => {
 				const model = await one.model('anthropic/claude-sonnet-4-5', 'worker');

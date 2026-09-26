@@ -8,7 +8,7 @@
  */
 import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
+import type { AssistantMessage, Context, JsonObject } from '@earendil-works/pi-ai';
 import {
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,
@@ -16,6 +16,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { pi } from './define.ts';
 import { createPiExecutor } from './executor.ts';
+import { scriptContext } from './script-context.ts';
 import { stubModel } from './services.ts';
 import { memorySessions } from './sessions.ts';
 
@@ -59,7 +60,7 @@ export function scripted(script: Script): StreamFn {
 		}
 		options?.signal?.addEventListener('abort', aborted, { once: true });
 		void Promise.resolve()
-			.then(() => script(context, agent, call))
+			.then(() => script(scriptContext(context), agent, call))
 			.catch((error: unknown) =>
 				fauxAssistantMessage('', { stopReason: 'error', errorMessage: String(error) }),
 			)
@@ -78,7 +79,7 @@ export const byAgent = (seats: Record<string, Script>): Script => {
 	return (context, agent, call) => (table.get(agent) ?? (() => quiet()))(context, agent, call);
 };
 
-export const callTool = (tool: string, args: Record<string, unknown>) =>
+export const callTool = (tool: string, args: JsonObject) =>
 	fauxAssistantMessage([fauxToolCall(tool, args)], { stopReason: 'toolUse' });
 
 export const speak = (text: string, to?: string) => callTool('say', to ? { to, text } : { text });

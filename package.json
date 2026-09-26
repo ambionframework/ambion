@@ -31,13 +31,13 @@
 		"publish:packages": "node scripts/publish.mjs"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.10",
-		"@types/node": "^26.2.0",
+		"@biomejs/biome": "^2.5.14",
+		"@types/node": "^26.6.2",
 		"@vitest/coverage-v8": "^4.1.11",
-		"knip": "^6.32.2",
-		"lemmascript": "0.6.1",
-		"prettier": "^3.9.6",
-		"turbo": "^2.10.11",
+		"knip": "^6.38.0",
+		"lemmascript": "0.6.4",
+		"prettier": "^3.9.9",
+		"turbo": "^2.11.4",
 		"typescript": "^7.0.2"
 	}
 }

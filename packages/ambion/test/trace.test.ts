@@ -1,4 +1,5 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
+import type { JsonObject } from '@earendil-works/pi-ai';
 import {
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,
@@ -76,7 +77,7 @@ async function traced(stream: StreamFn, options: CreateRuntimeOptions = {}, agen
 }
 
 /** A stream that thinks, then calls `tool`, then stops. */
-const thinksThenCalls = (thinking: string, tool: string, input: Record<string, unknown> = {}) =>
+const thinksThenCalls = (thinking: string, tool: string, input: JsonObject = {}) =>
 	scripted((_context, _agent, call) =>
 		call === 1
 			? fauxAssistantMessage([fauxThinking(thinking), fauxToolCall(tool, input)], {

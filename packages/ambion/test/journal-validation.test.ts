@@ -114,7 +114,7 @@ describe('room journal body validation', () => {
 			{ kind: 'dismissed', at, message: 3, activationId: 'message:1:alpha:1' },
 			'body.from',
 		],
-		['message', { kind: 'dismissed', at, message: 3, text: 'x' }, 'body: must not have additional'],
+		['message', { kind: 'dismissed', at, message: 3, text: 'x' }, 'body.text'],
 		[
 			'message',
 			{ kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', after: 60 },

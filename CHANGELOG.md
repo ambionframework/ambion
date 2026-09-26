@@ -22,6 +22,15 @@ every value stays text. See
   `SqlImportTable`, and `WorkspaceRead`.**
 - **An export quotes the text `\N` as `"\N"`.** A bare `\N` is a NULL
   alone, so the text `\N` reads back as text.
+- **Pi is 0.87.** A `stream` that `piExecution` takes gets Pi's
+  `TranscriptContext`. System messages carry the prompt and the tools. A
+  `Script` from `@ambionframework/pi/testing` still gets `systemPrompt`
+  and `tools`.
+- **A workspace env has `openTextLineReader`.** `HomeEnv` supplies it
+  from `readTextFile`. A backend without `HomeEnv` implements it.
+- **`callTool` takes a `JsonObject`.** Pi types tool arguments as JSON.
+- **A journal body with an extra property names the property.** The
+  error reads `at body.<name>: schema is false`.
 
 ## 0.3.0 (2026-09-25)
 

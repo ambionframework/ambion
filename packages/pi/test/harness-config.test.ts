@@ -25,6 +25,7 @@ import { noTrace } from '../../ambion/test/support/trace.ts';
 import { openHarness } from '../src/harness.ts';
 import { createPiExecutor, memorySessions, type PiSessions, pi, stubModel } from '../src/index.ts';
 import { streamModels } from '../src/models.ts';
+import { scriptContext } from '../src/script-context.ts';
 import { contextText, isClosing, quiet, type Script, scripted } from '../src/testing.ts';
 import { unusedRoom } from './support/activation.ts';
 
@@ -87,7 +88,7 @@ function recording(script: Script) {
 	const base = scripted(script);
 	const stream: StreamFn = (model, context, options) => {
 		requests.push({
-			context: { ...context, messages: [...context.messages] },
+			context: scriptContext(context),
 			options,
 			model: model.id,
 		});

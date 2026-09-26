@@ -12,10 +12,10 @@ import type {
 	Api,
 	AssistantMessage,
 	AssistantMessageEventStream,
-	Context,
 	Model,
 	Models,
 	SimpleStreamOptions,
+	TranscriptContext,
 } from '@earendil-works/pi-ai';
 import {
 	createAssistantMessageEventStream,
@@ -50,7 +50,7 @@ function forward(
 	stream: StreamFn,
 ): (
 	model: Model<Api>,
-	context: Context,
+	context: TranscriptContext,
 	options?: SimpleStreamOptions,
 ) => AssistantMessageEventStream {
 	return (model, context, options) => {
