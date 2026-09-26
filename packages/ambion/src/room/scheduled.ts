@@ -3,9 +3,9 @@
  *
  * An agent schedules a say when it says to itself with `after`. The say
  * waits until the room writes a `returned` entry for it. An unseating of its
- * author drops it, and a cancellation drops every say before it. The fold
- * and the projection run the same step, so both hold the same list in the
- * same order.
+ * author drops it, and a cancellation drops every say before it. The
+ * projection runs one step for each entry, so a replay holds the same list
+ * in the same order.
  */
 
 import type { Body } from '../journal/journal.ts';
@@ -73,18 +73,6 @@ export function afterCancellation(
 	cancelledAt: Seq | undefined,
 ): ScheduledSay[] {
 	return list.filter((say) => survivesCancellation(say.seq, cancelledAt));
-}
-
-/** The says that wait to return, folded over the whole record. */
-export function foldScheduled(
-	messages: readonly Message[],
-	cancelledAt: Seq | undefined,
-): ScheduledSay[] {
-	let list: ScheduledSay[] = [];
-	for (const message of messages) {
-		if (changesScheduled(message)) list = scheduleStep(list, message);
-	}
-	return afterCancellation(list, cancelledAt);
 }
 
 /** No bound: a room that passes no limits takes any whole number of seconds and any count. */

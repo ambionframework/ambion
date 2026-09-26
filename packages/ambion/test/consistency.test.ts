@@ -21,11 +21,11 @@ import {
 	type Visit,
 } from '../src/index.ts';
 import type { Entry as RoomEntry } from '../src/journal/journal.ts';
-import { foldRoom } from '../src/room/fold.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
 import { liveLeases, within } from './support/chaos.ts';
 import { mulberry32 } from './support/core-failure.ts';
+import { replayState } from './support/fold.ts';
 import { type Entry, History, standing, violations } from './support/history.ts';
 import { invariants } from './support/invariants.ts';
 import {
@@ -294,7 +294,7 @@ class Cluster {
 		});
 		const stored = await storedOf(this.opened.journals, this.name);
 		const entries = standing(stored) as readonly RoomEntry[];
-		const state = foldRoom(entries, RETRY);
+		const state = replayState(entries, RETRY);
 		const record = await messagesOf(this.session);
 		expect(state.messages).toEqual(record);
 		expect(record.length).toBeGreaterThan(0);

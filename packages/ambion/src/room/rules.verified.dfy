@@ -801,26 +801,6 @@ lemma stampedSummary_ensures(owner: string, from: int, through: int)
 {
 }
 
-function lastOf(seqs: seq<int>): int
-  requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |seqs|) ==> (seqs[i] <= seqs[j]))
-  requires forall i: int :: ((0 <= i) ==> (i < |seqs|) ==> (seqs[i] >= 1))
-{
-  if ((0 <= (|seqs| - 1)) && ((|seqs| - 1) < |seqs|)) then
-    seqs[(|seqs| - 1)]
-  else
-    0
-}
-
-lemma lastOf_ensures(seqs: seq<int>)
-  requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |seqs|) ==> (seqs[i] <= seqs[j]))
-  requires forall i: int :: ((0 <= i) ==> (i < |seqs|) ==> (seqs[i] >= 1))
-  ensures (lastOf(seqs) >= 0)
-  ensures ((|seqs| == 0) ==> (lastOf(seqs) == 0))
-  ensures ((|seqs| > 0) ==> (lastOf(seqs) == seqs[(|seqs| - 1)]))
-  ensures forall i: int :: ((0 <= i) ==> (i < |seqs|) ==> (seqs[i] <= lastOf(seqs)))
-{
-}
-
 function opensExchange(message: Message, people: seq<string>, closedThrough: int): bool
 {
   if (message.seq_ <= closedThrough) then

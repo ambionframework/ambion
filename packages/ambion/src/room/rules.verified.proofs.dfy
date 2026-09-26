@@ -219,7 +219,27 @@ lemma ThroughsSorted(closes: seq<CloseRef>)
 {
 }
 
-// The seq the last close reaches, as `openExchange` computes it.
+// The last position on an ordered record bounds every position on it; an empty
+// record ends at 0.
+function lastOf(seqs: seq<int>): int
+  requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |seqs|) ==> (seqs[i] <= seqs[j]))
+  requires forall i: int :: ((0 <= i) ==> (i < |seqs|) ==> (seqs[i] >= 1))
+{
+  if |seqs| == 0 then 0 else seqs[|seqs| - 1]
+}
+
+lemma lastOf_ensures(seqs: seq<int>)
+  requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |seqs|) ==> (seqs[i] <= seqs[j]))
+  requires forall i: int :: ((0 <= i) ==> (i < |seqs|) ==> (seqs[i] >= 1))
+  ensures (lastOf(seqs) >= 0)
+  ensures ((|seqs| == 0) ==> (lastOf(seqs) == 0))
+  ensures ((|seqs| > 0) ==> (lastOf(seqs) == seqs[(|seqs| - 1)]))
+  ensures forall i: int :: ((0 <= i) ==> (i < |seqs|) ==> (seqs[i] <= lastOf(seqs)))
+{
+}
+
+// The seq the last close reaches. The projection keeps it as its boundary: the
+// `through` of the close it applied last.
 function closedThrough(closes: seq<CloseRef>): int
   requires closesOrdered(closes)
 {

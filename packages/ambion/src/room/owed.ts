@@ -8,16 +8,28 @@
  * those again. The rules are the ones `exchange.ts` holds.
  */
 
+import { decodeActivationId } from '../activation-id.ts';
 import type { Close } from '../journal/events.ts';
 import type { Message, Seq } from '../types.ts';
 import { summaryCompletion } from './exchange.ts';
-import { type Owed, withAttempts } from './fold.ts';
-import type { LeaseHold, PendingActivationOptions } from './lease.ts';
+import {
+	cameToNothing,
+	type LeaseHold,
+	type PendingActivation,
+	type PendingActivationOptions,
+	pendingActivation,
+} from './lease.ts';
+import { draftsClose } from './rules.verified.ts';
 
-/** One close that owes a summary, with the draft the room owes for it. */
-export interface OwedEntry {
-	close: Close;
-	owed: Owed;
+/**
+ * A summary one person is owed, and how the room has tried to write it. The
+ * seat is the writer that the close named, and the position is the close's
+ * `through`, the boundary that the summary must retain.
+ */
+export interface Owed extends PendingActivation {
+	person: string;
+	/** The opening question that identifies the closed exchange. */
+	from: Seq;
 }
 
 /** What `judgeOwed` reads: the summary and removal messages, the closing leases, the marker. */
@@ -29,33 +41,67 @@ export interface OwedFacts {
 	cancelledAt: Seq | undefined;
 }
 
-/** The entry for a close, or nothing when the close owes no draft for good. */
+/** The close that an owed summary answers, as `summaryCompletion` reads it. */
+type OwedClose = Pick<Close, 'owner' | 'from' | 'through' | 'summary'>;
+
+const closeOf = (owed: Owed): OwedClose => ({
+	owner: owed.person,
+	from: owed.from,
+	through: owed.position,
+	summary: owed.seat,
+});
+
+/** The summary a close owes, or nothing when the close owes no draft for good. */
 export function judgeOwed(
-	close: Close,
+	close: OwedClose,
 	facts: OwedFacts,
 	options: PendingActivationOptions,
-): OwedEntry | undefined {
+): Owed | undefined {
 	const leases = facts.closedLeases.get(close.through) ?? new Map<string, LeaseHold>();
 	const completion = summaryCompletion(close, facts.record, leases, facts.cancelledAt);
 	if (completion.status !== 'pending' || completion.writer === undefined) return undefined;
-	const owed = withAttempts(
-		{ person: close.owner, writer: completion.writer, from: close.from, through: close.through },
-		leases,
-		options,
-	);
-	return { close, owed };
+	return withAttempts(close, completion.writer, leases, options);
 }
 
-/** Read again every entry the test names. The others stay as they are. */
+/** Read again every owed summary that the test names. The others stay as they are. */
 export function rejudgeOwed(
-	entries: readonly OwedEntry[],
-	affected: (close: Close) => boolean,
+	owed: readonly Owed[],
+	affected: (owed: Owed) => boolean,
 	facts: OwedFacts,
 	options: PendingActivationOptions,
-): OwedEntry[] {
-	return entries.flatMap((entry) => {
-		if (!affected(entry.close)) return [entry];
-		const next = judgeOwed(entry.close, facts, options);
+): Owed[] {
+	return owed.flatMap((entry) => {
+		if (!affected(entry)) return [entry];
+		const next = judgeOwed(closeOf(entry), facts, options);
 		return next === undefined ? [] : [next];
 	});
+}
+
+/**
+ * What a person is owed, as an activation: how many drafts over the close
+ * came to nothing, when the next may start, and the id it claims.
+ */
+export function withAttempts(
+	close: Pick<Close, 'owner' | 'from' | 'through'>,
+	writer: string,
+	leases: ReadonlyMap<string, LeaseHold>,
+	options: PendingActivationOptions,
+): Owed {
+	const failed = [...leases.values()].filter((lease) => draftedOver(lease, close.through, writer));
+	return {
+		person: close.owner,
+		from: close.from,
+		...pendingActivation('closed', close.through, writer, failed, options),
+	};
+}
+
+/**
+ * A draft of the writer's over this close that came to nothing. Another
+ * seat's lease is no attempt of the writer's. The validator holds
+ * `through >= 1`. `decodeActivationId` always names a seat, so a writer
+ * with no name drafts nothing.
+ */
+function draftedOver(lease: LeaseHold, through: Seq, writer: string): boolean {
+	const parsed = decodeActivationId(lease.id);
+	return parsed !== undefined && draftsClose(parsed, through, writer) && cameToNothing(lease);
 }

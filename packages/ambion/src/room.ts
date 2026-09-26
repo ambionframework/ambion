@@ -20,7 +20,7 @@ import {
 } from './host/runtime.ts';
 import { roomJournal } from './journal/journal.ts';
 import { discussionMessages } from './room/exchange.ts';
-import { foldRoom } from './room/fold.ts';
+import { projectState, replay } from './room/projection.ts';
 import type { MessageSelection } from './room/read.ts';
 import { captureMessageSelection, readView } from './room/read.ts';
 import { type CompositionDraft, type Room, RoomHost } from './room-host/room.ts';
@@ -180,7 +180,7 @@ export async function readRoom(name: string, options: ReadRoomOptions = {}): Pro
 	await journal.settled();
 	return readView(
 		name,
-		foldRoom(journal.entries, hosting.limits.activation),
+		projectState(replay(journal.entries, hosting.limits.activation)),
 		runtime.clock.now(),
 		journal.lastSeq,
 		messages,

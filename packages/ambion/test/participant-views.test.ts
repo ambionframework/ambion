@@ -10,8 +10,8 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
-import { foldRoom } from '../src/room/fold.ts';
 import { viewOf } from '../src/room/view.ts';
+import { replayState } from './support/fold.ts';
 import { participantsOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted, speak } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
@@ -121,7 +121,7 @@ describe('participant views', () => {
 			said(6, 'sam'),
 			said(7, 'sam'),
 		];
-		const state = foldRoom(entries, { backoff: () => 0 });
+		const state = replayState(entries, { backoff: () => 0 });
 		const spec: ActivationSpec = {
 			id: 'message:7:worker:1',
 			seat: 'worker',

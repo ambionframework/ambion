@@ -152,7 +152,7 @@ proof must pay for. These proofs are open, and none removes a known defect.
 | --------------------- | ----------------------------------------------------------------------------------------------- |
 | The stop-loop measure | A measure that the stop loop decreases                                                          |
 | The pass measure      | A measure that each reconciliation pass decreases, so the `PASSES` bound is a proof             |
-| Unique roster names   | `reseated` and `foldRoster` keep one seat per name                                              |
+| Unique roster names   | `reseat` and `rosterAfter` keep one seat per name                                               |
 | `seatLive`            | The seats that are live now, as a rule beside `exchangeLive`                                    |
 | `storedIdAccepted`    | The kinds on which `validate.ts` reads an activation id; a refusal on others is a schema change |
 

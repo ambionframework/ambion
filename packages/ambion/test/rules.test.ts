@@ -3,7 +3,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { ActivationId, ActivationSource } from '../src/activation-id.ts';
 import type { Close, LeaseChange } from '../src/journal/events.ts';
 import type { ActivationPurpose } from '../src/protocol.ts';
-import { cameToNothing, foldLeases, type LeaseHold, pendingWakes } from '../src/room/lease.ts';
+import { cameToNothing, foldLeases, type LeaseHold } from '../src/room/lease.ts';
 import {
 	type ActivationFields,
 	applyChange,
@@ -27,6 +27,7 @@ import type {
 	Message,
 	FailureCause as PublicFailureCause,
 } from '../src/types.ts';
+import { pendingWakes } from './support/fold.ts';
 
 type DistributiveOmit<T, K extends string> = T extends unknown ? Omit<T, K> : never;
 

@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { decodeActivationId } from '../src/activation-id.ts';
 import type { Close, LeaseChange } from '../src/journal/events.ts';
 import type { Body, Entry } from '../src/journal/journal.ts';
-import { foldRoom, type RoomState } from '../src/room/fold.ts';
+import type { RoomState } from '../src/room/fold.ts';
 import { liveWork, planReconciliation, type ReconcileOptions } from '../src/room/reconcile.ts';
 import type { Message } from '../src/types.ts';
+import { owedOf, pendingOf, replayState } from './support/fold.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const T0 = Date.parse(at);
@@ -65,7 +66,7 @@ const answered = () => [
 	released('message:3:product:1'),
 	close({ owner: 'priya', from: 3, through: 3, summary: 'writer' }),
 ];
-const fold = (entries: Entry[]): RoomState => foldRoom(entries, retry);
+const fold = (entries: Entry[]): RoomState => replayState(entries, retry);
 const options = (over: Partial<ReconcileOptions> = {}): ReconcileOptions => ({
 	now: T0,
 	resend: 5_000,
@@ -155,7 +156,7 @@ describe('room reconciliation', () => {
 			},
 		]);
 		expect(state.roster.map((seat) => seat.name)).toContain('writer');
-		expect(state.pending.some((wake) => wake.id === 'message:3:writer:1')).toBe(false);
+		expect(pendingOf(state).some((wake) => wake.id === 'message:3:writer:1')).toBe(false);
 	});
 
 	it.each([
@@ -188,7 +189,7 @@ describe('room reconciliation', () => {
 				readThrough: 0,
 			});
 		const once = fold([...answered(), failed(1, T0 + 1_000)]);
-		expect(once.owed).toMatchObject([{ unsuccessfulAttempts: 1, notBefore: T0 + 31_000 }]);
+		expect(owedOf(once)).toMatchObject([{ unsuccessfulAttempts: 1, notBefore: T0 + 31_000 }]);
 		expect(planReconciliation(once, options({ now: T0 + 30_999 })).sends).toEqual([]);
 		expect(planReconciliation(once, options({ now: T0 + 31_000 })).sends).toEqual([
 			{ id: 'closed:3:writer:2', seat: 'writer' },
@@ -218,6 +219,6 @@ describe('room reconciliation', () => {
 			covers: { from: 3, through: 3 },
 		};
 		const state = fold([...answered(), { kind: 'message', seq: 5, body: published }, unseated(6)]);
-		expect(state.owed).toEqual([]);
+		expect(owedOf(state)).toEqual([]);
 	});
 });

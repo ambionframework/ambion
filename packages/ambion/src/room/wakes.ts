@@ -21,75 +21,72 @@ import {
 } from './lease.ts';
 import { survivesCancellation, wakeAnswered } from './rules.verified.ts';
 
-/** One seat a message reached, and whether its wake is pending now. */
-export interface WakeCandidate {
-	seat: string;
-	seq: Seq;
-	at: string;
-	/** Undefined while a running lease answers the wake. */
-	wake: PendingWake | undefined;
-}
+/** A wake that a running lease answers while it runs. It is pending again when that lease comes to nothing. */
+type HeldWake = Pick<PendingWake, 'seat' | 'position' | 'at'>;
+
+/** A wake still open: pending now, or held by a running lease. */
+export type OpenWake = PendingWake | HeldWake;
+
+const isPending = (wake: OpenWake): wake is PendingWake => 'id' in wake;
 
 /** The leases of one seat that a wake claims, by activation id. */
 export type SeatLeases = ReadonlyMap<string, LeaseHold>;
 
-/** A candidate for one seat, or nothing when an ended lease answered the wake for good. */
+/** The wake of one seat, or nothing when an ended lease answered it for good. */
 function judgeWake(
 	seat: string,
 	message: { seq: Seq; at: string },
 	leases: SeatLeases | undefined,
 	options: PendingActivationOptions,
-): WakeCandidate | undefined {
+): OpenWake | undefined {
 	const taken = [...(leases?.values() ?? [])].filter((lease) => coversAttempt(lease, message.seq));
 	const wake = statusOf(message, seat, taken, options);
+	if (wake !== undefined) return wake;
 	const settled = taken.filter((lease) => lease.phase === 'ended').map(takenOf);
-	if (wake === undefined && wakeAnswered(settled, message.seq)) return undefined;
-	return { seat, seq: message.seq, at: message.at, wake };
+	if (wakeAnswered(settled, message.seq)) return undefined;
+	return { seat, position: message.seq, at: message.at };
 }
 
-/** The candidates one message opens, in the order the fold reads its recipients. */
-export function candidatesOf(
+/** The wakes one message opens, in the order of its recipients. */
+export function wakesOf(
 	message: { seq: Seq; at: string },
 	delivery: MessageDelivery,
 	seatLeases: ReadonlyMap<string, SeatLeases>,
 	options: PendingActivationOptions,
-): WakeCandidate[] {
+): OpenWake[] {
 	const seats = new Set([...delivery.wakes, ...delivery.steers.map((steer) => steer.seat)]);
 	return [...seats].flatMap((seat) => {
-		const candidate = judgeWake(seat, message, seatLeases.get(seat), options);
-		return candidate === undefined ? [] : [candidate];
+		const wake = judgeWake(seat, message, seatLeases.get(seat), options);
+		return wake === undefined ? [] : [wake];
 	});
 }
 
-/** Read every candidate of one seat again after its leases changed. */
+/** Read every wake of one seat again after its leases changed. */
 export function rejudgeSeat(
-	candidates: readonly WakeCandidate[],
+	wakes: readonly OpenWake[],
 	seat: string,
 	leases: SeatLeases | undefined,
 	options: PendingActivationOptions,
-): WakeCandidate[] {
-	return candidates.flatMap((candidate) => {
-		if (candidate.seat !== seat) return [candidate];
-		const next = judgeWake(seat, candidate, leases, options);
+): OpenWake[] {
+	return wakes.flatMap((wake) => {
+		if (wake.seat !== seat) return [wake];
+		const next = judgeWake(seat, { seq: wake.position, at: wake.at }, leases, options);
 		return next === undefined ? [] : [next];
 	});
 }
 
 /** A removal of the seat makes every wake open before it stale. */
-export const dropSeat = (candidates: readonly WakeCandidate[], seat: string): WakeCandidate[] =>
-	candidates.filter((candidate) => candidate.seat !== seat);
+export const dropSeat = (wakes: readonly OpenWake[], seat: string): OpenWake[] =>
+	wakes.filter((wake) => wake.seat !== seat);
 
-/** The wakes still pending for the seats on the roster, in the order of the fold. */
+/** The wakes still pending for the seats on the roster, in the order they opened. */
 export function pendingOf(
-	candidates: readonly WakeCandidate[],
+	wakes: readonly OpenWake[],
 	roster: ReadonlySet<string>,
 	cancelledAt: Seq | undefined,
 ): PendingWake[] {
-	return candidates.flatMap((candidate) =>
-		candidate.wake !== undefined &&
-		roster.has(candidate.seat) &&
-		survivesCancellation(candidate.seq, cancelledAt)
-			? [candidate.wake]
-			: [],
+	return wakes.filter(
+		(wake): wake is PendingWake =>
+			isPending(wake) && roster.has(wake.seat) && survivesCancellation(wake.position, cancelledAt),
 	);
 }

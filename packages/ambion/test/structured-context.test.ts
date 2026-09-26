@@ -5,9 +5,9 @@ import type { ActivationSpec, ContextParticipant } from '../src/hosting.ts';
 import { assertWire, roundTrip } from '../src/hosting.ts';
 import { defineAgent } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
-import { foldRoom } from '../src/room/fold.ts';
 import { viewOf } from '../src/room/view.ts';
 import type { Message } from '../src/types.ts';
+import { replayState } from './support/fold.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);
@@ -68,7 +68,7 @@ const entries: Entry[] = [
 const facts = (record = entries) => ({
 	name: 'payments',
 	now,
-	state: foldRoom(record, { backoff: () => 0 }),
+	state: replayState(record, { backoff: () => 0 }),
 	live: new Map<string, string[]>(),
 	messagesSince: () => 0,
 });

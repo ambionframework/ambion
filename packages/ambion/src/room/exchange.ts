@@ -52,7 +52,6 @@ import {
 	type Draft,
 	draftsClose,
 	exchangeOutcome,
-	lastOf,
 	openingQuestion,
 	summaryVerdict,
 	survivesCancellation,
@@ -375,18 +374,6 @@ export function exchangeViews(
 }
 
 /**
- * The open exchange, or nothing when nobody has asked since the last close:
- * the first question a person asked after the last close's `through`.
- */
-export function openExchange(
-	messages: readonly Message[],
-	closes: readonly Close[],
-	people: readonly string[],
-): ExchangeRef | undefined {
-	return exchangeAfter(messages, people, lastOf(closes.map((close) => close.through)));
-}
-
-/**
  * The `from` of the exchange an activation serves, or nothing. A closing
  * activation serves the exchange its close ended. A response activation
  * serves the exchange whose range holds the message that caused it. A
@@ -453,7 +440,11 @@ function seatAndExchange(
 	};
 }
 
-/** The open exchange over the messages after a boundary, for a projection that keeps only those. */
+/**
+ * The open exchange, or nothing when nobody has asked since the boundary:
+ * the first question a person asked after the last close's `through`. The
+ * projection keeps only the messages after the boundary.
+ */
 export function exchangeAfter(
 	messages: readonly Message[],
 	people: readonly string[],

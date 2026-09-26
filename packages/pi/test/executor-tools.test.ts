@@ -16,7 +16,7 @@ import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import type { Entry } from '../../ambion/src/journal/journal.ts';
 import { activationSpec } from '../../ambion/src/room/activation.ts';
-import { foldRoom } from '../../ambion/src/room/fold.ts';
+import { projectState, replay } from '../../ambion/src/room/projection.ts';
 import { viewOf } from '../../ambion/src/room/view.ts';
 import { pi } from '../src/index.ts';
 import { binding, type PiTool, toolsFor } from '../src/tools.ts';
@@ -246,7 +246,7 @@ describe('executor tool authority', () => {
 				body: { kind: 'said', at, from: 'priya', text: 'Latest.', wakes: ['product'] },
 			},
 		];
-		const state = foldRoom(entries, { backoff: () => 0 });
+		const state = projectState(replay(entries, { backoff: () => 0 }));
 		const facts = {
 			name: 'room',
 			now: Date.parse(at),

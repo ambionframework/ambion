@@ -2,7 +2,7 @@
 
 This is the contract for process, storage, wire, and model failure. The
 journal implementation is in [`packages/journal/src`](../packages/journal/src)
-and the room projection in [`room/fold.ts`](../packages/ambion/src/room/fold.ts).
+and the room projection in [`room/projection.ts`](../packages/ambion/src/room/projection.ts).
 Read [`room.md`](room.md) for the room mechanisms and
 [`deployment.md`](deployment.md) for host recovery procedures.
 

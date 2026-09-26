@@ -724,17 +724,6 @@ export function stampedSummary(owner: string, from: number, through: number): St
 	return { to: owner, covers: { from, through } };
 }
 
-//@ contract The last position on an ordered record bounds every position on it; an empty record ends at 0.
-export function lastOf(seqs: readonly number[]): number {
-	//@ requires forall(i, forall(j, 0 <= i && i < j && j < seqs.length ==> seqs[i] <= seqs[j]))
-	//@ requires forall(i, 0 <= i && i < seqs.length ==> seqs[i] >= 1)
-	//@ ensures \result >= 0
-	//@ ensures seqs.length == 0 ==> \result == 0
-	//@ ensures seqs.length > 0 ==> \result == seqs[seqs.length - 1]
-	//@ ensures forall(i, 0 <= i && i < seqs.length ==> seqs[i] <= \result)
-	return seqs[seqs.length - 1] ?? 0;
-}
-
 //@ contract A message opens an exchange after the last close when a person spoke it, or when the room returned a say for a person: agent speech, arrivals and departures open nothing.
 function opensExchange(
 	message: Message,

@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Entry } from '../src/journal/journal.ts';
-import { foldRoom } from '../src/room/fold.ts';
+import { projectState, replay } from '../src/room/projection.ts';
 import { readView } from '../src/room/read.ts';
 import type { ExchangeView, RoomRead } from '../src/types.ts';
 import { goldenScenarios } from './support/golden.ts';
@@ -23,7 +23,7 @@ const load = async <T>(file: string): Promise<T> =>
 	JSON.parse(await readFile(`${dir}${file}`, 'utf8')) as T;
 
 function foldOf(entries: readonly Entry[]): RoomRead {
-	const state = foldRoom(entries, { backoff });
+	const state = projectState(replay(entries, { backoff }));
 	return readView('golden', state, now, entries.length, false);
 }
 

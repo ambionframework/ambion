@@ -11,12 +11,12 @@ import { inProcessTransport, runningRoom } from '../src/hosting.ts';
 import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
-import { foldRoom } from '../src/room/fold.ts';
 import { readView } from '../src/room/read.ts';
 import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
 import { fakeClock } from '../src/testing.ts';
 import { bindings } from './support/binding.ts';
+import { owedOf, pendingOf, replayState } from './support/fold.ts';
 import { closedExchange, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
@@ -60,7 +60,7 @@ const running: Entry = {
 };
 const cancel: Entry = { kind: 'cancel', seq: 4, body: { at } };
 
-const asked = () => foldRoom([composition, person, question], options);
+const asked = () => replayState([composition, person, question], options);
 const reconcile = (state: ReturnType<typeof asked>, sent: Map<string, number> = new Map()) =>
 	decide(
 		state,
@@ -75,7 +75,7 @@ const closed3: Entry = {
 	body: { owner: 'priya', from: 3, through: 3, at, summary: 'product' },
 };
 const quietQuestion: Entry = { ...question, body: { ...question.body, wakes: [] } };
-const claimed = () => foldRoom([composition, person, question, running], options);
+const claimed = () => replayState([composition, person, question, running], options);
 
 describe('the room runs the verified rules', () => {
 	it('ends a lease only when mayEnd says so', () => {
@@ -150,7 +150,7 @@ describe('the room runs the verified rules', () => {
 
 	it('ends a lease at a cancellation only as cancelHold answers', () => {
 		const state = () =>
-			foldRoom([composition, person, question, running, { ...cancel, seq: 5 }], options);
+			replayState([composition, person, question, running, { ...cancel, seq: 5 }], options);
 		bind.onceWith(rules.cancelHold, (hold) => hold);
 		expect(state().leases.get(id)).toMatchObject({ phase: 'running' });
 		expect(state().leases.get(id)).toMatchObject({
@@ -162,8 +162,8 @@ describe('the room runs the verified rules', () => {
 
 	it('owes a wake only when wakeAnswered says nobody answered it', () => {
 		bind.once(rules.wakeAnswered, true);
-		expect(asked().pending).toEqual([]);
-		expect(asked().pending.map((wake) => wake.id)).toEqual([id]);
+		expect(pendingOf(asked())).toEqual([]);
+		expect(pendingOf(asked()).map((wake) => wake.id)).toEqual([id]);
 	});
 
 	it('ends a running lease the way endingOf answers', () => {
@@ -178,24 +178,29 @@ describe('the room runs the verified rules', () => {
 		bind.once(rules.exchangeOutcome, 'exhausted');
 		const read = readView(
 			'room',
-			foldRoom([composition, person, question, closed3], options),
+			replayState([composition, person, question, closed3], options),
 			now,
 			4,
 			false,
 		);
 		expect(read.exchanges).toMatchObject([{ status: 'closed', outcome: { kind: 'exhausted' } }]);
 		expect(
-			readView('room', foldRoom([composition, person, question, closed3], options), now, 4, false)
-				.exchanges,
+			readView(
+				'room',
+				replayState([composition, person, question, closed3], options),
+				now,
+				4,
+				false,
+			).exchanges,
 		).toMatchObject([{ outcome: { kind: 'complete' } }]);
 	});
 
 	it('keeps a pending wake only when survivesCancellation says so', () => {
 		bind.always(rules.survivesCancellation, () => false);
-		expect(asked().pending).toEqual([]);
+		expect(pendingOf(asked())).toEqual([]);
 		bind.restore(rules.survivesCancellation);
-		expect(asked().pending.map((wake) => wake.id)).toEqual([id]);
-		expect(foldRoom([composition, person, question, cancel], options).pending).toEqual([]);
+		expect(pendingOf(asked()).map((wake) => wake.id)).toEqual([id]);
+		expect(pendingOf(replayState([composition, person, question, cancel], options))).toEqual([]);
 	});
 
 	it.each([
@@ -204,7 +209,7 @@ describe('the room runs the verified rules', () => {
 		[
 			'for the close closeFor finds',
 			() => bind.once(rules.closeFor, undefined),
-			() => foldRoom([writerNamed, person, question, closed3], options),
+			() => replayState([writerNamed, person, question, closed3], options),
 			'closed:3:product:1',
 		],
 	])('grants an activation only %s', (_name, refuse, state, activation) => {
@@ -227,28 +232,24 @@ describe('the room runs the verified rules', () => {
 		expect(asked().due.map((owed) => owed.id)).toEqual([id]);
 	});
 
-	it('folds the exchange and the last seq as the rules answer', () => {
-		bind.once(rules.openingQuestion, undefined);
+	it('derives the open exchange as openingQuestion answers', () => {
+		bind.always(rules.openingQuestion, () => undefined);
 		expect(asked().exchange).toBeUndefined();
+		bind.restore(rules.openingQuestion);
 		expect(asked().exchange).toMatchObject({ owner: 'priya', from: 3 });
-		// The fold asks twice: the closes' end, then the record's.
-		bind.once(rules.lastOf, 0);
-		bind.once(rules.lastOf, 99);
-		expect(asked().lastSeq).toBe(99);
-		expect(asked().lastSeq).toBe(3);
 	});
 
 	it('owes a summary only when summaryVerdict says the close owes one', () => {
-		const closed = () => foldRoom([writerNamed, person, question, closed3], options);
+		const closed = () => replayState([writerNamed, person, question, closed3], options);
 		bind.once(rules.summaryVerdict, { status: 'failed' });
-		expect(closed().owed).toEqual([]);
-		expect(closed().owed).toMatchObject([{ writer: 'product', through: 3 }]);
+		expect(owedOf(closed())).toEqual([]);
+		expect(owedOf(closed())).toMatchObject([{ seat: 'product', position: 3 }]);
 	});
 
 	it('counts a draft of a close as draftsClose answers', () => {
 		const drafted = (reason: 'failed' | 'released') => {
 			const draft = 'closed:3:product:1';
-			return foldRoom(
+			return replayState(
 				[
 					writerNamed,
 					person,
@@ -270,11 +271,11 @@ describe('the room runs the verified rules', () => {
 		};
 		bind.always(rules.draftsClose, () => false);
 		// No lease drafts the close: the failed draft is no attempt, and the released one stands nobody down.
-		expect(drafted('failed').owed).toMatchObject([{ attempt: 1, unsuccessfulAttempts: 0 }]);
-		expect(drafted('released').owed).toMatchObject([{ writer: 'product', through: 3 }]);
+		expect(owedOf(drafted('failed'))).toMatchObject([{ attempt: 1, unsuccessfulAttempts: 0 }]);
+		expect(owedOf(drafted('released'))).toMatchObject([{ seat: 'product', position: 3 }]);
 		bind.restore(rules.draftsClose);
-		expect(drafted('failed').owed).toMatchObject([{ attempt: 2, unsuccessfulAttempts: 1 }]);
-		expect(drafted('released').owed).toEqual([]);
+		expect(owedOf(drafted('failed'))).toMatchObject([{ attempt: 2, unsuccessfulAttempts: 1 }]);
+		expect(owedOf(drafted('released'))).toEqual([]);
 	});
 
 	it('admits a claim or a renewal as admitsLease answers', () => {
@@ -296,7 +297,7 @@ describe('the room runs the verified rules', () => {
 				readThrough: 4,
 			},
 		};
-		const state = foldRoom([writerNamed, person, question, closed3, drafting], options);
+		const state = replayState([writerNamed, person, question, closed3, drafting], options);
 		const commit: CommitRequest = {
 			activation: 'closed:3:product:1',
 			key: 'summary',
@@ -321,14 +322,14 @@ describe('the room runs the verified rules', () => {
 			seq: 5,
 			body: { id, phase: 'ended', reason: 'failed', at, readThrough: 0 },
 		};
-		const failedOnce = () => foldRoom([composition, person, question, running, failed], options);
+		const failedOnce = () => replayState([composition, person, question, running, failed], options);
 		// A lease that covers nothing answers nothing, so the wake is owed again.
 		bind.once(rules.coversAttempt, false);
-		expect(claimed().pending.map((wake) => wake.id)).toEqual([id]);
-		expect(claimed().pending).toEqual([]);
+		expect(pendingOf(claimed()).map((wake) => wake.id)).toEqual([id]);
+		expect(pendingOf(claimed())).toEqual([]);
 		bind.once(rules.countsAgainst, false);
-		expect(failedOnce().pending[0]?.unsuccessfulAttempts).toBe(0);
-		expect(failedOnce().pending[0]?.unsuccessfulAttempts).toBe(1);
+		expect(pendingOf(failedOnce())[0]?.unsuccessfulAttempts).toBe(0);
+		expect(pendingOf(failedOnce())[0]?.unsuccessfulAttempts).toBe(1);
 	});
 
 	it('ends, renews, and acknowledges as the clock and record rules answer', () => {
@@ -361,13 +362,13 @@ describe('the room runs the verified rules', () => {
 			},
 		};
 		const entries = [writerNamed, person, question, closed3, published];
-		expect(foldRoom(entries, options).owed).toEqual([]);
+		expect(owedOf(replayState(entries, options))).toEqual([]);
 		bind.once(rules.coversExchange, false);
-		expect(foldRoom(entries, options).owed).toHaveLength(1);
+		expect(owedOf(replayState(entries, options))).toHaveLength(1);
 	});
 
 	it('closes only when exchangeLive says nothing of the exchange is live', () => {
-		const quiet = foldRoom([writerNamed, person, quietQuestion], options);
+		const quiet = replayState([writerNamed, person, quietQuestion], options);
 		expect(reconcile(quiet).events).toMatchObject([
 			{ kind: 'close', body: { summary: 'product' } },
 		]);

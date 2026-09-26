@@ -10,7 +10,7 @@ stale. Two files hold every rule:
 | File                                                                                          | Concern                                                                                            | Obligations                   |
 | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------- |
 | [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)         | The fence, the key, the seq counter, the cursor                                                    | 12, and 23 in its proofs file |
-| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | 77, and 36 in its proofs file |
+| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | 74, and 39 in its proofs file |
 
 **Everything else is ordinary TypeScript under the scripted and chaos
 suites.** Routing, presence, the roster, addressing, membership changes,
@@ -106,13 +106,12 @@ describes. Three things hold that binding.
 `applyLease` in `lease.ts` reads one lease entry, finds the lease the fold
 holds for its id, and asks `applyChange` for the lease after it.
 `cancelLeases` in `fold.ts` asks `cancelHold` for each lease a
-cancellation reaches. `openExchange` in `exchange.ts` maps the closes to
-their `through` seqs, asks `lastOf` for the last, and asks
-`openingQuestion` for the question after it. `withAttempts` in
-`fold.ts` and `draftsOf` in `exchange.ts` decode each lease id and ask
-`draftsClose` whether the lease drafts the close. A comment at such a site
-says "the rule decides" where a second check remains to narrow a
-TypeScript type.
+cancellation reaches. `exchangeAfter` in `exchange.ts` asks
+`openingQuestion` for the first question after the last close.
+`withAttempts` in `owed.ts` and `draftsOf` in `exchange.ts` decode each
+lease id and ask `draftsClose` whether the lease drafts the close. A
+comment at such a site says "the rule decides" where a second check
+remains to narrow a TypeScript type.
 
 ## 3. The generated files
 
@@ -147,7 +146,8 @@ moves back. The room's proofs file proves these lemmas:
   moves forward.
 
 A proofs file starts with `include` of the generated file and calls the
-generated `_ensures` lemmas. `check-extra.sh` at the root verifies every
+generated `_ensures` lemmas. A function that only a proof reads, such as
+`lastOf` for the last close, lives in the proofs file. `check-extra.sh` at the root verifies every
 proofs file, at a desk and in CI.
 
 **A contract states what Dafny proves on its own.** A clause that needs
@@ -255,14 +255,15 @@ doc it carries:
 
 - The storage adapters and the SQL compare-and-append in `sqlite.ts` are
   outside the rules. The storage tests hold them.
-- The record is ordered by seq, which the journal proves; `lastOf` and
-  `openingQuestion` require it and no runtime check repeats it.
+- The record is ordered by seq, which the journal proves;
+  `openingQuestion` requires it and no runtime check repeats it.
   `CloseExtendsTheRecord` takes the ordered closes as a premise, so it
   proves the step and the induction over a record is the reader's.
 - The lease lemmas and the exchange lemmas hold over the histories the
-  rules admit. The binding test proves `lease.ts`, `fold.ts`, and
-  `exchange.ts` call those rules; the projection from an entry to a
-  `Change` or a `Message` stays with the scripted suites.
+  rules admit. The binding test proves `lease.ts`, `fold.ts`,
+  `projection.ts`, and `exchange.ts` call those rules; the projection
+  from an entry to a `Change` or a `Message` stays with the scripted
+  suites.
 - The clock never runs backwards. That is a host promise.
 - A pass of the reconciliation converges. The chaos drain and the walk's
   `drained` check witness it; a measure over the fold is open work.
@@ -308,7 +309,6 @@ found no such rule.
 | `stampedSummary`       | The recipient and the range of a summary entry                 |
 | `coversExchange`       | A second summary entry, and the summaries that the room owes   |
 | `summaryVerdict`       | The summaries that the room owes                               |
-| `lastOf`               | The last seq, which a close entry and a commit of speech read  |
 | `openingQuestion`      | The open exchange that a close entry closes                    |
 | `exchangeLive`         | A close entry                                                  |
 | `admitsClose`          | A close entry                                                  |

@@ -11,6 +11,19 @@ and the statements copy them into the shared tables with
 every value stays text. See
 [Query the shared database](docs/workspace.md#query-the-shared-database).
 
+### Simplification
+
+- **The room state has one derivation.** `readRoom` replays the
+  projection that a live room advances. The fold over the whole journal
+  is a test oracle in `test/support/fold.ts`, and
+  `projection-equivalence.test.ts` compares the projection with it.
+- **`RoomState` lists what the room owes as `due` alone.** The `pending`
+  and `owed` lists go. A pending wake has no `seq`, and an owed summary
+  has no `writer` and no `through`: `position` and `seat` hold them.
+- **`lastOf` leaves the room rules.** The projection keeps the last
+  close's `through` and the last seq as it applies each entry, so no room
+  code runs `lastOf`. The proofs file defines it for `CloseExtendsTheRecord`.
+
 ### Breaking changes
 
 - **`WorkspaceFiles` has `readFile(path, maxBytes, context)`.** A custom

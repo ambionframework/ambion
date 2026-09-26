@@ -60,8 +60,6 @@ function state(
 		cancelClosed: [],
 		leases,
 		deliveries: new Map(),
-		pending: [],
-		owed: [],
 		due: [],
 		scheduled: [],
 		messages,

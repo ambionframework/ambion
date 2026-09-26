@@ -3,10 +3,11 @@ import type { CommitRequest } from '../src/hosting.ts';
 import type { Seating } from '../src/journal/events.ts';
 import type { Entry, Kind } from '../src/journal/journal.ts';
 import { activationSpec } from '../src/room/activation.ts';
-import { foldRoom, type RoomState } from '../src/room/fold.ts';
+import type { RoomState } from '../src/room/fold.ts';
 import { decide, type RoomDecision } from '../src/room/transition.ts';
 import { viewOf } from '../src/room/view.ts';
 import { evolve } from './support/evolve.ts';
+import { owedOf, replayState } from './support/fold.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);
@@ -46,7 +47,7 @@ const lease = (id: string, seq: number): Entry => ({
 	body: { id, phase: 'running', expiresAt: now + 60_000, at, readThrough: 0 },
 });
 
-const fold = (...entries: Entry[]) => foldRoom(entries, options);
+const fold = (...entries: Entry[]) => replayState(entries, options);
 /** A question, and the running activation of `seat` that answers it. */
 const answering = (seat = 'product', first = composition()) =>
 	fold(first, person(), question(), lease(`message:3:${seat}:1`, 4));
@@ -263,7 +264,7 @@ describe('room transition', () => {
 	});
 
 	it('allows one active execution per seat across ordinary and closing work', () => {
-		const state = foldRoom(
+		const state = replayState(
 			[
 				composition('writer'),
 				person(),
@@ -310,9 +311,9 @@ describe('room transition', () => {
 	it('starts a new summary assignment after reseating before close, and never revives one ended after close', () => {
 		const start = [composition('writer'), person(), question()];
 		const beforeClose = fold(...start, unseated(4), seated(5), closed(6, 5));
-		expect(beforeClose.owed).toMatchObject([{ writer: 'writer', through: 5 }]);
+		expect(owedOf(beforeClose)).toMatchObject([{ seat: 'writer', position: 5 }]);
 		const afterClose = fold(...start, closed(), unseated(5), seated(6));
-		expect(afterClose.owed).toEqual([]);
+		expect(owedOf(afterClose)).toEqual([]);
 	});
 });
 

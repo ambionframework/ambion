@@ -6,8 +6,8 @@
  * journal under a serial queue, then emits and sends. `reconcile` folds the journal,
  * decides, writes what it decided, and sends; it runs after every commit,
  * every lease change, every alarm and every wake, and running it twice
- * writes nothing. Every fact about the room is a fold over the journal
- * (`room/fold.ts`), so a room that resumes over the journal continues where the
+ * writes nothing. Every fact about the room is a projection of the journal
+ * (`room/projection.ts`), so a room that resumes over the journal continues where the
  * last run stopped.
  *
  * `RoomHost` holds the state and the phases of the room. Its mechanisms live
