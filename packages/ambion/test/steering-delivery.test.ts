@@ -10,6 +10,7 @@ import type { Steer, Wake } from '../src/hosting.ts';
 import { createRuntime, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { tapped } from './support/core-failure.ts';
+import { pendingOf } from './support/fold.ts';
 import {
 	assistant,
 	assistantEnded,
@@ -139,7 +140,7 @@ describe.each(storages)('steering on $name', (storage) => {
 			expect(next.contexts[0]).not.toContain('Keep this final correction.');
 			expect(next.contexts[1]?.split('Keep this final correction.')).toHaveLength(2);
 			expect(observed.wakes).toHaveLength(2);
-			expect(stateOf(room).pending).toEqual([]);
+			expect(pendingOf(stateOf(room))).toEqual([]);
 			expect(clock.now()).toBe(before);
 		},
 	);
@@ -183,7 +184,7 @@ describe.each(storages)('steering on $name', (storage) => {
 		expect(
 			events.filter((event) => event.type === 'activation_start').map((event) => event.agent),
 		).toEqual(['alpha']);
-		expect(stateOf(room).pending).toEqual([]);
+		expect(pendingOf(stateOf(room))).toEqual([]);
 		const last = observed.steers.at(-1);
 		expect(stateOf(room).leases.get(last?.activation ?? '')?.readThrough).toBe(last?.message.seq);
 	});
@@ -235,13 +236,15 @@ describe.each(storages)('steering on $name', (storage) => {
 				}),
 			}),
 		);
-		expect(stateOf(resumed).pending).toEqual(
-			expect.arrayContaining([expect.objectContaining({ seat: alpha.name, seq: update?.seq })]),
+		expect(pendingOf(stateOf(resumed))).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ seat: alpha.name, position: update?.seq }),
+			]),
 		);
 		await clock.advance(1_000);
 		await waitForRoom(resumed);
 		expect(contexts.some((text) => text.includes('Recover this unconsumed context.'))).toBe(true);
-		expect(stateOf(resumed).pending).toEqual([]);
+		expect(pendingOf(stateOf(resumed))).toEqual([]);
 	});
 
 	it('keeps summary input fixed while delivering its result to an active ordinary agent', async () => {

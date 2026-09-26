@@ -13,6 +13,7 @@ import {
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { settledFlag, turn } from './support/core-exchange.ts';
+import { owedOf } from './support/fold.ts';
 import {
 	assistantEnded,
 	closedExchange,
@@ -120,7 +121,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 		await expectOutcome(resumed.exchange(exchange.from), outcome);
 		await clock.advance(120_000);
 		await waitForRoom(resumed);
-		expect(stateOf(resumed).owed).toEqual([]);
+		expect(owedOf(stateOf(resumed))).toEqual([]);
 		expect(calls).toBe(0);
 	});
 
@@ -144,14 +145,14 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 		const settled = settledFlag(Promise.resolve(response));
 		await clock.advance(999);
 		expect(settled()).toBe(false);
-		expect(stateOf(resumed).owed).toHaveLength(1);
+		expect(owedOf(stateOf(resumed))).toHaveLength(1);
 		await clock.advance(1);
 		await expect(response).resolves.toMatchObject({
 			text: 'Recorded result.',
 			covers: { from: exchange.from, through: closedExchange(resumed, exchange.from)?.through },
 		});
 		await waitForRoom(resumed);
-		expect(stateOf(resumed).owed).toEqual([]);
+		expect(owedOf(stateOf(resumed))).toEqual([]);
 	});
 });
 

@@ -7,7 +7,7 @@ import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import type { SpokenMessage } from '../src/index.ts';
 import { placed, roomJournal, spaced } from '../src/journal/journal.ts';
-import { foldRoom } from '../src/room/fold.ts';
+import { replayState } from './support/fold.ts';
 import { deferred, roomName } from './support/room.ts';
 import { faultyJournals, gatedJournals, memory } from './support/storage.ts';
 
@@ -35,7 +35,7 @@ const message = (journal: OpenJournal, key: string | undefined, text: string) =>
 		decide: () => ({ body: say(text) }),
 	});
 
-const messages = (journal: OpenJournal) => foldRoom(journal.entries, options).messages;
+const messages = (journal: OpenJournal) => replayState(journal.entries, options).messages;
 const texts = (journal: OpenJournal) =>
 	messages(journal).flatMap((message) => (message.kind === 'said' ? [message.text] : []));
 
@@ -119,7 +119,7 @@ describe('roomJournal', () => {
 			journal.append('message', {
 				key,
 				decide: () => {
-					const state = foldRoom(journal.entries, options);
+					const state = replayState(journal.entries, options);
 					if (state.lastSeq > 1) {
 						return { result: { missed: state.messages.filter((entry) => entry.seq > 1) } };
 					}

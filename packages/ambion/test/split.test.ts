@@ -20,7 +20,6 @@ import { runningRoom } from '../src/host/runtime.ts';
 import { inProcessTransport } from '../src/hosting.ts';
 import { createRuntime, resumeRoom, startRoom } from '../src/index.ts';
 import type { Entry as RoomEntry } from '../src/journal/journal.ts';
-import { foldRoom } from '../src/room/fold.ts';
 import { fakeClock } from '../src/testing.ts';
 import {
 	agents,
@@ -34,6 +33,7 @@ import {
 	TIMING,
 } from './support/cast.ts';
 import { childWrites, quietNow } from './support/core-failure.ts';
+import { replayState } from './support/fold.ts';
 import { History, standing, violations } from './support/history.ts';
 import { collect, messagesOf, roomName, storedOf, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
@@ -140,7 +140,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 			(record) => record.map((m) => ({ seq: m.seq, key: m.key })),
 		);
 		const stored = await storedOf(opened.journals, name);
-		const folded = foldRoom(entriesOf(stored), RETRY);
+		const folded = replayState(entriesOf(stored), RETRY);
 		// The fold read the record. A fold that reads no place answers every
 		// check below with nothing, and the checks say the room is whole.
 		expect(folded.lastSeq).toBeGreaterThan(0);

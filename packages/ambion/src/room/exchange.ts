@@ -52,11 +52,35 @@ import {
 	type Draft,
 	draftsClose,
 	exchangeOutcome,
-	lastOf,
 	openingQuestion,
 	summaryVerdict,
 	survivesCancellation,
 } from './rules.verified.ts';
+
+/**
+ * The first summary on the record that covers a closed exchange for one
+ * person. With a writer, only a summary by that writer counts.
+ */
+export function coveringSummary(
+	messages: readonly Message[],
+	person: string,
+	range: { readonly from: Seq; readonly through: Seq },
+	writer?: string,
+): SummaryMessage | undefined {
+	return messages.find(
+		(message): message is SummaryMessage =>
+			isSummary(message) &&
+			(writer === undefined || message.from === writer) &&
+			coversExchange(
+				message.to,
+				message.covers.from,
+				message.covers.through,
+				person,
+				range.from,
+				range.through,
+			),
+	);
+}
 
 /** The recorded response outcome, with its writer only while summary work remains owed. */
 export function summaryCompletion(
@@ -65,31 +89,18 @@ export function summaryCompletion(
 	leases: ReadonlyMap<string, LeaseHold>,
 	cancelledAt?: number,
 ): SummaryOutcome {
-	const summary = messages.find(
-		(message): message is SummaryMessage =>
-			isSummary(message) &&
-			message.from === close.summary &&
-			coversExchange(
-				message.to,
-				message.covers.from,
-				message.covers.through,
-				close.owner,
-				close.from,
-				close.through,
-			),
-	);
-	if (summary !== undefined) return { status: 'published', summary };
 	const writer = close.summary;
+	// A close with no writer has no summary to publish.
+	const summary =
+		writer === undefined ? undefined : coveringSummary(messages, close.owner, close, writer);
+	if (summary !== undefined) return { status: 'published', summary };
 	const verdict = summaryVerdict(
-		summary !== undefined,
 		writer !== undefined,
 		writer !== undefined && removedAfter(messages, writer, close.through),
 		draftsOf(leases, close.through, writer),
 		!survivesCancellation(close.through, cancelledAt),
 	);
-	// The rule decides. The re-tests narrow the TypeScript type only.
-	if (verdict.status === 'published' && summary !== undefined)
-		return { status: 'published', summary };
+	// The rule decides. The re-test narrows the TypeScript type only.
 	if (verdict.status === 'pending' && verdict.owed && writer !== undefined)
 		return { status: 'pending', writer };
 	if (verdict.status === 'pending') return { status: 'pending' };
@@ -215,16 +226,7 @@ function exchangeOutcomeOf(
 function summariesOf(close: Close, range: readonly Message[], pass: Pass): SummaryMessage[] {
 	const recipients = recipientsOf(range, close.from, close.through, close.owner, pass.people);
 	return recipients.flatMap((person) => {
-		const summary = pass.summaries.find((message) =>
-			coversExchange(
-				message.to,
-				message.covers.from,
-				message.covers.through,
-				person,
-				close.from,
-				close.through,
-			),
-		);
+		const summary = coveringSummary(pass.summaries, person, close);
 		return summary === undefined ? [] : [copyMessage(summary)];
 	});
 }
@@ -375,18 +377,6 @@ export function exchangeViews(
 }
 
 /**
- * The open exchange, or nothing when nobody has asked since the last close:
- * the first question a person asked after the last close's `through`.
- */
-export function openExchange(
-	messages: readonly Message[],
-	closes: readonly Close[],
-	people: readonly string[],
-): ExchangeRef | undefined {
-	return exchangeAfter(messages, people, lastOf(closes.map((close) => close.through)));
-}
-
-/**
  * The `from` of the exchange an activation serves, or nothing. A closing
  * activation serves the exchange its close ended. A response activation
  * serves the exchange whose range holds the message that caused it. A
@@ -453,7 +443,11 @@ function seatAndExchange(
 	};
 }
 
-/** The open exchange over the messages after a boundary, for a projection that keeps only those. */
+/**
+ * The open exchange, or nothing when nobody has asked since the boundary:
+ * the first question a person asked after the last close's `through`. The
+ * projection keeps only the messages after the boundary.
+ */
 export function exchangeAfter(
 	messages: readonly Message[],
 	people: readonly string[],

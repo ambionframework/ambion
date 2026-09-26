@@ -1,12 +1,13 @@
 /**
- * Every fact about the room, as a fold over the journal.
+ * The room's facts, and the one step that applies an entry to them.
  *
- * The journal is the truth, and the room holds no fact beside it: the roster,
- * the reserve, the people, the open exchange, the closes, the leases, the
- * wakes still pending and the summaries still owed are each one function
- * over the entries. A room that replays the journal folds the same state the
- * room that wrote it held, which is what lets a room resume where it
- * stopped.
+ * The journal is the truth, and the room holds no fact beside it. The base
+ * facts are what each entry adds or changes: the messages, the closes, the
+ * leases, the composition, and the deliveries. `projection.ts` applies each
+ * entry with `applyEvent` or its own step, and derives the rest: the roster,
+ * the reserve, the people, the open exchange, and the activations the room
+ * owes. A room that replays the journal derives the same state as the room
+ * that wrote it, which is what lets a room resume where it stopped.
  */
 
 import { decodeActivationId } from '../activation-id.ts';
@@ -14,30 +15,10 @@ import type { Close, Composition, Seating } from '../journal/events.ts';
 import { type Entry, placed } from '../journal/journal.ts';
 import type { ExchangeRef, Message, Seq } from '../types.ts';
 import { type MessageDelivery, messageDelivery } from './delivery.ts';
-import { openExchange, summaryCompletion } from './exchange.ts';
-import {
-	applyLease,
-	cameToNothing,
-	type LeaseHold,
-	type PendingActivation,
-	type PendingWake,
-	pendingActivation,
-	pendingWakes,
-} from './lease.ts';
-import { foldPeople, type PersonState } from './presence.ts';
-import { cancelHold, draftsClose, lastOf, survivesCancellation } from './rules.verified.ts';
-import { foldScheduled, type ScheduledSay } from './scheduled.ts';
-
-/** A summary one person is owed, and how the room has tried to write it. */
-export interface Owed extends PendingActivation {
-	person: string;
-	/** The seat the close named to write it. */
-	writer: string;
-	/** The opening question that identifies the closed exchange. */
-	from: Seq;
-	/** The close boundary that the summary must retain. */
-	through: Seq;
-}
+import { applyLease, type LeaseHold, type PendingActivation } from './lease.ts';
+import type { PersonState } from './presence.ts';
+import { cancelHold } from './rules.verified.ts';
+import type { ScheduledSay } from './scheduled.ts';
 
 export interface RoomState {
 	readonly composition: Composition | undefined;
@@ -52,8 +33,6 @@ export interface RoomState {
 	readonly cancelClosed: readonly Seq[];
 	readonly leases: Map<string, LeaseHold>;
 	readonly deliveries: Map<Seq, MessageDelivery>;
-	readonly pending: PendingWake[];
-	readonly owed: Owed[];
 	/** Every activation the room owes, whatever caused it: the wakes and the drafts as one list. */
 	readonly due: PendingActivation[];
 	/** The scheduled says that wait to return, in the order they landed. None of them is live work. */
@@ -63,8 +42,8 @@ export interface RoomState {
 }
 
 /**
- * What the fold needs of the retry policy: how long the room waits after
- * `attempt` failed ones. The cap belongs to the decision, not the fold.
+ * What the projection needs of the retry policy: how long the room waits
+ * after `attempt` failed ones. The cap belongs to the decision.
  */
 export interface FoldOptions {
 	backoff(attempt: number): number;
@@ -123,47 +102,6 @@ export function applyEvent(read: BaseFacts, entry: Entry): void {
 	}
 }
 
-export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomState {
-	const read = older();
-	for (const entry of entries) applyEvent(read, entry);
-	return project(read, options);
-}
-
-/** Derives all room views from the base facts. */
-export function project(read: BaseFacts, options: FoldOptions): RoomState {
-	const { messages, closes, leases, composition, deliveries, cancelledAt, cancelClosed } = read;
-	const people = foldPeople(messages);
-	const roster = foldRoster(composition, messages);
-	const exchange = openExchange(messages, closes, [...people.keys()]);
-	const pending = pendingWakes(
-		messages,
-		deliveries,
-		leases,
-		new Set(roster.map((s) => s.name)),
-		options,
-	).filter((wake) => survivesCancellation(wake.position, cancelledAt));
-	const owed = foldOwed(closes, messages, leases, options, cancelledAt);
-	const state: RoomState = {
-		composition,
-		roster,
-		reserve: reserveOf(composition, roster),
-		people,
-		exchange,
-		closes,
-		cancelledAt,
-		cancelClosed,
-		leases,
-		deliveries,
-		pending,
-		owed,
-		due: [...pending, ...owed],
-		scheduled: foldScheduled(messages, cancelledAt),
-		messages,
-		lastSeq: lastOf(messages.map((message) => message.seq)),
-	};
-	return state;
-}
-
 /** A cancellation ends old leases while retaining their reads. */
 function cancelLeases(leases: Map<string, LeaseHold>, cancelledAt: Seq, at: string): void {
 	for (const [id, lease] of leases) {
@@ -191,16 +129,6 @@ export function reserveOf(
 		}));
 }
 
-/** The latest composition, then every seating and unseating after it, in order. */
-function foldRoster(composition: Composition | undefined, messages: readonly Message[]): Seating[] {
-	if (composition === undefined) return [];
-	const roster: Seating[] = composition.agents.map((seat) => ({ ...seat }));
-	for (const message of messages) {
-		if (message.seq > composition.seq) reseat(roster, message);
-	}
-	return roster;
-}
-
 /**
  * One seating or unseating applied to the roster. Any other message changes
  * nothing.
@@ -222,65 +150,3 @@ export function reseat(roster: Seating[], message: Message): void {
 /** A seat an agent cannot unseat. The summary writer's is fixed unless its seating said `fixed: false`. */
 export const isFixed = (seat: Seating, composition: Composition | undefined): boolean =>
 	seat.fixed ?? seat.name === composition?.summary;
-
-/**
- * The summaries still owed, one per close. A close owes one when it names a
- * seat, no summary covers it, and its own draft did not stand down. The close
- * carries the name, so the fold reads who is owed off the record and never
- * off the room. A draft at the cap is still owed here, and carries the
- * attempts that reached it: the room decides what it does about a draft it
- * gave up on, and an entry it writes answers that close.
- */
-function foldOwed(
-	closes: readonly Close[],
-	messages: readonly Message[],
-	leases: ReadonlyMap<string, LeaseHold>,
-	context: FoldOptions,
-	cancelledAt: Seq | undefined,
-): Owed[] {
-	return closes.flatMap((close) => {
-		const completion = summaryCompletion(close, messages, leases, cancelledAt);
-		if (completion.status !== 'pending' || completion.writer === undefined) return [];
-		return [
-			withAttempts(
-				{
-					person: close.owner,
-					writer: completion.writer,
-					from: close.from,
-					through: close.through,
-				},
-				leases,
-				context,
-			),
-		];
-	});
-}
-
-/**
- * What a person is owed, as an activation: how many drafts over these
- * closes came to nothing, when the next may start, and the id it claims.
- */
-export function withAttempts(
-	owed: Omit<Owed, keyof PendingActivation>,
-	leases: ReadonlyMap<string, LeaseHold>,
-	context: FoldOptions,
-): Owed {
-	const failed = [...leases.values()].filter((lease) =>
-		draftedOver(lease, owed.through, owed.writer),
-	);
-	return {
-		...owed,
-		...pendingActivation('closed', owed.through, owed.writer, failed, context),
-	};
-}
-
-/**
- * A draft of the writer's over this close that came to nothing. Another
- * seat's lease is no attempt of the writer's. The validator holds
- * `through >= 1`. `decodeActivationId` always names a seat, so a writer
- * with no name drafts nothing.
- */
-function draftedOver(lease: LeaseHold, through: Seq, writer: string): boolean {
-	const parsed = decodeActivationId(lease.id);
-	return parsed !== undefined && draftsClose(parsed, through, writer) && cameToNothing(lease);
-}

@@ -6,10 +6,10 @@
 import { describe, expect, it } from 'vitest';
 import type { LeaseChange } from '../src/journal/events.ts';
 import type { Entry } from '../src/journal/journal.ts';
-import { foldRoom } from '../src/room/fold.ts';
 import { planReconciliation } from '../src/room/reconcile.ts';
 import { decide, type RoomDecision } from '../src/room/transition.ts';
 import { evolve } from './support/evolve.ts';
+import { foldRoom, pendingOf, replayState } from './support/fold.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);
@@ -64,7 +64,7 @@ const reconciliation = (attempts: number) => ({
 
 describe('acknowledged lease context', () => {
 	it('does not infer progress from a heartbeat without readThrough', () => {
-		const beforeHeartbeat = foldRoom(
+		const beforeHeartbeat = replayState(
 			[composition, wake(2), held(id, 3, 2), wake(4, 'Later.')],
 			retry,
 		);
@@ -72,17 +72,18 @@ describe('acknowledged lease context', () => {
 			decide(beforeHeartbeat, { type: 'renew', id, expiry: 60_000, deadline: 600_000 }, now),
 			5,
 		);
-		expect(heartbeat.body).toMatchObject({ readThrough: 2 });
-		const afterRelease = foldRoom(
+		// The entry states what the renewal states. The fold keeps the prior acknowledgment.
+		expect(heartbeat.body).toMatchObject({ readThrough: 0 });
+		const afterRelease = replayState(
 			[composition, wake(2), held(id, 3, 2), wake(4, 'Later.'), heartbeat, released(id, 6, 2)],
 			retry,
 		);
 		expect(afterRelease.leases.get(id)?.readThrough).toBe(2);
-		expect(afterRelease.pending.map((pending) => pending.id)).toEqual(['message:4:solo:1']);
+		expect(pendingOf(afterRelease).map((pending) => pending.id)).toEqual(['message:4:solo:1']);
 	});
 
 	it('keeps explicit acknowledgements monotonic when they repeat or arrive out of order', () => {
-		const state = foldRoom(
+		const state = replayState(
 			[
 				composition,
 				wake(2),
@@ -95,11 +96,11 @@ describe('acknowledged lease context', () => {
 			retry,
 		);
 		expect(state.leases.get(id)).toMatchObject({ phase: 'ended', readThrough: 4 });
-		expect(state.pending).toEqual([]);
+		expect(pendingOf(state)).toEqual([]);
 	});
 
 	it('refuses invalid lease acknowledgements without proposing an event', () => {
-		const state = foldRoom([composition, wake(2), held(id, 3, 2)], retry);
+		const state = replayState([composition, wake(2), held(id, 3, 2)], retry);
 		for (const readThrough of [-1, 1.5, 99]) {
 			expect(
 				decide(state, { type: 'renew', id, expiry: 60_000, deadline: 600_000, readThrough }, now),
@@ -110,7 +111,7 @@ describe('acknowledged lease context', () => {
 		}
 		expect(
 			decide(
-				foldRoom([composition, wake(2)], retry),
+				replayState([composition, wake(2)], retry),
 				{ type: 'renew', id, expiry: 60_000, deadline: 600_000 },
 				now,
 			),
@@ -118,11 +119,11 @@ describe('acknowledged lease context', () => {
 	});
 
 	it('retries unread released work under a new id and abandons it at the cap', () => {
-		const releasedUnread = foldRoom(
+		const releasedUnread = replayState(
 			[composition, wake(2), held(id, 3, 0), released(id, 4, 0)],
 			retry,
 		);
-		expect(releasedUnread.pending).toMatchObject([
+		expect(pendingOf(releasedUnread)).toMatchObject([
 			{ id: 'message:2:solo:2', attempt: 2, unsuccessfulAttempts: 1 },
 		]);
 
@@ -142,7 +143,7 @@ describe('acknowledged lease context', () => {
 			{ kind: 'lease', seq: 5, body: decision.abandoned[0] as LeaseChange },
 			retry,
 		);
-		expect(stopped.pending).toEqual([]);
+		expect(pendingOf(stopped)).toEqual([]);
 		expect(planReconciliation(stopped, reconciliation(1)).sends).toEqual([]);
 	});
 
@@ -162,7 +163,7 @@ describe('acknowledged lease context', () => {
 		(_name, later) => {
 			const entries = [composition, wake(2), held(id, 3, 2), later, released(id, 5, 2)];
 			const incremental = evolve(foldRoom(entries.slice(0, -1), retry), released(id, 5, 2), retry);
-			expect(incremental.pending.map((pending) => pending.id)).toEqual(['message:4:solo:1']);
+			expect(pendingOf(incremental).map((pending) => pending.id)).toEqual(['message:4:solo:1']);
 			expect(incremental.leases.get(id)).toMatchObject({ phase: 'ended', readThrough: 2 });
 			expect(foldRoom(JSON.parse(JSON.stringify(entries)) as Entry[], retry)).toEqual(incremental);
 		},
@@ -170,17 +171,17 @@ describe('acknowledged lease context', () => {
 
 	it('keeps an earlier unread wake when a later activation is released', () => {
 		const later = 'message:4:solo:1';
-		const recovered = foldRoom(
+		const recovered = replayState(
 			[composition, wake(2), wake(4, 'Later.'), held(later, 5, 0), released(later, 6, 0)],
 			retry,
 		);
-		expect(recovered.pending.map((pending) => pending.id)).toContain('message:2:solo:1');
+		expect(pendingOf(recovered).map((pending) => pending.id)).toContain('message:2:solo:1');
 	});
 
 	it('does not resurrect settled work when a fresh unread lease follows it', () => {
 		const settledId = 'message:2:solo:1';
 		const freshId = 'message:6:solo:1';
-		const recovered = foldRoom(
+		const recovered = replayState(
 			[
 				composition,
 				wake(2),
@@ -192,6 +193,6 @@ describe('acknowledged lease context', () => {
 			],
 			retry,
 		);
-		expect(recovered.pending.map((pending) => pending.id)).toEqual(['message:6:solo:2']);
+		expect(pendingOf(recovered).map((pending) => pending.id)).toEqual(['message:6:solo:2']);
 	});
 });

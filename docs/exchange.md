@@ -62,7 +62,7 @@ quiet.
 
 ## 5. A fold over the journal
 
-`openExchange` finds the first spoken message from a known person, or the
+`exchangeAfter` finds the first spoken message from a known person, or the
 first returned say for one, after the last close. Closes, leases, messages,
 and pending work are all reconstructed from the journal, so a resumed room continues an exchange interrupted by a
 process or host failure. Unexpired leases may continue; unclaimed or expired

@@ -1,14 +1,15 @@
 /**
  * The room's derived facts as a projection that one entry updates.
  *
- * `foldRoom` replays the whole journal and stays the reference. This file
- * holds the same facts as values. `advance` takes the projection before an
- * entry and returns the projection after it. It builds a new value for each
- * field the entry changes and shares the rest, so a `RoomState` that a caller
- * holds never changes under it. Each derived collection is an index that the
- * entry touches: the people, the roster, the messages after the last close,
- * the wakes still open and the summaries still owed. The rules are the ones
- * the fold runs. This file changes how often they run.
+ * This file is the one derivation of the room state. `advance` takes the
+ * projection before an entry and returns the projection after it. It builds
+ * a new value for each field the entry changes and shares the rest, so a
+ * `RoomState` that a caller holds never changes under it. Each derived
+ * collection is an index that the entry touches: the people, the roster, the
+ * messages after the last close, the wakes still open and the summaries still
+ * owed. The live room advances it, and `readRoom` replays it.
+ * `test/support/fold.ts` keeps a fold over the whole journal as the oracle
+ * that `projection-equivalence.test.ts` compares it with.
  *
  * The projection is a cache. Nothing writes it to the journal, and a room
  * that resumes rebuilds it by `replay`.
@@ -30,7 +31,7 @@ import {
 	reserveOf,
 } from './fold.ts';
 import { applyLease, type LeaseHold } from './lease.ts';
-import { judgeOwed, type OwedEntry, type OwedFacts, rejudgeOwed } from './owed.ts';
+import { judgeOwed, type Owed, type OwedFacts, rejudgeOwed } from './owed.ts';
 import { advancePeople, type PersonState } from './presence.ts';
 import {
 	afterCancellation,
@@ -38,7 +39,7 @@ import {
 	type ScheduledSay,
 	scheduleStep,
 } from './scheduled.ts';
-import { candidatesOf, dropSeat, pendingOf, rejudgeSeat, type WakeCandidate } from './wakes.ts';
+import { dropSeat, type OpenWake, pendingOf, rejudgeSeat, wakesOf } from './wakes.ts';
 
 /** Leases of one kind of activation, grouped by a key, then by activation id. */
 type LeaseIndex<K> = Map<K, Map<string, LeaseHold>>;
@@ -60,8 +61,8 @@ export interface RoomProjection {
 	readonly seatLeases: LeaseIndex<string>;
 	/** The leases of closing activations, by the position they name. */
 	readonly closedLeases: LeaseIndex<Seq>;
-	readonly wakes: WakeCandidate[];
-	readonly owed: OwedEntry[];
+	readonly wakes: OpenWake[];
+	readonly owed: Owed[];
 	readonly scheduled: ScheduledSay[];
 	readonly lastSeq: Seq;
 }
@@ -103,8 +104,6 @@ export function replay(entries: readonly Entry[], options: FoldOptions): RoomPro
 export function projectState(projection: RoomProjection): RoomState {
 	const { base } = projection;
 	const seated = new Set(projection.roster.map((seat) => seat.name));
-	const pending = pendingOf(projection.wakes, seated, base.cancelledAt);
-	const owed = projection.owed.map((entry) => entry.owed);
 	return {
 		composition: base.composition,
 		roster: projection.roster,
@@ -116,9 +115,7 @@ export function projectState(projection: RoomProjection): RoomState {
 		cancelClosed: base.cancelClosed,
 		leases: base.leases,
 		deliveries: base.deliveries,
-		pending,
-		owed,
-		due: [...pending, ...owed],
+		due: [...pendingOf(projection.wakes, seated, base.cancelledAt), ...projection.owed],
 		scheduled: projection.scheduled,
 		messages: base.messages,
 		lastSeq: projection.lastSeq,
@@ -181,7 +178,7 @@ function onMessage(prev: RoomProjection, message: Message, step: Step): RoomProj
 		exchange: exchangeOf(projection, prev.exchange, message),
 		wakes: [
 			...(message.kind === 'unseated' ? dropSeat(prev.wakes, message.subject) : prev.wakes),
-			...candidatesOf(message, delivery, prev.seatLeases, step.options),
+			...wakesOf(message, delivery, prev.seatLeases, step.options),
 		],
 		owed: owedAfter(projection, message, step),
 		scheduled: changesScheduled(message) ? scheduleStep(prev.scheduled, message) : prev.scheduled,
@@ -226,12 +223,12 @@ function rosterAfter(prev: RoomProjection, message: Message): Seating[] {
 }
 
 /** The owed summaries after a message: a summary or a removal changes the closes it names. */
-function owedAfter(projection: RoomProjection, message: Message, step: Step): OwedEntry[] {
+function owedAfter(projection: RoomProjection, message: Message, step: Step): Owed[] {
 	const { owed } = projection;
 	if (message.kind === 'summary')
 		return rejudgeOwed(owed, () => true, factsOf(projection), step.options);
 	if (message.kind !== 'unseated') return owed;
-	const removed = (close: Close) => close.summary === message.subject;
+	const removed = (entry: Owed) => entry.seat === message.subject;
 	return rejudgeOwed(owed, removed, factsOf(projection), step.options);
 }
 
@@ -265,7 +262,7 @@ function onLease(
 		const next = { ...prev, base, running, closedLeases };
 		const owed = rejudgeOwed(
 			prev.owed,
-			(close) => close.through === parsed.position,
+			(entry) => entry.position === parsed.position,
 			factsOf(next),
 			step.options,
 		);

@@ -9,9 +9,10 @@ import { pi } from '../../pi/src/index.ts';
 import { windowToLimit } from '../src/execution/render.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { ActivationSpec, ViewRange } from '../src/protocol.ts';
-import { foldRoom, type RoomState } from '../src/room/fold.ts';
+import type { RoomState } from '../src/room/fold.ts';
 import { type RoomFacts, viewOf } from '../src/room/view.ts';
 import type { Message, Seq } from '../src/types.ts';
+import { replayState } from './support/fold.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);
@@ -113,9 +114,9 @@ const summarize: ActivationSpec = {
 	purpose: { kind: 'summarize', person: 'priya', people: ['priya'], exchange: 3, through: 5 },
 };
 
-const short = foldRoom([composition, ...[2, 3, 4, 5].map((seq) => message(said(seq)))], options);
+const short = replayState([composition, ...[2, 3, 4, 5].map((seq) => message(said(seq)))], options);
 // A summary at seq 8 stands for the closed range [4, 6].
-const long = foldRoom(
+const long = replayState(
 	[
 		composition,
 		...[2, 3, 4, 5, 6, 7].map((seq) => message(said(seq))),

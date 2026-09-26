@@ -48,16 +48,19 @@ activation. A continuing contribution keeps an exchange open.
 
 ## The cost of the fold
 
-**The claim is a shape.** The reference fold `foldRoom` in
-[`room/fold.ts`](../packages/ambion/src/room/fold.ts) replays the whole
-journal. Its cost grows with the length of the history. The incremental
-projection in [`room/projection.ts`](../packages/ambion/src/room/projection.ts)
-updates the addressed fields that one entry changes. A new question costs
-the same at any history length.
+**The claim is a shape.** The oracle `foldRoom` in
+[`test/support/fold.ts`](../packages/ambion/test/support/fold.ts) replays
+the whole journal. Its cost grows with the length of the history. The
+incremental projection in
+[`room/projection.ts`](../packages/ambion/src/room/projection.ts) updates
+the addressed fields that one entry changes. A new question costs the same
+at any history length.
 
-**The projection is a cache.** `foldRoom` stays the reference. A resumed
-room rebuilds the projection with `replay`. The projection writes no
-durable checkpoint. A durable checkpoint is backlog work.
+**The projection is a cache.** It is the one derivation of the room state
+that the room runs, and `foldRoom` is the oracle that the tests compare it
+with. A resumed room and `readRoom` rebuild the projection with `replay`.
+The projection writes no durable checkpoint. A durable checkpoint is
+backlog work.
 
 **One measurement shows the shape.** The run below used Node 26.9 on an
 Apple silicon laptop on 2026-09-20. Each closed exchange holds a question,

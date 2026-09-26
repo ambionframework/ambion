@@ -8,12 +8,11 @@ import type { Close } from '../src/journal/events.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { validateRoomBody } from '../src/journal/validate.ts';
 import { exchangeSession, summaryCompletion } from '../src/room/exchange.ts';
-import { foldRoom } from '../src/room/fold.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
-import { projectState, replay } from '../src/room/projection.ts';
 import { pendingFor, readView } from '../src/room/read.ts';
 import type { ExchangeView, Message, RoomRead, SummaryMessage } from '../src/types.ts';
 import { evolve } from './support/evolve.ts';
+import { foldRoom, owedOf, pendingOf, replayState } from './support/fold.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const cancelledAt = '2026-01-01T09:01:00.000Z';
@@ -82,7 +81,7 @@ const cancel = (seq: number, closes?: Close): Entry => ({
 describe('exchange outcomes', () => {
 	const room = [composition, arrival(2, 'priya'), arrival(3, 'sam')];
 	const readOf = (entries: readonly Entry[]): RoomRead =>
-		readView('room', foldRoom(entries, retry), 0, entries.length, false);
+		readView('room', replayState(entries, retry), 0, entries.length, false);
 	const closed = (read: RoomRead) =>
 		read.exchanges.filter(
 			(exchange): exchange is Extract<ExchangeView, { status: 'closed' }> =>
@@ -300,11 +299,11 @@ describe('summary completion query', () => {
 			close(4, 3, 3, 'writer'),
 			...failed(5, 'closed:3:worker:1'),
 		];
-		const owed = { writer: 'writer', through: 3, attempt: 1, unsuccessfulAttempts: 0 };
-		expect(foldRoom(entries, retry).owed).toMatchObject([owed]);
-		expect(projectState(replay(entries, retry)).owed).toMatchObject([owed]);
+		const owed = { seat: 'writer', position: 3, attempt: 1, unsuccessfulAttempts: 0 };
+		expect(owedOf(foldRoom(entries, retry))).toMatchObject([owed]);
+		expect(owedOf(replayState(entries, retry))).toMatchObject([owed]);
 		const retried = [...entries, ...failed(7, 'closed:3:writer:1')];
-		expect(foldRoom(retried, retry).owed).toMatchObject([
+		expect(owedOf(foldRoom(retried, retry))).toMatchObject([
 			{ ...owed, attempt: 2, unsuccessfulAttempts: 1, id: 'closed:3:writer:2' },
 		]);
 	});
@@ -319,7 +318,7 @@ describe('cancellation fold', () => {
 	const asked = [composition, arrival(2, 'priya'), question];
 	const worked = [...asked, running(4, 'message:3:worker:1')];
 	const completion = (entries: readonly Entry[], closes: Close) => {
-		const state = foldRoom(entries, retry);
+		const state = replayState(entries, retry);
 		return summaryCompletion(closes, state.messages, state.leases, state.cancelledAt);
 	};
 
@@ -330,21 +329,21 @@ describe('cancellation fold', () => {
 			body: { kind: 'said', at: cancelledAt, from: 'priya', text: 'New?', wakes: ['worker'] },
 		};
 		const entries = [...worked, cancel(5, { ...closeBody(3, 3), at: cancelledAt }), prompt];
-		const replayed = foldRoom(entries, retry);
-		const prior = foldRoom(entries.slice(0, 4), retry);
+		const replayed = replayState(entries, retry);
+		const prior = replayState(entries.slice(0, 4), retry);
 		const retained = structuredClone(prior);
 		let incremental = prior;
 		for (const entry of entries.slice(4)) incremental = evolve(incremental, entry, retry);
 		expect(incremental).toEqual(replayed);
 		expect(prior).toEqual(retained);
 		expect(replayed.exchange?.from).toBe(6);
-		expect(replayed.pending).toMatchObject([{ id: 'message:6:worker:1' }]);
+		expect(pendingOf(replayed)).toMatchObject([{ id: 'message:6:worker:1' }]);
 	});
 
 	it('revokes an expired lease once, keeping its context and the first terminal time', () => {
-		const once = foldRoom([...worked, cancel(5)], retry).leases.get('message:3:worker:1');
+		const once = replayState([...worked, cancel(5)], retry).leases.get('message:3:worker:1');
 		expect(once).toMatchObject({ phase: 'ended', reason: 'revoked', readThrough: 2, until: 5 });
-		const repeated = foldRoom(
+		const repeated = replayState(
 			[...worked, cancel(5, { ...closeBody(3, 3), at: cancelledAt }), cancel(6)],
 			retry,
 		).leases.get('message:3:worker:1');
@@ -370,13 +369,13 @@ describe('cancellation fold', () => {
 			},
 		};
 		const entries = [...asked, close(4, 3, 3, 'writer'), published, close(6, 2, 2), cancel(8)];
-		const state = foldRoom(entries, retry);
+		const state = replayState(entries, retry);
 		expect(completion(entries, closeBody(3, 3, 'writer'))).toEqual({
 			status: 'published',
 			summary: state.messages.find((message) => message.kind === 'summary'),
 		});
 		expect(completion(entries, closeBody(2, 2))).toEqual({ status: 'silent' });
-		expect(state.owed).toEqual([]);
+		expect(owedOf(state)).toEqual([]);
 	});
 
 	it.each([

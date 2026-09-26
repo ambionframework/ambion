@@ -1,5 +1,5 @@
 /**
- * The incremental projection against the fold.
+ * The incremental projection against the oracle fold in `support/fold.ts`.
  *
  * A seeded walk writes journal entries straight at the fold layer: people
  * come and go, messages are directed at people, seats are seated and unseated, a summary lands long after its
@@ -16,10 +16,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Close, Composition, LeaseChange } from '../src/journal/events.ts';
 import type { Entry } from '../src/journal/journal.ts';
-import { foldRoom } from '../src/room/fold.ts';
 import { advance, emptyProjection, projectState, replay } from '../src/room/projection.ts';
 import { readView } from '../src/room/read.ts';
 import { freeze, mulberry32 } from './support/core-failure.ts';
+import { foldRoom } from './support/fold.ts';
 
 const SEEDS = Number(process.env.AMBION_SEEDS ?? 50);
 const STEPS = 160;

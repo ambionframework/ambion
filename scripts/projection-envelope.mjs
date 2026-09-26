@@ -2,13 +2,13 @@
  * Measure the room's fold at 100, 1,000 and 4,000 closed exchanges.
  *
  * It prints the cost of a full replay and the cost of one new question, for
- * the reference fold path and the incremental projection. It is a manual
+ * the oracle fold in the tests and the incremental projection. It is a manual
  * bench: timing is too noisy for the gate. Run it with
  * `node scripts/projection-envelope.mjs [sizes...]`.
  */
-import { foldRoom } from '../packages/ambion/src/room/fold.ts';
 import { advance, projectState, replay } from '../packages/ambion/src/room/projection.ts';
-import { evolve } from '../packages/ambion/src/room/transition.ts';
+import { evolve } from '../packages/ambion/test/support/evolve.ts';
+import { foldRoom } from '../packages/ambion/test/support/fold.ts';
 
 const retry = { backoff: (attempt) => attempt * 30_000 };
 const start = Date.parse('2026-01-01T09:00:00.000Z');

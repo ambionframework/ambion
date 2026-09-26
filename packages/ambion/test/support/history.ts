@@ -19,6 +19,7 @@ import { decodeActivationId } from '../../src/activation-id.ts';
 import type { Clock, Message, Seq } from '../../src/index.ts';
 import type { LeaseChange } from '../../src/journal/events.ts';
 import type { RoomState } from '../../src/room/fold.ts';
+import { owedOf, pendingOf } from './fold.ts';
 
 export type Outcome = 'ok' | 'fail' | 'info';
 
@@ -284,8 +285,8 @@ function drained(state: RoomState): string[] {
 	for (const lease of state.leases.values()) {
 		if (lease.phase === 'running') found.push(`${lease.id} still runs after the drain`);
 	}
-	for (const wake of state.pending) found.push(`${wake.id} still pending after the drain`);
-	for (const owed of state.owed)
-		found.push(`a summary for ${owed.person} still owed after the drain`);
+	for (const wake of pendingOf(state)) found.push(`${wake.id} still pending after the drain`);
+	for (const owed of owedOf(state))
+		found.push(`the summary draft ${owed.id} still owed after the drain`);
 	return found;
 }

@@ -124,10 +124,10 @@ while a summary wakes no seat.
 
 ## 6. Presence
 
-Presence is a fold over the record (`foldPeople`): a person is `present` from
-their last arrival until their next departure, otherwise `absent`. The record
-also retains identity, preferences, change time, and the departure sequence.
-There is no second presence cache to reconcile.
+Presence is a projection of the record (`advancePeople`): a person is
+`present` from their last arrival until their next departure, otherwise
+`absent`. The record also retains identity, preferences, change time, and
+the departure sequence. There is no second presence cache to reconcile.
 
 Visiting an already present person writes nothing and returns the same live
 visit. Leaving writes one `left`; visiting again writes one new `arrived`.

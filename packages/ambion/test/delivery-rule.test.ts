@@ -8,11 +8,11 @@ import { decodeActivationId } from '../src/activation-id.ts';
 import type { LeaseChange } from '../src/journal/events.ts';
 import type { Body, Entry } from '../src/journal/journal.ts';
 import { messageDelivery } from '../src/room/delivery.ts';
-import { foldRoom } from '../src/room/fold.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import type { EndReason, Message } from '../src/types.ts';
 import { freeze } from './support/core-failure.ts';
 import { evolve } from './support/evolve.ts';
+import { foldRoom, pendingOf, replayState } from './support/fold.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 
@@ -260,7 +260,7 @@ function pendingState(
 	reason: EndReason,
 	readThrough: number,
 	removed = false,
-): ReturnType<typeof foldRoom> {
+): ReturnType<typeof replayState> {
 	const history: Entry[] = [
 		composition,
 		message(40, 'priya', { wakes: ['alpha'] }),
@@ -268,7 +268,7 @@ function pendingState(
 		lease(42, 'message:40:alpha:1', { phase: 'ended', reason, readThrough }),
 	];
 	if (removed) history.push(presence(43, 'unseated', 'alpha'));
-	return foldRoom(history, retry);
+	return replayState(history, retry);
 }
 
 describe('delivery replay projection', () => {
@@ -310,11 +310,11 @@ describe('delivery replay projection', () => {
 	});
 
 	it('retains unconsumed work for retry and clears consumed or removed work', () => {
-		const retained = [expect.objectContaining({ seq: 40, unsuccessfulAttempts: 1 })];
+		const retained = [expect.objectContaining({ position: 40, unsuccessfulAttempts: 1 })];
 		for (const reason of ['failed', 'expired', 'released'] as const)
-			expect(pendingState(reason, 0).pending).toMatchObject(retained);
-		expect(pendingState('released', 40).pending).toEqual([]);
-		expect(pendingState('revoked', 0).pending).toEqual([]);
-		expect(pendingState('failed', 0, true).pending).toEqual([]);
+			expect(pendingOf(pendingState(reason, 0))).toMatchObject(retained);
+		expect(pendingOf(pendingState('released', 40))).toEqual([]);
+		expect(pendingOf(pendingState('revoked', 0))).toEqual([]);
+		expect(pendingOf(pendingState('failed', 0, true))).toEqual([]);
 	});
 });

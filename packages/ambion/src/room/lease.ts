@@ -5,7 +5,7 @@
  * cause sits on the record, the seat's name and the attempt number. Nothing
  * mints an id, so a wake is safe to send twice, a retried commit lands once,
  * and a request from an activation whose lease ended is refused because the
- * fold says so. The id carries the cause, so a reader asks the id what the
+ * journal says so. The id carries the cause, so a reader asks the id what the
  * activation's durable cause, seat, and attempt. `activation.ts` combines
  * those facts with the current composition to derive its authority.
  *
@@ -23,7 +23,7 @@
  * seat reads them at the next attempt. The
  * failure counts as one attempt, and the message is pending again for
  * that seat after the backoff, under the next attempt's id, until the
- * cap. The fold reports every wake still pending with its attempts; the
+ * cap. The projection reports every wake still pending with its attempts; the
  * room sends it when it is due.
  */
 
@@ -31,7 +31,6 @@ import type { JournalEntry } from '@ambionframework/journal';
 import { type ActivationSource, decodeActivationId, encodeActivationId } from '../activation-id.ts';
 import type { LeaseChange } from '../journal/events.ts';
 import type { HarnessSession, Message, Seq, Usage } from '../types.ts';
-import type { MessageDelivery } from './delivery.ts';
 import {
 	applyChange,
 	countsAgainst,
@@ -114,55 +113,14 @@ export interface PendingActivation {
 
 /** A wake on the journal that no lease has answered. */
 export interface PendingWake extends PendingActivation {
-	seq: Seq;
 	/** When the message was written, ISO. */
 	at: string;
 }
 
-/** What the fold needs to schedule an activation the room owes. */
+/** What the room needs to schedule an activation it owes. */
 export interface PendingActivationOptions {
 	/** How long the room waits before the next attempt, after `attempt` failed ones. */
 	backoff(attempt: number): number;
-}
-
-/**
- * Every wake a message decided that no lease has answered, for a seat still
- * on the roster. A seat that left the roster answers no wake: what it was
- * sent is not pending.
- */
-export function pendingWakes(
-	messages: readonly Message[],
-	deliveries: ReadonlyMap<Seq, MessageDelivery>,
-	leases: ReadonlyMap<string, LeaseHold>,
-	roster: ReadonlySet<string>,
-	options: PendingActivationOptions,
-): PendingWake[] {
-	const bySeat = leasesBySeat(leases, roster);
-	const pending: PendingWake[] = [];
-	for (const message of messages) {
-		const delivery = deliveries.get(message.seq);
-		if (delivery === undefined) continue;
-		pending.push(...pendingForMessage(message, messages, delivery, bySeat, roster, options));
-	}
-	return pending;
-}
-
-function pendingForMessage(
-	message: Message,
-	messages: readonly Message[],
-	delivery: MessageDelivery,
-	bySeat: ReadonlyMap<string, LeaseHold[]>,
-	roster: ReadonlySet<string>,
-	options: PendingActivationOptions,
-): PendingWake[] {
-	const pending: PendingWake[] = [];
-	for (const seat of reached(delivery, roster)) {
-		if (removedAfter(messages, seat, message.seq)) continue;
-		const taken = (bySeat.get(seat) ?? []).filter((lease) => coversAttempt(lease, message.seq));
-		const wake = statusOf(message, seat, taken, options);
-		if (wake !== undefined) pending.push(wake);
-	}
-	return pending;
 }
 
 /** The seqs of every durable removal of this seat. */
@@ -174,34 +132,6 @@ const removalsOf = (messages: readonly Message[], seat: string): number[] =>
 /** A removal of the seat landed after the position, so work caused at or before it is stale. */
 export const removedAfter = (messages: readonly Message[], seat: string, seq: number): boolean =>
 	removalsOf(messages, seat).some((removal) => removal > seq);
-
-/**
- * Every lease a wake claimed, by seat, for the seats on the roster. A
- * message causes one and an open causes one; a close causes the activation
- * `foldOwed` reads, so this skips it.
- */
-function leasesBySeat(
-	leases: ReadonlyMap<string, LeaseHold>,
-	roster: ReadonlySet<string>,
-): Map<string, LeaseHold[]> {
-	const bySeat = new Map<string, LeaseHold[]>();
-	for (const lease of leases.values()) {
-		const parsed = decodeActivationId(lease.id);
-		if (parsed === undefined || parsed.source === 'closed') continue;
-		if (!roster.has(parsed.seat)) continue;
-		bySeat.set(parsed.seat, [...(bySeat.get(parsed.seat) ?? []), lease]);
-	}
-	return bySeat;
-}
-
-/** Filter recorded recipients by the roster that exists after replay. */
-function reached(delivery: MessageDelivery, roster: ReadonlySet<string>): Set<string> {
-	return new Set(
-		[...delivery.wakes, ...delivery.steers.map((steer) => steer.seat)].filter((seat) =>
-			roster.has(seat),
-		),
-	);
-}
 
 /** A lease as the wake rules read it: its phase, reason, acknowledgment, and the position its id names. */
 export function takenOf(lease: LeaseHold): Taken {
@@ -231,11 +161,7 @@ export function statusOf(
 	const covering = taken.map(takenOf);
 	if (wakeAnswered(covering, message.seq)) return undefined;
 	const failed = taken.filter((lease) => countsAgainst(takenOf(lease), message.seq));
-	return {
-		...pendingActivation('message', message.seq, seat, failed, options),
-		seq: message.seq,
-		at: message.at,
-	};
+	return { ...pendingActivation('message', message.seq, seat, failed, options), at: message.at };
 }
 
 /**
@@ -267,10 +193,6 @@ export function pendingActivation(
 		permanent,
 	};
 }
-
-/** The attempt came to nothing, so the next one is numbered after it. */
-export const cameToNothing = (lease: LeaseHold): boolean =>
-	lease.phase === 'ended' && (lease.reason === 'failed' || lease.reason === 'expired');
 
 /** The seat an id names, or nothing for an id the room did not derive. */
 export const seatOf = (id: string): string | undefined => decodeActivationId(id)?.seat;

@@ -1,6 +1,7 @@
 /** The seat protocol translates room decisions into view, commit, and lease responses. */
 
 import type {
+	ActivationSpec,
 	CommitRequest,
 	CommitResult,
 	LeaseRequest,
@@ -79,10 +80,8 @@ export async function answerView(
 	await room.ready;
 	const state = room.state();
 	const lease = state.leases.get(id);
-	const seat = liveSeatOf(room, id, state);
-	if (lease === undefined || seat === undefined) return stale('the lease ended');
-	const spec = activationSpec(id, state);
-	if (spec === undefined || spec.seat !== seat) return stale('the activation has no current grant');
+	const spec = liveSpec(room, id, state);
+	if (lease === undefined || spec === undefined) return stale('the lease ended');
 	const resume = exchangeSession(id, state.closes, state.exchange, state.leases);
 	const granted = resume === undefined ? spec : { ...spec, resume };
 	const view = viewOf(granted, facts(room, state), range);
@@ -103,13 +102,12 @@ function facts(room: Answering, state: RoomState): RoomFacts {
 	};
 }
 
-/** The seat holding a live lease under this id, or nothing. */
-function liveSeatOf(room: Answering, id: string, state: RoomState): string | undefined {
+/** The grant of a live lease under this id, for a seat on the roster, or nothing. */
+function liveSpec(room: Answering, id: string, state: RoomState): ActivationSpec | undefined {
 	const lease = state.leases.get(id);
 	if (lease === undefined || !isLive(lease, room.now())) return undefined;
-	if (activationSpec(id, state) === undefined) return undefined;
-	const seat = seatOf(id);
-	return seat !== undefined && onRoster(state, seat) ? seat : undefined;
+	const spec = activationSpec(id, state);
+	return spec !== undefined && onRoster(state, spec.seat) ? spec : undefined;
 }
 
 // -- commit -------------------------------------------------------------------
@@ -126,10 +124,12 @@ export async function answerCommit(room: Answering, commit: CommitRequest): Prom
 	const captured = structuredClone(commit);
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
-	const seat = liveSeatOf(room, captured.activation, room.state());
-	if (seat === undefined) return stale('the lease ended');
+	const spec = liveSpec(room, captured.activation, room.state());
+	if (spec === undefined) return stale('the lease ended');
 	const result = await room.write(captured);
-	return 'refusal' in result ? refused(room, seat, captured.activation, result.refusal) : result;
+	return 'refusal' in result
+		? refused(room, spec.seat, captured.activation, result.refusal)
+		: result;
 }
 
 function refused(
@@ -179,11 +179,7 @@ async function release(
 	lease: Extract<LeaseRequest, { operation: 'release' }>,
 	state: RoomState,
 ): Promise<LeaseResponse> {
-	if (
-		activationSpec(lease.activation, state) === undefined ||
-		liveSeatOf(room, lease.activation, state) === undefined
-	)
-		return stale('the lease ended');
+	if (liveSpec(room, lease.activation, state) === undefined) return stale('the lease ended');
 	const ended = await room.end(
 		lease.activation,
 		lease.reason,

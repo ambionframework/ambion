@@ -180,10 +180,7 @@ and the process tools. A step names the steps it needs; a step with no
 
 ### Phase 1. The drift
 
-- [ ] **1.** The fold becomes a test oracle, and `RoomState` exposes
-      `due` alone. (C1)
-- [ ] **2.** The copies of the verified rules go. (C2)
-- [ ] **3.** A cancellation has one shape. Needs 1. (C3)
+- [ ] **3.** A cancellation has one shape. (C3)
 - [ ] **4.** A seat of an unknown executor kind fails at once, on each
       of the three routers. (C5)
 - [ ] **5.** A composition carries no `version`, one capture serves a
@@ -197,7 +194,7 @@ and the process tools. A step names the steps it needs; a step with no
 of each changed package, measured before and after as `CLAUDE.md`
 states. A step that changes a rule runs `pnpm rule:check`. A step that
 changes a journal body updates the golden journals and the export
-snapshot in the same commit, and the changelog names it. Steps 1, 3, 5, and 7
+snapshot in the same commit, and the changelog names it. Steps 3, 5, and 7
 pass `pnpm chaos` and the Cloudflare tests in workerd.
 
 ### Phase 2. The contracts
@@ -237,52 +234,16 @@ pass one live file on each of Pi, Claude, and Codex before they merge.
 **Each item removes one kind of second path.** Each states the problem,
 the change, and the evidence.
 
-**C1. One derivation of the room state.** `room/fold.ts` derives every
-fact from the whole journal, and `room/projection.ts` derives the same
-facts one entry at a time. Nearly every fact has a pair: `foldPeople`
-and `advancePeople`, `openExchange` and `exchangeAfter`, `pendingWakes`
-and `wakes.ts`, `foldScheduled` and `scheduleStep`. Production reads both:
-`readRoom` in `room.ts` folds, and the live room advances the projection.
-
-- **`readRoom` reads `projectState(replay(...))`.** `foldRoom` and
-  `project` move to `test/support`, and `projection-equivalence.test.ts`
-  keeps them as its oracle. The projection imports `applyEvent`, `older`,
-  `BaseFacts`, `reseat`, and `reserveOf` from `fold.ts`, so those stay in
-  `src/`.
-- **`RoomState` exposes `due` alone.** Only tests read `pending` and
-  `owed`. `PendingWake.seq`, `Owed.writer`, and `Owed.through` repeat
-  other fields, and the `OwedEntry` and `WakeCandidate` wrappers go.
-- **The open proof of unique roster names follows the projection.**
-  [Proofs to write](backlog.md#proofs-to-write) names `foldRoster`, and the proof
-  states the rule for `rosterAfter` when `foldRoster` leaves `src/`.
-
-The two read paths can no longer differ. **Evidence:** `pnpm chaos`
-passes with the oracle in `test/support`, `golden.test.ts` compares
-`projectState(replay(...))`, and `src/` holds no `foldRoom`.
-
 **C2. One home for each rule.** A rule that the room decides by lives in
-`rules.verified.ts`, and the caller runs its body. Some callers hold a
-copy of the rule or feed it a constant.
+`rules.verified.ts`, and the caller runs its body. The rules still read
+one lease in four shapes.
 
-- **The unverified copies go.** `cameToNothing` in `room/lease.ts`
-  repeats a rule of `rules.verified.ts`, and `countsAgainst` serves both
-  callers. `acknowledged` repeats the `Math.max` of `applyChange`, which
-  alone keeps `readThrough` from moving back. `seatOf` in `lease.ts` and
-  `seatOfLease` in `transition.ts` are one function.
-- **`summaryVerdict` loses its constant input.** `summaryCompletion` in
-  `room/exchange.ts` returns before the rule when a summary exists, so it
-  passes `covered` as `false` every time, and the branch after the rule
-  never runs. `covered` and the `published` arm go.
-- **One search finds a covering summary.** `summaryCompletion`,
-  `summariesOf`, and `isCoveringSummary` in `transition.ts` each search
-  with `coversExchange`.
-- **`answerView` reads the activation once.** It calls `activationSpec`
-  twice and compares two seats that come from the same id.
 - **The rules read one lease shape.** They read a lease as `Hold`,
   `Taken`, `Draft`, and `LiveLease`, and `takenOf`, `draftsOf`, and
   `liveLeases` convert between them. One `RuleLease` replaces the four.
   This sub-item re-proves the rules that read them, and it follows the
-  cancelled close of C3, which changes what `Hold` holds. Phase 2 holds it.
+  cancelled close of C3, which changes what `Hold` holds. Phase 2 step 2
+  holds it.
 - **The lease `since` takes its name in the same proof edit.**
   [Deferred by decision](backlog.md#deferred-by-decision) holds the name until a
   proof edit renames it, and this sub-item is that edit.
