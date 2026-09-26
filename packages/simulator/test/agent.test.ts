@@ -22,7 +22,7 @@ import {
 	toolResultTexts,
 } from '@ambionframework/pi/testing';
 import { BACKGROUND_CONTEXT, openWorkspace } from '@ambionframework/workspace';
-import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
+import type { AssistantMessage, Context, JsonValue } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { agentActor, agentJudge, scriptedActor, simulate } from '../src/index.ts';
 import { renderRecord } from '../src/render.ts';
@@ -181,7 +181,7 @@ function promptOf(context: Context): string {
 const CRITERIA = ['The desk states the forecast.', 'The desk names Thursday.'];
 
 /** A grade call that spends 7 input tokens. */
-const grade = (findings: readonly { reason: string; pass: unknown }[]): AssistantMessage => {
+const grade = (findings: readonly { reason: string; pass: JsonValue }[]): AssistantMessage => {
 	const message = callTool('grade', { findings });
 	return { ...message, usage: { ...message.usage, input: 7, totalTokens: 7 } };
 };

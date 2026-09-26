@@ -1,7 +1,7 @@
 /**
  * The environment helpers a bash backend builds on, where the conformance
  * suite does not reach them: the members `HomeEnv` derives from the home, an
- * output view with no limits, and a command that throws under `withDeadline`.
+ * output view with no limits, a line reader, and a command that throws under `withDeadline`.
  */
 import { BACKGROUND_CONTEXT, err, FileError, ok, type Result } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
@@ -38,6 +38,30 @@ describe('HomeEnv', () => {
 			value: ['one', 'two', 'three'],
 		});
 		const missing = await env.readTextLines('b.txt', undefined, ctx);
+		expect(!missing.ok && missing.error.code).toBe('not_found');
+	});
+
+	it.each([
+		[
+			'one\ntwo',
+			[
+				{ text: 'one', terminated: true },
+				{ text: 'two', terminated: false },
+			],
+		],
+		['one\n', [{ text: 'one', terminated: true }]],
+		['', []],
+	])('opens %j for line reading, and marks a torn final line', async (text, expected) => {
+		const opened = await new FixedEnv({ '/home/ada/c.txt': text }).openTextLineReader('c.txt', ctx);
+		if (!opened.ok) throw opened.error;
+		const lines = [];
+		for (let line = await opened.value.readLine(ctx); line.ok && line.value;) {
+			lines.push(line.value);
+			line = await opened.value.readLine(ctx);
+		}
+		await opened.value.close(ctx);
+		expect(lines).toEqual(expected);
+		const missing = await env.openTextLineReader('b.txt', ctx);
 		expect(!missing.ok && missing.error.code).toBe('not_found');
 	});
 });

@@ -1,5 +1,6 @@
 /** The `/testing` subpath: the scripted stream, and the stub model it routes on. */
 import type { StreamFn } from '@earendil-works/pi-agent-core';
+import { normalizeContext } from '@earendil-works/pi-ai';
 import { expect, expectTypeOf, it } from 'vitest';
 import { streamModels } from '../src/models.ts';
 import { stubModel } from '../src/services.ts';
@@ -23,8 +24,8 @@ it('routes on the seat the stub model names, whatever the model id', async () =>
 		}),
 	);
 	const model = await stubModel('anthropic/claude-x', 'a');
-	await (await stream(model, { messages: [] })).result();
-	await (await stream(model, { messages: [] })).result();
+	await (await stream(model, normalizeContext({ messages: [] }))).result();
+	await (await stream(model, normalizeContext({ messages: [] }))).result();
 	expect(seen).toEqual(['a:1', 'a:2']);
 });
 
@@ -33,7 +34,9 @@ it('answers an already aborted signal with an aborted message', async () => {
 	controller.abort();
 	const model = await stubModel('anthropic/x', 'product');
 	const result = await (
-		await scripted(() => speak('never'))(model, { messages: [] }, { signal: controller.signal })
+		await scripted(() => speak('never'))(model, normalizeContext({ messages: [] }), {
+			signal: controller.signal,
+		})
 	).result();
 	expect(result.stopReason).toBe('aborted');
 });
@@ -43,7 +46,7 @@ it('turns a script that throws into an error message', async () => {
 	const result = await (
 		await scripted(() => {
 			throw new Error('script failed');
-		})(model, { messages: [] })
+		})(model, normalizeContext({ messages: [] }))
 	).result();
 	expect(result.stopReason).toBe('error');
 	expect(result.errorMessage).toContain('script failed');
@@ -51,7 +54,7 @@ it('turns a script that throws into an error message', async () => {
 
 it('reads the closing activation from the system prompt', () => {
 	expect(isClosing({ messages: [], systemPrompt: 'The exchange is over.' })).toBe(true);
-	expect(isClosing({ messages: [] })).toBe(false);
+	expect(isClosing(normalizeContext({ messages: [] }))).toBe(false);
 });
 
 it('serves the stream through one provider that holds the model under its provider and id', async () => {
@@ -66,7 +69,7 @@ it('serves the stream through one provider that holds the model under its provid
 	);
 	expect(models.getModel('scripted', 'scripted/product')).toBe(model);
 	expect(models.getModel('scripted', 'another')).toBeUndefined();
-	const answer = await models.streamSimple(model, { messages: [] }).result();
+	const answer = await models.streamSimple(model, normalizeContext({ messages: [] })).result();
 	expect(answer.content).toEqual([{ type: 'text', text: 'Here.' }]);
 	expect(seen).toEqual(['product']);
 });
@@ -92,7 +95,9 @@ it.each([
 ] as const)('ends the provider stream when the stream function %s', async (_name, stream, end) => {
 	const model = await stubModel('scripted/product', 'product');
 	const models = streamModels(model, async (...args) => stream(...args));
-	expect(await models.streamSimple(model, { messages: [] }).result()).toMatchObject(end);
+	expect(
+		await models.streamSimple(model, normalizeContext({ messages: [] })).result(),
+	).toMatchObject(end);
 });
 
 it('ends the wait for a steer that never comes', async () => {

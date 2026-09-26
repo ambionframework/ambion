@@ -19,6 +19,7 @@ import { randomBytes } from 'node:crypto';
 import { posix } from 'node:path';
 import type {
 	Context,
+	ExecutionEnv,
 	FileError,
 	Result,
 	ShellExecOptions,
@@ -83,6 +84,37 @@ export abstract class HomeEnv {
 		const lines = text.value.split('\n');
 		return ok(options?.maxLines === undefined ? lines : lines.slice(0, options.maxLines));
 	}
+
+	async openTextLineReader(
+		path: string,
+		context: Context,
+	): Promise<Result<TextLineReader, FileError>> {
+		const text = await this.readTextFile(path, context);
+		if (!text.ok) return text;
+		return ok(textLineReader(text.value));
+	}
+}
+
+/** Pi exports no name for the reader that `openTextLineReader` opens. */
+type TextLineReader = Extract<
+	Awaited<ReturnType<ExecutionEnv['openTextLineReader']>>,
+	{ ok: true }
+>['value'];
+type TextLine = NonNullable<
+	Extract<Awaited<ReturnType<TextLineReader['readLine']>>, { ok: true }>['value']
+>;
+
+/** A reader over text already in memory. A final line with no `\n` is not terminated. */
+function textLineReader(text: string): TextLineReader {
+	const lines: TextLine[] = text
+		.split('\n')
+		.map((line, index, all) => ({ text: line, terminated: index < all.length - 1 }));
+	if (lines.at(-1)?.text === '') lines.pop();
+	let next = 0;
+	return {
+		readLine: async () => ok(lines[next++]),
+		close: async () => {},
+	};
 }
 
 /** A path for a new temporary directory. Neither filesystem starts with `/tmp`. */

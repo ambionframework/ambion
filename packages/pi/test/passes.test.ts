@@ -17,6 +17,7 @@ import { type Context, fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { createPiExecutor, stubModel } from '../src/index.ts';
+import { scriptContext } from '../src/script-context.ts';
 import { callTool, contextText, quiet, type Script, scripted } from '../src/testing.ts';
 import { roomThatCommits, unusedRoom } from './support/activation.ts';
 
@@ -55,7 +56,7 @@ function activation(
 	const base = scripted(script);
 	const stream: StreamFn = (model, context, options) => {
 		requests.push({
-			context: { ...context, messages: [...context.messages] },
+			context: scriptContext(context),
 			session: options?.sessionId,
 		});
 		return base(model, context, options);

@@ -7,6 +7,7 @@ import {
 	type AssistantMessage,
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,
+	getCurrentSystemPrompt,
 } from '@earendil-works/pi-ai';
 import { onTestFinished } from 'vitest';
 import { type OpenOptions, openWorkbench, type Workbench } from '../src/workbench.ts';
@@ -46,8 +47,9 @@ export function scriptedStream(respond: Respond): PiExecutionOptions['stream'] {
 	const calls = new Map<string, number>();
 	return (_model, context, options) => {
 		const output = createAssistantMessageEventStream();
-		const closing = context.systemPrompt?.includes('The exchange is over.') ?? false;
-		const agent = context.systemPrompt?.match(/You are '([^']+)'/)?.[1] ?? 'assistant';
+		const system = getCurrentSystemPrompt(context.messages);
+		const closing = system.includes('The exchange is over.');
+		const agent = system.match(/You are '([^']+)'/)?.[1] ?? 'assistant';
 		const call = (calls.get(agent) ?? 0) + 1;
 		calls.set(agent, call);
 		const response = respond(agent, call, closing);
