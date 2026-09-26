@@ -10,7 +10,7 @@ stale. Two files hold every rule:
 | File                                                                                          | Concern                                                                                            | Obligations                   |
 | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------- |
 | [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)         | The fence, the key, the seq counter, the cursor                                                    | 12, and 23 in its proofs file |
-| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | 74, and 39 in its proofs file |
+| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | 72, and 39 in its proofs file |
 
 **Everything else is ordinary TypeScript under the scripted and chaos
 suites.** Routing, presence, the roster, addressing, membership changes,
