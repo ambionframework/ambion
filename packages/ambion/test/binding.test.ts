@@ -94,17 +94,6 @@ describe('the room runs the verified rules', () => {
 		).toMatchObject({ event: { kind: 'lease', body: { phase: 'running', expiresAt: 12_345 } } });
 	});
 
-	it('writes the read position acknowledged answers', () => {
-		bind.once(rules.acknowledged, 3);
-		expect(
-			decide(
-				claimed(),
-				{ type: 'renew', id, expiry: 60_000, deadline: 600_000, readThrough: 0 },
-				now,
-			),
-		).toMatchObject({ event: { kind: 'lease', body: { readThrough: 3 } } });
-	});
-
 	it('refuses or admits speech as speechFreshness answers', () => {
 		const commit = (readThrough: number): CommitRequest => ({
 			activation: id,

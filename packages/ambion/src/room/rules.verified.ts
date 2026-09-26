@@ -92,19 +92,6 @@ export function leaseExpiry(
 	return Math.min(now + expiry, claimedAt + deadline);
 }
 
-//@ contract The acknowledged position never moves back: a claim, and a renewal that states nothing, keep the prior acknowledgment.
-export function acknowledged(prior: number | undefined, incoming: number): number {
-	//@ requires incoming >= 0
-	//@ requires prior != undefined ==> prior >= 0
-	//@ ensures prior != undefined ==> \result >= prior
-	//@ ensures \result >= incoming
-	//@ ensures prior == undefined ==> \result == incoming
-	//@ ensures prior != undefined ==> (\result == prior || \result == incoming)
-	//@ ensures prior != undefined && incoming == 0 ==> \result == prior
-	//@ ensures \result >= 0
-	return prior === undefined ? incoming : Math.max(prior, incoming);
-}
-
 /** What a spoken commit's read position says: off the record, short of it, or at its end. */
 export type Freshness = 'invalid' | 'missed' | 'fresh';
 
@@ -600,7 +587,6 @@ export type Draft =
 
 /** The verdict on one close's summary work. A pending verdict is owed while the room still has to send a draft. */
 export type Verdict =
-	| { readonly status: 'published' }
 	| { readonly status: 'pending'; readonly owed: boolean }
 	| { readonly status: 'silent' }
 	| { readonly status: 'failed' };
@@ -640,28 +626,24 @@ function cancelledDraft(drafts: readonly Draft[], cancelledAfterClose: boolean):
 	);
 }
 
-//@ contract The verdict on one close's summary work: a covering summary beats everything; no named writer is silent; a writer removed after the close failed; a close owes a draft only while nothing stood down and no cancellation cut it.
+//@ contract The verdict on the summary work of one close that no summary covers: no named writer is silent; a writer removed after the close failed; a close owes a draft only while nothing stood down and no cancellation cut it.
 export function summaryVerdict(
-	covered: boolean,
 	writerNamed: boolean,
 	removedAfterClose: boolean,
 	drafts: readonly Draft[],
 	cancelledAfterClose: boolean,
 ): Verdict {
-	//@ ensures covered ==> \result.status == 'published'
-	//@ ensures \result.status == 'published' ==> covered
-	//@ ensures !covered && !writerNamed ==> \result.status == 'silent'
-	//@ ensures !covered && writerNamed && removedAfterClose ==> \result.status == 'failed'
-	//@ ensures !covered && writerNamed && !removedAfterClose && !stoodDown(drafts) && !cancelledAfterClose ==> \result.status == 'pending' && \result.owed
-	//@ ensures !covered && writerNamed && !removedAfterClose && !stoodDown(drafts) && cancelledAfterClose ==> \result.status == 'failed'
-	//@ ensures !covered && writerNamed && !removedAfterClose && cancelledDraft(drafts, cancelledAfterClose) ==> \result.status == 'failed'
-	//@ ensures !covered && writerNamed && !removedAfterClose && stoodDown(drafts) && !cancelledDraft(drafts, cancelledAfterClose) && draftRunning(drafts) ==> \result.status == 'pending' && !\result.owed
-	//@ ensures !covered && writerNamed && !removedAfterClose && stoodDown(drafts) && !cancelledDraft(drafts, cancelledAfterClose) && !draftRunning(drafts) && draftReleased(drafts) ==> \result.status == 'silent'
-	//@ ensures !covered && writerNamed && !removedAfterClose && stoodDown(drafts) && !cancelledDraft(drafts, cancelledAfterClose) && !draftRunning(drafts) && !draftReleased(drafts) ==> \result.status == 'failed'
-	//@ ensures (\result.status == 'pending' && \result.owed) <==> (!covered && writerNamed && !removedAfterClose && !stoodDown(drafts) && !cancelledAfterClose)
+	//@ ensures !writerNamed ==> \result.status == 'silent'
+	//@ ensures writerNamed && removedAfterClose ==> \result.status == 'failed'
+	//@ ensures writerNamed && !removedAfterClose && !stoodDown(drafts) && !cancelledAfterClose ==> \result.status == 'pending' && \result.owed
+	//@ ensures writerNamed && !removedAfterClose && !stoodDown(drafts) && cancelledAfterClose ==> \result.status == 'failed'
+	//@ ensures writerNamed && !removedAfterClose && cancelledDraft(drafts, cancelledAfterClose) ==> \result.status == 'failed'
+	//@ ensures writerNamed && !removedAfterClose && stoodDown(drafts) && !cancelledDraft(drafts, cancelledAfterClose) && draftRunning(drafts) ==> \result.status == 'pending' && !\result.owed
+	//@ ensures writerNamed && !removedAfterClose && stoodDown(drafts) && !cancelledDraft(drafts, cancelledAfterClose) && !draftRunning(drafts) && draftReleased(drafts) ==> \result.status == 'silent'
+	//@ ensures writerNamed && !removedAfterClose && stoodDown(drafts) && !cancelledDraft(drafts, cancelledAfterClose) && !draftRunning(drafts) && !draftReleased(drafts) ==> \result.status == 'failed'
+	//@ ensures (\result.status == 'pending' && \result.owed) <==> (writerNamed && !removedAfterClose && !stoodDown(drafts) && !cancelledAfterClose)
 	//@ ensures cancelledAfterClose && \result.status == 'pending' ==> !\result.owed
 	//@ ensures \result.status == 'pending' && !\result.owed ==> drafts.length > 0
-	if (covered) return { status: 'published' };
 	if (!writerNamed) return { status: 'silent' };
 	if (removedAfterClose) return { status: 'failed' };
 	const down = stoodDown(drafts);

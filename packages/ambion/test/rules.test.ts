@@ -3,13 +3,14 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { ActivationId, ActivationSource } from '../src/activation-id.ts';
 import type { Close, LeaseChange } from '../src/journal/events.ts';
 import type { ActivationPurpose } from '../src/protocol.ts';
-import { cameToNothing, foldLeases, type LeaseHold } from '../src/room/lease.ts';
+import { foldLeases, type LeaseHold, takenOf } from '../src/room/lease.ts';
 import {
 	type ActivationFields,
 	applyChange,
 	type Change,
 	type CloseFact,
 	cancelHold,
+	countsAgainst,
 	type FailureCause,
 	type GrantPurpose,
 	type Hold,
@@ -178,7 +179,8 @@ describe('lease rules', () => {
 			{ id: 'message:2:solo:2', unsuccessfulAttempts: 1 },
 		]);
 		const failed = foldLeases([ended(3, 'failed', 0)]).get(id);
-		expect(failed !== undefined && cameToNothing(failed)).toBe(true);
+		// A failed lease counts against a message its id does not name.
+		expect(failed !== undefined && countsAgainst(takenOf(failed), 5)).toBe(true);
 	});
 
 	it.each([

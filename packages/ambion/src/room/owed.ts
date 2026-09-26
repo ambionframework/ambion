@@ -13,13 +13,13 @@ import type { Close } from '../journal/events.ts';
 import type { Message, Seq } from '../types.ts';
 import { summaryCompletion } from './exchange.ts';
 import {
-	cameToNothing,
 	type LeaseHold,
 	type PendingActivation,
 	type PendingActivationOptions,
 	pendingActivation,
+	takenOf,
 } from './lease.ts';
-import { draftsClose } from './rules.verified.ts';
+import { countsAgainst, draftsClose } from './rules.verified.ts';
 
 /**
  * A summary one person is owed, and how the room has tried to write it. The
@@ -96,12 +96,18 @@ export function withAttempts(
 }
 
 /**
- * A draft of the writer's over this close that came to nothing. Another
- * seat's lease is no attempt of the writer's. The validator holds
+ * A draft of the writer's over this close that counts against the close.
+ * Another seat's lease is no attempt of the writer's. The validator holds
  * `through >= 1`. `decodeActivationId` always names a seat, so a writer
- * with no name drafts nothing.
+ * with no name drafts nothing. The room reads the attempts only while the
+ * close owes a draft. Then no draft stood down, so an ended draft failed or
+ * expired.
  */
 function draftedOver(lease: LeaseHold, through: Seq, writer: string): boolean {
 	const parsed = decodeActivationId(lease.id);
-	return parsed !== undefined && draftsClose(parsed, through, writer) && cameToNothing(lease);
+	return (
+		parsed !== undefined &&
+		draftsClose(parsed, through, writer) &&
+		countsAgainst(takenOf(lease), through)
+	);
 }

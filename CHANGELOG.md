@@ -23,9 +23,22 @@ every value stays text. See
 - **`lastOf` leaves the room rules.** The projection keeps the last
   close's `through` and the last seq as it applies each entry, so no room
   code runs `lastOf`. The proofs file defines it for `CloseExtendsTheRecord`.
+- **Each room rule has one home.** The copies of `cameToNothing` in
+  `room/lease.ts`, `seatOfLease` in `room/transition.ts`, and the rule
+  `acknowledged` go. `countsAgainst` counts the failed drafts of a
+  summary, and `applyChange` alone keeps `readThrough` from moving back.
+- **`summaryVerdict` has no `covered` input and no `published` verdict.**
+  `summaryCompletion` returns a covering summary before it runs the rule.
+- **One search finds a covering summary.** `coveringSummary` in
+  `room/exchange.ts` serves the summary outcome, the summaries of a
+  closed exchange, and the refusal of a second closing commit.
+- **`answerView` reads the grant of an activation once.**
 
 ### Breaking changes
 
+- **A lease entry stores the read position that its command states.** A
+  claim stores 0, and a renewal with no `readThrough` stores 0. The fold
+  keeps the highest position of the lease.
 - **`WorkspaceFiles` has `readFile(path, maxBytes, context)`.** A custom
   `WorkspaceFiles` implements it.
 - **`SqlRunOptions` has `import`, and an `ok` `SqlOutcome` has `import`.**

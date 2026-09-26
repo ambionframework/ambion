@@ -72,7 +72,8 @@ describe('acknowledged lease context', () => {
 			decide(beforeHeartbeat, { type: 'renew', id, expiry: 60_000, deadline: 600_000 }, now),
 			5,
 		);
-		expect(heartbeat.body).toMatchObject({ readThrough: 2 });
+		// The entry states what the renewal states. The fold keeps the prior acknowledgment.
+		expect(heartbeat.body).toMatchObject({ readThrough: 0 });
 		const afterRelease = replayState(
 			[composition, wake(2), held(id, 3, 2), wake(4, 'Later.'), heartbeat, released(id, 6, 2)],
 			retry,

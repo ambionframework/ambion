@@ -60,7 +60,7 @@ datatype Grant = Grant(seat: string, attempt: int, purpose: GrantPurpose)
 
 datatype Draft = running | ended(reason: LeaseEndReason, cancelled: bool)
 
-datatype Verdict = published | pending(owed: bool) | silent | failed
+datatype Verdict = pending(owed: bool) | silent | failed
 
 datatype Range = Range(from: int, through: int)
 
@@ -155,30 +155,6 @@ lemma leaseExpiry_ensures(now: int, claimedAt: int, expiry: int, deadline: int)
   ensures ((leaseExpiry(now, claimedAt, expiry, deadline) > now) <==> ((claimedAt + deadline) > now))
   ensures ((claimedAt == now) ==> (leaseExpiry(now, claimedAt, expiry, deadline) > now))
   ensures (!(expired(leaseExpiry(now, claimedAt, expiry, deadline), now)) <==> !(expired((claimedAt + deadline), now)))
-{
-}
-
-function acknowledged(prior: Option<int>, incoming: int): int
-  requires (incoming >= 0)
-  requires (match prior { case Some(i_prior_val) => (i_prior_val >= 0) case None => true })
-{
-  match prior {
-    case Some(i_prior_val) =>
-      MathMax(i_prior_val, incoming)
-    case None =>
-      incoming
-  }
-}
-
-lemma acknowledged_ensures(prior: Option<int>, incoming: int)
-  requires (incoming >= 0)
-  requires (match prior { case Some(i_prior_val) => (i_prior_val >= 0) case None => true })
-  ensures (match prior { case Some(i_prior_val) => (acknowledged(prior, incoming) >= i_prior_val) case None => true })
-  ensures (acknowledged(prior, incoming) >= incoming)
-  ensures ((match prior { case Some(i_) => false case None => true }) ==> (acknowledged(prior, incoming) == incoming))
-  ensures (match prior { case Some(i_prior_val) => ((acknowledged(prior, incoming) == i_prior_val) || (acknowledged(prior, incoming) == incoming)) case None => true })
-  ensures (match prior { case Some(i_prior_val) => ((incoming == 0) ==> (acknowledged(prior, incoming) == i_prior_val)) case None => true })
-  ensures (acknowledged(prior, incoming) >= 0)
 {
 }
 
@@ -705,50 +681,45 @@ lemma cancelledDraft_ensures(drafts: seq<Draft>, cancelledAfterClose: bool)
 {
 }
 
-function summaryVerdict(covered: bool, writerNamed: bool, removedAfterClose: bool, drafts: seq<Draft>, cancelledAfterClose: bool): Verdict
+function summaryVerdict(writerNamed: bool, removedAfterClose: bool, drafts: seq<Draft>, cancelledAfterClose: bool): Verdict
 {
-  if covered then
-    Verdict.published
+  if !(writerNamed) then
+    Verdict.silent
   else
-    if !(writerNamed) then
-      Verdict.silent
+    if removedAfterClose then
+      Verdict.failed
     else
-      if removedAfterClose then
+      var down := stoodDown(drafts);
+      if cancelledDraft(drafts, cancelledAfterClose) then
         Verdict.failed
       else
-        var down := stoodDown(drafts);
-        if cancelledDraft(drafts, cancelledAfterClose) then
+        if (!(down) && cancelledAfterClose) then
           Verdict.failed
         else
-          if (!(down) && cancelledAfterClose) then
-            Verdict.failed
+          if !(down) then
+            pending(true)
           else
-            if !(down) then
-              pending(true)
+            if draftRunning(drafts) then
+              pending(false)
             else
-              if draftRunning(drafts) then
-                pending(false)
+              if draftReleased(drafts) then
+                Verdict.silent
               else
-                if draftReleased(drafts) then
-                  Verdict.silent
-                else
-                  Verdict.failed
+                Verdict.failed
 }
 
-lemma summaryVerdict_ensures(covered: bool, writerNamed: bool, removedAfterClose: bool, drafts: seq<Draft>, cancelledAfterClose: bool)
-  ensures (covered ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).published?)
-  ensures (summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).published? ==> covered)
-  ensures (!(covered) ==> !(writerNamed) ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).silent?)
-  ensures (!(covered) ==> writerNamed ==> removedAfterClose ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
-  ensures (!(covered) ==> writerNamed ==> !(removedAfterClose) ==> !(stoodDown(drafts)) ==> !(cancelledAfterClose) ==> (summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? && summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed))
-  ensures (!(covered) ==> writerNamed ==> !(removedAfterClose) ==> !(stoodDown(drafts)) ==> cancelledAfterClose ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
-  ensures (!(covered) ==> writerNamed ==> !(removedAfterClose) ==> cancelledDraft(drafts, cancelledAfterClose) ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
-  ensures (!(covered) ==> writerNamed ==> !(removedAfterClose) ==> stoodDown(drafts) ==> !(cancelledDraft(drafts, cancelledAfterClose)) ==> draftRunning(drafts) ==> (summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? && !(summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed)))
-  ensures (!(covered) ==> writerNamed ==> !(removedAfterClose) ==> stoodDown(drafts) ==> !(cancelledDraft(drafts, cancelledAfterClose)) ==> !(draftRunning(drafts)) ==> draftReleased(drafts) ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).silent?)
-  ensures (!(covered) ==> writerNamed ==> !(removedAfterClose) ==> stoodDown(drafts) ==> !(cancelledDraft(drafts, cancelledAfterClose)) ==> !(draftRunning(drafts)) ==> !(draftReleased(drafts)) ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
-  ensures ((summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? && summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed) <==> ((((!(covered) && writerNamed) && !(removedAfterClose)) && !(stoodDown(drafts))) && !(cancelledAfterClose)))
-  ensures (cancelledAfterClose ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? ==> !(summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed))
-  ensures (summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? ==> !(summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed) ==> (|drafts| > 0))
+lemma summaryVerdict_ensures(writerNamed: bool, removedAfterClose: bool, drafts: seq<Draft>, cancelledAfterClose: bool)
+  ensures (!(writerNamed) ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).silent?)
+  ensures (writerNamed ==> removedAfterClose ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
+  ensures (writerNamed ==> !(removedAfterClose) ==> !(stoodDown(drafts)) ==> !(cancelledAfterClose) ==> (summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? && summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed))
+  ensures (writerNamed ==> !(removedAfterClose) ==> !(stoodDown(drafts)) ==> cancelledAfterClose ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
+  ensures (writerNamed ==> !(removedAfterClose) ==> cancelledDraft(drafts, cancelledAfterClose) ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
+  ensures (writerNamed ==> !(removedAfterClose) ==> stoodDown(drafts) ==> !(cancelledDraft(drafts, cancelledAfterClose)) ==> draftRunning(drafts) ==> (summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? && !(summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed)))
+  ensures (writerNamed ==> !(removedAfterClose) ==> stoodDown(drafts) ==> !(cancelledDraft(drafts, cancelledAfterClose)) ==> !(draftRunning(drafts)) ==> draftReleased(drafts) ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).silent?)
+  ensures (writerNamed ==> !(removedAfterClose) ==> stoodDown(drafts) ==> !(cancelledDraft(drafts, cancelledAfterClose)) ==> !(draftRunning(drafts)) ==> !(draftReleased(drafts)) ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
+  ensures ((summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? && summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed) <==> (((writerNamed && !(removedAfterClose)) && !(stoodDown(drafts))) && !(cancelledAfterClose)))
+  ensures (cancelledAfterClose ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? ==> !(summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed))
+  ensures (summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? ==> !(summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed) ==> (|drafts| > 0))
 {
 }
 

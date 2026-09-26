@@ -194,9 +194,5 @@ export function pendingActivation(
 	};
 }
 
-/** The attempt came to nothing, so the next one is numbered after it. */
-export const cameToNothing = (lease: LeaseHold): boolean =>
-	lease.phase === 'ended' && (lease.reason === 'failed' || lease.reason === 'expired');
-
 /** The seat an id names, or nothing for an id the room did not derive. */
 export const seatOf = (id: string): string | undefined => decodeActivationId(id)?.seat;

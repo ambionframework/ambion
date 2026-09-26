@@ -1,6 +1,5 @@
 /** Pure commands and committed events for a room. */
 
-import { decodeActivationId } from '../activation-id.ts';
 import type { AmbionErrorCode } from '../errors.ts';
 import { type Close, type Composition, JOURNAL_FORMAT, type Seating } from '../journal/events.ts';
 import type { Bodies, Body, Kind } from '../journal/journal.ts';
@@ -17,8 +16,9 @@ import type {
 	Usage,
 } from '../types.ts';
 import { activationSpec } from './activation.ts';
+import { coveringSummary } from './exchange.ts';
 import { isFixed, type RoomState } from './fold.ts';
-import { isExpired, isLive } from './lease.ts';
+import { isExpired, isLive, seatOf } from './lease.ts';
 import {
 	liveWork,
 	planReconciliation,
@@ -27,10 +27,8 @@ import {
 } from './reconcile.ts';
 import { routes } from './routing.ts';
 import {
-	acknowledged,
 	admitsClose,
 	admitsLease,
-	coversExchange,
 	speechFreshness as freshnessRule,
 	leaseExpiry,
 	mayEnd,
@@ -393,7 +391,8 @@ function closingCommit(
 	const recipient = intent.to ?? purpose.person;
 	if (!purpose.people.includes(recipient))
 		return refused('A closing response must address a person who spoke in the exchange.');
-	if (state.messages.some((entry) => isCoveringSummary(entry, purpose, recipient)))
+	const range = { from: purpose.exchange, through: purpose.through };
+	if (coveringSummary(state.messages, recipient, range) !== undefined)
 		return refused(`This exchange already has a summary for ${recipient}.`);
 	return message(
 		state,
@@ -431,24 +430,6 @@ function ordinaryCommit(
 	const { refs, ...rest } = intent;
 	const body = { ...rest, ...refsField(refs), ...ownerOf(intent, state.exchange), ...stamp };
 	return message(state, body, now, true, bytes);
-}
-
-function isCoveringSummary(
-	message: Message,
-	purpose: Extract<ActivationSpec['purpose'], { kind: 'summarize' }>,
-	recipient: string,
-): boolean {
-	return (
-		message.kind === 'summary' &&
-		coversExchange(
-			message.to,
-			message.covers.from,
-			message.covers.through,
-			recipient,
-			purpose.exchange,
-			purpose.through,
-		)
-	);
 }
 
 function liveSpec(
@@ -626,21 +607,19 @@ function runningLease(
 				phase: 'running',
 				expiresAt: leaseExpiry(now, claimedAt, command.expiry, command.deadline),
 				at: iso(now),
-				readThrough: acknowledged(known?.readThrough, readThrough),
+				readThrough,
 			},
 		},
 	};
 }
 
-const seatOfLease = (id: string): string | undefined => decodeActivationId(id)?.seat;
-
 /** Another activation of the same seat holds a live lease. */
 function seatHeld(state: RoomState, id: string, now: number): boolean {
-	const seat = seatOfLease(id);
+	const seat = seatOf(id);
 	return (
 		seat !== undefined &&
 		[...state.leases.values()].some(
-			(lease) => lease.id !== id && seatOfLease(lease.id) === seat && isLive(lease, now),
+			(lease) => lease.id !== id && seatOf(lease.id) === seat && isLive(lease, now),
 		)
 	);
 }
@@ -664,7 +643,7 @@ function end(
 				phase: 'ended',
 				reason,
 				at: iso(now),
-				readThrough: acknowledged(known?.readThrough, command.readThrough),
+				readThrough: command.readThrough,
 				...(cause === undefined ? {} : { cause }),
 				...(usage === undefined ? {} : { usage }),
 				...(session === undefined ? {} : { session }),

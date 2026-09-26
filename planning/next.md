@@ -180,7 +180,6 @@ and the process tools. A step names the steps it needs; a step with no
 
 ### Phase 1. The drift
 
-- [ ] **2.** The copies of the verified rules go. (C2)
 - [ ] **3.** A cancellation has one shape. (C3)
 - [ ] **4.** A seat of an unknown executor kind fails at once, on each
       of the three routers. (C5)
@@ -236,28 +235,15 @@ pass one live file on each of Pi, Claude, and Codex before they merge.
 the change, and the evidence.
 
 **C2. One home for each rule.** A rule that the room decides by lives in
-`rules.verified.ts`, and the caller runs its body. Some callers hold a
-copy of the rule or feed it a constant.
+`rules.verified.ts`, and the caller runs its body. The rules still read
+one lease in four shapes.
 
-- **The unverified copies go.** `cameToNothing` in `room/lease.ts`
-  repeats a rule of `rules.verified.ts`, and `countsAgainst` serves both
-  callers. `acknowledged` repeats the `Math.max` of `applyChange`, which
-  alone keeps `readThrough` from moving back. `seatOf` in `lease.ts` and
-  `seatOfLease` in `transition.ts` are one function.
-- **`summaryVerdict` loses its constant input.** `summaryCompletion` in
-  `room/exchange.ts` returns before the rule when a summary exists, so it
-  passes `covered` as `false` every time, and the branch after the rule
-  never runs. `covered` and the `published` arm go.
-- **One search finds a covering summary.** `summaryCompletion`,
-  `summariesOf`, and `isCoveringSummary` in `transition.ts` each search
-  with `coversExchange`.
-- **`answerView` reads the activation once.** It calls `activationSpec`
-  twice and compares two seats that come from the same id.
 - **The rules read one lease shape.** They read a lease as `Hold`,
   `Taken`, `Draft`, and `LiveLease`, and `takenOf`, `draftsOf`, and
   `liveLeases` convert between them. One `RuleLease` replaces the four.
   This sub-item re-proves the rules that read them, and it follows the
-  cancelled close of C3, which changes what `Hold` holds. Phase 2 holds it.
+  cancelled close of C3, which changes what `Hold` holds. Phase 2 step 2
+  holds it.
 - **The lease `since` takes its name in the same proof edit.**
   [Deferred by decision](backlog.md#deferred-by-decision) holds the name until a
   proof edit renames it, and this sub-item is that edit.

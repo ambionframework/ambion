@@ -290,7 +290,6 @@ found no such rule.
 | `cancelHold`           | The lease that the fold holds after a cancellation             |
 | `mayEnd`               | An end entry for a lease                                       |
 | `leaseExpiry`          | The expiry that a claim entry or a renewal entry stores        |
-| `acknowledged`         | The read position that a lease entry stores                    |
 | `onRecord`             | The read position that a claim, a renewal, or an end may carry |
 | `admitsLease`          | A claim entry or a renewal entry                               |
 | `isExpired`            | An expiry entry that a pass writes                             |
