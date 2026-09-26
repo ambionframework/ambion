@@ -1,8 +1,9 @@
 /**
  * A workspace with a SQL backend: the `sql` tool over SQLite, its preview
  * and its export into the shell, the audit entry, the two owners, and
- * disposal. A workspace with no SQL backend has no `sql` tool. The SQL
- * conformance cases run in `conformance.test.ts`.
+ * disposal, and the import of a CSV file from the shell. A workspace with
+ * no SQL backend has no `sql` tool. The SQL conformance cases run in
+ * `conformance.test.ts`.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -17,7 +18,13 @@ import { toolOf } from './support/backends.ts';
 
 const ctx = BACKGROUND_CONTEXT;
 
-type Details = { database: string; rows: number; export?: string };
+type Details = {
+	database: string;
+	rows: number;
+	export?: string;
+	import?: string;
+	imported?: number;
+};
 
 /** `inner`, and a record of the agents that connected and of each disposal. */
 function counted(inner: SqlBackend) {
@@ -97,7 +104,7 @@ describe('a workspace with a SQL backend', () => {
 		const properties = Object.keys(
 			(toolOf(workspace, 'sql').parameters as { properties: Record<string, unknown> }).properties,
 		);
-		expect(properties.sort()).toEqual(['export', 'maxRows', 'sql']);
+		expect(properties.sort()).toEqual(['export', 'import', 'maxRows', 'sql']);
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance).toContain('one shared database, :memory:');
 		expect(guidance).toContain('The database is SQLite: dates are functions');
@@ -229,6 +236,79 @@ PY`,
 		expect(python.output.trim()).toBe("3 \\N 'x\\ny'");
 	});
 
+	it('imports an exported CSV back through import.rows, copies it with INSERT ... SELECT, and drops it after the call', async () => {
+		const { workspace } = withSql({ audit: true });
+		await call(workspace, {
+			sql: `CREATE TABLE t (id INTEGER, note TEXT); INSERT INTO t VALUES (1, 'a, "b"'), (2, NULL), (3, 'x\ny'), (4, ''), (5, '\\N')`,
+		});
+		await call(workspace, { sql: 'SELECT id, note FROM t ORDER BY id', export: '~/out/t.csv' });
+		expect(await shellText(workspace, '/home/ada/out/t.csv')).toContain(
+			'\n2,\\N\n3,"x\ny"\n4,\n5,"\\N"\n',
+		);
+		const copied = await call(workspace, {
+			sql: `CREATE TABLE t2 (id INTEGER, note TEXT);
+INSERT INTO t2 SELECT CAST(id AS INTEGER), note FROM import.rows;
+SELECT (SELECT count(*) FROM t2) AS copied,
+  (SELECT count(*) FROM (SELECT id, note FROM t EXCEPT SELECT id, note FROM t2)) AS differ,
+  (SELECT typeof(id) FROM import.rows LIMIT 1) AS staged;`,
+			import: 'out/t.csv',
+		});
+		expect(copied.text).toMatch(
+			/^Imported 5 rows from \/home\/ada\/out\/t\.csv into import\.rows\.\n\n/,
+		);
+		expect(copied.text).toContain('| copied | differ | staged |');
+		expect(copied.text).toContain('| 5 | 0 | text |');
+		expect(copied.details).toMatchObject({
+			rows: 1,
+			import: '/home/ada/out/t.csv',
+			imported: 5,
+		});
+		const exported = await call(workspace, {
+			sql: 'SELECT count(*) AS n FROM import.rows',
+			import: 'out/t.csv',
+			export: 'out/n.csv',
+		});
+		expect(exported.text).toMatch(/^Imported 5 rows .*\n\n```csv\nn\n5\n```/);
+		expect(exported.details).toMatchObject({ export: '/home/ada/out/n.csv', imported: 5 });
+		const later = await call(workspace, { sql: 'SELECT * FROM import.rows' }, 'bob');
+		expect(later.text).toContain('SQL error');
+		const log = (await shellText(workspace, '/workspace/audit.jsonl')) ?? '';
+		const entries = log
+			.trim()
+			.split('\n')
+			.map((line) => JSON.parse(line) as { arguments: Record<string, unknown> });
+		expect(entries[2]?.arguments.import).toBe('out/t.csv');
+		const missing = await call(workspace, { sql: 'SELECT 1', import: 'none.csv' });
+		expect(missing.text).toMatch(/^SQL error on :memory::\nCannot read \/home\/ada\/none\.csv: /);
+		const nul = await call(workspace, { sql: 'SELECT 1;\0', import: 'none.csv' });
+		expect(nul.text).toContain('The SQL holds a NUL character.');
+	});
+
+	it('reads a CSV that a script in the shell writes, with CRLF line ends', async () => {
+		const { workspace } = withSql();
+		await workspace.use({ name: 'ada' }, (env) =>
+			sh(
+				env,
+				`python3 - <<'PY'
+import csv
+with open('/home/ada/sweep.csv', 'w', newline='') as f:
+    w = csv.writer(f)
+    w.writerow(['step', 'ohms', 'ma'])
+    for step in range(10):
+        w.writerow([step, 100 + step * 10, round(3.3 / (100 + step * 10) * 1000, 3)])
+PY`,
+			),
+		);
+		const result = await call(workspace, {
+			sql: `CREATE TABLE sweep (step INTEGER, ohms REAL, ma REAL);
+INSERT INTO sweep SELECT CAST(step AS INTEGER), CAST(ohms AS REAL), CAST(ma AS REAL) FROM import.rows;
+SELECT count(*) AS n, max(ohms) AS top, typeof(max(ohms)) AS kind FROM sweep;`,
+			import: '~/sweep.csv',
+		});
+		expect(result.text).toContain('Imported 10 rows from /home/ada/sweep.csv');
+		expect(result.text).toContain('| 10 | 190 | real |');
+	});
+
 	it('leaves an existing export file unchanged when the query fails', async () => {
 		const { workspace } = withSql();
 		await call(workspace, { sql: 'CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1);' });
@@ -306,6 +386,91 @@ PY`,
 		expect(read.details.database).toBe(location);
 		await second.dispose();
 		await rm(dir, { recursive: true, force: true });
+	});
+});
+
+describe('the import of a CSV file', () => {
+	/** Write `text` to ada's `in.csv`, import it as ada, and give the staged rows or the message. */
+	async function imported(text: string): Promise<unknown> {
+		const { workspace } = withSql();
+		await workspace.use({ name: 'host' }, (env) => env.writeFile('/home/ada/in.csv', text, ctx));
+		const owner = workspace.sql;
+		if (owner === undefined) throw new Error('The workspace has no SQL backend.');
+		const outcome = await owner.use({ name: 'ada' }, (env) =>
+			env.run('SELECT * FROM import.rows', { maxRows: 50, import: 'in.csv' }, ctx),
+		);
+		await workspace.dispose();
+		return outcome.ok ? outcome.rows.map((row) => ({ ...row })) : outcome.message;
+	}
+
+	it.each([
+		{
+			name: 'skips a byte order mark, reads CRLF, and needs no last line break',
+			csv: '﻿a,b\r\n1,2\r\n3,4',
+			rows: [
+				{ a: '1', b: '2' },
+				{ a: '3', b: '4' },
+			],
+		},
+		{ name: 'reads a lone CR as a line end', csv: 'a\r1\r', rows: [{ a: '1' }] },
+		{
+			name: 'reads quoted commas, quotes, and line breaks, \\N as NULL, and an empty value as text',
+			csv: 'a,b\n"x,""y""","1\n2"\n\\N,\n',
+			rows: [
+				{ a: 'x,"y"', b: '1\n2' },
+				{ a: null, b: '' },
+			],
+		},
+		{ name: 'stages a header alone as no rows', csv: 'a,b\n', rows: [] },
+		{
+			name: 'reads an empty line of one column as an empty value',
+			csv: 'a\n\n1\n',
+			rows: [{ a: '' }, { a: '1' }],
+		},
+		{
+			name: 'keeps a quote inside a bare value as text',
+			csv: 'a\n5" pipe\n',
+			rows: [{ a: '5" pipe' }],
+		},
+		{ name: 'reads a quoted \\N as the text \\N', csv: 'a\n"\\N"\n', rows: [{ a: '\\N' }] },
+	])('$name', async ({ csv, rows }) => {
+		expect(await imported(csv)).toEqual(rows);
+	});
+
+	it.each([
+		{ name: 'an empty file', csv: '', message: 'The file is empty. It needs a header.' },
+		{
+			name: 'a column with no name',
+			csv: 'a,,c\n',
+			message: 'Column 2 of the header has no name.',
+		},
+		{
+			name: 'two names that match without regard to case',
+			csv: 'id,ID\n',
+			message: "The header names the column 'ID' twice.",
+		},
+		{
+			name: 'a row with the wrong count of values',
+			csv: 'a,b\n1,2\n3\n',
+			message: 'Row 2 has 1 value, and the header has 2 columns.',
+		},
+		{
+			name: 'a NUL character in a header name',
+			csv: 'a\0b\n1\n',
+			message: 'Column 1 of the header holds a NUL character.',
+		},
+		{
+			name: 'a quoted value with no end',
+			csv: 'a\n"open\n',
+			message: 'The file ends inside a quoted value.',
+		},
+		{
+			name: 'text after a closing quote',
+			csv: 'a,b\n"x"y,1\n',
+			message: 'A quoted value must end at a comma or at a line break.',
+		},
+	])('refuses $name, and names the file', async ({ csv, message }) => {
+		expect(await imported(csv)).toBe(`The import of /home/ada/in.csv failed. ${message}`);
 	});
 });
 

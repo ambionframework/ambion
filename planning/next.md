@@ -33,8 +33,9 @@ holds on main.
 is new. Ambion is reactive: a seat acts when a person speaks, when a seat
 addresses it, or when a say that it scheduled comes due.
 
-**0.4.0 is a release of simplification.** It adds no capability. It
-removes each second path to a fact of the room. Every item in the
+**0.4.0 is a release of simplification.** It adds one capability, the
+`import` of the `sql` tool, which the changelog names. It removes each
+second path to a fact of the room. Every item in the
 [backlog](backlog.md) waits until after 0.4.0, unless its condition holds
 first.
 

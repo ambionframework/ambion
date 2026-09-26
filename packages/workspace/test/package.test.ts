@@ -68,7 +68,7 @@ it('holds exactly six entries, builds each under the name the manifest gives it,
 	}
 });
 
-it('exports one resource, its two logs, the environment helpers, and sqlResult from the root, and no backend', () => {
+it('exports one resource, its two logs, the environment helpers, sqlImport, and sqlResult from the root, and no backend', () => {
 	expect(Object.keys(main).sort()).toEqual([
 		'BACKGROUND_CONTEXT',
 		'DEFAULT_AUDIT_LOG',
@@ -86,6 +86,7 @@ it('exports one resource, its two logs, the environment helpers, and sqlResult f
 		'resolvePath',
 		'spill',
 		'spillPath',
+		'sqlImport',
 		'sqlResult',
 		'tempDirPath',
 		'tempFilePath',

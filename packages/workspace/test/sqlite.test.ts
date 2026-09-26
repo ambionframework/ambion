@@ -2,7 +2,8 @@
  * The SQLite backend's own rules: no statement opens a host file, with the
  * engine's authorizer and without it; a call commits its own transaction;
  * a result keeps one value per column name; a call stops on an abort and
- * past its time limit; and an export lands on a directory workspace.
+ * past its time limit, an import among them; and an export lands on a
+ * directory workspace.
  */
 import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -41,7 +42,13 @@ function workspace(location = ':memory:', timeout?: number): Workspace {
 async function run(
 	site: Workspace,
 	sql: string,
-	options: { maxRows?: number; export?: string; signal?: AbortSignal; agent?: string } = {},
+	options: {
+		maxRows?: number;
+		export?: string;
+		import?: string;
+		signal?: AbortSignal;
+		agent?: string;
+	} = {},
 ): Promise<SqlOutcome> {
 	const owner = site.sql;
 	if (owner === undefined) throw new Error('The workspace has no SQL backend.');
@@ -52,6 +59,7 @@ async function run(
 	const runOptions = {
 		maxRows: options.maxRows ?? 50,
 		...(options.export === undefined ? {} : { export: options.export }),
+		...(options.import === undefined ? {} : { import: options.import }),
 	};
 	return owner.use({ name: options.agent ?? 'alpha' }, (env) => env.run(sql, runOptions, context));
 }
@@ -240,6 +248,19 @@ describe('the SQLite backend', () => {
 			};
 		});
 		expect(left).toEqual({ parts: [], target: false });
+	});
+
+	it('stops a long import past its time limit, and leaves no staged table and no open transaction', async () => {
+		const site = workspace(':memory:', 0.05);
+		const lines = Array.from({ length: 300_000 }, (_, index) => `${index},row ${index}`);
+		await site.use({ name: 'alpha' }, (env) =>
+			env.writeFile('/home/alpha/big.csv', `id,label\n${lines.join('\n')}\n`, BACKGROUND_CONTEXT),
+		);
+		const outcome = await run(site, 'SELECT count(*) AS n FROM import.rows', { import: 'big.csv' });
+		expect(messageOf(outcome)).toContain('ran past 0.05 seconds');
+		expect(messageOf(outcome)).not.toContain('transaction');
+		expect(messageOf(await run(site, 'SELECT * FROM import.rows'))).toContain('import.rows');
+		expect((await run(site, 'BEGIN; CREATE TABLE after (x); COMMIT')).ok).toBe(true);
 	});
 
 	it('refuses a time limit that is not more than 0, or that no timer holds', () => {

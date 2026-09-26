@@ -18,9 +18,10 @@
  * ```
  *
  * `sqlConformance` holds the cases of a `SqlBackend`: the preview and the
- * count of the last statement, an export through `WorkspaceFiles`, a
- * refused statement as an outcome, one database for every agent, and an
- * abort before the first statement.
+ * count of the last statement, an export through `WorkspaceFiles`, an
+ * import through `WorkspaceFiles` that lives for one run, a refused
+ * statement as an outcome, one database for every agent, and an abort
+ * before the first statement.
  */
 
 import type { ConformanceCase } from '@ambionframework/ambion/conformance';
@@ -255,6 +256,7 @@ export interface SqlConformanceBackend {
 interface CaseFiles {
 	forAgent(agent: string): WorkspaceFiles;
 	read(path: string): string | undefined;
+	write(path: string, text: string): void;
 }
 
 /** In-memory `WorkspaceFiles`. A file lands only after every chunk arrives. */
@@ -267,6 +269,15 @@ function caseFiles(): CaseFiles {
 	};
 	return {
 		forAgent: (agent) => ({
+			readFile: async (path, maxBytes) => {
+				const target = absolute(agent, path);
+				const text = stored.get(target);
+				if (text === undefined) return { ok: false, message: `No file at ${target}.` };
+				if (Buffer.byteLength(text) > maxBytes) {
+					return { ok: false, message: `${target} is too large.` };
+				}
+				return { ok: true, path: target, text };
+			},
 			writeFile: async (path, chunks) => {
 				let text = '';
 				for await (const chunk of chunks) text += chunk;
@@ -276,6 +287,9 @@ function caseFiles(): CaseFiles {
 			},
 		}),
 		read: (path) => stored.get(path),
+		write: (path, text) => {
+			stored.set(path, text);
+		},
 	};
 }
 
@@ -392,6 +406,42 @@ async function exportThroughFiles(sql: SqlCase): Promise<void> {
 	check(text === expected, `the CSV file is ${JSON.stringify(text)}`);
 }
 
+async function importThroughFiles(sql: SqlCase): Promise<void> {
+	const path = '/home/conformance/in/e.csv';
+	sql.files.write(path, 'id,note\n1,"a, ""b"""\n2,\\N\n3,"x\ny"\n');
+	const outcome = okOf(
+		await runAs(
+			sql,
+			'conformance',
+			`CREATE TABLE f (id INTEGER, note TEXT);
+INSERT INTO f SELECT CAST(id AS INTEGER), note FROM import.rows;
+SELECT id, note FROM f ORDER BY id`,
+			{ maxRows: 50, import: 'in/e.csv' },
+		),
+		'the import failed',
+	);
+	check(outcome.import?.path === path, `the import path is ${outcome.import?.path}`);
+	check(outcome.import?.rows === 3, `the import staged ${outcome.import?.rows} rows`);
+	const notes = JSON.stringify(outcome.rows.map((row) => row.note));
+	check(notes === JSON.stringify(['a, "b"', null, 'x\ny']), `the imported notes are ${notes}`);
+	check(Number(outcome.rows[2]?.id) === 3, 'the imported id did not CAST');
+	const later = await runAs(sql, 'conformance', 'SELECT * FROM import.rows');
+	check(!later.ok, 'a later run reads the rows of an import');
+}
+
+async function refusedImportRunsNothing(sql: SqlCase): Promise<void> {
+	okOf(await runAs(sql, 'conformance', 'CREATE TABLE g (x)'), 'the run failed');
+	sql.files.write('/home/conformance/bad.csv', 'x,y\n1,2\n3\n');
+	for (const file of ['bad.csv', 'missing.csv']) {
+		const outcome = await runAs(sql, 'conformance', 'INSERT INTO g VALUES (1)', {
+			maxRows: 50,
+			import: file,
+		});
+		check(!outcome.ok && outcome.message.length > 0, `the import of ${file} gave an ok outcome`);
+	}
+	check((await count(sql, 'g')) === 0, 'a statement ran after a refused import');
+}
+
 async function failedExportWritesNothing(sql: SqlCase): Promise<void> {
 	const outcome = await runAs(sql, 'conformance', 'SELECT * FROM missing_table', {
 		maxRows: 50,
@@ -454,6 +504,11 @@ const SQL_CASES: readonly [string, SqlBody][] = [
 		exportThroughFiles,
 	],
 	['a refused statement with an export writes no file', failedExportWritesNothing],
+	[
+		'import reads a CSV through WorkspaceFiles into import.rows, for one run alone',
+		importThroughFiles,
+	],
+	['a refused import is an ok: false outcome, and no statement runs', refusedImportRunsNothing],
 	['a refused statement is an ok: false outcome, and the run stops there', refusedStatement],
 	['every agent reads what another agent wrote', oneDatabaseForEveryAgent],
 	['an aborted context rejects before the first statement runs', abortBeforeRun],
