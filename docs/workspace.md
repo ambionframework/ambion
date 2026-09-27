@@ -127,6 +127,18 @@ const readPlan = defineTool({
 states what the last three hold. The executor builds the context once per
 call and freezes it. `ToolContext` holds no workspace or resource field.
 
+## Give an agent skills
+
+**`workspace.tools({ skills })` gives one agent a fixed set of skills.**
+`loadSkills` reads the set once on the host. The guidance of the bundle
+lists the skills, and each respond activation copies their files into
+`~/.skills` in the agent's home. [Skills](skills.md) holds the contract.
+
+```ts
+const skills = await loadSkills(fromDirectory('./agents/surveyor/skills'));
+const bundles = [drive.tools({ skills })];
+```
+
 ## Write an append-only log
 
 **`openLog` writes JSON Lines to one absolute path, and rotates it by

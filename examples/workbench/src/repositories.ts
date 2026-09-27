@@ -16,7 +16,7 @@ import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { justGitBackend, sqliteGitStorage } from '@ambionframework/just-bash/git';
-import { fromDirectory } from '@ambionframework/workspace/git';
+import { fromDirectory } from '@ambionframework/workspace';
 
 const templatesDirectory = fileURLToPath(new URL('../templates/', import.meta.url));
 

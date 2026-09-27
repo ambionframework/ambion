@@ -7,8 +7,12 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKGROUND_CONTEXT, openWorkspace, type Workspace } from '@ambionframework/workspace';
-import { fromDirectory } from '@ambionframework/workspace/git';
+import {
+	BACKGROUND_CONTEXT,
+	fromDirectory,
+	openWorkspace,
+	type Workspace,
+} from '@ambionframework/workspace';
 import { afterEach, describe, expect, it } from 'vitest';
 import { justGitBackend, sqliteGitStorage } from '../src/git/index.ts';
 import { openServer } from '../src/git/server.ts';

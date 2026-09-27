@@ -11,6 +11,15 @@ and the statements copy them into the shared tables with
 every value stays text. See
 [Query the shared database](docs/workspace.md#query-the-shared-database).
 
+**Each agent has its own fixed skills.** `loadSkills(source)` reads a set
+of skills in the agentskills.io format once on the host, with their
+scripts, references, and assets, and refuses a skill that breaks a rule.
+`workspace.tools({ skills })` gives the set to one agent. The guidance of
+the bundle lists each skill, and each respond activation copies the set
+into `~/.skills` in the agent's home. The seat reads a skill with `read`
+and runs its scripts with `bash`, so a Pi, Claude, or Codex seat uses a
+skill the same way. See [Skills](docs/skills.md).
+
 ### Simplification
 
 - **The room state has one derivation.** `readRoom` replays the
@@ -36,6 +45,12 @@ every value stays text. See
 
 ### Breaking changes
 
+- **`fromDirectory` moves to the root entry of `@ambionframework/workspace`.**
+  `@ambionframework/workspace/git` no longer exports it.
+  `TemplateSource` and `TemplateFiles` become `FileSource` and
+  `SourceFiles` in the root entry, beside the new `SourceInput`. The `/git`
+  entry keeps `filesOf`, `hashesOf`, `sameFiles`, `changeTo`, and
+  `TemplateRegistration`.
 - **A lease entry stores the read position that its command states.** A
   claim stores 0, and a renewal with no `readThrough` stores 0. The fold
   keeps the highest position of the lease.

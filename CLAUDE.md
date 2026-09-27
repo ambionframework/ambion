@@ -34,6 +34,7 @@ floor.
 | `docs/summary.md`         | Design contract for optional summaries of closed exchanges                                                                                                           |
 | `docs/simulator.md`       | Design contract for the simulator: the loop, the actor, the run, the judge, and the validation on the assistant's live suite                                         |
 | `docs/workspace.md`       | Design contract for the workspace an agent's tools reach into — read with `agent.md`                                                                                 |
+| `docs/skills.md`          | Design contract for the fixed skills of each agent: `loadSkills`, the checks, the guidance, and the copy in the home — read with `workspace.md`                      |
 | `docs/processes.md`       | Design contract for background processes: `bash`, `ps`, `status`, `wait`, `cancel`, handles, output files, the host's view, and reminders — read with `workspace.md` |
 | `docs/workstation.md`     | Design contract for the workspace backend over SSH to one remote server, one Unix account for each agent — read with `workspace.md`                                  |
 | `docs/git.md`             | Design contract for the git backend: read-only templates, forks, clones into the home, and pushes — read with `workspace.md`                                         |

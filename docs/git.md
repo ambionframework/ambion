@@ -189,8 +189,9 @@ the same as `Workspace.sql`.
 - The conformance entry exports `gitConformance`.
 - `@ambionframework/just-bash/git` exports `justGitBackend` and
   `sqliteGitStorage`.
-- `@ambionframework/workspace/git` exports `fromDirectory`, the other
-  template helpers, and the name rules.
+- `@ambionframework/workspace/git` exports the template helpers and the
+  name rules. `fromDirectory` comes from the root entry, since skills
+  read their files from it too ([Skills](skills.md)).
 
 ## Repositories and their names
 
@@ -272,8 +273,8 @@ A crash between the steps of case 2 or case 3 leaves a state that the
 same case finishes at the next registration.
 
 **`fromDirectory(path)` reads every file as bytes.** It skips `.git` and
-every symbolic link. `@ambionframework/workspace/git` exports it. A plain
-object maps each path to text.
+every symbolic link. The root entry `@ambionframework/workspace` exports
+it. A plain object maps each path to text.
 
 **A template with forks stays.** A fork can read the objects of its
 template. Removal of a registration from the options deletes nothing. The
@@ -513,7 +514,7 @@ has forks that share objects, push hooks, and a ref policy.
 import { directoryBackend } from '@ambionframework/just-bash';
 import { justGitBackend, sqliteGitStorage } from '@ambionframework/just-bash/git';
 import { openWorkspace } from '@ambionframework/workspace';
-import { fromDirectory } from '@ambionframework/workspace/git';
+import { fromDirectory } from '@ambionframework/workspace';
 
 const lab = openWorkspace({
   name: 'lab',
@@ -676,7 +677,8 @@ the agent's name.
 | `packages/workspace`   | `src/git-conformance.ts`               | `gitConformance`                                                                            |
 | `packages/workspace`   | `src/git-entry.ts`                     | The `/git` entry                                                                            |
 | `packages/workspace`   | `src/git-names.ts`                     | The name rules of a repository ID                                                           |
-| `packages/workspace`   | `src/git-templates.ts`                 | `fromDirectory` and the template helpers                                                    |
+| `packages/workspace`   | `src/git-templates.ts`                 | The template registration, `filesOf`, and `changeTo`                                        |
+| `packages/workspace`   | `src/sources.ts`                       | `fromDirectory`, the source types, `hashesOf`, and `sameFiles`                              |
 | `packages/just-bash`   | `src/just-bash.ts`                     | `gitFor(agent, access)`                                                                     |
 | `packages/just-bash`   | `src/git/access.ts`                    | `JustGitAccess`, `GitCredential`, and `GitFetch`                                            |
 | `packages/just-bash`   | `src/git/backend.ts`                   | `justGitBackend`, the access, and the environment                                           |

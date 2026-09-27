@@ -1,4 +1,11 @@
-import type { ReminderSeat, Room, ToolBundle } from '@ambionframework/ambion';
+import type {
+	AmbionTool,
+	ReminderSeat,
+	Room,
+	ToolBundle,
+	ToolContext,
+} from '@ambionframework/ambion';
+import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, BashServices, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
 import { createFileTools, defaultToolGuidance } from './default-tools.ts';
@@ -21,9 +28,20 @@ import {
 	type WorkspaceAgent,
 	type WorkspaceResource,
 } from './resource.ts';
+import { type SkillSet, skillGuidance, skillSetOf, syncSkills } from './skills.ts';
 import type { SqlBackend, SqlEnv } from './sql-backend.ts';
 import { createSqlTool, sqlToolGuidance } from './sql-tool.ts';
 import { bindTools } from './tools.ts';
+
+/** What one agent's bundle adds to the tools every agent shares. */
+export interface WorkspaceToolsOptions {
+	/**
+	 * The agent's skills, from `loadSkills`. The guidance lists them, and
+	 * each respond activation makes `~/.skills` in the agent's home hold
+	 * their files.
+	 */
+	readonly skills?: SkillSet;
+}
 
 /**
  * The host's view of the processes of a workspace. A host shows a person
@@ -46,8 +64,13 @@ export interface WorkspaceProcesses {
 
 /** A workspace resource with an ordinary Ambion tool bundle. */
 export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
-	/** Return the backend tools and optional model guidance as one stable bundle. */
-	tools(): ToolBundle;
+	/**
+	 * Return the backend tools and optional model guidance. With no options,
+	 * the bundle is one stable value. With `skills`, the bundle holds the
+	 * same tools, its guidance lists the skills, and its reminder copies
+	 * them into the home of the seat's agent.
+	 */
+	tools(options?: WorkspaceToolsOptions): ToolBundle;
 	/**
 	 * The agent identity `mirror()` writes as: `<name>-host`, one agent this
 	 * workspace owns. A backend with real accounts can give it credentials.
@@ -157,6 +180,50 @@ function workspaceTools(
 		tools: Object.freeze([...files, ...processes, ...sql.tools, ...git.tools, ...extra]),
 		guidance: joinNotes(notes),
 		remind: (seat: ReminderSeat, signal: AbortSignal) => backends.processes.remind(seat, signal),
+	});
+}
+
+/**
+ * The bundle with the skills of `set`. The guidance lists them. The
+ * reminder queues the copy on the bash owner, then gives the process
+ * reminder. The owner runs its operations in order, so the copy ends
+ * before any tool call of the activation starts. The reminder does not
+ * wait for the copy, so the bound of the reminder does not cut it. A copy
+ * that fails leaves no manifest, and the next activation copies again.
+ *
+ * A run with no reminder, such as Pi's `runAgent`, copies at the first
+ * tool call of the bundle for each agent that this bundle has not copied.
+ */
+function withSkills(
+	bundle: ToolBundle,
+	set: SkillSet,
+	shell: WorkspaceResource<WorkspaceEnv>['use'],
+): ToolBundle {
+	const processes = bundle.remind;
+	const copied = new Set<string>();
+	const copy = (agent: string): void => {
+		copied.add(agent);
+		shell({ name: agent }, (env) => syncSkills(env, set, BACKGROUND_CONTEXT)).catch(
+			() => undefined,
+		);
+	};
+	const tools = bundle.tools.map((tool): AmbionTool =>
+		Object.freeze({
+			...tool,
+			invoke: (params: unknown, ctx: ToolContext) => {
+				if (!copied.has(ctx.agent.name)) copy(ctx.agent.name);
+				return tool.invoke(params, ctx);
+			},
+		}),
+	);
+	return Object.freeze({
+		...bundle,
+		tools: Object.freeze(tools),
+		guidance: joinNotes([bundle.guidance, skillGuidance(set)]),
+		remind: (seat: ReminderSeat, signal: AbortSignal) => {
+			copy(seat.agent);
+			return processes?.(seat, signal);
+		},
 	});
 }
 
@@ -302,7 +369,10 @@ export function openWorkspace(options: {
 		subscribe: (listener: (event: ProcessEvent) => void) => table.subscribe(listener),
 		cancel: (handle: string) => table.hostCancel(handle),
 	});
-	const tools = (): ToolBundle => toolBundle;
+	const tools = (toolsOptions?: WorkspaceToolsOptions): ToolBundle =>
+		toolsOptions?.skills === undefined
+			? toolBundle
+			: withSkills(toolBundle, skillSetOf(toolsOptions.skills), resource.use);
 	// The workspace's own name for a mirror: one agent it owns, so a caller
 	// names only the room.
 	const host: WorkspaceAgent = { name: `${options.name}-host` };

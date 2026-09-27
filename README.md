@@ -148,6 +148,13 @@ The room runs each seat on the default execution of its family; see
 [Executors](docs/executors.md). [`examples/workbench`](examples/workbench)
 builds its team the same way and runs it in a terminal.
 
+**Each agent has its own fixed skills.** `loadSkills` reads a folder of
+agentskills.io skills on the host, with their scripts and resources, and
+`workspace.tools({ skills })` gives the set to one agent. The guidance lists
+the skills, and each activation copies them into the agent's home. The seat
+reads a skill with `read` and runs its scripts with `bash`, on each of the
+three harnesses. See [Skills](docs/skills.md).
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-exchange-dark.svg">
   <img alt="Two exchanges on a time axis. A person asks with visit.send(), entry 1. The room activates Agent A, on Pi, and Agent B, on the Claude Agent SDK, and they reason in parallel. A reads a file and says, entry 2. The first say of B read only entry 1, so it comes back missed with entry 2. B reads entry 2, writes a new file, and says to A, entry 3. Entry 3 wakes A, and A resumes the harness session of its first activation. A reads only entry 3 and answers the person, entry 4. The room closes the exchange, entry 5, and waitForClose() returns. A summary follows, entry 6, and waitForSummary() returns it. The person asks again, entry 7. A starts a fresh session, reads the summary and entry 7, and says, entry 8. B has nothing to add and stays silent. The record is durable. The session is a cache for one exchange. The workspace keeps the files. The trace goes to the host's logs." src="docs/assets/ambion-exchange.svg">

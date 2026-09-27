@@ -223,7 +223,8 @@ calls them in the same process, so it needs no transport.
 **The model holds exactly the tools of the activation.** The executor
 passes the room tools, the tools of the definition, and the tools of its
 bundles as the harness `tools`, and names each one in `activeToolNames`.
-The harness adds no built-in tool, no skill, and no prompt template. A
+The harness adds no built-in tool, no skill, and no prompt template. The
+skills of an agent come from its workspace bundle ([Skills](skills.md)). A
 call to a tool the model does not hold gets an error result, and the run
 continues. A continued session takes the tools of the activation that
 continues it: a closing activation holds `say` alone.

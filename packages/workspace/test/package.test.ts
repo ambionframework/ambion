@@ -68,7 +68,7 @@ it('holds exactly six entries, builds each under the name the manifest gives it,
 	}
 });
 
-it('exports one resource, its two logs, the environment helpers, sqlImport, and sqlResult from the root, and no backend', () => {
+it('exports one resource, its two logs, the environment helpers, sqlImport, sqlResult, fromDirectory, and loadSkills from the root, and no backend', () => {
 	expect(Object.keys(main).sort()).toEqual([
 		'BACKGROUND_CONTEXT',
 		'DEFAULT_AUDIT_LOG',
@@ -79,6 +79,8 @@ it('exports one resource, its two logs, the environment helpers, sqlImport, and 
 		'TMP',
 		'boundedView',
 		'deliverView',
+		'fromDirectory',
+		'loadSkills',
 		'openAuditLog',
 		'openLog',
 		'openWorkspace',
@@ -108,7 +110,6 @@ it.each([
 			'assertAgent',
 			'changeTo',
 			'filesOf',
-			'fromDirectory',
 			'hashesOf',
 			'namespaceOf',
 			'readOnly',

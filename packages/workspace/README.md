@@ -65,9 +65,11 @@ and `sqlConformance` and `gitConformance`, the cases a `SqlBackend` and a
 `./git` holds what every git backend shares, and it loads no git library.
 The name rules of a repository ID are `validName`, `namespaceOf`,
 `assertAgent`, `readOnly`, `TEMPLATES`, and `SOURCES`. The template helpers
-are `fromDirectory`, `filesOf`, `hashesOf`, `sameFiles`, and `changeTo`,
-with the `TemplateRegistration`, `TemplateSource`, and `TemplateFiles`
-types. `@ambionframework/just-bash/git` holds a git backend that uses them.
+are `filesOf`, `hashesOf`, `sameFiles`, and `changeTo`, with the
+`TemplateRegistration` type. `@ambionframework/just-bash/git` holds a git
+backend that uses them. The root entry holds `fromDirectory` and the
+`FileSource`, `SourceFiles`, and `SourceInput` types, which templates and
+skills share.
 
 `openWorkspace` takes its backends by kind: `backend: { bash, sql }`.
 `bash` is required. `sql` is an optional `SqlBackend`, and the `sql` tool
