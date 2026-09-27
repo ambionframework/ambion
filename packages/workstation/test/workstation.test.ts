@@ -2,15 +2,20 @@
  * The workstation beyond the conformance cases: the options it refuses, the
  * pinned host key, one session for each agent and its idle timeout, a
  * dropped connection, the command script, the group kill, the error codes,
- * the private temporary files, and a workspace over it with an audit log and
- * a `sql` export.
+ * the private temporary files, and a workspace over it with an audit log, a
+ * `sql` export, and the copy of an agent's skills.
  */
 
 import { spawnSync } from 'node:child_process';
 import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
-import { openWorkspace, type Workspace, type WorkspaceEnv } from '@ambionframework/workspace';
+import {
+	loadSkills,
+	openWorkspace,
+	type Workspace,
+	type WorkspaceEnv,
+} from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { BACKGROUND_CONTEXT, type ShellOutputUpdate } from '@earendil-works/pi-agent-core';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -442,5 +447,33 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		const audit = (await readFile(started.options.layout.audit, 'utf8')).trim().split('\n');
 		expect(audit.map((line) => JSON.parse(line).tool)).toEqual(['write', 'bash', 'sql']);
 		expect(workspace.host).toEqual({ name: 'lab-host' });
+	});
+
+	it("copies the agent's skills into its home over SFTP, and marks each script executable", async () => {
+		const started = await server(['ada']);
+		const workspace = openWorkspace({
+			name: 'lab',
+			backend: { bash: workstationBackend(started.options) },
+		});
+		cleanups.push(() => workspace.dispose());
+		const skills = await loadSkills({
+			'pour-plan/SKILL.md':
+				'---\nname: pour-plan\ndescription: Check a pour.\n---\nRun the script.\n',
+			'pour-plan/scripts/tonnage.sh': '#!/bin/sh\necho "$1 t"\n',
+		});
+		const bundle = workspace.tools({ skills });
+		await bundle.remind?.(
+			{ agent: 'ada', room: 'lobby', activation: 'a1' },
+			new AbortController().signal,
+		);
+		const ran = await toolOf(workspace, 'bash').invoke(
+			{ command: '~/.skills/pour-plan/scripts/tonnage.sh 48' },
+			context('ada'),
+		);
+		expect(JSON.stringify(ran)).toContain('48 t');
+		const home = started.homes.get('ada') ?? '';
+		const script = await stat(join(home, '.skills', 'pour-plan', 'scripts', 'tonnage.sh'));
+		const skill = await stat(join(home, '.skills', 'pour-plan', 'SKILL.md'));
+		expect([script.mode & 0o111, skill.mode & 0o111]).toEqual([0o111, 0]);
 	});
 });

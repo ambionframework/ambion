@@ -71,6 +71,8 @@ export { openLog } from './log.ts';
 export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.ts';
 export type { ProcessKind, ProcessState, ProcessStatus } from './process-files.ts';
 export type { ProcessEvent, ProcessQuery } from './process-table.ts';
+export type { SkillInfo, SkillSet } from './skills.ts';
+export { loadSkills } from './skills.ts';
 export type { FileSource, SourceFiles, SourceInput } from './sources.ts';
 export { fromDirectory } from './sources.ts';
 export type {

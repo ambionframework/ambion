@@ -1,4 +1,5 @@
 import type { ReminderSeat, Room, ToolBundle } from '@ambionframework/ambion';
+import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, BashServices, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
 import { createFileTools, defaultToolGuidance } from './default-tools.ts';
@@ -21,7 +22,7 @@ import {
 	type WorkspaceAgent,
 	type WorkspaceResource,
 } from './resource.ts';
-import { remindSkills, skillFolders } from './skills.ts';
+import { type SkillSet, skillGuidance, skillSetOf, syncSkills } from './skills.ts';
 import type { SqlBackend, SqlEnv } from './sql-backend.ts';
 import { createSqlTool, sqlToolGuidance } from './sql-tool.ts';
 import { bindTools } from './tools.ts';
@@ -29,11 +30,11 @@ import { bindTools } from './tools.ts';
 /** What one agent's bundle adds to the tools every agent shares. */
 export interface WorkspaceToolsOptions {
 	/**
-	 * The folders in the workspace that hold the agent's skills, in the
-	 * agentskills.io format. A relative path starts at the agent's home.
-	 * Each respond activation lists the skills that the folders hold.
+	 * The agent's skills, from `loadSkills`. The guidance lists them, and
+	 * each respond activation makes `~/.skills` in the agent's home hold
+	 * their files.
 	 */
-	readonly skills?: string | readonly string[];
+	readonly skills?: SkillSet;
 }
 
 /**
@@ -60,7 +61,8 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	/**
 	 * Return the backend tools and optional model guidance. With no options,
 	 * the bundle is one stable value. With `skills`, the bundle holds the
-	 * same tools, and its reminder also lists the skills of those folders.
+	 * same tools, its guidance lists the skills, and its reminder copies
+	 * them into the home of the seat's agent.
 	 */
 	tools(options?: WorkspaceToolsOptions): ToolBundle;
 	/**
@@ -176,23 +178,27 @@ function workspaceTools(
 }
 
 /**
- * The bundle with the skill list before the process reminder. A part that
- * fails gives no text, and the other part still shows.
+ * The bundle with the skills of `set`. The guidance lists them. The
+ * reminder queues the copy on the bash owner, then gives the process
+ * reminder. The owner runs its operations in order, so the copy ends
+ * before any tool call of the activation starts. The reminder does not
+ * wait for the copy, so the bound of the reminder does not cut it. A copy
+ * that fails leaves no manifest, and the next activation copies again.
  */
 function withSkills(
 	bundle: ToolBundle,
-	skills: (agent: string, signal: AbortSignal) => Promise<string | undefined>,
+	set: SkillSet,
+	shell: WorkspaceResource<WorkspaceEnv>['use'],
 ): ToolBundle {
 	const processes = bundle.remind;
 	return Object.freeze({
 		...bundle,
-		remind: async (seat: ReminderSeat, signal: AbortSignal) => {
-			const listed = await skills(seat.agent, signal).catch(() => undefined);
-			const running = await Promise.resolve()
-				.then(() => processes?.(seat, signal))
-				.catch(() => undefined);
-			const text = joinNotes([listed, running]);
-			return text === '' ? undefined : text;
+		guidance: joinNotes([bundle.guidance, skillGuidance(set)]),
+		remind: (seat: ReminderSeat, signal: AbortSignal) => {
+			shell({ name: seat.agent }, (env) => syncSkills(env, set, BACKGROUND_CONTEXT)).catch(
+				() => undefined,
+			);
+			return processes?.(seat, signal);
 		},
 	});
 }
@@ -342,7 +348,7 @@ export function openWorkspace(options: {
 	const tools = (toolsOptions?: WorkspaceToolsOptions): ToolBundle =>
 		toolsOptions?.skills === undefined
 			? toolBundle
-			: withSkills(toolBundle, remindSkills(resource.use, skillFolders(toolsOptions.skills)));
+			: withSkills(toolBundle, skillSetOf(toolsOptions.skills), resource.use);
 	// The workspace's own name for a mirror: one agent it owns, so a caller
 	// names only the room.
 	const host: WorkspaceAgent = { name: `${options.name}-host` };
