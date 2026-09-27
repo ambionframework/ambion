@@ -69,7 +69,7 @@ across a restart of the host.
 import { directoryBackend } from '@ambionframework/just-bash';
 import { justGitBackend, sqliteGitStorage } from '@ambionframework/just-bash/git';
 import { openWorkspace } from '@ambionframework/workspace';
-import { fromDirectory } from '@ambionframework/workspace/git';
+import { fromDirectory } from '@ambionframework/workspace';
 
 const lab = openWorkspace({
   name: 'lab',

@@ -19,6 +19,7 @@
  * same case finishes at the next registration.
  */
 
+import type { SourceFiles } from '@ambionframework/workspace';
 import {
 	changeTo,
 	filesOf,
@@ -26,7 +27,6 @@ import {
 	SOURCES,
 	sameFiles,
 	TEMPLATES,
-	type TemplateFiles,
 	type TemplateRegistration,
 	validName,
 } from '@ambionframework/workspace/git';
@@ -120,7 +120,7 @@ async function commitSource(
 	store: OpenGitStorage,
 	server: GitServer<TokenClaims>,
 	name: string,
-	files: TemplateFiles,
+	files: SourceFiles,
 ): Promise<{ readonly id: string; readonly head: string | null }> {
 	const id = `${SOURCES}/${name}`;
 	if (!(await store.storage.hasRepo(id))) {

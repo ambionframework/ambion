@@ -25,12 +25,11 @@
  * move wins, and each compares the template that landed.
  */
 
-import { randomName } from '@ambionframework/workspace';
+import { randomName, type SourceFiles } from '@ambionframework/workspace';
 import {
 	filesOf,
 	hashesOf,
 	sameFiles,
-	type TemplateFiles,
 	type TemplateRegistration,
 	validName,
 } from '@ambionframework/workspace/git';
@@ -113,7 +112,7 @@ const UPDATE_SCRIPT = [
 ].join('\n');
 
 /** Refuse a path that leaves the root of the template. */
-function checkPaths(name: string, files: TemplateFiles): void {
+function checkPaths(name: string, files: SourceFiles): void {
 	for (const path of Object.keys(files)) {
 		const parts = path.split('/');
 		if (parts.some((part) => part === '' || part === '.' || part === '..' || part === '.git')) {
@@ -153,7 +152,7 @@ async function tipOf(
 }
 
 /** Write each file into the staging folder over SFTP. */
-async function writeFiles(env: SshEnv, folder: string, files: TemplateFiles): Promise<void> {
+async function writeFiles(env: SshEnv, folder: string, files: SourceFiles): Promise<void> {
 	for (const [path, bytes] of Object.entries(files)) {
 		const written = await env.writeFile(`${folder}/${path}`, bytes, BACKGROUND_CONTEXT);
 		if (!written.ok) throw written.error;
@@ -166,7 +165,7 @@ async function stageAndRun(
 	root: string,
 	name: string,
 	registration: TemplateRegistration,
-	files: TemplateFiles,
+	files: SourceFiles,
 	script: string,
 ): Promise<string> {
 	const stage = `template.${randomName()}`;

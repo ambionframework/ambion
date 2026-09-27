@@ -62,7 +62,7 @@ opens no port.
 ```ts
 import { readFile } from 'node:fs/promises';
 import { openWorkspace } from '@ambionframework/workspace';
-import { fromDirectory } from '@ambionframework/workspace/git';
+import { fromDirectory } from '@ambionframework/workspace';
 import { workstationBackend, workstationGitBackend } from '@ambionframework/workstation';
 
 // `layout` and `credentialFor` are the options of the example above.

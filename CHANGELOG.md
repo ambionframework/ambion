@@ -44,6 +44,12 @@ bundle. See [Give an agent skills](docs/workspace.md#give-an-agent-skills).
 
 ### Breaking changes
 
+- **`fromDirectory` moves to the root entry of `@ambionframework/workspace`.**
+  `@ambionframework/workspace/git` no longer exports it.
+  `TemplateSource` and `TemplateFiles` become `FileSource` and
+  `SourceFiles` in the root entry, beside the new `SourceInput`. The `/git`
+  entry keeps `filesOf`, `hashesOf`, `sameFiles`, `changeTo`, and
+  `TemplateRegistration`.
 - **A lease entry stores the read position that its command states.** A
   claim stores 0, and a renewal with no `readThrough` stores 0. The fold
   keeps the highest position of the lease.

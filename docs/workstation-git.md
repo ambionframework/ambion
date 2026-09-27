@@ -91,7 +91,7 @@ server. The host runs no git library.
 
 ```ts
 import { readFile } from 'node:fs/promises';
-import { fromDirectory } from '@ambionframework/workspace/git';
+import { fromDirectory } from '@ambionframework/workspace';
 import { openWorkspace } from '@ambionframework/workspace';
 import { workstationBackend, workstationGitBackend } from '@ambionframework/workstation';
 
@@ -501,10 +501,11 @@ request against the namespace rule. The tokens of `justGitBackend` grant
 one scope on one repository. The SSH keys name the agent, and `serve`
 applies the rule. The one-pusher rule holds on both.
 
-**The template helpers live in the workspace package.** `fromDirectory`,
-`filesOf`, `hashesOf`, `sameFiles`, `changeTo`, their types, and the name
-rules are in `@ambionframework/workspace/git`. The entry loads `node:fs`
-and `node:crypto` and no git library, so the workstation installs no
+**The template helpers live in the workspace package.** `filesOf`,
+`hashesOf`, `sameFiles`, `changeTo`, `TemplateRegistration`, and the name
+rules are in `@ambionframework/workspace/git`. `fromDirectory` and the
+source types are in the root entry. Both entries load `node:fs` and
+`node:crypto` and no git library, so the workstation installs no
 `just-git`. `tipHashes` reads `just-git/repo`, so it stays in just-bash.
 
 **Biome holds the imports of each entry.** The override for
