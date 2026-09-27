@@ -1,4 +1,10 @@
-import type { ReminderSeat, Room, ToolBundle } from '@ambionframework/ambion';
+import type {
+	AmbionTool,
+	ReminderSeat,
+	Room,
+	ToolBundle,
+	ToolContext,
+} from '@ambionframework/ambion';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, BashServices, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
@@ -184,6 +190,9 @@ function workspaceTools(
  * before any tool call of the activation starts. The reminder does not
  * wait for the copy, so the bound of the reminder does not cut it. A copy
  * that fails leaves no manifest, and the next activation copies again.
+ *
+ * A run with no reminder, such as Pi's `runAgent`, copies at the first
+ * tool call of the bundle for each agent that this bundle has not copied.
  */
 function withSkills(
 	bundle: ToolBundle,
@@ -191,13 +200,28 @@ function withSkills(
 	shell: WorkspaceResource<WorkspaceEnv>['use'],
 ): ToolBundle {
 	const processes = bundle.remind;
+	const copied = new Set<string>();
+	const copy = (agent: string): void => {
+		copied.add(agent);
+		shell({ name: agent }, (env) => syncSkills(env, set, BACKGROUND_CONTEXT)).catch(
+			() => undefined,
+		);
+	};
+	const tools = bundle.tools.map((tool): AmbionTool =>
+		Object.freeze({
+			...tool,
+			invoke: (params: unknown, ctx: ToolContext) => {
+				if (!copied.has(ctx.agent.name)) copy(ctx.agent.name);
+				return tool.invoke(params, ctx);
+			},
+		}),
+	);
 	return Object.freeze({
 		...bundle,
+		tools: Object.freeze(tools),
 		guidance: joinNotes([bundle.guidance, skillGuidance(set)]),
 		remind: (seat: ReminderSeat, signal: AbortSignal) => {
-			shell({ name: seat.agent }, (env) => syncSkills(env, set, BACKGROUND_CONTEXT)).catch(
-				() => undefined,
-			);
+			copy(seat.agent);
 			return processes?.(seat, signal);
 		},
 	});

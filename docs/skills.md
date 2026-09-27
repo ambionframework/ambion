@@ -23,7 +23,7 @@ tools, so a skill works the same on each harness.
 | -------------- | ---------------------------------------------------------------------- |
 | `skills.ts`    | `loadSkills`, the checks, the guidance, and the copy step              |
 | `sources.ts`   | `fromDirectory`, the source types, and the blob hashes of a set        |
-| `workspace.ts` | `tools({ skills })`: the guidance of the bundle and the reminder order |
+| `workspace.ts` | `tools({ skills })`: the guidance, the reminder, and the tool wrappers |
 
 ## Words
 
@@ -57,7 +57,8 @@ agents/surveyor/skills/
 ```
 
 **`SKILL.md` starts with YAML frontmatter between two `---` lines.** The
-body holds the instructions. A path in the body is relative to the folder
+frontmatter ends at the first line that holds `---` alone. The body holds
+the instructions. A path in the body is relative to the folder
 of the skill.
 
 ```markdown
@@ -89,8 +90,8 @@ asset can be binary. Call `loadSkills` before you define the agent: a skill
 that breaks a rule stops the host with an error that names the file.
 
 **`workspace.tools({ skills })` gives the set to one agent.** The bundle
-holds the same tools as `workspace.tools()`. Its guidance lists the skills,
-and its reminder makes the copy.
+holds a tool for each tool of `workspace.tools()`, with the same name. Its
+guidance lists the skills, and its reminder makes the copy.
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';
@@ -134,7 +135,7 @@ bundle of each agent. Each agent still gets its own copy in its own home.
 `defineAgent` refuses it. Give the agent the bundle with skills alone.
 
 **`tools()` with no skills keeps one stable bundle.** Each call with
-`skills` returns a new bundle over the same tools. `tools` throws when
+`skills` returns a new bundle, whose tools run the tools of `tools()`. `tools` throws when
 `skills` is a value that `loadSkills` did not make.
 
 ## The rules that `loadSkills` checks
@@ -237,6 +238,12 @@ file.
 file of its copy, and leaves the manifest, keeps the edit until the set
 changes or the manifest goes. Remove `~/.skills/.manifest` to restore the
 copy at the next activation.
+
+**A run with no reminder copies at its first tool call.** Pi's `runAgent`
+runs an agent outside a room and resolves no reminder. Each tool of the
+bundle queues the copy before its own operation when the bundle has not
+copied for that agent in this process. In a room, the reminder has already
+copied, so a tool call adds no operation.
 
 **A summarize activation makes no copy.** The executor calls no reminder
 for it, and a closing activation holds `say` alone.

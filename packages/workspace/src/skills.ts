@@ -30,6 +30,8 @@ const MAX_NAME = 64;
 const MAX_DESCRIPTION = 1024;
 const MAX_COMPATIBILITY = 500;
 const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+/** The frontmatter: from a first line of `---` to the next line that is `---` alone. */
+const FRONTMATTER = /^---[ \t]*\n([\s\S]*?)\n---[ \t]*(?:\n|$)/;
 
 /** One skill of a set. */
 export interface SkillInfo {
@@ -90,12 +92,12 @@ function frontmatterOf(folder: string, bytes: Uint8Array): Record<string, unknow
 	} catch {
 		return refuse(`the SKILL.md of '${folder}' is not UTF-8 text.`);
 	}
-	const end = text.startsWith('---\n') ? text.indexOf('\n---', 3) : -1;
-	if (end === -1)
+	const yaml = FRONTMATTER.exec(text)?.[1];
+	if (yaml === undefined)
 		refuse(`the SKILL.md of '${folder}' starts with no frontmatter between two '---' lines.`);
 	let data: unknown;
 	try {
-		data = parse(text.slice(4, end));
+		data = parse(yaml);
 	} catch (error) {
 		refuse(`the frontmatter of '${folder}' is not YAML: ${(error as Error).message}`);
 	}

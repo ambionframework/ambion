@@ -1,13 +1,17 @@
 /**
  * The skills of an agent: `loadSkills` and its checks, the guidance that
- * lists a set, the copy in each agent's home, and a seat in a real room
- * that reads a skill, a reference, and runs a script of it.
+ * lists a set, the copy in each agent's home, a seat in a real room that
+ * reads a skill, a reference, and runs a script of it, and a run outside a
+ * room.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { defineTool } from '@ambionframework/ambion';
+import { createExecutionServices, runAgent } from '@ambionframework/pi';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
+import { Type } from 'typebox';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { callTool, quiet } from '../../ambion/test/support/scripted.ts';
+import { callTool, quiet, scripted } from '../../ambion/test/support/scripted.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { tempDir } from '../../just-bash/test/support/backends.ts';
 import type { BashBackend } from '../src/backend.ts';
@@ -150,7 +154,18 @@ describe('loadSkills', () => {
 		await expect(loadSkills(source)).rejects.toThrow(`Skill set: ${message}`);
 	});
 
-	it('refuses a SKILL.md that is not UTF-8, and a skill set that loadSkills did not make', async () => {
+	it('ends the frontmatter at a line that is --- alone, and refuses a SKILL.md that is not UTF-8 and a set that loadSkills did not make', async () => {
+		const early = await loadSkills({
+			'a/SKILL.md': [
+				'---',
+				'name: a',
+				'---notes: kept',
+				'description: Use a.',
+				'---  ',
+				'Steps.',
+			].join('\n'),
+		});
+		expect(early.skills[0]?.description).toBe('Use a.');
 		const bytes = { read: async () => ({ 'a/SKILL.md': new Uint8Array([0xff, 0xfe]) }) };
 		await expect(loadSkills(bytes)).rejects.toThrow(
 			"Skill set: the SKILL.md of 'a' is not UTF-8 text.",
@@ -278,10 +293,44 @@ describe('the skills of a seat', () => {
 		expect(await exitOf(workspace, 'alpha', `test -f ~/.skills/${MANIFEST}`)).toBe(0);
 	});
 
+	it('copies the set at the first tool call of a run outside a room, which resolves no reminder', async () => {
+		const workspace = site();
+		const finish = defineTool({
+			name: 'finish',
+			description: 'End the run.',
+			parameters: Type.Object({}),
+			execute: () => 'finished',
+		});
+		const read: string[] = [];
+		await runAgent(
+			createExecutionServices({
+				sessions: 'memory',
+				stream: scripted((context, _who, call) => {
+					if (call === 1) return callTool('read', { path: '~/.skills/pour-plan/SKILL.md' });
+					read.push(...toolResults(context).map((result) => result.text));
+					return callTool('finish', {});
+				}),
+			}),
+			{
+				model: 'scripted/surveyor',
+				name: 'surveyor',
+				agent: { name: 'surveyor', identity: 'Quantity surveyor.' },
+				system: 'Use your skills.',
+				prompt: 'Check the pour.',
+				tools: [finish],
+				bundles: [workspace.tools({ skills: await loadSkills(POUR_PLAN) })],
+				ends: ['finish'],
+			},
+		);
+		expect(read.join('\n')).toContain('Run scripts/tonnage.sh with the volume.');
+	});
+
 	it('adds the list to the guidance of the bundle, and keeps one bundle when no skills are named', async () => {
 		const workspace = site();
 		const bundle = workspace.tools({ skills: await loadSkills(POUR_PLAN) });
-		expect(bundle.tools).toBe(workspace.tools().tools);
+		expect(bundle.tools.map((tool) => tool.name)).toEqual(
+			workspace.tools().tools.map((tool) => tool.name),
+		);
 		expect(bundle.guidance?.startsWith(workspace.tools().guidance ?? '')).toBe(true);
 		expect(bundle.guidance).toMatch(
 			/<\/available_skills>\nYour skills are in ~\/\.skills\. The folder of a skill also holds its scripts and\nresources\. Read a file with read, and run a script with bash\.$/,
