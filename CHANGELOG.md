@@ -11,6 +11,14 @@ and the statements copy them into the shared tables with
 every value stays text. See
 [Query the shared database](docs/workspace.md#query-the-shared-database).
 
+**A workspace bundle gives a seat skills.** `workspace.tools({ skills })`
+names one or more folders in the workspace that hold skills in the
+agentskills.io format. Each respond activation lists the name, the
+description, and the location of each skill. The seat reads a skill with
+`read` and runs its scripts with `bash`, so a Pi, Claude, or Codex seat
+uses a skill the same way. `tools()` with no skills keeps one stable
+bundle. See [Give an agent skills](docs/workspace.md#give-an-agent-skills).
+
 ### Simplification
 
 - **The room state has one derivation.** `readRoom` replays the

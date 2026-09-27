@@ -21,9 +21,20 @@ import {
 	type WorkspaceAgent,
 	type WorkspaceResource,
 } from './resource.ts';
+import { remindSkills, skillFolders } from './skills.ts';
 import type { SqlBackend, SqlEnv } from './sql-backend.ts';
 import { createSqlTool, sqlToolGuidance } from './sql-tool.ts';
 import { bindTools } from './tools.ts';
+
+/** What one agent's bundle adds to the tools every agent shares. */
+export interface WorkspaceToolsOptions {
+	/**
+	 * The folders in the workspace that hold the agent's skills, in the
+	 * agentskills.io format. A relative path starts at the agent's home.
+	 * Each respond activation lists the skills that the folders hold.
+	 */
+	readonly skills?: string | readonly string[];
+}
 
 /**
  * The host's view of the processes of a workspace. A host shows a person
@@ -46,8 +57,12 @@ export interface WorkspaceProcesses {
 
 /** A workspace resource with an ordinary Ambion tool bundle. */
 export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
-	/** Return the backend tools and optional model guidance as one stable bundle. */
-	tools(): ToolBundle;
+	/**
+	 * Return the backend tools and optional model guidance. With no options,
+	 * the bundle is one stable value. With `skills`, the bundle holds the
+	 * same tools, and its reminder also lists the skills of those folders.
+	 */
+	tools(options?: WorkspaceToolsOptions): ToolBundle;
 	/**
 	 * The agent identity `mirror()` writes as: `<name>-host`, one agent this
 	 * workspace owns. A backend with real accounts can give it credentials.
@@ -157,6 +172,28 @@ function workspaceTools(
 		tools: Object.freeze([...files, ...processes, ...sql.tools, ...git.tools, ...extra]),
 		guidance: joinNotes(notes),
 		remind: (seat: ReminderSeat, signal: AbortSignal) => backends.processes.remind(seat, signal),
+	});
+}
+
+/**
+ * The bundle with the skill list before the process reminder. A part that
+ * fails gives no text, and the other part still shows.
+ */
+function withSkills(
+	bundle: ToolBundle,
+	skills: (agent: string, signal: AbortSignal) => Promise<string | undefined>,
+): ToolBundle {
+	const processes = bundle.remind;
+	return Object.freeze({
+		...bundle,
+		remind: async (seat: ReminderSeat, signal: AbortSignal) => {
+			const listed = await skills(seat.agent, signal).catch(() => undefined);
+			const running = await Promise.resolve()
+				.then(() => processes?.(seat, signal))
+				.catch(() => undefined);
+			const text = joinNotes([listed, running]);
+			return text === '' ? undefined : text;
+		},
 	});
 }
 
@@ -302,7 +339,10 @@ export function openWorkspace(options: {
 		subscribe: (listener: (event: ProcessEvent) => void) => table.subscribe(listener),
 		cancel: (handle: string) => table.hostCancel(handle),
 	});
-	const tools = (): ToolBundle => toolBundle;
+	const tools = (toolsOptions?: WorkspaceToolsOptions): ToolBundle =>
+		toolsOptions?.skills === undefined
+			? toolBundle
+			: withSkills(toolBundle, remindSkills(resource.use, skillFolders(toolsOptions.skills)));
 	// The workspace's own name for a mirror: one agent it owns, so a caller
 	// names only the room.
 	const host: WorkspaceAgent = { name: `${options.name}-host` };

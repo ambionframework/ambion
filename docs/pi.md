@@ -224,8 +224,9 @@ calls them in the same process, so it needs no transport.
 passes the room tools, the tools of the definition, and the tools of its
 bundles as the harness `tools`, and names each one in `activeToolNames`.
 The harness adds no built-in tool, no skill, and no prompt template. A
-call to a tool the model does not hold gets an error result, and the run
-continues. A continued session takes the tools of the activation that
+workspace bundle can list skills
+([Workspace](workspace.md#give-an-agent-skills)). A call to a tool the
+model does not hold gets an error result, and the run continues. A continued session takes the tools of the activation that
 continues it: a closing activation holds `say` alone.
 
 **An `unknown` or `stale` answer ends the run.** The executor aborts the activation
