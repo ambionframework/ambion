@@ -190,7 +190,8 @@ the same as `Workspace.sql`.
 - `@ambionframework/just-bash/git` exports `justGitBackend` and
   `sqliteGitStorage`.
 - `@ambionframework/workspace/git` exports the template helpers and the
-  name rules. `fromDirectory` comes from the root entry.
+  name rules. `fromDirectory` comes from the root entry, since skills
+  read their files from it too ([Skills](skills.md)).
 
 ## Repositories and their names
 

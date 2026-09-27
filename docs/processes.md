@@ -433,7 +433,9 @@ text.
 - **Claude** and **Codex** resolve for the whole view of the first pass.
 
 **The workspace reminder costs one read of the agent's table.** It runs
-on the bash owner. On the workstation, the read connects the agent's SSH
+on the bash owner. A bundle with skills first queues the copy of the
+skills, which costs one more read when the copy matches
+([Skills](skills.md#the-copy-in-the-home)). On the workstation, the read connects the agent's SSH
 session at the start of the agent's first activation, and it creates the
 agent's home on every backend.
 

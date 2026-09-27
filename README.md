@@ -148,11 +148,12 @@ The room runs each seat on the default execution of its family; see
 [Executors](docs/executors.md). [`examples/workbench`](examples/workbench)
 builds its team the same way and runs it in a terminal.
 
-**A seat takes skills from a folder in the workspace.**
-`workspace.tools({ skills: '/skills' })` lists the agentskills.io skills of
-that folder at the start of each respond activation. The seat reads a skill
-with `read` and runs its scripts with `bash`, on each of the three harnesses.
-See [Workspace](docs/workspace.md#give-an-agent-skills).
+**Each agent has its own fixed skills.** `loadSkills` reads a folder of
+agentskills.io skills on the host, with their scripts and resources, and
+`workspace.tools({ skills })` gives the set to one agent. The guidance lists
+the skills, and each activation copies them into the agent's home. The seat
+reads a skill with `read` and runs its scripts with `bash`, on each of the
+three harnesses. See [Skills](docs/skills.md).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-exchange-dark.svg">

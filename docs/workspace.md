@@ -129,70 +129,15 @@ call and freezes it. `ToolContext` holds no workspace or resource field.
 
 ## Give an agent skills
 
-**`workspace.tools({ skills })` gives one agent the skills of one or more
-folders.** A folder holds skills in the [agentskills.io](https://agentskills.io)
-format: one directory for each skill, with a `SKILL.md` that starts with a
-`name` and a `description`. The bundle holds the same tools as
-`workspace.tools()`. Its reminder also lists the skills.
+**`workspace.tools({ skills })` gives one agent a fixed set of skills.**
+`loadSkills` reads the set once on the host. The guidance of the bundle
+lists the skills, and each respond activation copies their files into
+`~/.skills` in the agent's home. [Skills](skills.md) holds the contract.
 
 ```ts
-const surveyor = defineAgent({
-  name: 'surveyor',
-  identity: 'Quantity surveyor. Holds the tonnage.',
-  executor: claude({
-    model: 'claude-sonnet-5',
-    instructions: 'Read the pour plan before you answer.',
-    bundles: [drive.tools({ skills: ['/skills', 'skills'] })],
-  }),
-});
+const skills = await loadSkills(fromDirectory('./agents/surveyor/skills'));
+const bundles = [drive.tools({ skills })];
 ```
-
-**Each respond activation starts with the list.** The reminder reads the
-folders on the bash owner, as the agent of the seat. Pi's `loadSkills`
-finds each `SKILL.md`, and Pi's `formatSkillsForSystemPrompt` writes the
-name, the description, and the location of each skill. The list goes
-before the processes of the seat ([Reminders](processes.md#reminders)).
-
-```text
-The following skills provide specialized instructions for specific tasks.
-Read the full skill file when the task matches its description.
-...
-<available_skills>
-  <skill>
-    <name>pour-plan</name>
-    <description>Check a concrete pour plan against the tonnage.</description>
-    <location>/skills/pour-plan/SKILL.md</location>
-  </skill>
-</available_skills>
-```
-
-**The seat reads a skill with `read`, and runs its scripts with `bash`.**
-Each executor gives the seat the workspace tools, so a skill works the same
-on Pi, Claude, and Codex. No native tool of a harness reads a skill, and
-the scripts of a skill run in the workspace.
-
-**The rules of the list:**
-
-- **A relative path starts at the agent's home.** `skills` names
-  `/home/<agent>/skills`. An absolute path names one folder for every agent.
-- **The list names the skills that the folders hold now.** A skill that an
-  agent writes shows at the next respond activation.
-- **Pi's loader decides what a skill is.** A `SKILL.md` with no
-  `description` is not a skill. `disable-model-invocation: true` keeps a
-  skill out of the list. The loader follows `.gitignore` and `.ignore`
-  files in the folder. The list does not name a file that the loader
-  skipped.
-- **The list names at most 50 skills.** A last line counts the rest.
-- **A missing folder holds no skill.** A seat with no skill and no process
-  gets no reminder.
-- **A list that fails gives no text.** The process reminder still shows,
-  and a failed process reminder does not hide the list.
-  The reminder has 5 seconds for both
-  ([Reminders](processes.md#reminders)).
-
-**`tools()` with no `skills` keeps one stable bundle.** Each call with
-`skills` returns a new bundle over the same tools. `tools` throws when
-`skills` is not a nonempty path or a nonempty list of nonempty paths.
 
 ## Write an append-only log
 
