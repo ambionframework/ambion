@@ -83,6 +83,11 @@ last `seq` is fresh. A position short of it is `missed`: the room returns the
 messages beyond `readThrough`, and the seat reads them and commits again. A
 position off the record is invalid.
 
+**A scheduled say is the one said intent that the rule does not check.** It
+goes back to its author alone, so the room takes it at any position. The
+`committed` answer lists in `unread` the messages after its `readThrough`
+and before the say ([Exchange](exchange.md#6-a-scheduled-say)).
+
 A delivery's key and an agent commit's key live in separate spaces. The same
 literal key can name a delivery and, independently, a commit, without
 colliding: each reads back through `Message.key` exactly as its own caller
