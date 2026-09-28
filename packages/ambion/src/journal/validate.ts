@@ -22,15 +22,6 @@ const seating = Type.Object(
 	extra,
 );
 const covers = Type.Object({ from: seq, through: seq }, extra);
-const cancelClose = Type.Object(
-	{
-		owner: Type.String(),
-		from: seq,
-		through: seq,
-		at: Type.String(),
-	},
-	{ additionalProperties: false },
-);
 
 const messageSchemas: Record<string, TSchema> = {
 	said: Type.Object(
@@ -170,7 +161,7 @@ const schemas: Record<Kind, TSchema> = {
 	// The format stays permissive here. A schema literal would drop a newer
 	// fence without a word; validateRunFormat refuses it loudly.
 	run: Type.Object({ at: Type.String(), format: Type.Optional(Type.Integer()) }, extra),
-	cancel: Type.Object({ at: Type.String(), close: Type.Optional(cancelClose) }, extra),
+	cancel: Type.Object({ at: Type.String() }, extra),
 };
 
 /** Validate a room journal body. Unknown entry kinds stay outside this vocabulary. */
@@ -236,21 +227,16 @@ function validateRefs(kind: string, body: Record<string, unknown> | undefined): 
 	throw new Error(`Invalid room journal body for kind '${kind}' at body.refs: ${reason}.`);
 }
 
-/** Every range a body carries: a close, the close a cancel carries, and what a summary covers. */
+/** Every range a body carries: a close, and what a summary covers. */
 function validateRanges(kind: string, body: Record<string, unknown> | undefined): void {
 	if (body === undefined) return;
 	if (kind === 'close') validateRange(kind, body, 'body');
-	if (kind === 'cancel') validateRange(kind, objectBody(body.close), 'body.close');
-	if (kind === 'message' && body.kind === 'summary')
-		validateRange(kind, objectBody(body.covers), 'body.covers');
+	const covers =
+		kind === 'message' && body.kind === 'summary' ? objectBody(body.covers) : undefined;
+	if (covers !== undefined) validateRange(kind, covers, 'body.covers');
 }
 
-function validateRange(
-	kind: string,
-	range: Record<string, unknown> | undefined,
-	path: string,
-): void {
-	if (range === undefined) return;
+function validateRange(kind: string, range: Record<string, unknown>, path: string): void {
 	const { from, through } = range;
 	if (typeof from !== 'number' || typeof through !== 'number') return;
 	// The schema above already made both integers.

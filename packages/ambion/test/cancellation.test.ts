@@ -27,7 +27,16 @@ import {
 	turn,
 	worker,
 } from './support/core-exchange.ts';
-import { deferred, messagesOf, roomName, stateOf, storedOf, waitForRoom } from './support/room.ts';
+import {
+	closedExchange,
+	collect,
+	deferred,
+	messagesOf,
+	roomName,
+	stateOf,
+	storedOf,
+	waitForRoom,
+} from './support/room.ts';
 import { byAgent, isClosing, quiet, scripted, speak } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { faultyJournals, gatedJournals, memory, sqlite, storages } from './support/storage.ts';
@@ -95,6 +104,19 @@ describe('durable cancellation', () => {
 		expect(fresh).not.toBe(activation);
 		expect(await calls.lease({ activation: fresh, operation: 'claim' })).toMatchObject({ ok: {} });
 		expect(second.from).toBeGreaterThan(first.from);
+	});
+
+	it('closes the open exchange once, as a cancelled close', async () => {
+		const room = await workerRoom();
+		const events = collect(room);
+		const exchange = await (await room.visit(person)).send({ text: 'cancel me twice' });
+		await room.abort();
+		await room.abort();
+		await waitForRoom(room);
+		expect(closedExchange(room, exchange.from)).toMatchObject({ cancelled: true });
+		expect(
+			events.flatMap((event) => (event.type === 'exchange_closed' ? [event.exchange.from] : [])),
+		).toEqual([exchange.from]);
 	});
 
 	it.each(['hangs', 'throws'] as const)(

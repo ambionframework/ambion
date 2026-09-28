@@ -10,8 +10,10 @@ import { goldenScenarios } from './support/golden.ts';
 /**
  * Golden journals: journals the runtime wrote, each with the fold a reader
  * must derive from it. A later runtime replays the same file and reads the
- * same fold. `GOLDEN=write pnpm --filter @ambionframework/ambion exec
- * vitest run test/golden.test.ts` writes them again.
+ * same fold. The suite also runs each scenario again, and the runtime must
+ * write the same journal, so a fixture that no runtime writes any more
+ * fails. `GOLDEN=write pnpm --filter @ambionframework/ambion exec vitest run
+ * test/golden.test.ts` writes them again.
  */
 const dir = fileURLToPath(new URL('./golden/', import.meta.url));
 const REGENERATE =
@@ -52,11 +54,15 @@ function named(entries: readonly Entry[]): Entry[] {
 	});
 }
 
+/** The journal that a scenario writes now, with its runs and keys named. */
+const written = async (run: () => Promise<readonly unknown[]>): Promise<Entry[]> =>
+	named((await run()) as readonly Entry[]);
+
 if (process.env.GOLDEN === 'write') {
 	it('writes the golden journals', async () => {
 		await mkdir(dir, { recursive: true });
 		for (const [name, run] of Object.entries(goldenScenarios)) {
-			const entries = named((await run()) as readonly Entry[]);
+			const entries = await written(run);
 			await writeFile(`${dir}${name}.journal.json`, json(entries));
 			await writeFile(`${dir}${name}.fold.json`, json(foldOf(entries)));
 		}
@@ -72,6 +78,11 @@ if (process.env.GOLDEN === 'write') {
 		it('holds one fixture pair for each scenario', async () => {
 			const files = (await readdir(dir)).sort();
 			expect(files).toEqual(names.flatMap((n) => [`${n}.fold.json`, `${n}.journal.json`]).sort());
+		});
+
+		it.each(Object.entries(goldenScenarios))('writes %s again as committed', async (name, run) => {
+			const committed = await load<Entry[]>(`${name}.journal.json`);
+			expect(JSON.parse(JSON.stringify(await written(run))), REGENERATE).toEqual(committed);
 		});
 
 		it.each(names)('replays %s to the committed fold', async (name) => {

@@ -268,7 +268,7 @@ lemma OneOpenExchange(messages: seq<Message>, people: seq<string>, closedThrough
 
 // A close of the open exchange starts at the open question and ends at the
 // record's last seq. Both paths that write one have this shape: the close the
-// room admits, and the close a cancellation carries. Such a close keeps the
+// room admits, and the close a cancellation derives. Such a close keeps the
 // closes ordered, so no two exchanges overlap. Every question that could open
 // an exchange after the last close lands inside the closed range.
 lemma CloseExtendsTheRecord(messages: seq<Message>, people: seq<string>, closes: seq<CloseRef>, close: CloseRef, lastSeq: int)

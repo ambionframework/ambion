@@ -115,21 +115,9 @@
 			"phase": "running",
 			"expiresAt": 1767258060000,
 			"at": "2026-01-01T09:00:00.000Z",
-			"readThrough": 7
-		},
-		"seq": 9,
-		"run": "run-1"
-	},
-	{
-		"kind": "lease",
-		"body": {
-			"id": "message:4:worker:1",
-			"phase": "running",
-			"expiresAt": 1767258060000,
-			"at": "2026-01-01T09:00:00.000Z",
 			"readThrough": 8
 		},
-		"seq": 10,
+		"seq": 9,
 		"run": "run-1"
 	},
 	{
@@ -152,7 +140,7 @@
 				"id": "message:4:worker:1"
 			}
 		},
-		"seq": 11,
+		"seq": 10,
 		"run": "run-1"
 	},
 	{
@@ -163,7 +151,7 @@
 			"through": 8,
 			"at": "2026-01-01T09:00:00.000Z"
 		},
-		"seq": 12,
+		"seq": 11,
 		"run": "run-1"
 	},
 	{
@@ -173,7 +161,7 @@
 			"message": 7,
 			"at": "2026-01-01T09:00:00.000Z"
 		},
-		"seq": 13,
+		"seq": 12,
 		"run": "run-1"
 	},
 	{
@@ -184,7 +172,7 @@
 			"subject": "priya",
 			"at": "2026-01-01T09:20:00.000Z"
 		},
-		"seq": 14,
+		"seq": 13,
 		"key": "key-6",
 		"run": "run-1"
 	}

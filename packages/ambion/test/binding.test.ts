@@ -184,12 +184,12 @@ describe('the room runs the verified rules', () => {
 		).toMatchObject([{ outcome: { kind: 'complete' } }]);
 	});
 
-	it('keeps a pending wake only when survivesCancellation says so', () => {
+	it('owes a summary only while survivesCancellation keeps its close', () => {
+		const closed = () => replayState([writerNamed, person, question, closed3], options);
 		bind.always(rules.survivesCancellation, () => false);
-		expect(pendingOf(asked())).toEqual([]);
+		expect(owedOf(closed())).toEqual([]);
 		bind.restore(rules.survivesCancellation);
-		expect(pendingOf(asked()).map((wake) => wake.id)).toEqual([id]);
-		expect(pendingOf(replayState([composition, person, question, cancel], options))).toEqual([]);
+		expect(owedOf(closed())).toMatchObject([{ seat: 'product', position: 3 }]);
 	});
 
 	it.each([

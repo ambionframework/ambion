@@ -33,12 +33,7 @@ import {
 import { applyLease, type LeaseHold } from './lease.ts';
 import { judgeOwed, type Owed, type OwedFacts, rejudgeOwed } from './owed.ts';
 import { advancePeople, type PersonState } from './presence.ts';
-import {
-	afterCancellation,
-	changesScheduled,
-	type ScheduledSay,
-	scheduleStep,
-} from './scheduled.ts';
+import { changesScheduled, type ScheduledSay, scheduleStep } from './scheduled.ts';
 import { dropSeat, type OpenWake, pendingOf, rejudgeSeat, wakesOf } from './wakes.ts';
 
 /** Leases of one kind of activation, grouped by a key, then by activation id. */
@@ -112,10 +107,9 @@ export function projectState(projection: RoomProjection): RoomState {
 		exchange: projection.exchange,
 		closes: base.closes,
 		cancelledAt: base.cancelledAt,
-		cancelClosed: base.cancelClosed,
 		leases: base.leases,
 		deliveries: base.deliveries,
-		due: [...pendingOf(projection.wakes, seated, base.cancelledAt), ...projection.owed],
+		due: [...pendingOf(projection.wakes, seated), ...projection.owed],
 		scheduled: projection.scheduled,
 		messages: base.messages,
 		lastSeq: projection.lastSeq,
@@ -313,27 +307,29 @@ function closedAt(projection: RoomProjection, close: Close, step: Step): RoomPro
 
 type CancelEntry = Extract<Entry, { kind: 'cancel' }>;
 
-/** A cancellation cuts every wake before it and ends the running leases before it. */
+/**
+ * A cancellation drops every wake and every scheduled say before it, ends
+ * the running leases before it, and closes the open exchange.
+ */
 function onCancel(prev: RoomProjection, entry: CancelEntry, step: Step): RoomProjection {
 	const base: BaseFacts = {
 		...prev.base,
 		leases: new Map(prev.base.leases),
 		closes: [...prev.base.closes],
-		cancelClosed: [...prev.base.cancelClosed],
 	};
-	applyEvent(base, entry);
+	applyEvent(base, entry, prev.exchange);
 	const marked = {
 		...prev,
 		base,
 		wakes: [],
-		scheduled: afterCancellation(prev.scheduled, entry.seq),
+		scheduled: [],
 		...indexLeases(base.leases),
 	};
 	const projection = {
 		...marked,
 		owed: rejudgeOwed(prev.owed, () => true, factsOf(marked), step.options),
 	};
-	const { close } = entry.body;
+	const close = base.closes.length > prev.base.closes.length ? base.closes.at(-1) : undefined;
 	return close === undefined ? projection : closedAt(projection, close, step);
 }
 

@@ -157,24 +157,7 @@ export function decide(
 		case 'run':
 			return { event: { kind: 'run', body: { at: iso(now), format: JOURNAL_FORMAT } } };
 		case 'cancel':
-			return {
-				event: {
-					kind: 'cancel',
-					body: {
-						at: iso(now),
-						...(state.exchange === undefined
-							? {}
-							: {
-									close: {
-										owner: state.exchange.owner,
-										from: state.exchange.from,
-										through: state.lastSeq,
-										at: iso(now),
-									},
-								}),
-					},
-				},
-			};
+			return { event: { kind: 'cancel', body: { at: iso(now) } } };
 		case 'reconcile':
 			return reconcile(state, command, now);
 	}
