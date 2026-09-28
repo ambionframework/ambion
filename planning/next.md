@@ -182,8 +182,6 @@ and the process tools. A step names the steps it needs; a step with no
 ### Phase 1. The drift
 
 - [ ] **3.** A cancellation has one shape. (C3)
-- [ ] **4.** A seat of an unknown executor kind fails at once, on each
-      of the three routers. (C5)
 - [ ] **5.** A composition carries no `version`, one capture serves a
       definition, and one registry serves the waiters. (C9)
 - [ ] **6.** One record for a live process in the table. (C11)
@@ -207,8 +205,7 @@ page it changes in the same commit.
 - [ ] **1.** `decide` builds every journal body and makes every authority
       decision. Needs phase 1 step 3. (C4)
 - [ ] **2.** One lease shape in the rules. Needs phase 1 step 3. (C2)
-- [ ] **3.** The remote call is an `Execution`, and `Transport` goes.
-      Needs phase 1 step 4. (C5)
+- [ ] **3.** The remote call is an `Execution`, and `Transport` goes. (C5)
 - [ ] **4.** The room applies the token limit, and the paging of a view
       goes. (C7)
 - [ ] **5.** The core owns the activation state. Needs 3 and 4. (C6)
@@ -301,21 +298,13 @@ the commit runs again. `room.ts` repeats the name and summary checks of
 workerd.
 
 **C5. One boundary between the room and a seat.** Three routers pick an
-execution by executor kind: `composeExecutions` and
-`defaultExecutionFactory` in `host/runtime.ts`, and `missingConnector` in
-`room.ts`. They fail in two ways. `composeExecutions` throws in
-`connect`, `portFor` in `room-host/dispatch.ts` reports a
-`delivery_error`, and the wake stays due, so the room sends it again after
-each resend window with no end. `missingConnector` fails the activation
-at once. `composeConnector` also builds the executor and hands it to the
-`Transport`. Cloudflare's `rpcTransport` keeps only `room` and `seat`, and
-the seat object builds the executor a second time in `configure.ts` and
-`seat-object.ts`.
+execution by executor kind: `composeExecutions` in `execution/route.ts`,
+`defaultExecutionFactory` in `host/defaults.ts`, and `connectorFor` in
+`room.ts`. Each ends in `missingConnector` on a miss. `composeConnector`
+also builds the executor and hands it to the `Transport`. Cloudflare's
+`rpcTransport` keeps only `room` and `seat`, and the seat object builds
+the executor a second time in `configure.ts` and `seat-object.ts`.
 
-- **A kind with no execution fails its activation at once, on every
-  router.** `composeExecutions` returns a port whose activation fails,
-  as `missingConnector` does. This fix changes no contract, and phase 1
-  holds it.
 - **The remote call is an `Execution`.** Its connector returns a port
   over RPC, and the seat object calls the execution of its own host.
   `Transport`, `inProcessTransport`, and the transport options of the
@@ -327,9 +316,8 @@ the seat object builds the executor a second time in `configure.ts` and
   pass `DEFAULT_TRACE_LIMITS` today, and `ConnectorComposition` exists
   for that difference.
 
-**Evidence:** a scripted case of an unknown kind under
-`composeExecutions` that ends the activation, `transportConformance` on
-`rpcTransport` in workerd, and the hosting export snapshot.
+**Evidence:** `transportConformance` on `rpcTransport` in workerd, and
+the hosting export snapshot.
 
 **C6. The core owns the activation state.** Each of the Pi, Claude, and
 Codex executors re-implements the `readThrough` and `cancelled` state,

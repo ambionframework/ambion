@@ -137,8 +137,9 @@ transient cause is a rate limit, a server error, or a lost connection.
   permanent.
 - **A transient failure retries to the cap.** The activation retry in the
   lease paragraph above is room-driven. Each retry spends an attempt.
-- **A room without an execution fails every activation as permanent.** The
-  error code is `no_execution`.
+- **A seat that no execution serves fails every activation as
+  permanent.** The error code is `no_execution`. The room does not send
+  the wake again.
 - **The Pi executor reads a status only from a provider diagnostic.** It
   treats 400, 401, 402, 403, 404, 405, and 422 as permanent, and credit,
   quota, usage-limit, or authentication text as permanent. It never reads a status from free error

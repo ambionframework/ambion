@@ -22,7 +22,9 @@ construct a model runner.
 `startRoom` and `resumeRoom` take an `execution` for one room run. An
 explicit `execution` wins over every default. A room whose seats run on
 more than one family passes `composeExecutions`, which routes each seat on
-the `kind` of its executor.
+the `kind` of its executor. A seat of a kind that the composition does not
+name fails at once with a `no_execution` error, and the failure is
+permanent.
 
 **A room with no `execution` uses the default of each executor kind.** An
 executor package calls `registerDefaultExecution(kind, factory)` when the

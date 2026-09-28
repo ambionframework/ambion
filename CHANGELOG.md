@@ -42,6 +42,10 @@ skill the same way. See [Skills](docs/skills.md).
   `room/exchange.ts` serves the summary outcome, the summaries of a
   closed exchange, and the refusal of a second closing commit.
 - **`answerView` reads the grant of an activation once.**
+- **A seat of an unknown executor kind fails at once on every router.**
+  Under `composeExecutions`, its activation fails with a permanent
+  `no_execution` error, as it does in a room with no execution. Before,
+  the room sent the wake again after each resend window, with no end.
 
 ### Breaking changes
 
