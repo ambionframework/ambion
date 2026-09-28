@@ -1,7 +1,6 @@
 /** The seat protocol translates room decisions into view, commit, and lease responses. */
 
 import type {
-	ActivationSpec,
 	CommitRequest,
 	CommitResult,
 	LeaseRequest,
@@ -10,21 +9,12 @@ import type {
 	ViewRange,
 	ViewResponse,
 } from './protocol.ts';
-import { activationSpec } from './room/activation.ts';
+import { seatAuthority } from './room/activation.ts';
 import { exchangeSession } from './room/exchange.ts';
 import type { RoomState } from './room/fold.ts';
-import { seatOf } from './room/lease.ts';
-import { isLive } from './room/rules.verified.ts';
-import type { Refusal } from './room/transition.ts';
+import type { Refusal, ReleaseCommand } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
-import {
-	copyMessage,
-	type EndReason,
-	type FailureCause,
-	type HarnessSession,
-	type RoomNotification,
-	type Usage,
-} from './types.ts';
+import { copyMessage, type RoomNotification } from './types.ts';
 
 const stale = (why: string): Stale => ({ stale: why });
 
@@ -55,20 +45,10 @@ export interface Answering {
 	write(commit: CommitRequest): Promise<CommitResult | { refusal: Refusal }>;
 	claim(id: string): Promise<LeaseResponse>;
 	renew(id: string, readThrough?: number): Promise<LeaseResponse>;
-	/** End one lease, for whatever reason. Nothing to end is not an error. */
-	end(
-		id: string,
-		reason: EndReason,
-		readThrough: number,
-		cause?: FailureCause,
-		usage?: Usage,
-		session?: HarnessSession,
-	): Promise<boolean | { refusal: Refusal }>;
+	/** A seat ends its own lease. Nothing to end is not an error. */
+	end(command: ReleaseCommand): Promise<boolean | { refusal: Refusal }>;
 	reconcile(): Promise<void>;
 }
-
-const onRoster = (state: RoomState, name: string): boolean =>
-	state.roster.some((seat) => seat.name === name);
 
 // -- view ---------------------------------------------------------------------
 
@@ -80,9 +60,9 @@ export async function answerView(
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
 	const state = room.state();
-	const lease = state.leases.get(id);
-	const spec = liveSpec(room, id, state);
-	if (lease === undefined || spec === undefined) return stale('the lease ended');
+	const authority = seatAuthority(state, id, room.now());
+	if ('stale' in authority) return authority;
+	const { spec, lease } = authority;
 	const resume = exchangeSession(id, state.closes, state.exchange, state.leases);
 	const granted = resume === undefined ? spec : { ...spec, resume };
 	const view = viewOf(granted, facts(room, state), range);
@@ -103,14 +83,6 @@ function facts(room: Answering, state: RoomState): RoomFacts {
 	};
 }
 
-/** The grant of a live lease under this id, for a seat on the roster, or nothing. */
-function liveSpec(room: Answering, id: string, state: RoomState): ActivationSpec | undefined {
-	const lease = state.leases.get(id);
-	if (lease === undefined || !isLive(lease, room.now())) return undefined;
-	const spec = activationSpec(id, state);
-	return spec !== undefined && onRoster(state, spec.seat) ? spec : undefined;
-}
-
 // -- commit -------------------------------------------------------------------
 
 /**
@@ -120,18 +92,21 @@ function liveSpec(room: Answering, id: string, state: RoomState): ActivationSpec
  * at any position and hands the author what it landed past. A summary commits
  * against its fixed closed exchange, so later record entries do not refuse
  * it. A seating also commits without
- * `readThrough`. A lease that ended is answered `stale`, before and where
- * the write happens.
+ * `readThrough`. A seat without the authority of its activation is
+ * answered `stale`, before and where the write happens. The check before
+ * the write is the same `seatAuthority`: a key that the journal already
+ * holds returns its entry with no decision, so a retry after the lease
+ * ended hears `stale` too.
  */
 export async function answerCommit(room: Answering, commit: CommitRequest): Promise<CommitResult> {
 	const captured = structuredClone(commit);
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
-	const spec = liveSpec(room, captured.activation, room.state());
-	if (spec === undefined) return stale('the lease ended');
+	const authority = seatAuthority(room.state(), captured.activation, room.now());
+	if ('stale' in authority) return authority;
 	const result = await room.write(captured);
 	return 'refusal' in result
-		? refused(room, spec.seat, captured.activation, result.refusal)
+		? refused(room, authority.spec.seat, captured.activation, result.refusal)
 		: result;
 }
 
@@ -152,26 +127,25 @@ function refused(
 // -- lease --------------------------------------------------------------------
 
 /**
- * A claim, renewal, or release requires the seat on the roster. A release
- * requires a live lease and a valid purpose. Room control ends unclaimed
- * work directly when it revokes or abandons that work.
+ * A claim or a renewal requires the grant of the activation, and a release
+ * requires the authority of the seat: `decide` checks each where the write
+ * lands. The grant holds only for a seat on the roster. A release also
+ * checks the authority when the seat asks, as a commit does, so a release
+ * behind a write in the queue reads the lease as the seat saw it. Room
+ * control ends unclaimed work directly when it revokes or abandons that
+ * work.
  */
 export async function answerLease(room: Answering, lease: LeaseRequest): Promise<LeaseResponse> {
 	const captured = structuredClone(lease);
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
-	const state = room.state();
-	const seat = seatOf(captured.activation);
-	if (seat === undefined || !onRoster(state, seat)) {
-		return stale('the seat is not on the roster');
-	}
 	switch (captured.operation) {
 		case 'claim':
 			return room.claim(captured.activation);
 		case 'renew':
 			return room.renew(captured.activation, captured.readThrough);
 		case 'release':
-			return release(room, captured, state);
+			return release(room, captured);
 		default:
 			return stale('the lease operation is not known');
 	}
@@ -180,17 +154,11 @@ export async function answerLease(room: Answering, lease: LeaseRequest): Promise
 async function release(
 	room: Answering,
 	lease: Extract<LeaseRequest, { operation: 'release' }>,
-	state: RoomState,
 ): Promise<LeaseResponse> {
-	if (liveSpec(room, lease.activation, state) === undefined) return stale('the lease ended');
-	const ended = await room.end(
-		lease.activation,
-		lease.reason,
-		lease.readThrough,
-		lease.cause,
-		lease.usage,
-		lease.session,
-	);
+	const { activation, operation: _operation, ...ending } = lease;
+	const authority = seatAuthority(room.state(), activation, room.now());
+	if ('stale' in authority) return authority;
+	const ended = await room.end({ type: 'release', id: activation, ...ending });
 	if (typeof ended !== 'boolean') {
 		const refusal = ended.refusal;
 		return stale('reason' in refusal ? refusal.reason : 'the lease ended');

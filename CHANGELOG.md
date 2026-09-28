@@ -138,6 +138,28 @@ its `text`.
   `ps` that failed once does not hide a live shell: the next read adopts
   it. The status stays the same. A process with no `pid` gets no line.
   See [Processes](docs/processes.md#the-files).
+- **`decide` builds every entry that the room writes.** A pass of the
+  reconcile asks for its writes as commands: an end of a lease, the close
+  of the exchange that it saw, and the return of a scheduled say. `decide`
+  builds each entry where the write lands. One `returnable` rule serves
+  the pass and the return of a scheduled say, and the pass asks
+  `admitsClose` for the close. One `decideAndAppend` in `room-host/core.ts`
+  replaces eleven wrappers of the host around `decide`, and its
+  `whileRunning` option writes nothing once the room is gone. A lease end
+  takes one object in place of six arguments.
+- **A seat release is a command, and one `seatAuthority` checks a seat.**
+  The authority is a live lease and the grant of the activation, and the
+  grant holds only for a seat on the roster. `view`, `commit`, and a
+  release read `seatAuthority`, and `decide` reads it again for a commit
+  and a release. A commit whose grant is gone is `stale` where the write
+  lands, as it was when the seat asked. The answer of a lease call that
+  the room refuses can name another reason; its category stays. See
+  [Executors](docs/executors.md#the-room-tools).
+- **The host decides a presence change once, and a composition checks each
+  name once.** A seating and an unseating by the host commit with no
+  decision before the write. `startRoom` checks repeated names and the
+  summary writer, and the composition refuses only the name of a person
+  of the record.
 - **One loop serves the waits of an exchange.** `waitForClose` and
   `waitForSummary` run one loop over one set of waiters. Each publication
   wakes the set after its effect, and the end of the run wakes it once

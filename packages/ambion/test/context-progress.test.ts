@@ -126,22 +126,24 @@ describe('acknowledged lease context', () => {
 			{ id: 'message:2:solo:2', attempt: 2, unsuccessfulAttempts: 1 },
 		]);
 
-		const decision = planReconciliation(releasedUnread, reconciliation(1));
-		expect(decision.abandoned).toEqual([
-			{
-				id: 'message:2:solo:2',
-				phase: 'ended',
-				reason: 'abandoned',
-				at,
-				readThrough: 0,
-				cause: 'transient',
+		const [abandoned, ...rest] = planReconciliation(releasedUnread, reconciliation(1)).abandoned;
+		expect(rest).toEqual([]);
+		if (abandoned === undefined) throw new Error('Expected an abandonment.');
+		const ended = decide(releasedUnread, { type: 'end', ...abandoned }, now);
+		expect(ended).toEqual({
+			event: {
+				kind: 'lease',
+				body: {
+					id: 'message:2:solo:2',
+					phase: 'ended',
+					reason: 'abandoned',
+					at,
+					readThrough: 0,
+					cause: 'transient',
+				},
 			},
-		]);
-		const stopped = evolve(
-			releasedUnread,
-			{ kind: 'lease', seq: 5, body: decision.abandoned[0] as LeaseChange },
-			retry,
-		);
+		});
+		const stopped = evolve(releasedUnread, event(ended, 5), retry);
 		expect(pendingOf(stopped)).toEqual([]);
 		expect(planReconciliation(stopped, reconciliation(1)).sends).toEqual([]);
 	});

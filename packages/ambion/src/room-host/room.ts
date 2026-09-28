@@ -54,27 +54,24 @@ import {
 	readView,
 } from '../room/read.ts';
 import { liveWork } from '../room/reconcile.ts';
-import { decide, type Refusal } from '../room/transition.ts';
+import { decide, type Refusal, type ReleaseCommand } from '../room/transition.ts';
 import type { PendingSay } from '../scheduling.ts';
 import type {
 	AgentDefinition,
 	ClosedExchangeView,
-	EndReason,
-	FailureCause,
-	HarnessSession,
 	HumanDefinition,
 	Message,
 	RoomNotification,
 	RoomRead,
 	SeatOptions,
 	Seq,
-	Usage,
 	Without,
 } from '../types.ts';
 import * as control from './control.ts';
 import {
 	acceptedEvent,
 	compositionOf,
+	decideAndAppend,
 	notificationFor,
 	requireSubmission,
 	submit,
@@ -252,15 +249,10 @@ export class RoomHost implements Room, RunningRoom {
 		await this.journal.ready;
 		this.enter('running');
 		dispatch.seedHeard(this);
+		// The composition is decided before the fence, so a refused one writes nothing.
 		acceptedEvent(decide(this.state(), { type: 'compose', composition }, this.now()));
-		requireSubmission(
-			await submit(this.journal, 'run', () => decide(this.state(), { type: 'run' }, this.now())),
-		);
-		requireSubmission(
-			await submit(this.journal, 'composition', () =>
-				decide(this.state(), { type: 'compose', composition }, this.now()),
-			),
-		);
+		requireSubmission(await decideAndAppend(this, 'run', { type: 'run' }));
+		requireSubmission(await decideAndAppend(this, 'composition', { type: 'compose', composition }));
 		await this.reconcile();
 	}
 
@@ -530,16 +522,9 @@ export class RoomHost implements Room, RunningRoom {
 		return control.hold(this, id, 'renew', readThrough);
 	}
 
-	/** End one lease, for whatever reason. Nothing to end is not an error. */
-	end(
-		id: string,
-		reason: EndReason,
-		readThrough: Seq,
-		cause?: FailureCause,
-		usage?: Usage,
-		session?: HarnessSession,
-	): Promise<boolean | { refusal: Refusal }> {
-		return control.end(this, id, reason, readThrough, cause, usage, session);
+	/** A seat ends its own lease. Nothing to end is not an error. */
+	end(command: ReleaseCommand): Promise<boolean | { refusal: Refusal }> {
+		return control.end(this, command);
 	}
 
 	// -- control ----------------------------------------------------------------

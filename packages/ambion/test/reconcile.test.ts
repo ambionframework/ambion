@@ -4,6 +4,7 @@ import type { Close, LeaseChange } from '../src/journal/events.ts';
 import type { Body, Entry } from '../src/journal/journal.ts';
 import type { RoomState } from '../src/room/fold.ts';
 import { liveWork, planReconciliation, type ReconcileOptions } from '../src/room/reconcile.ts';
+import { decide } from '../src/room/transition.ts';
 import type { Message } from '../src/types.ts';
 import { owedOf, pendingOf, replayState } from './support/fold.ts';
 
@@ -88,13 +89,22 @@ describe('room reconciliation', () => {
 	});
 
 	it('closes a quiet human exchange and assigns its seated writer, unless the owner is absent or the writer is unseated', () => {
+		/** The close the pass asks for, as the write decides it. */
+		const closed = (state: RoomState) => {
+			const close = planReconciliation(state, options()).close;
+			return close === undefined ? undefined : decide(state, { type: 'close', ...close }, T0);
+		};
 		const quiet = [composition(), arrived(), said(), released('message:3:product:1')];
 		expect(planReconciliation(fold(quiet), options()).close).toEqual({
 			owner: 'priya',
 			from: 3,
 			through: 3,
-			at,
-			summary: 'writer',
+		});
+		expect(closed(fold(quiet))).toEqual({
+			event: {
+				kind: 'close',
+				body: { owner: 'priya', from: 3, through: 3, at, summary: 'writer' },
+			},
 		});
 
 		const absentOwner = fold([
@@ -105,11 +115,8 @@ describe('room reconciliation', () => {
 		expect(planReconciliation(absentOwner, options()).close).toEqual(undefined);
 
 		const writerLeft = fold([...quiet.slice(0, 3), unseated(4), quiet[3] as Entry]);
-		expect(planReconciliation(writerLeft, options()).close).toEqual({
-			owner: 'priya',
-			from: 3,
-			through: 4,
-			at,
+		expect(closed(writerLeft)).toEqual({
+			event: { kind: 'close', body: { owner: 'priya', from: 3, through: 4, at } },
 		});
 	});
 

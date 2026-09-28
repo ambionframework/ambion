@@ -103,8 +103,31 @@ export function scheduleRefusal(
 export const ownerOf = (intent: { after?: number }, open: ExchangeRef | undefined) =>
 	intent.after === undefined || open === undefined ? {} : { owner: open.owner };
 
-/** The entry that gives a scheduled say back to its author. */
-export function returnedBody(say: ScheduledSay, now: number): Body<ReturnedMessage> {
+/**
+ * Whether the room returns one say now: it is due, and its seat is on the
+ * roster. A say of a seat off the roster waits for the seat to return.
+ */
+export function returnable(
+	say: ScheduledSay,
+	roster: readonly { readonly name: string }[],
+	now: number,
+): boolean {
+	return say.dueAt <= now && roster.some((seat) => seat.name === say.seat);
+}
+
+/**
+ * The returned entry the room writes for one say now, or nothing: the say
+ * no longer waits, or it is not `returnable`. A second write of the same
+ * say finds it gone.
+ */
+export function returning(
+	list: readonly ScheduledSay[],
+	roster: readonly { readonly name: string }[],
+	seq: Seq,
+	now: number,
+): Body<ReturnedMessage> | undefined {
+	const say = list.find((candidate) => candidate.seq === seq);
+	if (say === undefined || !returnable(say, roster, now)) return undefined;
 	return {
 		kind: 'returned',
 		at: new Date(now).toISOString(),
@@ -114,22 +137,6 @@ export function returnedBody(say: ScheduledSay, now: number): Body<ReturnedMessa
 		text: say.text,
 		...(say.refs === undefined ? {} : { refs: [...say.refs] }),
 	};
-}
-
-/**
- * The returned entry the room writes for one say now, or nothing: the say
- * no longer waits, is not due, or its seat is not on the roster. A second
- * write of the same say finds it gone.
- */
-export function returning(
-	list: readonly ScheduledSay[],
-	roster: readonly { readonly name: string }[],
-	seq: Seq,
-	now: number,
-): Body<ReturnedMessage> | undefined {
-	const say = list.find((candidate) => candidate.seq === seq);
-	if (say === undefined || say.dueAt > now) return undefined;
-	return roster.some((seat) => seat.name === say.seat) ? returnedBody(say, now) : undefined;
 }
 
 /**
