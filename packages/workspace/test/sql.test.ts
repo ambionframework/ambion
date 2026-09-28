@@ -114,7 +114,7 @@ describe('a workspace with a SQL backend', () => {
 		expect(guidance).toContain(
 			'structured data that a colleague needs here as a named table or view',
 		);
-		expect(guidance).toContain('sqlite_master shows how a view was built.');
+		expect(guidance).toContain('sqlite_master holds the definition of each view.');
 	});
 
 	it('runs statements as the calling agent on one database the agents share, views and their definitions included', async () => {

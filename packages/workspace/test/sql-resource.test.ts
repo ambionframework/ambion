@@ -128,6 +128,11 @@ describe('the SQL resource', () => {
 		).rejects.toThrow(/Invalid arguments/);
 		const query = resource.tools().tools.find((tool) => tool.name === 'query');
 		expect(JSON.stringify(query?.parameters)).toContain('The default is 2.');
+		// A host cap past the most a caller may ask for is held to it.
+		const big = open({ maxRows: 5000 })
+			.tools()
+			.tools.find((tool) => tool.name === 'query');
+		expect(JSON.stringify(big?.parameters)).toContain('up to 1000. The default is 1000.');
 	});
 
 	it('serializes calls through the owner, closes once on dispose, and refuses a late call', async () => {

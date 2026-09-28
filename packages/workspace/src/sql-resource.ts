@@ -60,7 +60,7 @@ export interface SqlResourceOptions {
 	schema?: string;
 	/** The tables `insert` may add rows to. `insert` refuses every other table. */
 	writable?: readonly string[];
-	/** How many rows the `query` preview shows. The default is 50. */
+	/** How many rows the `query` preview shows. The default is 50, and the most is 1000. */
 	maxRows?: number;
 }
 
@@ -72,6 +72,9 @@ export interface SqlResource extends WorkspaceResource<SqlResourceEnv> {
 
 const PREVIEW_ROWS = 50;
 
+/** The most rows one preview shows, as for the `sql` tool. */
+const MAX_PREVIEW_ROWS = 1000;
+
 let memoryCounter = 0;
 
 const GUIDANCE =
@@ -81,7 +84,8 @@ const GUIDANCE =
 
 /** Open one SQL resource. The two handles stay open until `dispose`. */
 export function openSqlResource(options: SqlResourceOptions): SqlResource {
-	const maxRows = options.maxRows ?? PREVIEW_ROWS;
+	// The default preview never shows more rows than a caller may ask for.
+	const maxRows = Math.min(options.maxRows ?? PREVIEW_ROWS, MAX_PREVIEW_ROWS);
 	const handles = openHandles(options);
 	const owner = openResource<SqlResourceEnv>({
 		name: options.name,
@@ -141,7 +145,7 @@ function sqlBackend(
 	const env: SqlResourceEnv = {
 		query: (sql) => runQuery(handles.reader, sql),
 		insert: (table, values, provenance) =>
-			runRecord(handles.writer, writable, table, values, provenance),
+			runInsert(handles.writer, writable, table, values, provenance),
 		cleanup: async () => undefined,
 	};
 	return {
@@ -184,7 +188,7 @@ function checkColumns(table: string, columns: Set<string>, names: string[]): voi
 	}
 }
 
-function runRecord(
+function runInsert(
 	writer: DatabaseSync,
 	writable: ReadonlySet<string>,
 	table: string,
@@ -221,9 +225,6 @@ function provenanceOf(ctx: ToolContext): SqlProvenance {
 		at: new Date().toISOString(),
 	};
 }
-
-/** The most rows one preview shows, as for the `sql` tool. */
-const MAX_PREVIEW_ROWS = 1000;
 
 /** The `query` schema. `cap` is the preview size when the call names none. */
 const querySchema = (cap: number) =>

@@ -187,7 +187,7 @@ describe('the URIs a prompt states', () => {
 		expect(rendered.context).toContain(messageUri('site', 4));
 		expect(rendered.context).not.toContain('/exchange/');
 		expect(rendered.context).not.toContain('a say you scheduled');
-		// The kernel names no workspace: a seat with no database reads no database guidance.
+		// The kernel names no database: a seat with no database reads no database guidance.
 		expect(`${rendered.mechanism}${rendered.agent}`).not.toMatch(/database|sqlite/i);
 	});
 

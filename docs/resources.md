@@ -90,7 +90,7 @@ const agent = defineAgent({ ..., bundles: [lab.tools()] });
 handle, and it sets `query_only` before each run. An INSERT, an UPDATE, or a
 statement that changes the schema fails. The preview shows 50 rows unless the
 caller sets `rows`, from 0 to 1000. The host option `maxRows` sets the
-default.
+default, and the resource holds it to 1000.
 
 **`insert` is the only write.** It adds one row to a table that the host
 lists in `writable`. It refuses any other table and any unknown column. It
@@ -100,7 +100,7 @@ also refuses a provenance column that the caller sets.
 again inserts again. Give the table a UNIQUE constraint when a row must appear
 once. The `schema` runs at every open, so write it to run again.
 
-**The resource shares no journal transaction.** A crash between a `record`
+**The resource shares no journal transaction.** A crash between an `insert`
 call and the journal write of the activation can leave a row for an
 activation that the journal never committed. The journal stays the record of
 the room.
