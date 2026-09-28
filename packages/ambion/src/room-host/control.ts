@@ -6,19 +6,21 @@
 
 import { decodeActivationId } from '../activation-id.ts';
 import { AmbionError } from '../errors.ts';
-import type { Close } from '../journal/events.ts';
 import { placed, spaced } from '../journal/journal.ts';
 import type { CommitRequest, CommitResult, LeaseResponse } from '../protocol.ts';
 import { liveWork } from '../room/reconcile.ts';
 import {
 	decide,
 	type ReconcileDecision,
+	type ReconcileStep,
 	type Refusal,
+	type ReleaseCommand,
 	stopWork as stopWorkDecision,
 } from '../room/transition.ts';
-import type { EndReason, FailureCause, Intent, Message, Seq } from '../types.ts';
-import { copyMessage, type HarnessSession, type Usage } from '../types.ts';
+import type { Intent, Message, Seq } from '../types.ts';
+import { copyMessage } from '../types.ts';
 import {
+	decideAndAppend,
 	messageKeyConflict,
 	type RoomBase,
 	refusalError,
@@ -90,21 +92,16 @@ export async function writeCommit(
 	host: ControlHost,
 	commit: CommitRequest,
 ): Promise<CommitResult | { refusal: Refusal }> {
-	const appended = await submit(
-		host.journal,
+	const appended = await decideAndAppend(
+		host,
 		'message',
-		() =>
-			decide(
-				host.state(),
-				{
-					type: 'commit',
-					commit,
-					bytes: host.runtime.limits.message.bytes,
-					schedule: host.runtime.limits.schedule,
-				},
-				host.now(),
-			),
-		spaced('commit', commit.key),
+		{
+			type: 'commit',
+			commit,
+			bytes: host.runtime.limits.message.bytes,
+			schedule: host.runtime.limits.schedule,
+		},
+		{ key: spaced('commit', commit.key) },
 	);
 	if ('entry' in appended) {
 		const message = placed(appended.entry);
@@ -145,25 +142,20 @@ export async function hold(
 	type: 'claim' | 'renew',
 	readThrough?: Seq,
 ): Promise<LeaseResponse> {
-	const written = await submit(host.journal, 'lease', () => {
-		if (host.gone()) return { event: undefined };
-		const lease = host.runtime.limits.lease;
-		const decision = decide(
-			host.state(),
-			{
-				type,
-				id,
-				expiry: lease.ttl,
-				deadline: lease.deadline,
-				...(readThrough === undefined ? {} : { readThrough }),
-			},
-			host.now(),
-		);
-		if (!('event' in decision) || decision.event?.body.phase !== 'running')
-			return { event: undefined };
-		return decision;
-	});
-	requireSubmission(written);
+	const lease = host.runtime.limits.lease;
+	const written = await decideAndAppend(
+		host,
+		'lease',
+		{
+			type,
+			id,
+			expiry: lease.ttl,
+			deadline: lease.deadline,
+			...(readThrough === undefined ? {} : { readThrough }),
+		},
+		{ whileRunning: true },
+	);
+	// A refusal of a claim or a renewal is the same answer as a lease that ended.
 	return 'entry' in written && written.entry.body.phase === 'running'
 		? { ok: { expiresAt: written.entry.body.expiresAt, lastSeq: host.state().lastSeq } }
 		: { stale: 'the lease ended' };
@@ -177,32 +169,14 @@ export async function hold(
  * a lease that started ends how it went.
  * An expiry is judged where the change is written: a renewal that landed
  * ahead of it keeps the lease, and nothing is written. The change says
- * how the activation went, and `heardLease` says so once.
+ * how the activation went, and `heardLease` says so once. A release is the
+ * seat's own end, and `decide` checks the authority of the seat first.
  */
 export async function end(
 	host: ControlHost,
-	id: string,
-	reason: EndReason,
-	readThrough: Seq,
-	cause?: FailureCause,
-	usage?: Usage,
-	session?: HarnessSession,
+	command: Extract<ReconcileStep, { type: 'end' }> | ReleaseCommand,
 ): Promise<boolean | { refusal: Refusal }> {
-	const appended = await submit(host.journal, 'lease', () =>
-		decide(
-			host.state(),
-			{
-				type: 'end',
-				id,
-				reason,
-				readThrough,
-				...(cause === undefined ? {} : { cause }),
-				...(usage === undefined ? {} : { usage }),
-				...(session === undefined ? {} : { session }),
-			},
-			host.now(),
-		),
-	);
+	const appended = await decideAndAppend(host, 'lease', command);
 	if ('entry' in appended) return true;
 	if (appended.result !== undefined && 'refusal' in appended.result)
 		return { refusal: appended.result.refusal };
@@ -269,47 +243,37 @@ async function apply(host: ControlHost, decision: ReconcileDecision): Promise<bo
 	// A wake the fold no longer says is due is not one this room waits on.
 	for (const id of decision.effects.forget) host.sentAt.delete(id);
 	let changed = false;
-	// The decision says how each lease ends: expired first, then given up on.
-	for (const event of decision.events) {
+	// The decision says how each lease ends: revoked, expired, then given up on.
+	for (const step of decision.steps) {
 		// A room that went away mid-pass writes nothing more of what it decided.
 		if (host.gone()) return changed;
-		changed = (await applyEvent(host, event)) || changed;
+		changed = (await applyStep(host, step)) || changed;
 	}
 	for (const send of decision.effects.sends) host.sendWake(send.id, send.seat);
 	return changed || decision.effects.sends.length > 0;
 }
 
-function applyEvent(
-	host: ControlHost,
-	event: ReconcileDecision['events'][number],
-): Promise<boolean> {
-	if (event.kind === 'lease' && event.body.phase === 'ended')
-		return end(
-			host,
-			event.body.id,
-			event.body.reason,
-			event.body.readThrough,
-			event.body.cause,
-			event.body.usage,
-			event.body.session,
-		).then((result) => {
-			return requireEnd(result);
-		});
-	if (event.kind === 'message' && event.body.kind === 'returned')
-		return returnSay(host, event.body.message);
-	return event.kind === 'close' ? closeExchange(host, event.body) : Promise.resolve(false);
+function applyStep(host: ControlHost, step: ReconcileStep): Promise<boolean> {
+	switch (step.type) {
+		case 'end':
+			return end(host, step).then(requireEnd);
+		case 'close':
+			return closeExchange(host, step);
+		case 'return':
+			return returnSay(host, step);
+	}
 }
 
 /**
  * The room gives one scheduled say back to its author. The write decides
- * again inside the journal queue, so a say that another write returned
- * first writes nothing, and the fence refuses a run that lost the room.
+ * inside the journal queue, so a say that another write returned first
+ * writes nothing, and the fence refuses a run that lost the room.
  */
-async function returnSay(host: ControlHost, seq: Seq): Promise<boolean> {
-	const written = await submit(host.journal, 'message', () => {
-		if (host.gone()) return { event: undefined };
-		return decide(host.state(), { type: 'return', message: seq }, host.now());
-	});
+async function returnSay(
+	host: ControlHost,
+	step: Extract<ReconcileStep, { type: 'return' }>,
+): Promise<boolean> {
+	const written = await decideAndAppend(host, 'message', step, { whileRunning: true });
 	requireSubmission(written);
 	return 'entry' in written;
 }
@@ -326,11 +290,11 @@ function requireEnd(result: boolean | { refusal: Refusal }): boolean {
  * opens the next exchange when a question landed after the decision; the
  * next pass closes that one at once when nobody works on it.
  */
-async function closeExchange(host: ControlHost, close: Close): Promise<boolean> {
-	const written = await submit(host.journal, 'close', () => {
-		if (host.gone()) return { event: undefined };
-		return decide(host.state(), { type: 'close', close }, host.now());
-	});
+async function closeExchange(
+	host: ControlHost,
+	close: Extract<ReconcileStep, { type: 'close' }>,
+): Promise<boolean> {
+	const written = await decideAndAppend(host, 'close', close, { whileRunning: true });
 	requireSubmission(written);
 	if ('entry' in written) return true;
 	const state = host.state();
@@ -359,10 +323,12 @@ function arm(host: ControlHost, at: number | undefined): void {
 export async function dismissSay(host: ControlHost, seq: Seq): Promise<boolean> {
 	await host.ready;
 	host.assertRunning();
-	const written = await submit(host.journal, 'message', () => {
-		if (host.gone()) return { event: undefined };
-		return decide(host.state(), { type: 'dismiss', message: seq }, host.now());
-	});
+	const written = await decideAndAppend(
+		host,
+		'message',
+		{ type: 'dismiss', message: seq },
+		{ whileRunning: true },
+	);
 	requireSubmission(written);
 	if (host.gone() && !('entry' in written))
 		throw new AmbionError('room_stopped', `Room '${host.name}' stopped before the dismissal.`);
@@ -390,14 +356,11 @@ export async function abort(host: ControlHost): Promise<void> {
 async function cancel(host: ControlHost, key: string): Promise<void> {
 	await host.ready;
 	host.assertRunning();
-	const appended = await submit(
-		host.journal,
+	const appended = await decideAndAppend(
+		host,
 		'cancel',
-		() => {
-			if (host.gone()) return { event: undefined };
-			return decide(host.state(), { type: 'cancel' }, host.now());
-		},
-		key,
+		{ type: 'cancel' },
+		{ key, whileRunning: true },
 	);
 	requireSubmission(appended);
 	if (!('entry' in appended))

@@ -198,8 +198,6 @@ Each step states the change to
 [Executors](../docs/executors.md#the-hosting-entry-exports) or to the
 page it changes in the same commit.
 
-- [ ] **1.** `decide` builds every journal body and makes every authority
-      decision. (C4)
 - [ ] **3.** The remote call is an `Execution`, and `Transport` goes. (C5)
 - [ ] **4.** The room applies the token limit, and the paging of a view
       goes. (C7)
@@ -207,7 +205,7 @@ page it changes in the same commit.
 - [ ] **6.** The workspace keeps one SQL path and the ports that a
       backend uses. (C8)
 - [ ] **7.** Cloudflare reuses the core, and one scripted room serves the
-      conformance suites. Needs 1 and 3. (C9)
+      conformance suites. Needs 3. (C9)
 - [ ] **8.** `wait` takes `handles` alone, beside `status` and `ps`. (C10)
 
 **Evidence:** the evidence of phase 1 holds for each step. Steps 3 and 7
@@ -226,34 +224,6 @@ pass one live file on each of Pi, Claude, and Codex before they merge.
 
 **Each item removes one kind of second path.** Each states the problem,
 the change, and the evidence.
-
-**C4. `decide` is the one decision point.** The reconcile in
-`transition.ts` builds the bodies of returned says, closes, and lease
-endings, and `control.ts` discards each body and submits a command that
-decides again. `dueSays` and `returning` check the same condition, and so
-do the close in `planReconciliation` and `admitsClose`. The seat protocol
-in `answers.ts` checks liveness, the grant, and the roster that
-`transition.ts` checks again. `validatePresence` runs the `decide` that
-the commit runs again. `room.ts` repeats the name and summary checks of
-`transition.compose`.
-
-- **The reconcile emits commands.** `return`, `close`, and `end` go to
-  `decide`, and `decide` alone builds a body.
-- **A seat release is a command.** `answers.ts` maps a refusal to its
-  answer, and one pure `seatAuthority` in `room/` serves `view`.
-- **`seatAuthority` answers a missing grant in the `stale` category.**
-  [Executors](../docs/executors.md) states that an adapter aborts on
-  `stale` and continues on `refused`, so a seat whose grant is gone stops
-  at once, as it does today.
-- **One `decideAndAppend` serves the host.** It replaces about nine
-  hand-written `submit(() => decide(...))` wrappers, and it takes the
-  `gone()` guard as an option, since stop still writes revocations and
-  departures. `end` takes one object in place of six positional
-  arguments.
-
-**Evidence:** the refusal tests and the history walk of
-`consistency.test.ts` pass unchanged, and the Cloudflare tests pass in
-workerd.
 
 **C5. One boundary between the room and a seat.** Three routers pick an
 execution by executor kind: `composeExecutions` in `execution/route.ts`,

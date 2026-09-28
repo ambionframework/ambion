@@ -11,7 +11,13 @@ import type { RoomRuntime } from '../host/runtime.ts';
 import type { Composition } from '../journal/events.ts';
 import type { Kind, RoomJournal } from '../journal/journal.ts';
 import type { RoomState } from '../room/fold.ts';
-import type { Refusal, RoomDecision } from '../room/transition.ts';
+import {
+	type CommandFor,
+	type DecidedKind,
+	decide,
+	type Refusal,
+	type RoomDecision,
+} from '../room/transition.ts';
 import type { Message, RoomNotification, SpokenMessage, Without } from '../types.ts';
 import { copyMessage } from '../types.ts';
 import type { CompositionDraft } from './room.ts';
@@ -57,6 +63,29 @@ export function submit<K extends Kind>(
 			return { result };
 		},
 	});
+}
+
+/**
+ * One command, decided against the fold inside the journal's write queue and
+ * appended when it proposes an entry. `key` makes the append idempotent.
+ * `whileRunning` writes nothing once the room is gone; a stop leaves it off,
+ * since the stop still writes its revocations and departures.
+ */
+export function decideAndAppend<K extends DecidedKind>(
+	host: Pick<RoomBase, 'journal' | 'state' | 'now' | 'gone'>,
+	kind: K,
+	command: CommandFor[K],
+	options: { key?: string; whileRunning?: boolean } = {},
+) {
+	return submit(
+		host.journal,
+		kind,
+		() =>
+			options.whileRunning === true && host.gone()
+				? { event: undefined }
+				: decide<K>(host.state(), command, host.now()),
+		options.key,
+	);
 }
 
 /** Convert a refused internal decision to the existing room API error. */

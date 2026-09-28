@@ -1,7 +1,7 @@
 /** Pure commands and committed events for a room. */
 
 import type { AmbionErrorCode } from '../errors.ts';
-import type { Close, Composition, Seating } from '../journal/events.ts';
+import type { Composition, Seating } from '../journal/events.ts';
 import type { Bodies, Body, Kind } from '../journal/journal.ts';
 import type { ActivationSpec, CommitRequest, Unchanged } from '../protocol.ts';
 import { refsRefusal } from '../refs.ts';
@@ -15,11 +15,12 @@ import type {
 	Seq,
 	Usage,
 } from '../types.ts';
-import { activationSpec } from './activation.ts';
+import { activationSpec, NO_GRANT, seatAuthority } from './activation.ts';
 import { coveringSummary } from './exchange.ts';
 import { isFixed, type RoomState } from './fold.ts';
 import { seatOf } from './lease.ts';
 import {
+	type Ending,
 	liveWork,
 	planReconciliation,
 	type ReconcileOptions,
@@ -29,6 +30,7 @@ import { routes } from './routing.ts';
 import {
 	admitsClose,
 	admitsLease,
+	type CloseRef,
 	speechFreshness as freshnessRule,
 	isExpired,
 	isLive,
@@ -37,7 +39,8 @@ import {
 	onRecord,
 	stampedSummary,
 } from './rules.verified.ts';
-import { dismissal, ownerOf, returnedBody, returning, scheduleRefusal } from './scheduled.ts';
+import { dismissal, ownerOf, returning, scheduleRefusal } from './scheduled.ts';
+import { summaryWriter } from './summary.ts';
 
 type ProposedEvent<K extends Kind = Kind> = {
 	[P in K]: { kind: P; body: Bodies[P] };
@@ -51,32 +54,45 @@ type MessageCommand =
 	| { type: 'return'; message: Seq }
 	| { type: 'dismiss'; message: Seq };
 type DismissStamp = { at: string; activationId?: string; from?: string };
+/** How one lease ends: what an end entry carries beside its stamp. */
+interface LeaseEnding {
+	id: string;
+	reason: EndReason;
+	readThrough: number;
+	cause?: FailureCause;
+	usage?: Usage;
+	session?: HarnessSession;
+}
+/** The room ends a lease: a pass, or a stop. */
+type EndCommand = { type: 'end' } & LeaseEnding;
+/** A seat ends its own lease. The seat must hold the authority of the activation. */
+export type ReleaseCommand = { type: 'release' } & LeaseEnding;
 type LeaseCommand =
 	| { type: 'claim'; id: string; expiry: number; deadline: number }
 	| { type: 'renew'; id: string; expiry: number; deadline: number; readThrough?: number }
-	| {
-			type: 'end';
-			id: string;
-			reason: EndReason;
-			readThrough: number;
-			cause?: FailureCause;
-			usage?: Usage;
-			session?: HarnessSession;
-	  };
+	| EndCommand
+	| ReleaseCommand;
 type ComposeCommand = { type: 'compose'; composition: Body<Composition> };
-type CloseCommand = { type: 'close'; close: Close };
+/** Close the exchange that the pass saw open, at the record position it saw. */
+type CloseCommand = { type: 'close' } & CloseRef;
 type RunCommand = { type: 'run' };
 type CancelCommand = { type: 'cancel' };
 type ReconcileCommand = { type: 'reconcile'; options: Omit<ReconcileOptions, 'now'> };
 
-export type RoomCommand =
-	| MessageCommand
-	| LeaseCommand
-	| ComposeCommand
-	| CloseCommand
-	| RunCommand
-	| CancelCommand
-	| ReconcileCommand;
+/** The command that decides each kind of entry. */
+export interface CommandFor {
+	message: MessageCommand;
+	lease: LeaseCommand;
+	composition: ComposeCommand;
+	close: CloseCommand;
+	run: RunCommand;
+	cancel: CancelCommand;
+}
+
+/** A kind of entry that one command decides. */
+export type DecidedKind = keyof CommandFor;
+
+export type RoomCommand = CommandFor[DecidedKind] | ReconcileCommand;
 
 /** The codes a decision refuses with. Every one is a code the host switches on. */
 type RefusalCode = Extract<
@@ -86,7 +102,6 @@ type RefusalCode = Extract<
 	| 'not_present'
 	| 'unknown_participant'
 	| 'duplicate_name'
-	| 'missing_definition'
 	| 'message_too_large'
 >;
 
@@ -96,9 +111,12 @@ export type Refusal =
 export type RoomDecision<K extends Kind> =
 	{ event: ProposedEvent<K> | undefined } | { refusal: Refusal } | { unchanged: Unchanged };
 
+/** A write a pass asks for. `decide` builds its entry where the write lands. */
+export type ReconcileStep = EndCommand | CloseCommand | Extract<MessageCommand, { type: 'return' }>;
+
 export type ReconcileDecision = {
-	events: ProposedEvent<'lease' | 'close' | 'message'>[];
-	effects: Omit<Reconciliation, 'expired' | 'abandoned' | 'close' | 'returns'>;
+	steps: ReconcileStep[];
+	effects: Pick<Reconciliation, 'sends' | 'forget' | 'alarmAt'>;
 };
 
 export function decide(
@@ -120,6 +138,11 @@ export function decide(
 	now: number,
 ): RoomDecision<'cancel'>;
 export function decide(state: RoomState, command: ReconcileCommand, now: number): ReconcileDecision;
+export function decide<K extends DecidedKind>(
+	state: RoomState,
+	command: CommandFor[K],
+	now: number,
+): RoomDecision<K>;
 /** Decide against the state read inside the journal's write queue. Time is an explicit input. */
 export function decide(
 	state: RoomState,
@@ -143,19 +166,12 @@ export function decide(
 			return renew(state, command, now);
 		case 'end':
 			return end(state, command, now);
+		case 'release':
+			return release(state, command, now);
 		case 'compose':
 			return compose(state, command.composition);
 		case 'close':
-			return {
-				event: admitsClose(
-					state.exchange,
-					command.close,
-					state.lastSeq,
-					liveWork(state, now).exchange,
-				)
-					? { kind: 'close', body: command.close }
-					: undefined,
-			};
+			return closing(state, command, now);
 		case 'run':
 			return { event: { kind: 'run', body: { at: iso(now) } } };
 		case 'cancel':
@@ -174,7 +190,7 @@ export function stopWork(state: RoomState, now: number): RoomDecision<'lease'> {
 	const running = [...state.leases.values()].find((lease) => lease.phase === 'running');
 	return running === undefined
 		? { event: undefined }
-		: end(state, { type: 'end', id: running.id, reason: 'revoked', readThrough: 0 }, now);
+		: end(state, { id: running.id, reason: 'revoked', readThrough: 0 }, now);
 }
 
 const iso = (now: number): string => new Date(now).toISOString();
@@ -351,9 +367,9 @@ type CommitCommand = Extract<MessageCommand, { type: 'commit' }>;
 
 function commit(state: RoomState, command: CommitCommand, now: number): RoomDecision<'message'> {
 	const { commit: request, bytes } = command;
-	const spec = activationSpec(request.activation, state);
-	const live = liveSpec(state, request.activation, spec, now);
-	if ('refusal' in live) return live;
+	const authority = seatAuthority(state, request.activation, now);
+	if ('stale' in authority) return stale(authority.stale);
+	const live = authority.spec;
 	const { intent } = request;
 	if (!permits(live, intent.kind)) return refused('This activation cannot submit that intent.');
 	const purpose = live.purpose;
@@ -415,18 +431,6 @@ function ordinaryCommit(
 	const { refs, ...rest } = intent;
 	const body = { ...rest, ...refsField(refs), ...ownerOf(intent, state.exchange), ...stamp };
 	return message(state, body, now, true, bytes);
-}
-
-function liveSpec(
-	state: RoomState,
-	id: string,
-	spec: ActivationSpec | undefined,
-	now: number,
-): ActivationSpec | { refusal: Refusal } {
-	const held = state.leases.get(id);
-	if (held === undefined || !isLive(held, now)) return stale('the lease ended');
-	if (spec === undefined) return refused('This activation has no room grant.');
-	return spec;
 }
 
 /** Both purposes permit speech. Only a response permits a seating or an unseating. */
@@ -552,8 +556,7 @@ function claim(
 	command: Extract<LeaseCommand, { type: 'claim' }>,
 	now: number,
 ): RoomDecision<'lease'> {
-	if (activationSpec(command.id, state) === undefined)
-		return stale('the activation has no room grant');
+	if (activationSpec(command.id, state) === undefined) return stale(NO_GRANT);
 	return runningLease(state, command, now, 0);
 }
 
@@ -564,8 +567,7 @@ function renew(
 ): RoomDecision<'lease'> {
 	const invalid = invalidProgress(state, command.readThrough);
 	if (invalid !== undefined) return invalid;
-	if (activationSpec(command.id, state) === undefined)
-		return stale('the activation has no room grant');
+	if (activationSpec(command.id, state) === undefined) return stale(NO_GRANT);
 	return runningLease(state, command, now, command.readThrough ?? 0);
 }
 
@@ -611,11 +613,13 @@ function seatHeld(state: RoomState, id: string, now: number): boolean {
 	);
 }
 
-function end(
-	state: RoomState,
-	command: Extract<LeaseCommand, { type: 'end' }>,
-	now: number,
-): RoomDecision<'lease'> {
+/** A seat releases only the lease that it holds the authority of. */
+function release(state: RoomState, command: ReleaseCommand, now: number): RoomDecision<'lease'> {
+	const authority = seatAuthority(state, command.id, now);
+	return 'stale' in authority ? stale(authority.stale) : end(state, command, now);
+}
+
+function end(state: RoomState, command: LeaseEnding, now: number): RoomDecision<'lease'> {
 	const invalid = invalidProgress(state, command.readThrough);
 	if (invalid !== undefined) return invalid;
 	const known = state.leases.get(command.id);
@@ -648,41 +652,61 @@ function invalidProgress(
 		: undefined;
 }
 
+/**
+ * The host checks the names of a composition and its summary writer before
+ * the run starts. The record alone knows its people, so this refuses a seat
+ * that takes the name of a person.
+ */
 function compose(state: RoomState, composition: Body<Composition>): RoomDecision<'composition'> {
-	if (
-		composition.summary !== undefined &&
-		![...composition.agents, ...composition.available].some(
-			(seat) => seat.name === composition.summary,
-		)
-	)
+	const person = [...composition.agents, ...composition.available].find((seat) =>
+		state.people.has(seat.name),
+	);
+	if (person !== undefined)
 		return refused(
-			`Summary writer '${composition.summary}' is not defined in this room.`,
-			'missing_definition',
+			`Duplicate agent name '${person.name}': one name names one participant.`,
+			'duplicate_name',
 		);
-	const names = new Set<string>();
-	for (const seat of [...composition.agents, ...composition.available]) {
-		if (names.has(seat.name) || state.people.has(seat.name))
-			return refused(
-				`Duplicate agent name '${seat.name}': one name names one participant.`,
-				'duplicate_name',
-			);
-		names.add(seat.name);
-	}
 	return { event: { kind: 'composition', body: composition } };
 }
 
+/**
+ * The close of the exchange that the pass saw, as `admitsClose` admits it
+ * where the write lands. The close names the configured summary writer
+ * when the owner is a person of the room.
+ */
+function closing(state: RoomState, command: CloseCommand, now: number): RoomDecision<'close'> {
+	if (!admitsClose(state.exchange, command, state.lastSeq, liveWork(state, now).exchange))
+		return { event: undefined };
+	const { owner, from, through } = command;
+	const writer = state.people.has(owner)
+		? summaryWriter(state.composition, state.roster)
+		: undefined;
+	return {
+		event: {
+			kind: 'close',
+			body: {
+				owner,
+				from,
+				through,
+				at: iso(now),
+				...(writer === undefined ? {} : { summary: writer }),
+			},
+		},
+	};
+}
+
 function reconcile(state: RoomState, command: ReconcileCommand, now: number): ReconcileDecision {
-	const { expired, abandoned, close, returns, ...effects } = planReconciliation(state, {
+	const { revoked, expired, abandoned, close, returns, ...effects } = planReconciliation(state, {
 		...command.options,
 		now,
 	});
+	const ending = (order: Ending): EndCommand => ({ type: 'end', ...order });
 	return {
-		events: [
-			...effects.revoked.map((body) => ({ kind: 'lease' as const, body })),
-			...[...expired, ...abandoned].map((body) => ({ kind: 'lease' as const, body })),
-			...(close === undefined ? [] : [{ kind: 'close' as const, body: close }]),
+		steps: [
+			...[...revoked, ...expired, ...abandoned].map(ending),
+			...(close === undefined ? [] : [{ type: 'close' as const, ...close }]),
 			// After the close: a say that returns to a quiet room opens the next exchange.
-			...returns.map((say) => ({ kind: 'message' as const, body: returnedBody(say, now) })),
+			...returns.map((message) => ({ type: 'return' as const, message })),
 		],
 		effects,
 	};

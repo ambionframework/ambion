@@ -8,7 +8,7 @@ import { captureHuman } from '../define.ts';
 import { AmbionError } from '../errors.ts';
 import { placed, spaced } from '../journal/journal.ts';
 import type { VisitRuntime } from '../room/presence.ts';
-import { decide, type RoomCommand } from '../room/transition.ts';
+import type { RoomCommand } from '../room/transition.ts';
 import type {
 	AgentDefinition,
 	HumanDefinition,
@@ -18,12 +18,11 @@ import type {
 	Seq,
 } from '../types.ts';
 import {
-	acceptedEvent,
+	decideAndAppend,
 	messageKeyConflict,
 	type RoomBase,
 	requireSubmission,
 	saidContentMatches,
-	submit,
 } from './core.ts';
 import type { ExchangeHandle } from './waits.ts';
 
@@ -232,12 +231,9 @@ async function commitMessage(
 	key: string,
 	command: Extract<RoomCommand, { type: 'deliver' }>,
 ): Promise<Message> {
-	const appended = await submit(
-		host.journal,
-		'message',
-		() => decide(host.state(), command, host.now()),
-		spaced('delivery', key),
-	);
+	const appended = await decideAndAppend(host, 'message', command, {
+		key: spaced('delivery', key),
+	});
 	requireSubmission(appended);
 	if (!('entry' in appended)) throw new Error('The room command did not append a message.');
 	const message = placed(appended.entry);
@@ -246,23 +242,21 @@ async function commitMessage(
 	return message;
 }
 
-/** Validate before host effects, then decide again where the message commits. */
-function validatePresence(host: PeopleHost, change: PresenceDraft): void {
-	acceptedEvent(decide(host.state(), { type: 'presence', change, route: false }, host.now()));
-}
-
-/** A presence change uses its caller's stable key, or a fresh key by default. */
+/**
+ * A presence change uses its caller's stable key, or a fresh key by default.
+ * The decision where the message commits refuses what the room refuses.
+ */
 async function commitPresence(
 	host: PeopleHost,
 	change: PresenceDraft,
 	route = true,
 	key: string = crypto.randomUUID(),
 ): Promise<Message | undefined> {
-	const appended = await submit(
-		host.journal,
+	const appended = await decideAndAppend(
+		host,
 		'message',
-		() => decide(host.state(), { type: 'presence', change, route }, host.now()),
-		key,
+		{ type: 'presence', change, route },
+		{ key },
 	);
 	requireSubmission(appended);
 	return 'entry' in appended ? placed(appended.entry) : undefined;
@@ -287,7 +281,6 @@ export async function seatAgent(
 		attention,
 		...(options.fixed === undefined ? {} : { fixed: options.fixed }),
 	};
-	validatePresence(host, change);
 	await commitPresence(host, change);
 }
 
@@ -296,7 +289,6 @@ export async function unseatAgent(host: PeopleHost, name: string): Promise<void>
 	host.assertRunning();
 	await host.ready;
 	if (!host.defs.has(name)) throw new AmbionError('missing_definition', `Unknown agent '${name}'.`);
-	validatePresence(host, { kind: 'unseated', subject: name });
 	await commitPresence(host, { kind: 'unseated', subject: name });
 	await host.reconcile();
 }
