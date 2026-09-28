@@ -7,7 +7,7 @@
  * channel limit, the spill file, and the permissions between accounts.
  */
 
-import type { ToolContext } from '@ambionframework/ambion';
+import { parseSnapshotUri, type ToolContext } from '@ambionframework/ambion';
 import { openWorkspace } from '@ambionframework/workspace';
 import {
 	type ConformanceBackend,
@@ -45,7 +45,7 @@ describe.skipIf(configPath === undefined)('integration tier', () => {
 			await withEnv(backend, agent, (env) => env.exec(WIPE, undefined, ctx));
 		}
 		await withEnv(backend, 'lab-host', (env) =>
-			env.exec(`rm -rf -- ${layout.rooms}/*`, undefined, ctx),
+			env.exec(`rm -rf -- ${layout.rooms}/* ${layout.snapshots}/*`, undefined, ctx),
 		);
 	});
 	afterAll(async () => backend.dispose?.());
@@ -172,23 +172,26 @@ describe.skipIf(configPath === undefined)('integration tier', () => {
 		});
 	});
 
-	it('lets the host account write the rooms folder, and no agent', async () => {
-		const path = `${layout.rooms}/lobby.jsonl`;
-		await withEnv(backend, 'surveyor', async (env) => {
-			expect(await env.writeFile(`${layout.rooms}/x.txt`, 'x', ctx)).toMatchObject({
-				ok: false,
-				error: { code: 'permission_denied' },
+	it.each(['rooms', 'snapshots'] as const)(
+		'lets the host account write the %s folder, and no agent',
+		async (folder) => {
+			const path = `${layout[folder]}/lobby.jsonl`;
+			await withEnv(backend, 'surveyor', async (env) => {
+				expect(await env.writeFile(`${layout[folder]}/x.txt`, 'x', ctx)).toMatchObject({
+					ok: false,
+					error: { code: 'permission_denied' },
+				});
 			});
-		});
-		await withEnv(backend, 'lab-host', (env) => env.writeFile(path, 'entry\n', ctx));
-		await withEnv(backend, 'planner', async (env) => {
-			expect(await env.readTextFile(path, ctx)).toMatchObject({ ok: true, value: 'entry\n' });
-			expect(await env.appendFile(path, 'forged\n', ctx)).toMatchObject({
-				ok: false,
-				error: { code: 'permission_denied' },
+			await withEnv(backend, 'lab-host', (env) => env.writeFile(path, 'entry\n', ctx));
+			await withEnv(backend, 'planner', async (env) => {
+				expect(await env.readTextFile(path, ctx)).toMatchObject({ ok: true, value: 'entry\n' });
+				expect(await env.appendFile(path, 'forged\n', ctx)).toMatchObject({
+					ok: false,
+					error: { code: 'permission_denied' },
+				});
 			});
-		});
-	});
+		},
+	);
 });
 
 const context = (agent: string): ToolContext => ({
@@ -222,6 +225,34 @@ describe.skipIf(configPath === undefined)('a workspace on OpenSSH', () => {
 				.split('\n')
 				.map((line) => JSON.parse(line).agent);
 			expect(agents.slice(-2)).toEqual(['surveyor', 'planner']);
+		} finally {
+			await workspace.dispose();
+		}
+	});
+
+	it("snapshots a file of an agent's home as that agent, every agent reads the copy and none changes it, and fetch writes it into another home", async () => {
+		const resolved = await options();
+		const bashBackend = workstationBackend(resolved);
+		const workspace = openWorkspace({ name: 'lab', backend: { bash: bashBackend } });
+		try {
+			await withEnv(bashBackend, 'surveyor', (env) => env.writeFile('plan.md', 'pour\n', ctx));
+			const [ref] = await workspace.snapshot(['plan.md'], { agent: { name: 'surveyor' } });
+			const digest = parseSnapshotUri(ref ?? '')?.digest ?? '';
+			const copy = `${resolved.layout.snapshots}/${digest}`;
+			await withEnv(bashBackend, 'planner', async (env) => {
+				expect(await env.readTextFile(copy, ctx)).toMatchObject({ ok: true, value: 'pour\n' });
+				expect(await env.writeFile(copy, 'forged\n', ctx)).toMatchObject({
+					ok: false,
+					error: { code: 'permission_denied' },
+				});
+			});
+			// fetch reads the object as the host and writes it into the home of planner, as planner.
+			const fetch = workspace.tools().tools.find((tool) => tool.name === 'fetch');
+			if (fetch === undefined) throw new Error('No fetch tool.');
+			await fetch.invoke({ ref, path: 'plan.md' }, context('planner'));
+			await withEnv(bashBackend, 'planner', async (env) => {
+				expect(await env.readTextFile('plan.md', ctx)).toMatchObject({ ok: true, value: 'pour\n' });
+			});
 		} finally {
 			await workspace.dispose();
 		}

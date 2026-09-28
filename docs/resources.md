@@ -109,10 +109,14 @@ the room.
 **An artifact is cited as a ref on the record.** A message and a summary
 carry `refs`, absolute URIs that the room stores and never reads behind.
 [Definitions and tools](agent.md) owns the ref rules. A resource change is
-cited by the URI that the application chooses.
+cited by a URI that the resource gives, or by one that the application
+chooses.
 
-**A workspace path is not a ref.** Cite a file with a `file:` URI or another
-absolute URI. The room cannot check that the path exists.
+**A workspace file is cited by a snapshot ref.** The `snapshot` tool and
+`workspace.snapshot(paths)` freeze each file and give one ref for it. The
+ref names the bytes, so it keeps its meaning when the file changes
+([Snapshot a file](workspace.md#snapshot-a-file)). The room does not check
+that the workspace holds the copy.
 
 **Provenance names who made a change.** Every tool call receives a
 `ToolContext`. It holds `room`, `activation`, and `exchange`. `room` names

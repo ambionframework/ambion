@@ -189,8 +189,8 @@ no useful work remains. The room assigns closing work separately.
 
 **The guidance names the marker that a mid-activation result carries.** The
 room delivers a message that lands while the assistant works as a user message
-that starts with `[new]`. A specialist result reads
-`[new] [specialist → assistant] text`. The ordinary guidance names this marker
+that starts with `[new]`, then the seq of the message. A specialist result
+reads `[new] #12 [specialist → assistant] text`. The ordinary guidance names this marker
 and says to end without a tool call. Change the marker and the guidance
 together.
 

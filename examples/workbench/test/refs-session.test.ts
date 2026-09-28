@@ -26,16 +26,27 @@ const exchange = {
 const FILE = 'file:///library/led-5mm.md';
 const MISSING = 'file:///library/missing.md';
 const HOST_FILE = 'file:///etc/passwd';
+const SNAPSHOT = `ambion://workspace/workbench/snapshot/${'a'.repeat(64)}/library/led-5mm.md`;
+const COMMIT = `ambion://workspace/workbench/repo/bench/firmware/branch/blink/commit/${'e'.repeat(40)}`;
+const ROOM = 'ambion://room/power';
+const ELSEWHERE = 'ambion://room/power/message/2';
 
-/** A room with a closed exchange of two messages, then two messages that cite. */
+/** A room with a closed exchange of two messages, then three messages that cite, and a second room. */
 function room(host: FakeHost, cite = true): void {
+	host.table.set(
+		'power',
+		view('power', {
+			participants: [{ name: 'mira', kind: 'human' }],
+			messages: [said(1, 'mira'), said(2, 'design')],
+		}),
+	);
 	host.table.set(
 		'bringup',
 		view('bringup', {
 			participants: [{ name: 'mira', kind: 'human' }],
 			messages: [
 				said(1, 'mira'),
-				said(2, 'design', cite ? [FILE, 'lab:///runs'] : undefined),
+				said(2, 'design', cite ? [FILE, 'lab:///runs', SNAPSHOT] : undefined),
 				said(3, 'datasheets'),
 				said(4, 'mira', cite ? ['ambion://room/bringup/message/3', MISSING] : undefined),
 				said(
@@ -43,6 +54,7 @@ function room(host: FakeHost, cite = true): void {
 					'design',
 					cite ? [HOST_FILE, 'https://example.com/x', 'lab:///missing'] : undefined,
 				),
+				said(6, 'design', cite ? [COMMIT, ROOM, ELSEWHERE] : undefined),
 			],
 			exchanges: [exchange],
 		}),
@@ -91,8 +103,15 @@ describe('the refs of a message', () => {
 			['5#0', false],
 			['5#1', false],
 			['5#2', false],
+			['6#0', true],
+			['6#1', true],
+			['6#2', true],
 		]);
-		expect(session.refItems[0]?.resolved.target).toEqual({ kind: 'message', seq: 3 });
+		expect(session.refItems[0]?.resolved.target).toEqual({
+			kind: 'message',
+			room: 'bringup',
+			seq: 3,
+		});
 		expect(session.expanded.has('1')).toBe(false);
 		await session.openRef('4#0');
 		expect(session.expanded.has('1')).toBe(true);
@@ -103,7 +122,7 @@ describe('the refs of a message', () => {
 		expect(session.refItems.map((item) => item.id).slice(0, 2)).toEqual(['2#0', '2#1']);
 	});
 
-	it('opens a file or a table ref in the files panel, beside the tables, and nothing for a ref that does not resolve', async () => {
+	it('opens a file, a table, or a snapshot ref in the files panel, beside the tables, and nothing for a ref that does not resolve', async () => {
 		const { session, host } = await open();
 		host.reads.length = 0;
 		for (const id of ['4#1', '5#0', '5#1', '5#2'])
@@ -124,7 +143,41 @@ describe('the refs of a message', () => {
 		expect(await session.openRef('2#1')).toEqual({ type: 'files' });
 		await vi.waitFor(() => expect(session.browser.file?.path).toBe('lab:///runs'));
 		expect(session.browser.selected).toEqual({ path: 'lab:///runs', size: 0, kind: 'table' });
-		expect(host.reads).toEqual(expect.arrayContaining(['/library/led-5mm.md', 'lab:///runs']));
+		expect(await session.openRef('2#2')).toEqual({ type: 'files' });
+		await vi.waitFor(() => expect(session.browser.file?.text).toBe(`bytes of ${SNAPSHOT}`));
+		expect(session.browser.selected).toEqual({
+			path: SNAPSHOT,
+			size: 0,
+			kind: 'snapshot',
+			label: `/library/led-5mm.md @${'a'.repeat(8)}`,
+		});
+		expect(host.reads).toEqual(
+			expect.arrayContaining(['/library/led-5mm.md', 'lab:///runs', SNAPSHOT]),
+		);
+	});
+});
+
+describe('the refs that open elsewhere', () => {
+	it('opens a commit in the files panel, a room ref in its room, and a message of another room at the message', async () => {
+		const { session, host } = await open();
+		expect(await session.openRef('6#0')).toEqual({ type: 'files' });
+		await vi.waitFor(() => expect(session.browser.file?.text).toBe(`commit of ${COMMIT}`));
+		expect(session.browser.selected).toEqual({
+			path: COMMIT,
+			size: 0,
+			kind: 'commit',
+			label: 'bench/firmware blink eeeeeee',
+		});
+		expect(host.reads).toContain(COMMIT);
+
+		expect(await session.openRef('6#1')).toBeUndefined();
+		expect(session.room).toBe('power');
+		await session.switchRoom('bringup');
+		expect(await session.openRef('6#2')).toBeUndefined();
+		expect(session.room).toBe('power');
+		expect(session.focus).toBe(2);
+		session.jump(9);
+		expect(session.notice).toBe('Room power has no message 9 yet.');
 	});
 });
 
@@ -136,6 +189,8 @@ describe('the ref keys', () => {
 		expect(keys.mode).toBe('browse');
 		press('r');
 		expect(keys.mode).toBe('refs');
+		expect(keys.picking).toBe('6#2');
+		for (const _ of [1, 2, 3]) press('up');
 		expect(keys.picking).toBe('5#2');
 		press('return');
 		expect(keys.mode).toBe('refs');
@@ -144,7 +199,7 @@ describe('the ref keys', () => {
 		expect(keys.picking).toBe('5#1');
 		press('down');
 		press('down');
-		expect(keys.picking).toBe('5#2');
+		expect(keys.picking).toBe('6#0');
 		press('escape');
 		expect(keys.mode).toBe('browse');
 	});
@@ -159,6 +214,30 @@ describe('the ref keys', () => {
 		expect(keys.mode).toBe('browse');
 		expect(session.notice).toMatch(/No shown message has a ref/);
 	});
+
+	it.each([
+		{ refs: [COMMIT], mode: 'refs', notice: undefined },
+		{ refs: undefined, mode: 'compose', notice: 'No discussions or refs to browse yet.' },
+	])(
+		'reaches the refs of a direct reply, which has no discussion: $mode',
+		async ({ refs, mode, notice }) => {
+			const { session, host } = await started();
+			host.table.set(
+				'bringup',
+				view('bringup', {
+					participants: [{ name: 'mira', kind: 'human' }],
+					messages: [said(1, 'mira'), said(2, 'design', refs)],
+					exchanges: [{ ...exchange, through: 2 }],
+				}),
+			);
+			await session.refresh();
+			const { keys, press } = keysOver(session);
+			press('tab');
+			press('r');
+			expect(keys.mode).toBe(mode);
+			expect(session.notice).toBe(notice);
+		},
+	);
 
 	it('opens the file preview from a chosen ref, and Escape returns to the refs', async () => {
 		const { session } = await open();
@@ -184,6 +263,30 @@ describe('the ref keys', () => {
 		expect(keys.mode).toBe('files');
 		press('escape');
 		expect(keys.mode).toBe('compose');
+	});
+
+	it('opens the room of a room ref at the composer, and browses the room of a message ref at the message', async () => {
+		const { session } = await open();
+		const { keys, press, log } = keysOver(session);
+		press('tab');
+		press('r');
+		press('up');
+		expect(keys.picking).toBe('6#1');
+		press('return');
+		await vi.waitFor(() => expect(keys.mode).toBe('compose'));
+		expect(session.room).toBe('power');
+		expect(log.at(-1)).toBe('focus');
+
+		await session.switchRoom('bringup');
+		press('tab');
+		press('r');
+		press('down');
+		expect(keys.picking).toBe('6#2');
+		press('return');
+		await vi.waitFor(() => expect(keys.mode).toBe('browse'));
+		expect(session.room).toBe('power');
+		expect(session.focus).toBe(2);
+		expect(log).toContain('reveal:2');
 	});
 
 	it('jumps to the message a message ref cites', async () => {

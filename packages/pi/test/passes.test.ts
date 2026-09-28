@@ -103,7 +103,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		expect(after?.context.messages).toHaveLength(3);
 		const prompts = texts(after?.context as Context);
 		expect(prompts[0]).toContain("The record of 'passes' so far:");
-		expect(prompts.at(-1)).toBe('[new] [andrei] And the pump?');
+		expect(prompts.at(-1)).toBe('[new] #2 [andrei] And the pump?');
 		expect(after?.session).toBe(before?.session);
 		expect(session.session).toEqual({ harness: 'pi', id: 'message:1:worker:1' });
 		expect(session.readThrough).toBe(2);

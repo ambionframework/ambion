@@ -28,6 +28,7 @@ import {
 	unavailableSeats,
 } from './families.ts';
 import { openInstrument } from './instrument.ts';
+import { WORKSPACE } from './refs.ts';
 import { labRepositories } from './repositories.ts';
 import { instruments, labSchema, labWritable, scenarios, seedWorkspace } from './scenarios.ts';
 import { stepLog } from './steps.ts';
@@ -148,7 +149,7 @@ export async function openRooms(
 	let closing = false;
 	const workspacePath = resolve(directory, 'workspace');
 	const workspace = openWorkspace({
-		name: 'workbench',
+		name: WORKSPACE,
 		backend: {
 			bash: directoryBackend(workspacePath),
 			sql: sqliteBackend(resolve(directory, 'shared.db')),

@@ -38,6 +38,10 @@
 			"types": "./dist/git-entry.d.mts",
 			"import": "./dist/git-entry.mjs"
 		},
+		"./s3": {
+			"types": "./dist/s3-entry.d.mts",
+			"import": "./dist/s3-entry.mjs"
+		},
 		"./conformance": {
 			"types": "./dist/conformance.d.mts",
 			"import": "./dist/conformance.mjs"
@@ -61,7 +65,8 @@
 		"check:types": "tsc -p tsconfig.check.json --noEmit",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"test:live": "vitest run --config vitest.live.config.ts"
+		"test:live": "vitest run --config vitest.live.config.ts",
+		"test:s3": "vitest run --config vitest.s3.config.ts"
 	},
 	"devDependencies": {
 		"@ambionframework/pi": "workspace:*",
@@ -73,6 +78,7 @@
 	"dependencies": {
 		"@ambionframework/ambion": "workspace:*",
 		"@earendil-works/pi-agent-core": "^0.87.1",
+		"aws4fetch": "^1.0.20",
 		"typebox": "^1.3.34",
 		"yaml": "^2.9.1"
 	}

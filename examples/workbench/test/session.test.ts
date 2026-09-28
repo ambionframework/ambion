@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { parseSnapshotUri, snapshotUri } from '@ambionframework/ambion';
 import { describe, expect, it, vi } from 'vitest';
 import { ProcessBrowser, stateText } from '../src/process-browser.ts';
 import { lastPart } from '../src/processes.ts';
@@ -190,7 +191,10 @@ describe('Session on the real host', () => {
 		await session.submit(`/attach ${local}`);
 		const [staged] = session.pendingRefs;
 		expect(staged?.path).toMatch(/^\/attachments\/\d+-board\.png$/);
-		expect(staged?.ref).toBe(`file://${staged?.path}`);
+		expect(parseSnapshotUri(staged?.ref ?? '')).toMatchObject({
+			workspace: 'workbench',
+			path: staged?.path,
+		});
 		expect(session.notice).toContain(`Attached ${staged?.path}`);
 		await session.submit('Look at this.');
 		const sent = (await workbench.read('bringup', 0)).messages.find(
@@ -237,6 +241,10 @@ describe('Session on the real host', () => {
 	});
 });
 
+/** The ref the fake host gives a picture that `/attach` copies. */
+const attached = (name: string) =>
+	snapshotUri('workbench', '0'.repeat(64), `/attachments/${name}.png`);
+
 describe('Session /attach while other work runs', () => {
 	it('stages a copy that lands after a room switch into the array the session holds by then', async () => {
 		const { host, session } = await started();
@@ -250,7 +258,7 @@ describe('Session /attach while other work runs', () => {
 		await attaching;
 		expect(session.pendingRefs).toBe(freshArray);
 		expect(session.pendingRefs).toEqual([
-			{ path: '/attachments/board.png', ref: 'file:///attachments/board.png' },
+			{ path: '/attachments/board.png', ref: attached('board') },
 		]);
 	});
 
@@ -265,9 +273,9 @@ describe('Session /attach while other work runs', () => {
 		gate.resolve();
 		await sending;
 
-		expect(host.sentRefs).toEqual([['file:///attachments/board.png']]);
+		expect(host.sentRefs).toEqual([[attached('board')]]);
 		expect(session.pendingRefs).toEqual([
-			{ path: '/attachments/sensor.png', ref: 'file:///attachments/sensor.png' },
+			{ path: '/attachments/sensor.png', ref: attached('sensor') },
 		]);
 	});
 });

@@ -559,7 +559,7 @@ describe('async seat model resolution', () => {
 
 		// The steer joins the prompt of the run, so the first provider request holds it.
 		expect(contexts).toHaveLength(1);
-		expect(contextText(contexts[0] as Context)).toContain('[new] [priya] Follow up');
+		expect(contextText(contexts[0] as Context)).toContain('[new] #2 [priya] Follow up');
 		expect(room.of('release')).toEqual([expect.objectContaining({ readThrough: 2 })]);
 	});
 });

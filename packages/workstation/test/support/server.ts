@@ -149,7 +149,11 @@ export async function startSshServer(accounts: readonly string[]): Promise<TestS
 			host: '127.0.0.1',
 			port,
 			hostKey: fingerprint(parsed(hostKey.public).getPublicSSH()),
-			layout: { audit: join(shared, 'audit', 'audit.jsonl'), rooms: join(shared, 'rooms') },
+			layout: {
+				audit: join(shared, 'audit', 'audit.jsonl'),
+				rooms: join(shared, 'rooms'),
+				snapshots: join(shared, 'snapshots'),
+			},
 			credentialFor: (agent) => ({ username: agent.name, privateKey: clientKey.private }),
 		},
 		homes,

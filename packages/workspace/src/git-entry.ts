@@ -6,7 +6,18 @@
  * and no git library.
  */
 
-export { assertAgent, namespaceOf, readOnly, SOURCES, TEMPLATES, validName } from './git-names.ts';
+export {
+	assertAgent,
+	assertCommitHash,
+	byPath,
+	namespaceOf,
+	readOnly,
+	revisionOf,
+	SOURCES,
+	TEMPLATES,
+	validName,
+	validRefName,
+} from './git-names.ts';
 export type { TemplateRegistration } from './git-templates.ts';
 export { changeTo, filesOf } from './git-templates.ts';
 export { hashesOf, sameFiles } from './sources.ts';

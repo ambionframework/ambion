@@ -1,6 +1,6 @@
 /**
  * A workspace with a git backend: the `repos` and `fork` tools and their
- * texts, the tool line and the order of the notes, the refusal of a bash
+ * texts, the host's `commitRef`, the tool line and the order of the notes, the refusal of a bash
  * backend that does not carry the transport, the audit entry of a call,
  * and a room in which a seat forks a template, clones it, edits,
  * commits, and pushes. The backend is `justGitBackend`, reached by
@@ -10,11 +10,13 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { commitUri } from '@ambionframework/ambion';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { callTool, quiet, speak } from '../../ambion/test/support/scripted.ts';
+import { callTool, quiet } from '../../ambion/test/support/scripted.ts';
 import { justGitBackend, sqliteGitStorage } from '../../just-bash/src/git/index.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { defaultToolGuidance } from '../src/default-tools.ts';
+import { validRefName } from '../src/git-names.ts';
 import { gitToolGuidance } from '../src/git-tools.ts';
 import { BACKGROUND_CONTEXT, openWorkspace } from '../src/index.ts';
 import { roomMirrorGuidance } from '../src/mirror.ts';
@@ -71,6 +73,8 @@ describe('the tools and the guidance', () => {
 			'status',
 			'wait',
 			'cancel',
+			'snapshot',
+			'fetch',
 			'sql',
 			'repos',
 			'fork',
@@ -78,19 +82,23 @@ describe('the tools and the guidance', () => {
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance.startsWith(defaultToolGuidance(['sql', 'repos', 'fork']))).toBe(true);
 		expect(guidance).toContain(
-			'eleven tools: read, write, edit, bash, ps, status, wait, cancel, sql, repos and fork.',
+			'thirteen tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, fetch, sql, repos and fork.',
 		);
-		const git = guidance.indexOf(gitToolGuidance(SERVER));
+		const git = guidance.indexOf(gitToolGuidance(SERVER, 'lab'));
+		expect(git).toBeGreaterThan(-1);
 		expect(git).toBeGreaterThan(guidance.indexOf('sql runs statements'));
 		expect(git).toBeLessThan(guidance.indexOf('The shell is a simulated Unix shell'));
 		expect(guidance.endsWith(roomMirrorGuidance('/rooms'))).toBe(true);
 	});
 
-	it('counts ten tools with no SQL backend, and states the shell sentence that holds with a git backend', async () => {
+	it('counts twelve tools with no SQL backend, states the form of a commit ref, and states the shell sentence that holds with a git backend', async () => {
 		const { workspace } = await lab();
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance).toContain(
-			'ten tools: read, write, edit, bash, ps, status, wait, cancel, repos and fork.',
+			'twelve tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, fetch, repos and fork.',
+		);
+		expect(guidance).toContain(
+			'ambion://workspace/lab/repo/<repository>/branch/<branch>/commit/<hash>',
 		);
 		expect(guidance).toContain('or a URL\nthat this guidance names. git reaches no other host.');
 		expect(guidance).toContain(`repos and fork reach the git server of this workspace, ${SERVER}.`);
@@ -243,11 +251,79 @@ describe('fork', () => {
 	});
 });
 
+describe('commitRef', () => {
+	it.each([
+		['main', true],
+		['feature/pour', true],
+		['v1.0', true],
+		['', false],
+		['@', false],
+		['a..b', false],
+		['a@{1}', false],
+		['main~1', false],
+		['a b', false],
+		['a\tb', false],
+		['a\u007fb', false],
+		['a//b', false],
+		['/a', false],
+		['a/', false],
+		['.hidden', false],
+		['a/.b', false],
+		['a.lock', false],
+		['a.', false],
+	])('reads %j as a git ref name: %s', (name, valid) => {
+		expect(validRefName(name)).toBe(valid);
+	});
+
+	it.each([
+		[{ branch: 'none' }, "analyst/report has no branch 'none'."],
+		[{ tag: 'v1' }, "analyst/report has no tag 'v1'."],
+		[{ commit: 'abc' }, "'abc' is not a commit hash of 7 to 64 lowercase hex digits."],
+		[{ branch: 'main~1' }, "'main~1' is not a valid git branch name."],
+	])('refuses %j', async (at, refusal) => {
+		const { workspace } = await lab();
+		await text(workspace, 'fork', { source: 'templates/weekly-report', name: 'report' });
+		await expect(workspace.commitRef('analyst/report', at)).rejects.toThrow(refusal);
+	});
+
+	it('gives a host the same ref, and refuses a missing repository, a workspace with no git backend, and a ref that readCommit does not read', async () => {
+		const { workspace } = await lab();
+		await text(workspace, 'fork', { source: 'templates/weekly-report', name: 'report' });
+		const fork = await workspace.git?.use({ name: 'analyst' }, (env) => env.get('analyst/report'));
+		const main = fork?.branches.main ?? '';
+		expect(await workspace.commitRef('analyst/report', { commit: main.slice(0, 8) })).toBe(
+			commitUri('lab', 'analyst/report', main),
+		);
+		await expect(workspace.commitRef('analyst/none', { branch: 'main' })).rejects.toThrow(
+			"analyst/none has no branch 'main'.",
+		);
+		const plain = openWorkspace({ name: 'plain', backend: { bash: memoryBackend() } });
+		onTestFinished(() => plain.dispose());
+		await expect(plain.commitRef('analyst/report', { branch: 'main' })).rejects.toThrow(
+			"Workspace 'plain' has no git backend.",
+		);
+		const long = 'b'.repeat(2000);
+		await text(workspace, 'bash', {
+			command: `cd ~ && git clone ${fork?.url} long && cd long && git push origin main:refs/heads/${long}`,
+			wait: 60,
+		});
+		await expect(workspace.commitRef('analyst/report', { branch: long })).rejects.toThrow(
+			/has 2\d{3} characters, and a ref has at most 2048/,
+		);
+		await expect(workspace.readCommit('https://x/a')).rejects.toThrow(
+			'https://x/a is not a commit ref.',
+		);
+		await expect(
+			workspace.readCommit(commitUri('elsewhere', 'analyst/report', main)),
+		).rejects.toThrow("names the workspace 'elsewhere', not 'lab'.");
+	});
+});
+
 describe('a seat in a room', () => {
-	it('forks a template, clones it, edits, commits, and pushes a branch that the host reads', async () => {
+	it('forks a template, clones it, edits, commits, pushes a branch that the host reads, and cites the commit that the host checks', async () => {
 		const { workspace } = await lab();
 		const results: { tool: string; text: string; failed: boolean }[][] = [];
-		await run([agent('analyst', { bundles: [workspace.tools()] })], {
+		const room = await run([agent('analyst', { bundles: [workspace.tools()] })], {
 			analyst: (context, _who, call) => {
 				results.push(toolResults(context));
 				const steps = [
@@ -264,9 +340,14 @@ describe('a seat in a room', () => {
 					}),
 					callTool('bash', { command: 'cd ~/report && git add -A && git commit -m "Week 39"' }),
 					callTool('bash', { command: 'cd ~/report && git push origin week-39' }),
+					callTool('bash', { command: 'cd ~/report && git rev-parse HEAD' }),
 				];
 				if (call <= steps.length) return steps[call - 1] ?? quiet();
-				if (call === steps.length + 1) return speak('Pushed week-39.');
+				// The agent writes the ref from the form that the git note states.
+				const hash = /[0-9a-f]{40}/.exec(toolResults(context).at(-1)?.text ?? '')?.[0] ?? '';
+				const ref = `ambion://workspace/lab/repo/analyst/report/branch/week-39/commit/${hash}`;
+				if (call === steps.length + 1)
+					return callTool('say', { text: 'Pushed week-39.', refs: [ref] });
 				return quiet();
 			},
 		});
@@ -277,9 +358,18 @@ describe('a seat in a room', () => {
 			['edit', false],
 			['bash', false],
 			['bash', false],
+			['bash', false],
 		]);
 		const fork = await workspace.git?.use({ name: 'analyst' }, (env) => env.get('analyst/report'));
 		expect(Object.keys(fork?.branches ?? {}).sort()).toEqual(['main', 'week-39']);
-		expect(fork?.branches['week-39']).not.toBe(fork?.branches.main);
+		const week = fork?.branches['week-39'] ?? '';
+		expect(week).not.toBe(fork?.branches.main);
+		const said = (await room.read()).messages.find(
+			(message) => message.kind === 'said' && message.from === 'analyst',
+		);
+		// The host checks the cited commit against the server.
+		const onServer = await workspace.commitRef('analyst/report', { branch: 'week-39' });
+		expect(onServer).toBe(commitUri('lab', 'analyst/report', week, { branch: 'week-39' }));
+		expect(said).toMatchObject({ refs: [onServer] });
 	});
 });

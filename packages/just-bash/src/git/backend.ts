@@ -15,16 +15,33 @@
  * No agent holds a credential for `template-sources`.
  */
 
-import type { GitBackend, GitEnv, GitForkOutcome, GitRepository } from '@ambionframework/workspace';
+import type {
+	GitBackend,
+	GitCommit,
+	GitEnv,
+	GitForkOutcome,
+	GitRepository,
+	GitRevision,
+} from '@ambionframework/workspace';
 import {
 	assertAgent,
+	assertCommitHash,
+	byPath,
 	namespaceOf,
+	revisionOf,
 	SOURCES,
 	type TemplateRegistration,
 	validName,
 } from '@ambionframework/workspace/git';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
-import { listBranches, readHead } from 'just-git/repo';
+import {
+	diffTrees,
+	type GitRepo,
+	listBranches,
+	readCommit,
+	readHead,
+	revParse,
+} from 'just-git/repo';
 import type { GitServer } from 'just-git/server';
 import type { GitCredential, GitFetch, JustGitAccess } from './access.ts';
 import { DEFAULT_BRANCH, registerTemplates, settleAll } from './registration.ts';
@@ -63,6 +80,12 @@ interface Opened {
 }
 
 /** The life of a token in seconds, after the options are checked. */
+/** The one object whose hash starts with `prefix`, or `undefined` for none or more than one. */
+async function onlyObject(repo: GitRepo, prefix: string): Promise<string | undefined> {
+	const found = await repo.objectStore.findByPrefix(prefix);
+	return found.length === 1 ? found[0] : undefined;
+}
+
 function checked(options: JustGitBackendOptions): number {
 	if (options.secret === '') throw new Error('justGitBackend needs a secret.');
 	const ttl = options.tokenTtl ?? DEFAULT_TOKEN_TTL;
@@ -217,9 +240,69 @@ class Repositories {
 				const row = await this.row(id);
 				return row === undefined ? undefined : this.describe(row);
 			},
+			// A refused name rejects the call, the same as every other failure of the env.
+			resolve: async (id, at, signal) => this.resolve(id, at, signal),
+			show: async (id, hash, signal) => {
+				assertCommitHash(hash);
+				return this.show(id, hash, signal);
+			},
 			fork: (source, name, signal) => this.fork(agent, source, name, signal),
 			cleanup: async () => undefined,
 		};
+	}
+
+	/** The repository `id`, when an agent reaches it and the storage holds it. */
+	private async repoOf(id: string): Promise<GitRepo | undefined> {
+		const row = await this.row(id);
+		if (row === undefined) return undefined;
+		return (await (await this.ready()).server.repo(row.id)) ?? undefined;
+	}
+
+	/** The commit `hash` of `id`, or `undefined` when either does not exist. */
+	private async show(
+		id: string,
+		hash: string,
+		signal?: AbortSignal,
+	): Promise<GitCommit | undefined> {
+		const repo = await this.repoOf(id);
+		signal?.throwIfAborted();
+		if (repo === undefined || (await revParse(repo, `${hash}^{commit}`)) !== hash) return undefined;
+		const commit = await readCommit(repo, hash);
+		const parent = commit.parents[0];
+		const base = parent === undefined ? null : (await readCommit(repo, parent)).tree;
+		const changes = byPath(
+			(await diffTrees(repo, base, commit.tree)).map((entry) => ({
+				path: entry.path,
+				change: entry.status,
+			})),
+		);
+		const { name, email, timestamp } = commit.author;
+		return {
+			hash,
+			message: commit.message,
+			author: { name, email, date: new Date(timestamp * 1000).toISOString() },
+			parents: [...commit.parents],
+			changes,
+		};
+	}
+
+	/**
+	 * The full hash of the commit that `at` names in `id`, or `undefined`. A
+	 * hash names an object alone, so a branch or a tag with the same name
+	 * plays no part, and a prefix of more than one object names none.
+	 */
+	private async resolve(
+		id: string,
+		at: GitRevision,
+		signal?: AbortSignal,
+	): Promise<string | undefined> {
+		const revision = revisionOf(at);
+		const repo = await this.repoOf(id);
+		signal?.throwIfAborted();
+		if (repo === undefined) return undefined;
+		const name = 'commit' in at ? await onlyObject(repo, revision) : revision;
+		if (name === undefined) return undefined;
+		return (await revParse(repo, `${name}^{commit}`)) ?? undefined;
 	}
 
 	private async fork(

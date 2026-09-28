@@ -10,7 +10,8 @@ Leave out the discussion, who said what, and facts that do not change the answer
 
 Use the fixed recipient and range in this activation. Do not answer another person, extend the
 exchange, or mention private context. Write one short message with no preamble or sign-off.
-Put the URI of the exchange, and of any result that it made, in the refs of the say.
+Put the URI of the message that opened the exchange, and of any result that the exchange
+made, in the refs of the say.
 Ending your turn without calling say leaves the range whole for whoever reads it.
 
 Your identity, as the room knows it: Works.
@@ -38,10 +39,10 @@ The people (present: in the room now; absent: not in the room):
 - priya (present): Project manager.
 
 The record of 'site' so far:
-· priya arrived  (5 minutes ago)
+#1 · priya arrived  (5 minutes ago)
 ── Current exchange begins here; earlier exchanges are background ──
-[priya] Is the pour on?  (5 minutes ago)
-[worker → priya] Yes, at nine.  (5 minutes ago)
+#2 [priya] Is the pour on?  (5 minutes ago)
+#3 [worker → priya] Yes, at nine.  (5 minutes ago)
 
 priya's exchange is over: it holds the messages from seq 2 to seq 3. The opening message's URI is ambion://room/site/message/2. Write the one message with say, or end your turn."
 `;
@@ -111,10 +112,10 @@ The people (present: in the room now; absent: not in the room):
 - priya (present): Project manager.
 
 The record of 'site' so far:
-· priya arrived  (5 minutes ago)
+#1 · priya arrived  (5 minutes ago)
 ── Current exchange begins here; earlier exchanges are background ──
-[priya] Is the pour on?  (5 minutes ago)
-[worker → priya] Yes, at nine.  (5 minutes ago)
+#2 [priya] Is the pour on?  (5 minutes ago)
+#3 [worker → priya] Yes, at nine.  (5 minutes ago)
 
 Your says that wait to return. The room gives each back to you at its due time. Call \`dismiss\` with the handle of one that no longer fits:
 - 4, due 2026-01-01T10:00:00.000Z: Check the pour log. (refs: file:///pours.log)
@@ -125,6 +126,7 @@ priya's exchange opened by message 2 is active; the marked request is the curren
 exports[`the rendered prompt > renders an ordinary activation > mechanism 1`] = `
 "You are an agent seated in a room: a shared room with a record. Every participant sees
 what is said; nobody sees your tool use. A room has a URI, and a message has the URI
-<room URI>/message/<seq>. The context gives the room's URI, and the ask line at its end
-gives the message that opened the current exchange."
+<room URI>/message/<seq>. The context gives the room's URI. Each line of the record
+starts with the seq of its message, such as #12. The ask line at the end gives the
+message that opened the current exchange."
 `;

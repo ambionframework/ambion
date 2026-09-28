@@ -1,19 +1,29 @@
 import type { Message } from '@ambionframework/ambion';
-import { parseRoomUri } from '@ambionframework/ambion';
+import { parseCommitUri, parseRoomUri, parseSnapshotUri } from '@ambionframework/ambion';
 import { ellipsize } from './text.ts';
 import type { Block } from './timeline.ts';
+import type { FileContent, FileEntry, Workbench } from './workbench.ts';
 
 /**
  * The refs of a message, as the terminal shows and opens them.
  *
  * A ref is untrusted text from an agent. The room stores it and never reads
- * behind it. The Workbench chooses three forms and resolves each one against
- * a list the host gives, so no ref reaches a host file:
+ * behind it. The Workbench resolves six forms, each against what the host
+ * gives, so no ref reaches a host file:
  *
- * - `file:///<path>` names a file of the workspace.
+ * - `ambion://workspace/workbench/snapshot/<digest>/<path>` names the bytes
+ *   a file held at a snapshot. The panel shows them, through `readSnapshot`.
+ * - `ambion://workspace/workbench/repo/<repository>/.../commit/<hash>` names
+ *   a commit of a lab repository. The panel shows it, through `readCommit`.
+ * - `file:///<path>` names a file of the workspace as it is now.
  * - `lab:///<table>` names a table of the lab database.
- * - `ambion://room/<room>/message/<seq>` names a message of the open room.
+ * - `ambion://room/<room>` names a room. It opens the room.
+ * - `ambion://room/<room>/message/<seq>` names a message. It opens its room
+ *   and jumps to the message.
  */
+
+/** The name of the Workbench's workspace, the first part of each snapshot ref. */
+export const WORKSPACE = 'workbench';
 
 /** The start of a lab table URI. The file browser also uses it as the path of a table. */
 const LAB_PREFIX = 'lab:///';
@@ -24,11 +34,6 @@ const TABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 /** The URI that names one table of the lab database. */
 export const labUri = (table: string): string => `${LAB_PREFIX}${table}`;
 
-/** The URI that names one workspace file, the way `/attach` cites it in a message. */
-export function fileUri(path: string): string {
-	return `file://${path.split('/').map(encodeURIComponent).join('/')}`;
-}
-
 /** The table that a lab URI names, or undefined for any other string. */
 export function tableOfUri(uri: string): string | undefined {
 	const name = uri.startsWith(LAB_PREFIX) ? uri.slice(LAB_PREFIX.length) : undefined;
@@ -37,14 +42,19 @@ export function tableOfUri(uri: string): string | undefined {
 
 /** What opening a resolved ref does. */
 type RefTarget =
+	| { kind: 'snapshot'; ref: string; label: string }
+	| { kind: 'commit'; ref: string; label: string }
 	| { kind: 'file'; path: string }
 	| { kind: 'table'; name: string }
-	| { kind: 'message'; seq: number };
+	| { kind: 'room'; room: string }
+	| { kind: 'message'; room: string; seq: number };
 
 /** What the terminal knows, to check a ref against. */
 export interface Known {
 	/** The open room. */
 	room: string;
+	/** The rooms of the host. */
+	rooms: readonly string[];
 	/** The paths of the workspace files, as the host lists them. */
 	files: readonly string[];
 	/** The tables of the lab database. */
@@ -53,7 +63,7 @@ export interface Known {
 	seqs: ReadonlySet<number>;
 }
 
-type RefKind = 'file' | 'table' | 'message' | 'unknown';
+type RefKind = 'snapshot' | 'commit' | 'file' | 'table' | 'room' | 'message' | 'unknown';
 
 /** One ref after resolution. `target` is absent when the ref does not resolve. */
 export interface ResolvedRef {
@@ -115,18 +125,49 @@ function resolveTable(ref: string, known: Known): ResolvedRef {
 	return { ref, kind: 'table', label: name, target: { kind: 'table', name } };
 }
 
-function resolveMessage(ref: string, known: Known): ResolvedRef {
+/**
+ * A snapshot of this workspace opens from the object store. The label is the
+ * path the file had, and the first digits of the digest tell two snapshots
+ * apart. The panel says so when the store holds no bytes for the ref.
+ */
+function resolveSnapshot(ref: string): ResolvedRef | undefined {
+	const uri = parseSnapshotUri(ref);
+	if (uri === undefined) return undefined;
+	const label = `${uri.path} @${uri.digest.slice(0, 8)}`;
+	if (uri.workspace !== WORKSPACE)
+		return { ...unresolved(ref, 'snapshot', `in workspace ${uri.workspace}`), label };
+	return { ref, kind: 'snapshot', label, target: { kind: 'snapshot', ref, label } };
+}
+
+/**
+ * A commit of this workspace opens in the panel. The label shows its
+ * repository, the branch or the tag, and the short hash.
+ */
+function resolveCommit(ref: string): ResolvedRef | undefined {
+	const uri = parseCommitUri(ref);
+	if (uri === undefined) return undefined;
+	const via = uri.branch ?? uri.tag;
+	const label = [uri.repository, via, uri.commit.slice(0, 7)].filter(Boolean).join(' ');
+	if (uri.workspace !== WORKSPACE)
+		return { ...unresolved(ref, 'commit', `in workspace ${uri.workspace}`), label };
+	return { ref, kind: 'commit', label, target: { kind: 'commit', ref, label } };
+}
+
+/**
+ * A room ref opens its room, and a message ref opens its room and jumps to
+ * the message. A message of the open room resolves only once it is read.
+ */
+function resolveRoom(ref: string, known: Known): ResolvedRef {
 	const uri = parseRoomUri(ref);
-	if (uri?.message === undefined) return unresolved(ref, 'unknown', 'names a room, not a message');
-	if (uri.room !== known.room) return unresolved(ref, 'message', `in room ${uri.room}`);
-	if (!known.seqs.has(uri.message))
-		return unresolved(ref, 'message', `message ${uri.message} is not read yet`);
-	return {
-		ref,
-		kind: 'message',
-		label: `${uri.message}`,
-		target: { kind: 'message', seq: uri.message },
-	};
+	if (uri === undefined) return unresolved(ref, 'unknown', 'this form opens nothing');
+	const kind = uri.message === undefined ? 'room' : 'message';
+	if (!known.rooms.includes(uri.room)) return unresolved(ref, kind, `no room ${uri.room}`);
+	if (uri.message === undefined)
+		return { ref, kind, label: uri.room, target: { kind: 'room', room: uri.room } };
+	if (uri.room === known.room && !known.seqs.has(uri.message))
+		return unresolved(ref, kind, `message ${uri.message} is not read yet`);
+	const label = uri.room === known.room ? `${uri.message}` : `${uri.room} ${uri.message}`;
+	return { ref, kind, label, target: { kind: 'message', room: uri.room, seq: uri.message } };
 }
 
 /** Resolve one ref. A ref of another scheme is `unknown` and opens nothing. */
@@ -134,7 +175,8 @@ export function resolveRef(ref: string, known: Known): ResolvedRef {
 	const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):/.exec(ref)?.[1]?.toLowerCase();
 	if (scheme === 'file') return resolveFile(ref, known);
 	if (scheme === 'lab') return resolveTable(ref, known);
-	if (scheme === 'ambion') return resolveMessage(ref, known);
+	if (scheme === 'ambion')
+		return resolveSnapshot(ref) ?? resolveCommit(ref) ?? resolveRoom(ref, known);
 	return unresolved(ref, 'unknown', 'this scheme opens nothing');
 }
 
@@ -185,4 +227,40 @@ export function holderOf(blocks: readonly Block[], seq: number): string | undefi
 /** True when the blocks show the message at `seq`: open, or in a discussion that is open. */
 export function shows(blocks: readonly Block[], seq: number): boolean {
 	return shownMessages(blocks).some((message) => message.seq === seq);
+}
+
+/** The entries of the files panel: the workspace files, then the tables of the lab database. */
+export function panelEntries(files: readonly FileEntry[], tables: readonly string[]): FileEntry[] {
+	return [
+		...files,
+		...tables.map((name) => ({ path: labUri(name), size: 0, kind: 'table' as const })),
+	];
+}
+
+/**
+ * The files panel entry a target opens, or undefined for a target that opens
+ * a room. A snapshot and a commit are not in the list of files, so the panel
+ * lists them first.
+ */
+export function panelOf(target: RefTarget): { path: string; extra?: FileEntry } | undefined {
+	if (target.kind === 'snapshot' || target.kind === 'commit') {
+		const { ref: path, kind, label } = target;
+		return { path, extra: { path, size: 0, kind, label } };
+	}
+	if (target.kind === 'file') return { path: target.path };
+	return target.kind === 'table' ? { path: labUri(target.name) } : undefined;
+}
+
+/** Load one entry of the files panel: a snapshot, a commit, a lab table, or a workspace file. */
+export function loadEntry(host: Workbench, path: string): Promise<FileContent> {
+	if (parseSnapshotUri(path) !== undefined) return host.snapshot(path);
+	if (parseCommitUri(path) !== undefined) return host.commit(path);
+	return tableOfUri(path) === undefined ? host.file(path) : host.labTable(path);
+}
+
+/** Why a message ref shows nothing: a summary stands for the message, or the room has no such message. */
+export function unshownText(seq: number, room: string, read: readonly { seq: number }[]): string {
+	return read.some((message) => message.seq === seq)
+		? `Message ${seq} is not in the conversation. A summary stands for it.`
+		: `Room ${room} has no message ${seq} yet.`;
 }

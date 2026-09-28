@@ -222,10 +222,11 @@ export class Keys {
 
 	// Discussions
 
+	/** Enter browse mode. A direct reply has no discussion, so its refs alone are enough to enter. */
 	private enterBrowse(): void {
 		const keys = discussionKeys(this.session.blocks);
-		if (keys.length === 0) {
-			this.session.say('No discussions to browse yet.');
+		if (keys.length === 0 && this.session.refItems.length === 0) {
+			this.session.say('No discussions or refs to browse yet.');
 			return;
 		}
 		this.mode = 'browse';
@@ -237,7 +238,7 @@ export class Keys {
 	}
 
 	private exitBrowse(): void {
-		if (this.mode !== 'browse') return;
+		if (this.mode !== 'browse' && this.mode !== 'refs') return;
 		this.mode = 'compose';
 		this.composer.focus();
 		this.painter.invalidate();
@@ -296,6 +297,13 @@ export class Keys {
 		this.render();
 	}
 
+	/** Browse the room a message ref opened. The refs of the room it left are gone; the focus stays. */
+	private browseOpened(): void {
+		this.mode = 'browse';
+		this.painter.invalidate();
+		this.render();
+	}
+
 	private exitRefs(): void {
 		this.mode = 'browse';
 		this.session.clearFocus();
@@ -311,12 +319,17 @@ export class Keys {
 		this.render();
 	}
 
-	/** Open the chosen ref. A message ref jumps, and a file or a table opens the panel. */
+	/**
+	 * Open the chosen ref. A message ref opens its room and jumps, a room ref
+	 * opens its room at the composer, and every other ref opens the panel.
+	 */
 	private async openPicked(): Promise<void> {
-		const picked = this.session.refItems.find((item) => item.id === this.picking);
-		if (picked?.resolved.target?.kind === 'message')
-			this.painter.revealMessage(picked.resolved.target.seq);
+		const target = this.session.refItems.find((item) => item.id === this.picking)?.resolved.target;
+		const room = this.session.room;
 		const intent = this.picking ? await this.session.openRef(this.picking) : undefined;
+		if (target?.kind === 'message') this.painter.revealMessage(target.seq);
+		if (target?.kind === 'room') this.exitBrowse();
+		else if (this.session.room !== room) this.browseOpened();
 		if (intent) this.openFiles();
 	}
 

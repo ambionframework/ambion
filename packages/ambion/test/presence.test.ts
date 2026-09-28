@@ -127,7 +127,7 @@ describe('presence', () => {
 
 		// the arrival never woke a second activation; it landed inside the running one
 		expect(await kinds(session)).toEqual(['arrived', 'said', 'arrived']);
-		expect(seen.some((c) => c.includes('[new] · mara arrived'))).toBe(true);
+		expect(seen.some((c) => /\[new\] #\d+ · mara arrived/.test(c))).toBe(true);
 	});
 
 	it('stamps two people from their own visits, and shows no goal when none is set', async () => {

@@ -104,22 +104,49 @@ shorter text. The limit counts `text` only.
 
 **A ref is one absolute URI that a message cites.** A ref has a scheme, at
 most 2048 characters, and no whitespace. A message carries at most 16 refs
-without duplicates. The room stores the list in order, omits an empty list,
-and never reads behind a ref. The `say` tool trims each ref and drops blank
-ones. A direct `visit.send` keeps refs exactly and refuses a bad one.
+without duplicates. `REF_LIMITS` holds both limits. The room stores the list
+in order, omits an empty list, and never reads behind a ref. The `say` tool
+trims each ref and drops blank ones. A direct `visit.send` keeps refs exactly
+and refuses a bad one.
 
-**The room owns the `ambion` scheme.** `roomUri(name)` gives
-`ambion://room/<name>`. `messageUri(name, seq)` gives
-`ambion://room/<name>/message/<seq>`. `parseRoomUri` reads only these
-canonical forms. The room refuses an `ambion:` ref that is not canonical. The
-prompt states the room URI and the URI of the message that opened the
-current exchange. The seq in a message URI is the same `seq` a workspace
-mirror writes for that message, so a reader can find the cited line in
-`/rooms/<name>/messages.jsonl` (see
-[the mirror](workspace.md#mirror-a-rooms-messages)). A workspace path is not
-a ref. Cite a file with a `file:` URI or another absolute URI that the
-application chooses. [Resources](resources.md) states how a resource change
-is cited.
+**The kernel owns the `ambion` scheme, and defines four forms.** The kernel
+only builds and reads them. The room refuses an `ambion:` ref in any other
+form.
+
+| Form                                                                                            | Names                      | Build with                                       | Read with          |
+| ----------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------ | ------------------ |
+| `ambion://room/<name>`                                                                          | A room                     | `roomUri(name)`                                  | `parseRoomUri`     |
+| `ambion://room/<name>/message/<seq>`                                                            | One message of a room      | `messageUri(name, seq)`                          | `parseRoomUri`     |
+| `ambion://workspace/<workspace>/snapshot/<digest>/<path>`                                       | The bytes of one file      | `snapshotUri(workspace, digest, path)`           | `parseSnapshotUri` |
+| `ambion://workspace/<workspace>/repo/<namespace>/<name>[/branch/<b> or /tag/<t>]/commit/<hash>` | One commit of a repository | `commitUri(workspace, repository, commit, via?)` | `parseCommitUri`   |
+
+**A seat can cite every message it reads.** Each line of the record starts
+with the seq of its message, such as `#12`. The prompt states the room URI
+and the URI of the message that opened the current exchange. An exchange has
+no URI of its own: the URI of its opening message names it. The seq in a
+message URI is the same `seq` a workspace mirror writes for that message, so
+a reader finds the cited line in `/rooms/<name>/messages.jsonl` (see
+[the mirror](workspace.md#mirror-a-rooms-messages)).
+
+**A snapshot ref names bytes.** `<digest>` is the SHA-256 of the bytes, as 64
+lowercase hex digits. `<path>` is the absolute workspace path that held them,
+with each part percent-encoded. `parseSnapshotUri` accepts only the one form
+that `snapshotUri` writes, so one file and one digest have one ref. No
+decoded part of a path, a branch, or a tag holds a control character, so a
+ref never carries a newline or a terminal escape. A workspace makes a
+snapshot and keeps its bytes
+([Snapshot a file](workspace.md#snapshot-a-file)).
+
+**A commit ref names one commit.** `<hash>` is the full hash, 40 or 64
+lowercase hex digits. `branch` or `tag` records the name that pointed at
+the commit when the ref was made, so the ref keeps its meaning after the
+branch moves. A workspace with a git backend makes the ref
+([Cite a commit](git.md#cite-a-commit)).
+
+**A workspace path is not a ref.** Cite a workspace file with a snapshot ref.
+A `file:` URI or another URI that the application chooses names a file as
+it is now, and it can change after the message cites it.
+[Resources](resources.md) states how a resource change is cited.
 
 **A refusal is typed.** The room throws `AmbionError`. Its `code` is one of
 the closed set in `errors.ts`; its message is for a person.

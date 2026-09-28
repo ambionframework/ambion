@@ -149,9 +149,12 @@ export class Painter {
 		if (!resolved) return 'No ref is chosen.';
 		if (!resolved.target)
 			return `This ref does not open: ${resolved.problem ?? 'it does not resolve'}.`;
-		return resolved.target.kind === 'message'
+		const { target } = resolved;
+		if (target.kind === 'room') return `Enter opens the room ${target.room}.`;
+		if (target.kind !== 'message') return 'Enter opens this ref in the files panel.';
+		return target.room === this.session.room
 			? 'Enter jumps to this message.'
-			: 'Enter opens this ref in the files panel.';
+			: `Enter opens the room ${target.room} and jumps to this message.`;
 	}
 
 	private placeholder(): string {
