@@ -13,7 +13,7 @@ import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
 const CODE = 'TANGO-7731';
-const ROOM_TOOLS = ['say', 'seat', 'unseat', 'dismiss'];
+const ROOM_TOOLS = ['say', 'schedule', 'seat', 'unseat', 'dismiss'];
 
 /** A directory with a file that holds the code. */
 async function directory(): Promise<string> {
