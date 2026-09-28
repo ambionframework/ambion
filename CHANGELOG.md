@@ -46,9 +46,11 @@ skill the same way. See [Skills](docs/skills.md).
   process of this run and an adopted process share one map, one stop, and
   one end. The record of a process of this run also holds its environment
   and its abort.
-- **The first read that finds a process lost writes its `stop`.** The line
-  is `failed <time> The host run ended before the process did.`, and the
-  listing runs no `ps` for that process again. The status stays the same.
+- **The first read that finds a process lost with a `pid` writes its
+  `stop`.** The line is `failed <time> The host run ended before the process
+  did.`, and the listing runs no `ps` for that process again. The status
+  stays the same. A process with no `pid` gets no line, so a read adopts it
+  when its shell starts later.
   See [Processes](docs/processes.md#the-files).
 
 ### Breaking changes

@@ -89,6 +89,8 @@ export interface ProcessFiles {
 	readonly stop?: string;
 	/** A result or a reminder showed the end. */
 	readonly seen: boolean;
+	/** The wrapper wrote `pid`: a shell started the command. */
+	readonly pid: boolean;
 	/** The shell that ran the command still runs it, on a backend that can tell. */
 	readonly alive: boolean;
 }
@@ -159,7 +161,8 @@ export function stopLine(cause: StopCause, message?: string): string {
 
 /**
  * The `stop` line for a lost process. The first read that finds the process
- * lost writes it, and the listing runs no `ps` for a process with this line.
+ * lost with a `pid` writes it, and the listing runs no `ps` for a process
+ * with this line.
  */
 export function lostLine(): string {
 	return stopLine('failed', LOST);
@@ -208,7 +211,7 @@ function listingScript(root: string, handle?: string): string {
 	const names = handle === undefined ? '*' : quoted(handle);
 	return [
 		`cd ${quoted(root)} 2>/dev/null || exit 0`,
-		`find ${from} -maxdepth ${handle === undefined ? 2 : 1} -type f \\( -name spec -o -name exit -o -name stop -o -name seen \\) -exec grep '' /dev/null {} + 2>/dev/null`,
+		`find ${from} -maxdepth ${handle === undefined ? 2 : 1} -type f \\( -name spec -o -name exit -o -name stop -o -name seen -o -name pid \\) -exec grep '' /dev/null {} + 2>/dev/null`,
 		`command -v ps >/dev/null 2>&1 || exit 0`,
 		`for f in ${names}/pid; do`,
 		`  h="\${f%/pid}"`,
@@ -265,6 +268,7 @@ interface Draft {
 	exit?: string;
 	stop?: string;
 	seen: boolean;
+	pid: boolean;
 	alive: boolean;
 }
 
@@ -278,13 +282,29 @@ function fold(drafts: Map<string, Draft>, text: string): void {
 	if (!isHandle(handle)) return;
 	const fact = line.slice(slash + 1, colon);
 	const rest = line.slice(colon + 1);
-	const draft = drafts.get(handle) ?? { handle, seen: false, alive: false };
+	const draft = drafts.get(handle) ?? { handle, seen: false, pid: false, alive: false };
 	drafts.set(handle, draft);
-	if (fact === 'spec') draft.spec = parseSpec(rest);
-	else if (fact === 'exit') draft.exit = rest;
-	else if (fact === 'stop') draft.stop = rest;
-	else if (fact === 'seen') draft.seen = true;
-	else if (fact === 'alive') draft.alive = true;
+	record(draft, fact, rest);
+}
+
+/** Record one fact of a process in its draft. */
+function record(draft: Draft, fact: string, text: string): void {
+	switch (fact) {
+		case 'spec':
+			draft.spec = parseSpec(text);
+			break;
+		case 'exit':
+			draft.exit = text;
+			break;
+		case 'stop':
+			draft.stop = text;
+			break;
+		case 'seen':
+		case 'pid':
+		case 'alive':
+			draft[fact] = true;
+			break;
+	}
 }
 
 /** The files of every process of the agent under `root`, or of the one process `handle`. */
@@ -306,6 +326,7 @@ export async function readFiles(
 						dir: `${root}/${draft.handle}`,
 						spec: draft.spec,
 						seen: draft.seen,
+						pid: draft.pid,
 						alive: draft.alive,
 						...(draft.exit === undefined ? {} : { exit: draft.exit }),
 						...(draft.stop === undefined ? {} : { stop: draft.stop }),

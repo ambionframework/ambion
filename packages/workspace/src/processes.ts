@@ -178,10 +178,12 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	/**
 	 * Write `stop` for a lost process, so later listings run no `ps` for it.
 	 * A process is lost when nothing runs it and its files name no end. The
-	 * line changes no status. Best-effort: the next read tries again.
+	 * line changes no status. A process with no `pid` costs no `ps`, and its
+	 * shell can still start, so it gets no line. Best-effort: the next read
+	 * tries again.
 	 */
 	const recordLost = async (env: WorkspaceEnv, { files, status }: Found): Promise<void> => {
-		if (status.error !== LOST || files.stop !== undefined) return;
+		if (status.error !== LOST || files.stop !== undefined || !files.pid) return;
 		await writeStop(env, files.dir, lostLine()).catch(() => undefined);
 	};
 
@@ -418,7 +420,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		const process: Live = { agent: agent.name, spec, dir, own };
 		live.set(spec.handle, process);
 		launch(process, own);
-		const status = statusOf({ dir, spec, seen: false, alive: false }, true);
+		const status = statusOf({ dir, spec, seen: false, pid: false, alive: false }, true);
 		emit({ type: 'started', process: status });
 		return status;
 	};

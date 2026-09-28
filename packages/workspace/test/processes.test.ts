@@ -678,7 +678,7 @@ describe('the files as the source of truth', () => {
 			timeout: 600,
 			startedAt: '2026-01-01T00:00:00.000Z',
 		};
-		const read: ProcessFiles = { dir: '/p', spec, seen: false, alive: live, ...files };
+		const read: ProcessFiles = { dir: '/p', spec, seen: false, pid: true, alive: live, ...files };
 		expect(statusOf(read, false).state).toBe(state);
 	});
 
@@ -690,7 +690,7 @@ describe('the files as the source of truth', () => {
 		const command = 'echo kept # a: b\\c';
 		const done = (await call(first, 'bash', { command, name: 'build' })).details.process;
 		await first.dispose();
-		// A spec with no end and no live shell: the run that owned it ended before it did.
+		// A spec and a pid with no end and no live shell: the run that owned it ended before it did.
 		const lost = 'bash-00000000000a';
 		const home = join(dir, 'home', 'alpha', '.processes', lost);
 		await mkdir(home, { recursive: true });
@@ -699,6 +699,7 @@ describe('the files as the source of truth', () => {
 			join(home, 'spec'),
 			JSON.stringify({ ...spec, timeout: 600, startedAt: '2026-01-01T00:00:00.000Z' }),
 		);
+		await writeFile(join(home, 'pid'), '1\n');
 		const second = openWorkspace({ name: 'files-two', backend: { bash: directoryBackend(dir) } });
 		const live = new AbortController().signal;
 		onTestFinished(() => second.dispose());
