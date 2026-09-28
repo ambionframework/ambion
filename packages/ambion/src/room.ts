@@ -2,14 +2,12 @@
 
 import { assertRoomName, captureAgent } from './define.ts';
 import { AmbionError } from './errors.ts';
-import { composeConnector } from './execution/connector.ts';
-import type { Executor } from './execution/executor.ts';
+import { missingConnector } from './execution/route.ts';
 import {
 	defaultConnectorOf,
 	defaultRuntime,
 	type Execution,
 	type ExecutionConnector,
-	type ExecutionHost,
 	executionHostOf,
 	hostingOf,
 	type Runtime,
@@ -81,7 +79,7 @@ function connectorFor(runtime: Runtime, own: Execution | undefined): ExecutionCo
 	const host = executionHostOf(runtime);
 	const execution = own ?? hostingOf(runtime).execution;
 	if (execution !== undefined) return execution.connector(host);
-	const missing = missingConnector(host);
+	const missing = missingConnector(host, noExecution);
 	return {
 		connect(room, request) {
 			const kind = request.definition.executor.kind;
@@ -90,42 +88,9 @@ function connectorFor(runtime: Runtime, own: Execution | undefined): ExecutionCo
 	};
 }
 
-/** The connector for a seat whose kind has no execution: its activations fail. */
-function missingConnector(host: ExecutionHost): ExecutionConnector {
-	return composeConnector({
-		host,
-		traceLimits: host.limits.trace,
-		buildExecutor: (request) => missingExecutor(request.seat),
-	});
-}
-
-/** The executor of a room that has none: each activation fails at once, and a retry cannot fix it. */
-function missingExecutor(seat: string): Executor {
-	return {
-		open(activation) {
-			const error = new AmbionError(
-				'no_execution',
-				'The room has no execution. Load the executor package of the agent, or pass `execution`, such as `piExecution()` from @ambionframework/pi, to startRoom or createRuntime.',
-			);
-			return {
-				readThrough: 0,
-				cancelled: false,
-				async pass() {
-					activation.emit({
-						type: 'error',
-						agent: seat,
-						activation: activation.id,
-						error,
-						cause: 'permanent',
-					});
-					return { failed: true, cause: 'permanent' };
-				},
-				shouldRefresh: () => false,
-				abort() {},
-			};
-		},
-	};
-}
+/** Why a seat fails when no execution serves its kind and no package registered a default. */
+const noExecution = (): string =>
+	'The room has no execution. Load the executor package of the agent, or pass `execution`, such as `piExecution()` from @ambionframework/pi, to startRoom or createRuntime.';
 
 export async function startRoom(options: StartRoomOptions): Promise<Room> {
 	assertRoomName(options.name);
