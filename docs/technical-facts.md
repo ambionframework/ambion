@@ -14,8 +14,9 @@ holds the positioning and the headline of what is new.
   expected position. Each run writes a fence, and a later fence voids the
   earlier run's writes. A retry under the same key lands once. Golden
   journals replay in CI, the body schemas refuse an old field that the
-  runtime would misread, and before 1.0.0 any release may change a body. Memory and SQLite storages ship, with a Cloudflare Durable
-  Objects adapter.
+  runtime would misread, and before 1.0.0 any release may change a body.
+  Memory and SQLite storages ship, with a Cloudflare Durable Objects
+  adapter.
 - **Derived activation identity.** An activation id encodes its cause, its
   journal position, its seat, and its attempt. Nothing mints an id, so a wake
   can be sent twice and the fold refuses a stale caller. Leases claim, renew,

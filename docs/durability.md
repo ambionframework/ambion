@@ -262,6 +262,8 @@ needs no refusal of its own:
   highest read position of its lease. The fold keeps the highest position,
   so the fold of that entry does not change.
 
+**Two more mechanisms hold the stored shapes.**
+
 - **The golden journals pin the fold.** The journals in
   [`test/golden`](../packages/ambion/test/golden) replay to the committed
   fold in CI, and each scenario writes its committed journal again.

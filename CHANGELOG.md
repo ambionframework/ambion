@@ -187,7 +187,8 @@ of the exchange.
   downgrade before 1.0.0. See
   [Journal format](docs/durability.md#journal-format).
 - **A `run` entry refuses `format`.** Each run of 0.3.0 wrote
-  `format: 1`, so the room refuses a journal of 0.3.0 at its first entry.
+  `format: 1`, so the journal read refuses a journal of 0.3.0 at its
+  first entry.
   A body schema refuses an old field that the runtime would misread, and
   the error reads `at body.<name>: expected no such field; an earlier
   release wrote it`.

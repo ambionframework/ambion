@@ -58,10 +58,10 @@ home, and each seat one boundary. `pnpm check` passes, the coverage of
 each changed package holds, and the changelog states the measured count
 of lines that the release removes.
 
-**Journal bodies.** A close carries `cancelled`, a cancel entry carries
-no close (C3), and a composition carries no `version` (C9). The body
-schemas refuse the old shapes, and the journal carries no format number
-(C12). Ambion supports no downgrade.
+**Journal bodies.** A cancel entry carries no close, and the room
+derives a cancelled close from it (C3). A composition carries no
+`version` (C9). The body schemas refuse the old shapes, and the journal
+carries no format number (C12). Ambion supports no downgrade.
 
 **The `assistant` room option stays.** It is shorthand for `agents`,
 `summary`, and `broadcast` attention. The owner keeps it for now.
