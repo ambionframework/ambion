@@ -250,6 +250,38 @@ describe('room transition', () => {
 		});
 	});
 
+	const writes = {
+		commit: (state: RoomState) =>
+			commit(state, {
+				activation: 'message:3:writer:1',
+				key: 'say',
+				intent: { kind: 'said', text: 'Answer.' },
+			}),
+		release: (state: RoomState) =>
+			decide(
+				state,
+				{ type: 'release', id: 'message:3:writer:1', reason: 'released', readThrough: 3 },
+				now,
+			),
+	};
+	const ended: Entry = {
+		kind: 'lease',
+		seq: 5,
+		body: { id: 'message:3:writer:1', phase: 'ended', reason: 'revoked', at, readThrough: 0 },
+	};
+	it.each([
+		['commit', 'the lease ended', ended, 'the lease ended'],
+		['commit', 'the seat left the roster', unseated(5), 'the activation has no room grant'],
+		['release', 'the lease ended', ended, 'the lease ended'],
+		['release', 'the seat left the roster', unseated(5), 'the activation has no room grant'],
+	] as const)(
+		'refuses a %s as stale when %s after the seat checked',
+		(write, _case, entry, reason) => {
+			const state = evolve(answering('writer'), entry, options);
+			expect(writes[write](state)).toEqual({ refusal: { category: 'stale', reason } });
+		},
+	);
+
 	it('allows one active execution per seat across ordinary and closing work', () => {
 		const state = replayState(
 			[

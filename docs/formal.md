@@ -292,31 +292,31 @@ record: it decides an entry, an admission, or the `due` list that
 it lives beside its caller with an ordinary test. The sweep for 0.2.0
 found no such rule.
 
-| Rule                   | The write it gates                                             |
-| ---------------------- | -------------------------------------------------------------- |
-| `applyChange`          | The lease that the fold holds after each lease entry           |
-| `cancelHold`           | The lease that the fold holds after a cancellation             |
-| `mayEnd`               | An end entry for a lease                                       |
-| `leaseExpiry`          | The expiry that a claim entry or a renewal entry stores        |
-| `onRecord`             | The read position that a claim, a renewal, or an end may carry |
-| `admitsLease`          | A claim entry or a renewal entry                               |
-| `isExpired`            | An expiry entry that a pass writes                             |
-| `isLive`               | A commit, a claim, and the seats that a pass routes to         |
-| `endingOf`             | A revocation entry or an expiry entry that a pass writes       |
-| `wellFormed`           | The ids that a claim and a commit may carry                    |
-| `nextActivationId`     | The id that each claim carries                                 |
-| `coversAttempt`        | The leases that answer a wake, so the wakes that the room owes |
-| `wakeAnswered`         | The wakes that the room owes                                   |
-| `countsAgainst`        | The attempt number in the next id, and the attempt limit       |
-| `draftsClose`          | The attempt number of a summary draft, and the summary verdict |
-| `survivesCancellation` | The grants and the owed summaries that a cancellation leaves   |
-| `closeFor`             | The grant of a closing activation                              |
-| `activationGrant`      | A claim entry and a commit entry                               |
-| `speechFreshness`      | A message entry that an activation writes                      |
-| `stampedSummary`       | The recipient and the range of a summary entry                 |
-| `coversExchange`       | A second summary entry, and the summaries that the room owes   |
-| `summaryVerdict`       | The summaries that the room owes                               |
-| `openingQuestion`      | The open exchange that a close entry closes                    |
-| `exchangeLive`         | A close entry                                                  |
-| `admitsClose`          | A close entry                                                  |
-| `exchangeOutcome`      | None; it shapes the outcome that a read reports                |
+| Rule                   | The write it gates                                                           |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| `applyChange`          | The lease that the fold holds after each lease entry                         |
+| `cancelHold`           | The lease that the fold holds after a cancellation                           |
+| `mayEnd`               | An end entry for a lease                                                     |
+| `leaseExpiry`          | The expiry that a claim entry or a renewal entry stores                      |
+| `onRecord`             | The read position that a claim, a renewal, or an end may carry               |
+| `admitsLease`          | A claim entry or a renewal entry                                             |
+| `isExpired`            | An expiry entry that a pass writes                                           |
+| `isLive`               | A commit, a claim, a renewal, a release, and the seats that a pass routes to |
+| `endingOf`             | A revocation entry or an expiry entry that a pass writes                     |
+| `wellFormed`           | The ids that a claim, a renewal, a commit, and a release may carry           |
+| `nextActivationId`     | The id that each claim carries                                               |
+| `coversAttempt`        | The leases that answer a wake, so the wakes that the room owes               |
+| `wakeAnswered`         | The wakes that the room owes                                                 |
+| `countsAgainst`        | The attempt number in the next id, and the attempt limit                     |
+| `draftsClose`          | The attempt number of a summary draft, and the summary verdict               |
+| `survivesCancellation` | The grants and the owed summaries that a cancellation leaves                 |
+| `closeFor`             | The grant of a closing activation                                            |
+| `activationGrant`      | A claim entry, a renewal entry, a commit entry, and a release entry          |
+| `speechFreshness`      | A message entry that an activation writes                                    |
+| `stampedSummary`       | The recipient and the range of a summary entry                               |
+| `coversExchange`       | A second summary entry, and the summaries that the room owes                 |
+| `summaryVerdict`       | The summaries that the room owes                                             |
+| `openingQuestion`      | The open exchange that a close entry closes                                  |
+| `exchangeLive`         | A close entry                                                                |
+| `admitsClose`          | A close entry                                                                |
+| `exchangeOutcome`      | None; it shapes the outcome that a read reports                              |
