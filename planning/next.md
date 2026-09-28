@@ -52,9 +52,6 @@ it to the first, and some copies had already drifted:
 
 - The three classifiers of a permanent failure disagree on the API key,
   the login, and the quota.
-- A seat of an unknown executor kind under `composeExecutions` gets its
-  wake again after each resend window, with no end.
-- `defineHuman` trims preferences, and `captureHuman` does not.
 
 **Acceptance.** Each fact of the room has one derivation, each rule one
 home, and each seat one boundary. `pnpm check` passes, the coverage of
