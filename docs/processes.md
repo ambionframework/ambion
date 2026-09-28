@@ -11,8 +11,9 @@ every bash backend.
 **The files of the bash backend are the source of truth.** Each process
 is a directory in its owner agent's home. The table reads those files for
 every answer, so a new run of the host reads the same table. Memory holds
-only what no file can: the environment, the controller, and the timer of
-each process that this run owns or adopts.
+only what no file can: one record for each live process, with its timer.
+The record of a process that this run started also holds its environment
+and its controller. The record of an adopted process holds neither.
 
 **A process runs until it ends, times out, or gets a cancel.** An
 activation, an exchange, and a room do not stop a process. The host sees
@@ -88,6 +89,7 @@ agent is the agent's own home. A handle of another agent fails with
 | `pid`    | The wrapper | First: the pid of the shell that runs the command                    |
 | `exit`   | The wrapper | After the command: the exit code and the time, whole or absent       |
 | `stop`   | The table   | Before it stops the process: `cancelled`, `timed_out`, or `failed`   |
+| `stop`   | The table   | When a read first finds the process lost with a `pid`: `failed`      |
 | `seen`   | The table   | When a result or a reminder showed the end                           |
 | `cursor` | The table   | After each result: the byte offset of the output that results showed |
 
@@ -117,6 +119,31 @@ or 200 lines, and records the shell's exit code in `exit`.
 | `stop`, the shell gone           | `cancelled`, `timed_out`, or `failed`, as `stop` names it |
 | Neither, the shell gone          | `failed`: `The host run ended before the process did.`    |
 
+**The first read that finds a process lost with a `pid` writes `stop`.**
+The line is `failed <time> The host run ended before the process did.`
+The time names that read, and the status has no `endedAt`. The listing
+runs no `ps` for a process with this line while `/proc` has no directory
+for its pid, so later reads cost no `ps` for it. The state stays
+`failed`, and `exit` still wins.
+
+**A pid that is still in `/proc` gets the `ps` check.** A `ps` that fails
+once, for example on a fork failure, writes the line for a live shell.
+The next read finds the pid in `/proc`, runs `ps`, and adopts the
+process. The live shell wins over the line, so the state is `running`,
+and the timeout and `cancel` stop the process.
+
+**The line stays in `stop` while the shell runs.** A stop of the table
+writes over it. When the shell ends with no `exit`, the line gives the
+state again. On a system with no `/proc`, the line alone skips the
+process, and a `ps` that fails once makes the process lost for good.
+
+**A process with no `pid` gets no line.** The listing runs no `ps` for it.
+The run that writes `spec` starts the wrapper next, and the wrapper
+writes `pid`. A read by another host between the two writes finds no
+`pid`, and a later read adopts the process. A host that ends before it
+starts the wrapper leaves a spec that never gains a `pid`. That process
+stays lost.
+
 **`exit` wins, and `stop` names the cause of a stop.** The table writes
 `stop` before it aborts, in one shell command that writes it only when no
 `exit` exists. A cancel or a timeout that meets the natural end of a
@@ -126,13 +153,15 @@ handle check keeps a pid that the system reused for another program from
 reading as the process.
 
 **One shell command reads the table of an agent.** A POSIX script runs
-one `find` that hands `spec`, `exit`, `stop`, and `seen` of every process
-to one `grep`. Where `ps` exists, the script then checks the pid of each
-process with no `exit`. A read costs one `exec` on every backend, and
-just-bash reads a table of 64 processes in about 30 ms. `ps` and the
-reminder read the whole table. `status` and `cancel` read the one process.
-`wait` reads the one process, or the whole table on each read when it has
-`handles`.
+one `find` that hands `spec`, `exit`, `stop`, `seen`, and `pid` of every
+process to one `grep`. Where `ps` exists, the script then checks the pid
+of each process with no `exit`. It skips a process whose `stop` names it
+lost when `/proc` has no directory for its pid. Shell builtins read that
+`stop` and test the directory, so the skip starts no program. A read
+costs one `exec` on every backend, and just-bash reads a table of 64
+processes in about 30 ms. `ps` and the reminder read the whole table.
+`status` and `cancel` read the one process. `wait` reads the one process,
+or the whole table on each read when it has `handles`.
 
 ## The result
 
@@ -293,7 +322,8 @@ shell and no more.
 
 **A process of an earlier run that no shell runs is lost.** Its state is
 `failed`, with the error `The host run ended before the process did.` The
-reminder names it once.
+first read that finds it with a `pid` writes `stop` for it. The reminder
+names it once.
 
 | Backend              | What a new run finds of a running process          |
 | -------------------- | -------------------------------------------------- |
@@ -651,6 +681,8 @@ the three handle tools stay as they are.
 | The files of the bash backend are the source of truth          | A new run reads the same table, and a crash loses no record                                        |
 | An agent reaches its own processes alone                       | Its table is its home, and the workstation's accounts make it the wall                             |
 | A lost process reads `failed`                                  | It left no end, and nothing runs it                                                                |
+| The first read of a lost process with a pid writes its `stop`  | A later listing runs no `ps` for a process that nothing runs                                       |
+| The lost `stop` skips `ps` only for a pid gone from `/proc`    | A `ps` that fails once does not hide a live shell, and the skip starts no program                  |
 | The host's list covers this run's agents                       | The workspace keeps no roster                                                                      |
 | The reminder resolves once per activation, and can read I/O    | Every render of one activation reads the same text                                                 |
 | The table holds the timeout, and adopts a live process         | A kill goes through the stops of its agent, in every run                                           |

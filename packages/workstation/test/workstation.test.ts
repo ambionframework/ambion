@@ -331,13 +331,13 @@ function toolOf(workspace: Workspace, name: string): AmbionTool {
 }
 
 describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
-	it('adopts the live processes of an earlier run from their files, cancels one through its pid, and times out the other', async () => {
+	it('adopts the live processes of an earlier run from their files, cancels one through its pid, times out the other over a lost stop, and records a lost one', async () => {
 		const started = await server(['ada']);
 		const home = started.homes.get('ada') ?? '';
 		// An earlier run of the host starts two processes, and then goes away.
 		const earlier = workstationBackend(started.options);
 		const env = await earlier.connect({ name: 'ada' });
-		const launch = async (handle: string, timeout: number, startedAt: string) => {
+		const specOf = async (handle: string, timeout: number, startedAt: string) => {
 			const dir = join(home, '.processes', handle);
 			await mkdir(dir, { recursive: true });
 			const spec = {
@@ -349,13 +349,38 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 				startedAt,
 			};
 			await writeFile(join(dir, 'spec'), JSON.stringify(spec));
+			return dir;
+		};
+		const shell = async (dir: string, on = env) => {
 			const script = `echo "$$" > '${dir}/pid'\n(\nexec sleep 30\n) < /dev/null > '${dir}/out' 2>&1`;
-			void env.exec(script, { timeout: 60 }, ctx).catch(() => undefined);
+			void on.exec(script, { timeout: 60 }, ctx).catch(() => undefined);
 			await until(() => spawnSync('test', ['-s', join(dir, 'pid')]).status === 0);
 			return Number((await readFile(join(dir, 'pid'), 'utf8')).trim());
 		};
-		const kept = await launch('bash-00000000000c', 600, new Date().toISOString());
-		const late = await launch('bash-00000000000d', 1, new Date(Date.now() - 5_000).toISOString());
+		const kept = await shell(await specOf('bash-00000000000c', 600, new Date().toISOString()));
+		const lateDir = await specOf(
+			'bash-00000000000d',
+			1,
+			new Date(Date.now() - 5_000).toISOString(),
+		);
+		const late = await shell(lateDir);
+		// A read whose ps failed once wrote the lost stop for this live shell.
+		await writeFile(
+			join(lateDir, 'stop'),
+			'failed 2026-01-01T00:00:00.000Z The host run ended before the process did.\n',
+		);
+		// A process whose shell starts only after the first read: its spec has no pid yet.
+		const slow = await specOf('bash-00000000000f', 600, new Date().toISOString());
+		// A process whose shell ended and left no end in the files: no run runs it.
+		const lost = join(home, '.processes', 'bash-00000000000e');
+		await mkdir(lost, { recursive: true });
+		const spec = { handle: 'bash-00000000000e', kind: 'bash', agent: 'ada', command: 'true' };
+		await writeFile(
+			join(lost, 'spec'),
+			JSON.stringify({ ...spec, timeout: 600, startedAt: new Date().toISOString() }),
+		);
+		await writeFile(join(lost, 'pid'), `${spawnSync('true').pid}\n`);
+		await env.cleanup();
 		await earlier.dispose?.();
 		const workspace = openWorkspace({
 			name: 'lab',
@@ -368,8 +393,31 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			return (result.details as { process: { state: string } }).process.state;
 		};
 		// A read adopts what it finds: ps reads both. The one past its timeout stops at once.
-		await toolOf(workspace, 'ps').invoke({}, context('ada'));
+		// The pid of the one with the lost stop is in /proc, so the listing runs ps for it.
+		const listed = await toolOf(workspace, 'ps').invoke({}, context('ada'));
+		if (typeof listed === 'string') throw new Error('A process tool gives a structured result.');
+		const running = (listed.details as { processes: Array<{ handle: string; state: string }> })
+			.processes;
+		expect(running.map((one) => [one.handle, one.state])).toEqual([
+			['bash-00000000000d', 'running'],
+			['bash-00000000000c', 'running'],
+		]);
 		expect(await call('status', { handle: 'bash-00000000000c' })).toBe('running');
+		// The read that found the lost process wrote its stop. Its pid is not in /proc, so no later
+		// listing runs ps for it.
+		expect(await readFile(join(lost, 'stop'), 'utf8')).toMatch(
+			/^failed \S+ The host run ended before the process did\.\n$/,
+		);
+		expect(await call('status', { handle: 'bash-00000000000e' })).toBe('failed');
+		// A spec with no pid gets no stop, so the read after its shell writes the pid adopts it.
+		await expect(readFile(join(slow, 'stop'), 'utf8')).rejects.toThrow();
+		const other = backendFor(started.options);
+		const otherEnv = await other.connect({ name: 'ada' });
+		cleanups.push(() => otherEnv.cleanup());
+		const slowPid = await shell(slow, otherEnv);
+		expect(await call('status', { handle: 'bash-00000000000f' })).toBe('running');
+		expect(await call('cancel', { handle: 'bash-00000000000f' })).toBe('cancelled');
+		expect(ended(slowPid)).toBe(true);
 		await until(() => ended(late), 15_000);
 		expect(await call('status', { handle: 'bash-00000000000d' })).toBe('timed_out');
 		expect(await call('cancel', { handle: 'bash-00000000000c' })).toBe('cancelled');

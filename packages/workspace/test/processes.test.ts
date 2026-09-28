@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, onTestFinished } from 'vitest';
@@ -358,9 +358,34 @@ describe('the host view', () => {
 		expect(await workspace.processes.list({ agent: 'beta' })).toEqual([]);
 		expect((await workspace.processes.cancel(handle)).state).toBe('cancelled');
 		expect(events).toEqual([`started ${handle}`, `ended ${handle}`]);
+		// A read that sees the exit before the run ends gives no event: the run gives the one end.
+		const gated = await call(workspace, 'bash', {
+			command: 'until [ -f ~/gate ]; do sleep 0.01; done',
+			wait: 0,
+		});
+		const late = gated.details.process;
+		const ended = Promise.withResolvers<void>();
+		workspace.processes.subscribe((event) => {
+			if (event.type === 'ended' && event.process.handle === late.handle) ended.resolve();
+		});
+		const lateDir = late.output.slice(0, late.output.lastIndexOf('/'));
+		await workspace.use({ name: 'alpha' }, (env) => writeExit(env, lateDir, 0));
+		const seen = await workspace.processes.list();
+		expect(seen.find((one) => one.handle === late.handle)?.state).toBe('exited');
+		expect(events).toHaveLength(3);
+		await workspace.use({ name: 'alpha' }, (env) =>
+			env.exec('touch ~/gate', undefined, BACKGROUND_CONTEXT),
+		);
+		await ended.promise;
+		expect(events).toEqual([
+			`started ${handle}`,
+			`ended ${handle}`,
+			`started ${late.handle}`,
+			`ended ${late.handle}`,
+		]);
 		unsubscribe();
 		await call(workspace, 'bash', { command: 'true' });
-		expect(events).toHaveLength(2);
+		expect(events).toHaveLength(4);
 		await expect(workspace.processes.cancel('bash-000000000000')).rejects.toThrow(
 			'The workspace has no process bash-000000000000.',
 		);
@@ -653,7 +678,7 @@ describe('the files as the source of truth', () => {
 			timeout: 600,
 			startedAt: '2026-01-01T00:00:00.000Z',
 		};
-		const read: ProcessFiles = { dir: '/p', spec, seen: false, alive: live, ...files };
+		const read: ProcessFiles = { dir: '/p', spec, seen: false, pid: true, alive: live, ...files };
 		expect(statusOf(read, false).state).toBe(state);
 	});
 
@@ -665,7 +690,7 @@ describe('the files as the source of truth', () => {
 		const command = 'echo kept # a: b\\c';
 		const done = (await call(first, 'bash', { command, name: 'build' })).details.process;
 		await first.dispose();
-		// A spec with no end and no live shell: the run that owned it ended before it did.
+		// A spec and a pid with no end and no live shell: the run that owned it ended before it did.
 		const lost = 'bash-00000000000a';
 		const home = join(dir, 'home', 'alpha', '.processes', lost);
 		await mkdir(home, { recursive: true });
@@ -674,6 +699,7 @@ describe('the files as the source of truth', () => {
 			join(home, 'spec'),
 			JSON.stringify({ ...spec, timeout: 600, startedAt: '2026-01-01T00:00:00.000Z' }),
 		);
+		await writeFile(join(home, 'pid'), '1\n');
 		const second = openWorkspace({ name: 'files-two', backend: { bash: directoryBackend(dir) } });
 		const live = new AbortController().signal;
 		onTestFinished(() => second.dispose());
@@ -696,12 +722,16 @@ describe('the files as the source of truth', () => {
 		const reminded =
 			(await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a1' }, live)) ?? '';
 		expect(reminded).toContain(`- ${lost} failed: sleep 99`);
+		// The first read that finds the process lost with a pid writes the lost line to its stop.
+		const [cause, , ...message] = (await readFile(join(home, 'stop'), 'utf8')).split(' ');
+		expect([cause, message.join(' ')]).toEqual(['failed', `${LOST}\n`]);
 		expect(reminded).not.toContain(done.handle);
 		expect(
 			await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a2' }, live),
 		).toBeUndefined();
 		const lostStatus = await call(second, 'status', { handle: lost });
 		expect(lostStatus.details.process).toMatchObject({ state: 'failed', error: LOST });
+		expect(lostStatus.details.process.endedAt).toBeUndefined();
 		// The host's cancel finds the owner from the files, and gives the final state again.
 		expect(await second.processes.cancel(lost)).toMatchObject({ state: 'failed', error: LOST });
 		expect((await call(second, 'ps', {})).text).toBe('No running processes.');
