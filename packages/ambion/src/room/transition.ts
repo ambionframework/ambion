@@ -18,7 +18,7 @@ import type {
 import { activationSpec } from './activation.ts';
 import { coveringSummary } from './exchange.ts';
 import { isFixed, type RoomState } from './fold.ts';
-import { isExpired, isLive, seatOf } from './lease.ts';
+import { seatOf } from './lease.ts';
 import {
 	liveWork,
 	planReconciliation,
@@ -30,6 +30,8 @@ import {
 	admitsClose,
 	admitsLease,
 	speechFreshness as freshnessRule,
+	isExpired,
+	isLive,
 	leaseExpiry,
 	mayEnd,
 	onRecord,

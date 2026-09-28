@@ -8,7 +8,7 @@
  * function over the entries. `projection-equivalence.test.ts` holds the
  * projection equal to it after every entry of a seeded walk.
  */
-import { decodeActivationId } from '../../src/activation-id.ts';
+import { type ActivationId, decodeActivationId } from '../../src/activation-id.ts';
 import type { Close, Composition, Seating } from '../../src/journal/events.ts';
 import type { Entry } from '../../src/journal/journal.ts';
 import type { MessageDelivery } from '../../src/room/delivery.ts';
@@ -23,7 +23,6 @@ import {
 	reserveOf,
 } from '../../src/room/fold.ts';
 import {
-	coversAttempt,
 	type LeaseHold,
 	type PendingActivation,
 	type PendingWake,
@@ -33,8 +32,16 @@ import {
 import { type Owed, withAttempts } from '../../src/room/owed.ts';
 import { advancePeople, type PersonState } from '../../src/room/presence.ts';
 import { projectState, replay } from '../../src/room/projection.ts';
+import { coversAttempt } from '../../src/room/rules.verified.ts';
 import { changesScheduled, type ScheduledSay, scheduleStep } from '../../src/room/scheduled.ts';
 import type { ExchangeRef, Message, Seq } from '../../src/types.ts';
+
+/** The fields an id encodes, as the fold decodes them for a lease that a test writes by hand. */
+export function activationOf(id: string): ActivationId {
+	const activation = decodeActivationId(id);
+	if (activation === undefined) throw new Error(`Malformed activation id '${id}'.`);
+	return activation;
+}
 
 /** The state after every entry, folded over the whole journal. */
 export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomState {

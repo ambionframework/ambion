@@ -103,6 +103,15 @@ its `text`.
   `room/lease.ts`, `seatOfLease` in `room/transition.ts`, and the rule
   `acknowledged` go. `countsAgainst` counts the failed drafts of a
   summary, and `applyChange` alone keeps `readThrough` from moving back.
+- **The room rules read one lease shape.** `RuleLease` replaces `Hold`,
+  `Taken`, `Draft`, and `LiveLease`, and the converters `takenOf` and
+  `liveLeases` go. `isLive`, `isExpired`, and `coversAttempt` read the
+  lease itself. The fold decodes the id of a lease once and keeps its
+  fields in `activation`, so the callers of the rules decode no lease id.
+  The fold holds no lease whose id the room did not derive.
+- **The lease field `since` is now `openedSeq`.** It holds the seq of the
+  entry that opened the lease. `since` stays the name of the exclusive
+  read cursor of a read and of a pass.
 - **`summaryVerdict` has no `covered` input and no `published` verdict.**
   `summaryCompletion` returns a covering summary before it runs the rule.
 - **One search finds a covering summary.** `coveringSummary` in

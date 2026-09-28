@@ -200,7 +200,6 @@ page it changes in the same commit.
 
 - [ ] **1.** `decide` builds every journal body and makes every authority
       decision. (C4)
-- [ ] **2.** One lease shape in the rules. (C2)
 - [ ] **3.** The remote call is an `Execution`, and `Transport` goes. (C5)
 - [ ] **4.** The room applies the token limit, and the paging of a view
       goes. (C7)
@@ -227,22 +226,6 @@ pass one live file on each of Pi, Claude, and Codex before they merge.
 
 **Each item removes one kind of second path.** Each states the problem,
 the change, and the evidence.
-
-**C2. One home for each rule.** A rule that the room decides by lives in
-`rules.verified.ts`, and the caller runs its body. The rules still read
-one lease in four shapes.
-
-- **The rules read one lease shape.** They read a lease as `Hold`,
-  `Taken`, `Draft`, and `LiveLease`, and `takenOf`, `draftsOf`, and
-  `liveLeases` convert between them. One `RuleLease` replaces the four.
-  This sub-item re-proves the rules that read them. Phase 2 step 2 holds
-  it.
-- **The lease `since` takes its name in the same proof edit.**
-  [Deferred by decision](backlog.md#deferred-by-decision) holds the name until a
-  proof edit renames it, and this sub-item is that edit.
-
-**Evidence:** `pnpm rule:check` on each changed rules file, and
-`pnpm check:lemmascript`.
 
 **C4. `decide` is the one decision point.** The reconcile in
 `transition.ts` builds the bodies of returned says, closes, and lease

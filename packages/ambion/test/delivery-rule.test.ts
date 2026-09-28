@@ -12,7 +12,7 @@ import type { LeaseHold } from '../src/room/lease.ts';
 import type { EndReason, Message } from '../src/types.ts';
 import { freeze } from './support/core-failure.ts';
 import { evolve } from './support/evolve.ts';
-import { foldRoom, pendingOf, replayState } from './support/fold.ts';
+import { activationOf, foldRoom, pendingOf, replayState } from './support/fold.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 
@@ -25,28 +25,30 @@ const said = (seq = 10, wakes?: string[]): Message => ({
 	...(wakes === undefined ? {} : { wakes }),
 });
 
-const running = (id: string, since: number, expiresAt = 1): LeaseHold => ({
+const running = (id: string, openedSeq: number, expiresAt = 1): LeaseHold => ({
 	id,
+	activation: activationOf(id),
 	phase: 'running',
 	expiresAt,
 	at,
 	claimedAt: at,
-	since,
+	openedSeq,
 	readThrough: 0,
 });
 
 const ended = (
 	id: string,
-	since: number,
+	openedSeq: number,
 	until: number,
 	reason: Extract<LeaseHold, { phase: 'ended' }>['reason'] = 'released',
 ): LeaseHold => ({
 	id,
+	activation: activationOf(id),
 	phase: 'ended',
 	reason,
 	at,
 	claimedAt: at,
-	since,
+	openedSeq,
 	until,
 	readThrough: 0,
 });
@@ -80,7 +82,6 @@ describe('message delivery rule', () => {
 					ended('message:3:at-end:1', 3, 10),
 					ended('message:3:after:1', 3, 11),
 					running('message:3:running:1', 3, 0),
-					running('opened:3:opened:1', 3),
 					running('closed:10:closed:1', 3),
 				),
 			),
@@ -209,7 +210,7 @@ const entries: Entry[] = [
 	},
 ];
 
-type HistoricalLease = { id: string; since: number; until: number | undefined };
+type HistoricalLease = { id: string; openedSeq: number; until: number | undefined };
 type OracleDelivery = { recipients: Set<string>; steers: Set<string> };
 
 function historicalLeases(history: readonly Entry[]): Map<string, HistoricalLease> {
@@ -220,7 +221,7 @@ function historicalLeases(history: readonly Entry[]): Map<string, HistoricalLeas
 		const current = leases.get(id);
 		if (current?.until !== undefined) continue;
 		const until = phase === 'running' ? undefined : entry.seq;
-		leases.set(id, { id, since: current?.since ?? entry.seq, until });
+		leases.set(id, { id, openedSeq: current?.openedSeq ?? entry.seq, until });
 	}
 	return leases;
 }
@@ -242,7 +243,7 @@ function historicalDeliveries(
 				id?.source === 'message' &&
 				id.seat !== body.from &&
 				!explicit.has(id.seat) &&
-				held.since < entry.seq &&
+				held.openedSeq < entry.seq &&
 				(held.until === undefined || entry.seq <= held.until)
 			)
 				steers.add(id.seat);

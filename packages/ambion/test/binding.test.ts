@@ -127,9 +127,10 @@ describe('the room runs the verified rules', () => {
 			reason: 'failed',
 			at,
 			claimedAt: at,
-			since: 1,
+			openedSeq: 1,
 			readThrough: 0,
 			until: 4,
+			activation: { source: 'message', position: 3, seat: 'product', attempt: 1 },
 		} as const;
 		bind.once(rules.applyChange, sentinel);
 		expect(claimed().leases.get(id)).toEqual(sentinel);

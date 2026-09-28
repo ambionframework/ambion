@@ -14,15 +14,8 @@
 import { decodeActivationId } from '../activation-id.ts';
 import type { Close, LeaseChange } from '../journal/events.ts';
 import type { RoomState } from './fold.ts';
-import {
-	isExpired,
-	isLive,
-	type LeaseHold,
-	type PendingActivation,
-	removedAfter,
-	seatOf,
-} from './lease.ts';
-import { endingOf, exchangeLive, type LiveLease, type OwedActivation } from './rules.verified.ts';
+import { type PendingActivation, removedAfter, seatOf } from './lease.ts';
+import { endingOf, exchangeLive, isExpired, isLive } from './rules.verified.ts';
 import type { ScheduledSay } from './scheduled.ts';
 import { summaryWriter } from './summary.ts';
 
@@ -112,30 +105,9 @@ export function liveWork(state: RoomState, now: number): LiveWork {
 	const seats = liveSeats(state, now);
 	return {
 		seats,
-		exchange: exchangeLive(liveLeases(state), owedActivations(state), now),
+		exchange: exchangeLive([...state.leases.values()], state.due, now),
 		rest: seats.size === 0,
 	};
-}
-
-/** Every lease the room derived an id for, as the liveness rules read it. */
-function liveLeases(state: RoomState): LiveLease[] {
-	return [...state.leases.values()].flatMap((lease: LeaseHold) => {
-		const parsed = decodeActivationId(lease.id);
-		if (parsed === undefined) return [];
-		return [
-			{
-				source: parsed.source,
-				seat: parsed.seat,
-				phase: lease.phase,
-				expiresAt: lease.phase === 'running' ? lease.expiresAt : 0,
-			},
-		];
-	});
-}
-
-/** Every activation the room owes, as the liveness rules read it. */
-function owedActivations(state: RoomState): OwedActivation[] {
-	return state.due.map((owed) => ({ source: owed.source, seat: owed.seat }));
 }
 
 export function planReconciliation(state: RoomState, options: ReconcileOptions): Reconciliation {

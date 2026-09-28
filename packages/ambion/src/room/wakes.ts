@@ -12,14 +12,12 @@
 import type { Seq } from '../types.ts';
 import type { MessageDelivery } from './delivery.ts';
 import {
-	coversAttempt,
 	type LeaseHold,
 	type PendingActivationOptions,
 	type PendingWake,
 	statusOf,
-	takenOf,
 } from './lease.ts';
-import { wakeAnswered } from './rules.verified.ts';
+import { coversAttempt, wakeAnswered } from './rules.verified.ts';
 
 /** A wake that a running lease answers while it runs. It is pending again when that lease comes to nothing. */
 type HeldWake = Pick<PendingWake, 'seat' | 'position' | 'at'>;
@@ -42,7 +40,7 @@ function judgeWake(
 	const taken = [...(leases?.values() ?? [])].filter((lease) => coversAttempt(lease, message.seq));
 	const wake = statusOf(message, seat, taken, options);
 	if (wake !== undefined) return wake;
-	const settled = taken.filter((lease) => lease.phase === 'ended').map(takenOf);
+	const settled = taken.filter((lease) => lease.phase === 'ended');
 	if (wakeAnswered(settled, message.seq)) return undefined;
 	return { seat, position: message.seq, at: message.at };
 }

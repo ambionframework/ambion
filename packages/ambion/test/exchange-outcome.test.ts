@@ -11,7 +11,7 @@ import type { LeaseHold } from '../src/room/lease.ts';
 import { pendingFor, readView } from '../src/room/read.ts';
 import type { ExchangeView, Message, RoomRead, SummaryMessage } from '../src/types.ts';
 import { evolve } from './support/evolve.ts';
-import { foldRoom, owedOf, pendingOf, replayState } from './support/fold.ts';
+import { activationOf, foldRoom, owedOf, pendingOf, replayState } from './support/fold.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const cancelledAt = '2026-01-01T09:01:00.000Z';
@@ -184,14 +184,25 @@ describe('summary completion query', () => {
 		reason === undefined
 			? {
 					id,
+					activation: activationOf(id),
 					phase: 'running',
 					expiresAt: Date.parse(cancelledAt),
 					at,
 					claimedAt: at,
-					since: 3,
+					openedSeq: 3,
 					readThrough: 0,
 				}
-			: { id, phase: 'ended', reason, at, claimedAt: at, since: 3, until: 7, readThrough: 0 };
+			: {
+					id,
+					activation: activationOf(id),
+					phase: 'ended',
+					reason,
+					at,
+					claimedAt: at,
+					openedSeq: 3,
+					until: 7,
+					readThrough: 0,
+				};
 	const pending = { status: 'pending', writer: 'assistant' };
 	const covering = (covers: { from: number; through: number }) => ({ ...written, covers });
 
@@ -393,10 +404,11 @@ describe('exchange session', () => {
 	/** An ended lease that recorded session `id`, and ended at `until`. */
 	const ended = (lease: string, id: string, until: number): LeaseHold => ({
 		id: lease,
+		activation: activationOf(lease),
 		phase: 'ended',
 		at,
 		claimedAt: at,
-		since: until - 1,
+		openedSeq: until - 1,
 		readThrough: until - 1,
 		reason: 'released',
 		until,

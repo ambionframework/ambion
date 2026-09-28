@@ -242,10 +242,11 @@ it('marks an activation a cancellation ended', () => {
 	expect(
 		exchangeActivation({
 			id: 'message:4:assistant:1',
+			activation: { source: 'message', position: 4, seat: 'assistant', attempt: 1 },
 			phase: 'ended',
 			at,
 			claimedAt: at,
-			since: 5,
+			openedSeq: 5,
 			readThrough: 0,
 			reason: 'revoked',
 			cancelled: true,

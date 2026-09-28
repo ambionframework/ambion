@@ -28,37 +28,31 @@ datatype LeaseEndReason = released | failed | revoked | expired | abandoned
 
 datatype FailureCause = permanent | transient
 
+datatype Source = message | closed
+
+datatype ActivationFields = ActivationFields(source: Source, position: int, seat: string, attempt: int)
+
+datatype RuleLease = running(id: string, activation: ActivationFields, at: string, claimedAt: string, openedSeq: int, readThrough: int, expiresAt: int) | ended(id: string, activation: ActivationFields, at: string, claimedAt: string, openedSeq: int, readThrough: int, reason: LeaseEndReason, cancelled: Option<bool>, cause: Option<string>, until: int)
+
 datatype Freshness = invalid | missed | fresh_
 
 datatype OpenExchange = OpenExchange(owner: string, from: int)
 
 datatype CloseRef = CloseRef(owner: string, from: int, through: int)
 
-datatype Hold = running(id: string, at: string, claimedAt: string, since: int, readThrough: int, expiresAt: int) | ended(id: string, at: string, claimedAt: string, since: int, readThrough: int, reason: LeaseEndReason, cancelled: Option<bool>, cause: Option<string>, until: int)
-
 datatype Change = running(id: string, expiresAt: int, at: string, readThrough: int) | ended(id: string, reason: LeaseEndReason, at: string, readThrough: int, cause: Option<string>)
-
-datatype Taken = running(readThrough: int, position: int) | ended(reason: LeaseEndReason, readThrough: int, position: int)
 
 datatype Ending = revoked | expired | stays
 
-datatype Source = message | closed
-
 datatype OutcomeKind = complete | cancelled | exhausted | awaiting
 
-datatype LiveLease = LiveLease(source: Source, seat: string, phase: LeasePhase, expiresAt: int)
-
 datatype OwedActivation = OwedActivation(source: Source, seat: string)
-
-datatype ActivationFields = ActivationFields(source: Source, position: int, seat: string, attempt: int)
 
 datatype CloseFact = CloseFact(owner: string, from: int, through: int, summary: Option<string>)
 
 datatype GrantPurpose = respond(message: int) | summarize(exchange: int, person: string, through: int)
 
 datatype Grant = Grant(seat: string, attempt: int, purpose: GrantPurpose)
-
-datatype Draft = running | ended(reason: LeaseEndReason, cancelled: bool)
 
 datatype Verdict = pending(owed: bool) | silent | failed
 
@@ -80,15 +74,20 @@ lemma expired_ensures(expiry: int, now: int)
 {
 }
 
-function coversAttempt(ended: bool, until: int, seq_: int): bool
+function coversAttempt(lease: RuleLease, seq_: int): bool
 {
-  (!(ended) || (seq_ <= until))
+  match lease {
+    case running(i_lease_id, i_lease_activation, i_lease_at, i_lease_claimedAt, i_lease_openedSeq, i_lease_readThrough, i_lease_expiresAt) =>
+      true
+    case ended(i_lease_id, i_lease_activation, i_lease_at, i_lease_claimedAt, i_lease_openedSeq, i_lease_readThrough, i_lease_reason, i_lease_cancelled, i_lease_cause, i_lease_until) =>
+      (seq_ <= i_lease_until)
+  }
 }
 
-lemma coversAttempt_ensures(ended: bool, until: int, seq_: int)
-  ensures (!(ended) ==> coversAttempt(ended, until, seq_))
-  ensures (ended ==> (coversAttempt(ended, until, seq_) <==> (seq_ <= until)))
-  ensures (coversAttempt(ended, until, seq_) ==> forall earlier: int :: ((earlier <= seq_) ==> coversAttempt(ended, until, earlier)))
+lemma coversAttempt_ensures(lease: RuleLease, seq_: int)
+  ensures (lease.running? ==> coversAttempt(lease, seq_))
+  ensures (lease.ended? ==> (coversAttempt(lease, seq_) <==> (seq_ <= lease.until)))
+  ensures (coversAttempt(lease, seq_) ==> forall earlier: int :: ((earlier <= seq_) ==> coversAttempt(lease, earlier)))
 {
 }
 
@@ -255,116 +254,124 @@ lemma survivesCancellation_ensures(position: int, cancelledAt: Option<int>)
 {
 }
 
-function applyChange(known: Option<Hold>, change: Change, seq_: int): Hold
+function applyChange(known: Option<RuleLease>, change: Change, seq_: int, activation: ActivationFields): RuleLease
   requires (seq_ >= 1)
   requires (change.readThrough >= 0)
-  requires (match known { case Some(i_known_val) => ((i_known_val.readThrough >= 0) && (i_known_val.since <= seq_)) case None => true })
+  requires (match known { case Some(i_known_val) => ((i_known_val.readThrough >= 0) && (i_known_val.openedSeq <= seq_)) case None => true })
 {
   match known {
     case Some(i_known_val) =>
       if i_known_val.ended? then
         i_known_val
       else
-        var since := (match known { case Some(i_known_val) => i_known_val.since case None => seq_ });
+        var named := (match known { case Some(i_known_val) => i_known_val.activation case None => activation });
+        var openedSeq := (match known { case Some(i_known_val) => i_known_val.openedSeq case None => seq_ });
         var claimedAt := (match known { case Some(i_known_val) => i_known_val.claimedAt case None => change.at });
         var prior := (match known { case Some(i_known_val) => i_known_val.readThrough case None => 0 });
         var readThrough := MathMax(prior, change.readThrough);
         match change {
           case running(i_change_id, i_change_expiresAt, i_change_at, i_change_readThrough) =>
-            Hold.running(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_expiresAt)
+            RuleLease.running(i_change_id, named, i_change_at, claimedAt, openedSeq, readThrough, i_change_expiresAt)
           case ended(i_change_id, i_change_reason, i_change_at, i_change_readThrough, i_change_cause) =>
-            Hold.ended(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_reason, None, i_change_cause, seq_)
+            RuleLease.ended(i_change_id, named, i_change_at, claimedAt, openedSeq, readThrough, i_change_reason, None, i_change_cause, seq_)
         }
     case None =>
-      var since := (match known { case Some(i_known_val) => i_known_val.since case None => seq_ });
+      var named := (match known { case Some(i_known_val) => i_known_val.activation case None => activation });
+      var openedSeq := (match known { case Some(i_known_val) => i_known_val.openedSeq case None => seq_ });
       var claimedAt := (match known { case Some(i_known_val) => i_known_val.claimedAt case None => change.at });
       var prior := (match known { case Some(i_known_val) => i_known_val.readThrough case None => 0 });
       var readThrough := MathMax(prior, change.readThrough);
       match change {
         case running(i_change_id, i_change_expiresAt, i_change_at, i_change_readThrough) =>
-          Hold.running(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_expiresAt)
+          RuleLease.running(i_change_id, named, i_change_at, claimedAt, openedSeq, readThrough, i_change_expiresAt)
         case ended(i_change_id, i_change_reason, i_change_at, i_change_readThrough, i_change_cause) =>
-          Hold.ended(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_reason, None, i_change_cause, seq_)
+          RuleLease.ended(i_change_id, named, i_change_at, claimedAt, openedSeq, readThrough, i_change_reason, None, i_change_cause, seq_)
       }
   }
 }
 
-lemma applyChange_ensures(known: Option<Hold>, change: Change, seq_: int)
+lemma applyChange_ensures(known: Option<RuleLease>, change: Change, seq_: int, activation: ActivationFields)
   requires (seq_ >= 1)
   requires (change.readThrough >= 0)
-  requires (match known { case Some(i_known_val) => ((i_known_val.readThrough >= 0) && (i_known_val.since <= seq_)) case None => true })
-  ensures (match known { case Some(i_known_val) => (i_known_val.ended? ==> (applyChange(known, change, seq_) == i_known_val)) case None => true })
-  ensures ((match known { case Some(i_) => false case None => true }) ==> ((applyChange(known, change, seq_).since == seq_) && (applyChange(known, change, seq_).claimedAt == change.at)))
-  ensures (match known { case Some(i_known_val) => ((applyChange(known, change, seq_).since == i_known_val.since) && (applyChange(known, change, seq_).claimedAt == i_known_val.claimedAt)) case None => true })
-  ensures (match known { case Some(i_known_val) => (applyChange(known, change, seq_).readThrough >= i_known_val.readThrough) case None => true })
-  ensures ((match known { case Some(i_) => false case None => true }) ==> (applyChange(known, change, seq_).readThrough == change.readThrough))
-  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> (applyChange(known, change, seq_).readThrough >= change.readThrough)) case None => true })
-  ensures ((match known { case Some(i_) => false case None => true }) ==> ((applyChange(known, change, seq_).id == change.id) && (applyChange(known, change, seq_).at == change.at)))
-  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> ((applyChange(known, change, seq_).id == change.id) && (applyChange(known, change, seq_).at == change.at))) case None => true })
-  ensures ((match known { case Some(i_) => false case None => true }) ==> change.ended? ==> (((applyChange(known, change, seq_).ended? && (applyChange(known, change, seq_).until == seq_)) && (applyChange(known, change, seq_).reason == change.reason)) && (applyChange(known, change, seq_).cause == change.cause)))
-  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> change.ended? ==> (((applyChange(known, change, seq_).ended? && (applyChange(known, change, seq_).until == seq_)) && (applyChange(known, change, seq_).reason == change.reason)) && (applyChange(known, change, seq_).cause == change.cause))) case None => true })
-  ensures ((match known { case Some(i_) => false case None => true }) ==> change.running? ==> (applyChange(known, change, seq_).running? && (applyChange(known, change, seq_).expiresAt == change.expiresAt)))
-  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> change.running? ==> (applyChange(known, change, seq_).running? && (applyChange(known, change, seq_).expiresAt == change.expiresAt))) case None => true })
-  ensures ((match known { case Some(i_) => false case None => true }) ==> applyChange(known, change, seq_).ended? ==> (applyChange(known, change, seq_).since <= applyChange(known, change, seq_).until))
-  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> applyChange(known, change, seq_).ended? ==> (applyChange(known, change, seq_).since <= applyChange(known, change, seq_).until)) case None => true })
+  requires (match known { case Some(i_known_val) => ((i_known_val.readThrough >= 0) && (i_known_val.openedSeq <= seq_)) case None => true })
+  ensures (match known { case Some(i_known_val) => (i_known_val.ended? ==> (applyChange(known, change, seq_, activation) == i_known_val)) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> (((applyChange(known, change, seq_, activation).openedSeq == seq_) && (applyChange(known, change, seq_, activation).claimedAt == change.at)) && (applyChange(known, change, seq_, activation).activation == activation)))
+  ensures (match known { case Some(i_known_val) => (((applyChange(known, change, seq_, activation).openedSeq == i_known_val.openedSeq) && (applyChange(known, change, seq_, activation).claimedAt == i_known_val.claimedAt)) && (applyChange(known, change, seq_, activation).activation == i_known_val.activation)) case None => true })
+  ensures (match known { case Some(i_known_val) => (applyChange(known, change, seq_, activation).readThrough >= i_known_val.readThrough) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> (applyChange(known, change, seq_, activation).readThrough == change.readThrough))
+  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> (applyChange(known, change, seq_, activation).readThrough >= change.readThrough)) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> ((applyChange(known, change, seq_, activation).id == change.id) && (applyChange(known, change, seq_, activation).at == change.at)))
+  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> ((applyChange(known, change, seq_, activation).id == change.id) && (applyChange(known, change, seq_, activation).at == change.at))) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> change.ended? ==> (((applyChange(known, change, seq_, activation).ended? && (applyChange(known, change, seq_, activation).until == seq_)) && (applyChange(known, change, seq_, activation).reason == change.reason)) && (applyChange(known, change, seq_, activation).cause == change.cause)))
+  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> change.ended? ==> (((applyChange(known, change, seq_, activation).ended? && (applyChange(known, change, seq_, activation).until == seq_)) && (applyChange(known, change, seq_, activation).reason == change.reason)) && (applyChange(known, change, seq_, activation).cause == change.cause))) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> change.running? ==> (applyChange(known, change, seq_, activation).running? && (applyChange(known, change, seq_, activation).expiresAt == change.expiresAt)))
+  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> change.running? ==> (applyChange(known, change, seq_, activation).running? && (applyChange(known, change, seq_, activation).expiresAt == change.expiresAt))) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> applyChange(known, change, seq_, activation).ended? ==> (applyChange(known, change, seq_, activation).openedSeq <= applyChange(known, change, seq_, activation).until))
+  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> applyChange(known, change, seq_, activation).ended? ==> (applyChange(known, change, seq_, activation).openedSeq <= applyChange(known, change, seq_, activation).until)) case None => true })
 {
 }
 
-function markedCancelled(hold: Hold): bool
+function markedCancelled(lease: RuleLease): bool
 {
-  ((hold.ended? && hold.reason.revoked?) && (match hold.cancelled { case Some(i_value) => (i_value == true) case None => false }))
+  ((lease.ended? && lease.reason.revoked?) && (match lease.cancelled { case Some(i_value) => (i_value == true) case None => false }))
 }
 
-lemma markedCancelled_ensures(hold: Hold)
-  ensures (markedCancelled(hold) ==> hold.ended?)
-  ensures (markedCancelled(hold) ==> hold.reason.revoked?)
+lemma markedCancelled_ensures(lease: RuleLease)
+  ensures (markedCancelled(lease) ==> lease.ended?)
+  ensures (markedCancelled(lease) ==> lease.reason.revoked?)
 {
 }
 
-function cancelHold(hold: Hold, position: int, cancelledAt: int, at: string): Hold
-  requires (hold.since <= cancelledAt)
+function cancelHold(hold: RuleLease, cancelledAt: int, at: string): RuleLease
+  requires (hold.openedSeq <= cancelledAt)
 {
-  if (hold.ended? || !(beforeCancellation(position, cancelledAt))) then
+  if (hold.ended? || !(beforeCancellation(hold.activation.position, cancelledAt))) then
     hold
   else
-    Hold.ended(hold.id, at, hold.claimedAt, hold.since, hold.readThrough, LeaseEndReason.revoked, Some(true), None, cancelledAt)
+    RuleLease.ended(hold.id, hold.activation, at, hold.claimedAt, hold.openedSeq, hold.readThrough, LeaseEndReason.revoked, Some(true), None, cancelledAt)
 }
 
-lemma cancelHold_ensures(hold: Hold, position: int, cancelledAt: int, at: string)
-  requires (hold.since <= cancelledAt)
-  ensures (hold.ended? ==> (cancelHold(hold, position, cancelledAt, at) == hold))
-  ensures (hold.running? ==> !(beforeCancellation(position, cancelledAt)) ==> (cancelHold(hold, position, cancelledAt, at) == hold))
-  ensures (hold.running? ==> beforeCancellation(position, cancelledAt) ==> ((((cancelHold(hold, position, cancelledAt, at).ended? && cancelHold(hold, position, cancelledAt, at).reason.revoked?) && markedCancelled(cancelHold(hold, position, cancelledAt, at))) && (cancelHold(hold, position, cancelledAt, at).until == cancelledAt)) && (cancelHold(hold, position, cancelledAt, at).at == at)))
-  ensures (cancelHold(hold, position, cancelledAt, at).readThrough == hold.readThrough)
-  ensures (cancelHold(hold, position, cancelledAt, at).since == hold.since)
-  ensures (cancelHold(hold, position, cancelledAt, at).claimedAt == hold.claimedAt)
-  ensures (cancelHold(hold, position, cancelledAt, at).id == hold.id)
-  ensures (cancelHold(hold, position, cancelledAt, at).ended? ==> hold.running? ==> (cancelHold(hold, position, cancelledAt, at).since <= cancelHold(hold, position, cancelledAt, at).until))
-  ensures (markedCancelled(cancelHold(hold, position, cancelledAt, at)) ==> !(markedCancelled(hold)) ==> (hold.running? && beforeCancellation(position, cancelledAt)))
+lemma cancelHold_ensures(hold: RuleLease, cancelledAt: int, at: string)
+  requires (hold.openedSeq <= cancelledAt)
+  ensures (hold.ended? ==> (cancelHold(hold, cancelledAt, at) == hold))
+  ensures (hold.running? ==> !(beforeCancellation(hold.activation.position, cancelledAt)) ==> (cancelHold(hold, cancelledAt, at) == hold))
+  ensures (hold.running? ==> beforeCancellation(hold.activation.position, cancelledAt) ==> ((((cancelHold(hold, cancelledAt, at).ended? && cancelHold(hold, cancelledAt, at).reason.revoked?) && markedCancelled(cancelHold(hold, cancelledAt, at))) && (cancelHold(hold, cancelledAt, at).until == cancelledAt)) && (cancelHold(hold, cancelledAt, at).at == at)))
+  ensures (cancelHold(hold, cancelledAt, at).readThrough == hold.readThrough)
+  ensures (cancelHold(hold, cancelledAt, at).openedSeq == hold.openedSeq)
+  ensures (cancelHold(hold, cancelledAt, at).claimedAt == hold.claimedAt)
+  ensures (cancelHold(hold, cancelledAt, at).id == hold.id)
+  ensures (cancelHold(hold, cancelledAt, at).activation == hold.activation)
+  ensures (cancelHold(hold, cancelledAt, at).ended? ==> hold.running? ==> (cancelHold(hold, cancelledAt, at).openedSeq <= cancelHold(hold, cancelledAt, at).until))
+  ensures (markedCancelled(cancelHold(hold, cancelledAt, at)) ==> !(markedCancelled(hold)) ==> (hold.running? && beforeCancellation(hold.activation.position, cancelledAt)))
 {
 }
 
-function isExpired(phase: LeasePhase, expiresAt: int, now: int): bool
+function isExpired(lease: RuleLease, now: int): bool
 {
-  (phase.running? && expired(expiresAt, now))
+  match lease {
+    case ended(i_lease_id, i_lease_activation, i_lease_at, i_lease_claimedAt, i_lease_openedSeq, i_lease_readThrough, i_lease_reason, i_lease_cancelled, i_lease_cause, i_lease_until) =>
+      false
+    case running(i_lease_id, i_lease_activation, i_lease_at, i_lease_claimedAt, i_lease_openedSeq, i_lease_readThrough, i_lease_expiresAt) =>
+      expired(i_lease_expiresAt, now)
+  }
 }
 
-lemma isExpired_ensures(phase: LeasePhase, expiresAt: int, now: int)
-  ensures (isExpired(phase, expiresAt, now) <==> (phase.running? && expired(expiresAt, now)))
-  ensures (isExpired(phase, expiresAt, now) ==> phase.running?)
+lemma isExpired_ensures(lease: RuleLease, now: int)
+  ensures (isExpired(lease, now) <==> (lease.running? && expired(lease.expiresAt, now)))
+  ensures (isExpired(lease, now) ==> lease.running?)
 {
 }
 
-function isLive(phase: LeasePhase, expiresAt: int, now: int): bool
+function isLive(lease: RuleLease, now: int): bool
 {
-  (phase.running? && !(isExpired(phase, expiresAt, now)))
+  (lease.running? && !(isExpired(lease, now)))
 }
 
-lemma isLive_ensures(phase: LeasePhase, expiresAt: int, now: int)
-  ensures (isLive(phase, expiresAt, now) <==> (phase.running? && (now < expiresAt)))
-  ensures !((isLive(phase, expiresAt, now) && isExpired(phase, expiresAt, now)))
-  ensures (phase.running? ==> (isLive(phase, expiresAt, now) || isExpired(phase, expiresAt, now)))
-  ensures (phase.ended? ==> !(isLive(phase, expiresAt, now)))
+lemma isLive_ensures(lease: RuleLease, now: int)
+  ensures (isLive(lease, now) <==> (lease.running? && (now < lease.expiresAt)))
+  ensures !((isLive(lease, now) && isExpired(lease, now)))
+  ensures (lease.running? ==> (isLive(lease, now) || isExpired(lease, now)))
+  ensures (lease.ended? ==> !(isLive(lease, now)))
 {
 }
 
@@ -378,37 +385,38 @@ lemma cameToNothing_ensures(reason: LeaseEndReason)
 {
 }
 
-function answers(lease: Taken, seq_: int): bool
+function answers(lease: RuleLease, seq_: int): bool
   requires (seq_ >= 1)
 {
   match lease {
-    case running(i_lease_readThrough, i_lease_position) =>
+    case running(i_lease_id, i_lease_activation, i_lease_at, i_lease_claimedAt, i_lease_openedSeq, i_lease_readThrough, i_lease_expiresAt) =>
       true
-    case ended(i_lease_reason, i_lease_readThrough, i_lease_position) =>
+    case ended(i_lease_id, i_lease_activation, i_lease_at, i_lease_claimedAt, i_lease_openedSeq, i_lease_readThrough, i_lease_reason, i_lease_cancelled, i_lease_cause, i_lease_until) =>
       if cameToNothing(i_lease_reason) then
         false
       else
-        (((i_lease_reason.abandoned? || i_lease_reason.revoked?) && (i_lease_position == seq_)) || (i_lease_readThrough >= seq_))
+        var named := (i_lease_reason.abandoned? || i_lease_reason.revoked?);
+        ((named && (i_lease_activation.position == seq_)) || (i_lease_readThrough >= seq_))
   }
 }
 
-lemma answers_ensures(lease: Taken, seq_: int)
+lemma answers_ensures(lease: RuleLease, seq_: int)
   requires (seq_ >= 1)
   ensures (lease.running? ==> answers(lease, seq_))
   ensures (lease.ended? ==> cameToNothing(lease.reason) ==> !(answers(lease, seq_)))
   ensures (lease.ended? ==> lease.reason.released? ==> (answers(lease, seq_) <==> (lease.readThrough >= seq_)))
-  ensures (lease.ended? ==> (lease.reason.abandoned? || lease.reason.revoked?) ==> (answers(lease, seq_) <==> ((lease.position == seq_) || (lease.readThrough >= seq_))))
-  ensures (lease.ended? ==> (lease.readThrough < seq_) ==> (lease.position != seq_) ==> !(answers(lease, seq_)))
+  ensures (lease.ended? ==> (lease.reason.abandoned? || lease.reason.revoked?) ==> (answers(lease, seq_) <==> ((lease.activation.position == seq_) || (lease.readThrough >= seq_))))
+  ensures (lease.ended? ==> (lease.readThrough < seq_) ==> (lease.activation.position != seq_) ==> !(answers(lease, seq_)))
 {
 }
 
-function wakeAnswered(taken: seq<Taken>, seq_: int): bool
+function wakeAnswered(taken: seq<RuleLease>, seq_: int): bool
   requires (seq_ >= 1)
 {
   (exists lease :: lease in taken && answers(lease, seq_))
 }
 
-lemma wakeAnswered_ensures(taken: seq<Taken>, seq_: int)
+lemma wakeAnswered_ensures(taken: seq<RuleLease>, seq_: int)
   requires (seq_ >= 1)
   ensures (wakeAnswered(taken, seq_) <==> exists i: int :: (((0 <= i) && (i < |taken|)) && answers(taken[i], seq_)))
   ensures (!(wakeAnswered(taken, seq_)) ==> forall i: int :: ((0 <= i) ==> (i < |taken|) ==> taken[i].ended?))
@@ -416,22 +424,22 @@ lemma wakeAnswered_ensures(taken: seq<Taken>, seq_: int)
 {
 }
 
-function countsAgainst(lease: Taken, seq_: int): bool
+function countsAgainst(lease: RuleLease, seq_: int): bool
   requires (seq_ >= 1)
 {
   match lease {
-    case running(i_lease_readThrough, i_lease_position) =>
+    case running(i_lease_id, i_lease_activation, i_lease_at, i_lease_claimedAt, i_lease_openedSeq, i_lease_readThrough, i_lease_expiresAt) =>
       false
-    case ended(i_lease_reason, i_lease_readThrough, i_lease_position) =>
-      (cameToNothing(i_lease_reason) || (i_lease_position == seq_))
+    case ended(i_lease_id, i_lease_activation, i_lease_at, i_lease_claimedAt, i_lease_openedSeq, i_lease_readThrough, i_lease_reason, i_lease_cancelled, i_lease_cause, i_lease_until) =>
+      (cameToNothing(i_lease_reason) || (i_lease_activation.position == seq_))
   }
 }
 
-lemma countsAgainst_ensures(lease: Taken, seq_: int)
+lemma countsAgainst_ensures(lease: RuleLease, seq_: int)
   requires (seq_ >= 1)
   ensures (lease.running? ==> !(countsAgainst(lease, seq_)))
   ensures (lease.ended? ==> cameToNothing(lease.reason) ==> countsAgainst(lease, seq_))
-  ensures (lease.ended? ==> !(cameToNothing(lease.reason)) ==> (countsAgainst(lease, seq_) <==> (lease.position == seq_)))
+  ensures (lease.ended? ==> !(cameToNothing(lease.reason)) ==> (countsAgainst(lease, seq_) <==> (lease.activation.position == seq_)))
 {
 }
 
@@ -494,16 +502,16 @@ lemma holdsExchange_ensures(source: Source)
 {
 }
 
-function exchangeLive(leases: seq<LiveLease>, due: seq<OwedActivation>, now: int): bool
+function exchangeLive(leases: seq<RuleLease>, due: seq<OwedActivation>, now: int): bool
 {
-  ((exists lease :: lease in leases && (isLive(lease.phase, lease.expiresAt, now) && holdsExchange(lease.source))) || (exists owed :: owed in due && holdsExchange(owed.source)))
+  ((exists lease :: lease in leases && (isLive(lease, now) && holdsExchange(lease.activation.source))) || (exists owed :: owed in due && holdsExchange(owed.source)))
 }
 
-lemma exchangeLive_ensures(leases: seq<LiveLease>, due: seq<OwedActivation>, now: int)
-  ensures (exchangeLive(leases, due, now) <==> ((exists i: int :: ((((0 <= i) && (i < |leases|)) && isLive(leases[i].phase, leases[i].expiresAt, now)) && holdsExchange(leases[i].source))) || exists j: int :: (((0 <= j) && (j < |due|)) && holdsExchange(due[j].source))))
-  ensures ((forall i: int :: ((0 <= i) ==> (i < |leases|) ==> leases[i].source.closed?)) ==> (forall j: int :: ((0 <= j) ==> (j < |due|) ==> due[j].source.closed?)) ==> !(exchangeLive(leases, due, now)))
+lemma exchangeLive_ensures(leases: seq<RuleLease>, due: seq<OwedActivation>, now: int)
+  ensures (exchangeLive(leases, due, now) <==> ((exists i: int :: ((((0 <= i) && (i < |leases|)) && isLive(leases[i], now)) && holdsExchange(leases[i].activation.source))) || exists j: int :: (((0 <= j) && (j < |due|)) && holdsExchange(due[j].source))))
+  ensures ((forall i: int :: ((0 <= i) ==> (i < |leases|) ==> leases[i].activation.source.closed?)) ==> (forall j: int :: ((0 <= j) ==> (j < |due|) ==> due[j].source.closed?)) ==> !(exchangeLive(leases, due, now)))
   ensures ((exists j: int :: (((0 <= j) && (j < |due|)) && due[j].source.message?)) ==> exchangeLive(leases, due, now))
-  ensures ((forall i: int :: ((0 <= i) ==> (i < |leases|) ==> !(isLive(leases[i].phase, leases[i].expiresAt, now)))) ==> (|due| == 0) ==> !(exchangeLive(leases, due, now)))
+  ensures ((forall i: int :: ((0 <= i) ==> (i < |leases|) ==> !(isLive(leases[i], now)))) ==> (|due| == 0) ==> !(exchangeLive(leases, due, now)))
   ensures ((|leases| == 0) ==> (|due| == 0) ==> !(exchangeLive(leases, due, now)))
 {
 }
@@ -637,51 +645,51 @@ lemma draftsClose_ensures(id: ActivationFields, through: int, writer: string)
 {
 }
 
-function stoodDown(drafts: seq<Draft>): bool
+function stoodDown(drafts: seq<RuleLease>): bool
 {
   (exists draft :: draft in drafts && (draft.ended? && ((draft.reason.released? || draft.reason.revoked?) || draft.reason.abandoned?)))
 }
 
-lemma stoodDown_ensures(drafts: seq<Draft>)
+lemma stoodDown_ensures(drafts: seq<RuleLease>)
   ensures (stoodDown(drafts) <==> exists i: int :: ((((0 <= i) && (i < |drafts|)) && drafts[i].ended?) && ((drafts[i].reason.released? || drafts[i].reason.revoked?) || drafts[i].reason.abandoned?)))
   ensures (stoodDown(drafts) ==> (|drafts| > 0))
 {
 }
 
-function draftReleased(drafts: seq<Draft>): bool
+function draftReleased(drafts: seq<RuleLease>): bool
 {
   (exists draft :: draft in drafts && (draft.ended? && draft.reason.released?))
 }
 
-lemma draftReleased_ensures(drafts: seq<Draft>)
+lemma draftReleased_ensures(drafts: seq<RuleLease>)
   ensures (draftReleased(drafts) <==> exists i: int :: ((((0 <= i) && (i < |drafts|)) && drafts[i].ended?) && drafts[i].reason.released?))
   ensures (draftReleased(drafts) ==> stoodDown(drafts))
 {
 }
 
-function draftRunning(drafts: seq<Draft>): bool
+function draftRunning(drafts: seq<RuleLease>): bool
 {
   (exists draft :: draft in drafts && draft.running?)
 }
 
-lemma draftRunning_ensures(drafts: seq<Draft>)
+lemma draftRunning_ensures(drafts: seq<RuleLease>)
   ensures (draftRunning(drafts) <==> exists i: int :: (((0 <= i) && (i < |drafts|)) && drafts[i].running?))
 {
 }
 
-function cancelledDraft(drafts: seq<Draft>, cancelledAfterClose: bool): bool
+function cancelledDraft(drafts: seq<RuleLease>, cancelledAfterClose: bool): bool
 {
-  (cancelledAfterClose && (exists draft :: draft in drafts && ((draft.ended? && draft.reason.revoked?) && draft.cancelled)))
+  (cancelledAfterClose && (exists draft :: draft in drafts && markedCancelled(draft)))
 }
 
-lemma cancelledDraft_ensures(drafts: seq<Draft>, cancelledAfterClose: bool)
+lemma cancelledDraft_ensures(drafts: seq<RuleLease>, cancelledAfterClose: bool)
   ensures (cancelledDraft(drafts, cancelledAfterClose) ==> cancelledAfterClose)
   ensures (cancelledDraft(drafts, cancelledAfterClose) ==> stoodDown(drafts))
-  ensures (cancelledDraft(drafts, cancelledAfterClose) <==> (cancelledAfterClose && exists i: int :: (((((0 <= i) && (i < |drafts|)) && drafts[i].ended?) && drafts[i].reason.revoked?) && drafts[i].cancelled)))
+  ensures (cancelledDraft(drafts, cancelledAfterClose) <==> (cancelledAfterClose && exists i: int :: (((0 <= i) && (i < |drafts|)) && markedCancelled(drafts[i]))))
 {
 }
 
-function summaryVerdict(writerNamed: bool, removedAfterClose: bool, drafts: seq<Draft>, cancelledAfterClose: bool): Verdict
+function summaryVerdict(writerNamed: bool, removedAfterClose: bool, drafts: seq<RuleLease>, cancelledAfterClose: bool): Verdict
 {
   if !(writerNamed) then
     Verdict.silent
@@ -708,7 +716,7 @@ function summaryVerdict(writerNamed: bool, removedAfterClose: bool, drafts: seq<
                 Verdict.failed
 }
 
-lemma summaryVerdict_ensures(writerNamed: bool, removedAfterClose: bool, drafts: seq<Draft>, cancelledAfterClose: bool)
+lemma summaryVerdict_ensures(writerNamed: bool, removedAfterClose: bool, drafts: seq<RuleLease>, cancelledAfterClose: bool)
   ensures (!(writerNamed) ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).silent?)
   ensures (writerNamed ==> removedAfterClose ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
   ensures (writerNamed ==> !(removedAfterClose) ==> !(stoodDown(drafts)) ==> !(cancelledAfterClose) ==> (summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? && summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed))

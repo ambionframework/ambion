@@ -27,6 +27,51 @@ export type LeaseEndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'ab
 /** Why an activation failed. The same union as `FailureCause` in `types.ts`. */
 export type FailureCause = 'permanent' | 'transient';
 
+/** The journal fact that caused an activation. The same union as `ActivationSource`. */
+export type Source = 'message' | 'closed';
+
+/** The fields an activation id encodes. The same shape as `ActivationId` in `activation-id.ts`. */
+export interface ActivationFields {
+	readonly source: Source;
+	readonly position: number;
+	readonly seat: string;
+	readonly attempt: number;
+}
+
+/**
+ * The lease the fold holds for one id, and the one lease shape every rule
+ * reads. `LeaseHold` in `lease.ts` is this type with the usage and the
+ * session, which no rule reads. `activation` holds the fields that the id
+ * encodes: the caller decodes them once, because a rule reads no regular
+ * expression. `openedSeq` is the seq of the entry that opened the lease.
+ */
+export type RuleLease =
+	| {
+			id: string;
+			activation: ActivationFields;
+			phase: 'running';
+			at: string;
+			claimedAt: string;
+			openedSeq: number;
+			readThrough: number;
+			expiresAt: number;
+	  }
+	| {
+			id: string;
+			activation: ActivationFields;
+			phase: 'ended';
+			at: string;
+			claimedAt: string;
+			openedSeq: number;
+			readThrough: number;
+			reason: LeaseEndReason;
+			/** The marker of a lease a cancellation ended. */
+			cancelled?: true;
+			/** Why the activation failed, on a failed or abandoned lease. */
+			cause?: FailureCause;
+			until: number;
+	  };
+
 //@ contract A lease is past its expiry once now reaches it.
 function expired(expiry: number, now: number): boolean {
 	//@ ensures \result <==> expiry <= now
@@ -34,11 +79,12 @@ function expired(expiry: number, now: number): boolean {
 }
 
 //@ contract A lease covers an entry while it attempts work, and every earlier entry with it.
-export function coversAttempt(ended: boolean, until: number, seq: number): boolean {
-	//@ ensures !ended ==> \result
-	//@ ensures ended ==> (\result <==> seq <= until)
-	//@ ensures \result ==> forall(earlier, earlier <= seq ==> coversAttempt(ended, until, earlier))
-	return !ended || seq <= until;
+export function coversAttempt(lease: RuleLease, seq: number): boolean {
+	//@ ensures lease.phase == 'running' ==> \result
+	//@ ensures lease.phase == 'ended' ==> (\result <==> seq <= lease.until)
+	//@ ensures \result ==> forall(earlier, earlier <= seq ==> coversAttempt(lease, earlier))
+	if (lease.phase === 'running') return true;
+	return seq <= lease.until;
 }
 
 //@ contract The next attempt is numbered after the failed ones.
@@ -183,32 +229,6 @@ export function survivesCancellation(position: number, cancelledAt: number | und
 	return !beforeCancellation(position, cancelledAt);
 }
 
-/** The lease the fold holds for one id. `LeaseHold` in `lease.ts` is this type. */
-export type Hold =
-	| {
-			id: string;
-			phase: 'running';
-			at: string;
-			claimedAt: string;
-			since: number;
-			readThrough: number;
-			expiresAt: number;
-	  }
-	| {
-			id: string;
-			phase: 'ended';
-			at: string;
-			claimedAt: string;
-			since: number;
-			readThrough: number;
-			reason: LeaseEndReason;
-			/** The marker of a lease a cancellation ended. */
-			cancelled?: true;
-			/** Why the activation failed, on a failed or abandoned lease. */
-			cause?: FailureCause;
-			until: number;
-	  };
-
 /** One lease entry, as the journal records it. The same shape as `LeaseChange` in `events.ts`. */
 export type Change =
 	| { id: string; phase: 'running'; expiresAt: number; at: string; readThrough: number }
@@ -221,19 +241,19 @@ export type Change =
 			cause?: FailureCause;
 	  };
 
-/** A lease that covers a message, as the wake rules read it: its phase, reason, acknowledgment, and the position its id names. */
-export type Taken =
-	| { phase: 'running'; readThrough: number; position: number }
-	| { phase: 'ended'; reason: LeaseEndReason; readThrough: number; position: number };
-
-//@ contract One lease entry applied to the lease the fold holds. An ended lease is final. The first entry fixes since and claimedAt. readThrough never moves back. An ending entry sets until to its own seq and carries its reason.
-export function applyChange(known: Hold | undefined, change: Change, seq: number): Hold {
+//@ contract One lease entry applied to the lease the fold holds. An ended lease is final. The first entry fixes the activation, openedSeq and claimedAt. readThrough never moves back. An ending entry sets until to its own seq and carries its reason.
+export function applyChange(
+	known: RuleLease | undefined,
+	change: Change,
+	seq: number,
+	activation: ActivationFields,
+): RuleLease {
 	//@ requires seq >= 1
 	//@ requires change.readThrough >= 0
-	//@ requires known != undefined ==> known.readThrough >= 0 && known.since <= seq
+	//@ requires known != undefined ==> known.readThrough >= 0 && known.openedSeq <= seq
 	//@ ensures known != undefined && known.phase == 'ended' ==> \result == known
-	//@ ensures known == undefined ==> \result.since == seq && \result.claimedAt == change.at
-	//@ ensures known != undefined ==> \result.since == known.since && \result.claimedAt == known.claimedAt
+	//@ ensures known == undefined ==> \result.openedSeq == seq && \result.claimedAt == change.at && \result.activation == activation
+	//@ ensures known != undefined ==> \result.openedSeq == known.openedSeq && \result.claimedAt == known.claimedAt && \result.activation == known.activation
 	//@ ensures known != undefined ==> \result.readThrough >= known.readThrough
 	//@ ensures known == undefined ==> \result.readThrough == change.readThrough
 	//@ ensures known != undefined && known.phase == 'running' ==> \result.readThrough >= change.readThrough
@@ -243,30 +263,33 @@ export function applyChange(known: Hold | undefined, change: Change, seq: number
 	//@ ensures known != undefined && known.phase == 'running' && change.phase == 'ended' ==> \result.phase == 'ended' && \result.until == seq && \result.reason == change.reason && \result.cause == change.cause
 	//@ ensures known == undefined && change.phase == 'running' ==> \result.phase == 'running' && \result.expiresAt == change.expiresAt
 	//@ ensures known != undefined && known.phase == 'running' && change.phase == 'running' ==> \result.phase == 'running' && \result.expiresAt == change.expiresAt
-	//@ ensures known == undefined && \result.phase == 'ended' ==> \result.since <= \result.until
-	//@ ensures known != undefined && known.phase == 'running' && \result.phase == 'ended' ==> \result.since <= \result.until
+	//@ ensures known == undefined && \result.phase == 'ended' ==> \result.openedSeq <= \result.until
+	//@ ensures known != undefined && known.phase == 'running' && \result.phase == 'ended' ==> \result.openedSeq <= \result.until
 	if (known !== undefined && known.phase === 'ended') return known;
-	const since = known === undefined ? seq : known.since;
+	const named = known === undefined ? activation : known.activation;
+	const openedSeq = known === undefined ? seq : known.openedSeq;
 	const claimedAt = known === undefined ? change.at : known.claimedAt;
 	const prior = known === undefined ? 0 : known.readThrough;
 	const readThrough = Math.max(prior, change.readThrough);
 	if (change.phase === 'running') {
 		return {
 			id: change.id,
+			activation: named,
 			phase: 'running',
 			at: change.at,
 			claimedAt,
-			since,
+			openedSeq,
 			readThrough,
 			expiresAt: change.expiresAt,
 		};
 	}
 	return {
 		id: change.id,
+		activation: named,
 		phase: 'ended',
 		at: change.at,
 		claimedAt,
-		since,
+		openedSeq,
 		readThrough,
 		reason: change.reason,
 		cause: change.cause,
@@ -275,32 +298,34 @@ export function applyChange(known: Hold | undefined, change: Change, seq: number
 }
 
 //@ contract A lease the cancellation projection ended carries the marker: it is ended and revoked.
-// biome-ignore lint/correctness/noUnusedVariables: the contract of `cancelHold` names it, and Dafny reads it there.
-function markedCancelled(hold: Hold): boolean {
-	//@ ensures \result ==> hold.phase == 'ended'
-	//@ ensures \result ==> hold.reason == 'revoked'
-	return hold.phase === 'ended' && hold.reason === 'revoked' && hold.cancelled === true;
+function markedCancelled(lease: RuleLease): boolean {
+	//@ ensures \result ==> lease.phase == 'ended'
+	//@ ensures \result ==> lease.reason == 'revoked'
+	return lease.phase === 'ended' && lease.reason === 'revoked' && lease.cancelled === true;
 }
 
-//@ contract A cancellation marker ends every running lease whose cause is before it as revoked and marked, at the marker's seq, and keeps its id, since, claimedAt and readThrough. An ended lease, and a running lease caused at or after the marker, stay as they are.
-export function cancelHold(hold: Hold, position: number, cancelledAt: number, at: string): Hold {
-	//@ requires hold.since <= cancelledAt
+//@ contract A cancellation marker ends every running lease whose cause is before it as revoked and marked, at the marker's seq, and keeps its id, activation, openedSeq, claimedAt and readThrough. An ended lease, and a running lease caused at or after the marker, stay as they are.
+export function cancelHold(hold: RuleLease, cancelledAt: number, at: string): RuleLease {
+	//@ requires hold.openedSeq <= cancelledAt
 	//@ ensures hold.phase == 'ended' ==> \result == hold
-	//@ ensures hold.phase == 'running' && !beforeCancellation(position, cancelledAt) ==> \result == hold
-	//@ ensures hold.phase == 'running' && beforeCancellation(position, cancelledAt) ==> \result.phase == 'ended' && \result.reason == 'revoked' && markedCancelled(\result) && \result.until == cancelledAt && \result.at == at
+	//@ ensures hold.phase == 'running' && !beforeCancellation(hold.activation.position, cancelledAt) ==> \result == hold
+	//@ ensures hold.phase == 'running' && beforeCancellation(hold.activation.position, cancelledAt) ==> \result.phase == 'ended' && \result.reason == 'revoked' && markedCancelled(\result) && \result.until == cancelledAt && \result.at == at
 	//@ ensures \result.readThrough == hold.readThrough
-	//@ ensures \result.since == hold.since
+	//@ ensures \result.openedSeq == hold.openedSeq
 	//@ ensures \result.claimedAt == hold.claimedAt
 	//@ ensures \result.id == hold.id
-	//@ ensures \result.phase == 'ended' && hold.phase == 'running' ==> \result.since <= \result.until
-	//@ ensures markedCancelled(\result) && !markedCancelled(hold) ==> hold.phase == 'running' && beforeCancellation(position, cancelledAt)
-	if (hold.phase === 'ended' || !beforeCancellation(position, cancelledAt)) return hold;
+	//@ ensures \result.activation == hold.activation
+	//@ ensures \result.phase == 'ended' && hold.phase == 'running' ==> \result.openedSeq <= \result.until
+	//@ ensures markedCancelled(\result) && !markedCancelled(hold) ==> hold.phase == 'running' && beforeCancellation(hold.activation.position, cancelledAt)
+	if (hold.phase === 'ended' || !beforeCancellation(hold.activation.position, cancelledAt))
+		return hold;
 	return {
 		id: hold.id,
+		activation: hold.activation,
 		phase: 'ended',
 		at,
 		claimedAt: hold.claimedAt,
-		since: hold.since,
+		openedSeq: hold.openedSeq,
 		readThrough: hold.readThrough,
 		reason: 'revoked',
 		cancelled: true,
@@ -309,19 +334,20 @@ export function cancelHold(hold: Hold, position: number, cancelledAt: number, at
 }
 
 //@ contract A lease is expired when it runs and now reached its expiry.
-export function isExpired(phase: LeasePhase, expiresAt: number, now: number): boolean {
-	//@ ensures \result <==> (phase == 'running' && expired(expiresAt, now))
-	//@ ensures \result ==> phase == 'running'
-	return phase === 'running' && expired(expiresAt, now);
+export function isExpired(lease: RuleLease, now: number): boolean {
+	//@ ensures \result <==> (lease.phase == 'running' && expired(lease.expiresAt, now))
+	//@ ensures \result ==> lease.phase == 'running'
+	if (lease.phase === 'ended') return false;
+	return expired(lease.expiresAt, now);
 }
 
 //@ contract A lease is live when it runs and now is before its expiry. A running lease is live or expired and never both; an ended lease is neither.
-export function isLive(phase: LeasePhase, expiresAt: number, now: number): boolean {
-	//@ ensures \result <==> (phase == 'running' && now < expiresAt)
-	//@ ensures !(\result && isExpired(phase, expiresAt, now))
-	//@ ensures phase == 'running' ==> (\result || isExpired(phase, expiresAt, now))
-	//@ ensures phase == 'ended' ==> !\result
-	return phase === 'running' && !isExpired(phase, expiresAt, now);
+export function isLive(lease: RuleLease, now: number): boolean {
+	//@ ensures \result <==> (lease.phase == 'running' && now < lease.expiresAt)
+	//@ ensures !(\result && isExpired(lease, now))
+	//@ ensures lease.phase == 'running' ==> (\result || isExpired(lease, now))
+	//@ ensures lease.phase == 'ended' ==> !\result
+	return lease.phase === 'running' && !isExpired(lease, now);
 }
 
 //@ contract An attempt came to nothing when it failed or expired.
@@ -331,22 +357,22 @@ function cameToNothing(reason: LeaseEndReason): boolean {
 }
 
 //@ contract A running lease answers every message it covers. A failed or expired lease answers nothing. An abandoned or revoked lease answers the position its id names. Every other ended lease answers only positions at or below its acknowledged readThrough.
-function answers(lease: Taken, seq: number): boolean {
+function answers(lease: RuleLease, seq: number): boolean {
 	//@ requires seq >= 1
 	//@ ensures lease.phase == 'running' ==> \result
 	//@ ensures lease.phase == 'ended' && cameToNothing(lease.reason) ==> !\result
 	//@ ensures lease.phase == 'ended' && lease.reason == 'released' ==> (\result <==> lease.readThrough >= seq)
-	//@ ensures lease.phase == 'ended' && (lease.reason == 'abandoned' || lease.reason == 'revoked') ==> (\result <==> (lease.position == seq || lease.readThrough >= seq))
-	//@ ensures lease.phase == 'ended' && lease.readThrough < seq && lease.position != seq ==> !\result
+	//@ ensures lease.phase == 'ended' && (lease.reason == 'abandoned' || lease.reason == 'revoked') ==> (\result <==> (lease.activation.position == seq || lease.readThrough >= seq))
+	//@ ensures lease.phase == 'ended' && lease.readThrough < seq && lease.activation.position != seq ==> !\result
 	if (lease.phase === 'running') return true;
 	if (cameToNothing(lease.reason)) return false;
-	if ((lease.reason === 'abandoned' || lease.reason === 'revoked') && lease.position === seq)
-		return true;
+	const named = lease.reason === 'abandoned' || lease.reason === 'revoked';
+	if (named && lease.activation.position === seq) return true;
 	return lease.readThrough >= seq;
 }
 
 //@ contract A wake is answered when some covering lease answers it. A pending wake has no running covering lease, and no covering lease acknowledged the message.
-export function wakeAnswered(taken: Taken[], seq: number): boolean {
+export function wakeAnswered(taken: readonly RuleLease[], seq: number): boolean {
 	//@ requires seq >= 1
 	//@ ensures \result <==> exists(i, 0 <= i && i < taken.length && answers(taken[i], seq))
 	//@ ensures !\result ==> forall(i, 0 <= i && i < taken.length ==> taken[i].phase == 'ended')
@@ -355,20 +381,17 @@ export function wakeAnswered(taken: Taken[], seq: number): boolean {
 }
 
 //@ contract A covering lease counts as an unsuccessful attempt when it came to nothing, or when it ended for any reason and its id names the message. A running lease never counts.
-export function countsAgainst(lease: Taken, seq: number): boolean {
+export function countsAgainst(lease: RuleLease, seq: number): boolean {
 	//@ requires seq >= 1
 	//@ ensures lease.phase == 'running' ==> !\result
 	//@ ensures lease.phase == 'ended' && cameToNothing(lease.reason) ==> \result
-	//@ ensures lease.phase == 'ended' && !cameToNothing(lease.reason) ==> (\result <==> lease.position == seq)
+	//@ ensures lease.phase == 'ended' && !cameToNothing(lease.reason) ==> (\result <==> lease.activation.position == seq)
 	if (lease.phase === 'running') return false;
-	return cameToNothing(lease.reason) || lease.position === seq;
+	return cameToNothing(lease.reason) || lease.activation.position === seq;
 }
 
 /** How a running lease ends in a pass, or that it stays. */
 export type Ending = 'revoked' | 'expired' | 'stays';
-
-/** The journal fact that caused an activation. The same union as `ActivationSource`. */
-export type Source = 'message' | 'closed';
 
 //@ contract A running lease is revoked when its seat is stale; else it is expired when past its expiry; else it stays. A revocation wins over an expiry, and an ended lease is never ended again.
 export function endingOf(running: boolean, stale: boolean, pastExpiry: boolean): Ending {
@@ -404,14 +427,6 @@ export function exchangeOutcome(
 	return awaiting ? 'awaiting' : 'complete';
 }
 
-/** A lease as the liveness rules read it. */
-export interface LiveLease {
-	readonly source: Source;
-	readonly seat: string;
-	readonly phase: LeasePhase;
-	readonly expiresAt: number;
-}
-
 /** An activation the room owes, as the liveness rules read it. */
 export interface OwedActivation {
 	readonly source: Source;
@@ -426,28 +441,19 @@ function holdsExchange(source: Source): boolean {
 
 //@ contract The exchange's own work is live when a live lease a message caused exists, or the room owes an activation a message caused: through its backoff, and at the cap until the abandonment lands.
 export function exchangeLive(
-	leases: readonly LiveLease[],
+	leases: readonly RuleLease[],
 	due: readonly OwedActivation[],
 	now: number,
 ): boolean {
-	//@ ensures \result <==> (exists(i, 0 <= i && i < leases.length && isLive(leases[i].phase, leases[i].expiresAt, now) && holdsExchange(leases[i].source)) || exists(j, 0 <= j && j < due.length && holdsExchange(due[j].source)))
-	//@ ensures forall(i, 0 <= i && i < leases.length ==> leases[i].source == 'closed') && forall(j, 0 <= j && j < due.length ==> due[j].source == 'closed') ==> !\result
+	//@ ensures \result <==> (exists(i, 0 <= i && i < leases.length && isLive(leases[i], now) && holdsExchange(leases[i].activation.source)) || exists(j, 0 <= j && j < due.length && holdsExchange(due[j].source)))
+	//@ ensures forall(i, 0 <= i && i < leases.length ==> leases[i].activation.source == 'closed') && forall(j, 0 <= j && j < due.length ==> due[j].source == 'closed') ==> !\result
 	//@ ensures exists(j, 0 <= j && j < due.length && due[j].source == 'message') ==> \result
-	//@ ensures forall(i, 0 <= i && i < leases.length ==> !isLive(leases[i].phase, leases[i].expiresAt, now)) && due.length == 0 ==> !\result
+	//@ ensures forall(i, 0 <= i && i < leases.length ==> !isLive(leases[i], now)) && due.length == 0 ==> !\result
 	//@ ensures leases.length == 0 && due.length == 0 ==> !\result
 	return (
-		leases.some(
-			(lease) => isLive(lease.phase, lease.expiresAt, now) && holdsExchange(lease.source),
-		) || due.some((owed) => holdsExchange(owed.source))
+		leases.some((lease) => isLive(lease, now) && holdsExchange(lease.activation.source)) ||
+		due.some((owed) => holdsExchange(owed.source))
 	);
-}
-
-/** The fields an activation id encodes. The same shape as `ActivationId` in `activation-id.ts`. */
-export interface ActivationFields {
-	readonly source: Source;
-	readonly position: number;
-	readonly seat: string;
-	readonly attempt: number;
 }
 
 /** A close, as the closing grant reads it. `Close` in `events.ts` passes as this. */
@@ -580,11 +586,6 @@ export function draftsClose(id: ActivationFields, through: number, writer: strin
 	return id.source === 'closed' && id.position === through && id.seat === writer;
 }
 
-/** A draft of one close's summary, as the verdict reads it: running, or ended with its reason and the marker. */
-export type Draft =
-	| { readonly phase: 'running' }
-	| { readonly phase: 'ended'; readonly reason: LeaseEndReason; readonly cancelled: boolean };
-
 /** The verdict on one close's summary work. A pending verdict is owed while the room still has to send a draft. */
 export type Verdict =
 	| { readonly status: 'pending'; readonly owed: boolean }
@@ -592,7 +593,7 @@ export type Verdict =
 	| { readonly status: 'failed' };
 
 //@ contract A draft stood down when one ended by release, revocation or abandonment.
-function stoodDown(drafts: readonly Draft[]): boolean {
+function stoodDown(drafts: readonly RuleLease[]): boolean {
 	//@ ensures \result <==> exists(i, 0 <= i && i < drafts.length && drafts[i].phase == 'ended' && (drafts[i].reason == 'released' || drafts[i].reason == 'revoked' || drafts[i].reason == 'abandoned'))
 	//@ ensures \result ==> drafts.length > 0
 	return drafts.some(
@@ -603,34 +604,31 @@ function stoodDown(drafts: readonly Draft[]): boolean {
 }
 
 //@ contract A draft the writer released.
-function draftReleased(drafts: readonly Draft[]): boolean {
+function draftReleased(drafts: readonly RuleLease[]): boolean {
 	//@ ensures \result <==> exists(i, 0 <= i && i < drafts.length && drafts[i].phase == 'ended' && drafts[i].reason == 'released')
 	//@ ensures \result ==> stoodDown(drafts)
 	return drafts.some((draft) => draft.phase === 'ended' && draft.reason === 'released');
 }
 
 //@ contract A draft still running.
-function draftRunning(drafts: readonly Draft[]): boolean {
+function draftRunning(drafts: readonly RuleLease[]): boolean {
 	//@ ensures \result <==> exists(i, 0 <= i && i < drafts.length && drafts[i].phase == 'running')
 	return drafts.some((draft) => draft.phase === 'running');
 }
 
 //@ contract A draft a cancellation after the close revoked.
-function cancelledDraft(drafts: readonly Draft[], cancelledAfterClose: boolean): boolean {
+function cancelledDraft(drafts: readonly RuleLease[], cancelledAfterClose: boolean): boolean {
 	//@ ensures \result ==> cancelledAfterClose
 	//@ ensures \result ==> stoodDown(drafts)
-	//@ ensures \result <==> cancelledAfterClose && exists(i, 0 <= i && i < drafts.length && drafts[i].phase == 'ended' && drafts[i].reason == 'revoked' && drafts[i].cancelled)
-	return (
-		cancelledAfterClose &&
-		drafts.some((draft) => draft.phase === 'ended' && draft.reason === 'revoked' && draft.cancelled)
-	);
+	//@ ensures \result <==> cancelledAfterClose && exists(i, 0 <= i && i < drafts.length && markedCancelled(drafts[i]))
+	return cancelledAfterClose && drafts.some((draft) => markedCancelled(draft));
 }
 
 //@ contract The verdict on the summary work of one close that no summary covers: no named writer is silent; a writer removed after the close failed; a close owes a draft only while nothing stood down and no cancellation cut it.
 export function summaryVerdict(
 	writerNamed: boolean,
 	removedAfterClose: boolean,
-	drafts: readonly Draft[],
+	drafts: readonly RuleLease[],
 	cancelledAfterClose: boolean,
 ): Verdict {
 	//@ ensures !writerNamed ==> \result.status == 'silent'
