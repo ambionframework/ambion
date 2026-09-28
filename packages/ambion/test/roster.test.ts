@@ -33,6 +33,7 @@ import {
 	seat,
 	speak,
 	toolNames,
+	toolResultTexts,
 } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 
@@ -102,7 +103,8 @@ describe('ordinary participation', () => {
 		await (await session.visit(priya)).send({ text: 'How much steel is on site?' });
 		await waitForRoom(session);
 
-		expect(tools[0]).toEqual(['say', 'schedule', 'seat', 'unseat', 'dismiss']);
+		expect(tools[0]).toEqual(['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall']);
+		expect(contexts[1]).toMatch(/seated surveyor \(#\d+\)/);
 		expect(contexts[0]).toContain('The reserve: agents not in the room.');
 		expect(contexts[0]).toContain('- surveyor: Quantity surveyor. Holds the tonnage.');
 		const record = await messagesOf(session);
@@ -114,6 +116,27 @@ describe('ordinary participation', () => {
 		expect(activated(events)).toContain('surveyor');
 		expect(activated(events)).toContain('greeter');
 		expect(await seatNames(session)).toEqual(['product', 'greeter', 'surveyor']);
+	});
+
+	it('recalls a message of the record through the room, and the recall commits nothing', async () => {
+		const recalled: string[] = [];
+		const session = await open({
+			agents: [product],
+			script: byAgent({
+				product: (context, _name, call) => {
+					if (call === 2) recalled.push(...toolResultTexts(context));
+					// The ask line names the URI of the question.
+					const uri = /The opening message's URI is (\S+)\./.exec(contextText(context))?.[1];
+					return call === 1 && uri !== undefined ? callTool('recall', { refs: [uri] }) : quiet();
+				},
+			}),
+		});
+		await (await session.visit(priya)).send({ text: 'How much steel is on site?' });
+		await waitForRoom(session);
+		expect(recalled).toEqual([
+			expect.stringMatching(/^#\d+ \[priya\] How much steel is on site\?$/),
+		]);
+		expect(kinds(await messagesOf(session))).toEqual(['arrived', 'said']);
 	});
 
 	it('lets an ordinary seat add several colleagues without a local call quota', async () => {
@@ -200,7 +223,8 @@ describe('ordinary unseating and host membership', () => {
 		await (await session.visit(priya)).send({ text: 'Is the team ready?' });
 		await waitForRoom(session);
 
-		expect(contexts[1]).toContain('delivered');
+		expect(contexts[1]).toContain(`${surveyor.name} is already seated`);
+		expect(contexts[3]).toMatch(/unseated surveyor \(#\d+\)/);
 		const record = await messagesOf(session);
 		expect(record.filter((message) => message.kind === 'seated')).toHaveLength(0);
 		expect(record.filter((message) => message.kind === 'unseated')).toMatchObject([

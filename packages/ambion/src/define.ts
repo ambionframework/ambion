@@ -268,6 +268,17 @@ function copyProperties(from: object, to: object, seen: WeakMap<object, unknown>
 	}
 }
 
+/**
+ * The refs a say cites. Each item names the ref forms a model makes: a
+ * workspace path and a table have no ref form.
+ */
+const CITED = Type.Array(
+	Type.String({
+		description:
+			'An absolute URI the message cites. Cite a file by the ref that `snapshot` gives, a commit by its commit ref, and a message by ambion://room/<room>/message/<seq>.',
+	}),
+);
+
 /** The room tool that every activation may use to speak. */
 export const SAY = {
 	name: 'say' as const,
@@ -275,14 +286,8 @@ export const SAY = {
 		'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. To come back to your work later, call `schedule`.',
 	parameters: Type.Object({
 		to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
-		text: Type.String(),
-		refs: Type.Optional(
-			Type.Array(
-				Type.String({
-					description: 'A URI the message cites: a file, a table, a room, or an exchange.',
-				}),
-			),
-		),
+		text: Type.String({ description: 'What you say, as the record shows it.' }),
+		refs: Type.Optional(CITED),
 	}),
 };
 
@@ -308,10 +313,12 @@ export const UNSEAT = {
 /** The room tool that dismisses one pending say of the seat. */
 export const DISMISS = {
 	name: 'dismiss' as const,
-	description:
-		'Dismiss one of your says that wait to return, by its handle. The room does not give it back to you.',
+	description: 'Drop a message you scheduled, by its seq. The room does not wake you with it.',
 	parameters: Type.Object({
-		handle: Type.Integer({ minimum: 1, description: 'The handle of a say that waits to return.' }),
+		message: Type.Integer({
+			minimum: 1,
+			description: 'The seq of the scheduled message, as the record shows it: 41 for #41.',
+		}),
 	}),
 };
 
@@ -319,19 +326,30 @@ export const DISMISS = {
 export const SCHEDULE = {
 	name: 'schedule' as const,
 	description:
-		'Come back to your work later. After `after` seconds, the room gives this say back to you, for the person who owns the exchange. The result names a handle; call `dismiss` with it to drop the say.',
+		'Schedule a message to yourself. After `after` seconds, the room wakes you with this text, for the person who owns the current exchange. Use it to check a long process or to continue your work later. The result names the seq of the message; `dismiss` drops it.',
 	parameters: Type.Object({
 		after: Type.Integer({
 			minimum: 1,
-			description: 'Seconds until the room gives this say back to you.',
+			description: 'Seconds until the room wakes you with this message.',
 		}),
-		text: Type.String({ description: 'What to do when the say comes back.' }),
-		refs: Type.Optional(
-			Type.Array(
-				Type.String({
-					description: 'A URI the say cites: a file, a table, a room, or an exchange.',
-				}),
-			),
+		text: Type.String({ description: 'What to do when the room wakes you.' }),
+		refs: Type.Optional(CITED),
+	}),
+};
+
+/** The room tool that reads messages of the room by URI. It commits nothing. */
+export const RECALL = {
+	name: 'recall' as const,
+	description:
+		'Read messages of this room by seq, as #12, or by URI, ambion://room/<room>/message/<seq>: a message that your context leaves out or that a summary folds, or one that a say cites. The result gives one line for each ref.',
+	parameters: Type.Object({
+		refs: Type.Array(
+			Type.String({ description: 'A message of this room: its seq as #12, or its URI.' }),
+			{
+				minItems: 1,
+				// The count of refs one message carries: `REF_LIMITS.count`.
+				maxItems: 16,
+			},
 		),
 	}),
 };
@@ -340,6 +358,7 @@ export const SCHEDULE = {
 const ROOM_TOOL_NAMES: readonly string[] = [
 	SAY.name,
 	SCHEDULE.name,
+	RECALL.name,
 	SEAT.name,
 	UNSEAT.name,
 	DISMISS.name,

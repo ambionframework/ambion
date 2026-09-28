@@ -36,7 +36,7 @@ function delivered(context: Context): string[] {
 			? message.content.flatMap((item) =>
 					item.type === 'toolCall' &&
 					item.name === 'say' &&
-					results.get(item.id) === 'delivered' &&
+					/^said #\d+/.test(results.get(item.id) ?? '') &&
 					typeof item.arguments.text === 'string'
 						? [item.arguments.text]
 						: [],

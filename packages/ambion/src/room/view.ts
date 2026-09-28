@@ -62,7 +62,9 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange
 	// A summary reads every message through its closed exchange, background and
 	// current alike; what it covers stays fixed to its own exchange. An ordinary
 	// response reads the whole record instead. Either may read one bounded page
-	// of its record rather than the whole of it. A malformed range reads the
+	// of its record in place of the whole of it. The room caps the record a view
+	// serves, and a page reads below the cap: the cap bounds what a view renders,
+	// and the purpose bounds what a seat may read. A malformed range reads the
 	// whole record, because a seat's request is data.
 	const bounded =
 		purpose.kind === 'summarize'
@@ -71,7 +73,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange
 	const page = range !== undefined && validRange(range) ? range : undefined;
 	const pin = purpose.kind === 'respond' ? state.exchange?.from : purpose.exchange;
 	const served = capOf(bounded, facts.limits?.messages, pin);
-	const messages = page !== undefined ? pageOf(served, page) : served;
+	const messages = page !== undefined ? pageOf(bounded, page) : served;
 	const context: CollaborationContext = {
 		name: facts.name,
 		now: facts.now,

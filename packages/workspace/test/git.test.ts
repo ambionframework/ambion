@@ -74,7 +74,7 @@ describe('the tools and the guidance', () => {
 			'wait',
 			'cancel',
 			'snapshot',
-			'fetch',
+			'restore',
 			'sql',
 			'repos',
 			'fork',
@@ -82,7 +82,7 @@ describe('the tools and the guidance', () => {
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance.startsWith(defaultToolGuidance(['sql', 'repos', 'fork']))).toBe(true);
 		expect(guidance).toContain(
-			'thirteen tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, fetch, sql, repos and fork.',
+			'thirteen tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, restore, sql, repos and fork.',
 		);
 		const git = guidance.indexOf(gitToolGuidance(SERVER, 'lab'));
 		expect(git).toBeGreaterThan(-1);
@@ -95,7 +95,7 @@ describe('the tools and the guidance', () => {
 		const { workspace } = await lab();
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance).toContain(
-			'twelve tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, fetch, repos and fork.',
+			'twelve tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, restore, repos and fork.',
 		);
 		expect(guidance).toContain(
 			'ambion://workspace/lab/repo/<repository>/branch/<branch>/commit/<hash>',
@@ -188,7 +188,7 @@ describe('fork', () => {
 
 	it('refuses a missing source, and clones a taken name only when the path is free', async () => {
 		const { workspace } = await lab();
-		expect(await text(workspace, 'fork', { source: 'templates/none', name: 'x' })).toBe(
+		await expect(text(workspace, 'fork', { source: 'templates/none', name: 'x' })).rejects.toThrow(
 			'templates/none does not exist. Call repos to list the repositories.',
 		);
 		await text(workspace, 'fork', { source: 'templates/weekly-report', name: 'report' });
@@ -218,11 +218,15 @@ describe('fork', () => {
 		await workspace.use({ name: 'analyst' }, (env) =>
 			env.writeFile('/home/analyst/busy/file.txt', 'in the way', BACKGROUND_CONTEXT),
 		);
+		// The fork stands, and the failed clone fails the call.
 		const forked = await text(workspace, 'fork', {
 			source: 'templates/weekly-report',
 			name: 'report',
 			clone: '~/busy',
-		});
+		}).then(
+			() => 'The clone must fail.',
+			(error: unknown) => (error instanceof Error ? error.message : String(error)),
+		);
 		const [, failure] = forked.split('\n');
 		expect(failure).toMatch(
 			/^The clone into \/home\/analyst\/busy failed: .+\. The fork stays; clone http:\/\/git\.ambion\.invalid\/analyst\/report\.$/s,

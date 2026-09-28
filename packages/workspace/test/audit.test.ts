@@ -119,6 +119,15 @@ describe('the workspace audit log', () => {
 		expect(roomless).toMatchObject({ room: '', callId: 'call-2' });
 		expect(roomless).not.toHaveProperty('activation');
 		expect(roomless).not.toHaveProperty('exchange');
+		// A process that ended badly fails the call, and the log keeps the details of its result.
+		await expect(
+			toolOf(site, 'bash').invoke({ command: 'exit 3' }, callAs('scribe')),
+		).rejects.toThrow(/exited with code 3/);
+		const failed = (await entriesOf(site)).find((entry) => entry.tool === 'bash');
+		expect(failed).toMatchObject({
+			error: { name: 'ToolFailure', details: { process: { state: 'exited', exitCode: 3 } } },
+		});
+		expect(failed).not.toHaveProperty('result');
 		await site.dispose();
 	});
 

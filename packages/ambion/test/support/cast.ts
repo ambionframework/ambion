@@ -50,7 +50,7 @@ export const agents: readonly AgentDefinition[] = [assistant, product, colleague
 const people = [priya.name, sam.name];
 
 const assistantScript: Script = (context) =>
-	isClosing(context) && !toolResultTexts(context).includes('delivered')
+	isClosing(context) && !toolResultTexts(context).some((text) => text.startsWith('said #'))
 		? summarise('The one message.')
 		: quiet();
 

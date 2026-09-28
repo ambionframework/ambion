@@ -69,13 +69,27 @@ const lookup = defineTool({
 });
 ```
 
-Every ordinary activation receives `say`, `schedule`, `seat`, `unseat`, and
-`dismiss`, plus the tools from its definition. A closing activation receives
-only `say`. `say` accepts `{ text, to?, refs? }`. `schedule` accepts
-`{ after, text, refs? }` and writes a scheduled say
+Every ordinary activation receives `say`, `schedule`, `seat`, `unseat`,
+`dismiss`, and `recall`, plus the tools from its definition. A closing
+activation receives only `say`. `say` accepts `{ text, to?, refs? }`.
+`schedule` accepts `{ after, text, refs? }` and writes a scheduled say
 ([Exchange](exchange.md#6-a-scheduled-say)). The room stamps the author,
-activation, time, and routing facts. `seat` and `unseat` accept an agent
-name. The room validates operations at the commit boundary.
+activation, time, and routing facts. `seat` and `unseat` accept an agent name.
+`dismiss` accepts `{ message }`, the seq of a pending scheduled say. The room
+validates operations at the commit boundary.
+
+**`recall` reads messages of the room by seq or by URI.** It accepts `{ refs
+}`, 1 to 16 messages of this room. A ref is the seq as the record shows it,
+such as `#12`, the bare seq `12`, or the URI
+`ambion://room/<room>/message/<seq>`. The result gives one line for each
+distinct ref: the message as the record renders it, or why the room gave none.
+A ref to another room, a ref that names no message, and a seq that the view of
+the activation cannot read each give a line. A ref that finds no message makes
+the call a tool error, and the text still holds every line. `recall` reaches
+every message that the purpose of the activation may read. A summary can fold
+such a message, the context window of the seat can leave it out, or the cap of
+`limits.context.messages` can keep it below the view. `recall` commits
+nothing, and it never moves the read position.
 
 **A bundle adds tools, guidance, and a reminder.** `bundles: [shared.tools()]`
 adds the tools of a resource, such as the workspace. A bundle's `remind`

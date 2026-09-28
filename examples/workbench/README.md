@@ -80,7 +80,7 @@ person leaves the current room, then enters it as the new person.
 
 **A say that waits to return shows as a note.** An agent calls `schedule`
 with `after`. The conversation notes the say with its seat, its due time,
-its owner, its text, and its handle, as in `(/dismiss 41)`. `/dismiss `
+its owner, its text, and its seq, as in `(/dismiss 41)`. `/dismiss `
 lists the says that wait. `/dismiss 41` calls `room.dismiss`, and the
 agent does not come back to the say. The say in its discussion then reads
 `dismissed` in place of its return time.
@@ -165,7 +165,7 @@ ref, and an agent writes a commit ref from `git rev-parse`.
 **A snapshot opens through `readSnapshot`, from the object store.** Its line
 shows the path the file had and the first digits of its digest. The panel
 shows text as text, a picture as a picture, and a SQLite database as its
-tables. A binary file shows its size, and an agent reads it with `fetch`.
+tables. A binary file shows its size, and an agent reads it with `restore`.
 
 **A commit opens through `readCommit`, from the lab repositories.** Its line
 shows the repository, the branch or the tag, and the first digits of the

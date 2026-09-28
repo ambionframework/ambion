@@ -1,8 +1,8 @@
 import type { RoomView, Workbench } from './workbench.ts';
 
 /**
- * Dismiss one say of the open room that waits to return. The handle must
- * name a say that the view lists, so a typo reaches no other say.
+ * Dismiss one say of the open room that waits to return. The seq must name
+ * a say that the view lists, so a typo reaches no other say.
  */
 export async function dismissCommand(
 	host: Workbench,

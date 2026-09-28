@@ -100,13 +100,13 @@ describe('a workspace with a SQL backend', () => {
 			'wait',
 			'cancel',
 			'snapshot',
-			'fetch',
+			'restore',
 			'sql',
 		]);
 		const properties = Object.keys(
 			(toolOf(workspace, 'sql').parameters as { properties: Record<string, unknown> }).properties,
 		);
-		expect(properties.sort()).toEqual(['export', 'import', 'maxRows', 'sql']);
+		expect(properties.sort()).toEqual(['export', 'import', 'rows', 'sql']);
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance).toContain('one shared database, :memory:');
 		expect(guidance).toContain('The database is SQLite: dates are functions');
@@ -171,7 +171,7 @@ SELECT * FROM pour ORDER BY id;`,
 WITH RECURSIVE seq(id) AS (SELECT 1 UNION ALL SELECT id+1 FROM seq WHERE id < 200)
 INSERT INTO big SELECT id FROM seq;`,
 			sql: 'SELECT * FROM big ORDER BY id;',
-			maxRows: 5,
+			preview: 5,
 			shows: ['Shows 5 of 200 rows'],
 			rows: 200,
 		},
@@ -186,19 +186,16 @@ SELECT p.id, p.name FROM part p JOIN scratch.pick USING(id) ORDER BY p.id;`,
 			shows: ['| 1 | a |', '| 3 | c |'],
 			hides: ['| 2 | b |'],
 		},
-		{
-			name: 'returns a refused statement as content with the database name, so the agent can correct it',
-			sql: 'SELECT * FROM missing_table',
-			match: /^SQL error on :memory::\n.*missing_table/,
-		},
-	])('$name', async ({ setup, sql, maxRows, shows = [], hides = [], rows, match }) => {
+	])('$name', async ({ setup, sql, preview, shows = [], hides = [], rows }) => {
 		const { workspace } = withSql();
 		if (setup !== undefined) await call(workspace, { sql: setup });
-		const result = await call(workspace, { sql, ...(maxRows === undefined ? {} : { maxRows }) });
+		const result = await call(workspace, {
+			sql,
+			...(preview === undefined ? {} : { rows: preview }),
+		});
 		for (const text of shows) expect(result.text).toContain(text);
 		for (const text of hides) expect(result.text).not.toContain(text);
 		if (rows !== undefined) expect(result.details.rows).toBe(rows);
-		if (match !== undefined) expect(result.text).toMatch(match);
 		await workspace.dispose();
 	});
 
@@ -218,7 +215,7 @@ SELECT p.id, p.name FROM part p JOIN scratch.pick USING(id) ORDER BY p.id;`,
 		const head = await call(workspace, {
 			sql: 'SELECT id, note FROM t ORDER BY id',
 			export: '~/out/head.csv',
-			maxRows: 1,
+			rows: 1,
 		});
 		expect(head.text).toContain('Wrote 3 rows to /home/ada/out/head.csv.');
 		expect(head.text).toContain('id,note\n1,"a, ""b"""');
@@ -272,18 +269,21 @@ SELECT (SELECT count(*) FROM t2) AS copied,
 		});
 		expect(exported.text).toMatch(/^Imported 5 rows .*\n\n```csv\nn\n5\n```/);
 		expect(exported.details).toMatchObject({ export: '/home/ada/out/n.csv', imported: 5 });
-		const later = await call(workspace, { sql: 'SELECT * FROM import.rows' }, 'bob');
-		expect(later.text).toContain('SQL error');
+		await expect(call(workspace, { sql: 'SELECT * FROM import.rows' }, 'bob')).rejects.toThrow(
+			'SQL error',
+		);
 		const log = (await shellText(workspace, '/workspace/audit.jsonl')) ?? '';
 		const entries = log
 			.trim()
 			.split('\n')
 			.map((line) => JSON.parse(line) as { arguments: Record<string, unknown> });
 		expect(entries[2]?.arguments.import).toBe('out/t.csv');
-		const missing = await call(workspace, { sql: 'SELECT 1', import: 'none.csv' });
-		expect(missing.text).toMatch(/^SQL error on :memory::\nCannot read \/home\/ada\/none\.csv: /);
-		const nul = await call(workspace, { sql: 'SELECT 1;\0', import: 'none.csv' });
-		expect(nul.text).toContain('The SQL holds a NUL character.');
+		await expect(call(workspace, { sql: 'SELECT 1', import: 'none.csv' })).rejects.toThrow(
+			/^SQL error on :memory::\nCannot read \/home\/ada\/none\.csv: /,
+		);
+		await expect(call(workspace, { sql: 'SELECT 1;\0', import: 'none.csv' })).rejects.toThrow(
+			'The SQL holds a NUL character.',
+		);
 	});
 
 	it('reads a CSV that a script in the shell writes, with CRLF line ends', async () => {
@@ -316,8 +316,12 @@ SELECT count(*) AS n, max(ohms) AS top, typeof(max(ohms)) AS kind FROM sweep;`,
 		await call(workspace, { sql: 'CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1);' });
 		const good = await call(workspace, { sql: 'SELECT * FROM t;', export: '~/keep.csv' });
 		expect(good.details.rows).toBe(1);
-		const bad = await call(workspace, { sql: 'SELECT * FROM nope;', export: '~/keep.csv' });
-		expect(bad.text).toContain('SQL error');
+		// A refused statement fails the call, and the text names the database, the fault, and the next step.
+		await expect(
+			call(workspace, { sql: 'SELECT * FROM nope;', export: '~/keep.csv' }),
+		).rejects.toThrow(
+			/^SQL error on :memory::\n.*nope[\s\S]*Correct the statement and run it again\.$/,
+		);
 		expect(await shellText(workspace, '/home/ada/keep.csv')).toBe('id\n1\n');
 	});
 
@@ -490,11 +494,11 @@ describe('a workspace with no SQL backend and no audit log', () => {
 			'wait',
 			'cancel',
 			'snapshot',
-			'fetch',
+			'restore',
 		]);
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance).toContain(
-			'ten tools: read, write, edit, bash, ps, status, wait, cancel, snapshot and fetch.',
+			'ten tools: read, write, edit, bash, ps, status, wait, cancel, snapshot and restore.',
 		);
 		expect(guidance).not.toMatch(/\bsql\b/);
 		expect(guidance).not.toContain('audit');

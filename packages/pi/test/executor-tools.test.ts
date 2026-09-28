@@ -10,6 +10,7 @@ import type {
 	CommitRequest,
 	CommitResult,
 	Intent,
+	RoomProtocol,
 } from '@ambionframework/ambion/hosting';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
@@ -120,6 +121,7 @@ describe('executor tool authority', () => {
 			'seat',
 			'unseat',
 			'dismiss',
+			'recall',
 			'record_decision',
 		]);
 		expect(names(bound('activation', summarize).tools)).toEqual(['say']);
@@ -135,7 +137,7 @@ describe('executor tool authority', () => {
 		await expect(call(say, 'same-key', { text: '   ' })).rejects.toThrow(blank);
 		expect(activation.readThrough).toBe(0);
 		await expect(call(say, 'same-key', { text: '  A useful answer.  ' })).resolves.toMatchObject({
-			content: [{ text: 'delivered' }],
+			content: [{ text: 'said #1' }],
 		});
 		expect(activation.cancelled).toBe(false);
 		expect(activation.readThrough).toBe(1);
@@ -157,7 +159,7 @@ describe('executor tool authority', () => {
 			to: ' priya ',
 			text: '  The exchange is complete.  ',
 		});
-		expect(result.content).toEqual([{ type: 'text', text: 'delivered' }]);
+		expect(result.content).toEqual([{ type: 'text', text: 'said #5' }]);
 		expect(result.terminate).toBe(true);
 		const request = (text: string) => ({
 			activation: 'closed:4:worker:1',
@@ -203,7 +205,7 @@ describe('executor tool authority', () => {
 		expect(result.content).toEqual([
 			{
 				type: 'text',
-				text: 'scheduled 5: the room gives this say back to you at 2026-01-01T00:10:00.000Z',
+				text: 'scheduled #5: the room wakes you with this message at 2026-01-01T00:10:00.000Z',
 			},
 		]);
 		expect(clean.commits).toEqual([
@@ -226,7 +228,7 @@ describe('executor tool authority', () => {
 			{
 				type: 'text',
 				text: [
-					'scheduled 6: the room gives this say back to you at 2026-01-01T00:10:00.000Z. New on the record before it:',
+					'scheduled #6: the room wakes you with this message at 2026-01-01T00:10:00.000Z. New on the record before it:',
 					'#5 [priya] Also the tests.',
 				].join('\n'),
 			},
@@ -235,12 +237,59 @@ describe('executor tool authority', () => {
 		expect(behind.activation.readThrough).toBe(0);
 	});
 
+	it('recalls messages of the room by URI, one line for each ref, and moves no read position', async () => {
+		const record: Message[] = [
+			{ kind: 'said', seq: 2, at, from: 'priya', text: 'Is the pour on?' },
+			{ kind: 'said', seq: 5, at, from: 'worker', to: 'priya', text: 'Yes, at nine.' },
+		];
+		const pages: (number | undefined)[] = [];
+		const room: RoomProtocol = {
+			...unusedRoom,
+			// A page of one message before the cursor, as the room serves it.
+			view: async (_id, range) => {
+				pages.push(range?.before);
+				const below = record.filter((message) => message.seq < (range?.before ?? Infinity));
+				const view = viewFor(respond);
+				return { view: { ...view, context: { ...view.context, messages: below.slice(-1) } } };
+			},
+		};
+		const activation = activationFor('message:4:worker:1', worker);
+		const recall = toolsFor(viewFor(respond), worker, binding(activation, room)).find(
+			(tool) => tool.name === 'recall',
+		);
+		const uri = (seq: number) => `ambion://room/room/message/${seq}`;
+		// Every ref finds its message: a success, one line for each distinct ref. A seq as the
+		// record shows it names a message of this room.
+		const result = await call(recall, 'recall', { refs: [uri(5), ' #2 ', uri(5)] });
+		expect(result.content).toEqual([
+			{ type: 'text', text: '#5 [worker → priya] Yes, at nine.\n#2 [priya] Is the pour on?' },
+		]);
+		// A ref that finds nothing fails the call, and each line says why.
+		await expect(
+			call(recall, 'misses', {
+				refs: ['2', uri(4), 'ambion://room/elsewhere/message/2', 'ambion://room/room', 'file:///x'],
+			}),
+		).rejects.toThrow(
+			[
+				'#2 [priya] Is the pour on?',
+				`${uri(4)}: no message at #4 on the record you may read. Take the seq from a record line or a ref.`,
+				'ambion://room/elsewhere/message/2: names another room. recall reads this room alone.',
+				'ambion://room/room: not a message ref. Give the seq as #12, or the URI ambion://room/room/message/<seq>.',
+				'file:///x: not a message ref. Give the seq as #12, or the URI ambion://room/room/message/<seq>.',
+			].join('\n'),
+		);
+		// Each distinct seq is one page, and a recalled message is old: nothing moves the position.
+		expect(pages).toEqual([6, 3, 3, 5]);
+		expect(activation.readThrough).toBe(0);
+		await expect(call(recall, 'none', { refs: [] })).rejects.toThrow(/refs must be 1 to 16/);
+	});
+
 	it('does not mark context consumed for membership or an unchanged membership result', async () => {
 		const { activation, commits, tool } = bound('message:4:worker:1', respond, {
 			unchanged: { kind: 'seated', name: 'surveyor' },
 		});
 		await expect(call(tool(2), 'seat-call', { name: 'surveyor' })).resolves.toMatchObject({
-			content: [{ text: 'delivered' }],
+			content: [{ text: 'surveyor is already seated' }],
 		});
 		expect(commits).toEqual([
 			{

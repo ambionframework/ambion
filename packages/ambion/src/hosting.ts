@@ -29,6 +29,7 @@ export {
 	DISMISS,
 	describeExecutor,
 	executorOfKind,
+	RECALL,
 	SAY,
 	SCHEDULE,
 	SEAT,

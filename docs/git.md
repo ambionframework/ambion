@@ -382,7 +382,9 @@ owner, and that operation ends. The tool then runs `git clone <url>
 <path>` on the bash owner as the calling agent, so the clone sets
 `origin` to the fork.
 
-**Each outcome has one text.** `<url>` is the fork's clone URL.
+**Each outcome has one text.** `<url>` is the fork's clone URL. A missing
+source, a refused fork, and a failed clone fail the call, and the error
+text is the text below. After a failed clone, the fork stays.
 
 | Outcome                 | The result text                                                                                                |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -391,7 +393,7 @@ owner, and that operation ends. The tool then runs `git clone <url>
 | No such source          | `templates/weekly-report does not exist. Call repos to list the repositories.`                                 |
 | Name taken              | `analyst/report exists. Clone URL: <url>.` With `clone`, the tool then clones it, the same as a new fork       |
 | Name taken, path in use | The line above, then `/home/analyst/report already exists, so the tool made no clone.`                         |
-| Refused                 | `The git server refused the fork: <message>`                                                                   |
+| Refused                 | `The git server refused the fork: <message> Call repos to see what exists.`                                    |
 | Clone failed            | The forked line, then `The clone into /home/analyst/report failed: <git output>. The fork stays; clone <url>.` |
 
 **A taken name makes a repeated call safe.** A `fork` call that repeats
@@ -488,7 +490,7 @@ holds the bundle, so the git note stays at nine lines.
 
 1. The tool line, which counts the tools. With a git backend it names
    twelve: read, write, edit, bash, ps, status, wait, cancel, snapshot,
-   fetch, repos and fork. With a SQL backend as well, it names thirteen.
+   restore, repos and fork. With a SQL backend as well, it names thirteen.
 2. The process note ([Processes](processes.md#the-guidance)).
 3. The snapshot note ([Snapshot a file](workspace.md#snapshot-a-file)).
 4. The SQL note, when the workspace has a SQL backend.

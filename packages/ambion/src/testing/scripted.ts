@@ -50,7 +50,7 @@ export const callTool = (tool: string, args: Record<string, unknown> = {}): Turn
 export const speak = (text: string, to?: string): Turn =>
 	callTool('say', to ? { to, text } : { text });
 
-/** A turn that calls `schedule`: the room gives the say back to the seat after `after` seconds. */
+/** A turn that calls `schedule`: the room wakes the seat with the say after `after` seconds. */
 export const later = (text: string, after: number): Turn => callTool('schedule', { text, after });
 
 /** A turn that records the usage of a model request as a `usage` step. */

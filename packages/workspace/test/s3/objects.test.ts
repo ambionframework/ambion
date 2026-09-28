@@ -97,8 +97,8 @@ describe.skipIf(configPath === undefined)('the object backend on MinIO', () => {
 			ok: true,
 			value: false,
 		});
-		const fetched = await toolOf(workspace, 'fetch').invoke({ ref }, callAs('reviewer'));
-		expect(fetched).toMatchObject({
+		const restored = await toolOf(workspace, 'restore').invoke({ ref }, callAs('reviewer'));
+		expect(restored).toMatchObject({
 			details: { path: `/home/reviewer/snapshots/${digest}/plan.md`, bytes: 17 },
 		});
 		// The host credential can still overwrite an object; the digest check refuses it.

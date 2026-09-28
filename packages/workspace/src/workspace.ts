@@ -33,7 +33,7 @@ import {
 } from './resource.ts';
 import { type SkillSet, skillGuidance, skillSetOf, syncSkills } from './skills.ts';
 import {
-	createFetchTool,
+	createRestoreTool,
 	createSnapshotTool,
 	readSnapshot,
 	type SnapshotOptions,
@@ -202,7 +202,7 @@ function gitPart(
 }
 
 /**
- * Bind the three file tools, the five process tools, `snapshot` and `fetch`, `sql`
+ * Bind the three file tools, the five process tools, `snapshot` and `restore`, `sql`
  * when the workspace has a SQL backend, `repos` and `fork` when it has a
  * git backend, and the bash backend's own tools. The guidance names the
  * tools, then the process note, the snapshot note, the SQL notes, the git
@@ -221,7 +221,7 @@ function workspaceTools(
 	const processes = createProcessTools({ shell: shell.use, processes: backends.processes, audit });
 	const snapshots = [
 		createSnapshotTool(backends.store, audit),
-		createFetchTool(backends.store, audit),
+		createRestoreTool(backends.store, audit),
 	];
 	const extra = bindTools(own, shell.use, undefined, audit).tools;
 	const sql = sqlPart(backends.sql, shell, audit);

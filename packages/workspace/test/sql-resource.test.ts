@@ -120,6 +120,8 @@ describe('the SQL resource', () => {
 		const shown = await invoke(resource, 'query', { sql: 'SELECT label FROM runs' });
 		expect(shown).toContain('Shows 2 of 3 rows.');
 		expect(String(shown)).not.toContain('| c |');
+		const one = await invoke(resource, 'query', { sql: 'SELECT label FROM runs', rows: 1 });
+		expect(one).toContain('Shows 1 of 3 rows.');
 	});
 
 	it('serializes calls through the owner, closes once on dispose, and refuses a late call', async () => {

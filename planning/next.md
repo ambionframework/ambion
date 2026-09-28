@@ -209,7 +209,7 @@ page it changes in the same commit.
       backend uses. (C8)
 - [ ] **7.** Cloudflare reuses the core, and one scripted room serves the
       conformance suites. Needs 1 and 3. (C9)
-- [ ] **8.** One tool for `status` and `wait`. (C10)
+- [ ] **8.** `wait` takes `handles` alone, beside `status` and `ps`. (C10)
 
 **Evidence:** the evidence of phase 1 holds for each step. Steps 3 and 7
 pass `transportConformance` on `rpcTransport` in workerd. Steps 5 and 8
@@ -389,14 +389,12 @@ snapshot of `@ambionframework/workspace`.
 **Evidence:** the coverage of the core holds, and the Cloudflare tests
 pass in workerd.
 
-**C10. One tool for `status` and `wait`.** `status` gives what `wait`
-with a timeout of 0 gives. `ps` gives what `wait` with no handle and a
-timeout of 0 would give. The process tools shrink to `bash`, `wait`, and
-`cancel`, and the table of tool counts in `defaultToolGuidance` shrinks
-with them. The acceptance of B in 0.3.0 and
-[Processes](../docs/processes.md) name `status` and `ps`, so the item
-rewrites both. **Evidence:** the process tests, the prompt snapshot, and
-one live file on each harness that shows no loss in the use of a process.
+**C10. `wait` takes `handles` alone.** The owner keeps `status`, `ps`,
+and `wait` as three tools: each answers one question. `wait` took
+`handle` or `handles`, and the schema did not say that one is required.
+It now takes `{ handles, timeout? }`, with 1 to 16 handles, and one handle
+gives the result of `status`. **Evidence:** the process tests, and one
+live file on each harness that shows no loss in the use of a process.
 
 **A1. The assistant works a request after its owner leaves.** This item
 fixes a defect and adds no capability. A room stays available between

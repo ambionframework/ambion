@@ -58,6 +58,7 @@ describe('the tool list and domain tools', () => {
 			'broken',
 			'dismiss',
 			'lookup',
+			'recall',
 			'say',
 			'schedule',
 			'seat',
@@ -116,7 +117,7 @@ describe('say, seat and unseat', () => {
 			name: 'say',
 			arguments: { text: 'Done.', refs: ['room://lab', '/work/plan.md'] },
 		});
-		expect(textOf(result)).toBe('delivered');
+		expect(textOf(result)).toBe('said #2');
 		expect(acknowledged).toEqual([2]);
 		await client.callTool(say('Again.'));
 		expect(commits).toMatchObject([
@@ -127,11 +128,11 @@ describe('say, seat and unseat', () => {
 		expect(commits[1]?.intent).not.toHaveProperty('refs');
 	});
 
-	it('answers unchanged as delivered, and commits a seated intent', async () => {
+	it('answers an unchanged seating with the fact, and commits a seated intent', async () => {
 		const { client, commits } = await on(() => ({ unchanged: { kind: 'seated', name: 'ada' } }));
-		expect(textOf(await client.callTool(say()))).toBe('delivered');
+		expect(textOf(await client.callTool(say()))).toBe('ada is already seated');
 		const result = await client.callTool({ name: 'seat', arguments: { name: ' ada ' } });
-		expect(textOf(result)).toBe('delivered');
+		expect(textOf(result)).toBe('ada is already seated');
 		expect(commits[1]?.intent).toEqual({ kind: 'seated', name: 'ada' });
 	});
 

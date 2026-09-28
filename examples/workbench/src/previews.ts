@@ -22,7 +22,7 @@ function tooLarge(bytes: Uint8Array, named: string): string | undefined {
 	if (kind === undefined) return undefined;
 	const limit = kind === 'database' ? MAX_BYTES.database : MAX_BYTES.image;
 	if (bytes.byteLength <= limit) return undefined;
-	return `A ${kind} of ${bytes.byteLength} bytes. The preview shows one of up to ${limit / 1_048_576} MiB. An agent reads it with fetch.`;
+	return `A ${kind} of ${bytes.byteLength} bytes. The preview shows one of up to ${limit / 1_048_576} MiB. An agent reads it with restore.`;
 }
 
 /**
@@ -44,7 +44,7 @@ export async function readSnapshotFile(workspace: Workspace, ref: string): Promi
 		return { path: ref, text: '', truncated: false, image };
 	}
 	if (isBinary(bytes)) {
-		const text = `A binary file of ${bytes.byteLength} bytes. An agent reads it with fetch.`;
+		const text = `A binary file of ${bytes.byteLength} bytes. An agent reads it with restore.`;
 		return { path: ref, text, truncated: false };
 	}
 	const text = new TextDecoder().decode(bytes.subarray(0, MAX_BYTES.text));

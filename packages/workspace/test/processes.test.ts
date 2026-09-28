@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
-import { describe, expect, it, onTestFinished } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { tempDir } from '../../just-bash/test/support/backends.ts';
 import {
@@ -134,14 +134,14 @@ describe('bash', () => {
 		expect(started.details.process.state).toBe('running');
 		expect(started.text).toContain(`Process ${handle} is running.`);
 		expect(started.text).toContain(
-			'Call status, wait or cancel with its handle, or ps to list your processes.',
+			'Call status or cancel with its handle, wait with it in handles, or ps to list your processes.',
 		);
 		// Outside a room there is no say, so the result points to none.
 		expect(started.text).not.toContain(LATER_LINE);
 		expect((await call(workspace, 'status', { handle })).details.process.state).toBe('running');
 		// A running process holds no operation of the bash owner.
 		expect(await workspace.use({ name: 'alpha' }, () => 'free')).toBe('free');
-		const waited = await call(workspace, 'wait', { handle, timeout: 5 });
+		const waited = await call(workspace, 'wait', { handles: [handle], timeout: 5 });
 		expect(waited.details.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		expect(waited.text.startsWith('done\n\n[Process')).toBe(true);
 		// The cursor stands after what wait showed, so status gives no output twice.
@@ -162,7 +162,10 @@ describe('bash', () => {
 	it('gives the running state when wait ends before the process', async () => {
 		const workspace = site();
 		const { details } = await call(workspace, 'bash', { command: 'sleep 5', wait: 0 });
-		const waited = await call(workspace, 'wait', { handle: details.process.handle, timeout: 0.05 });
+		const waited = await call(workspace, 'wait', {
+			handles: [details.process.handle],
+			timeout: 0.05,
+		});
 		expect(waited.details.process.state).toBe('running');
 	});
 
@@ -214,22 +217,24 @@ describe('bash', () => {
 			'(no new output)',
 		],
 	])(
-		'fails the call on %s with the output, and status reports the same process',
+		'fails the call on %s with the output, and status fails on the same process',
 		async (_case, params, state, output, after) => {
 			const workspace = site();
 			const error = await failure(() => toolOf(workspace, 'bash').invoke(params, callAs('alpha')));
 			expect(error).toContain(output);
 			const handle = HANDLE.exec(error)?.[0] ?? 'none';
-			const status = await call(workspace, 'status', { handle });
-			expect(status.text).toContain(`Process ${handle} ${state}.`);
-			expect(status.text.startsWith(`${after}\n\n[Process`)).toBe(true);
+			const status = await failure(() =>
+				toolOf(workspace, 'status').invoke({ handle }, callAs('alpha')),
+			);
+			expect(status).toContain(`Process ${handle} ${state}.`);
+			expect(status.startsWith(`ToolFailure: ${after}\n\n[Process`)).toBe(true);
 		},
 	);
 
 	it.each([
 		['bash', { command: 'true', timeout: 0 }],
 		['bash', { command: 'true', wait: -1 }],
-		['wait', { handle: 'bash-000000000000', timeout: 601 }],
+		['wait', { handles: ['bash-000000000000'], timeout: 601 }],
 		['bash', { command: 'true', name: 'Not A Name' }],
 	])('refuses an invalid number of seconds or an invalid name in %s', async (tool, params) => {
 		const workspace = site();
@@ -250,14 +255,23 @@ describe('status, wait and cancel', () => {
 		expect((await call(workspace, 'cancel', { handle })).details.process).toEqual(
 			cancelled.details.process,
 		);
+		// A cancel of a process that ended first says that it stopped nothing.
+		const done = (await call(workspace, 'bash', { command: 'true' })).details.process.handle;
+		expect((await call(workspace, 'cancel', { handle: done })).text).toMatch(
+			new RegExp(`^Process ${done} had ended before the cancel, so the cancel stopped nothing\\.`),
+		);
 	});
 
 	it("finds a handle of the calling agent alone, and names no other agent's process", async () => {
 		const workspace = site();
 		const { details } = await call(workspace, 'bash', { command: 'true' });
 		const handle = details.process.handle;
-		for (const tool of ['status', 'wait', 'cancel']) {
-			await expect(invokeText(toolOf(workspace, tool), { handle }, callAs('beta'))).rejects.toThrow(
+		for (const [tool, params] of [
+			['status', { handle }],
+			['wait', { handles: [handle] }],
+			['cancel', { handle }],
+		] as const) {
+			await expect(invokeText(toolOf(workspace, tool), params, callAs('beta'))).rejects.toThrow(
 				`You have no process ${handle}.`,
 			);
 		}
@@ -443,7 +457,7 @@ describe('the reminder', () => {
 					`^- ${failed} exited with code 3 at \\d\\d:\\d\\d:\\d\\d UTC: until .*; sleep 0.05; exit 3$`,
 				),
 			),
-			'Call status, wait or cancel with a handle. Call ps to list processes.',
+			'Call status or cancel with a handle, and wait with a list of handles. Call ps to list processes.',
 		]);
 		expect(text).not.toContain(shown);
 		// The reminder wrote seen for the finished process, so the next one names the running ones alone.
@@ -519,6 +533,7 @@ describe('a wait on several handles', () => {
 			expect.stringMatching(new RegExp(`^\\[Process ${fast} exited with code 0\\.`)),
 			expect.stringMatching(new RegExp(`^\\[Process ${slow} is running\\.`)),
 			expect.stringMatching(new RegExp(`^\\[Process ${other} is running\\.`)),
+			`[Drop ${fast} from handles: it has ended, and a wait that holds one returns at once.]`,
 		]);
 		const details = result.details as WaitDetails;
 		expect(details.processes.map((process) => process.handle)).toEqual([slow, fast, other]);
@@ -531,15 +546,55 @@ describe('a wait on several handles', () => {
 		);
 		expect(waited.split('\n\n')).toHaveLength(2);
 		expect(waited).not.toContain('swept');
+		// A process that ends badly fails the wait, and the text still states the others.
+		const bad = await start('sleep 0.2; echo broke; exit 3');
+		await expect(
+			Promise.resolve(
+				toolOf(workspace, 'wait').invoke({ handles: [slow, bad], timeout: 20 }, callAs('alpha')),
+			),
+		).rejects.toThrow(
+			new RegExp(
+				`^broke\\n\\n\\[Process ${bad} exited with code 3\\.[\\s\\S]*\\[Process ${slow} is running\\.`,
+			),
+		);
+	});
+
+	it('gives the output of the processes that ended within one budget, and holds the rest for status', async () => {
+		const workspace = site();
+		// Each process writes about 90 KB, and the view keeps 50 KB: the first fills the budget.
+		const LINE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+		const start = async () =>
+			(
+				await call(workspace, 'bash', {
+					command: `sleep 0.3; for i in $(seq 1 1500); do echo ${LINE}; done`,
+					wait: 0,
+				})
+			).details.process.handle;
+		const [one, two] = [await start(), await start()];
+		// The host reads the table without moving the cursor of the agent.
+		await vi.waitFor(
+			async () => {
+				const running = await workspace.processes.list({ agent: 'alpha', running: true });
+				if (running.length > 0) throw new Error('A process still runs.');
+			},
+			{ timeout: 20_000 },
+		);
+		const both = await invokeText(
+			toolOf(workspace, 'wait'),
+			{ handles: [one, two] },
+			callAs('alpha'),
+		);
+		expect(both).toContain(`[Process ${two} exited with code 0.`);
+		expect(both).toContain('call status with its handle to read it.');
+		expect(both).toContain(`[Drop ${one}, ${two} from handles: they have ended`);
+		expect(new TextEncoder().encode(both).length).toBeLessThan(60_000);
+		// The cursor of the held process did not move, so status gives its output.
+		expect(
+			await invokeText(toolOf(workspace, 'status'), { handle: two }, callAs('alpha')),
+		).toContain(LINE);
 	});
 
 	it.each([
-		[
-			'both handle and handles',
-			{ handle: 'bash-000000000001', handles: ['bash-000000000001'] },
-			/Invalid handles/,
-		],
-		['neither', { timeout: 1 }, /Invalid handles/],
 		[
 			'a handle of no process',
 			{ handles: ['bash-000000000001'] },
@@ -553,9 +608,7 @@ describe('a wait on several handles', () => {
 	])('refuses %s', async (_case, params, message) => {
 		const workspace = site();
 		const known = (await call(workspace, 'bash', { command: 'true' })).details.process.handle;
-		const handles =
-			'handles' in params ? params.handles.map((one) => one.replace('KNOWN', known)) : undefined;
-		const given = handles === undefined ? params : { ...params, handles };
+		const given = { handles: params.handles.map((one) => one.replace('KNOWN', known)) };
 		await expect(
 			Promise.resolve().then(() => toolOf(workspace, 'wait').invoke(given, callAs('alpha'))),
 		).rejects.toThrow(message);
@@ -583,7 +636,11 @@ describe('a wait near the end of the activation', () => {
 			exchange: { owner: 'priya', from: 4 },
 		});
 		const before = Date.now();
-		const waited = await invokeText(toolOf(workspace, 'wait'), { handle, timeout: 60 }, late);
+		const waited = await invokeText(
+			toolOf(workspace, 'wait'),
+			{ handles: [handle], timeout: 60 },
+			late,
+		);
 		expect(Date.now() - before).toBeLessThan(2_000);
 		// The note rounds the time left, and a loaded runner can take a second.
 		expect(waited).toMatch(
@@ -617,7 +674,7 @@ describe('the note that points to a scheduled say', () => {
 		const texts = [
 			started.content.map((part) => (part.type === 'text' ? part.text : '')).join(''),
 			await invokeText(toolOf(workspace, 'status'), { handle }, inside),
-			await invokeText(wait, { handle, timeout: 0 }, inside),
+			await invokeText(wait, { handles: [handle], timeout: 0 }, inside),
 			await invokeText(wait, { handles: [other, handle], timeout: 0 }, inside),
 			await invokeText(wait, { handles: [ended, other, handle], timeout: 0 }, inside),
 		];
@@ -643,7 +700,7 @@ describe('an aborted wait', () => {
 		const controller = new AbortController();
 		const waiting = Promise.resolve(
 			toolOf(workspace, 'wait').invoke(
-				{ handle, timeout: 30 },
+				{ handles: [handle], timeout: 30 },
 				callAs('alpha', { signal: controller.signal }),
 			),
 		);
@@ -729,11 +786,14 @@ describe('the files as the source of truth', () => {
 		expect(
 			await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a2' }, live),
 		).toBeUndefined();
-		const lostStatus = await call(second, 'status', { handle: lost });
-		expect(lostStatus.details.process).toMatchObject({ state: 'failed', error: LOST });
-		expect(lostStatus.details.process.endedAt).toBeUndefined();
+		const lostStatus = await failure(() =>
+			toolOf(second, 'status').invoke({ handle: lost }, callAs('alpha')),
+		);
+		expect(lostStatus).toContain(`Process ${lost} failed: ${LOST}`);
 		// The host's cancel finds the owner from the files, and gives the final state again.
-		expect(await second.processes.cancel(lost)).toMatchObject({ state: 'failed', error: LOST });
+		const lostState = await second.processes.cancel(lost);
+		expect(lostState).toMatchObject({ state: 'failed', error: LOST });
+		expect(lostState.endedAt).toBeUndefined();
 		expect((await call(second, 'ps', {})).text).toBe('No running processes.');
 	});
 });
