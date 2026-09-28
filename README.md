@@ -42,7 +42,7 @@ room is a shared journal with rules for taking part.
 `ps` lists it, and `status`, `wait`, and `cancel` take its handle. Each
 activation starts with a reminder of the seat's processes. `snapshot` freezes
 a file and gives a ref that names its bytes. A message then cites what the
-file held when the agent spoke, and `fetch` gives those bytes to another
+file held when the agent spoke, and `restore` gives those bytes to another
 agent. The bytes live in an object store: a folder of the workspace by
 default, or an S3 bucket such as MinIO or R2. An optional SQL backend gives
 tables and adds `sql`: agents pass work to each other through a table or a

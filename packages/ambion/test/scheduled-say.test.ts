@@ -45,7 +45,7 @@ const results: string[] = [];
 const checksLater: Script = (context) => {
 	const last = toolResultTexts(context).at(-1);
 	if (last !== undefined) results.push(last);
-	if (last === 'delivered' || last?.startsWith('scheduled')) return quiet();
+	if (last?.startsWith('said #') || last?.startsWith('scheduled')) return quiet();
 	if (contextText(context).includes('[returned → worker'))
 		return speak('The build passed.', 'priya');
 	return callTool('schedule', {
@@ -63,8 +63,8 @@ const checksLater: Script = (context) => {
 const changesItsMind: Script = (context) => {
 	const last = toolResultTexts(context).at(-1);
 	if (last !== undefined) results.push(last);
-	const handle = /^scheduled (\d+):/.exec(last ?? '')?.[1];
-	if (handle !== undefined) return callTool('dismiss', { handle: Number(handle) });
+	const seq = /^scheduled #(\d+):/.exec(last ?? '')?.[1];
+	if (seq !== undefined) return callTool('dismiss', { message: Number(seq) });
 	if (last?.startsWith('dismissed')) return speak('I dropped the check.', 'priya');
 	if (last !== undefined) return quiet();
 	return later('Check the build.', AFTER);
@@ -109,7 +109,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		expect(say).toMatchObject({ seat: 'worker', owner: 'priya', text: 'Check the build.' });
 		const due = new Date(clock.now() + AFTER * 1000).toISOString();
 		expect(results).toContain(
-			`scheduled ${say?.seq}: the room gives this say back to you at ${due}`,
+			`scheduled #${say?.seq}: the room wakes you with this message at ${due}`,
 		);
 		expect((await room.read({ messages: false })).scheduled).toEqual([
 			{
@@ -199,7 +199,10 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		if (by === 'seat') {
 			expect(kinds(messages)).toEqual(['said', 'said', 'dismissed', 'said']);
 			expect(dismissed).toMatchObject({ from: 'worker' });
-			expect(results.at(-1)).toBe('delivered');
+			// The result names the say it dismissed, the seq that its schedule result gave.
+			const scheduled = dismissed?.kind === 'dismissed' ? dismissed.message : 0;
+			expect(results).toContain(`dismissed #${scheduled}`);
+			expect(results.at(-1)).toMatch(/^said #\d+ to priya$/);
 		} else {
 			expect(kinds(messages)).toEqual(['said', 'said', 'dismissed']);
 			expect(dismissed).not.toHaveProperty('from');

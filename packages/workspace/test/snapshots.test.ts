@@ -1,6 +1,6 @@
 /**
  * Snapshots: the refs a workspace gives for its files, the objects it keeps
- * in the default file store, `fetch`, and the refusals. The `snapshot` tool
+ * in the default file store, `restore`, and the refusals. The `snapshot` tool
  * in a running room is in `workspace.test.ts`; the object backend's own
  * cases are in `conformance.test.ts`.
  */
@@ -128,13 +128,13 @@ describe('snapshot', () => {
 	});
 });
 
-/** The two ways to read a snapshot: the host's `readSnapshot`, and the agent's `fetch`. */
+/** The two ways to read a snapshot: the host's `readSnapshot`, and the agent's `restore`. */
 const readers: [string, (workspace: Workspace, ref: string) => Promise<unknown>][] = [
 	['readSnapshot', (workspace, ref) => workspace.readSnapshot(ref)],
 	[
-		'fetch',
+		'restore',
 		(workspace, ref) =>
-			Promise.resolve(toolOf(workspace, 'fetch').invoke({ ref }, callAs('reviewer'))),
+			Promise.resolve(toolOf(workspace, 'restore').invoke({ ref }, callAs('reviewer'))),
 	],
 ];
 
@@ -161,21 +161,21 @@ describe.each(readers)('%s', (_name, read) => {
 	});
 });
 
-describe('fetch', () => {
+describe('restore', () => {
 	it("puts the bytes of a ref in the caller's files, at the default path or at its own", async () => {
-		const workspace = site('snapshot-fetch');
+		const workspace = site('snapshot-restore');
 		await put(workspace, 'analyst', '/home/analyst/plan.md', 'pour on Thursday\n');
 		const [ref = ''] = await workspace.snapshot(['/home/analyst/plan.md']);
 		await put(workspace, 'analyst', '/home/analyst/plan.md', 'changed\n');
 		const digest = sha256('pour on Thursday\n');
-		const fetch = toolOf(workspace, 'fetch');
-		const fetched = await fetch.invoke({ ref }, callAs('reviewer'));
+		const restore = toolOf(workspace, 'restore');
+		const restored = await restore.invoke({ ref }, callAs('reviewer'));
 		const into = `/home/reviewer/snapshots/${digest}/plan.md`;
-		expect(fetched).toMatchObject({
+		expect(restored).toMatchObject({
 			content: [{ text: `Wrote the 17 bytes of ${ref} to ${into}.` }],
 			details: { ref, path: into, bytes: 17 },
 		});
-		await fetch.invoke({ ref, path: 'review/plan.md' }, callAs('reviewer'));
+		await restore.invoke({ ref, path: 'review/plan.md' }, callAs('reviewer'));
 		const read = (path: string) =>
 			workspace.use({ name: 'reviewer' }, (env) => env.readTextFile(path, ctx));
 		expect(await read(into)).toEqual({ ok: true, value: 'pour on Thursday\n' });

@@ -50,6 +50,7 @@ it('lists the room tools with JSON Schema beside the agent tools, runs an agent 
 		'broken',
 		'dismiss',
 		'lookup',
+		'recall',
 		'say',
 		'schedule',
 		'seat',

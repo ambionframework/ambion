@@ -152,7 +152,10 @@ export const twoPeopleTwoExchanges: Scenario = {
 						colleague: answersLastQuestion(['priya', 'sam']),
 						assistant: (context) => {
 							const person = /(\w+)'s exchange is over/.exec(contextText(context))?.[1] ?? '';
-							if (!isClosing(context) || toolResultTexts(context).includes('delivered')) {
+							if (
+								!isClosing(context) ||
+								toolResultTexts(context).some((text) => text.startsWith('said #'))
+							) {
 								return quiet();
 							}
 							return summarise(`for ${person}`);

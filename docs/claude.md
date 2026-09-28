@@ -198,9 +198,9 @@ not bound what a resumed session holds.
 key, and the room answers.
 
 **The executor builds an in-process SDK MCP server named `ambion` for each
-activation.** It holds `say`, `schedule`, `seat`, `unseat`, `dismiss`, and
-the tools of the definition. The model sees them as `mcp__ambion__say` and so on. Steps and
-events show the plain name.
+activation.** It holds `say`, `schedule`, `seat`, `unseat`, `dismiss`,
+`recall`, and the tools of the definition. The model sees them as
+`mcp__ambion__say` and so on. Steps and events show the plain name.
 
 - The executable calls them over the SDK transport. The tool code never
   runs in the child process.

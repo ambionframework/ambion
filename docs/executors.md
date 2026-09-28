@@ -161,8 +161,8 @@ family.
 ## The room tools
 
 [Definitions and tools](agent.md#tools) states which tools an ordinary
-activation receives and which tools a closing activation receives. The
-hosting entry exports `SAY`, `SCHEDULE`, `SEAT`, `UNSEAT`, `DISMISS`, and
+activation receives and which tools a closing activation receives. The hosting
+entry exports `SAY`, `SCHEDULE`, `SEAT`, `UNSEAT`, `DISMISS`, `RECALL`, and
 `summaryToolDescription`.
 
 **The hosting entry holds the room tools once, in a form that names no
@@ -189,15 +189,25 @@ to do: an `unknown` or `stale` answer, or the last answer of a closing
 activation.
 
 **`say` commits a `said` intent.** It carries `readThrough` and takes the
-tool call id as its commit key. It accepts `text`, `to`, and `refs`.
+tool call id as its commit key. It accepts `text`, `to`, and `refs`. The
+result names the message, as `said #41` or `said #41 to priya`, so the
+agent can cite it. `seat` and `unseat` give `seated surveyor (#42)`, and a
+membership the record already holds gives `surveyor is already seated`.
 
 **`schedule` commits a `said` intent with `after`.** The intent goes to the
 seat itself. It carries `readThrough`, and the room takes it at any
-position. It accepts `after`, `text`, and `refs`. The result names the
-handle and the due time, and it lists the `unread` messages of the answer.
+position. It accepts `after`, `text`, and `refs`. The result names the say
+as `#<seq>` and gives the due time, and it lists the `unread` messages of
+the answer.
 
 **`seat` and `unseat` commit a membership intent**, keyed on the tool call
 id.
+
+**`recall` reads and commits nothing.** For each distinct ref of its
+room, it calls `view(id, { before: seq + 1, limit: 1 })`. A summary sits
+after the range it covers, so that page never folds the message away. The
+tool calls neither `acknowledgeThrough` nor `resultExpected`, and every
+family reports it as a tool event.
 
 **The room answer tells the adapter what to do:**
 
@@ -320,7 +330,7 @@ promises to keep.
 **Freshness governs speech in a kept session.** A kept session does not
 let a seat commit over a record it has not read.
 [Durability](durability.md#journal-format) owns the journal field and the
-journal format.
+body schemas.
 
 ## Failure classification
 

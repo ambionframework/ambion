@@ -13,9 +13,10 @@ holds the positioning and the headline of what is new.
 - **Conditional, fenced, idempotent writes.** Storage appends only at the
   expected position. Each run writes a fence, and a later fence voids the
   earlier run's writes. A retry under the same key lands once. Golden
-  journals of format 1 replay in CI, and before 1.0.0 the format may change
-  in any release. Memory and SQLite storages ship, with a Cloudflare Durable
-  Objects adapter.
+  journals replay in CI, the body schemas refuse an old field that the
+  runtime would misread, and before 1.0.0 any release may change a body.
+  Memory and SQLite storages ship, with a Cloudflare Durable Objects
+  adapter.
 - **Derived activation identity.** An activation id encodes its cause, its
   journal position, its seat, and its attempt. Nothing mints an id, so a wake
   can be sent twice and the fold refuses a stale caller. Leases claim, renew,
@@ -35,7 +36,7 @@ holds the positioning and the headline of what is new.
 - **One executor contract.** The kernel drives leases, passes, steering, and
   freshness. A framework supplies one session with passes. Pi, the Claude
   Agent SDK, and the Codex SDK ship as adapters. Codex reaches the same
-  three room tools through an MCP server. A conformance suite proves the Pi
+  room tools through an MCP server. A conformance suite proves the Pi
   and Claude adapters on fakes. The Codex adapter runs live.
 - **Speech through `say` only; everything else into a trace.** Every
   activation gives its steps to the host's logger as they happen: thinking,

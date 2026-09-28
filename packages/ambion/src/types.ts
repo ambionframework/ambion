@@ -292,7 +292,7 @@ export interface SummaryMessage extends Landed {
 export interface DismissedMessage extends Landed {
 	kind: 'dismissed';
 	from?: string;
-	/** The seq of the scheduled say: its handle. */
+	/** The seq of the scheduled say. */
 	message: Seq;
 }
 

@@ -141,7 +141,7 @@ describe('tools', () => {
 		expect(steps.claim('say')).toBe('s1');
 		expect(steps.claim('say')).toBeUndefined();
 		expect(['say', 'schedule', 'seat', 'unseat', 'dismiss'].every(isRoomTool)).toBe(true);
-		expect(isRoomTool('lookup')).toBe(false);
+		expect(isRoomTool('lookup') || isRoomTool('recall')).toBe(false);
 	});
 });
 

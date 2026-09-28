@@ -80,7 +80,7 @@ describe('room journal body validation', () => {
 			},
 		],
 		['run', { at }],
-		['run', { at, format: 1 }],
+		['cancel', { at }],
 	])('accepts a stored %s body with its optional fields: %j', (kind, body) => {
 		expect(validateRoomBody(kind, body)).toBe(true);
 	});
@@ -160,23 +160,24 @@ describe('room journal body validation', () => {
 		expect(() => validateRoomBody(kind, body)).toThrow(new RegExp(`kind '${kind}'.*${escaped}`));
 	});
 
-	it('refuses a run entry with a format other than 1', () => {
-		for (const format of [2, 0, 1.5, '1'])
-			expect(() => validateRoomBody('run', { at, format })).toThrow(
-				/unsupported journal format.*format 1|invalid room journal body/i,
-			);
-		expect(() => validateRoomBody('run', { at, format: 2 })).toThrow(
-			/unsupported journal format \(2\).*format 1/i,
+	it.each([
+		['cancel', { at, close: { owner: 'andrei', from: 1, through: 2, at } }, 'body.close'],
+		['close', { owner: 'andrei', from: 1, through: 2, at, cancelled: true }, 'body.cancelled'],
+		['run', { at, format: 1 }, 'body.format'],
+	] as const)('refuses a %s body with the old field at %s', (kind, body, path) => {
+		const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		expect(() => validateRoomBody(kind, body)).toThrow(
+			new RegExp(`kind '${kind}' at ${escaped}: expected no such field`),
 		);
 	});
 
-	it('writes format 1 on the run entry of a started room', async () => {
+	it('writes a run entry with the time alone', async () => {
 		const opened = await memory.open();
-		const name = roomName('run-format');
+		const name = roomName('run-fence');
 		const runtime = createRuntime({ storage: opened.storage });
 		stopAtEnd(await startRoom({ name, runtime, agents: [], seats: {} }));
 		const stored = await storedOf(hostingOf(runtime).journals, name);
-		expect(stored.find((entry) => entry.kind === 'run')?.body).toMatchObject({ format: 1 });
+		expect(stored.find((entry) => entry.kind === 'run')?.body).toEqual({ at: expect.any(String) });
 	});
 
 	it('skips an unknown kind without inspecting its body, and skips it during replay', async () => {

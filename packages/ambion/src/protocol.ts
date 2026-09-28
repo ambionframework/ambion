@@ -106,7 +106,7 @@ export interface CollaborationContext {
 	readonly preferences?: string;
 	/**
 	 * The says of this seat that wait to return, for a response. The seq of
-	 * each is its handle. Absent when none waits.
+	 * each names it. Absent when none waits.
 	 */
 	readonly scheduled?: readonly PendingSay[];
 	/**

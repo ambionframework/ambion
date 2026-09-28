@@ -77,14 +77,14 @@ describe('the preview of a snapshot', () => {
 		expect(shown.path).toBe(ref);
 		if (kind === 'text') expect(shown.text).toBe('pour on Thursday\n');
 		if (kind === 'binary')
-			expect(shown.text).toBe('A binary file of 5 bytes. An agent reads it with fetch.');
+			expect(shown.text).toBe('A binary file of 5 bytes. An agent reads it with restore.');
 		if (kind === 'database') {
 			expect(shown.tables?.map((table) => [table.name, table.count])).toEqual([['runs', 2]]);
 		}
 		if (kind === 'picture') expect(shown.image?.mimeType).toBe('image/png');
 		if (kind === 'large picture')
 			expect(shown.text).toBe(
-				'A picture of 8388609 bytes. The preview shows one of up to 8 MiB. An agent reads it with fetch.',
+				'A picture of 8388609 bytes. The preview shows one of up to 8 MiB. An agent reads it with restore.',
 			);
 	});
 });

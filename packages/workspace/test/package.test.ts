@@ -82,6 +82,7 @@ it('exports one resource, its two logs, the environment helpers, sqlImport, sqlR
 		'PACKAGE_NAME',
 		'SNAPSHOT_LIMITS',
 		'TMP',
+		'ToolFailure',
 		'boundedView',
 		'deliverView',
 		'fromDirectory',

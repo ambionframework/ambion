@@ -220,7 +220,7 @@ function provenanceOf(ctx: ToolContext): SqlProvenance {
 
 const querySchema = Type.Object({
 	sql: Type.String({ description: 'One SELECT statement. The resource refuses every write.' }),
-	maxRows: Type.Optional(
+	rows: Type.Optional(
 		Type.Number({
 			description: 'How many rows the preview shows. The default is the resource cap.',
 		}),
@@ -243,7 +243,7 @@ function bundle(owner: WorkspaceResource<SqlResourceEnv>, cap: number): ToolBund
 		execute: (params, ctx) =>
 			owner.use(
 				ctx.agent,
-				(env) => renderTable(env.query(params.sql), params.maxRows ?? cap),
+				(env) => renderTable(env.query(params.sql), params.rows ?? cap),
 				ctx.signal,
 			),
 	});

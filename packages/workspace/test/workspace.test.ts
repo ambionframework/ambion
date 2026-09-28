@@ -172,7 +172,7 @@ describe('the workspace bundle', () => {
 			'wait',
 			'cancel',
 			'snapshot',
-			'fetch',
+			'restore',
 		]);
 		// The /rooms guidance names no room, so a workspace states it with no other guidance.
 		expect(workspace.tools().guidance).toBe(
@@ -214,7 +214,7 @@ describe('the workspace bundle', () => {
 			'wait',
 			'cancel',
 			'snapshot',
-			'fetch',
+			'restore',
 			'inspect',
 		]);
 		const result = await toolOf(workspace, 'inspect').invoke({}, callAs('alpha'));
@@ -287,7 +287,7 @@ describe('a workspace beside a running room', () => {
 		const guidance = site.tools().guidance ?? '';
 		expect(guidance).toContain(own.audit);
 		expect(guidance).toContain(own.rooms);
-		expect(guidance).toContain('call fetch with its ref');
+		expect(guidance).toContain('call restore with its ref');
 		const digest = createHash('sha256').update('done\n').digest('hex');
 		const ref = snapshotUri(site.name, digest, '/home/worker/notes.txt');
 

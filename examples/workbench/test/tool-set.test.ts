@@ -222,7 +222,7 @@ describe('the Workbench repositories', () => {
 			const handle = step.results[0]?.text.match(/bash-[0-9a-f]{12}/)?.[0];
 			return [
 				callTool('ps'),
-				callTool('wait', { handle, timeout: 30 }),
+				callTool('wait', { handles: [handle], timeout: 30 }),
 				speak(`${step.results[0]?.text}\n${step.results[1]?.text}`, 'assistant'),
 			][step.results.length];
 		};

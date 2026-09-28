@@ -75,7 +75,7 @@ binds three file tools first: `read`, `write`, and `edit`. The five process
 tools come next: `bash`, `ps`, `status`, `wait`, and `cancel`. `bash` starts
 each command as a background process and returns its handle
 ([Processes](processes.md)). The bundle also reminds each seat of its
-processes at the start of an activation. `snapshot` and `fetch` come next:
+processes at the start of an activation. `snapshot` and `restore` come next:
 one freezes files and gives the refs that cite them, and the other puts the
 bytes of a cited snapshot in the agent's files
 ([Snapshot a file](#snapshot-a-file)).
@@ -85,6 +85,22 @@ with a SQL backend adds `sql`
 no SQL backend has no `sql` tool. The bash backend then adds its own tools,
 and its own guidance about its own shell, if it has any. The bundle binds every tool through the resource owner and
 keeps one stable identity. Pass the bundle in an agent's `bundles` field.
+
+**A failure is an error, and every result tells the agent what to do.**
+The workspace tools share these rules:
+
+- **A failure is a tool error.** A harness and a host tell it from a
+  success by the error flag of the result. A bad path, an unknown handle,
+  and the limit of running processes are failures. A bad ref, a refused
+  statement, a refused fork or clone, and a process that ended badly are
+  failures too. So are an abort, a fault of a backend, and an invalid
+  argument.
+- **The text of a failure states the problem and the next step.** A
+  process that ended badly gives its output and its state line. A refused
+  statement names the database and the fault. An unknown handle names
+  `bash`, which returns the handle.
+- **The file tools are Pi's.** `read`, `write`, and `edit` report a bad
+  path as a tool error, as Pi does.
 
 ```ts
 import { defineAgent, defineTool } from '@ambionframework/ambion';
@@ -384,15 +400,15 @@ the calling agent, and its result lists one ref for each path. The guidance
 tells every agent to cite a file with a snapshot ref in the `refs` of a
 say. The audit log records each call.
 
-| Step | Owner  | What happens                                                                                  |
-| ---- | ------ | --------------------------------------------------------------------------------------------- |
-| 1    | bash   | The agent that reads finds every file. A path that is not one readable file refuses the call. |
-| 2    | bash   | For each file in turn, the agent that reads reads the bytes.                                  |
-| 3    | —      | The workspace hashes the bytes with SHA-256.                                                  |
-| 4    | object | The host agent, `<name>-host`, puts the bytes under their digest. Then the next file starts.  |
-| 5    | —      | The workspace gives the refs.                                                                 |
+| Step | Owner  | What happens                                                                                 |
+| ---- | ------ | -------------------------------------------------------------------------------------------- |
+| 1    | bash   | The agent that reads finds every file. A path that is not one readable file fails the call.  |
+| 2    | bash   | For each file in turn, the agent that reads reads the bytes.                                 |
+| 3    | —      | The workspace hashes the bytes with SHA-256.                                                 |
+| 4    | object | The host agent, `<name>-host`, puts the bytes under their digest. Then the next file starts. |
+| 5    | —      | The workspace gives the refs.                                                                |
 
-**The `fetch` tool puts the bytes of a cited snapshot in an agent's files.**
+**The `restore` tool puts the bytes of a cited snapshot in an agent's files.**
 It takes `ref` and an optional `path`. The default path is
 `~/snapshots/<digest>/<name>`, where `<name>` is the last part of the path
 in the ref. The host agent gets the object on the object owner, and the
@@ -415,7 +431,7 @@ bytes of the snapshot. A new snapshot of the changed file gives a new ref.
 The object outlasts a restart of the host when its store does. Nothing
 removes an object today.
 
-**`readSnapshot` and `fetch` check the bytes against the digest.** Each
+**`readSnapshot` and `restore` check the bytes against the digest.** Each
 refuses a ref of another workspace, a missing object, and bytes whose
 SHA-256 differs from the digest. The check holds on every object backend,
 so a backend promises storage alone.
@@ -442,7 +458,7 @@ file of any size.
 **`backend.objects` names where the bytes of each snapshot live.** It is an
 `ObjectBackend`. When it is absent, `openWorkspace` opens a file store at
 `layout.snapshots` on the bash backend. So every workspace has `snapshot`
-and `fetch`, and the bytes have one path.
+and `restore`, and the bytes have one path.
 
 ```ts
 interface ObjectEnv extends ResourceEnv {
@@ -542,7 +558,7 @@ read every object under the prefix.
 exposes it for host code. An object operation may wait on the bash owner,
 since the default store writes through it. No bash operation waits on the
 object owner: `snapshot` reads on the bash owner and then puts on the
-object owner, and `fetch` gets on the object owner and then writes on the
+object owner, and `restore` gets on the object owner and then writes on the
 bash owner. `dispose` drains the SQL owner, the bash owner, the object
 owner, and the git owner, in that order, so a use that starts after
 `dispose` is refused at once.
@@ -620,13 +636,13 @@ another agent reads at once. The tool takes these parameters:
 | `sql`     | One or more statements. The last query gives the preview.          |
 | `export`  | A path in the workspace for the full result as CSV.                |
 | `import`  | A path in the workspace of a CSV file, as the table `import.rows`. |
-| `maxRows` | How many rows the preview shows, up to 1000. The default is 50.    |
+| `rows`    | How many rows the preview shows, up to 1000. The default is 50.    |
 
 **The preview stays in context and writes nothing to disk.** The tool shows
-the last query's result as a Markdown table, capped at `maxRows`. It keeps
+the last query's result as a Markdown table, capped at `rows`. It keeps
 the data in the database. An agent reads the result and continues. A
-statement that the database refuses comes back as text that names the
-database, so the agent can correct it.
+statement that the database refuses fails the call. The error text names
+the database and the fault, and asks the agent to correct the statement.
 
 **Share through a table or a view.** The data stays in the shared database, so
 no agent copies a file. A view holds its own query and reflects the current

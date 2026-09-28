@@ -110,11 +110,11 @@ if (process.env.GOLDEN === 'write') {
 			]);
 		});
 
-		it('writes format 1 on every fence, and two fences after a resume', async () => {
+		it('writes the time alone on every fence, and two fences after a resume', async () => {
 			const entries = await load<Entry[]>('resumed.journal.json');
 			const fences = entries.filter((entry) => entry.kind === 'run');
 			expect(fences).toHaveLength(2);
-			for (const fence of fences) expect(fence.body).toMatchObject({ format: 1 });
+			for (const fence of fences) expect(Object.keys(fence.body)).toEqual(['at']);
 		});
 
 		it('records a session on each ended activation, and keeps it inside one exchange', async () => {
@@ -132,15 +132,6 @@ if (process.env.GOLDEN === 'write') {
 			expect(new Set(first).size).toBe(1);
 			expect(second).toHaveLength(1);
 			expect(second).not.toContain(first[0]);
-		});
-
-		it('reads a journal whose fence has no format as format 1', async () => {
-			const entries = await load<Entry[]>('complete.journal.json');
-			const legacy = entries.map((entry) => {
-				if (entry.kind !== 'run') return entry;
-				return { ...entry, body: { at: entry.body.at } } as unknown as Entry;
-			});
-			expect(foldOf(legacy)).toEqual(foldOf(entries));
 		});
 	});
 }
