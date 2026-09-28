@@ -53,8 +53,8 @@ export interface AuditEntry {
 	 * the log records that the tool returned a picture, not the picture.
 	 */
 	readonly result?: unknown;
-	/** Present when the call threw. */
-	readonly error?: { readonly name: string; readonly message: string };
+	/** Present when the call threw. A `ToolFailure` keeps the details of its result here. */
+	readonly error?: { readonly name: string; readonly message: string; readonly details?: unknown };
 }
 
 export interface AuditLogOptions {

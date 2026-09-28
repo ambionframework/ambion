@@ -227,7 +227,7 @@ describe('bash', () => {
 				toolOf(workspace, 'status').invoke({ handle }, callAs('alpha')),
 			);
 			expect(status).toContain(`Process ${handle} ${state}.`);
-			expect(status.startsWith(`Error: ${after}\n\n[Process`)).toBe(true);
+			expect(status.startsWith(`ToolFailure: ${after}\n\n[Process`)).toBe(true);
 		},
 	);
 

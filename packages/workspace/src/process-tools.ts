@@ -33,7 +33,7 @@ import { readOutput } from './process-output.ts';
 import type { ProcessTable } from './process-table.ts';
 import { deadlineNote, psTable, stateLine } from './process-text.ts';
 import type { WorkspaceResource } from './resource.ts';
-import { recordedOnShell } from './tools.ts';
+import { recordedOnShell, ToolFailure } from './tools.ts';
 
 /** Seconds a process may run when `bash` names no timeout. */
 const DEFAULT_TIMEOUT_SECONDS = 600;
@@ -419,7 +419,7 @@ function failedOr<D>(
 	result: AgentToolResult<D>,
 	reported: readonly ProcessStatus[],
 ): AgentToolResult<D> {
-	if (reported.some(endedBadly)) throw new Error(textOf(result));
+	if (reported.some(endedBadly)) throw new ToolFailure(textOf(result), result.details);
 	return result;
 }
 

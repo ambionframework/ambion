@@ -649,9 +649,11 @@ workstation's Unix accounts.
 
 **Each call of the five tools has one audit entry.** The entry runs on
 the bash owner after the call ends. The entry of a `bash` call holds the
-state at the end of the call, which can be `running`. A `bash` call that
-an abort cuts while it waits records an error with no handle, and the
-process keeps running. The reminder and `ps` name it. The files of a
+state at the end of the call, which can be `running`. A call that fails
+on a process that ended badly records `error` with the name `ToolFailure`
+and the `details` of its result: the `ProcessStatus`, and for `wait` on
+several handles, every status. A `bash` call that an abort cuts while it
+waits records an error with no handle, and the process keeps running. The reminder and `ps` name it. The files of a
 process are its record.
 
 ## The guidance

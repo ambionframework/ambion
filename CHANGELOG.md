@@ -131,6 +131,11 @@ its `text`.
 
 ### Breaking changes
 
+- **The audit entry of a failed process keeps its details.** A call that
+  fails on a process that ended badly throws a `ToolFailure`, and its audit
+  entry holds `error.details`: the `ProcessStatus` and the read range. The
+  error name is `ToolFailure` in place of `Error`. `AuditEntry.error` has
+  `details`.
 - **A wait on several handles bounds its output and names the handles to
   drop.** It shows the output of the processes that ended until its text
   holds about 50 KB. A process past that gives its state line and asks for
