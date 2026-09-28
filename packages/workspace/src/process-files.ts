@@ -158,6 +158,14 @@ export function stopLine(cause: StopCause, message?: string): string {
 }
 
 /**
+ * The `stop` line for a lost process. The first read that finds the process
+ * lost writes it, and the listing runs no `ps` for a process with this line.
+ */
+export function lostLine(): string {
+	return stopLine('failed', LOST);
+}
+
+/**
  * Write `stop` for a process that has no `exit`. One shell command checks
  * and writes, so a stop that meets the natural end of the command leaves
  * the end as the command gave it.
@@ -192,7 +200,8 @@ export async function writeSeen(env: WorkspaceEnv, dir: string): Promise<void> {
  * uses none for a finished process. The liveness check runs only where
  * `ps` exists. It matches the handle in the command line of the pid, so a
  * pid that the system reused for another program does not read as the
- * process.
+ * process. It skips a process whose `stop` names it lost: a shell builtin
+ * reads that line, so the skip starts no program.
  */
 function listingScript(root: string, handle?: string): string {
 	const from = handle === undefined ? '. -mindepth 2' : quoted(handle);
@@ -204,6 +213,7 @@ function listingScript(root: string, handle?: string): string {
 		`for f in ${names}/pid; do`,
 		`  h="\${f%/pid}"`,
 		`  [ -f "$f" ] && [ ! -f "$h/exit" ] || continue`,
+		`  [ -f "$h/stop" ] && read -r c t m 2>/dev/null < "$h/stop" && [ "$c $m" = ${quoted(`failed ${LOST}`)} ] && continue`,
 		`  ps -ww -o args= -p "$(cat "$f")" 2>/dev/null | grep -q -- "$h" && echo "$h/alive:"`,
 		`done`,
 		`exit 0`,
@@ -306,12 +316,18 @@ export async function readFiles(
 
 type Ending = Pick<ProcessStatus, 'state' | 'endedAt' | 'exitCode' | 'error'>;
 
-/** The end that `stop` names: its cause, its time, and for a failure its message. */
+/**
+ * The end that `stop` names: its cause, its time, and for a failure its
+ * message. The time of a lost process names the read that found it lost,
+ * and no end, so its status has no `endedAt`.
+ */
 function stopEnding(stop: string): Ending {
 	const [cause = '', at, ...message] = stop.split(' ');
+	const error = message.join(' ');
+	if (error === LOST) return { state: 'failed', error };
 	const endedAt = at === undefined || at === '' ? {} : { endedAt: at };
 	if (cause === 'cancelled' || cause === 'timed_out') return { state: cause, ...endedAt };
-	return { state: 'failed', ...endedAt, error: message.join(' ') || 'The process failed.' };
+	return { state: 'failed', ...endedAt, error: error || 'The process failed.' };
 }
 
 /** The end that `exit` names: the exit code and the time. */

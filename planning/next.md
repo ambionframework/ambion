@@ -186,7 +186,6 @@ and the process tools. A step names the steps it needs; a step with no
       of the three routers. (C5)
 - [ ] **5.** A composition carries no `version`, one capture serves a
       definition, and one registry serves the waiters. (C9)
-- [ ] **6.** One record for a live process in the table. (C11)
 - [ ] **7.** The body schemas guard the journal, and the format number
       goes. Needs 3 and 5. (C12)
 - [ ] **8.** The assistant works a request after its owner leaves. (A1)
@@ -443,17 +442,6 @@ with them. The acceptance of B in 0.3.0 and
 [Processes](../docs/processes.md) name `status` and `ps`, so the item
 rewrites both. **Evidence:** the process tests, the prompt snapshot, and
 one live file on each harness that shows no loss in the use of a process.
-
-**C11. One record for a live process in the table.** The table keeps a
-process of this run and an adopted process in two maps, with two stop
-paths and two end paths. One record with an optional controller removes
-about 50 lines, and each fix to a stop then lands once. The two stop
-mechanisms stay: an abort for a process of this run, since just-bash has
-no pid, and the pid for an adopted process. A lost process keeps its
-`pid` and no end file, so each listing runs `ps` for it until a start
-forgets it. A `stop` line that the first read writes ends that cost.
-**Evidence:** the process tests on just-bash and on the workstation, and
-the adoption on OpenSSH.
 
 **C12. The body schemas guard the journal.** Each `run` entry carries
 `format`, and `validateRunFormat` refuses a format that the runtime does

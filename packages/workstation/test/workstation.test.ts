@@ -330,7 +330,7 @@ function toolOf(workspace: Workspace, name: string): AmbionTool {
 }
 
 describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
-	it('adopts the live processes of an earlier run from their files, cancels one through its pid, and times out the other', async () => {
+	it('adopts the live processes of an earlier run from their files, cancels one through its pid, times out the other, and records a lost one', async () => {
 		const started = await server(['ada']);
 		const home = started.homes.get('ada') ?? '';
 		// An earlier run of the host starts two processes, and then goes away.
@@ -355,6 +355,15 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		};
 		const kept = await launch('bash-00000000000c', 600, new Date().toISOString());
 		const late = await launch('bash-00000000000d', 1, new Date(Date.now() - 5_000).toISOString());
+		// A process whose shell ended and left no end in the files: no run runs it.
+		const lost = join(home, '.processes', 'bash-00000000000e');
+		await mkdir(lost, { recursive: true });
+		const spec = { handle: 'bash-00000000000e', kind: 'bash', agent: 'ada', command: 'true' };
+		await writeFile(
+			join(lost, 'spec'),
+			JSON.stringify({ ...spec, timeout: 600, startedAt: new Date().toISOString() }),
+		);
+		await writeFile(join(lost, 'pid'), `${spawnSync('true').pid}\n`);
 		await earlier.dispose?.();
 		const workspace = openWorkspace({
 			name: 'lab',
@@ -369,6 +378,11 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		// A read adopts what it finds: ps reads both. The one past its timeout stops at once.
 		await toolOf(workspace, 'ps').invoke({}, context('ada'));
 		expect(await call('status', { handle: 'bash-00000000000c' })).toBe('running');
+		// The read that found the lost process wrote its stop, so no later listing runs ps for it.
+		expect(await readFile(join(lost, 'stop'), 'utf8')).toMatch(
+			/^failed \S+ The host run ended before the process did\.\n$/,
+		);
+		expect(await call('status', { handle: 'bash-00000000000e' })).toBe('failed');
 		await until(() => ended(late), 15_000);
 		expect(await call('status', { handle: 'bash-00000000000d' })).toBe('timed_out');
 		expect(await call('cancel', { handle: 'bash-00000000000c' })).toBe('cancelled');

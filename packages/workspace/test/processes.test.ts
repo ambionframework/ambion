@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, onTestFinished } from 'vitest';
@@ -696,12 +696,16 @@ describe('the files as the source of truth', () => {
 		const reminded =
 			(await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a1' }, live)) ?? '';
 		expect(reminded).toContain(`- ${lost} failed: sleep 99`);
+		// The first read that finds the process lost writes its stop, so no later listing runs ps for it.
+		const [cause, , ...message] = (await readFile(join(home, 'stop'), 'utf8')).split(' ');
+		expect([cause, message.join(' ')]).toEqual(['failed', `${LOST}\n`]);
 		expect(reminded).not.toContain(done.handle);
 		expect(
 			await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a2' }, live),
 		).toBeUndefined();
 		const lostStatus = await call(second, 'status', { handle: lost });
 		expect(lostStatus.details.process).toMatchObject({ state: 'failed', error: LOST });
+		expect(lostStatus.details.process.endedAt).toBeUndefined();
 		// The host's cancel finds the owner from the files, and gives the final state again.
 		expect(await second.processes.cancel(lost)).toMatchObject({ state: 'failed', error: LOST });
 		expect((await call(second, 'ps', {})).text).toBe('No running processes.');
