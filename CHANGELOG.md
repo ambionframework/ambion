@@ -169,6 +169,18 @@ its `text`.
 
 ### Breaking changes
 
+- **The kernel names no database.** The hand-off guidance of every seat said
+  to put structured data in the shared database and named `sqlite_master`,
+  even for a seat with no SQL backend. It now says to write an artifact once
+  where the tools keep it, and to hand it off with a directed say. The
+  guidance of `sql` names the table or view hand-off, and the SQLite backend
+  names `sqlite_master`.
+- **The SQL resource inserts with `insert`.** The tool `record` becomes
+  `insert`, and `SqlResourceEnv.record` becomes `SqlResourceEnv.insert`.
+  The record is the journal of a room, so the tool no longer shares its
+  word. The result reads `Inserted row <id> into <table>.` The `rows` of
+  `query` is a whole number from 0 to 1000, as for `sql`, and its
+  description states the default.
 - **The audit entry of a failed process keeps its details.** A call that
   fails on a process that ended badly throws a `ToolFailure`, and its audit
   entry holds `error.details`: the `ProcessStatus` and the read range. The

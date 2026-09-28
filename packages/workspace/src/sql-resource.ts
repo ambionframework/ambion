@@ -2,13 +2,13 @@
  * A read-only SQL resource: the second binding of the neutral resource contract.
  *
  * The resource owns one SQLite database that lives beside the journal and never
- * shares a transaction with it. An agent reads with `query` and appends with
- * `record`. `query` runs on a handle that refuses every write. `record` is the
+ * shares a transaction with it. An agent reads with `query` and adds rows with
+ * `insert`. `query` runs on a handle that refuses every write. `insert` is the
  * only mutation path: a parameterized INSERT into a table that the host lists
  * in `writable`. It stamps the calling agent, room, activation, and exchange
  * into the columns that the table declares for them.
  *
- * The resource does not deduplicate. A retried activation that calls `record`
+ * The resource does not deduplicate. A retried activation that calls `insert`
  * again inserts again. The application owns the idempotency of its own effects,
  * for example with a UNIQUE column and INSERT OR IGNORE in its schema.
  *
@@ -30,7 +30,7 @@ import {
 } from './resource.ts';
 import type { SqlValue } from './sql-backend.ts';
 
-/** The columns `record` fills from the tool context, when the table declares them. */
+/** The columns `insert` fills from the tool context, when the table declares them. */
 export const PROVENANCE_COLUMNS = [
 	'agent',
 	'room',
@@ -40,7 +40,7 @@ export const PROVENANCE_COLUMNS = [
 	'at',
 ] as const;
 
-/** The provenance one `record` call carries. An absent field leaves its column NULL. */
+/** The provenance one `insert` call carries. An absent field leaves its column NULL. */
 export type SqlProvenance = Partial<Record<(typeof PROVENANCE_COLUMNS)[number], string>>;
 
 /** What a caller of `use` reaches. */
@@ -48,7 +48,7 @@ export interface SqlResourceEnv extends ResourceEnv {
 	/** Run one statement on the read-only handle and return its rows. */
 	query(sql: string): Record<string, SqlValue>[];
 	/** Insert one row into a writable table. Returns the new rowid. */
-	record(table: string, values: Record<string, SqlValue>, provenance?: SqlProvenance): number;
+	insert(table: string, values: Record<string, SqlValue>, provenance?: SqlProvenance): number;
 }
 
 export interface SqlResourceOptions {
@@ -58,30 +58,34 @@ export interface SqlResourceOptions {
 	location: string;
 	/** Statements that run at every open: tables, views, and seed rows. Write them to run again. */
 	schema?: string;
-	/** The tables `record` may append to. `record` refuses every other table. */
+	/** The tables `insert` may add rows to. `insert` refuses every other table. */
 	writable?: readonly string[];
-	/** How many rows the `query` preview shows. The default is 50. */
+	/** How many rows the `query` preview shows. The default is 50, and the most is 1000. */
 	maxRows?: number;
 }
 
 /** A SQL resource: the owner, and the tools an agent uses. */
 export interface SqlResource extends WorkspaceResource<SqlResourceEnv> {
-	/** The `query` and `record` tools, with the guidance that explains them. */
+	/** The `query` and `insert` tools, with the guidance that explains them. */
 	tools(): ToolBundle;
 }
 
 const PREVIEW_ROWS = 50;
 
+/** The most rows one preview shows, as for the `sql` tool. */
+const MAX_PREVIEW_ROWS = 1000;
+
 let memoryCounter = 0;
 
 const GUIDANCE =
-	'The SQL resource holds structured records. Use `query` to read with one SELECT statement, and add a LIMIT to a large table. ' +
-	'Use `record` to append one row to a table that accepts records. `query` cannot change data. ' +
-	'The room stamps your name, the activation, and the exchange into the provenance columns of a recorded row.';
+	'The SQL resource holds structured data. Use `query` to read with one SELECT statement, and add a LIMIT to a large table. ' +
+	'Use `insert` to add one row to a table that accepts inserts. `query` cannot change data. ' +
+	'The room stamps your name, the activation, and the exchange into the provenance columns of an inserted row.';
 
 /** Open one SQL resource. The two handles stay open until `dispose`. */
 export function openSqlResource(options: SqlResourceOptions): SqlResource {
-	const maxRows = options.maxRows ?? PREVIEW_ROWS;
+	// The default preview never shows more rows than a caller may ask for.
+	const maxRows = Math.min(options.maxRows ?? PREVIEW_ROWS, MAX_PREVIEW_ROWS);
 	const handles = openHandles(options);
 	const owner = openResource<SqlResourceEnv>({
 		name: options.name,
@@ -140,8 +144,8 @@ function sqlBackend(
 ): ResourceBackend<SqlResourceEnv> {
 	const env: SqlResourceEnv = {
 		query: (sql) => runQuery(handles.reader, sql),
-		record: (table, values, provenance) =>
-			runRecord(handles.writer, writable, table, values, provenance),
+		insert: (table, values, provenance) =>
+			runInsert(handles.writer, writable, table, values, provenance),
 		cleanup: async () => undefined,
 	};
 	return {
@@ -184,21 +188,25 @@ function checkColumns(table: string, columns: Set<string>, names: string[]): voi
 	}
 }
 
-function runRecord(
+function runInsert(
 	writer: DatabaseSync,
 	writable: ReadonlySet<string>,
 	table: string,
 	values: Record<string, SqlValue>,
 	provenance?: SqlProvenance,
 ): number {
-	if (!writable.has(table)) throw new Error(`Table '${table}' does not accept records.`);
+	if (!writable.has(table))
+		throw new Error(
+			`Table '${table}' does not accept inserts. Insert into a table that your instructions name.`,
+		);
 	const columns = tableColumns(writer, table);
 	checkColumns(table, columns, Object.keys(values));
 	const entries: [string, SqlValue][] = [
 		...Object.entries(values),
 		...stampedColumns(columns, provenance),
 	];
-	if (entries.length === 0) throw new Error('A record needs at least one value.');
+	if (entries.length === 0)
+		throw new Error('An insert needs at least one value. Give values for the columns of the row.');
 	const names = entries.map(([name]) => quoteName(name)).join(', ');
 	const marks = entries.map(() => '?').join(', ');
 	const result = writer
@@ -218,17 +226,21 @@ function provenanceOf(ctx: ToolContext): SqlProvenance {
 	};
 }
 
-const querySchema = Type.Object({
-	sql: Type.String({ description: 'One SELECT statement. The resource refuses every write.' }),
-	rows: Type.Optional(
-		Type.Number({
-			description: 'How many rows the preview shows. The default is the resource cap.',
-		}),
-	),
-});
+/** The `query` schema. `cap` is the preview size when the call names none. */
+const querySchema = (cap: number) =>
+	Type.Object({
+		sql: Type.String({ description: 'One SELECT statement. The resource refuses every write.' }),
+		rows: Type.Optional(
+			Type.Integer({
+				minimum: 0,
+				maximum: MAX_PREVIEW_ROWS,
+				description: `How many rows the preview shows, up to ${MAX_PREVIEW_ROWS}. The default is ${cap}.`,
+			}),
+		),
+	});
 
-const recordSchema = Type.Object({
-	table: Type.String({ description: 'A table that accepts records.' }),
+const insertSchema = Type.Object({
+	table: Type.String({ description: 'A table that accepts inserts.' }),
 	values: Type.Record(Type.String(), Type.Union([Type.String(), Type.Number(), Type.Null()]), {
 		description: 'The column values of the new row. Provenance columns fill themselves.',
 	}),
@@ -239,7 +251,7 @@ function bundle(owner: WorkspaceResource<SqlResourceEnv>, cap: number): ToolBund
 		name: 'query',
 		label: 'Query',
 		description: 'Read rows from the SQL resource with one SELECT statement.',
-		parameters: querySchema,
+		parameters: querySchema(cap),
 		execute: (params, ctx) =>
 			owner.use(
 				ctx.agent,
@@ -247,22 +259,22 @@ function bundle(owner: WorkspaceResource<SqlResourceEnv>, cap: number): ToolBund
 				ctx.signal,
 			),
 	});
-	const record = defineTool({
-		name: 'record',
-		label: 'Record',
-		description: 'Append one row to a table of the SQL resource. Returns the new rowid.',
-		parameters: recordSchema,
+	const insert = defineTool({
+		name: 'insert',
+		label: 'Insert',
+		description: 'Insert one row into a table of the SQL resource. Returns the new rowid.',
+		parameters: insertSchema,
 		execute: (params, ctx) =>
 			owner.use(
 				ctx.agent,
 				(env) => {
-					const id = env.record(params.table, params.values, provenanceOf(ctx));
-					return `Recorded row ${id} in ${params.table}.`;
+					const id = env.insert(params.table, params.values, provenanceOf(ctx));
+					return `Inserted row ${id} into ${params.table}.`;
 				},
 				ctx.signal,
 			),
 	});
-	return Object.freeze({ tools: Object.freeze([query, record]), guidance: GUIDANCE });
+	return Object.freeze({ tools: Object.freeze([query, insert]), guidance: GUIDANCE });
 }
 
 /** Render rows as a GitHub Markdown table, capped at `maxRows`, with a footer. */

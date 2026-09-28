@@ -113,7 +113,7 @@ function runOperate(
 	const provenance = provenanceOf(ctx);
 	if (setpoint <= spec.limit) {
 		const reading = readingOf(setpoint);
-		const id = env.record(
+		const id = env.insert(
 			'operations',
 			{ instrument: spec.name, setpoint, outcome: 'done', reading },
 			provenance,
@@ -123,7 +123,7 @@ function runOperate(
 	if (!ctx.exchange) {
 		throw new Error('An operation above the limit needs an open exchange and its owner.');
 	}
-	const id = env.record(
+	const id = env.insert(
 		'operations',
 		{ instrument: spec.name, setpoint, outcome: 'requested' },
 		provenance,
@@ -153,7 +153,7 @@ function runApprove(
 	const unit = specs.get(name)?.unit ?? '';
 	const provenance = provenanceOf(ctx);
 	if (decision === 'deny') {
-		env.record(
+		env.insert(
 			'operations',
 			{ instrument: name, setpoint, outcome: 'denied', request_id: id },
 			provenance,
@@ -161,7 +161,7 @@ function runApprove(
 		return `Operation ${id} denied. ${name} stays where it is.`;
 	}
 	const reading = readingOf(setpoint);
-	env.record(
+	env.insert(
 		'operations',
 		{ instrument: name, setpoint, outcome: 'approved', request_id: id, reading },
 		provenance,

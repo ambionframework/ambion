@@ -89,8 +89,9 @@ export interface SqlToolOptions {
 export function sqlToolGuidance(database: string): string {
 	return [
 		`sql runs statements on one shared database, ${database}. Every agent queries this`,
-		`database, so a table or a view you create is data another agent reads at once. Share`,
-		`through a view or a table; this needs no copy. Reach this database with sql alone. The`,
+		`database. Put structured data that a colleague needs here as a named table or view:`,
+		`the colleague queries it by its name at once, with no copy. Reach this database with`,
+		`sql alone. The`,
 		`tool shows the last result as a table and keeps the data in the database. Set export to`,
 		`write the full result as a CSV file in your workspace for another tool or script.`,
 		`Set import to read a CSV file with a header from your workspace, up to ${MAX_IMPORT_BYTES / 1024 / 1024} MiB. Its rows`,

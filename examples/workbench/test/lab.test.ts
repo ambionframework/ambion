@@ -56,7 +56,7 @@ describe('the lab SQL resource', () => {
 			room: 'sensing',
 		});
 		await call(
-			'record',
+			'insert',
 			{ table: 'runs', values: { project: 'sensing', label: 'range at 50 cm' } },
 			at('experiments', 'act-1'),
 		);
@@ -67,8 +67,8 @@ describe('the lab SQL resource', () => {
 		);
 		expect(shown).toContain('| sensing | range at 50 cm | experiments | sensing | act-1 |');
 		await expect(
-			call('record', { table: 'projects', values: { name: 'x', goal: 'y' } }, at('design', 'a')),
-		).rejects.toThrow(/does not accept records/);
+			call('insert', { table: 'projects', values: { name: 'x', goal: 'y' } }, at('design', 'a')),
+		).rejects.toThrow(/does not accept inserts/);
 	});
 
 	it('opens the lab database beside the journal database and seeds the projects', async () => {
