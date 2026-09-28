@@ -262,9 +262,17 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		expect(stored).toHaveLength(1);
 		expect(stored[0]).toMatchObject({ refs: ['https://x/a'] });
 
-		const later = await world.say('after-key', 'Check later.', { after: 600 });
+		// A scheduled say lands past what its author has not read, and names it.
+		const behind = { after: 600, readThrough: world.first };
+		const later = await world.say('after-key', 'Check later.', behind);
 		expect(later).toMatchObject({ committed: { after: 600, owner: person.name } });
-		expect(await world.say('after-key', 'Check later.', { after: 600 })).toEqual(later);
+		const unread = 'unread' in later ? (later.unread ?? []) : [];
+		expect(unread.map((message) => (message.kind === 'said' ? message.text : ''))).toEqual([
+			'An answer.',
+			'Original text.',
+			'An answer.',
+		]);
+		expect(await world.say('after-key', 'Check later.', behind)).toEqual(later);
 		expect(await world.say('after-key', 'Check later.', { after: 900 })).toEqual(
 			differentOperation,
 		);

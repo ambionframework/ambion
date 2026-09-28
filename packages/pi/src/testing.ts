@@ -84,6 +84,8 @@ export const callTool = (tool: string, args: JsonObject) =>
 
 export const speak = (text: string, to?: string) => callTool('say', to ? { to, text } : { text });
 
+export const later = (text: string, after: number) => callTool('schedule', { text, after });
+
 export const quiet = (thought = 'nothing to add') =>
 	fauxAssistantMessage(thought, { stopReason: 'stop' });
 

@@ -399,15 +399,39 @@ describe('a scheduled say', () => {
 		});
 	});
 
+	it('takes a scheduled say at any read position, and refuses an ordinary say that missed a message', () => {
+		const state = answering();
+		const commit = (readThrough: number | undefined, intent: CommitRequest['intent']) =>
+			decide(
+				state,
+				{
+					type: 'commit',
+					commit: {
+						activation: 'message:3:product:1',
+						key: 'say',
+						...(readThrough === undefined ? {} : { readThrough }),
+						intent,
+					},
+					schedule,
+				},
+				now,
+			);
+		expect(commit(undefined, later())).toHaveProperty('event');
+		expect(commit(state.lastSeq - 1, later())).toHaveProperty('event');
+		expect(commit(state.lastSeq - 1, { kind: 'said', text: 'Hi.' })).toMatchObject({
+			refusal: { category: 'missed' },
+		});
+	});
+
 	it.each([
-		['to another seat', answering(), later('writer'), /goes to yourself/],
-		['to a person', answering(), later('priya'), /goes to yourself/],
-		['to the room', answering(), { kind: 'said', text: 'Hi.', after: 600 } as const, /yourself/],
+		['to another seat', answering(), later('writer'), /goes to its author/],
+		['to a person', answering(), later('priya'), /goes to its author/],
+		['to the room', answering(), { kind: 'said', text: 'Hi.', after: 600 } as const, /author/],
 		[
 			'to oneself with no after',
 			answering(),
 			{ kind: 'said', to: 'product', text: 'Hi.' } as const,
-			/cannot address yourself.*`after`/,
+			/cannot address yourself.*`schedule`/,
 		],
 		['under the least after', answering(), later('product', 59), /from 60 to 3600 seconds/],
 		['over the most after', answering(), later('product', 3_601), /from 60 to 3600 seconds/],

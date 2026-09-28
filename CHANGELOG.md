@@ -45,6 +45,16 @@ skill the same way. See [Skills](docs/skills.md).
 
 ### Breaking changes
 
+- **`schedule` is a room tool, and `say` has no `after`.** An agent calls
+  `schedule` with `{ after, text, refs? }` to come back to its work. The
+  tool writes the same `said` entry with `to` and `after` as before, so
+  the journal format does not change. An agent tool named `schedule` gets
+  a refusal. The hosting entry exports `SCHEDULE`. The process note and
+  the guidance of the process tools name `schedule`.
+- **The room takes a scheduled say at any read position.** A scheduled
+  say never gets a `missed` answer. A `committed` answer to it lists in
+  `unread` the messages after its `readThrough` and before the say. The
+  `schedule` tool result shows them.
 - **`fromDirectory` moves to the root entry of `@ambionframework/workspace`.**
   `@ambionframework/workspace/git` no longer exports it.
   `TemplateSource` and `TemplateFiles` become `FileSource` and

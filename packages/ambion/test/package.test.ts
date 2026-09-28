@@ -76,6 +76,7 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'PERMANENT_STATUS',
 		'REMINDER_TIMEOUT_MS',
 		'SAY',
+		'SCHEDULE',
 		'SEAT',
 		'UNSEAT',
 		'agentTools',

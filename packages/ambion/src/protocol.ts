@@ -185,7 +185,14 @@ export interface CommitRequest {
  * when no attempt confirms.
  */
 export type CommitResult =
-	| { committed: Message }
+	| {
+			committed: Message;
+			/**
+			 * The messages a scheduled say landed past: after its `readThrough` and
+			 * before the say. The room takes a scheduled say at any position.
+			 */
+			unread?: Message[];
+	  }
 	| { unchanged: Unchanged }
 	| { missed: Message[] }
 	| { refused: string }
