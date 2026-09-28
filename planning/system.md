@@ -6,87 +6,50 @@
 
 **The change in four points.**
 
-1. **The system is the author of every message that the room's clock or the
-   host writes.** It has no seat and no visit. It already writes returned
-   says, host seatings, and host dismissals, with no `from`.
-2. **The host posts a message as the system.** `room.post` writes a
-   `posted` entry. A host no longer defines a fake person to wake a seat.
-3. **The system owns the exchange that its message opens.** A posted
-   message and a returned say open an exchange with no owner.
-4. **A summary goes to the people that the exchange involved.** These are
-   the owner, each person who spoke, and each person that a seat
-   addressed.
+1. **The host posts a message.** `room.post` writes a `posted` entry with
+   no author. A host no longer defines a fake person to wake a seat.
+2. **The system owns what it starts.** A posted message and a returned say
+   open an exchange with no owner. The host gets a handle, a usage, and an
+   outcome for the work.
+3. **A scheduled say carries no owner.** A seat schedules from any response
+   activation, and a returned say opens an exchange of the system.
+4. **An exchange of the system owes no summary.** Every summary rule reads
+   an exchange that a person opened, as today.
 
 ## The problem
 
 **A host notification needs a fake person.**
 [Processes](../docs/processes.md#a-host-can-wake-the-owner-seat) tells a
 host to call `defineHuman({ name: 'lab' })` and send through
-`room.visit(lab)`. The room then treats `lab` as a person in every rule:
+`room.visit(lab)`. The room then applies each rule for people to `lab`:
 
-| Rule that reads people                  | What `lab` causes                                                                           | Code                         |
-| --------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------- |
-| An arrival is a message                 | An `arrived` entry wakes each seat at `presence` attention                                  | `room-host/people.ts`        |
-| A stop records who was present          | Each stop writes `left`, and each run writes `arrived` again                                | `room-host/people.ts:313`    |
-| The people list of each activation      | Each seat reads `lab (present, has not seen the last N messages)`                           | `execution/render.ts:258`    |
-| A person's message opens an exchange    | `lab` owns the exchange                                                                     | `room/rules.verified.ts:710` |
-| The owner of an exchange gets a summary | A closing activation writes a summary for `lab`, and it replaces the range in agent context | `room/reconcile.ts:246`      |
-| The opening message is human direction  | The prompt states that the notification is "the current human direction"                    | `execution/render.ts:495`    |
+| Rule                                    | What `lab` causes                                                                                              | Code                         |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| A stop records who was present          | Each stop writes `left`, and each run writes `arrived` again                                                   | `room-host/people.ts:309`    |
+| An arrival is a message                 | Each `arrived` entry wakes the seats at `presence` attention                                                   | `room/routing.ts:38`         |
+| Each activation lists the people        | Each seat reads `lab (present, has not seen the last N messages)`                                              | `execution/render.ts:258`    |
+| A person's message opens an exchange    | `lab` owns the exchange                                                                                        | `room/rules.verified.ts:710` |
+| The owner of an exchange gets a summary | When `summary` names a seated agent, a closing activation writes for `lab`, and the summary replaces the range | `room/reconcile.ts:246`      |
+| The opening message directs the work    | The prompt calls the notification "the current human direction"                                                | `execution/render.ts:495`    |
 
-**A scheduled say belongs to a person.** The room stamps the owner of the
+**A scheduled say belongs to a person.** `ownerOf` stamps the owner of the
 open exchange on a scheduled say, and the returned say opens an exchange
-for that owner. A seat that schedules again from a returned say keeps the
-same owner. A monitor that returns each ten minutes thus opens an exchange
-for one person each ten minutes. Each close assigns a closing activation
-and a summary to that person, who can be absent for weeks.
-`state.people` keeps absent people, so nothing stops the loop.
-
-```mermaid
-sequenceDiagram
-    participant P as priya
-    participant R as room
-    participant W as monitor
-    P->>R: question (seq 4) opens exchange 4, owner priya
-    W->>R: schedule, after 600 (owner priya)
-    R-->>R: close, summary to priya
-    loop each 600 seconds
-        R->>W: returned say opens an exchange, owner priya
-        W->>R: schedule, after 600 (owner priya)
-        R-->>R: close, summary to priya
-    end
-```
+for that owner. A seat that schedules again keeps the owner. A monitor
+that returns each ten minutes opens an exchange for one person each ten
+minutes, and each close owes that person a summary. `state.people` keeps
+absent people, so the loop runs for weeks after the person leaves.
 
 **A seat cannot schedule outside a person's exchange.** `scheduleRefusal`
-refuses a scheduled say when no exchange is open, because no person owns
-the work.
-
-**The record already holds the system.** A returned say, a host seating,
-and a host dismissal carry no `from`. The `ReturnedMessage` type states
-that the room wrote it and that the room is not a participant. The
-condition at `room/reconcile.ts:246` assigns a summary only when the owner
-is a person, and no record today makes it false. The system writes to the
-record. It cannot speak, and it cannot own work.
+refuses a scheduled say when no exchange is open.
 
 ## The proposal
-
-### The system
-
-**The system is the room's clock and its host.** It writes the `returned`
-entries of the clock and the `posted`, seating, and dismissal entries of
-the host. An entry of the system has no `from`. The system has no seat, no
-visit, no presence, and no identity on the roster. A seat cannot address
-it, because it has no name on the record.
-
-**The render names it `system`.** `defineAgent` and `defineHuman` refuse
-the name `system`, so no participant reads as the system.
 
 ### A posted message
 
 **The host posts with `room.post`.** The call takes
-`{ to?, text, refs?, key?, source? }` and returns an `ExchangeHandle`.
-`key` is the delivery key of a visit send, with the same retry rule.
-`source` is a short label that the host chooses, such as `ci` or `lab`.
-The room stores `source` and never reads it.
+`{ to?, text, refs?, key? }` and returns an `ExchangeHandle`. The room
+applies `limits.message.bytes` and the ref rules. The host puts a label,
+such as `ci:`, in the text.
 
 ```ts
 workspace.processes.subscribe((event) => {
@@ -95,31 +58,29 @@ workspace.processes.subscribe((event) => {
   room
     .post({
       to: agent,
-      source: 'lab',
-      text: `Process ${name ?? handle} is ${state}. Call status with ${handle} for its output.`,
+      text: `lab: process ${name ?? handle} is ${state}. Call status with ${handle} for its output.`,
       key: `process-ended:${handle}`,
     })
     .catch((error: unknown) => log.error(error));
 });
 ```
 
-**The journal holds the post as a `posted` entry.**
-`{ kind: 'posted', to?, text, refs?, source? }`, with no `from`. The room
-applies the limits of a message: `limits.message.bytes` and the ref rules.
+**The journal holds a `posted` entry.** Its body is
+`{ kind: 'posted', to?, text, refs? }`. The body schema refuses `from`, so
+a seat cannot write one.
 
-**A post routes by its `to`.**
+**A post key has its own space.** `KeySpace` becomes
+`'delivery' | 'commit' | 'post'`, and a post has its own retry matcher. A
+visit send and a post under one key do not collide.
 
-| `to`                              | Reach       | Wakes                                  | Steers            |
-| --------------------------------- | ----------- | -------------------------------------- | ----------------- |
-| A seat                            | `named`     | That seat                              | That seat         |
-| A person                          | `named`     | No seat                                | No seat           |
-| Absent                            | `broadcast` | Each idle seat at `broadcast` or wider | Each seat at work |
-| A `none` seat, or an unknown name | Refused     |                                        |                   |
+**A post routes and steers as a `said` does.**
 
-A directed post steers its target alone, as a returned say does. The
-record shows the post to every seat at its next activation. A post to a
-person wakes no seat, so its exchange closes at the next reconcile with no
-summary. The person reads the post at catch-up.
+| `to`                              | Wakes                                  | Steers                  |
+| --------------------------------- | -------------------------------------- | ----------------------- |
+| A seat                            | That seat                              | Each other seat at work |
+| A person                          | No seat                                | Each seat at work       |
+| Absent                            | Each idle seat at `broadcast` or wider | Each seat at work       |
+| A `none` seat, or an unknown name | Refused                                | Refused                 |
 
 ### The exchange
 
@@ -132,62 +93,87 @@ close and `ExchangeRef` carry no `owner`. A message that lands in an open
 exchange steers work and changes no owner, as today. A person's question
 that lands in an exchange of the system joins it.
 
-**A scheduled say carries no owner.** The `said` entry with `after` and the
-`returned` entry lose `owner`. The render derives the exchange that held
-the scheduled say from the closes, and states it on the opening line:
-`Message 9 is a say you scheduled in exchange 4 of priya.`
+**An exchange of the system keeps each read of an exchange.**
+`waitForClose` gives a webhook handler the end of the work. The closed
+view carries `usage`, the activations, and the `outcome`. Each seat starts
+a fresh harness session in it.
+
+**`awaiting` lists what the system started for a person.**
+`awaitedPerson` treats a message to the owner as the answer. An exchange
+of the system has no owner, so a seat's last message to a person ends it
+as `awaiting` that person. `pendingFor('priya')` lists each report and
+each approval request that waits on priya.
+
+### The summary
+
+**A close owes a summary only when a person owns the exchange.** The
+condition at `room/reconcile.ts:246` already reads this way, and no
+record reaches its other branch today. After the change, each exchange of
+the system takes that branch. The body schema of a close requires `owner`
+when it carries `summary`.
+
+**The summary rules keep their inputs.** `coversExchange`,
+`stampedSummary`, `activationGrant`, the owed index in `room/owed.ts`, and
+the closing purpose in `protocol.ts` read only a close with a writer, and
+that close has an owner. None of their contracts change.
+
+**A returned say that finds nothing costs one activation.** A monitor tick
+that stays silent closes with no summary. A tick that finds news
+addresses the person, and the exchange ends `awaiting` that person.
+
+```mermaid
+sequenceDiagram
+    participant R as room
+    participant W as monitor
+    participant P as priya
+    loop each 600 seconds
+        R->>W: returned say opens an exchange of the system
+        W->>R: schedule, after 600
+        R-->>R: close, no summary
+    end
+    R->>W: returned say opens an exchange of the system
+    W->>P: say: build 412 failed
+    R-->>R: close, outcome awaiting priya
+```
+
+### A scheduled say
+
+**A scheduled say carries `after` and no `owner`.** The `said` entry with
+`after`, the `returned` entry, and `PendingSay` lose `owner`, and `ownerOf`
+goes. `validateSchedule` checks that `after` comes with `to` equal to
+`from`.
 
 **A seat schedules from any response activation.** `scheduleRefusal` loses
 the refusal for no open exchange. The other rules stay: the say goes to
 its author, `after` stays in its bounds, and one seat holds at most
 `pending` says.
 
-### The summary
-
-**One rule names the recipients of every closed exchange.** The recipients
-are the owner when the owner is a person, then each person who spoke in
-the range, then each person that a seat addressed in the range, in the
-order of the record. `recipientsOf` in `room/exchange.ts` holds the rule.
-
-**A close assigns a summary when it has a recipient.** An exchange of the
-system with no recipient assigns no closing activation. A silent monitor
-tick thus costs one activation and no summary.
-
-**The summary of the first recipient completes the assignment.** When the
-owner is a person, the owner is the first recipient, as today.
-
-**`waitForSummary` takes a person.** `waitForSummary(person?)` resolves
-the summary for that person. A handle from `visit.send` defaults to the
-sender. A handle from `room.exchange` defaults to the owner. A handle from
-`room.post` has no default and resolves `undefined` with no person.
-
 ### The prompt
 
-**The render marks each entry of the system.** A post renders as
-`[system/lab → worker] Process build is ended.` The guidance states one
-rule: a message of the system reports an event, and it carries no human
-direction. An exchange of the system opens with
-`The system opened exchange 9 with message 9.` The phrase "the current
-human direction" stays for an exchange that a person opened.
+**The render states the kind of each entry of the system.** A post
+renders as `[posted → worker] lab: process build is ended.` A returned
+say renders as `[returned → worker] <text>`.
 
-**The assistant guidance adds one sentence.** A posted message reports an
-event: route it to the seat whose work it concerns, and address a person
-only when the event changes their work.
+**An exchange of the system opens with its own line.** For a post, the
+prompt reads `The room opened exchange 9 with message 9. A post reports
+an event of the host, and it carries no human direction.` For a returned
+say, it reads `Message 9 is a say you scheduled, and the room returned
+it.` The phrase "the current human direction" stays for an exchange that
+a person opened.
 
 ## What changes on the surface
 
-| Surface             | Today                                                             | Proposed                                             |
-| ------------------- | ----------------------------------------------------------------- | ---------------------------------------------------- |
-| Journal kinds       | `said`, presence, `summary`, `returned`, `dismissed`              | Adds `posted`                                        |
-| `said` with `after` | Carries `after` and `owner`                                       | Carries `after`                                      |
-| `returned`          | Carries `owner`                                                   | No `owner`                                           |
-| Close               | `owner: string`                                                   | `owner?: string`                                     |
-| `ExchangeRef.owner` | `string`                                                          | `string \| undefined`                                |
-| `PendingSay.owner`  | `string`                                                          | Removed                                              |
-| Room handle         | `visit`, `dismiss`, `seat`, `unseat`                              | Adds `post`                                          |
-| `ExchangeHandle`    | `waitForSummary()`                                                | `waitForSummary(person?)`                            |
-| Names               | Any                                                               | `system` refused                                     |
-| Verified rules      | `opensExchange` reads `people.includes(owner)` for a returned say | `opensExchange` admits `posted` and every `returned` |
+| Surface                                   | Today                                                | Proposed                                              |
+| ----------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------- |
+| Journal kinds                             | `said`, presence, `summary`, `returned`, `dismissed` | Adds `posted`                                         |
+| `said` with `after`                       | Carries `after` and `owner`                          | Carries `after`                                       |
+| `returned`, `PendingSay`                  | Carry `owner`                                        | No `owner`                                            |
+| Close                                     | `owner: string`                                      | `owner?: string`, required with `summary`             |
+| `ExchangeRef.owner`, `ctx.exchange.owner` | `string`                                             | `string \| undefined`                                 |
+| Room handle                               | `visit`, `dismiss`, `seat`, `unseat`                 | Adds `post`, also on the Cloudflare room object       |
+| `KeySpace`                                | `delivery`, `commit`                                 | Adds `post`                                           |
+| `opensExchange`                           | A person's `said`, a `returned` for a person         | A person's `said`, every `posted`, every `returned`   |
+| `admitsClose`                             | Compares `owner` as a string                         | Compares an optional `owner`; the contract text stays |
 
 The golden journals, the export snapshot, and the body schemas change in
 the same commit. The changelog names each change. No reader for the old
@@ -195,102 +181,108 @@ bodies is added.
 
 ## Consequences
 
-**`awaiting` becomes the inbox of a person.** An exchange of the system has
-no owner, so each message of a seat to a person can end it as `awaiting`.
-A monitor that tells priya that a build failed leaves the exchange
-`awaiting` priya until she speaks. `pendingFor('priya')` lists every such
-exchange. The kernel does not tell a question from a report, as today.
+**An undirected post wakes each seat at `broadcast`.** Each wake costs one
+activation. The assistant sits at `broadcast`. The processes page directs
+each post.
 
-**A person's question can join an exchange of the system.** The person
-becomes a recipient and gets a summary. `waitForSummary()` on the send
-handle resolves that summary. The person does not become the owner.
-
-**An undirected post costs one activation for each seat at `broadcast`.**
-The assistant is at `broadcast`. The processes page directs each post.
-
-**A host can build a loop.** A seat acts, a webhook fires, the host posts,
-and the seat acts again. Each post steers work, so the exchange can stay
-open. [Exchange](../docs/exchange.md#9-a-gap-the-room-has) states the gap
-today. The key of each post stops a repeated delivery, and it does not
-stop a loop. The host owns its rate.
+**A person's question in an exchange of the system gets no summary.** The
+seats answer the person directly. `waitForSummary()` on the send handle
+resolves `undefined`, as it does in a room with no summary writer. The
+answer to the person ends the exchange `awaiting` that person until the
+person speaks again.
 
 **Silent exchanges stay in agent context.** A monitor that ticks each ten
 minutes for a week writes about 1,000 returned says, and no summary folds
 them. `limits.context.messages` and `activationTokenLimit` bound the view.
 Today each tick costs a closing activation and folds into a summary.
 
-## The obligations it removes
+**A host can build a loop.** A seat acts, a webhook fires, the host posts,
+and the seat acts again. Each post steers work, so the exchange can stay
+open. [Exchange](../docs/exchange.md#9-a-gap-the-room-has) states this gap
+today. The key of a post stops a repeated delivery, and it does not stop
+a loop. The host owns its rate.
 
-| Removed                                                               | Added                                      |
-| --------------------------------------------------------------------- | ------------------------------------------ |
-| The fake person in the processes page and in each host                | The `posted` kind and `room.post`          |
-| Its arrival, departure, roster line, and summary on each notification | The render label and one guidance sentence |
-| `owner` on a scheduled say, on a returned say, and on `PendingSay`    | An optional `owner` on a close             |
-| The refusal for a schedule with no open exchange                      | The addressed people in `recipientsOf`     |
-| The summary loop of a self-scheduling seat                            | The person argument of `waitForSummary`    |
-| The person check on the owner of a returned say in `opensExchange`    | The reserved name `system`                 |
-| A branch in `reconcile.ts` that no record reaches                     |                                            |
+## The obligations
+
+| Removed                                                         | Added                                               |
+| --------------------------------------------------------------- | --------------------------------------------------- |
+| The fake person in the processes page and in each host          | The `posted` kind, its schema, and `room.post`      |
+| Its arrival, departure, roster line, and summary on each post   | The `post` key space and its retry matcher          |
+| `owner` on a scheduled say, a returned say, and `PendingSay`    | An optional `owner` on a close and on `ExchangeRef` |
+| `ownerOf`, and the pairing of `after` and `owner` in the schema | The opening line for an exchange of the system      |
+| The refusal for a schedule with no open exchange                | `admitsClose` over an optional `owner`              |
+| The person check on a returned say in `opensExchange`           |                                                     |
+| The summary loop of a self-scheduling seat                      |                                                     |
 
 ## Alternatives rejected
 
 - **A flag on `defineHuman`, such as `automated: true`.** The flag keeps
-  the visit, the presence, and the stop entries, and each rule that reads
-  people needs a second test for the flag.
-- **Named system participants through a `defineSystem`.** Names need a
-  registry, a composition entry, and a namespace. The `source` label gives
-  the render the same name and adds no rule.
-- **One kind for `posted` and `returned`.** A returned say holds the text
-  of a seat, and a post holds the text of the host. The render and the
-  trust table state each one differently, so each keeps its kind.
+  the visit, the presence, and the stop entries, and each rule for people
+  needs a second test for the flag.
+- **A `said` with no `from`.** Each reader of `said` then reads an
+  optional author: `routing.ts`, `exchange.ts`, and `people.ts`. A kind of
+  its own costs less.
+- **One kind for `posted` and `returned`.** A returned say names its
+  scheduled say, and the fold drops that say when it lands. A post has no
+  such link.
+- **A post and a returned say open no exchange.** The work then has no
+  handle, no usage, no outcome, and no `awaiting`. An active room expects
+  work that the system starts, and the host needs to measure it.
+- **A summary for each person that an exchange of the system involved.**
+  The summary rules then read an owner that the record derives from the
+  spoken range. The owed index, four proofs, and the protocol change. A
+  seat that addresses a person already writes the report.
 - **The first person who speaks becomes the owner.** The owner then
-  changes inside an open exchange. The fold and the proof of
-  `openingQuestion` fix the owner at the opening message.
-- **A returned say keeps the owner of the exchange that scheduled it.** The
-  summary loop stays. The seat addresses the person when it has news,
-  and the recipient rule then gives that person a summary.
+  changes inside an open exchange. The proof of `openingQuestion` fixes
+  the owner at the opening message.
+- **A `source` field and a reserved name `system`.** The room never reads
+  either. A label in the text serves a reader.
 
 ## Out of scope
 
 **These wait in the [backlog](backlog.md) with their conditions.**
 
-- **A post with `after`.** The host sets a clock on the journal, and the
-  room posts when it is due. **Condition:** a host that loses a reminder
-  across a restart.
-- **A fold of silent exchanges out of the view.** A closed exchange of the
-  system with no spoken message leaves the view, and `recall` still reads
-  it. **Condition:** a measured context cost from a self-scheduling seat.
-- **Posts in `simulate()`.** A scenario posts an event during an exchange.
-  **Condition:** a simulator case that needs one.
+- **A summary for a person who spoke in an exchange of the system.**
+  **Condition:** a host whose people ask while the system works, and who
+  need the summary.
+- **An answer to a person who spoke clears `awaiting`.** The rule
+  generalizes the answer to the owner. **Condition:** a host whose
+  `pendingFor` lists questions that the seats answered.
+- **A fold of silent exchanges out of the view.** **Condition:** a
+  measured context cost from a self-scheduling seat.
+- **A post with `after`.** The host sets a clock on the journal.
+  **Condition:** a host that loses a reminder across a restart.
+- **Posts in `simulate()`.** **Condition:** a simulator case that needs
+  one.
 
 ## Evidence
 
 **The change lands with its evidence or stays open.**
 
-- `scheduled-say.test.ts`: a returned say opens an exchange with no owner,
-  a seat schedules with no open exchange, and a silent tick assigns no
-  summary.
+- `scheduled-say.test.ts`: a returned say opens an exchange of the system,
+  a seat schedules with no exchange open, and a silent tick closes with
+  no summary.
 - `exchange-completion.test.ts`: a post opens an exchange of the system, a
-  post joins an open exchange and keeps its owner, and a person's question
-  joins an exchange of the system.
-- `summary.test.ts`: the recipients include each addressed person, and the
-  first recipient completes the assignment.
-- `exchange-outcome.test.ts`: a message of a seat to a person ends an
-  exchange of the system as `awaiting`.
+  post joins an open exchange and keeps its owner, a person's question
+  joins an exchange of the system, and `waitForClose` on a post handle
+  returns the range.
+- `exchange-outcome.test.ts`: a seat's message to a person ends an
+  exchange of the system as `awaiting`, and `pendingFor` lists it.
 - `transition.test.ts` and `journal-validation.test.ts`: the refusals of a
-  post, the schema of `posted`, and the refusal of `owner` on a returned
-  say.
-- `golden.test.ts` and `package.test.ts`: the new bodies and exports.
+  post, the `posted` schema, a close with `summary` and no `owner`, and
+  `owner` on a returned say.
+- `golden.test.ts`, `package.test.ts`, and the prompt snapshot.
 - `pnpm rule:check packages/ambion/src/room/rules.verified.ts` for
-  `opensExchange` and `openingQuestion`.
+  `opensExchange`, `openingQuestion`, and `admitsClose`.
 - `pnpm check`, `pnpm chaos` on both storages, and the Cloudflare tests in
   workerd.
-- One live file on the assistant: a post opens an exchange, the assistant
-  routes it, and the specialist addresses the person.
+- One live file on the assistant: a post wakes a seat, and the seat
+  reports to a person.
 
 ## Placement
 
-**The change fits the theme of 0.4.0.** It removes a second path to a
-notification and three `owner` fields, and it adds one kind. It needs
-[C4](next.md#the-items): `decide` then builds the `posted` body beside the
-others. The proposal is phase 2 step 9, after step 1. The owner decides
-between that step and the backlog.
+**The change fits the theme of 0.4.0.** It removes the fake person, three
+`owner` fields, and a refusal, and it adds one kind. It is phase 2
+step 9. It needs step 1 (C4), so `decide` builds the `posted` body, and
+step 2 (C2), so the proof edit of `admitsClose` joins that re-proof. The
+owner decides between that step and the backlog.
