@@ -21,7 +21,6 @@ const composition: Entry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
-		version: 2,
 		agents: [{ name: 'worker', identity: 'Worker.', attention: 'broadcast' }],
 		available: [{ name: 'writer', identity: 'Writer.', attention: 'broadcast' }],
 		at,

@@ -67,7 +67,7 @@ every activation from its opening question to its durable close. See
 
 ## Membership and people
 
-`startRoom` writes a version 2 composition and starts the room. `seats` names
+`startRoom` writes a composition and starts the room. `seats` names
 the initial members and their attention. If `seats` is omitted, every defined
 agent starts as a member with `broadcast` attention. An empty map starts all
 defined agents in the reserve.
@@ -156,11 +156,6 @@ does not acknowledge that context. The next contribution must report what the
 activation consumed.
 
 ## History and limits
-
-Composition entries use version 2. The room rejects legacy compositions and
-does not reinterpret old assistant definitions or opening activation ids.
-Start a new journal, or migrate the history outside Ambion, before you resume
-it.
 
 A seat keeps its harness session for one exchange.
 [Exchange continuity](executors.md#exchange-continuity) states the rule.

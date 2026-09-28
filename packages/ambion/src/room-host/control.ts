@@ -46,8 +46,8 @@ export interface ControlHost extends RoomBase {
 	release(): void;
 	assertRunning(): void;
 	sendWake(id: string, seat: string): void;
+	/** Wake each caller that waits on an exchange. */
 	notifyExchangeWaiters(): void;
-	rejectExchangeWaiters(error: Error): void;
 	leaveEverybody(): Promise<void>;
 }
 
@@ -255,15 +255,11 @@ async function onePass(host: ControlHost): Promise<boolean> {
 	try {
 		changed = await apply(host, decision);
 	} catch {
-		host.notifyExchangeWaiters();
 		// A write that failed because the room is gone arms nothing.
 		if (!host.gone()) arm(host, host.now() + host.runtime.limits.delivery.resend);
 		return true;
 	}
 	if (changed) return false;
-	// Whoever waits hears it once the room has nothing more to write: a
-	// pass that expired a lease is followed by the pass that closes.
-	host.notifyExchangeWaiters();
 	arm(host, decision.effects.alarmAt);
 	return true;
 }
@@ -438,6 +434,7 @@ export async function stopRun(host: ControlHost): Promise<void> {
 		// The name comes free whatever the storage did. A failed write must
 		// not leave a room that can never be started again.
 		host.release();
-		host.rejectExchangeWaiters(new AmbionError('room_stopped', `Room '${host.name}' was stopped.`));
+		// The room is gone: each caller that waits looks once more, and stops.
+		host.notifyExchangeWaiters();
 	}
 }

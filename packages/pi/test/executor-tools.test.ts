@@ -308,7 +308,6 @@ describe('executor tool authority', () => {
 				kind: 'composition',
 				seq: 1,
 				body: {
-					version: 2,
 					summary: 'worker',
 					agents: [
 						{ name: 'worker', identity: 'A.', attention: 'broadcast' },

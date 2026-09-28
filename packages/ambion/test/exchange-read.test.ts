@@ -27,7 +27,6 @@ const record: readonly Written[] = [
 	entry(
 		'composition',
 		{
-			version: 2,
 			goal: 'Keep the record coherent.',
 			agents: [{ name: 'assistant', identity: 'Assistant.', attention: 'none' }],
 			available: [],

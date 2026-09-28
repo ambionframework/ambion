@@ -2,6 +2,7 @@ import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { pi, piExecution } from '../../pi/src/index.ts';
+import { captureHuman } from '../src/define.ts';
 import { renderRecord } from '../src/execution/render.ts';
 import type { AgentDefinition } from '../src/index.ts';
 import {
@@ -1036,9 +1037,18 @@ describe('defineHuman', () => {
 			'Lead with the decision she has to make. Leave out who said what.',
 		);
 		expect(dan.preferences).toBeUndefined();
+	});
+
+	it.each([
+		['defineHuman', defineHuman],
+		['captureHuman', captureHuman],
+	])('%s trims preferences, and drops a blank', (_, capture) => {
 		expect(
-			defineHuman({ name: 'eve', identity: 'Eve.', preferences: '   ' }).preferences,
+			capture({ name: 'eve', identity: 'Eve.', preferences: '   ' }).preferences,
 		).toBeUndefined();
+		expect(capture({ name: 'eve', identity: 'Eve.', preferences: ' Short. ' }).preferences).toBe(
+			'Short.',
+		);
 	});
 });
 

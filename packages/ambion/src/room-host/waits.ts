@@ -1,7 +1,8 @@
 /**
  * Exchange handles and the callers that wait on them. A handle waits for
- * the close of its exchange and for the summary. The room wakes the waiters
- * after every change to the durable state.
+ * the close of its exchange and for the summary. Both run one loop over one
+ * registry, and the room wakes the registry after each publication and at
+ * the end of the run.
  */
 
 import { AmbionError } from '../errors.ts';
@@ -26,16 +27,10 @@ export interface ExchangeHandle extends ExchangeRef {
 	waitForSummary(): Promise<SummaryMessage | undefined>;
 }
 
-/** What the waiters need of the room: the two registries of callers. */
+/** What the waiters need of the room: the registry of callers. */
 export interface WaitsHost extends RoomBase {
-	readonly closeWaiters: Map<
-		Seq,
-		Array<{
-			resolve: (close: ClosedExchange) => void;
-			reject: (error: Error) => void;
-		}>
-	>;
-	readonly responseWaiters: Set<() => void>;
+	/** Each caller that waits for a fact the state does not hold yet. A wake empties it. */
+	readonly waiters: Set<() => void>;
 }
 
 /** Reacquire an exchange by the source sequence of its opening question. */
@@ -87,17 +82,24 @@ function closedFor(host: WaitsHost, from: Seq): ClosedExchange | undefined {
 	return closedExchange(close, state.messages);
 }
 
-async function waitForClose(host: WaitsHost, from: Seq): Promise<ClosedExchange> {
+/**
+ * Look for a fact on the state until it is there. Each wake looks again, and
+ * a room that answers nothing more ends the wait with the `stopped` message.
+ */
+async function until<T>(host: WaitsHost, find: () => T | undefined, stopped: string): Promise<T> {
 	await host.ready;
-	const closed = closedFor(host, from);
-	if (closed !== undefined) return closed;
-	if (host.gone())
-		throw new AmbionError('room_stopped', `Exchange '${from}' was stopped or interrupted.`);
-	return new Promise((resolve, reject) => {
-		const waiters = host.closeWaiters.get(from) ?? [];
-		waiters.push({ resolve, reject });
-		host.closeWaiters.set(from, waiters);
-	});
+	for (;;) {
+		const found = find();
+		if (found !== undefined) return found;
+		if (host.gone()) throw new AmbionError('room_stopped', stopped);
+		await new Promise<void>((resolve) => {
+			host.waiters.add(resolve);
+		});
+	}
+}
+
+function waitForClose(host: WaitsHost, from: Seq): Promise<ClosedExchange> {
+	return until(host, () => closedFor(host, from), `Exchange '${from}' was stopped or interrupted.`);
 }
 
 async function exchangeMessages(host: WaitsHost, from: Seq): Promise<Message[]> {
@@ -107,20 +109,17 @@ async function exchangeMessages(host: WaitsHost, from: Seq): Promise<Message[]> 
 
 async function responseFor(host: WaitsHost, from: Seq): Promise<SummaryMessage | undefined> {
 	const close = await waitForClose(host, from);
-	for (;;) {
-		const result = responseResult(host, close);
-		if (result === 'silent') return undefined;
-		if (result !== 'pending' && result !== 'failed') return copyMessage(result);
-		if (result === 'failed') throw new Error(`Exchange '${from}' summary work was interrupted.`);
-		if (host.gone())
-			throw new AmbionError(
-				'room_stopped',
-				`Exchange '${from}' summary work was stopped or interrupted.`,
-			);
-		await new Promise<void>((resolve) => {
-			host.responseWaiters.add(resolve);
-		});
-	}
+	const { result } = await until(
+		host,
+		() => {
+			const result = responseResult(host, close);
+			return result === 'pending' ? undefined : { result };
+		},
+		`Exchange '${from}' summary work was stopped or interrupted.`,
+	);
+	if (result === 'silent') return undefined;
+	if (result === 'failed') throw new Error(`Exchange '${from}' summary work was interrupted.`);
+	return copyMessage(result);
 }
 
 function responseResult(
@@ -139,24 +138,9 @@ function responseResult(
 	return completion.status === 'published' ? completion.summary : completion.status;
 }
 
+/** Wake every caller that waits. Each looks at the state again. */
 export function notifyExchangeWaiters(host: WaitsHost): void {
-	for (const [from, waiters] of host.closeWaiters) {
-		const closed = closedFor(host, from);
-		if (closed === undefined) continue;
-		host.closeWaiters.delete(from);
-		for (const waiter of waiters) waiter.resolve(closed);
-	}
-	const responseWaiters = [...host.responseWaiters];
-	host.responseWaiters.clear();
-	for (const resolve of responseWaiters) resolve();
-}
-
-export function rejectExchangeWaiters(host: WaitsHost, error: Error): void {
-	for (const [from, waiters] of host.closeWaiters) {
-		host.closeWaiters.delete(from);
-		for (const waiter of waiters) waiter.reject(error);
-	}
-	const responseWaiters = [...host.responseWaiters];
-	host.responseWaiters.clear();
-	for (const resolve of responseWaiters) resolve();
+	const waiters = [...host.waiters];
+	host.waiters.clear();
+	for (const resolve of waiters) resolve();
 }

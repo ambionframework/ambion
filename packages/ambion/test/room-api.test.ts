@@ -22,6 +22,7 @@ import {
 	messagesOf,
 	roomName,
 	scriptedAgent,
+	tick,
 	waitForRoom,
 } from './support/room.ts';
 import {
@@ -272,12 +273,23 @@ describe('the room API', () => {
 		expect(await retry.waitForClose()).toEqual(firstConversation);
 	});
 
-	it('rejects the waits of an exchange when the room stops before close', async () => {
+	it.each([
+		['stops', (_runtime: Runtime, room: Room) => room.stop()],
+		['is evicted', (runtime: Runtime, room: Room) => crash(runtime, room)],
+	] as const)('rejects the waits of an exchange when the room %s before close', async (_, end) => {
 		const held = deferred();
-		const { room } = await world(heldBy(held.promise));
+		const { runtime, room } = await world(async () => {
+			await held.promise;
+			return quiet();
+		});
 		const exchange = await (await room.visit(priya)).send({ text: 'Hold?', key: 'stop-1' });
-		await room.stop();
+		// A caller that waits before the end hears it; a caller that asks after it is refused.
+		const before = [exchange.waitForClose(), exchange.waitForSummary()];
+		for (const wait of before) wait.catch(() => {});
+		await tick();
+		await end(runtime, room);
 		held.resolve();
+		for (const wait of before) await expect(wait).rejects.toEqual(refusal('room_stopped'));
 		await expect(exchange.waitForClose()).rejects.toThrow(/stopped|ended/i);
 		await expect(exchange.waitForClose()).rejects.toEqual(refusal('room_stopped'));
 		await expect(exchange.waitForSummary()).rejects.toThrow(/stopped|ended/i);

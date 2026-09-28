@@ -149,7 +149,6 @@ const schemas: Record<Kind, TSchema> = {
 	),
 	composition: Type.Object(
 		{
-			version: Type.Literal(2),
 			goal: Type.Optional(Type.String()),
 			summary: Type.Optional(Type.String()),
 			agents: Type.Array(seating),
@@ -167,7 +166,6 @@ const schemas: Record<Kind, TSchema> = {
 /** Validate a room journal body. Unknown entry kinds stay outside this vocabulary. */
 export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 	if (!Object.hasOwn(schemas, kind)) return false;
-	if (kind === 'composition') validateCompositionVersion(body);
 	if (kind === 'run') validateRunFormat(body);
 	const schema = schemaFor(kind, body);
 	if (!Check(schema, body)) {
@@ -243,21 +241,6 @@ function validateRange(kind: string, range: Record<string, unknown>, path: strin
 	if (from >= 1 && from <= through) return;
 	throw new Error(
 		`Invalid room journal body for kind '${kind}' at ${path}: expected a range from 1 that ends where it starts or later.`,
-	);
-}
-
-function validateCompositionVersion(body: unknown): void {
-	const object = objectBody(body);
-	const version = object?.version;
-	if (object !== undefined && Object.hasOwn(object, 'assistant')) {
-		throw new Error(
-			'Unsupported room composition version (legacy assistant field); expected version 2. Start a new journal or migrate this journal externally.',
-		);
-	}
-	if (version === 2) return;
-	const found = version === undefined ? 'missing' : JSON.stringify(version);
-	throw new Error(
-		`Unsupported room composition version (${found}); expected version 2. Start a new journal or migrate this journal externally.`,
 	);
 }
 

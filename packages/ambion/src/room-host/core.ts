@@ -119,7 +119,6 @@ export function notificationFor(event: RoomNotification): RoomNotification {
 export function compositionOf(cast: CompositionDraft, at: string): Without<Composition, 'seq'> {
 	return {
 		...(cast.goal === undefined ? {} : { goal: cast.goal }),
-		version: 2,
 		...(cast.summary === undefined ? {} : { summary: cast.summary }),
 		agents: cast.definitions
 			.filter((agent) => cast.seats.has(agent.name))

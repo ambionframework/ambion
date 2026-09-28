@@ -72,7 +72,6 @@ describe('room journal body validation', () => {
 		[
 			'composition',
 			{
-				version: 2,
 				goal: 'Draft the weekly.',
 				summary: 'assistant',
 				agents: [seating],
@@ -151,7 +150,7 @@ describe('room journal body validation', () => {
 		['close', { owner: 'a', from: 1, through: 2.5, at: 'now' }, 'body.through'],
 		[
 			'composition',
-			{ version: 2, agents: [{ ...seating, attention: 'sometimes' }], available: [], at: 'now' },
+			{ agents: [{ ...seating, attention: 'sometimes' }], available: [], at: 'now' },
 			'body.agents[0].attention',
 		],
 		['run', { at: 7 }, 'body.at'],
@@ -159,18 +158,6 @@ describe('room journal body validation', () => {
 	] as const)('reports the kind and the path of a malformed %s body at %s', (kind, body, path) => {
 		const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 		expect(() => validateRoomBody(kind, body)).toThrow(new RegExp(`kind '${kind}'.*${escaped}`));
-	});
-
-	it('rejects old or missing composition versions with an explicit migration boundary', () => {
-		for (const body of [
-			{ agents: [], available: [], at },
-			{ version: 1, agents: [], available: [], at },
-			{ version: 2, assistant: 'legacy', agents: [], available: [], at },
-		]) {
-			expect(() => validateRoomBody('composition', body)).toThrow(
-				/unsupported room composition version.*version 2.*new journal.*externally/i,
-			);
-		}
 	});
 
 	it('refuses a run entry with a format other than 1', () => {

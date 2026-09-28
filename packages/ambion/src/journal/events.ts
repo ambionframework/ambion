@@ -67,7 +67,6 @@ export interface Seating {
 
 /** What a run started with. The roster folds from the latest one. */
 export interface Composition {
-	version: 2;
 	goal?: string;
 	/** The configured agent that writes summaries for human owners. */
 	summary?: string;

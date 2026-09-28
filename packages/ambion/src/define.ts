@@ -105,15 +105,9 @@ export function describeExecutor(options: ExecutorOptions): AgentExecutor {
 	});
 }
 
+/** Define an agent. The room captures the definition the same way, so both check and copy alike. */
 export function defineAgent(options: DefineAgentOptions): AgentDefinition {
-	assertName(options.name);
-	assertAgentTools(options.name, options.executor.tools);
-	return Object.freeze({
-		name: options.name,
-		identity: options.identity,
-		executor: options.executor,
-		trace: capturePolicy(options.name, options.trace),
-	});
+	return captureAgent(options);
 }
 
 /** The record-window fields, validated and written only when a limit is set. */
@@ -178,22 +172,19 @@ export interface DefineHumanOptions {
 	preferences?: string;
 }
 
+/** Define a person. The room captures the definition the same way, so both check and trim alike. */
 export function defineHuman(options: DefineHumanOptions): HumanDefinition {
-	assertName(options.name);
-	const preferences = options.preferences?.trim() || undefined;
-	return Object.freeze({
-		name: options.name,
-		identity: options.identity,
-		...(preferences === undefined ? {} : { preferences }),
-	});
+	return captureHuman(options);
 }
 
+/** Capture a person at a room boundary. Blank preferences are no preferences. */
 export function captureHuman(human: HumanDefinition): HumanDefinition {
 	assertName(human.name);
+	const preferences = human.preferences?.trim() || undefined;
 	return Object.freeze({
 		name: human.name,
 		identity: human.identity,
-		...(human.preferences === undefined ? {} : { preferences: human.preferences }),
+		...(preferences === undefined ? {} : { preferences }),
 	});
 }
 

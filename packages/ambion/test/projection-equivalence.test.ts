@@ -92,7 +92,6 @@ class Walk {
 			attention: this.pick(['broadcast', 'named', 'presence'] as const),
 		});
 		const body: Composition = {
-			version: 2,
 			seq: 0,
 			at: this.at(),
 			agents: seated.map(seat),

@@ -647,7 +647,6 @@ function invalidProgress(
 }
 
 function compose(state: RoomState, composition: Body<Composition>): RoomDecision<'composition'> {
-	if (composition.version !== 2) return refused('This room requires composition version 2.');
 	if (
 		composition.summary !== undefined &&
 		![...composition.agents, ...composition.available].some(
