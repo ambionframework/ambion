@@ -213,14 +213,9 @@ class Walk {
 		return { kind: 'close', seq: this.seq, body };
 	}
 
+	/** A cancellation closes the exchange it finds open, at the last message before it. */
 	private cancel(): Entry {
-		const range = this.chance(0.5) ? this.range() : undefined;
-		if (range !== undefined) this.lastThrough = range.through;
-		return {
-			kind: 'cancel',
-			seq: this.seq,
-			body: { at: this.at(), ...(range ? { close: range } : {}) },
-		};
+		return { kind: 'cancel', seq: this.seq, body: { at: this.at() } };
 	}
 
 	/** A summary for an earlier close, possibly long after it. */

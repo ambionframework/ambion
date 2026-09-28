@@ -181,21 +181,20 @@ and the process tools. A step names the steps it needs; a step with no
 
 ### Phase 1. The drift
 
-- [ ] **3.** A cancellation has one shape. (C3)
 - [ ] **4.** A seat of an unknown executor kind fails at once, on each
       of the three routers. (C5)
 - [ ] **5.** A composition carries no `version`, one capture serves a
       definition, and one registry serves the waiters. (C9)
 - [ ] **6.** One record for a live process in the table. (C11)
 - [ ] **7.** The body schemas guard the journal, and the format number
-      goes. Needs 3 and 5. (C12)
+      goes. Needs 5. (C12)
 - [ ] **8.** The assistant works a request after its owner leaves. (A1)
 
 **Evidence:** each step keeps `pnpm check` green and holds the coverage
 of each changed package, measured before and after as `CLAUDE.md`
 states. A step that changes a rule runs `pnpm rule:check`. A step that
 changes a journal body updates the golden journals and the export
-snapshot in the same commit, and the changelog names it. Steps 3, 5, and 7
+snapshot in the same commit, and the changelog names it. Steps 5 and 7
 pass `pnpm chaos` and the Cloudflare tests in workerd.
 
 ### Phase 2. The contracts
@@ -205,8 +204,8 @@ Each step states the change to
 page it changes in the same commit.
 
 - [ ] **1.** `decide` builds every journal body and makes every authority
-      decision. Needs phase 1 step 3. (C4)
-- [ ] **2.** One lease shape in the rules. Needs phase 1 step 3. (C2)
+      decision. (C4)
+- [ ] **2.** One lease shape in the rules. (C2)
 - [ ] **3.** The remote call is an `Execution`, and `Transport` goes.
       Needs phase 1 step 4. (C5)
 - [ ] **4.** The room applies the token limit, and the paging of a view
@@ -242,35 +241,14 @@ one lease in four shapes.
 - **The rules read one lease shape.** They read a lease as `Hold`,
   `Taken`, `Draft`, and `LiveLease`, and `takenOf`, `draftsOf`, and
   `liveLeases` convert between them. One `RuleLease` replaces the four.
-  This sub-item re-proves the rules that read them, and it follows the
-  cancelled close of C3, which changes what `Hold` holds. Phase 2 step 2
-  holds it.
+  This sub-item re-proves the rules that read them. Phase 2 step 2 holds
+  it.
 - **The lease `since` takes its name in the same proof edit.**
   [Deferred by decision](backlog.md#deferred-by-decision) holds the name until a
   proof edit renames it, and this sub-item is that edit.
 
 **Evidence:** `pnpm rule:check` on each changed rules file, and
 `pnpm check:lemmascript`.
-
-**C3. One shape for a cancellation.** A `cancel` entry can carry a
-close. That close needs its own schema in `journal/validate.ts`, its own
-branch in the fold and the projection, and the list
-`RoomState.cancelClosed`, which exists only so that `exchangeOutcome` can
-ask whether a cancellation wrote a close. The room also applies a
-cancellation twice: at once through `cancelHold` and an empty wake list,
-and later as a `survivesCancellation` filter in four places. In the
-projection, the filter in `pendingOf` is always true.
-
-- **A close carries `cancelled`.** The cancellation writes a close with
-  `cancelled: true` into `closes`. `cancelClosed` and the second close
-  schema go.
-- **Each fact takes one mechanism.** Wakes and scheduled says drop at
-  the cancellation. A grant keeps the filter, since it reads an id against
-  the whole record.
-
-**Evidence:** the `cancelled` golden journal and its `.fold.json` change
-shape, `pnpm rule:check` on the room rules, `pnpm chaos` on both
-storages, and the Cloudflare tests in workerd.
 
 **C4. `decide` is the one decision point.** The reconcile in
 `transition.ts` builds the bodies of returned says, closes, and lease

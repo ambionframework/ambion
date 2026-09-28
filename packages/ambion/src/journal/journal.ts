@@ -40,7 +40,8 @@ export type Body<T> = Without<T, 'seq' | 'key'>;
 export interface Bodies {
 	message: Body<Message>;
 	lease: LeaseChange;
-	close: Close;
+	/** A close entry is the room's own close. The close a cancellation derives is not an entry. */
+	close: Without<Close, 'cancelled'>;
 	composition: Body<Composition>;
 	run: Fence;
 	cancel: Cancellation;

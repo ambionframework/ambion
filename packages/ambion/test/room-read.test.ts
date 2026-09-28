@@ -57,7 +57,6 @@ function state(
 		people: new Map(),
 		exchange,
 		closes,
-		cancelClosed: [],
 		leases,
 		deliveries: new Map(),
 		due: [],

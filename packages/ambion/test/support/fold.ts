@@ -33,25 +33,24 @@ import {
 import { type Owed, withAttempts } from '../../src/room/owed.ts';
 import { advancePeople, type PersonState } from '../../src/room/presence.ts';
 import { projectState, replay } from '../../src/room/projection.ts';
-import { survivesCancellation } from '../../src/room/rules.verified.ts';
-import {
-	afterCancellation,
-	changesScheduled,
-	type ScheduledSay,
-	scheduleStep,
-} from '../../src/room/scheduled.ts';
+import { changesScheduled, type ScheduledSay, scheduleStep } from '../../src/room/scheduled.ts';
 import type { ExchangeRef, Message, Seq } from '../../src/types.ts';
 
 /** The state after every entry, folded over the whole journal. */
 export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomState {
 	const read = older();
-	for (const entry of entries) applyEvent(read, entry);
+	for (const entry of entries)
+		applyEvent(read, entry, entry.kind === 'cancel' ? open(read) : undefined);
 	return project(read, options);
 }
 
+/** The exchange open over the base facts, read from the whole record. */
+const open = (read: BaseFacts): ExchangeRef | undefined =>
+	openExchange(read.messages, read.closes, [...foldPeople(read.messages).keys()]);
+
 /** Every derived fact, read again from the base facts. */
 export function project(read: BaseFacts, options: FoldOptions): RoomState {
-	const { messages, closes, leases, composition, deliveries, cancelledAt, cancelClosed } = read;
+	const { messages, closes, leases, composition, deliveries, cancelledAt } = read;
 	const people = foldPeople(messages);
 	const roster = foldRoster(composition, messages);
 	const pending = pendingWakes(
@@ -60,7 +59,8 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		leases,
 		new Set(roster.map((s) => s.name)),
 		options,
-	).filter((wake) => survivesCancellation(wake.position, cancelledAt));
+		cancelledAt,
+	);
 	const owed = foldOwed(closes, messages, leases, options, cancelledAt);
 	return {
 		composition,
@@ -70,7 +70,6 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		exchange: openExchange(messages, closes, [...people.keys()]),
 		closes,
 		cancelledAt,
-		cancelClosed,
 		leases,
 		deliveries,
 		due: [...pending, ...owed],
@@ -114,18 +113,23 @@ function openExchange(
 	return exchangeAfter(messages, people, closes.at(-1)?.through ?? 0);
 }
 
-/** The says that wait to return, folded over the whole record. */
+/** The says that wait to return, folded over the record after the last cancellation. */
 function foldScheduled(messages: readonly Message[], cancelledAt: Seq | undefined): ScheduledSay[] {
 	let list: ScheduledSay[] = [];
-	for (const message of messages) {
+	for (const message of after(messages, cancelledAt)) {
 		if (changesScheduled(message)) list = scheduleStep(list, message);
 	}
-	return afterCancellation(list, cancelledAt);
+	return list;
 }
 
+/** The messages after the last cancellation. A cancellation drops the wakes and the says before it. */
+const after = (messages: readonly Message[], cancelledAt: Seq | undefined): Message[] =>
+	messages.filter((message) => message.seq > (cancelledAt ?? 0));
+
 /**
- * Every wake a message decided that no lease has answered, for a seat still
- * on the roster. A seat that left the roster answers no wake.
+ * Every wake a message after the last cancellation decided that no lease
+ * has answered, for a seat still on the roster. A seat that left the roster
+ * answers no wake.
  */
 export function pendingWakes(
 	messages: readonly Message[],
@@ -133,10 +137,11 @@ export function pendingWakes(
 	leases: ReadonlyMap<string, LeaseHold>,
 	roster: ReadonlySet<string>,
 	options: FoldOptions,
+	cancelledAt?: Seq,
 ): PendingWake[] {
 	const bySeat = leasesBySeat(leases, roster);
 	const pending: PendingWake[] = [];
-	for (const message of messages) {
+	for (const message of after(messages, cancelledAt)) {
 		const delivery = deliveries.get(message.seq);
 		if (delivery === undefined) continue;
 		for (const seat of reached(delivery, roster)) {

@@ -132,16 +132,10 @@ function draftsOf(
 		);
 }
 
-/** What the outcome and the recipients of a closed exchange read besides the close itself. */
-export interface OutcomeFacts {
-	/** The people of the room, by name. */
-	readonly people: ReadonlySet<string>;
-	/** The `through` of each close a cancellation wrote. */
-	readonly cancelClosed: readonly Seq[];
-}
-
 /** What one pass over the room shares among its closed exchanges. */
-interface Pass extends OutcomeFacts {
+interface Pass {
+	/** The people of the room, by name. The outcome and the recipients read them. */
+	readonly people: ReadonlySet<string>;
 	messages: readonly Message[];
 	summaries: readonly SummaryMessage[];
 	leases: ReadonlyMap<string, LeaseHold>;
@@ -212,11 +206,7 @@ function exchangeOutcomeOf(
 	exhausted: boolean,
 ): ExchangeOutcome {
 	const person = awaitedPerson(close.owner, range, pass.people, pass.lastSaid);
-	const kind = exchangeOutcome(
-		pass.cancelClosed.includes(close.through),
-		exhausted,
-		person !== undefined,
-	);
+	const kind = exchangeOutcome(close.cancelled === true, exhausted, person !== undefined);
 	// The rule decides. The re-test narrows the TypeScript type only.
 	if (kind === 'awaiting' && person !== undefined) return { kind, person };
 	return { kind: kind === 'awaiting' ? 'complete' : kind };
@@ -358,14 +348,14 @@ export function exchangeViews(
 	open: ExchangeRef | undefined,
 	leases: ReadonlyMap<string, LeaseHold>,
 	cancelledAt: number | undefined,
-	facts: OutcomeFacts,
+	people: ReadonlySet<string>,
 ): ExchangeView[] {
 	const pass: Pass = {
-		...facts,
+		people,
 		messages,
 		summaries: messages.filter(isSummary),
 		leases,
-		lastSaid: lastSaidBy(messages, facts.people),
+		lastSaid: lastSaidBy(messages, people),
 		cancelledAt,
 	};
 	const closed = closes.map((close) => closedExchangeView(close, pass));

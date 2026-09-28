@@ -6,7 +6,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Close } from '../src/journal/events.ts';
 import type { Entry } from '../src/journal/journal.ts';
-import { validateRoomBody } from '../src/journal/validate.ts';
 import { exchangeSession, summaryCompletion } from '../src/room/exchange.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import { pendingFor, readView } from '../src/room/read.ts';
@@ -72,11 +71,7 @@ const running = (seq: number, id: string): Entry => ({
 	seq,
 	body: { id, phase: 'running', expiresAt: Date.parse(cancelledAt) - 1, at, readThrough: 2 },
 });
-const cancel = (seq: number, closes?: Close): Entry => ({
-	kind: 'cancel',
-	seq,
-	body: { at: cancelledAt, ...(closes === undefined ? {} : { close: closes }) },
-});
+const cancel = (seq: number): Entry => ({ kind: 'cancel', seq, body: { at: cancelledAt } });
 
 describe('exchange outcomes', () => {
 	const room = [composition, arrival(2, 'priya'), arrival(3, 'sam')];
@@ -122,11 +117,7 @@ describe('exchange outcomes', () => {
 		[
 			'cancelled',
 			'a cancellation after an abandoned response',
-			[
-				said(5, 'worker', 'sam'),
-				ended(6, 'message:4:worker:1', 'abandoned'),
-				cancel(7, closeBody(4, 5)),
-			],
+			[said(5, 'worker', 'sam'), ended(6, 'message:4:worker:1', 'abandoned'), cancel(7)],
 		],
 	] as const)('reads %s after %s', (kind, _case, tail) => {
 		const entries = [...asked, ...tail];
@@ -141,7 +132,7 @@ describe('exchange outcomes', () => {
 	});
 
 	it('reads complete for a normal close that a later cancellation follows', () => {
-		const entries = [...asked, close(5, 4, 4), said(6, 'priya'), cancel(7, closeBody(6, 6))];
+		const entries = [...asked, close(5, 4, 4), said(6, 'priya'), cancel(7)];
 		expect(outcomes(entries).map((outcome) => outcome.kind)).toEqual(['complete', 'cancelled']);
 	});
 
@@ -167,7 +158,7 @@ describe('exchange outcomes', () => {
 			said(5, 'worker', 'sam'),
 			close(6, 4, 5),
 			said(7, 'priya'),
-			cancel(8, closeBody(7, 7)),
+			cancel(8),
 		];
 		let state = foldRoom(entries.slice(0, 3), retry);
 		for (const entry of entries.slice(3)) state = evolve(state, entry, retry);
@@ -328,7 +319,7 @@ describe('cancellation fold', () => {
 			seq: 6,
 			body: { kind: 'said', at: cancelledAt, from: 'priya', text: 'New?', wakes: ['worker'] },
 		};
-		const entries = [...worked, cancel(5, { ...closeBody(3, 3), at: cancelledAt }), prompt];
+		const entries = [...worked, cancel(5), prompt];
 		const replayed = replayState(entries, retry);
 		const prior = replayState(entries.slice(0, 4), retry);
 		const retained = structuredClone(prior);
@@ -343,10 +334,9 @@ describe('cancellation fold', () => {
 	it('revokes an expired lease once, keeping its context and the first terminal time', () => {
 		const once = replayState([...worked, cancel(5)], retry).leases.get('message:3:worker:1');
 		expect(once).toMatchObject({ phase: 'ended', reason: 'revoked', readThrough: 2, until: 5 });
-		const repeated = replayState(
-			[...worked, cancel(5, { ...closeBody(3, 3), at: cancelledAt }), cancel(6)],
-			retry,
-		).leases.get('message:3:worker:1');
+		const repeated = replayState([...worked, cancel(5), cancel(6)], retry).leases.get(
+			'message:3:worker:1',
+		);
 		expect(repeated).toMatchObject({
 			phase: 'ended',
 			reason: 'revoked',
@@ -397,15 +387,6 @@ describe('cancellation fold', () => {
 			...tail,
 		];
 		expect(completion(entries, closeBody(3, 3, 'writer'))).toEqual({ status });
-	});
-
-	it('rejects a summary field inside a cancellation close', () => {
-		expect(() =>
-			validateRoomBody('cancel', {
-				at: cancelledAt,
-				close: { ...closeBody(3, 3, 'writer'), at: cancelledAt },
-			}),
-		).toThrow();
 	});
 });
 

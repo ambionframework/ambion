@@ -11,7 +11,6 @@
 import type { Body } from '../journal/journal.ts';
 import type { PendingSay, ScheduleLimits } from '../scheduling.ts';
 import type { ExchangeRef, Message, ReturnedMessage, Seq } from '../types.ts';
-import { survivesCancellation } from './rules.verified.ts';
 
 /** One say that waits to return to its author. */
 export interface ScheduledSay {
@@ -65,14 +64,6 @@ export function pendingSay({ dueAt, refs, ...say }: ScheduledSay): PendingSay {
 		due: new Date(dueAt).toISOString(),
 		...(refs === undefined ? {} : { refs: [...refs] }),
 	};
-}
-
-/** The says that a cancellation leaves: the ones after it. */
-export function afterCancellation(
-	list: readonly ScheduledSay[],
-	cancelledAt: Seq | undefined,
-): ScheduledSay[] {
-	return list.filter((say) => survivesCancellation(say.seq, cancelledAt));
 }
 
 /** No bound: a room that passes no limits takes any whole number of seconds and any count. */

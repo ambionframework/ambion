@@ -19,7 +19,6 @@ const baseOf = (state: RoomState): BaseFacts => ({
 	messages: [...state.messages],
 	closes: [...state.closes],
 	cancelledAt: state.cancelledAt,
-	cancelClosed: [...state.cancelClosed],
 	leases: new Map(state.leases),
 	composition: state.composition,
 	deliveries: new Map(state.deliveries),
@@ -28,6 +27,6 @@ const baseOf = (state: RoomState): BaseFacts => ({
 /** The state after one more entry, by the rules that fold a whole journal. */
 export function evolve(state: RoomState, entry: Entry, options: FoldOptions): RoomState {
 	const base = baseOf(state);
-	applyEvent(base, entry);
+	applyEvent(base, entry, state.exchange);
 	return project(base, options);
 }

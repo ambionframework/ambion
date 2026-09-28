@@ -42,6 +42,11 @@ skill the same way. See [Skills](docs/skills.md).
   `room/exchange.ts` serves the summary outcome, the summaries of a
   closed exchange, and the refusal of a second closing commit.
 - **`answerView` reads the grant of an activation once.**
+- **A cancellation has one shape.** `RoomState.cancelClosed` and the
+  schema of the close inside a `cancel` entry go. The wakes and the
+  scheduled says drop at the cancellation, and no later filter applies it
+  again. A grant keeps its filter, since it reads an id against the whole
+  record.
 
 ### Breaking changes
 
@@ -72,6 +77,10 @@ skill the same way. See [Skills](docs/skills.md).
 - **`callTool` takes a `JsonObject`.** Pi types tool arguments as JSON.
 - **A journal body with an extra property names the property.** The
   error reads `at body.<name>: schema is false`.
+- **A `cancel` entry carries no close.** The room derives the close of a
+  cancellation from the `cancel` entry: it closes the open exchange at the
+  last message before the entry. That close carries `cancelled: true`, and
+  a closed exchange reads `cancelled` from it.
 
 ## 0.3.0 (2026-09-25)
 

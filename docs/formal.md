@@ -140,7 +140,7 @@ moves back. The room's proofs file proves these lemmas:
   at the record's last seq keeps the closes ordered. So no two exchanges
   overlap, and every question after the last close lands inside the
   closed range. The close the room admits and the close a cancellation
-  carries both have that shape; `AdmittedCloseExtendsTheRecord` derives
+  derives both have that shape; `AdmittedCloseExtendsTheRecord` derives
   the first from `admitsClose`.
 - `StillExpired` and `EndingStands`: an expiry stays expired as the clock
   moves forward.
@@ -301,7 +301,7 @@ found no such rule.
 | `wakeAnswered`         | The wakes that the room owes                                   |
 | `countsAgainst`        | The attempt number in the next id, and the attempt limit       |
 | `draftsClose`          | The attempt number of a summary draft, and the summary verdict |
-| `survivesCancellation` | The wakes and the grants that a cancellation leaves            |
+| `survivesCancellation` | The grants and the owed summaries that a cancellation leaves   |
 | `closeFor`             | The grant of a closing activation                              |
 | `activationGrant`      | A claim entry and a commit entry                               |
 | `speechFreshness`      | A message entry that an activation writes                      |

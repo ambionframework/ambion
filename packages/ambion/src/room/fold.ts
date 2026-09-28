@@ -29,8 +29,6 @@ export interface RoomState {
 	readonly closes: Close[];
 	/** The latest cancellation marker, whose journal position bounds old work. */
 	readonly cancelledAt?: Seq;
-	/** The `through` of each close that a cancellation wrote. */
-	readonly cancelClosed: readonly Seq[];
 	readonly leases: Map<string, LeaseHold>;
 	readonly deliveries: Map<Seq, MessageDelivery>;
 	/** Every activation the room owes, whatever caused it: the wakes and the drafts as one list. */
@@ -54,7 +52,6 @@ export interface BaseFacts {
 	messages: Message[];
 	closes: Close[];
 	cancelledAt: Seq | undefined;
-	cancelClosed: Seq[];
 	leases: Map<string, LeaseHold>;
 	composition: Composition | undefined;
 	deliveries: Map<Seq, MessageDelivery>;
@@ -65,14 +62,17 @@ export const older = (): BaseFacts => ({
 	messages: [],
 	closes: [],
 	cancelledAt: undefined,
-	cancelClosed: [],
 	leases: new Map(),
 	composition: undefined,
 	deliveries: new Map(),
 });
 
-/** Applies one committed event to the room facts. */
-export function applyEvent(read: BaseFacts, entry: Entry): void {
+/**
+ * Applies one committed event to the room facts. `open` is the exchange
+ * open before the entry, which the base facts do not hold. Only a
+ * cancellation reads it: it closes that exchange.
+ */
+export function applyEvent(read: BaseFacts, entry: Entry, open: ExchangeRef | undefined): void {
 	if (entry.kind === 'message') {
 		const message = placed(entry);
 		read.deliveries.set(message.seq, messageDelivery(message, read.leases));
@@ -84,12 +84,10 @@ export function applyEvent(read: BaseFacts, entry: Entry): void {
 		return;
 	}
 	if (entry.kind === 'cancel') {
+		const close = cancelledClose(open, read.messages.at(-1)?.seq ?? 0, entry.body.at);
+		if (close !== undefined) read.closes.push(close);
 		read.cancelledAt = entry.seq;
 		cancelLeases(read.leases, entry.seq, entry.body.at);
-		if (entry.body.close !== undefined) {
-			read.closes.push(entry.body.close);
-			read.cancelClosed.push(entry.body.close.through);
-		}
 		return;
 	}
 	if (entry.kind === 'lease') {
@@ -100,6 +98,20 @@ export function applyEvent(read: BaseFacts, entry: Entry): void {
 		read.composition = { ...entry.body, seq: entry.seq };
 		return;
 	}
+}
+
+/**
+ * The close that a cancellation derives for the open exchange, or nothing
+ * when no exchange is open. It ends at the last message before the
+ * cancellation, and it owes no summary.
+ */
+function cancelledClose(
+	open: ExchangeRef | undefined,
+	through: Seq,
+	at: string,
+): Close | undefined {
+	if (open === undefined) return undefined;
+	return { owner: open.owner, from: open.from, through, at, cancelled: true };
 }
 
 /** A cancellation ends old leases while retaining their reads. */

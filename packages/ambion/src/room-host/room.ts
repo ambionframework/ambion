@@ -187,6 +187,8 @@ export class RoomHost implements Room, RunningRoom {
 	readonly deliveryStates = new Map<string, dispatch.DeliveryState>();
 	/** Every lease id this room has heard a change for. It says `activation_start` once. */
 	readonly heardLeases = new Set<string>();
+	/** How many closes of the state this room has heard. It says `exchange_closed` once for each. */
+	heardCloses = 0;
 	cancelAlarm: () => void = () => {};
 	/** The reconcile in flight: the entries it writes, and whoever it wakes. A caller that asks waits for it. */
 	reconciling: Promise<void> = Promise.resolve();
@@ -256,7 +258,7 @@ export class RoomHost implements Room, RunningRoom {
 	private async compose(composition: Without<Composition, 'seq'>): Promise<void> {
 		await this.journal.ready;
 		this.enter('running');
-		dispatch.seedHeardLeases(this);
+		dispatch.seedHeard(this);
 		acceptedEvent(decide(this.state(), { type: 'compose', composition }, this.now()));
 		requireSubmission(
 			await submit(this.journal, 'run', () => decide(this.state(), { type: 'run' }, this.now())),
@@ -273,7 +275,7 @@ export class RoomHost implements Room, RunningRoom {
 	private async recover(): Promise<void> {
 		await this.journal.ready;
 		this.enter('running');
-		dispatch.seedHeardLeases(this);
+		dispatch.seedHeard(this);
 		const state = this.state();
 		this.validateDefinitions(state);
 		// The fence lands here: from here on, every earlier run's later writes are void.
