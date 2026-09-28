@@ -590,7 +590,7 @@ const SUMMARY_PARAGRAPH = [
 ];
 
 /** How a response reads a message that a fold, the context window, or the cap keeps out of view. */
-const RECALL_LINE = `A message out of view is still on the record: call recall with its URI to read it.`;
+const RECALL_LINE = `A message out of view is still on the record: call recall with its seq, as #12, to read it.`;
 
 function action(purpose: 'respond' | 'summarize'): string {
 	return purpose === 'respond'

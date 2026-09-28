@@ -448,10 +448,12 @@ async function recallLine(
 	room: string,
 	ref: string,
 ): Promise<{ found: boolean; line: string }> {
-	const named = parseRoomUri(ref);
+	const named = shortRef(room, ref) ?? parseRoomUri(ref);
 	const missed = (why: string) => ({ found: false, line: `${ref}: ${why}` });
 	if (named?.message === undefined)
-		return missed(`not a message ref. A message ref is ${roomUri(room)}/message/<seq>.`);
+		return missed(
+			`not a message ref. Give the seq as #12, or the URI ${roomUri(room)}/message/<seq>.`,
+		);
 	if (named.room !== room) return missed('names another room. recall reads this room alone.');
 	const message = await messageAt(binding, named.message);
 	return message === undefined
@@ -459,6 +461,13 @@ async function recallLine(
 				`no message at #${named.message} on the record you may read. Take the seq from a record line or a ref.`,
 			)
 		: { found: true, line: renderLine(message) };
+}
+
+/** A seq of this room, as the record shows it (`#12`) or bare (`12`), or nothing. */
+function shortRef(room: string, ref: string): { room: string; message: Seq } | undefined {
+	const seq = /^#?([1-9][0-9]*)$/.exec(ref)?.[1];
+	const message = Number(seq);
+	return seq !== undefined && Number.isSafeInteger(message) ? { room, message } : undefined;
 }
 
 /**

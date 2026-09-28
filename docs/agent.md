@@ -78,8 +78,10 @@ activation, time, and routing facts. `seat` and `unseat` accept an agent name.
 `dismiss` accepts `{ message }`, the seq of a pending scheduled say. The room
 validates operations at the commit boundary.
 
-**`recall` reads messages of the room by URI.** It accepts `{ refs }`, 1
-to 16 message URIs of the form `ambion://room/<room>/message/<seq>`. The
+**`recall` reads messages of the room by seq or by URI.** It accepts
+`{ refs }`, 1 to 16 messages of this room. A ref is the seq as the record
+shows it, such as `#12`, the bare seq `12`, or the URI
+`ambion://room/<room>/message/<seq>`. The
 result gives one line for each distinct ref: the message as the record
 renders it, or why the room gave none. A ref to another room, a ref that
 names no message, and a seq that the view of the activation cannot read

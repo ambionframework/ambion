@@ -70,6 +70,10 @@ too. It commits nothing and never moves the read position. A response reads a
 note about it when a message is out of view. The hosting entry exports
 `RECALL`, and an agent tool named `recall` gets a refusal.
 
+**`recall` takes a seq as the record shows it.** A ref of `#12` or `12`
+names message 12 of the room of the activation. The URI form still works,
+and the note about `recall` names the short form.
+
 **`bash` waits 30 seconds by default.** A test run, a build, or an
 install then ends inside its first call more often, so the agent calls
 `wait` less. The wait still stops before the activation ends. A person's

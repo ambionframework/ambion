@@ -258,29 +258,24 @@ describe('executor tool authority', () => {
 			(tool) => tool.name === 'recall',
 		);
 		const uri = (seq: number) => `ambion://room/room/message/${seq}`;
-		// Every ref finds its message: a success, one line for each distinct ref.
-		const result = await call(recall, 'recall', { refs: [uri(5), ` ${uri(2)} `, uri(5)] });
+		// Every ref finds its message: a success, one line for each distinct ref. A seq as the
+		// record shows it names a message of this room.
+		const result = await call(recall, 'recall', { refs: [uri(5), ' #2 ', uri(5)] });
 		expect(result.content).toEqual([
 			{ type: 'text', text: '#5 [worker → priya] Yes, at nine.\n#2 [priya] Is the pour on?' },
 		]);
 		// A ref that finds nothing fails the call, and each line says why.
 		await expect(
 			call(recall, 'misses', {
-				refs: [
-					uri(2),
-					uri(4),
-					'ambion://room/elsewhere/message/2',
-					'ambion://room/room',
-					'file:///x',
-				],
+				refs: ['2', uri(4), 'ambion://room/elsewhere/message/2', 'ambion://room/room', 'file:///x'],
 			}),
 		).rejects.toThrow(
 			[
 				'#2 [priya] Is the pour on?',
 				`${uri(4)}: no message at #4 on the record you may read. Take the seq from a record line or a ref.`,
 				'ambion://room/elsewhere/message/2: names another room. recall reads this room alone.',
-				'ambion://room/room: not a message ref. A message ref is ambion://room/room/message/<seq>.',
-				'file:///x: not a message ref. A message ref is ambion://room/room/message/<seq>.',
+				'ambion://room/room: not a message ref. Give the seq as #12, or the URI ambion://room/room/message/<seq>.',
+				'file:///x: not a message ref. Give the seq as #12, or the URI ambion://room/room/message/<seq>.',
 			].join('\n'),
 		);
 		// Each distinct seq is one page, and a recalled message is old: nothing moves the position.

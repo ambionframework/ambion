@@ -69,7 +69,7 @@ describe('the recall note', () => {
 			through: 5,
 			context: { name: 'site', now: 0, participants: [], messages: shown, reserve: [], ...reach },
 		};
-		expect(renderActivation(view, worker).context.includes('call recall with its URI')).toBe(noted);
+		expect(renderActivation(view, worker).context.includes('call recall with its seq')).toBe(noted);
 	});
 });
 

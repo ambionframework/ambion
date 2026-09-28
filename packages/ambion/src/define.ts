@@ -350,13 +350,16 @@ export const SCHEDULE = {
 export const RECALL = {
 	name: 'recall' as const,
 	description:
-		'Read messages of this room by URI, ambion://room/<room>/message/<seq>: a message that your context leaves out or that a summary folds, or one that a say cites. The result gives one line for each ref.',
+		'Read messages of this room by seq, as #12, or by URI, ambion://room/<room>/message/<seq>: a message that your context leaves out or that a summary folds, or one that a say cites. The result gives one line for each ref.',
 	parameters: Type.Object({
-		refs: Type.Array(Type.String({ description: 'A message URI of this room.' }), {
-			minItems: 1,
-			// The count of refs one message carries: `REF_LIMITS.count`.
-			maxItems: 16,
-		}),
+		refs: Type.Array(
+			Type.String({ description: 'A message of this room: its seq as #12, or its URI.' }),
+			{
+				minItems: 1,
+				// The count of refs one message carries: `REF_LIMITS.count`.
+				maxItems: 16,
+			},
+		),
 	}),
 };
 
