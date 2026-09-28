@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
-import { describe, expect, it, onTestFinished } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { tempDir } from '../../just-bash/test/support/backends.ts';
 import {
@@ -533,6 +533,7 @@ describe('a wait on several handles', () => {
 			expect.stringMatching(new RegExp(`^\\[Process ${fast} exited with code 0\\.`)),
 			expect.stringMatching(new RegExp(`^\\[Process ${slow} is running\\.`)),
 			expect.stringMatching(new RegExp(`^\\[Process ${other} is running\\.`)),
+			`[Drop ${fast} from handles: it has ended, and a wait that holds one returns at once.]`,
 		]);
 		const details = result.details as WaitDetails;
 		expect(details.processes.map((process) => process.handle)).toEqual([slow, fast, other]);
@@ -556,6 +557,41 @@ describe('a wait on several handles', () => {
 				`^broke\\n\\n\\[Process ${bad} exited with code 3\\.[\\s\\S]*\\[Process ${slow} is running\\.`,
 			),
 		);
+	});
+
+	it('gives the output of the processes that ended within one budget, and holds the rest for status', async () => {
+		const workspace = site();
+		// Each process writes about 90 KB, and the view keeps 50 KB: the first fills the budget.
+		const LINE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+		const start = async () =>
+			(
+				await call(workspace, 'bash', {
+					command: `sleep 0.3; for i in $(seq 1 1500); do echo ${LINE}; done`,
+					wait: 0,
+				})
+			).details.process.handle;
+		const [one, two] = [await start(), await start()];
+		// The host reads the table without moving the cursor of the agent.
+		await vi.waitFor(
+			async () => {
+				const running = await workspace.processes.list({ agent: 'alpha', running: true });
+				if (running.length > 0) throw new Error('A process still runs.');
+			},
+			{ timeout: 20_000 },
+		);
+		const both = await invokeText(
+			toolOf(workspace, 'wait'),
+			{ handles: [one, two] },
+			callAs('alpha'),
+		);
+		expect(both).toContain(`[Process ${two} exited with code 0.`);
+		expect(both).toContain('call status with its handle to read it.');
+		expect(both).toContain(`[Drop ${one}, ${two} from handles: they have ended`);
+		expect(new TextEncoder().encode(both).length).toBeLessThan(60_000);
+		// The cursor of the held process did not move, so status gives its output.
+		expect(
+			await invokeText(toolOf(workspace, 'status'), { handle: two }, callAs('alpha')),
+		).toContain(LINE);
 	});
 
 	it.each([

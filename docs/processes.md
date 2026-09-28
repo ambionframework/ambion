@@ -574,13 +574,22 @@ handles, and counts a handle that repeats once. For one process, the result is
 the result of `status`. For several, the result gives the new output and the
 bracketed line of each process that ended, then the bracketed line of each one
 that still runs. `details.processes` holds every status in the order of the
-handles, and `details.ended` holds the details of each process that ended.
+handles, and `details.ended` holds the details of each process that it shows.
+
+**A wait on several handles shows at most about 50 KB of output.** It shows
+the processes that ended in order, until its text holds 50 KB. Each process
+after that gives its bracketed line and `Its new output did not fit this
+result: call status with its handle to read it.` The wait does not read the
+output of that process, so its cursor stays, and `status` gives the output.
 
 **A process that already ended makes `wait` return at once.** An agent
 that runs a parameter sweep as four processes calls `wait` with the four
 handles, reads the result of the first that ends, and calls `wait` again
-with the handles that still run. A handle of a process that ended badly
-fails each `wait` that holds it, so the agent drops it from the list.
+with the handles that still run. The last line of the result names each
+handle that ended: `Drop <handles> from handles: they have ended, and a wait
+that holds one returns at once.` The description of `wait` states the same
+rule. A handle of a process that ended badly fails each `wait` that holds
+it.
 
 **A wait ends 30 seconds before the room ends the activation.** The room
 ends an activation `limits.lease.deadline` after its first claim, 600

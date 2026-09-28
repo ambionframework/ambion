@@ -131,6 +131,12 @@ its `text`.
 
 ### Breaking changes
 
+- **A wait on several handles bounds its output and names the handles to
+  drop.** It shows the output of the processes that ended until its text
+  holds about 50 KB. A process past that gives its state line and asks for
+  `status`, and its cursor stays. The last line names each handle that
+  ended, because a wait that holds one returns at once. The description of
+  `wait` states the same rule.
 - **A room tool result names what landed.** `say` gives `said #<seq>`,
   with `to <name>` for a directed say, so the agent can cite its own
   message. `seat` and `unseat` give `seated <name> (#<seq>)` and
