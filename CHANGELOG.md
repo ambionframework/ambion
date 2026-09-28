@@ -93,6 +93,17 @@ of the exchange.
   Under `composeExecutions`, its activation fails with a permanent
   `no_execution` error, as it does in a room with no execution. Before,
   the room sent the wake again after each resend window, with no end.
+- **The process table keeps one record for each live process.** A
+  process of this run and an adopted process share one map, one stop, and
+  one end. The record of a process of this run also holds its environment
+  and its abort.
+- **The first read that finds a process lost with a `pid` writes its
+  `stop`.** The line is `failed <time> The host run ended before the process
+  did.` The listing runs no `ps` for that process while `/proc` has no
+  directory for its pid. A pid still in `/proc` gets the `ps` check, so a
+  `ps` that failed once does not hide a live shell: the next read adopts
+  it. The status stays the same. A process with no `pid` gets no line.
+  See [Processes](docs/processes.md#the-files).
 
 ### Breaking changes
 

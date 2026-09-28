@@ -121,7 +121,7 @@ export function endOfRun(run: Exclude<Run, { ok: true }>): string {
 /** The status of a process whose files could not be read: a failure, from its spec. */
 export function unreadable(spec: ProcessSpec, dir: string, error: unknown): ProcessStatus {
 	const message = error instanceof Error ? error.message : String(error);
-	const lost = statusOf({ dir, spec, seen: false, alive: false }, false);
+	const lost = statusOf({ dir, spec, seen: false, pid: false, alive: false }, false);
 	return Object.freeze({
 		...lost,
 		error: `The files of the process could not be read: ${message}`,

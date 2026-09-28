@@ -47,7 +47,7 @@ export interface ProcessStatus {
 	/** The room of the call that started the process, when it had one. Metadata alone. */
 	readonly room?: string;
 	readonly startedAt: string;
-	/** Set when the state is final and the files name the time. */
+	/** Set when the state is final and the files name the time of the end. */
 	readonly endedAt?: string;
 	/** Set when the state is `exited`. */
 	readonly exitCode?: number;
@@ -89,6 +89,8 @@ export interface ProcessFiles {
 	readonly stop?: string;
 	/** A result or a reminder showed the end. */
 	readonly seen: boolean;
+	/** The wrapper wrote `pid`: a shell started the command. */
+	readonly pid: boolean;
 	/** The shell that ran the command still runs it, on a backend that can tell. */
 	readonly alive: boolean;
 }
@@ -158,6 +160,15 @@ export function stopLine(cause: StopCause, message?: string): string {
 }
 
 /**
+ * The `stop` line for a lost process. The first read that finds the process
+ * lost with a `pid` writes it. The listing runs no `ps` for a process with
+ * this line while its pid is not in `/proc`.
+ */
+export function lostLine(): string {
+	return stopLine('failed', LOST);
+}
+
+/**
  * Write `stop` for a process that has no `exit`. One shell command checks
  * and writes, so a stop that meets the natural end of the command leaves
  * the end as the command gave it.
@@ -192,18 +203,24 @@ export async function writeSeen(env: WorkspaceEnv, dir: string): Promise<void> {
  * uses none for a finished process. The liveness check runs only where
  * `ps` exists. It matches the handle in the command line of the pid, so a
  * pid that the system reused for another program does not read as the
- * process.
+ * process. It skips a process whose `stop` names it lost and whose pid is
+ * not in `/proc`. Shell builtins read the line and test the directory, so
+ * the skip starts no program. A pid still in `/proc` gets the `ps` check,
+ * so a line that a failed `ps` wrote for a live shell does not hide it. On
+ * a system with no `/proc`, no pid has a directory there, so the line
+ * alone skips the process.
  */
 function listingScript(root: string, handle?: string): string {
 	const from = handle === undefined ? '. -mindepth 2' : quoted(handle);
 	const names = handle === undefined ? '*' : quoted(handle);
 	return [
 		`cd ${quoted(root)} 2>/dev/null || exit 0`,
-		`find ${from} -maxdepth ${handle === undefined ? 2 : 1} -type f \\( -name spec -o -name exit -o -name stop -o -name seen \\) -exec grep '' /dev/null {} + 2>/dev/null`,
+		`find ${from} -maxdepth ${handle === undefined ? 2 : 1} -type f \\( -name spec -o -name exit -o -name stop -o -name seen -o -name pid \\) -exec grep '' /dev/null {} + 2>/dev/null`,
 		`command -v ps >/dev/null 2>&1 || exit 0`,
 		`for f in ${names}/pid; do`,
 		`  h="\${f%/pid}"`,
 		`  [ -f "$f" ] && [ ! -f "$h/exit" ] || continue`,
+		`  [ -f "$h/stop" ] && read -r c t m 2>/dev/null < "$h/stop" && [ "$c $m" = ${quoted(`failed ${LOST}`)} ] && read -r p 2>/dev/null < "$f" && [ ! -d "/proc/$p" ] && continue`,
 		`  ps -ww -o args= -p "$(cat "$f")" 2>/dev/null | grep -q -- "$h" && echo "$h/alive:"`,
 		`done`,
 		`exit 0`,
@@ -255,6 +272,7 @@ interface Draft {
 	exit?: string;
 	stop?: string;
 	seen: boolean;
+	pid: boolean;
 	alive: boolean;
 }
 
@@ -268,13 +286,29 @@ function fold(drafts: Map<string, Draft>, text: string): void {
 	if (!isHandle(handle)) return;
 	const fact = line.slice(slash + 1, colon);
 	const rest = line.slice(colon + 1);
-	const draft = drafts.get(handle) ?? { handle, seen: false, alive: false };
+	const draft = drafts.get(handle) ?? { handle, seen: false, pid: false, alive: false };
 	drafts.set(handle, draft);
-	if (fact === 'spec') draft.spec = parseSpec(rest);
-	else if (fact === 'exit') draft.exit = rest;
-	else if (fact === 'stop') draft.stop = rest;
-	else if (fact === 'seen') draft.seen = true;
-	else if (fact === 'alive') draft.alive = true;
+	record(draft, fact, rest);
+}
+
+/** Record one fact of a process in its draft. */
+function record(draft: Draft, fact: string, text: string): void {
+	switch (fact) {
+		case 'spec':
+			draft.spec = parseSpec(text);
+			break;
+		case 'exit':
+			draft.exit = text;
+			break;
+		case 'stop':
+			draft.stop = text;
+			break;
+		case 'seen':
+		case 'pid':
+		case 'alive':
+			draft[fact] = true;
+			break;
+	}
 }
 
 /** The files of every process of the agent under `root`, or of the one process `handle`. */
@@ -296,6 +330,7 @@ export async function readFiles(
 						dir: `${root}/${draft.handle}`,
 						spec: draft.spec,
 						seen: draft.seen,
+						pid: draft.pid,
 						alive: draft.alive,
 						...(draft.exit === undefined ? {} : { exit: draft.exit }),
 						...(draft.stop === undefined ? {} : { stop: draft.stop }),
@@ -306,12 +341,18 @@ export async function readFiles(
 
 type Ending = Pick<ProcessStatus, 'state' | 'endedAt' | 'exitCode' | 'error'>;
 
-/** The end that `stop` names: its cause, its time, and for a failure its message. */
+/**
+ * The end that `stop` names: its cause, its time, and for a failure its
+ * message. The time of a lost process names the read that found it lost,
+ * and no end, so its status has no `endedAt`.
+ */
 function stopEnding(stop: string): Ending {
 	const [cause = '', at, ...message] = stop.split(' ');
+	const error = message.join(' ');
+	if (error === LOST) return { state: 'failed', error };
 	const endedAt = at === undefined || at === '' ? {} : { endedAt: at };
 	if (cause === 'cancelled' || cause === 'timed_out') return { state: cause, ...endedAt };
-	return { state: 'failed', ...endedAt, error: message.join(' ') || 'The process failed.' };
+	return { state: 'failed', ...endedAt, error: error || 'The process failed.' };
 }
 
 /** The end that `exit` names: the exit code and the time. */
