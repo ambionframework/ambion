@@ -22,6 +22,7 @@ import {
 	classifyCommit,
 	type Intent,
 	type RoomProtocol,
+	type Unchanged,
 } from '../protocol.ts';
 import { parseRoomUri, REF_LIMITS, roomUri } from '../refs.ts';
 import type { AgentDefinition, Message, Seq } from '../types.ts';
@@ -178,8 +179,8 @@ function toolResultOf(value: string | ToolResult): RoomToolResult {
 
 /** What the model reads for a commit the room answered. */
 function landed(binding: RoomToolBinding, response: CommitResult): RoomToolResult {
+	if ('committed' in response || 'unchanged' in response) return text(landedLine(response));
 	const outcome = classifyCommit(response);
-	if (outcome.kind === 'delivered') return text(landedLine(response));
 	if (outcome.kind === 'refused') return text(outcome.why, true);
 	binding.abort();
 	if (outcome.kind === 'unknown') {
@@ -196,7 +197,7 @@ function landed(binding: RoomToolBinding, response: CommitResult): RoomToolResul
  * so the agent can cite its own message. A membership change the record
  * already holds says so.
  */
-function landedLine(response: CommitResult): string {
+function landedLine(response: { committed: Message } | { unchanged: Unchanged }): string {
 	if ('unchanged' in response) {
 		const { unchanged } = response;
 		if (unchanged.kind === 'dismissed') return `#${unchanged.message} no longer waits`;
@@ -204,7 +205,6 @@ function landedLine(response: CommitResult): string {
 			? `${unchanged.name} is already seated`
 			: `${unchanged.name} is not seated`;
 	}
-	if (!('committed' in response)) return 'delivered';
 	const message = response.committed;
 	if (message.kind === 'seated' || message.kind === 'unseated')
 		return `${message.kind} ${message.subject} (#${message.seq})`;
@@ -392,19 +392,18 @@ function dismissTool(binding: RoomToolBinding): RoomTool {
 		description: DISMISS.description,
 		parameters: DISMISS.parameters,
 		run: async (args, call) => {
-			const seq = (args as { message: number }).message;
+			const message = (args as { message: number }).message;
 			const response = await binding.room.commit({
 				activation: binding.id,
 				key: call,
-				intent: { kind: 'dismissed', message: seq },
+				intent: { kind: 'dismissed', message },
 			});
 			if ('committed' in response) {
 				// The result shows the entry, so a record read up to it is read through it.
 				const { seq } = response.committed;
 				if (binding.readThrough === seq - 1) binding.resultExpected(call, seq);
-				return text(`dismissed #${seq}`);
+				return text(`dismissed #${message}`);
 			}
-			if ('unchanged' in response) return text(`#${seq} no longer waits`);
 			return landed(binding, response);
 		},
 	};
@@ -425,7 +424,10 @@ function recallTool(room: string, binding: RoomToolBinding): RoomTool {
 		run: async (args) => {
 			const refs = recallRefs(args);
 			if (refs === undefined)
-				return text(`refs must be 1 to ${REF_LIMITS.count} message URIs of this room.`, true);
+				return text(
+					`refs must be 1 to ${REF_LIMITS.count} messages of this room: a seq as #12, or a URI.`,
+					true,
+				);
 			const lines: { found: boolean; line: string }[] = [];
 			for (const ref of refs) lines.push(await recallLine(binding, room, ref));
 			const missed = lines.some((one) => !one.found);

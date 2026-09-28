@@ -143,7 +143,7 @@ export interface ProcessDetails {
 	truncation?: ShellOutputTruncation;
 }
 
-/** What `wait` with `handles` gives in `details`: every status in the order of the handles, and each process that ended. */
+/** What `wait` on several handles gives in `details`: every status in the order of the handles, and each process it shows. */
 export interface WaitDetails {
 	processes: readonly ProcessStatus[];
 	ended: readonly ProcessDetails[];
@@ -218,14 +218,14 @@ function checkedSeconds(value: number | undefined, fallback: number, max: number
 	return value;
 }
 
+/** The seconds a call waits, and whether the deadline of the activation cut them. */
+type WaitWindow = { seconds: number; cut: boolean };
+
 /**
  * The seconds a call may wait: the seconds it asks for, or fewer when the
  * room ends the activation sooner. The wait then ends
  * `DEADLINE_MARGIN_SECONDS` before the deadline.
  */
-/** The seconds a call waits, and whether the deadline of the activation cut them. */
-type WaitWindow = { seconds: number; cut: boolean };
-
 function withinActivation(asked: number, ctx: ToolContext): WaitWindow {
 	if (ctx.deadline === undefined) return { seconds: asked, cut: false };
 	const left = Math.max(0, (ctx.deadline - Date.now()) / 1000 - DEADLINE_MARGIN_SECONDS);
@@ -300,9 +300,8 @@ async function started(
 
 /**
  * Wait for the first of the processes in `handles` to end. For one process,
- * the result is the result of `status`. For several, it gives the new
- * output of each process that ended, and the state line of each one that
- * still runs. A handle that repeats counts once.
+ * the result is the result of `status`. For several, see `waitedOnSeveral`.
+ * A handle that repeats counts once.
  */
 async function waited(
 	options: ProcessToolOptions,
@@ -360,8 +359,9 @@ const WAIT_OUTPUT_BYTES = DEFAULT_MAX_BYTES;
 const HELD = 'Its new output did not fit this result: call status with its handle to read it.';
 
 /**
- * Describe the processes that ended, in order, until the text holds
- * `WAIT_OUTPUT_BYTES`. A process past the budget is not described, so its
+ * Describe the processes that ended, in the order of the handles, until the
+ * text holds `WAIT_OUTPUT_BYTES`. Each one adds at most one view of 50 KB, so
+ * the text holds at most about twice the budget. A process past the budget is not described, so its
  * cursor stays and a later `status` gives its output.
  */
 async function describedWithin(

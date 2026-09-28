@@ -199,6 +199,9 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		if (by === 'seat') {
 			expect(kinds(messages)).toEqual(['said', 'said', 'dismissed', 'said']);
 			expect(dismissed).toMatchObject({ from: 'worker' });
+			// The result names the say it dismissed, the seq that its schedule result gave.
+			const scheduled = dismissed?.kind === 'dismissed' ? dismissed.message : 0;
+			expect(results).toContain(`dismissed #${scheduled}`);
 			expect(results.at(-1)).toMatch(/^said #\d+ to priya$/);
 		} else {
 			expect(kinds(messages)).toEqual(['said', 'said', 'dismissed']);

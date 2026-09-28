@@ -203,7 +203,7 @@ the answer.
 **`seat` and `unseat` commit a membership intent**, keyed on the tool call
 id.
 
-**`recall` reads and commits nothing.** For each distinct message URI of its
+**`recall` reads and commits nothing.** For each distinct ref of its
 room, it calls `view(id, { before: seq + 1, limit: 1 })`. A summary sits
 after the range it covers, so that page never folds the message away. The
 tool calls neither `acknowledgeThrough` nor `resultExpected`, and every

@@ -62,17 +62,14 @@ with the seq of its message, such as `#12`, so a seat builds the message
 URI of any line. The closing guidance names the URI of the opening message
 of the exchange.
 
-**`recall` reads messages of the room by URI.** An ordinary activation calls
-`recall` with 1 to 16 message URIs of its room and reads one line for each:
-the message, or why the room gave none. It reaches every message that the
-purpose of the activation may read, below the cap of `limits.context.messages`
-too. It commits nothing and never moves the read position. A response reads a
-note about it when a message is out of view. The hosting entry exports
-`RECALL`, and an agent tool named `recall` gets a refusal.
-
-**`recall` takes a seq as the record shows it.** A ref of `#12` or `12`
-names message 12 of the room of the activation. The URI form still works,
-and the note about `recall` names the short form.
+**`recall` reads messages of the room by seq or by URI.** An ordinary
+activation calls `recall` with 1 to 16 messages of its room, as `#12`, `12`,
+or a message URI, and reads one line for each: the message, or why the room
+gave none. It reaches every message that the purpose of the activation may
+read, below the cap of `limits.context.messages` too. It commits nothing and
+never moves the read position. A response reads a note about it when a message
+is out of view. The hosting entry exports `RECALL`, and an agent tool named
+`recall` gets a refusal.
 
 **`bash` waits 30 seconds by default.** A test run, a build, or an
 install then ends inside its first call more often, so the agent calls
