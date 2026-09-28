@@ -78,7 +78,7 @@ press Ctrl+R to pick a room.
 `/abort` runs at once. Typing the command is the confirmation. Switching
 person leaves the current room, then enters it as the new person.
 
-**A say that waits to return shows as a note.** An agent schedules a say
+**A say that waits to return shows as a note.** An agent calls `schedule`
 with `after`. The conversation notes the say with its seat, its due time,
 its owner, its text, and its handle, as in `(/dismiss 41)`. `/dismiss `
 lists the says that wait. `/dismiss 41` calls `room.dismiss`, and the
@@ -129,8 +129,8 @@ the list again, and the slow poll updates the times.
   the terminal do not wait for it.
 
 `/attach <local path>` reads a file from your own machine and copies it into
-the workspace, under `/attachments`. It cites the copy as a ref of your next
-message. A colleague opens the same file with `/open`, and an agent's `read`
+the workspace, under `/attachments`, and snapshots it. It cites the snapshot
+as a ref of your next message. A colleague opens the same file with `/open`, and an agent's `read`
 tool returns it as a picture, not text. The command takes files up to 8 MiB.
 `~/` in the path expands to your home directory.
 
@@ -143,25 +143,43 @@ already underway, or a paste that does not look like one bare picture path,
 lands as typed.
 
 **A message shows its refs, one line each.** A line starts with `↗` and the
-kind of the ref: `file`, `table`, or `message`. A ref that does not resolve
-starts with `✗` and ends with the reason. Press Tab, then `r`, to choose a
-ref of a shown message. Enter opens a `file` or a `table` ref in the files
-panel, the same panel that `/files` opens. Enter on a `message` ref opens its
-discussion and highlights the message. Esc goes back. `r` lists only the
-refs of shown messages, so press `e` to open every discussion first.
+kind of the ref: `snapshot`, `commit`, `file`, `table`, `room`, or
+`message`. A ref that does not resolve starts with `✗` and ends with the
+reason. Press Tab, then `r`, to choose a ref of a shown message. Tab works
+on a direct reply too, which has no discussion. Esc goes back. `r` lists
+only the refs of shown messages, so press `e` to open every discussion
+first.
 
-The Workbench resolves three URI forms. The agents cite them in `refs`.
+| Form                                                                  | Names                                                 | Enter opens                                            |
+| --------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
+| `ambion://workspace/workbench/snapshot/<digest>/<path>`               | The bytes a file held at a snapshot, from the store   | The preview in the files panel                         |
+| `ambion://workspace/workbench/repo/<repo>[/branch/<b>]/commit/<hash>` | One commit of a lab repository                        | The commit in the files panel                          |
+| `file:///<path>`                                                      | A file of the workspace as it is now, as `/library/x` | The file in the files panel                            |
+| `lab:///<table>`                                                      | A table of the lab database                           | The table in the files panel                           |
+| `ambion://room/<room>`                                                | A room of this Workbench                              | The room, at the composer                              |
+| `ambion://room/<room>/message/<seq>`                                  | A message of a room of this Workbench                 | The room, with the discussion open and the message lit |
 
-| Form                                 | Names                                    |
-| ------------------------------------ | ---------------------------------------- |
-| `file:///<path>`                     | A file of the workspace, as `/library/x` |
-| `lab:///<table>`                     | A table of the lab database              |
-| `ambion://room/<room>/message/<seq>` | A message of the open room               |
+The agents cite these forms in `refs`. The `snapshot` tool gives a snapshot
+ref, and an agent writes a commit ref from `git rev-parse`.
 
-The terminal checks a `file:` or `lab:` ref against the list that the host
-gives for the workspace and the lab database. It reads no file of the host.
-A path with `..`, an empty part, a backslash, or a host name does not
-resolve. The files panel lists the lab tables after the files.
+**A snapshot opens through `readSnapshot`, from the object store.** Its line
+shows the path the file had and the first digits of its digest. The panel
+shows text as text, a picture as a picture, and a SQLite database as its
+tables. A binary file shows its size, and an agent reads it with `fetch`.
+
+**A commit opens through `readCommit`, from the lab repositories.** Its line
+shows the repository, the branch or the tag, and the first digits of the
+hash. The panel shows the log entry: the hash, the author, the date, the
+parents, the message, and each changed file as `A`, `M`, or `D`. When the
+ref names a branch or a tag, the last line states where it points now. A moved or deleted
+branch keeps the commit, so the ref still opens.
+
+**The terminal checks each ref against what the host holds.** A file, a
+table, and a snapshot must be of this workspace, a commit of the
+`workbench` workspace, and a room of this Workbench. The terminal reads no
+file of the host. A path with `..`, an empty part, a backslash, or a host
+name does not resolve. The files panel lists the lab tables after the
+files.
 
 A discussion is the thread between a question and its summary, with each
 steering message in its place. It starts closed. Start a message with `//` to

@@ -37,6 +37,8 @@ call is work that the room does not replay.
 | Returned say | A say that an agent scheduled for itself, which the room gives back when it is due | [exchange.md](exchange.md#6-a-scheduled-say)     |
 | Lease        | The time-limited right of one activation to run and commit                         | [durability.md](durability.md)                   |
 | Ref          | One absolute URI that a message cites                                              | [agent.md](agent.md)                             |
+| Snapshot     | The frozen bytes of one workspace file, and the ref that names them by digest      | [workspace.md](workspace.md#snapshot-a-file)     |
+| Commit ref   | The ref of one commit of a workspace repository, by its full hash                  | [git.md](git.md#cite-a-commit)                   |
 
 ## Controlled vocabulary
 
@@ -196,8 +198,8 @@ credentials, process lifetime, and recovery.
 
 ## The map
 
-- [Definitions and tools](agent.md): `defineAgent`, `defineTool`, `say`, refs,
-  and refs.
+- [Definitions and tools](agent.md): `defineAgent`, `defineTool`, `say`, and
+  refs.
 - [Executors](executors.md): the execution boundary, steps, the trace, and how
   to write an adapter.
 - [Default assistant](assistant.md): the `assistant` room option and package.

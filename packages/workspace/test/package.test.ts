@@ -15,6 +15,7 @@ import * as git from '../src/git-entry.ts';
 import * as main from '../src/index.ts';
 import { PACKAGE_NAME } from '../src/index.ts';
 import * as resource from '../src/resource-entry.ts';
+import * as s3 from '../src/s3-entry.ts';
 import * as sql from '../src/sql-resource.ts';
 import * as sqlite from '../src/sqlite-entry.ts';
 
@@ -34,10 +35,11 @@ const STEMS: Record<string, string> = {
 	'./sql': 'sql-resource',
 	'./sqlite': 'sqlite-entry',
 	'./git': 'git-entry',
+	'./s3': 's3-entry',
 	'./conformance': 'conformance',
 };
 
-it('holds exactly six entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
+it('holds exactly seven entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
 	const { name, exports } = await manifest();
 	expect(PACKAGE_NAME).toBe(name);
 	expect(Object.keys(exports).sort()).toEqual([
@@ -46,6 +48,7 @@ it('holds exactly six entries, builds each under the name the manifest gives it,
 		'./git',
 		'./package.json',
 		'./resource',
+		'./s3',
 		'./sql',
 		'./sqlite',
 	]);
@@ -57,6 +60,7 @@ it('holds exactly six entries, builds each under the name the manifest gives it,
 		'src/sql-resource.ts',
 		'src/sqlite-entry.ts',
 		'src/git-entry.ts',
+		'src/s3-entry.ts',
 		'src/conformance.ts',
 	]);
 	for (const [path, target] of Object.entries(exports)) {
@@ -76,6 +80,7 @@ it('exports one resource, its two logs, the environment helpers, sqlImport, sqlR
 		'Deadline',
 		'HomeEnv',
 		'PACKAGE_NAME',
+		'SNAPSHOT_LIMITS',
 		'TMP',
 		'boundedView',
 		'deliverView',
@@ -100,7 +105,12 @@ it.each([
 	['./resource', resource, ['openResource']],
 	['./sql', sql, ['PROVENANCE_COLUMNS', 'openSqlResource']],
 	['./sqlite', sqlite, ['sqliteBackend']],
-	['./conformance', conformance, ['gitConformance', 'sqlConformance', 'workspaceConformance']],
+	['./s3', s3, ['s3ObjectBackend']],
+	[
+		'./conformance',
+		conformance,
+		['gitConformance', 'objectConformance', 'sqlConformance', 'workspaceConformance'],
+	],
 	[
 		'./git',
 		git,
@@ -108,13 +118,17 @@ it.each([
 			'SOURCES',
 			'TEMPLATES',
 			'assertAgent',
+			'assertCommitHash',
+			'byPath',
 			'changeTo',
 			'filesOf',
 			'hashesOf',
 			'namespaceOf',
 			'readOnly',
+			'revisionOf',
 			'sameFiles',
 			'validName',
+			'validRefName',
 		],
 	],
 ])('exports exactly its bindings from %s', (_path, entry, names) => {

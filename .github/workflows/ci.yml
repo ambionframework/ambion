@@ -124,3 +124,26 @@ jobs:
         run: pnpm --filter @ambionframework/workstation run test:sshd
         env:
           AMBION_WORKSTATION_SSHD: ${{ runner.temp }}/ambion-sshd/workstation.json
+
+  object-store:
+    name: Object backend against MinIO
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26.4.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # The script runs MinIO in Docker from an image pinned by digest, and
+      # writes the endpoint and a fresh credential to the file below.
+      - name: start MinIO
+        run: bash packages/workspace/test/s3/setup.sh "$RUNNER_TEMP/ambion-s3"
+      - name: S3 tier
+        run: pnpm --filter @ambionframework/workspace run test:s3
+        env:
+          AMBION_S3: ${{ runner.temp }}/ambion-s3/s3.json

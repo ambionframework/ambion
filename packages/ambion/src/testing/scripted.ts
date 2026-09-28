@@ -50,6 +50,9 @@ export const callTool = (tool: string, args: Record<string, unknown> = {}): Turn
 export const speak = (text: string, to?: string): Turn =>
 	callTool('say', to ? { to, text } : { text });
 
+/** A turn that calls `schedule`: the room gives the say back to the seat after `after` seconds. */
+export const later = (text: string, after: number): Turn => callTool('schedule', { text, after });
+
 /** A turn that records the usage of a model request as a `usage` step. */
 export const spend = (usage: Usage): Turn => callTool('usage', { ...usage });
 
@@ -83,20 +86,20 @@ const trimmed = (value: unknown): string | undefined =>
 	typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
 
 /** The room intent a call makes, or nothing when the call names an agent's own tool. */
-function intentOf(call: Call): Intent | undefined {
+function intentOf(call: Call, seat: string): Intent | undefined {
 	if (call.tool === 'seat') return { kind: 'seated', name: trimmed(call.args.name) ?? '' };
 	if (call.tool === 'unseat') return { kind: 'unseated', name: trimmed(call.args.name) ?? '' };
+	if (call.tool === 'schedule')
+		return { kind: 'said', to: seat, ...spoken(call), after: Number(call.args.after) };
 	if (call.tool !== 'say') return undefined;
 	const to = trimmed(call.args.to);
+	return { kind: 'said', ...(to === undefined ? {} : { to }), ...spoken(call) };
+}
+
+/** The text and refs of a `say` or a `schedule` call. */
+function spoken(call: Call): { text: string; refs?: string[] } {
 	const refs = Array.isArray(call.args.refs) ? call.args.refs.map(String) : [];
-	const after = call.args.after;
-	return {
-		kind: 'said',
-		...(to === undefined ? {} : { to }),
-		text: trimmed(call.args.text) ?? '',
-		...(refs.length === 0 ? {} : { refs }),
-		...(typeof after === 'number' ? { after } : {}),
-	};
+	return { text: trimmed(call.args.text) ?? '', ...(refs.length === 0 ? {} : { refs }) };
 }
 
 const textOf = (result: string | ToolResult): string =>
@@ -209,7 +212,7 @@ class ScriptedSession implements ExecutorSession {
 			this.results.push({ tool: call.tool, text: 'recorded' });
 			return;
 		}
-		const intent = intentOf(call);
+		const intent = intentOf(call, this.definition.name);
 		const text = intent === undefined ? await this.invoke(call) : await this.commit(intent);
 		this.results.push({ tool: call.tool, text });
 	}

@@ -6,6 +6,7 @@
  * namespace is the name of an agent. No agent takes a reserved name.
  */
 
+import type { GitCommit, GitRevision } from './git-backend.ts';
 import type { WorkspaceAgent } from './resource.ts';
 
 /** The namespace of the read-only templates. */
@@ -51,4 +52,66 @@ export function assertAgent(agent: WorkspaceAgent): void {
 export function readOnly(id: string): boolean {
 	const namespace = namespaceOf(id);
 	return namespace === TEMPLATES || namespace === SOURCES;
+}
+
+/** A commit hash, full or short. */
+const HASH = /^[0-9a-f]{7,64}$/;
+
+/**
+ * A full commit hash: 40 hex digits, or 64 in a SHA-256 repository. The
+ * kernel's commit URI holds the same hash. A backend checks its own input,
+ * since host code can call `show` without a ref.
+ */
+const FULL_HASH = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
+/** Throw a `RangeError` when `hash` is not a full commit hash. */
+export function assertCommitHash(hash: string): void {
+	if (!FULL_HASH.test(hash))
+		throw new RangeError(`'${hash}' is not a full commit hash of 40 or 64 lowercase hex digits.`);
+}
+
+/** The changes of a commit in the order `show` gives them: by path, as code units compare. */
+export function byPath(changes: GitCommit['changes']): GitCommit['changes'] {
+	return [...changes].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/** The characters a git ref name never holds beside a control or a space: `~^:?*[\`. */
+const REF_FORBIDDEN = /[~^:?*[\\]/;
+
+/** Whether `name` holds a control character, a space, or DEL. */
+function hasControl(name: string): boolean {
+	return [...name].some((char) => {
+		const code = char.charCodeAt(0);
+		return code <= 0x20 || code === 0x7f;
+	});
+}
+
+/**
+ * Whether `name` is a branch or a tag name that git takes as a name alone,
+ * after the rules of `git check-ref-format`. A name with `..`, `@{`, or one
+ * of the characters git reads as an expression is refused.
+ */
+export function validRefName(name: string): boolean {
+	if (name === '@' || name.endsWith('.') || REF_FORBIDDEN.test(name) || hasControl(name))
+		return false;
+	if (name.includes('..') || name.includes('@{')) return false;
+	return name
+		.split('/')
+		.every((part) => part !== '' && !part.startsWith('.') && !part.endsWith('.lock'));
+}
+
+/**
+ * The revision git reads for `at`: `refs/heads/<branch>`, `refs/tags/<tag>`,
+ * or the hash. A backend adds `^{commit}`. Throws for a name or a hash that
+ * git would read as something else.
+ */
+export function revisionOf(at: GitRevision): string {
+	if ('commit' in at) {
+		if (!HASH.test(at.commit))
+			throw new Error(`'${at.commit}' is not a commit hash of 7 to 64 lowercase hex digits.`);
+		return at.commit;
+	}
+	const [kind, name] = 'branch' in at ? ['branch', at.branch] : ['tag', at.tag];
+	if (!validRefName(name)) throw new Error(`'${name}' is not a valid git ${kind} name.`);
+	return `refs/${kind === 'branch' ? 'heads' : 'tags'}/${name}`;
 }

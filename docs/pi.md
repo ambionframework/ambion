@@ -214,7 +214,7 @@ tokens.** A scripted room compacts only when its definition sets
 
 ## How room tools reach the harness
 
-[Executors](executors.md#the-room-tools) states the three tools, the commit
+[Executors](executors.md#the-room-tools) states the room tools, the commit
 key, and the room answers.
 
 **The room tools are harness tools bound to the activation.** The harness

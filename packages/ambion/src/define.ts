@@ -281,7 +281,7 @@ function copyProperties(from: object, to: object, seen: WeakMap<object, unknown>
 export const SAY = {
 	name: 'say' as const,
 	description:
-		'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. To come back to your work later, set `to` to your own name and `after` to a number of seconds: the room gives the say back to you then, for the person who owns the exchange.',
+		'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. To come back to your work later, call `schedule`.',
 	parameters: Type.Object({
 		to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
 		text: Type.String(),
@@ -291,13 +291,6 @@ export const SAY = {
 					description: 'A URI the message cites: a file, a table, a room, or an exchange.',
 				}),
 			),
-		),
-		after: Type.Optional(
-			Type.Integer({
-				minimum: 1,
-				description:
-					'Seconds until the room gives this say back to you. Set `to` to your own name.',
-			}),
 		),
 	}),
 };
@@ -331,8 +324,35 @@ export const DISMISS = {
 	}),
 };
 
+/** The room tool that schedules a say to the seat itself, to come back to its work later. */
+export const SCHEDULE = {
+	name: 'schedule' as const,
+	description:
+		'Come back to your work later. After `after` seconds, the room gives this say back to you, for the person who owns the exchange. The result names a handle; call `dismiss` with it to drop the say.',
+	parameters: Type.Object({
+		after: Type.Integer({
+			minimum: 1,
+			description: 'Seconds until the room gives this say back to you.',
+		}),
+		text: Type.String({ description: 'What to do when the say comes back.' }),
+		refs: Type.Optional(
+			Type.Array(
+				Type.String({
+					description: 'A URI the say cites: a file, a table, a room, or an exchange.',
+				}),
+			),
+		),
+	}),
+};
+
 /** The names that the room supplies for an activation. An agent's own tool takes none of them. */
-const ROOM_TOOL_NAMES: readonly string[] = [SAY.name, SEAT.name, UNSEAT.name, DISMISS.name];
+const ROOM_TOOL_NAMES: readonly string[] = [
+	SAY.name,
+	SCHEDULE.name,
+	SEAT.name,
+	UNSEAT.name,
+	DISMISS.name,
+];
 
 function flattenTools(
 	tools: readonly AmbionTool[] | undefined,

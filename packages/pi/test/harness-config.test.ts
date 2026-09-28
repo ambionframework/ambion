@@ -139,6 +139,7 @@ describe('the harness of an activation', () => {
 		const [ordinary, closed] = requests;
 		expect(names(ordinary?.context as Context)).toEqual([
 			'say',
+			'schedule',
 			'seat',
 			'unseat',
 			'dismiss',
@@ -180,7 +181,7 @@ describe('the harness of an activation', () => {
 		const last = answers.at(-1)?.context as Context;
 		expect(contextText(last)).toContain('The pump question is open.');
 		expect(contextText(last)).not.toContain('Can we ship?');
-		expect(contextText(last)).toContain('[new] [andrei] And the hose?');
+		expect(contextText(last)).toContain('[new] #3 [andrei] And the hose?');
 		expect(session.readThrough).toBe(3);
 	});
 

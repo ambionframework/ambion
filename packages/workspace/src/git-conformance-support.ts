@@ -1,0 +1,84 @@
+/**
+ * What the git conformance cases share: the agents, the check, and the
+ * helpers that run the git owner and the shell as one agent.
+ */
+
+import { BACKGROUND_CONTEXT, type ShellOutputUpdate } from '@earendil-works/pi-agent-core';
+import type { GitEnv } from './git-backend.ts';
+import type { WorkspaceAgent } from './resource.ts';
+import type { Workspace } from './workspace.ts';
+
+export const ctx = BACKGROUND_CONTEXT;
+
+export const ANALYST: WorkspaceAgent = { name: 'analyst' };
+export const REVIEWER: WorkspaceAgent = { name: 'reviewer' };
+
+/** Throw `what` when `condition` fails. */
+export function check(condition: boolean, what: string): void {
+	if (!condition) throw new Error(what);
+}
+
+/** Run `operation` on the git owner as `agent`. */
+export function git<T>(
+	workspace: Workspace,
+	agent: WorkspaceAgent,
+	operation: (env: GitEnv) => Promise<T>,
+): Promise<T> {
+	const owner = workspace.git;
+	if (owner === undefined) throw new Error('The workspace has no git owner.');
+	return owner.use(agent, operation);
+}
+
+/**
+ * Run one shell command as `agent`, and give its exit status and its output.
+ * The author variables let a real `git` commit. The just-bash `git` locks
+ * the author to the agent, and ignores them.
+ */
+export async function sh(
+	workspace: Workspace,
+	agent: WorkspaceAgent,
+	command: string,
+): Promise<{ code: number; output: string }> {
+	let output = '';
+	const onUpdate = (update: ShellOutputUpdate): void => {
+		if (update.kind === 'replace') output = update.output.text;
+	};
+	const ran = await workspace.use(agent, (env) =>
+		env.exec(
+			command,
+			{
+				timeout: 120,
+				env: authorOf(agent),
+				capture: { limits: { maxBytes: 100_000, maxLines: 1000 } },
+				onUpdate,
+			},
+			ctx,
+		),
+	);
+	if (!ran.ok) throw ran.error;
+	return { code: ran.value.exitCode, output };
+}
+
+/** The author and committer variables of `agent`. */
+function authorOf(agent: WorkspaceAgent): Record<string, string> {
+	const email = `${agent.name}@ambion.invalid`;
+	return {
+		GIT_AUTHOR_NAME: agent.name,
+		GIT_AUTHOR_EMAIL: email,
+		GIT_COMMITTER_NAME: agent.name,
+		GIT_COMMITTER_EMAIL: email,
+	};
+}
+
+/** Fork `source` to `<agent>/<name>`, and give the fork's clone URL. */
+export async function forkAs(
+	workspace: Workspace,
+	agent: WorkspaceAgent,
+	source: string,
+	name: string,
+): Promise<string> {
+	const outcome = await git(workspace, agent, (env) => env.fork(source, name));
+	if (!outcome.ok)
+		throw new Error(`the fork of ${source} to ${name} was refused: ${outcome.reason}`);
+	return outcome.repository.url;
+}

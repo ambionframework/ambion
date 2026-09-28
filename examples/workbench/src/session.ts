@@ -6,7 +6,17 @@ import { type Choices, type Parsed, parse, type Suggestion, suggest } from './co
 import { dismissCommand } from './dismiss.ts';
 import { RoomFeed } from './feed.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
-import { holderOf, type Known, labUri, type RefItem, refItems, shows, tableOfUri } from './refs.ts';
+import {
+	holderOf,
+	type Known,
+	loadEntry,
+	panelEntries,
+	panelOf,
+	type RefItem,
+	refItems,
+	shows,
+	unshownText,
+} from './refs.ts';
 import { DONE, errorText, HELP, notesOf, refusal, workingAgents } from './session-text.ts';
 import { type ActivationSteps, activationLine, ended, stepsView } from './steps.ts';
 import { type Block, buildTimeline } from './timeline.ts';
@@ -63,10 +73,7 @@ export class Session {
 		this.identity = identity;
 		this.changed = changed;
 		this.feed = new RoomFeed<RoomView>(host);
-		this.browser = new FileBrowser(
-			(path) => (tableOfUri(path) === undefined ? host.file(path) : host.labTable(path)),
-			changed,
-		);
+		this.browser = new FileBrowser((path) => loadEntry(host, path), changed);
 	}
 
 	/** True once when the conversation should scroll to its end, as after a notice. */
@@ -459,15 +466,8 @@ export class Session {
 
 	// Files
 
-	/** The entries of the files panel: the workspace files, then the tables of the lab database. */
-	private get entries(): FileEntry[] {
-		return [
-			...this.files,
-			...this.tables.map((name) => ({ path: labUri(name), size: 0, kind: 'table' as const })),
-		];
-	}
-
-	private async openFiles(path?: string): Promise<Intent | undefined> {
+	/** Open the files panel on `path`. `extra` lists one more entry first, such as a snapshot. */
+	private async openFiles(path?: string, extra?: FileEntry): Promise<Intent | undefined> {
 		try {
 			this.files = await this.host.files();
 			this.tables = await this.host.labTables();
@@ -475,7 +475,8 @@ export class Session {
 			this.fail(error);
 			return undefined;
 		}
-		this.browser.show(this.entries, path);
+		const entries = panelEntries(this.files, this.tables);
+		this.browser.show(extra === undefined ? entries : [extra, ...entries], path);
 		return { type: 'files' };
 	}
 
@@ -485,6 +486,7 @@ export class Session {
 	private get known(): Known {
 		return {
 			room: this.room,
+			rooms: this.rooms.map((room) => room.name),
 			files: this.files.map((file) => file.path),
 			tables: this.tables,
 			seqs: new Set(this.feed.messages.map((message) => message.seq)),
@@ -497,18 +499,19 @@ export class Session {
 	}
 
 	/**
-	 * Open a ref. A file or a table opens in the files panel, and the terminal
-	 * shows the panel when this returns the intent. A message ref moves the focus
-	 * to that message. A ref that does not resolve opens nothing.
+	 * Open a ref. A snapshot, a commit, a file, or a table opens in the files
+	 * panel, and the terminal shows the panel when this returns the intent. A
+	 * room ref opens its room, and a message ref opens its room and moves the
+	 * focus to the message. A ref that does not resolve opens nothing.
 	 */
 	async openRef(id: string): Promise<Intent | undefined> {
 		const target = this.refItems.find((item) => item.id === id)?.resolved.target;
 		if (!target) return undefined;
-		if (target.kind === 'message') {
-			this.jump(target.seq);
-			return undefined;
-		}
-		return this.openFiles(target.kind === 'file' ? target.path : labUri(target.name));
+		const panel = panelOf(target);
+		if (panel) return this.openFiles(panel.path, panel.extra);
+		if ('room' in target) await this.switchRoom(target.room);
+		if (target.kind === 'message') this.jump(target.seq);
+		return undefined;
 	}
 
 	/** Focus one message. It opens the discussion that holds the message. */
@@ -517,10 +520,9 @@ export class Session {
 		if (holder) this.expanded.add(holder);
 		this.focus = seq;
 		this.rebuild();
-		if (!shows(this.blocks, seq)) {
-			this.focus = undefined;
-			this.say(`Message ${seq} is not in the conversation. A summary stands for it.`);
-		}
+		if (shows(this.blocks, seq)) return;
+		this.focus = undefined;
+		this.say(unshownText(seq, this.room, this.feed.messages));
 	}
 
 	/** Drop the focus that a message ref set. */

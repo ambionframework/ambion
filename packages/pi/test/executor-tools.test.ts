@@ -3,7 +3,7 @@
  * purpose gets, what a say or a membership tool commits, and what a domain
  * tool receives.
  */
-import { defineAgent, defineTool, type ToolContext } from '@ambionframework/ambion';
+import { defineAgent, defineTool, type Message, type ToolContext } from '@ambionframework/ambion';
 import type {
 	ActivationSpec,
 	ActivationView,
@@ -116,6 +116,7 @@ describe('executor tool authority', () => {
 	it('binds only the tool named by each activation purpose', () => {
 		expect(names(bound('activation', respond).tools)).toEqual([
 			'say',
+			'schedule',
 			'seat',
 			'unseat',
 			'dismiss',
@@ -186,11 +187,59 @@ describe('executor tool authority', () => {
 		},
 	);
 
+	it('schedules a say to the seat, and confirms the read position only when nothing landed before it', async () => {
+		const scheduled = (seq: number): Message => ({
+			kind: 'said',
+			seq,
+			at,
+			from: 'worker',
+			to: 'worker',
+			text: 'Check the build.',
+			after: 600,
+			owner: 'priya',
+		});
+		const clean = bound('message:4:worker:1', respond, { committed: scheduled(5) });
+		const result = await call(clean.tool(1), 'clean', { text: ' Check the build. ', after: 600 });
+		expect(result.content).toEqual([
+			{
+				type: 'text',
+				text: 'scheduled 5: the room gives this say back to you at 2026-01-01T00:10:00.000Z',
+			},
+		]);
+		expect(clean.commits).toEqual([
+			{
+				activation: 'message:4:worker:1',
+				key: 'clean',
+				readThrough: 0,
+				intent: { kind: 'said', to: 'worker', text: 'Check the build.', after: 600 },
+			},
+		]);
+		expect(clean.activation.readThrough).toBe(5);
+
+		const unread: Message = { kind: 'said', seq: 5, at, from: 'priya', text: 'Also the tests.' };
+		const behind = bound('message:4:worker:1', respond, {
+			committed: scheduled(6),
+			unread: [unread],
+		});
+		const late = await call(behind.tool(1), 'behind', { text: 'Check the build.', after: 600 });
+		expect(late.content).toEqual([
+			{
+				type: 'text',
+				text: [
+					'scheduled 6: the room gives this say back to you at 2026-01-01T00:10:00.000Z. New on the record before it:',
+					'#5 [priya] Also the tests.',
+				].join('\n'),
+			},
+		]);
+		// The model reads the record through the say when it reads the result.
+		expect(behind.activation.readThrough).toBe(0);
+	});
+
 	it('does not mark context consumed for membership or an unchanged membership result', async () => {
 		const { activation, commits, tool } = bound('message:4:worker:1', respond, {
 			unchanged: { kind: 'seated', name: 'surveyor' },
 		});
-		await expect(call(tool(1), 'seat-call', { name: 'surveyor' })).resolves.toMatchObject({
+		await expect(call(tool(2), 'seat-call', { name: 'surveyor' })).resolves.toMatchObject({
 			content: [{ text: 'delivered' }],
 		});
 		expect(commits).toEqual([

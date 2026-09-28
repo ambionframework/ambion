@@ -150,11 +150,12 @@ application puts it, and that place is often no git repository.
 
 ## How a room tool reaches Codex
 
-[Executors](executors.md#the-room-tools) states the three tools, the commit
+[Executors](executors.md#the-room-tools) states the room tools, the commit
 key, and the room answers.
 
-**Codex runs tools as MCP servers that it spawns.** The three room tools
-(`say`, `seat`, `unseat`) and the tools of the agent live in the host. A small
+**Codex runs tools as MCP servers that it spawns.** The room tools (`say`,
+`schedule`, `seat`, `unseat`, `dismiss`) and the tools of the agent live in
+the host. A small
 stdio server bridges them.
 
 ```mermaid
@@ -209,9 +210,9 @@ events for trouble that it survives, such as a reconnect. An `error` event
 ends the run only when nothing else does.
 
 **`turn.started` moves `readThrough` to the position of the view or the
-delta.** The model reads the prompt when a run starts. A missed say also
-moves the position, to the last of the messages it carries; see
-[Executors](executors.md#how-an-activation-runs).
+delta.** The model reads the prompt when a run starts. A missed say moves
+the position to the last of the messages it carries, and a `schedule` moves
+it to the scheduled say; see [Executors](executors.md#how-an-activation-runs).
 
 **Codex takes no steer.** [The harness matrix](executors.md#the-harness-matrix)
 states what a family without steering does. The Codex session has no
@@ -246,8 +247,8 @@ command failed with exit code N". A failed patch gives "The patch failed".
 A failed MCP call gives the message that Codex reported.
 
 **A tool of another server shows with its server.** The step name is
-`server__tool`. A room tool shows as `say`, `seat`, or `unseat`, and the
-executor reports none of the three as a tool event; see
+`server__tool`. A room tool shows with its plain name, such as `say` or
+`schedule`, and the executor reports no room tool as a tool event; see
 [Executors](executors.md#the-room-tools).
 
 **A completed patch feeds `refs`.** The executor collects the paths of each

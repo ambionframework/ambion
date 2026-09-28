@@ -22,7 +22,9 @@ construct a model runner.
 `startRoom` and `resumeRoom` take an `execution` for one room run. An
 explicit `execution` wins over every default. A room whose seats run on
 more than one family passes `composeExecutions`, which routes each seat on
-the `kind` of its executor.
+the `kind` of its executor. A seat of a kind that the composition does not
+name fails at once with a `no_execution` error, and the failure is
+permanent.
 
 **A room with no `execution` uses the default of each executor kind.** An
 executor package calls `registerDefaultExecution(kind, factory)` when the
@@ -131,7 +133,9 @@ reads for the first event.
 | ----------------------------------------------------- | ------------------------------------------------------------------- |
 | The model reads a prompt, a delta, or a steered line  | `readThrough` moves to the position of that message.                |
 | The room accepts an ordinary `say`                    | `readThrough` moves to the position the say confirms.               |
+| The room accepts a `schedule` with no `unread`        | `readThrough` moves to the position of the scheduled say.           |
 | The harness reports the tool result of a `missed` say | `readThrough` moves to the last of the messages the result carries. |
+| The harness reports the tool result of a `schedule`   | `readThrough` moves to the scheduled say, past its `unread`.        |
 
 **A steered line moves the position only when the record before it is
 already read.** A message that lands out of order does not advance
@@ -158,7 +162,8 @@ family.
 
 [Definitions and tools](agent.md#tools) states which tools an ordinary
 activation receives and which tools a closing activation receives. The
-hosting entry exports `SAY`, `SEAT`, `UNSEAT`, and `summaryToolDescription`.
+hosting entry exports `SAY`, `SCHEDULE`, `SEAT`, `UNSEAT`, `DISMISS`, and
+`summaryToolDescription`.
 
 **The hosting entry holds the room tools once, in a form that names no
 harness.** Each family adapts them to its own tool shape.
@@ -169,9 +174,9 @@ harness.** Each family adapts them to its own tool shape.
   id of the tool call, and the commit takes it as its key.
 - **`RoomToolBinding`** is what the tools reach: the activation id, the
   room, `readThrough`, `acknowledgeThrough`, `resultExpected`, and `abort`.
-- **`RoomToolOptions`** adds to a say: `refs` changes the refs it cites,
-  and `spoke` runs when the room takes an ordinary say. A scheduled say is
-  an ordinary say, so `spoke` runs for it too.
+- **`RoomToolOptions`** adds to a say and to a schedule: `refs` changes
+  the refs it cites, and `spoke` runs when the room takes an ordinary say
+  or a scheduled say.
 - **`agentTools(view, agent, signal, current)`** returns the tools of the
   definition in the same form. A closing activation gets none.
 - **`toolContext(agent, view, call, signal, onUpdate?)`** builds the
@@ -186,6 +191,11 @@ activation.
 **`say` commits a `said` intent.** It carries `readThrough` and takes the
 tool call id as its commit key. It accepts `text`, `to`, and `refs`.
 
+**`schedule` commits a `said` intent with `after`.** The intent goes to the
+seat itself. It carries `readThrough`, and the room takes it at any
+position. It accepts `after`, `text`, and `refs`. The result names the
+handle and the due time, and it lists the `unread` messages of the answer.
+
 **`seat` and `unseat` commit a membership intent**, keyed on the tool call
 id.
 
@@ -198,8 +208,9 @@ id.
 | `missed`                   | The adapter raises a tool error that lists the new messages.                    |
 | `unknown` or `stale`       | The adapter aborts the activation. The message may already stand on the record. |
 
-**`say` is the room's own event.** It raises no `tool_execution_start` and
-no `tool_execution_end` event. The adapter reports it as a room event.
+**`say` and `schedule` are the room's own events.** They raise no
+`tool_execution_start` and no `tool_execution_end` event. The adapter
+reports each one as a room event.
 [Codex](codex.md#step-mapping) reports `seat` and `unseat` the same way.
 
 **The tools run in the host process.** Each adapter page names the
@@ -374,7 +385,7 @@ family. `@ambionframework/claude` is the worked example, and
 2. **Render with the shared helpers.** Call `renderActivation` on the first
    pass and `renderDelta` on later passes. [The prompt the driver
    renders](#the-prompt-the-driver-renders) states where each part goes.
-3. **Expose the three room tools.** Call `roomTools` and `agentTools` for
+3. **Expose the room tools.** Call `roomTools` and `agentTools` for
    one activation, and adapt each result to the form the harness needs.
    [The room tools](#the-room-tools) states the commit key and the room
    answers.

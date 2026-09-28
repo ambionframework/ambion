@@ -2,7 +2,8 @@
  * How a room finds the execution for a seat. An explicit execution of a room
  * or a runtime runs before a registered default. `composeExecutions` routes
  * each seat by its executor kind. A room with no execution still runs its
- * people and its record, and a seat the room wakes fails at once and for good.
+ * people and its record. On every router, a seat whose kind no execution
+ * serves fails at once and for good, and the room does not wake it again.
  * Stub executions stand in for a family, because the kernel imports no
  * executor package.
  */
@@ -13,6 +14,7 @@ import {
 	composeExecutions,
 	describeExecutor,
 	type Execution,
+	hostingOf,
 	registerDefaultExecution,
 } from '../src/hosting.ts';
 import {
@@ -25,7 +27,8 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { andrei, collect, roomName, waitForRoom } from './support/room.ts';
+import { fakeClock } from '../src/testing.ts';
+import { andrei, collect, roomName, stateOf, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted, speak } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { memory } from './support/storage.ts';
@@ -89,7 +92,7 @@ describe('the execution a room chooses', () => {
 		},
 	);
 
-	it('routes each seat to the execution for its kind, and names the known kinds on a miss', () => {
+	it('routes each seat to the execution for its kind', () => {
 		const pi: string[] = [];
 		const claude: string[] = [];
 		const host = { clock: { now: () => 0, alarm: () => () => {} }, storage: {}, limits: {} };
@@ -109,26 +112,52 @@ describe('the execution a room chooses', () => {
 		connect(both, 'sonnet', 'claude');
 		expect(pi).toEqual(['pilot']);
 		expect(claude).toEqual(['sonnet']);
-		expect(() => connect(composeExecutions({ pi: stub().execution }), 'sonnet', 'claude')).toThrow(
-			"No execution serves seat 'sonnet' of kind 'claude'. Known kinds: pi.",
-		);
 	});
 
-	it('fails the activation of a woken seat with a permanent no_execution error when none serves it', async () => {
-		const room = stopAtEnd(
-			await startRoom({ name: roomName('no-execution'), agents: [seat('none')] }),
-		);
-		const events = collect(room);
-		await (await room.visit(andrei)).send({ text: 'Anybody there?' });
-		await waitForRoom(room);
-		const failures = events.filter((event) => event.type === 'error');
-		expect(failures.length).toBeGreaterThan(0);
-		expect(failures[0]).toMatchObject({
-			cause: 'permanent',
-			agent: 'worker',
-			error: { code: 'no_execution' },
-		});
-	});
+	const composed = () => composeExecutions({ pi: stub().execution });
+	const known = "No execution serves seat 'worker' of kind 'claude'. Known kinds: pi.";
+	it.each([
+		{ router: 'composeExecutions on the room', kind: 'claude', room: composed(), reason: known },
+		{
+			router: 'composeExecutions on the runtime',
+			kind: 'claude',
+			runtime: composed(),
+			reason: known,
+		},
+		{ router: 'the registered defaults', kind: 'none', reason: /^The room has no execution\./ },
+	])(
+		'fails the activation at once and for good when $router serves no execution for the kind',
+		async ({ kind, room: own, runtime: shared, reason }) => {
+			const clock = fakeClock();
+			const runtime = createRuntime({
+				clock,
+				...(shared === undefined ? {} : { execution: shared }),
+			});
+			const room = stopAtEnd(
+				await startRoom({
+					name: roomName('no-execution'),
+					agents: [seat(kind)],
+					runtime,
+					...(own === undefined ? {} : { execution: own }),
+				}),
+			);
+			const events = collect(room);
+			await (await room.visit(andrei)).send({ text: 'Anybody there?' });
+			await waitForRoom(room, 'settled', 10_000);
+			const failures = events.filter((event) => event.type === 'error');
+			expect(failures.length).toBeGreaterThan(0);
+			expect(failures[0]).toMatchObject({
+				cause: 'permanent',
+				agent: 'worker',
+				error: { code: 'no_execution', message: expect.stringMatching(reason) },
+			});
+			const seen = events.length;
+			await clock.advance(3 * hostingOf(runtime).limits.delivery.resend);
+			await room.reconcile();
+			expect(events.slice(seen)).toEqual([]);
+			expect(stateOf(room).due).toEqual([]);
+		},
+	);
 });
 
 interface Call {

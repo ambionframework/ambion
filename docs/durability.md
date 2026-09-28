@@ -83,6 +83,11 @@ last `seq` is fresh. A position short of it is `missed`: the room returns the
 messages beyond `readThrough`, and the seat reads them and commits again. A
 position off the record is invalid.
 
+**A scheduled say is the one said intent that the rule does not check.** It
+goes back to its author alone, so the room takes it at any position. The
+`committed` answer lists in `unread` the messages after its `readThrough`
+and before the say ([Exchange](exchange.md#6-a-scheduled-say)).
+
 A delivery's key and an agent commit's key live in separate spaces. The same
 literal key can name a delivery and, independently, a commit, without
 colliding: each reads back through `Message.key` exactly as its own caller
@@ -137,8 +142,9 @@ transient cause is a rate limit, a server error, or a lost connection.
   permanent.
 - **A transient failure retries to the cap.** The activation retry in the
   lease paragraph above is room-driven. Each retry spends an attempt.
-- **A room without an execution fails every activation as permanent.** The
-  error code is `no_execution`.
+- **A seat that no execution serves fails every activation as
+  permanent.** The error code is `no_execution`. The room does not send
+  the wake again.
 - **The Pi executor reads a status only from a provider diagnostic.** It
   treats 400, 401, 402, 403, 404, 405, and 422 as permanent, and credit,
   quota, usage-limit, or authentication text as permanent. It never reads a status from free error

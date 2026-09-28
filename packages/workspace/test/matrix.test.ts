@@ -77,7 +77,7 @@ const twoWorkspaces: Scenario = {
 							return call === 3 ? speak('beta done') : quiet();
 						},
 						gamma: (context) => {
-							expect(toolNames(context)).toEqual(['say', 'seat', 'unseat', 'dismiss']);
+							expect(toolNames(context)).toEqual(['say', 'schedule', 'seat', 'unseat', 'dismiss']);
 							return quiet();
 						},
 					}),

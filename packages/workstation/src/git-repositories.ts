@@ -14,8 +14,22 @@
  * waits for the first.
  */
 
-import type { GitEnv, GitForkOutcome, GitRepository } from '@ambionframework/workspace';
-import { namespaceOf, SOURCES, validName } from '@ambionframework/workspace/git';
+import type {
+	GitChange,
+	GitCommit,
+	GitEnv,
+	GitForkOutcome,
+	GitRepository,
+	GitRevision,
+} from '@ambionframework/workspace';
+import {
+	assertCommitHash,
+	byPath,
+	namespaceOf,
+	revisionOf,
+	SOURCES,
+	validName,
+} from '@ambionframework/workspace/git';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import { type GitAccount, tagged } from './git-account.ts';
 
@@ -54,6 +68,94 @@ const LIST_SCRIPT = [
 	'done',
 	'',
 ].join('\n');
+
+/**
+ * Print the full hash of the commit that `AMBION_REV` names in the
+ * repository `AMBION_ID`, or an empty value when it names none. The caller
+ * builds the revision with `revisionOf`, so git reads a branch or a tag as a
+ * name alone. When `AMBION_KIND` is `hash`, the revision is a hash prefix:
+ * `--disambiguate` lists the objects it names, and a branch or a tag with
+ * the same name plays no part. A prefix of more than one object names none.
+ */
+const RESOLVE_SCRIPT = [
+	'set -euo pipefail',
+	'repo="$HOME/$AMBION_ROOT/$AMBION_ID.git"',
+	'[ -f "$repo/HEAD" ] || exit 0',
+	'rev="$AMBION_REV"',
+	'if [ "$AMBION_KIND" = hash ]; then',
+	'  found=$(git --git-dir="$repo" rev-parse --disambiguate="$rev" 2>/dev/null || true)',
+	'  [ -n "$found" ] && [ "$(wc -l <<<"$found")" -eq 1 ] || exit 0',
+	'  rev="$found"',
+	'fi',
+	String.raw`printf 'AMBION_COMMIT %s\n' "$(git --git-dir="$repo" rev-parse --verify --quiet "$rev^{commit}" || true)"`,
+	'',
+].join('\n');
+
+/**
+ * Print the commit `AMBION_HASH` of the repository `AMBION_ID`: its parents,
+ * then its author, its message, and its changes in base64, so no byte of a
+ * name, a message, or a path breaks a line. It prints nothing when the
+ * repository or the commit does not exist. The changes are `diff-tree -z`
+ * against the first parent, or against an empty tree for a root commit.
+ */
+const SHOW_SCRIPT = [
+	'set -euo pipefail',
+	'repo="$HOME/$AMBION_ROOT/$AMBION_ID.git"',
+	'[ -f "$repo/HEAD" ] || exit 0',
+	'[ "$(git --git-dir="$repo" cat-file -t "$AMBION_HASH" 2>/dev/null || true)" = commit ] || exit 0',
+	'show() { git --git-dir="$repo" show -s --format="$1" "$AMBION_HASH"; }',
+	String.raw`printf 'AMBION_PARENTS %s\n' "$(show '%P')"`,
+	String.raw`printf 'AMBION_AUTHOR %s\n' "$(show '%an%x00%ae%x00%aI' | base64 -w0)"`,
+	// The stored message: every byte after the blank line that ends the headers.
+	String.raw`printf 'AMBION_MESSAGE %s\n' "$(git --git-dir="$repo" cat-file commit "$AMBION_HASH" | sed '1,/^$/d' | base64 -w0)"`,
+	String.raw`printf 'AMBION_CHANGES %s\n' "$(git --git-dir="$repo" diff-tree --root --diff-merges=first-parent --no-commit-id --no-renames -r --name-status -z "$AMBION_HASH" | base64 -w0)"`,
+	'',
+].join('\n');
+
+/**
+ * How `diff-tree --name-status` names a change. `T` is a change of type, such
+ * as a file that becomes a symbolic link, and the port calls it `modified`.
+ */
+const CHANGES: Readonly<Record<string, GitChange>> = {
+	A: 'added',
+	M: 'modified',
+	T: 'modified',
+	D: 'deleted',
+};
+
+/** The changes that `diff-tree -z --name-status` prints: a status, then a path, each ended by NUL. */
+function changesOf(encoded: string): GitCommit['changes'] {
+	const fields = Buffer.from(encoded, 'base64').toString('utf8').split('\0');
+	const changes: { path: string; change: GitChange }[] = [];
+	for (let index = 0; index + 1 < fields.length; index += 2) {
+		const change = CHANGES[fields[index] ?? ''];
+		const path = fields[index + 1];
+		if (change !== undefined && path !== undefined) changes.push({ path, change });
+	}
+	return byPath(changes);
+}
+
+/** `date` as an ISO 8601 time in UTC, or as git gave it when it does not parse. */
+function isoOf(date: string): string {
+	const at = new Date(date);
+	return Number.isNaN(at.getTime()) ? date : at.toISOString();
+}
+
+/** The commit that the output of `SHOW_SCRIPT` names, or `undefined` for no output. */
+function commitOf(hash: string, output: string): GitCommit | undefined {
+	const [parents] = tagged(output, 'AMBION_PARENTS');
+	if (parents === undefined) return undefined;
+	const text = (tag: string) =>
+		Buffer.from(tagged(output, tag)[0] ?? '', 'base64').toString('utf8');
+	const [name = '', email = '', date = ''] = text('AMBION_AUTHOR').replace(/\n$/, '').split('\0');
+	return {
+		hash,
+		message: text('AMBION_MESSAGE'),
+		author: { name, email, date: isoOf(date) },
+		parents: parents.split(' ').filter((parent) => parent !== ''),
+		changes: changesOf(tagged(output, 'AMBION_CHANGES')[0] ?? ''),
+	};
+}
 
 /** Clone the source into `.staging`, set its facts, and rename it to the target. */
 const FORK_SCRIPT = [
@@ -178,10 +280,54 @@ export class Repositories {
 		return (await this.read(id, '', signal)).find((repository) => repository.id === id);
 	}
 
+	/** The full hash of the commit that `at` names in `id`, or `undefined`. */
+	private async resolve(
+		id: string,
+		at: GitRevision,
+		signal?: AbortSignal,
+	): Promise<string | undefined> {
+		const namespace = namespaceOf(id);
+		if (namespace === undefined || namespace === SOURCES) return undefined;
+		const output = await this.account.run(
+			RESOLVE_SCRIPT,
+			{
+				AMBION_ROOT: this.root,
+				AMBION_ID: id,
+				AMBION_REV: revisionOf(at),
+				AMBION_KIND: 'commit' in at ? 'hash' : 'ref',
+			},
+			signal,
+		);
+		const hash = tagged(output, 'AMBION_COMMIT')[0] ?? '';
+		return hash === '' ? undefined : hash;
+	}
+
+	/** The commit `hash` of `id`, or `undefined` when either does not exist. */
+	private async show(
+		id: string,
+		hash: string,
+		signal?: AbortSignal,
+	): Promise<GitCommit | undefined> {
+		const namespace = namespaceOf(id);
+		if (namespace === undefined || namespace === SOURCES) return undefined;
+		const output = await this.account.run(
+			SHOW_SCRIPT,
+			{ AMBION_ROOT: this.root, AMBION_ID: id, AMBION_HASH: hash },
+			signal,
+		);
+		return commitOf(hash, output);
+	}
+
 	envFor(agent: WorkspaceAgent): GitEnv {
 		return {
 			list: (namespace, signal) => this.list(namespace, signal),
 			get: (id, signal) => this.get(id, signal),
+			// A refused name rejects the call, the same as every other failure of the env.
+			resolve: async (id, at, signal) => this.resolve(id, at, signal),
+			show: async (id, hash, signal) => {
+				assertCommitHash(hash);
+				return this.show(id, hash, signal);
+			},
 			fork: (source, name, signal) => this.fork(agent, source, name, signal),
 			cleanup: async () => undefined,
 		};

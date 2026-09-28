@@ -46,12 +46,13 @@ import { DEV_DIR, withDevices } from './devices.ts';
 import type { JustGitAccess } from './git/access.ts';
 
 /**
- * Where the just-bash backends keep the audit log and the room mirrors.
- * Both backends name the same layout, so no file moves.
+ * Where the just-bash backends keep the audit log, the room mirrors, and
+ * the snapshots. Both backends name the same layout, so no file moves.
  */
 const JUST_BASH_LAYOUT: WorkspaceLayout = {
 	audit: DEFAULT_AUDIT_LOG,
 	rooms: '/rooms',
+	snapshots: '/snapshots',
 };
 
 /**

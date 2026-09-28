@@ -10,6 +10,7 @@ export {
 	type Call,
 	callTool,
 	isClosing,
+	later,
 	quiet,
 	type Result,
 	type Script,

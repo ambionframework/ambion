@@ -1,3 +1,4 @@
+import { snapshotUri } from '@ambionframework/ambion';
 import { people } from '../src/definitions.ts';
 import { Session } from '../src/session.ts';
 import type {
@@ -126,10 +127,19 @@ export class FakeHost implements Workbench {
 		this.reads.push(path);
 		return { path, text: `text of ${path}`, truncated: false };
 	}
+	async snapshot(ref: string): Promise<FileContent> {
+		this.reads.push(ref);
+		return { path: ref, text: `bytes of ${ref}`, truncated: false };
+	}
+	async commit(ref: string): Promise<FileContent> {
+		this.reads.push(ref);
+		return { path: ref, text: `commit of ${ref}`, truncated: false };
+	}
 	async attach(localPath: string) {
 		this.calls.push(`attach:${localPath}`);
 		if (this.attachGate) await this.attachGate;
-		return { path: `/attachments/${localPath.split('/').at(-1)}`, size: 42 };
+		const path = `/attachments/${localPath.split('/').at(-1)}`;
+		return { path, size: 42, ref: snapshotUri('workbench', '0'.repeat(64), path) };
 	}
 	async processes() {
 		const table = [...this.processTable];

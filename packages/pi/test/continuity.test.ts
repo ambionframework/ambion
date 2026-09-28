@@ -209,7 +209,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		expect(prompts.at(-1)).toBe(
 			'Reminder for message:2:product:1.\n\n' +
 				'Your says that wait to return. The room gives each back to you at its due time. Call `dismiss` with the handle of one that no longer fits:\n' +
-				'- 1, due soon: Check the pump.\n\n[new] [andrei] And the pump?',
+				'- 1, due soon: Check the pump.\n\n[new] #2 [andrei] And the pump?',
 		);
 		// The position the session read never reaches the model.
 		expect(prompts.join('\n')).not.toContain('through');
@@ -390,8 +390,8 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		const retry = await run('message:2:product:2', { resume: failed.session });
 		expect(retry.readThrough).toBe(2);
 		const prompts = texts(seen.at(-1) as Context);
-		expect(prompts.filter((text) => text === '[new] [andrei] And the pump?')).toHaveLength(1);
-		expect(prompts.at(-1)).toBe('[new] [andrei] And the pump?');
+		expect(prompts.filter((text) => text === '[new] #2 [andrei] And the pump?')).toHaveLength(1);
+		expect(prompts.at(-1)).toBe('[new] #2 [andrei] And the pump?');
 	});
 
 	it('closes the session, records none, and fails as transient when the harness refuses the settings', async () => {
@@ -555,7 +555,7 @@ describe('exchange continuity on the local disk', () => {
 		expect(second.readThrough).toBe(2);
 		const prompts = texts(after.seen.at(-1) as Context);
 		expect(prompts[0]).toContain("The record of 'memory' so far:");
-		expect(prompts.at(-1)).toBe('[new] [andrei] And the pump?');
+		expect(prompts.at(-1)).toBe('[new] #2 [andrei] And the pump?');
 	});
 
 	it('keeps a session file for each room and seat, and begins fresh over a corrupt one', async () => {
