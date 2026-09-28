@@ -22,18 +22,9 @@ export type LeaseChange =
 			session?: HarnessSession;
 	  };
 
-/**
- * The format of the journal the room writes. Every `run` entry carries it,
- * and a reader refuses a format it does not know. `docs/durability.md`
- * describes the format and its guards.
- */
-export const JOURNAL_FORMAT = 1;
-
 /** A run took the name and fenced earlier runs. */
 export interface Fence {
 	at: string;
-	/** The journal format the run writes. A journal without it is format 1. */
-	format: 1;
 }
 
 /** The room went quiet with an exchange open, and closed it. */

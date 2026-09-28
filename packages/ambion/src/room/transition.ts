@@ -1,7 +1,7 @@
 /** Pure commands and committed events for a room. */
 
 import type { AmbionErrorCode } from '../errors.ts';
-import { type Close, type Composition, JOURNAL_FORMAT, type Seating } from '../journal/events.ts';
+import type { Close, Composition, Seating } from '../journal/events.ts';
 import type { Bodies, Body, Kind } from '../journal/journal.ts';
 import type { ActivationSpec, CommitRequest, Unchanged } from '../protocol.ts';
 import { refsRefusal } from '../refs.ts';
@@ -155,7 +155,7 @@ export function decide(
 					: undefined,
 			};
 		case 'run':
-			return { event: { kind: 'run', body: { at: iso(now), format: JOURNAL_FORMAT } } };
+			return { event: { kind: 'run', body: { at: iso(now) } } };
 		case 'cancel':
 			return { event: { kind: 'cancel', body: { at: iso(now) } } };
 		case 'reconcile':

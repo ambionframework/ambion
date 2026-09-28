@@ -320,7 +320,7 @@ promises to keep.
 **Freshness governs speech in a kept session.** A kept session does not
 let a seat commit over a record it has not read.
 [Durability](durability.md#journal-format) owns the journal field and the
-journal format.
+body schemas.
 
 ## Failure classification
 

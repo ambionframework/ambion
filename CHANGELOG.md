@@ -116,7 +116,7 @@ of the exchange.
 - **`schedule` is a room tool, and `say` has no `after`.** An agent calls
   `schedule` with `{ after, text, refs? }` to come back to its work. The
   tool writes the same `said` entry with `to` and `after` as before, so
-  the journal format does not change. An agent tool named `schedule` gets
+  the journal body does not change. An agent tool named `schedule` gets
   a refusal. The hosting entry exports `SCHEDULE`. The process note and
   the guidance of the process tools name `schedule`.
 - **The room takes a scheduled say at any read position.** A scheduled
@@ -182,6 +182,19 @@ of the exchange.
   The body schema has no `version`, and the room reads a composition by
   its fields alone. The refusal of the legacy `assistant` field goes with
   it.
+- **A `run` entry carries `at` alone.** The journal carries no format
+  number, and the refusal of an unknown format goes. Ambion supports no
+  downgrade before 1.0.0. See
+  [Journal format](docs/durability.md#journal-format).
+- **A `run` entry refuses `format`.** Each run of 0.3.0 wrote
+  `format: 1`, so the room refuses a journal of 0.3.0 at its first entry.
+  A body schema refuses an old field that the runtime would misread, and
+  the error reads `at body.<name>: expected no such field; an earlier
+  release wrote it`.
+- **A `cancel` entry refuses `close`.** A `cancel` entry of 0.3.0 carries
+  the close of the open exchange.
+- **A `close` entry refuses `cancelled`.** Only the close that the room
+  derives from a `cancel` entry is cancelled.
 - **One capture serves a definition.** `defineHuman` and the room apply
   the same capture to a person, and `defineAgent` and the room apply the
   same capture to an agent. A room trims the `preferences` of a person
