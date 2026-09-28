@@ -111,12 +111,12 @@ describe('the room runs the verified rules', () => {
 	});
 
 	it('writes a close only when admitsClose says so', () => {
-		const close = { owner: 'priya', from: 3, through: 3, at };
+		const close = { type: 'close', owner: 'priya', from: 3, through: 3 } as const;
 		bind.once(rules.admitsClose, false);
-		expect(decide(asked(), { type: 'close', close }, now)).toEqual({ event: undefined });
+		expect(decide(asked(), close, now)).toEqual({ event: undefined });
 		bind.once(rules.admitsClose, true);
-		expect(decide(asked(), { type: 'close', close: { ...close, through: 9 } }, now)).toMatchObject({
-			event: { kind: 'close', body: { through: 9 } },
+		expect(decide(asked(), { ...close, through: 9 }, now)).toMatchObject({
+			event: { kind: 'close', body: { through: 9, at } },
 		});
 	});
 
@@ -157,10 +157,10 @@ describe('the room runs the verified rules', () => {
 
 	it('ends a running lease the way endingOf answers', () => {
 		bind.once(rules.endingOf, 'expired');
-		expect(reconcile(claimed()).events).toMatchObject([
-			{ kind: 'lease', body: { id, phase: 'ended', reason: 'expired' } },
+		expect(reconcile(claimed()).steps).toEqual([
+			{ type: 'end', id, reason: 'expired', readThrough: 3 },
 		]);
-		expect(reconcile(claimed()).events).toEqual([]);
+		expect(reconcile(claimed()).steps).toEqual([]);
 	});
 
 	it('reads an exchange outcome as exchangeOutcome answers', () => {
@@ -358,11 +358,11 @@ describe('the room runs the verified rules', () => {
 
 	it('closes only when exchangeLive says nothing of the exchange is live', () => {
 		const quiet = replayState([writerNamed, person, quietQuestion], options);
-		expect(reconcile(quiet).events).toMatchObject([
-			{ kind: 'close', body: { summary: 'product' } },
+		expect(reconcile(quiet).steps).toEqual([
+			{ type: 'close', owner: 'priya', from: 3, through: 3 },
 		]);
 		bind.once(rules.exchangeLive, true);
-		expect(reconcile(quiet).events).toEqual([]);
+		expect(reconcile(quiet).steps).toEqual([]);
 	});
 
 	it('closes on a later pass when admitsClose refuses once', async () => {
@@ -391,8 +391,13 @@ describe('the room runs the verified rules', () => {
 			intent: { kind: 'said', text: 'Answer.' },
 		};
 		expect(await peer.commit(request)).toMatchObject({ committed: { text: 'Answer.' } });
-		// A refused close leaves the exchange open. A later pass asks admitsClose
-		// again, and the close lands.
+		// The pass admits the close, and the write refuses it once. The refused
+		// close leaves the exchange open. A later pass asks admitsClose again,
+		// and the close lands.
+		await room.reconcile();
+		const body = vi.mocked(rules.admitsClose).getMockImplementation();
+		if (body === undefined) throw new Error('The rule has no body.');
+		bind.onceWith(rules.admitsClose, body);
 		bind.once(rules.admitsClose, false);
 		await peer.lease({ activation, operation: 'release', reason: 'released', readThrough: 4 });
 		await visit.send({ text: 'Again.' });

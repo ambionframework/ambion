@@ -2,7 +2,8 @@
  * How the room moves: it folds the journal, decides, and writes what it decided.
  *
  * `decide` is pure. It reads the folded state and the clock and returns the
- * entries to write, the wakes to send, and when to look again. Every wake it
+ * writes to make, as commands that `decide` turns into entries where each
+ * write lands, the wakes to send, and when to look again. Every wake it
  * sends comes off one list, `state.due`: the activations the room owes,
  * whatever caused each one. Each pass writes what the fold owes after the
  * last, and the loop stops at the pass that writes nothing: that is what
@@ -11,18 +12,19 @@
  * got to.
  */
 
-import type { Close, LeaseChange } from '../journal/events.ts';
+import type { FailureCause, Seq } from '../types.ts';
 import type { RoomState } from './fold.ts';
 import { type PendingActivation, removedAfter, seatOf } from './lease.ts';
 import {
 	type ActivationFields,
+	admitsClose,
+	type CloseRef,
 	endingOf,
 	exchangeLive,
 	isExpired,
 	isLive,
 } from './rules.verified.ts';
-import type { ScheduledSay } from './scheduled.ts';
-import { summaryWriter } from './summary.ts';
+import { returnable } from './scheduled.ts';
 
 export interface ReconcileOptions {
 	now: number;
@@ -42,19 +44,25 @@ interface Send {
 	seat: string;
 }
 
-type Ended = Extract<LeaseChange, { phase: 'ended' }>;
+/** One lease the pass ends, and how. `decide` builds the entry. */
+export interface Ending {
+	id: string;
+	reason: 'revoked' | 'expired' | 'abandoned';
+	readThrough: number;
+	cause?: FailureCause;
+}
 
 export interface Reconciliation {
 	/** Running leases made stale by a seat's durable removal. */
-	revoked: Ended[];
-	/** Leases that ran past their expiry, ended here. */
-	expired: Ended[];
-	/** The attempts the room does not make: the activations at the cap, written off here. */
-	abandoned: Ended[];
-	/** The exchange the room closes, when nothing is live and one is open. */
-	close: Omit<Close, 'seq'> | undefined;
-	/** The scheduled says the room returns in this pass, after the close: the due ones of seated seats. */
-	returns: ScheduledSay[];
+	revoked: Ending[];
+	/** Leases that ran past their expiry. */
+	expired: Ending[];
+	/** The attempts the room does not make: the activations at the cap. */
+	abandoned: Ending[];
+	/** The exchange the room closes, when nothing is live and one is open. `decide` builds the entry. */
+	close: CloseRef | undefined;
+	/** The seqs of the scheduled says the room returns in this pass, after the close. */
+	returns: Seq[];
 	sends: Send[];
 	/**
 	 * Wakes this room waited on and no longer does: nothing the fold says is
@@ -121,10 +129,7 @@ export function planReconciliation(state: RoomState, options: ReconcileOptions):
 	const abandoned = options.stopped ? [] : abandonments(state, options);
 	// An ending changes what is live: the close waits for the fold that holds it.
 	const ended = revoked.length + expired.length + abandoned.length;
-	const close =
-		options.stopped || ended > 0 || state.exchange === undefined || work.exchange
-			? undefined
-			: closing(state, options.now);
+	const close = options.stopped || ended > 0 ? undefined : closing(state, work);
 	const sends = options.stopped ? [] : dueWakes(state, options);
 	// A say returns after the fold holds every ending, so it lands after the close it follows.
 	const returns = options.stopped || ended > 0 ? [] : dueSays(state, options.now);
@@ -152,10 +157,9 @@ function isStale(state: RoomState, activation: ActivationFields): boolean {
 }
 
 /** Every lease that ends in this pass, by how it ends. A revocation wins over an expiry. */
-function endings(state: RoomState, now: number): { revoked: Ended[]; expired: Ended[] } {
-	const at = new Date(now).toISOString();
-	const revoked: Ended[] = [];
-	const expired: Ended[] = [];
+function endings(state: RoomState, now: number): { revoked: Ending[]; expired: Ending[] } {
+	const revoked: Ending[] = [];
+	const expired: Ending[] = [];
 	for (const lease of state.leases.values()) {
 		const ending = endingOf(
 			lease.phase === 'running',
@@ -163,7 +167,7 @@ function endings(state: RoomState, now: number): { revoked: Ended[]; expired: En
 			isExpired(lease, now),
 		);
 		if (ending === 'stays') continue;
-		const ended = { id: lease.id, phase: 'ended' as const, at, readThrough: lease.readThrough };
+		const ended = { id: lease.id, readThrough: lease.readThrough };
 		if (ending === 'revoked') revoked.push({ ...ended, reason: 'revoked' });
 		else expired.push({ ...ended, reason: 'expired' });
 	}
@@ -189,41 +193,27 @@ const capped = (owed: PendingActivation, options: ReconcileOptions): boolean =>
  * entry answers the wake or the close it stood for, so the room stops trying
  * and every reader sees that it did.
  */
-function abandonments(state: RoomState, options: ReconcileOptions): Ended[] {
-	const at = new Date(options.now).toISOString();
+function abandonments(state: RoomState, options: ReconcileOptions): Ending[] {
 	return state.due
 		.filter((owed) => capped(owed, options))
 		.map((owed) => ({
 			id: owed.id,
-			phase: 'ended' as const,
 			reason: 'abandoned' as const,
-			at,
 			readThrough: 0,
 			cause: owed.permanent ? ('permanent' as const) : ('transient' as const),
 		}));
 }
 
 /**
- * The exchange closes when nothing works on it. It names the configured
- * summary writer when the exchange owes a summary. The pass decided that
- * nothing is live; this reads the open exchange.
+ * The exchange closes when nothing works on it: the open exchange, through
+ * the record's last seq, as `admitsClose` admits it. The write decides
+ * again with the same rule where it lands.
  */
-function closing(state: RoomState, now: number): Reconciliation['close'] {
+function closing(state: RoomState, work: LiveWork): CloseRef | undefined {
 	const exchange = state.exchange;
 	if (exchange === undefined) return undefined;
-	const base = {
-		owner: exchange.owner,
-		from: exchange.from,
-		through: state.lastSeq,
-		at: new Date(now).toISOString(),
-	};
-	const writer = state.people.has(exchange.owner)
-		? summaryWriter(state.composition, state.roster)
-		: undefined;
-	return {
-		...base,
-		...(writer === undefined ? {} : { summary: writer }),
-	};
+	const close = { owner: exchange.owner, from: exchange.from, through: state.lastSeq };
+	return admitsClose(exchange, close, state.lastSeq, work.exchange) ? close : undefined;
 }
 
 /** The activations the room still tries: what it owes, less what it gave up on. */
@@ -269,12 +259,11 @@ function retryTimes(state: RoomState, options: ReconcileOptions): number[] {
 }
 
 /**
- * The scheduled says due now. A say of a seat that is not on the roster
- * waits: the room returns it when the seat takes its seat again.
+ * The seqs of the scheduled says due now. A say of a seat that is not on
+ * the roster waits: the room returns it when the seat takes its seat again.
  */
-function dueSays(state: RoomState, now: number): ScheduledSay[] {
-	const seated = new Set(state.roster.map((seat) => seat.name));
-	return state.scheduled.filter((say) => say.dueAt <= now && seated.has(say.seat));
+function dueSays(state: RoomState, now: number): Seq[] {
+	return state.scheduled.filter((say) => returnable(say, state.roster, now)).map((say) => say.seq);
 }
 
 function nextAlarm(state: RoomState, options: ReconcileOptions): number | undefined {

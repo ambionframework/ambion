@@ -250,6 +250,38 @@ describe('room transition', () => {
 		});
 	});
 
+	const writes = {
+		commit: (state: RoomState) =>
+			commit(state, {
+				activation: 'message:3:writer:1',
+				key: 'say',
+				intent: { kind: 'said', text: 'Answer.' },
+			}),
+		release: (state: RoomState) =>
+			decide(
+				state,
+				{ type: 'release', id: 'message:3:writer:1', reason: 'released', readThrough: 3 },
+				now,
+			),
+	};
+	const ended: Entry = {
+		kind: 'lease',
+		seq: 5,
+		body: { id: 'message:3:writer:1', phase: 'ended', reason: 'revoked', at, readThrough: 0 },
+	};
+	it.each([
+		['commit', 'the lease ended', ended, 'the lease ended'],
+		['commit', 'the seat left the roster', unseated(5), 'the activation has no room grant'],
+		['release', 'the lease ended', ended, 'the lease ended'],
+		['release', 'the seat left the roster', unseated(5), 'the activation has no room grant'],
+	] as const)(
+		'refuses a %s as stale when %s after the seat checked',
+		(write, _case, entry, reason) => {
+			const state = evolve(answering('writer'), entry, options);
+			expect(writes[write](state)).toEqual({ refusal: { category: 'stale', reason } });
+		},
+	);
+
 	it('allows one active execution per seat across ordinary and closing work', () => {
 		const state = replayState(
 			[
@@ -449,7 +481,7 @@ describe('a scheduled say', () => {
 			},
 		]);
 		const early = reconcile(closedWaiting, now + 1_000);
-		expect(early.events).toEqual([]);
+		expect(early.steps).toEqual([]);
 		expect(early.effects.alarmAt).toBe(due);
 		const returned = {
 			kind: 'returned',
@@ -460,7 +492,7 @@ describe('a scheduled say', () => {
 			text: 'Check the build.',
 			refs: ['file:///out.log'],
 		};
-		expect(reconcile(closedWaiting, due).events).toEqual([{ kind: 'message', body: returned }]);
+		expect(reconcile(closedWaiting, due).steps).toEqual([{ type: 'return', message: 5 }]);
 		const written = decide(closedWaiting, { type: 'return', message: 5 }, due);
 		expect(written).toEqual({
 			event: { kind: 'message', body: { ...returned, wakes: ['product'] } },
@@ -475,19 +507,20 @@ describe('a scheduled say', () => {
 	});
 
 	it('returns the say after the close that the same pass writes', () => {
-		const events = reconcile(waiting(released(6)), due).events;
-		expect(events.map((entry) => entry.kind)).toEqual(['close', 'message']);
+		const steps = reconcile(waiting(released(6)), due).steps;
+		expect(steps.map((step) => step.type)).toEqual(['close', 'return']);
 	});
 
 	it('writes the ending of a lease first, then the close, then the returned say', () => {
 		// A crash left the lease running past its expiry. The say returns only
 		// after the close, so the record is the same whether the host crashed.
 		const expired = waiting();
-		expect(reconcile(expired, due).events.map((entry) => entry.kind)).toEqual(['lease']);
-		const [ending] = reconcile(expired, due).events;
-		if (ending === undefined) throw new Error('Expected the ending.');
-		const ended = evolve(expired, { ...ending, seq: 6 } as Entry, options);
-		expect(reconcile(ended, due).events.map((entry) => entry.kind)).toEqual(['close', 'message']);
+		const steps = reconcile(expired, due).steps;
+		expect(steps.map((step) => step.type)).toEqual(['end']);
+		const [ending] = steps;
+		if (ending?.type !== 'end') throw new Error('Expected the ending.');
+		const ended = evolve(expired, event(decide(expired, ending, due), 6), options);
+		expect(reconcile(ended, due).steps.map((step) => step.type)).toEqual(['close', 'return']);
 	});
 
 	it("joins another person's open exchange, and leaves its owner", () => {
@@ -506,9 +539,9 @@ describe('a scheduled say', () => {
 		const empty = composition(undefined, [watcher]);
 		const away = waiting(released(6), quietClose(7, 6), { ...empty, seq: 8 });
 		expect(away.scheduled).toHaveLength(1);
-		expect(reconcile(away, due).events).toEqual([]);
+		expect(reconcile(away, due).steps).toEqual([]);
 		const back = evolve(away, { ...composition(undefined, [product, watcher]), seq: 9 }, options);
-		expect(reconcile(back, due).events.map((entry) => entry.kind)).toEqual(['message']);
+		expect(reconcile(back, due).steps.map((step) => step.type)).toEqual(['return']);
 	});
 
 	const dismiss = (state: RoomState, handle: number, activation = 'message:3:product:1') =>

@@ -218,6 +218,14 @@ family reports it as a tool event.
 | `missed`                   | The adapter raises a tool error that lists the new messages.                    |
 | `unknown` or `stale`       | The adapter aborts the activation. The message may already stand on the record. |
 
+**A seat without the authority of its activation hears `stale`.** The
+authority is a live lease and the grant that the record gives the
+activation id. The grant holds only for a seat on the roster. `view`,
+`commit`, and a lease release check the authority when the seat asks, and
+`commit` and a release check it again where the write lands. The answer
+names the reason: `the lease ended` or `the activation has no room grant`.
+A claim or a renewal that the room refuses answers `the lease ended`.
+
 **`say` and `schedule` are the room's own events.** They raise no
 `tool_execution_start` and no `tool_execution_end` event. The adapter
 reports each one as a room event.
