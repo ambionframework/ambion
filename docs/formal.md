@@ -109,8 +109,8 @@ lease after it. `cancelLeases` in `fold.ts` asks `cancelHold` for each
 lease a cancellation reaches. `exchangeAfter` in `exchange.ts` asks
 `openingQuestion` for the first question after the last close.
 `draftsOf` in `exchange.ts` asks `draftsClose` whether each lease drafts
-the close, and `summaryCompletion` and `withAttempts` in `owed.ts` read
-the drafts it selects. A comment at such a site says "the rule decides"
+the close. `summaryCompletion` in `exchange.ts` and `withAttempts` in
+`owed.ts` read the drafts it selects. A comment at such a site says "the rule decides"
 where a second check remains to narrow a TypeScript type.
 
 **A rule that reads a lease reads one shape.** `RuleLease` is the lease
