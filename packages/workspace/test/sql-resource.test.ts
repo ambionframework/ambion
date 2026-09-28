@@ -67,8 +67,8 @@ const invoke = async (
 describe('the SQL resource', () => {
 	it('records a row with provenance from the tool context, and reads it back as a Markdown table', async () => {
 		const resource = open();
-		expect(await invoke(resource, 'record', { table: 'runs', values: { label: 'first' } })).toBe(
-			'Recorded row 1 in runs.',
+		expect(await invoke(resource, 'insert', { table: 'runs', values: { label: 'first' } })).toBe(
+			'Inserted row 1 into runs.',
 		);
 		const shown = await invoke(resource, 'query', { sql: 'SELECT id, label FROM runs' });
 		expect(shown).toContain('| id | label |');
@@ -104,40 +104,46 @@ describe('the SQL resource', () => {
 	});
 
 	it.each([
-		['notes', { body: 'x' }, /does not accept records/],
-		['sqlite_master', { name: 'x' }, /does not accept records/],
+		['notes', { body: 'x' }, /does not accept inserts/],
+		['sqlite_master', { name: 'x' }, /does not accept inserts/],
 		['runs', { label: 'x', nope: 1 }, /no column 'nope'/],
 		['runs', { label: 'x', agent: 'someone' }, /reserved for provenance/],
 	])('refuses a record into %s of %j', async (table, values, error) => {
-		await expect(invoke(open(), 'record', { table, values })).rejects.toThrow(error);
+		await expect(invoke(open(), 'insert', { table, values })).rejects.toThrow(error);
 	});
 
 	it('shows a truncation footer past the row cap', async () => {
 		const resource = open({ maxRows: 2 });
 		for (const label of ['a', 'b', 'c']) {
-			await invoke(resource, 'record', { table: 'runs', values: { label } });
+			await invoke(resource, 'insert', { table: 'runs', values: { label } });
 		}
 		const shown = await invoke(resource, 'query', { sql: 'SELECT label FROM runs' });
 		expect(shown).toContain('Shows 2 of 3 rows.');
 		expect(String(shown)).not.toContain('| c |');
 		const one = await invoke(resource, 'query', { sql: 'SELECT label FROM runs', rows: 1 });
 		expect(one).toContain('Shows 1 of 3 rows.');
+		// rows is a whole number from 0 to 1000, as for sql, and the default is the host's cap.
+		await expect(
+			invoke(resource, 'query', { sql: 'SELECT label FROM runs', rows: 1001 }),
+		).rejects.toThrow(/Invalid arguments/);
+		const query = resource.tools().tools.find((tool) => tool.name === 'query');
+		expect(JSON.stringify(query?.parameters)).toContain('The default is 2.');
 	});
 
 	it('serializes calls through the owner, closes once on dispose, and refuses a late call', async () => {
 		const resource = open();
 		const calls = ['a', 'b', 'c'].map((label) =>
-			invoke(resource, 'record', { table: 'runs', values: { label } }),
+			invoke(resource, 'insert', { table: 'runs', values: { label } }),
 		);
 		await expect(Promise.all(calls)).resolves.toEqual([
-			'Recorded row 1 in runs.',
-			'Recorded row 2 in runs.',
-			'Recorded row 3 in runs.',
+			'Inserted row 1 into runs.',
+			'Inserted row 2 into runs.',
+			'Inserted row 3 into runs.',
 		]);
 		await resource.dispose();
 		await resource.dispose();
 		await expect(
-			invoke(resource, 'record', { table: 'runs', values: { label: 'late' } }),
+			invoke(resource, 'insert', { table: 'runs', values: { label: 'late' } }),
 		).rejects.toThrow(/no longer available/);
 		await expect(resource.use(context.agent, (env) => env.query('SELECT 1'))).rejects.toThrow(
 			/no longer available/,
@@ -157,7 +163,7 @@ describe('the SQL resource', () => {
 		directories.push(dir);
 		const location = join(dir, 'lab.db');
 		const first = open({ location });
-		await invoke(first, 'record', { table: 'runs', values: { label: 'kept' } });
+		await invoke(first, 'insert', { table: 'runs', values: { label: 'kept' } });
 		await first.dispose();
 		const second = open({ location });
 		const rows = await second.use(context.agent, (env) => env.query('SELECT label FROM runs'));
@@ -169,7 +175,7 @@ describe('the SQL resource', () => {
 		const sql = open();
 		const resources: WorkspaceResource[] = [drive, sql];
 		expect(resources.map((resource) => resource.name)).toEqual(['drive', 'lab']);
-		expect(sql.tools().tools.map((tool) => tool.name)).toEqual(['query', 'record']);
+		expect(sql.tools().tools.map((tool) => tool.name)).toEqual(['query', 'insert']);
 		expect(drive.tools().tools.map((tool) => tool.name)).not.toContain('query');
 		await drive.dispose();
 	});

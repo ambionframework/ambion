@@ -139,6 +139,12 @@ the SQLite backend names `sqlite_master`.
 
 ### Breaking changes
 
+- **The SQL resource inserts with `insert`.** The tool `record` becomes
+  `insert`, and `SqlResourceEnv.record` becomes `SqlResourceEnv.insert`.
+  The record is the journal of a room, so the tool no longer shares its
+  word. The result reads `Inserted row <id> into <table>.` The `rows` of
+  `query` is a whole number from 0 to 1000, as for `sql`, and its
+  description states the default.
 - **The audit entry of a failed process keeps its details.** A call that
   fails on a process that ended badly throws a `ToolFailure`, and its audit
   entry holds `error.details`: the `ProcessStatus` and the read range. The
