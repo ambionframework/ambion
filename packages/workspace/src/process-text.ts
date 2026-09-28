@@ -45,7 +45,7 @@ export function stateLine(process: ProcessStatus): string {
 	const where = `Output: ${process.output}.`;
 	switch (process.state) {
 		case 'running':
-			return `${who} is running. ${where} Call status, wait or cancel with its handle, or ps to list your processes.`;
+			return `${who} is running. ${where} Call status or cancel with its handle, wait with it in handles, or ps to list your processes.`;
 		case 'exited':
 			return `${who} exited with code ${process.exitCode}. ${where}`;
 		case 'timed_out':
@@ -125,7 +125,7 @@ export function reminderText(
 		'Your background processes in the workspace:',
 		...[...running, ...finished].map((process) => reminderLine(process, room, now)),
 		...(more > 0 ? [`- and ${more} more finished processes`] : []),
-		'Call status, wait or cancel with a handle. Call ps to list processes.',
+		'Call status or cancel with a handle, and wait with a list of handles. Call ps to list processes.',
 	].join('\n');
 }
 

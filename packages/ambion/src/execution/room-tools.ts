@@ -3,7 +3,8 @@
  * that names no harness.
  *
  * Every ordinary activation can speak, schedule a say to itself, seat an
- * agent, remove an agent, or dismiss a scheduled say. A closing activation
+ * agent, remove an agent, dismiss a scheduled say, or recall messages of the
+ * room by URI. A closing activation
  * receives only `say`; the room turns that said intent into the assigned
  * summary and supplies its recipient and range.
  *
@@ -14,7 +15,7 @@
  */
 
 import type { AmbionTool, ToolContext, ToolResult, ToolUpdate } from '../bundle.ts';
-import { DISMISS, SAY, SCHEDULE, SEAT, UNSEAT } from '../define.ts';
+import { DISMISS, RECALL, SAY, SCHEDULE, SEAT, UNSEAT } from '../define.ts';
 import {
 	type ActivationView,
 	type CommitResult,
@@ -22,6 +23,7 @@ import {
 	type Intent,
 	type RoomProtocol,
 } from '../protocol.ts';
+import { parseRoomUri, REF_LIMITS, roomUri } from '../refs.ts';
 import type { AgentDefinition, Message, Seq } from '../types.ts';
 import { refusal, renderLine, summaryToolDescription } from './render.ts';
 
@@ -111,6 +113,7 @@ export function roomTools(
 		membershipTool(binding, 'seated'),
 		membershipTool(binding, 'unseated'),
 		dismissTool(binding),
+		recallTool(view.context.name, binding),
 	];
 }
 
@@ -188,11 +191,11 @@ function landed(binding: RoomToolBinding, response: CommitResult): RoomToolResul
 	return ended(`Your turn ended: ${why}.`);
 }
 
-/** The line of a say the room scheduled: its handle, and when it returns. */
+/** The line of a say the room scheduled: its seq, and when it returns. */
 function scheduledLine(message: Message): string {
 	const after = message.kind === 'said' ? (message.after ?? 0) : 0;
 	const due = new Date(Date.parse(message.at) + after * 1000).toISOString();
-	return `scheduled ${message.seq}: the room gives this say back to you at ${due}`;
+	return `scheduled #${message.seq}: the room wakes you with this message at ${due}`;
 }
 
 /** The result that tells the model its activation has ended. */
@@ -361,27 +364,89 @@ function membershipTool(binding: RoomToolBinding, kind: 'seated' | 'unseated'): 
 	};
 }
 
-/** The room tool that dismisses one pending say of the seat, by its handle. */
+/** The room tool that dismisses one pending say of the seat, by its seq. */
 function dismissTool(binding: RoomToolBinding): RoomTool {
 	return {
 		name: DISMISS.name,
 		description: DISMISS.description,
 		parameters: DISMISS.parameters,
 		run: async (args, call) => {
-			const handle = (args as { handle: number }).handle;
+			const seq = (args as { message: number }).message;
 			const response = await binding.room.commit({
 				activation: binding.id,
 				key: call,
-				intent: { kind: 'dismissed', message: handle },
+				intent: { kind: 'dismissed', message: seq },
 			});
 			if ('committed' in response) {
 				// The result shows the entry, so a record read up to it is read through it.
 				const { seq } = response.committed;
 				if (binding.readThrough === seq - 1) binding.resultExpected(call, seq);
-				return text(`dismissed ${handle}`);
+				return text(`dismissed #${seq}`);
 			}
-			if ('unchanged' in response) return text(`${handle} no longer waits`);
+			if ('unchanged' in response) return text(`#${seq} no longer waits`);
 			return landed(binding, response);
 		},
 	};
+}
+
+/**
+ * The room tool that reads messages of this room by URI. It gives one line
+ * for each distinct ref, in the order given: the message, or why the room
+ * gave none. A ref that finds no message makes the call an error. It reads
+ * what the view of the activation may read, commits nothing, and moves no
+ * read position: a recalled message is old.
+ */
+function recallTool(room: string, binding: RoomToolBinding): RoomTool {
+	return {
+		name: RECALL.name,
+		description: RECALL.description,
+		parameters: RECALL.parameters,
+		run: async (args) => {
+			const refs = recallRefs(args);
+			if (refs === undefined)
+				return text(`refs must be 1 to ${REF_LIMITS.count} message URIs of this room.`, true);
+			const lines: { found: boolean; line: string }[] = [];
+			for (const ref of refs) lines.push(await recallLine(binding, room, ref));
+			const missed = lines.some((one) => !one.found);
+			return text(lines.map((one) => one.line).join('\n'), missed);
+		},
+	};
+}
+
+/** The refs of a `recall` call, trimmed and each once, or nothing when the schema refuses them. */
+function recallRefs(args: unknown): string[] | undefined {
+	const refs: unknown = (args as { refs?: unknown }).refs;
+	if (!Array.isArray(refs) || refs.length === 0 || refs.length > REF_LIMITS.count) return undefined;
+	if (!refs.every((ref): ref is string => typeof ref === 'string')) return undefined;
+	return [...new Set(refs.map((ref) => ref.trim()))];
+}
+
+/** The line of one ref: the message it names, or why the room gave none. */
+async function recallLine(
+	binding: RoomToolBinding,
+	room: string,
+	ref: string,
+): Promise<{ found: boolean; line: string }> {
+	const named = parseRoomUri(ref);
+	const missed = (why: string) => ({ found: false, line: `${ref}: ${why}` });
+	if (named?.message === undefined)
+		return missed(`not a message ref. A message ref is ${roomUri(room)}/message/<seq>.`);
+	if (named.room !== room) return missed('names another room. recall reads this room alone.');
+	const message = await messageAt(binding, named.message);
+	return message === undefined
+		? missed(
+				`no message at #${named.message} on the record you may read. Take the seq from a record line or a ref.`,
+			)
+		: { found: true, line: renderLine(message) };
+}
+
+/**
+ * The message at `seq`, from a page of one message before `seq + 1`. A
+ * summary sits after the range it covers, so the page never folds `seq`
+ * away. A page that holds a lower message, or none, means no message.
+ */
+async function messageAt(binding: RoomToolBinding, seq: Seq): Promise<Message | undefined> {
+	const response = await binding.room.view(binding.id, { before: seq + 1, limit: 1 });
+	if (!('view' in response)) return undefined;
+	return response.view.context.messages.find((message) => message.seq === seq);
 }

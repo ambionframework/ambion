@@ -408,7 +408,10 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		expect(await readFile(join(lost, 'stop'), 'utf8')).toMatch(
 			/^failed \S+ The host run ended before the process did\.\n$/,
 		);
-		expect(await call('status', { handle: 'bash-00000000000e' })).toBe('failed');
+		// A lost process ended badly, so its status fails, and the text states the loss.
+		await expect(call('status', { handle: 'bash-00000000000e' })).rejects.toThrow(
+			/Process bash-00000000000e failed: The host run ended before the process did\./,
+		);
 		// A spec with no pid gets no stop, so the read after its shell writes the pid adopts it.
 		await expect(readFile(join(slow, 'stop'), 'utf8')).rejects.toThrow();
 		const other = backendFor(started.options);
@@ -419,7 +422,10 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		expect(await call('cancel', { handle: 'bash-00000000000f' })).toBe('cancelled');
 		expect(ended(slowPid)).toBe(true);
 		await until(() => ended(late), 15_000);
-		expect(await call('status', { handle: 'bash-00000000000d' })).toBe('timed_out');
+		// A process that timed out fails the status call, and the text states the timeout.
+		await expect(call('status', { handle: 'bash-00000000000d' })).rejects.toThrow(
+			/Process bash-00000000000d timed out/,
+		);
 		expect(await call('cancel', { handle: 'bash-00000000000c' })).toBe('cancelled');
 		expect(ended(kept)).toBe(true);
 	});

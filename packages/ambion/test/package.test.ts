@@ -79,6 +79,7 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'DEFAULT_TRACE_LIMITS',
 		'DISMISS',
 		'PERMANENT_STATUS',
+		'RECALL',
 		'REMINDER_TIMEOUT_MS',
 		'SAY',
 		'SCHEDULE',

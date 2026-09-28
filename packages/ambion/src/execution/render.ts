@@ -63,7 +63,7 @@ export function renderLine(message: Message): string {
 
 function lineBody(message: Message): string {
 	if (message.kind === 'dismissed') {
-		return `· ${message.from ?? 'the host'} dismissed say ${message.message}`;
+		return `· ${message.from ?? 'the host'} dismissed say #${message.message}`;
 	}
 	if (isReturned(message)) {
 		return `[returned → ${message.to}, for ${message.owner}] ${message.text}${refsOf(message)}`;
@@ -393,7 +393,11 @@ function renderSetting(view: ActivationView): string[] {
 	if (context.goal) lines.push(`This room exists to: ${context.goal}`, ``);
 	// A fold renders once the record holds a summary, so only such a record
 	// tells its seat how to read one.
-	if (context.messages.some(isSummary)) lines.push(...SUMMARY_PARAGRAPH, ``);
+	const folded = context.messages.some(isSummary);
+	if (folded) lines.push(...SUMMARY_PARAGRAPH, ``);
+	// A response reads of recall when a fold or the window leaves a message out of view.
+	if (view.spec.purpose.kind === 'respond' && (folded || (context.omitted ?? 0) > 0))
+		lines.push(RECALL_LINE, ``);
 	return lines;
 }
 
@@ -445,7 +449,7 @@ function paragraph(text: string | undefined): string[] {
 }
 
 /**
- * The says of this seat that wait to return, by handle, or nothing when none
+ * The says of this seat that wait to return, by seq, or nothing when none
  * waits. A seat that continues its session reads it beside the delta, so the
  * list is current at every response activation.
  */
@@ -454,8 +458,8 @@ export function renderPending(view: ActivationView): string | undefined {
 	if (view.spec.purpose.kind !== 'respond' || scheduled === undefined) return undefined;
 	if (scheduled.length === 0) return undefined;
 	return [
-		`Your says that wait to return. The room gives each back to you at its due time. Call \`dismiss\` with the handle of one that no longer fits:`,
-		...scheduled.map((say) => `- ${say.seq}, due ${say.due}: ${say.text}${refsOf(say)}`),
+		`Your scheduled messages. The room wakes you with each one at its due time. Call \`dismiss\` with the seq of one that no longer fits:`,
+		...scheduled.map((say) => `- #${say.seq}, due ${say.due}: ${say.text}${refsOf(say)}`),
 	].join('\n');
 }
 
@@ -582,9 +586,11 @@ const SUMMARY_PARAGRAPH = [
 	`summary as a recorded report, preserving its uncertainty and qualifications. Later corrections`,
 	`or conflicting concrete evidence take precedence over a summarized claim. The summary asks`,
 	`you for nothing and addresses one person, not you.`,
-	`If you need a fact it left out, read it again from your own tools rather than asking the`,
-	`room to repeat itself.`,
+	`If you need a fact it left out, do not ask the room to repeat itself.`,
 ];
+
+/** How a response reads a message that a fold, the context window, or the cap keeps out of view. */
+const RECALL_LINE = `A message out of view is still on the record: call recall with its URI to read it.`;
 
 function action(purpose: 'respond' | 'summarize'): string {
 	return purpose === 'respond'

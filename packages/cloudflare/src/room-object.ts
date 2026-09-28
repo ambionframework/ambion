@@ -220,9 +220,9 @@ export class RoomObject extends DurableObject<Env> {
 		await this.running().abort();
 	}
 
-	/** Dismiss one scheduled say by its handle. True when the room dismissed it now. */
-	async dismiss(handle: Seq): Promise<boolean> {
-		return await this.running().dismiss(handle);
+	/** Dismiss one scheduled say by its seq. True when the room dismissed it now. */
+	async dismiss(seq: Seq): Promise<boolean> {
+		return await this.running().dismiss(seq);
 	}
 
 	/**

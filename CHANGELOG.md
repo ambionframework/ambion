@@ -28,7 +28,7 @@ the same object, and a later change to the file does not change the ref.
 One snapshot takes at most 16 files, and one file holds at most 5 GiB, the
 limit of one S3 PutObject. `workspace.readSnapshot(ref)` gives the bytes
 back and refuses bytes that no longer match the digest. The `snapshot`
-tool gives an agent the same refs, and the `fetch` tool writes the bytes
+tool gives an agent the same refs, and the `restore` tool writes the bytes
 of a ref into the agent's files. See
 [Snapshot a file](docs/workspace.md#snapshot-a-file).
 
@@ -61,6 +61,30 @@ room ref opens its room, and a message ref opens its room at the message.
 with the seq of its message, such as `#12`, so a seat builds the message
 URI of any line. The closing guidance names the URI of the opening message
 of the exchange.
+
+**`recall` reads messages of the room by URI.** An ordinary activation calls
+`recall` with 1 to 16 message URIs of its room and reads one line for each:
+the message, or why the room gave none. It reaches every message that the
+purpose of the activation may read, below the cap of `limits.context.messages`
+too. It commits nothing and never moves the read position. A response reads a
+note about it when a message is out of view. The hosting entry exports
+`RECALL`, and an agent tool named `recall` gets a refusal.
+
+**`bash` waits 30 seconds by default.** A test run, a build, or an
+install then ends inside its first call more often, so the agent calls
+`wait` less. The wait still stops before the activation ends. A person's
+correction steers a Pi seat after the call returns, so the default stays
+well under a minute.
+
+**`schedule` and `dismiss` speak the model's words.** The descriptions
+call a scheduled say a message to yourself, and the room wakes you with it.
+The schedule result and the list of pending says use the same words. The
+docs keep the term scheduled say.
+
+**The `refs` of `say` and `schedule` name the forms to cite.** Each item
+names a snapshot ref, a commit ref, and a message URI. A workspace path and
+a table have no ref form, so the text no longer names them. `say` describes
+its `text`.
 
 ### Simplification
 
@@ -107,6 +131,33 @@ of the exchange.
 
 ### Breaking changes
 
+- **A view with a range cuts its page from every message the purpose may
+  read.** The cap of `limits.context.messages` bounds a view with no range
+  alone. A page still reports the cap floor as `earliest`, and a seat with
+  `activationTokenLimit` stops its window there. A host that pages a view
+  reads below the cap.
+- **A process that ended badly fails every call that reports it.** An
+  exit code other than 0, a timeout, and a failed process make `bash`,
+  `status`, and `wait` a tool error, so one state has one shape on every
+  tool. The error text is the output and the state line. A refused
+  statement of `sql` and a refused fork are tool errors, and their text
+  states the next step, and so does a failed clone of `fork`. `recall`
+  fails when a ref finds no message, and its text holds every line.
+  `cancel` of a process that had ended says that it stopped nothing.
+- **`fetch` is `restore`.** A model reads `fetch` as a web request, and
+  the shell has no network. `restore` takes the same `{ ref, path? }` and
+  puts the bytes of a cited snapshot in the agent's files.
+- **`wait` takes `{ handles, timeout? }`.** `handle` goes, and `handles`
+  holds 1 to 16 handles. One handle gives the result of `status`. Several
+  give the output of each process that ended and the state of each one
+  that still runs.
+- **The preview size of `sql` and `query` is `rows`.** The tool parameter
+  `maxRows` becomes `rows`, the one camelCase name that a model wrote. The
+  host option and `SqlRunOptions` keep `maxRows`.
+- **`dismiss` takes `{ message }`, the seq of a scheduled say.** The word
+  handle now names a process alone. The `schedule` result, the list of
+  pending says, and the dismissal results show the say as `#<seq>`, as the
+  record shows it. `room.dismiss` names its argument `seq`.
 - **`schedule` is a room tool, and `say` has no `after`.** An agent calls
   `schedule` with `{ after, text, refs? }` to come back to its work. The
   tool writes the same `said` entry with `to` and `after` as before, so
@@ -132,7 +183,7 @@ of the exchange.
   `workstationBackend` layout name the folder of the default object store.
   The just-bash backends use `/snapshots`. On a workstation, the host account
   owns the folder with mode `2750`, the same as `layout.rooms`.
-- **Every workspace has ten tools.** `snapshot` and `fetch` follow the
+- **Every workspace has ten tools.** `snapshot` and `restore` follow the
   process tools, and their note follows the process note in the guidance.
 - **The root entry exports `ObjectBackend`, `ObjectEnv`, and `ObjectDigest`.**
   The `./conformance` entry exports `objectConformance`, and

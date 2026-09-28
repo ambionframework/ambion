@@ -118,11 +118,11 @@ after the close of the same pass.
   604,800 by default, and holds at most `pending` says of one seat, 4 by
   default.
 
-**The agent sees its pending says.** The schedule result names the seq of
-the say as its handle: `scheduled 41: the room gives this say back to you at
-<time>`. The view of each response activation carries the pending says of
-the seat in `scheduled`, and the render lists each one with its handle, its
-due time, its text, and its refs. A continued Pi session reads the list
+**The agent sees its pending says.** The schedule result names the say by
+its seq, as the record shows it: `scheduled #41: the room wakes you with this
+message at <time>`. The view of each response activation carries the pending
+says of the seat in `scheduled`, and the render lists each one with its seq,
+its due time, its text, and its refs. A continued Pi session reads the list
 beside the delta. A closing activation reads none.
 
 **A say can stop waiting.** An unseating of its author drops it, and a
@@ -133,15 +133,15 @@ again. A read lists the says that wait in `scheduled`, and so does
 
 **The agent or the host dismisses a say.** A correction to long work can make
 a pending say wrong, and its text is fixed. The `dismiss` tool takes the
-handle of a pending say, and the room writes a `dismissed` entry
+seq of a pending say as `message`, and the room writes a `dismissed` entry
 `{ from, message }`. The entry wakes nobody. The fold drops the say, so it
 frees its place under `pending`.
 
 - A seat dismisses its own pending say, from a response activation. The
-  handle of another seat's say, or of no scheduled say, gets a refusal.
+  seq of another seat's say, or of no scheduled say, gets a refusal.
 - A dismissal of a say that returned or that the seat dismissed already
   changes nothing. The tool result says that the say no longer waits.
-- The host dismisses any pending say with `room.dismiss(handle)`. The entry
+- The host dismisses any pending say with `room.dismiss(seq)`. The entry
   has no `from`. The call returns `true` when it writes the entry and
   `false` when the say no longer waits.
 - A dismissal and the due time race through the journal. The entry that

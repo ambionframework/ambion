@@ -38,7 +38,7 @@ import { recordedOnShell } from './tools.ts';
 const DEFAULT_TIMEOUT_SECONDS = 600;
 
 /** Seconds a `bash` call waits for its process when it names no `wait`. */
-const DEFAULT_BASH_WAIT_SECONDS = 10;
+const DEFAULT_BASH_WAIT_SECONDS = 30;
 
 /** Seconds a `wait` call waits when it names no timeout. */
 const DEFAULT_WAIT_SECONDS = 30;
@@ -78,13 +78,13 @@ export function processToolGuidance(): string {
 		`Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.`,
 		`The call waits up to wait seconds, ${DEFAULT_BASH_WAIT_SECONDS} by default, and then gives the state of the process and its output.`,
 		`The whole output of a process goes to ${PROCESSES_DIR}/<handle>/out. Read it with read.`,
-		`status, wait and cancel take a handle. status gives the state of the process, wait waits for it to end,`,
-		`and cancel stops it. ps lists your running processes.`,
+		`status and cancel take a handle, and wait takes a list of handles. status gives the state of a process,`,
+		`wait waits for the first of them to end, and cancel stops one. ps lists your running processes.`,
 		`A process keeps running after your activation ends. It stops after timeout seconds, ${DEFAULT_TIMEOUT_SECONDS} by default.`,
 		`No message tells you when a process ends. When your answer needs the result, call wait before you answer.`,
 		`A wait stops before your activation ends.`,
 		`A process that outlives your activation shows in the reminder at the start of your next activation.`,
-		`To check a long process later, call schedule with after, in seconds. The room gives the say back to you then.`,
+		`To check a long process later, call schedule with after, in seconds. The room wakes you with it then.`,
 	].join('\n');
 }
 
@@ -118,15 +118,11 @@ const psSchema = Type.Object({});
 const handleSchema = Type.Object({ handle });
 
 const waitSchema = Type.Object({
-	handle: Type.Optional(handle),
-	handles: Type.Optional(
-		Type.Array(handle, {
-			minItems: 1,
-			maxItems: MAX_WAIT_HANDLES,
-			description:
-				'Several handles, in place of handle. The call returns when the first of these processes ends.',
-		}),
-	),
+	handles: Type.Array(handle, {
+		minItems: 1,
+		maxItems: MAX_WAIT_HANDLES,
+		description: 'The processes to wait for. The call returns when the first of them ends.',
+	}),
 	timeout: Type.Optional(
 		Type.Number({
 			description: `Seconds to wait for the process to end. The default is ${DEFAULT_WAIT_SECONDS}.`,
@@ -187,14 +183,15 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			parameters: handleSchema,
 			execute: recorded('status', async (params: HandleParams, ctx) => {
 				const process = await table.find(ctx.agent, params.handle, ctx.signal);
-				return described(options, process, ctx, deadlineLine(NOT_CUT, process, [process], ctx));
+				const note = deadlineLine(NOT_CUT, process, [process], ctx);
+				return failedOr(await described(options, process, ctx, note), [process]);
 			}),
 		}),
 		defineTool({
 			name: 'wait',
 			label: 'Wait for a process',
 			description:
-				'Wait for a process to end, up to timeout seconds. Give its state and its new output. The process keeps running when the time ends first. Give handles in place of handle to wait for the first of several processes to end.',
+				'Wait for the first of your processes in handles to end, up to timeout seconds. Give the state and the new output of each one that ended, and the state of each one that still runs. A process keeps running when the time ends first.',
 			parameters: waitSchema,
 			execute: recorded('wait', (params: WaitParams, ctx) => waited(options, params, ctx)),
 		}),
@@ -205,7 +202,7 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 				'Stop a running process, and give its state and its new output. A process that takes over 10 seconds to stop still shows running.',
 			parameters: handleSchema,
 			execute: recorded('cancel', async (params: HandleParams, ctx) =>
-				described(options, await table.cancel(ctx.agent, params.handle), ctx),
+				cancelled(await described(options, await table.cancel(ctx.agent, params.handle), ctx)),
 			),
 		}),
 	]);
@@ -265,8 +262,7 @@ function deadlineLine(
 
 /**
  * Start the process, wait up to `wait` seconds, and describe it. A process
- * that ended in that time with a code other than 0, with a timeout, or with
- * a failure makes the call fail with the same text.
+ * that ended badly in that time makes the call an error with the same text.
  */
 async function started(
 	options: ProcessToolOptions,
@@ -294,16 +290,15 @@ async function started(
 		wait.seconds,
 		ctx.signal,
 	);
-	const result = await described(options, ended, ctx, deadlineLine(wait, ended, [ended], ctx));
-	if (unsuccessful(ended)) throw new Error(textOf(result));
-	return result;
+	const note = deadlineLine(wait, ended, [ended], ctx);
+	return failedOr(await described(options, ended, ctx, note), [ended]);
 }
 
 /**
- * Wait for one process, or for the first of several to end. With
- * `handles`, the result gives the new output of each process that ended,
- * and the state line of each one that still runs. A handle that repeats
- * counts once.
+ * Wait for the first of the processes in `handles` to end. For one process,
+ * the result is the result of `status`. For several, it gives the new
+ * output of each process that ended, and the state line of each one that
+ * still runs. A handle that repeats counts once.
  */
 async function waited(
 	options: ProcessToolOptions,
@@ -316,8 +311,10 @@ async function waited(
 	const processes = await options.processes.wait(ctx.agent, handles, wait.seconds, ctx.signal);
 	const [first] = processes;
 	if (first === undefined) throw new Error('Invalid handles: give at least one handle.');
-	if (params.handles === undefined)
-		return described(options, first, ctx, deadlineLine(wait, first, [first], ctx));
+	if (handles.length === 1) {
+		const note = deadlineLine(wait, first, [first], ctx);
+		return failedOr(await described(options, first, ctx, note), [first]);
+	}
 	const ended: AgentToolResult<ProcessDetails>[] = [];
 	for (const process of processes) {
 		if (process.state !== 'running') ended.push(await described(options, process, ctx));
@@ -329,30 +326,51 @@ async function waited(
 		...running.map((process) => `[${stateLine(process)}]`),
 		...(note === '' ? [] : [`[${note}]`]),
 	].join('\n\n');
-	return {
-		content: [{ type: 'text', text }],
-		details: { processes, ended: ended.map((result) => result.details) },
+	const result = {
+		content: [{ type: 'text' as const, text }],
+		details: { processes, ended: ended.map((one) => one.details) },
 	};
+	return failedOr(
+		result,
+		ended.map((one) => one.details.process),
+	);
 }
 
-/** The handles of a `wait` call: `handle` or `handles`, one of the two. */
-function handlesOf(params: WaitParams): readonly string[] {
-	if ((params.handle === undefined) === (params.handles === undefined)) {
-		throw new Error('Invalid handles: give handle or handles, and not both.');
-	}
-	const handles = params.handle === undefined ? [...new Set(params.handles)] : [params.handle];
-	if (handles.length === 0 || handles.length > MAX_WAIT_HANDLES) {
-		throw new Error(`Invalid handles: give 1 to ${MAX_WAIT_HANDLES} handles.`);
-	}
-	return handles;
+/**
+ * The result of `cancel`. A process that had ended before the cancel leads
+ * with a line that says so: the cancel stopped nothing.
+ */
+function cancelled(result: AgentToolResult<ProcessDetails>): AgentToolResult<ProcessDetails> {
+	const { process } = result.details;
+	if (process.state === 'cancelled' || process.state === 'running') return result;
+	const lead = `Process ${process.handle} had ended before the cancel, so the cancel stopped nothing.`;
+	return { ...result, content: [{ type: 'text', text: `${lead}\n\n${textOf(result)}` }] };
 }
 
-function unsuccessful(process: ProcessStatus): boolean {
+/** Whether a process ended badly: a code other than 0, a timeout, or a failure. */
+function endedBadly(process: ProcessStatus): boolean {
 	return (
 		process.state === 'timed_out' ||
 		process.state === 'failed' ||
 		(process.state === 'exited' && process.exitCode !== 0)
 	);
+}
+
+/**
+ * The result, or an error with its text when a process it reports ended
+ * badly. The text holds the output and the state, so the agent can act on it.
+ */
+function failedOr<D>(
+	result: AgentToolResult<D>,
+	reported: readonly ProcessStatus[],
+): AgentToolResult<D> {
+	if (reported.some(endedBadly)) throw new Error(textOf(result));
+	return result;
+}
+
+/** The handles of a `wait` call, each once. The schema holds the count to 1 to 16. */
+function handlesOf(params: WaitParams): readonly string[] {
+	return [...new Set(params.handles)];
 }
 
 function textOf(result: AgentToolResult<unknown>): string {

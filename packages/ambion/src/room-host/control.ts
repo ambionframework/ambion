@@ -360,12 +360,12 @@ function arm(host: ControlHost, at: number | undefined): void {
  * journal queue, so a say that returned first writes nothing. The room then
  * looks again, so its alarm drops the due time of the say.
  */
-export async function dismissSay(host: ControlHost, handle: Seq): Promise<boolean> {
+export async function dismissSay(host: ControlHost, seq: Seq): Promise<boolean> {
 	await host.ready;
 	host.assertRunning();
 	const written = await submit(host.journal, 'message', () => {
 		if (host.gone()) return { event: undefined };
-		return decide(host.state(), { type: 'dismiss', message: handle }, host.now());
+		return decide(host.state(), { type: 'dismiss', message: seq }, host.now());
 	});
 	requireSubmission(written);
 	if (host.gone() && !('entry' in written))

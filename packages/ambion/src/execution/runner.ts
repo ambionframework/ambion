@@ -470,9 +470,12 @@ export class AgentRunner implements AgentPort {
 			const page = await this.pageView(id, before, cancelled);
 			if ('stop' in page) return page.stop;
 			if (frame === undefined) frame = page.view;
-			const older = page.view.context.messages;
-			// The last page fetched is the oldest, so its count is the room's.
-			omitted = page.view.context.omitted ?? 0;
+			// A page reads below the cap of the room. The window stops at the cap, at
+			// `earliest`, and counts what it drops there. The last page is the oldest.
+			const floor = frame.context.earliest ?? 0;
+			const served = page.view.context.messages;
+			const older = served.filter((message) => message.seq >= floor);
+			omitted = (page.view.context.omitted ?? 0) + served.length - older.length;
 			held = [...older, ...held];
 			const window = windowToLimit(held, estimate, limit, pinOf(frame));
 			before = held[0]?.seq;
@@ -528,7 +531,7 @@ export class AgentRunner implements AgentPort {
 
 	private boundedRoom(cancelled: Promise<void>, trace: TraceSink): RoomProtocol {
 		return {
-			view: (id) => this.room.view(id),
+			view: (id, range) => this.room.view(id, range),
 			commit: async (request) => {
 				const response = await this.commitOnce(request, cancelled);
 				trace.record(roomStep(request, response));

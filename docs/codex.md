@@ -154,8 +154,8 @@ application puts it, and that place is often no git repository.
 key, and the room answers.
 
 **Codex runs tools as MCP servers that it spawns.** The room tools (`say`,
-`schedule`, `seat`, `unseat`, `dismiss`) and the tools of the agent live in
-the host. A small
+`schedule`, `seat`, `unseat`, `dismiss`, `recall`) and the tools of the
+agent live in the host. A small
 stdio server bridges them.
 
 ```mermaid

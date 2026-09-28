@@ -182,6 +182,12 @@ entries plus the open exchange. The cap counts messages and does not count
 bytes. The default is unbounded. A seat with `activationTokenLimit` windows
 further, inside what the room serves.
 
+**The cap bounds a view, and a page reads below it.** A view with a range
+cuts its page from every message that the purpose may read, so `recall`
+reaches a message below the cap. The page still reports the cap floor as
+`earliest`. A seat that pages its context window stops at `earliest`, so
+its window stays inside the cap.
+
 When a view holds less than the whole record, `context.omitted` counts the
 messages below the first one served. The rendered record then opens with one
 line: `── N earlier messages not shown ──`. The line shows for summarised and

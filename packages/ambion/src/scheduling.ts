@@ -16,7 +16,7 @@ export interface ScheduleLimits {
 
 /**
  * A say that waits to return to its seat for its owner, as a read shows it.
- * `seq` is its handle, and `due` is ISO.
+ * `seq` names it, as the record shows it, and `due` is ISO.
  */
 export interface PendingSay {
 	readonly seq: Seq;

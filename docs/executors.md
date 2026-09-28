@@ -161,8 +161,8 @@ family.
 ## The room tools
 
 [Definitions and tools](agent.md#tools) states which tools an ordinary
-activation receives and which tools a closing activation receives. The
-hosting entry exports `SAY`, `SCHEDULE`, `SEAT`, `UNSEAT`, `DISMISS`, and
+activation receives and which tools a closing activation receives. The hosting
+entry exports `SAY`, `SCHEDULE`, `SEAT`, `UNSEAT`, `DISMISS`, `RECALL`, and
 `summaryToolDescription`.
 
 **The hosting entry holds the room tools once, in a form that names no
@@ -193,11 +193,18 @@ tool call id as its commit key. It accepts `text`, `to`, and `refs`.
 
 **`schedule` commits a `said` intent with `after`.** The intent goes to the
 seat itself. It carries `readThrough`, and the room takes it at any
-position. It accepts `after`, `text`, and `refs`. The result names the
-handle and the due time, and it lists the `unread` messages of the answer.
+position. It accepts `after`, `text`, and `refs`. The result names the say
+as `#<seq>` and gives the due time, and it lists the `unread` messages of
+the answer.
 
 **`seat` and `unseat` commit a membership intent**, keyed on the tool call
 id.
+
+**`recall` reads and commits nothing.** For each distinct message URI of its
+room, it calls `view(id, { before: seq + 1, limit: 1 })`. A summary sits
+after the range it covers, so that page never folds the message away. The
+tool calls neither `acknowledgeThrough` nor `resultExpected`, and every
+family reports it as a tool event.
 
 **The room answer tells the adapter what to do:**
 

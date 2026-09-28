@@ -63,8 +63,8 @@ const checksLater: Script = (context) => {
 const changesItsMind: Script = (context) => {
 	const last = toolResultTexts(context).at(-1);
 	if (last !== undefined) results.push(last);
-	const handle = /^scheduled (\d+):/.exec(last ?? '')?.[1];
-	if (handle !== undefined) return callTool('dismiss', { handle: Number(handle) });
+	const seq = /^scheduled #(\d+):/.exec(last ?? '')?.[1];
+	if (seq !== undefined) return callTool('dismiss', { message: Number(seq) });
 	if (last?.startsWith('dismissed')) return speak('I dropped the check.', 'priya');
 	if (last !== undefined) return quiet();
 	return later('Check the build.', AFTER);
@@ -109,7 +109,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		expect(say).toMatchObject({ seat: 'worker', owner: 'priya', text: 'Check the build.' });
 		const due = new Date(clock.now() + AFTER * 1000).toISOString();
 		expect(results).toContain(
-			`scheduled ${say?.seq}: the room gives this say back to you at ${due}`,
+			`scheduled #${say?.seq}: the room wakes you with this message at ${due}`,
 		);
 		expect((await room.read({ messages: false })).scheduled).toEqual([
 			{
