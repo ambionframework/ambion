@@ -8,18 +8,16 @@
  * those again. The rules are the ones `exchange.ts` holds.
  */
 
-import { decodeActivationId } from '../activation-id.ts';
 import type { Close } from '../journal/events.ts';
 import type { Message, Seq } from '../types.ts';
-import { summaryCompletion } from './exchange.ts';
+import { draftsOf, summaryCompletion } from './exchange.ts';
 import {
 	type LeaseHold,
 	type PendingActivation,
 	type PendingActivationOptions,
 	pendingActivation,
-	takenOf,
 } from './lease.ts';
-import { countsAgainst, draftsClose } from './rules.verified.ts';
+import { countsAgainst } from './rules.verified.ts';
 
 /**
  * A summary one person is owed, and how the room has tried to write it. The
@@ -79,7 +77,9 @@ export function rejudgeOwed(
 
 /**
  * What a person is owed, as an activation: how many drafts over the close
- * came to nothing, when the next may start, and the id it claims.
+ * came to nothing, when the next may start, and the id it claims. The room
+ * reads the attempts only while the close owes a draft. Then no draft stood
+ * down, so an ended draft failed or expired.
  */
 export function withAttempts(
 	close: Pick<Close, 'owner' | 'from' | 'through'>,
@@ -87,27 +87,12 @@ export function withAttempts(
 	leases: ReadonlyMap<string, LeaseHold>,
 	options: PendingActivationOptions,
 ): Owed {
-	const failed = [...leases.values()].filter((lease) => draftedOver(lease, close.through, writer));
+	const failed = draftsOf(leases, close.through, writer).filter((lease) =>
+		countsAgainst(lease, close.through),
+	);
 	return {
 		person: close.owner,
 		from: close.from,
 		...pendingActivation('closed', close.through, writer, failed, options),
 	};
-}
-
-/**
- * A draft of the writer's over this close that counts against the close.
- * Another seat's lease is no attempt of the writer's. The validator holds
- * `through >= 1`. `decodeActivationId` always names a seat, so a writer
- * with no name drafts nothing. The room reads the attempts only while the
- * close owes a draft. Then no draft stood down, so an ended draft failed or
- * expired.
- */
-function draftedOver(lease: LeaseHold, through: Seq, writer: string): boolean {
-	const parsed = decodeActivationId(lease.id);
-	return (
-		parsed !== undefined &&
-		draftsClose(parsed, through, writer) &&
-		countsAgainst(takenOf(lease), through)
-	);
 }

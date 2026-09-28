@@ -13,7 +13,8 @@ import type {
 import { activationSpec } from './room/activation.ts';
 import { exchangeSession } from './room/exchange.ts';
 import type { RoomState } from './room/fold.ts';
-import { isLive, seatOf } from './room/lease.ts';
+import { seatOf } from './room/lease.ts';
+import { isLive } from './room/rules.verified.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
 import {

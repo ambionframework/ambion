@@ -3,7 +3,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { ActivationId, ActivationSource } from '../src/activation-id.ts';
 import type { Close, LeaseChange } from '../src/journal/events.ts';
 import type { ActivationPurpose } from '../src/protocol.ts';
-import { foldLeases, type LeaseHold, takenOf } from '../src/room/lease.ts';
+import { foldLeases, type LeaseHold } from '../src/room/lease.ts';
 import {
 	type ActivationFields,
 	applyChange,
@@ -13,12 +13,12 @@ import {
 	countsAgainst,
 	type FailureCause,
 	type GrantPurpose,
-	type Hold,
 	type LeaseEndReason,
 	type LeasePhase,
 	leaseExpiry,
 	mayEnd,
 	type OutcomeKind,
+	type RuleLease,
 	type Source,
 	wakeAnswered,
 } from '../src/room/rules.verified.ts';
@@ -34,6 +34,7 @@ type DistributiveOmit<T, K extends string> = T extends unknown ? Omit<T, K> : ne
 
 const at = '2026-01-01T09:00:00.000Z';
 const id = 'message:2:solo:1';
+const activation = { source: 'message', position: 2, seat: 'solo', attempt: 1 } as const;
 const running = (seq: number, readThrough: number): Entry<LeaseChange> => ({
 	kind: 'lease',
 	seq,
@@ -75,59 +76,73 @@ describe('verified rules', () => {
 		expectTypeOf<GrantPurpose>().toEqualTypeOf<DistributiveOmit<ActivationPurpose, 'people'>>();
 		expectTypeOf<OutcomeKind>().toEqualTypeOf<ExchangeOutcome['kind']>();
 		expectTypeOf<Close>().toMatchTypeOf<CloseFact>();
-		// The room's hold is the rule's hold plus the derived `cancelled` marker.
-		expectTypeOf<Hold>().toEqualTypeOf<DistributiveOmit<LeaseHold, 'usage' | 'session'>>();
+		// The room's lease is the rule's lease plus the usage and the session of its end.
+		expectTypeOf<RuleLease>().toEqualTypeOf<DistributiveOmit<LeaseHold, 'usage' | 'session'>>();
 	});
 
-	it('folds one lease entry: ended is final, since is fixed, readThrough never moves back', () => {
+	it('folds one lease entry: ended is final, the start is fixed, readThrough never moves back', () => {
 		const first = applyChange(
 			undefined,
-			{ id: 'message:2:solo:1', phase: 'running', expiresAt: 9, at, readThrough: 2 },
+			{ id, phase: 'running', expiresAt: 9, at, readThrough: 2 },
 			3,
+			activation,
 		);
-		expect(first).toMatchObject({ phase: 'running', since: 3, claimedAt: at, readThrough: 2 });
+		expect(first).toMatchObject({
+			phase: 'running',
+			activation,
+			openedSeq: 3,
+			claimedAt: at,
+			readThrough: 2,
+		});
+		const other = { ...activation, attempt: 2 };
 		const renewed = applyChange(
 			first,
-			{ id: 'message:2:solo:1', phase: 'running', expiresAt: 19, at, readThrough: 0 },
+			{ id, phase: 'running', expiresAt: 19, at, readThrough: 0 },
 			5,
+			other,
 		);
-		expect(renewed).toMatchObject({ since: 3, readThrough: 2, expiresAt: 19 });
+		expect(renewed).toMatchObject({ activation, openedSeq: 3, readThrough: 2, expiresAt: 19 });
 		const ended = applyChange(
 			renewed,
-			{ id: 'message:2:solo:1', phase: 'ended', reason: 'released', at, readThrough: 4 },
+			{ id, phase: 'ended', reason: 'released', at, readThrough: 4 },
 			8,
+			activation,
 		);
-		expect(ended).toMatchObject({ phase: 'ended', since: 3, until: 8, readThrough: 4 });
+		expect(ended).toMatchObject({ phase: 'ended', openedSeq: 3, until: 8, readThrough: 4 });
 		expect(
 			applyChange(
 				ended,
-				{ id: 'message:2:solo:1', phase: 'running', expiresAt: 99, at, readThrough: 9 },
+				{ id, phase: 'running', expiresAt: 99, at, readThrough: 9 },
 				9,
+				activation,
 			),
 		).toBe(ended);
 	});
 
 	it('cancels a running lease caused before the marker and leaves every other lease alone', () => {
-		const running: Hold = {
-			id: 'message:2:solo:1',
+		const running: RuleLease = {
+			id,
+			activation,
 			phase: 'running',
 			at,
 			claimedAt: at,
-			since: 3,
+			openedSeq: 3,
 			readThrough: 2,
 			expiresAt: 9,
 		};
-		expect(cancelHold(running, 2, 6, at)).toMatchObject({
+		expect(cancelHold(running, 6, at)).toMatchObject({
 			phase: 'ended',
 			reason: 'revoked',
 			cancelled: true,
 			until: 6,
-			since: 3,
+			activation,
+			openedSeq: 3,
 			readThrough: 2,
 		});
-		expect(cancelHold(running, 7, 6, at)).toBe(running);
-		const ended = cancelHold(running, 2, 6, at);
-		expect(cancelHold(ended, 2, 9, at)).toBe(ended);
+		const later = { ...running, activation: { ...activation, position: 7 } };
+		expect(cancelHold(later, 6, at)).toBe(later);
+		const ended = cancelHold(running, 6, at);
+		expect(cancelHold(ended, 9, at)).toBe(ended);
 	});
 
 	it.each([
@@ -137,9 +152,13 @@ describe('verified rules', () => {
 		['ended', 'revoked', 0, true],
 	] as const)(
 		'answers a wake that a %s %s lease holds: %s',
-		(phase, reason, readThrough, answered) => {
-			const lease = reason === undefined ? { phase } : { phase, reason };
-			expect(wakeAnswered([{ ...lease, readThrough, position: 2 }], 2)).toBe(answered);
+		(_phase, reason, readThrough, answered) => {
+			const opened = { id, activation, at, claimedAt: at, openedSeq: 2, readThrough };
+			const lease: RuleLease =
+				reason === undefined
+					? { ...opened, phase: 'running', expiresAt: 9 }
+					: { ...opened, phase: 'ended', reason, until: 3 };
+			expect(wakeAnswered([lease], 2)).toBe(answered);
 		},
 	);
 
@@ -169,9 +188,14 @@ describe('lease rules', () => {
 	it('keeps a lease interval through its terminal entry', () => {
 		const leases = foldLeases([running(2, 2), running(3, 3)]);
 		const held = foldLeases([ended(8, 'released', 3)], [...leases.values()]).get(id);
-		expect(held).toMatchObject({ since: 2, until: 8, readThrough: 3 });
+		expect(held).toMatchObject({ activation, openedSeq: 2, until: 8, readThrough: 3 });
 		if (held?.phase !== 'ended') throw new Error('Expected terminal lease.');
-		expect(held.until).toBeGreaterThanOrEqual(held.since);
+		expect(held.until).toBeGreaterThanOrEqual(held.openedSeq);
+		// The fold holds no lease whose id the room did not derive.
+		const underived = running(9, 9);
+		expect(
+			foldLeases([{ ...underived, body: { ...underived.body, id: 'opened:3:opened:1' } }]),
+		).toEqual(new Map());
 	});
 
 	it('retries unread released work and counts failed work', () => {
@@ -180,7 +204,7 @@ describe('lease rules', () => {
 		]);
 		const failed = foldLeases([ended(3, 'failed', 0)]).get(id);
 		// A failed lease counts against a message its id does not name.
-		expect(failed !== undefined && countsAgainst(takenOf(failed), 5)).toBe(true);
+		expect(failed !== undefined && countsAgainst(failed, 5)).toBe(true);
 	});
 
 	it.each([

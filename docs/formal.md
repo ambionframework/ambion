@@ -10,7 +10,7 @@ stale. Two files hold every rule:
 | File                                                                                          | Concern                                                                                            | Obligations                   |
 | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------- |
 | [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)         | The fence, the key, the seq counter, the cursor                                                    | 12, and 23 in its proofs file |
-| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | 72, and 39 in its proofs file |
+| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | 74, and 39 in its proofs file |
 
 **Everything else is ordinary TypeScript under the scripted and chaos
 suites.** Routing, presence, the roster, addressing, membership changes,
@@ -103,15 +103,21 @@ describes. Three things hold that binding.
    case, so a rule cannot gain an export without one.
 
 **The call site holds the projection, and the rule holds the decision.**
-`applyLease` in `lease.ts` reads one lease entry, finds the lease the fold
-holds for its id, and asks `applyChange` for the lease after it.
-`cancelLeases` in `fold.ts` asks `cancelHold` for each lease a
-cancellation reaches. `exchangeAfter` in `exchange.ts` asks
+`applyLease` in `lease.ts` reads one lease entry, decodes its id, finds
+the lease the fold holds for that id, and asks `applyChange` for the
+lease after it. `cancelLeases` in `fold.ts` asks `cancelHold` for each
+lease a cancellation reaches. `exchangeAfter` in `exchange.ts` asks
 `openingQuestion` for the first question after the last close.
-`withAttempts` in `owed.ts` and `draftsOf` in `exchange.ts` decode each
-lease id and ask `draftsClose` whether the lease drafts the close. A
-comment at such a site says "the rule decides" where a second check
-remains to narrow a TypeScript type.
+`draftsOf` in `exchange.ts` asks `draftsClose` whether each lease drafts
+the close. `summaryCompletion` in `exchange.ts` and `withAttempts` in
+`owed.ts` read the drafts it selects. A comment at such a site says "the rule decides"
+where a second check remains to narrow a TypeScript type.
+
+**A rule that reads a lease reads one shape.** `RuleLease` is the lease
+that the fold holds: its phase, its read position, its end, and the fields
+that its id encodes, in `activation`. `applyLease` decodes the id once.
+The callers pass the lease that the fold holds to the rules, with no
+conversion.
 
 ## 3. The generated files
 
@@ -131,8 +137,10 @@ moves back. The room's proofs file proves these lemmas:
 - `AttemptIdsAreFresh`: no two attempts in one lease history share an id.
 - `LeaseHistoryKeeps` and `FirstChangeFixesStart`: they fold every
   history of changes and cancellation markers the rules admit. The first
-  change fixes `since` and `claimedAt`. The read position never moves
-  back. An ended lease stays as it ended.
+  change fixes `activation`, `openedSeq`, and `claimedAt`. The read
+  position never moves back. An ended lease stays as it ended.
+  `openedSeq` is the seq of the entry that opened the lease. The name
+  `since` belongs to the exclusive read cursor of a read and of a pass.
 - `OneOpenExchange`: the open exchange is the earliest question after the
   last close. Every other question that could open one comes at or after
   it.

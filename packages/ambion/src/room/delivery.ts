@@ -1,6 +1,5 @@
 /** The recipients a message reaches, derived from journal facts. */
 
-import { decodeActivationId } from '../activation-id.ts';
 import type { Message } from '../types.ts';
 import type { LeaseHold } from './lease.ts';
 
@@ -24,9 +23,7 @@ export function messageDelivery(
 	const wakes = new Set(message.wakes ?? []);
 	const steered = new Map<string, string>();
 	for (const lease of leases.values()) {
-		const parsed = decodeActivationId(lease.id);
-		if (parsed === undefined) continue;
-		const { source, seat } = parsed;
+		const { source, seat } = lease.activation;
 		// A message steers an ordinary lease that was at work when it landed, and
 		// never the author's seat or a seat it wakes. A returned say steers
 		// only the seat that scheduled it. The first lease at a seat, in journal
@@ -48,5 +45,5 @@ export function messageDelivery(
 
 /** The lease held a change before the message, and ended, if it ended, after it. */
 function atWork(lease: LeaseHold, seq: number): boolean {
-	return lease.since < seq && (lease.phase !== 'ended' || lease.until >= seq);
+	return lease.openedSeq < seq && (lease.phase !== 'ended' || lease.until >= seq);
 }

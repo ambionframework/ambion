@@ -109,39 +109,39 @@ lemma EndingStands(stale: bool, expiry: int, now: int, later: int)
 // ---- One lease history -----------------------------------------------------
 
 // One entry the fold applies to the lease it holds for one id: a lease change
-// at its seq, or a cancellation marker at its seq.
+// at its seq with the fields its id encodes, or a cancellation marker at its seq.
 datatype LeaseEvent =
-  | Changed(change: Change, seqNo: int)
-  | Cancelled(position: int, cancelledAt: int, stamp: string)
+  | Changed(change: Change, seqNo: int, activation: ActivationFields)
+  | Cancelled(cancelledAt: int, stamp: string)
 
 // What the fold admits, which are the preconditions of `applyChange` and
 // `cancelHold`. A change lands at or after the lease's start with a read
 // position of zero or more. A marker lands at or after the lease's start.
-predicate leaseAdmits(known: Option<Hold>, e: LeaseEvent) {
+predicate leaseAdmits(known: Option<RuleLease>, e: LeaseEvent) {
   match e
-  case Changed(change, seqNo) =>
+  case Changed(change, seqNo, activation) =>
     seqNo >= 1 && change.readThrough >= 0
-    && (known.Some? ==> known.value.readThrough >= 0 && known.value.since <= seqNo)
-  case Cancelled(position, cancelledAt, stamp) =>
-    known.Some? ==> known.value.since <= cancelledAt
+    && (known.Some? ==> known.value.readThrough >= 0 && known.value.openedSeq <= seqNo)
+  case Cancelled(cancelledAt, stamp) =>
+    known.Some? ==> known.value.openedSeq <= cancelledAt
 }
 
-function leaseStep(known: Option<Hold>, e: LeaseEvent): Option<Hold>
+function leaseStep(known: Option<RuleLease>, e: LeaseEvent): Option<RuleLease>
   requires leaseAdmits(known, e)
 {
   match e
-  case Changed(change, seqNo) => Some(applyChange(known, change, seqNo))
-  case Cancelled(position, cancelledAt, stamp) =>
-    (match known case None => None case Some(h) => Some(cancelHold(h, position, cancelledAt, stamp)))
+  case Changed(change, seqNo, activation) => Some(applyChange(known, change, seqNo, activation))
+  case Cancelled(cancelledAt, stamp) =>
+    (match known case None => None case Some(h) => Some(cancelHold(h, cancelledAt, stamp)))
 }
 
-predicate leaseHistoryAdmitted(known: Option<Hold>, es: seq<LeaseEvent>)
+predicate leaseHistoryAdmitted(known: Option<RuleLease>, es: seq<LeaseEvent>)
   decreases |es|
 {
   |es| == 0 || (leaseAdmits(known, es[0]) && leaseHistoryAdmitted(leaseStep(known, es[0]), es[1..]))
 }
 
-function leaseFold(known: Option<Hold>, es: seq<LeaseEvent>): Option<Hold>
+function leaseFold(known: Option<RuleLease>, es: seq<LeaseEvent>): Option<RuleLease>
   requires leaseHistoryAdmitted(known, es)
   decreases |es|
 {
@@ -149,33 +149,36 @@ function leaseFold(known: Option<Hold>, es: seq<LeaseEvent>): Option<Hold>
 }
 
 // The lease the fold holds is well formed: an ended lease ended at or after it started.
-predicate leaseWellFormed(hold: Hold) {
-  hold.readThrough >= 0 && (hold.ended? ==> hold.until >= hold.since)
+predicate leaseWellFormed(lease: RuleLease) {
+  lease.readThrough >= 0 && (lease.ended? ==> lease.until >= lease.openedSeq)
 }
 
-// One step keeps the start, never lowers the read position, never changes an
-// ended lease, and ends a lease only at or after its start.
-lemma LeaseStepKeeps(known: Hold, e: LeaseEvent)
+// One step keeps the activation and the start, never lowers the read position,
+// never changes an ended lease, and ends a lease only at or after its start.
+lemma LeaseStepKeeps(known: RuleLease, e: LeaseEvent)
   requires leaseWellFormed(known)
   requires leaseAdmits(Some(known), e)
   ensures leaseStep(Some(known), e).Some?
   ensures leaseWellFormed(leaseStep(Some(known), e).value)
-  ensures leaseStep(Some(known), e).value.since == known.since
+  ensures leaseStep(Some(known), e).value.activation == known.activation
+  ensures leaseStep(Some(known), e).value.openedSeq == known.openedSeq
   ensures leaseStep(Some(known), e).value.claimedAt == known.claimedAt
   ensures leaseStep(Some(known), e).value.readThrough >= known.readThrough
   ensures known.ended? ==> leaseStep(Some(known), e).value == known
 {
 }
 
-// The invariant holds across every admitted history: the start is fixed by the
-// first change, the read position never moves back, and ended is final.
-lemma LeaseHistoryKeeps(known: Hold, es: seq<LeaseEvent>)
+// The invariant holds across every admitted history: the activation and the
+// start are fixed by the first change, the read position never moves back, and
+// ended is final.
+lemma LeaseHistoryKeeps(known: RuleLease, es: seq<LeaseEvent>)
   requires leaseWellFormed(known)
   requires leaseHistoryAdmitted(Some(known), es)
   decreases |es|
   ensures leaseFold(Some(known), es).Some?
   ensures leaseWellFormed(leaseFold(Some(known), es).value)
-  ensures leaseFold(Some(known), es).value.since == known.since
+  ensures leaseFold(Some(known), es).value.activation == known.activation
+  ensures leaseFold(Some(known), es).value.openedSeq == known.openedSeq
   ensures leaseFold(Some(known), es).value.claimedAt == known.claimedAt
   ensures leaseFold(Some(known), es).value.readThrough >= known.readThrough
   ensures known.ended? ==> leaseFold(Some(known), es).value == known
@@ -187,15 +190,16 @@ lemma LeaseHistoryKeeps(known: Hold, es: seq<LeaseEvent>)
 }
 
 // The first change fixes the start: every later reading of the lease keeps the
-// seq and the stamp of that change.
-lemma FirstChangeFixesStart(change: Change, seqNo: int, es: seq<LeaseEvent>)
-  requires leaseHistoryAdmitted(None, [Changed(change, seqNo)] + es)
-  ensures leaseFold(None, [Changed(change, seqNo)] + es).Some?
-  ensures leaseFold(None, [Changed(change, seqNo)] + es).value.since == seqNo
-  ensures leaseFold(None, [Changed(change, seqNo)] + es).value.claimedAt == change.at
+// activation, the seq and the stamp of that change.
+lemma FirstChangeFixesStart(change: Change, seqNo: int, activation: ActivationFields, es: seq<LeaseEvent>)
+  requires leaseHistoryAdmitted(None, [Changed(change, seqNo, activation)] + es)
+  ensures leaseFold(None, [Changed(change, seqNo, activation)] + es).Some?
+  ensures leaseFold(None, [Changed(change, seqNo, activation)] + es).value.activation == activation
+  ensures leaseFold(None, [Changed(change, seqNo, activation)] + es).value.openedSeq == seqNo
+  ensures leaseFold(None, [Changed(change, seqNo, activation)] + es).value.claimedAt == change.at
 {
-  var first := applyChange(None, change, seqNo);
-  assert ([Changed(change, seqNo)] + es)[1..] == es;
+  var first := applyChange(None, change, seqNo, activation);
+  assert ([Changed(change, seqNo, activation)] + es)[1..] == es;
   LeaseHistoryKeeps(first, es);
 }
 

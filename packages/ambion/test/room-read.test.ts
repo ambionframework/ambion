@@ -28,11 +28,12 @@ const close = (summary?: string): Close => ({
 
 const abandoned: LeaseHold = {
 	id: 'closed:3:assistant:1',
+	activation: { source: 'closed', position: 3, seat: 'assistant', attempt: 1 },
 	phase: 'ended',
 	reason: 'abandoned',
 	at: '2026-01-01T00:00:03.000Z',
 	claimedAt: '2026-01-01T00:00:02.000Z',
-	since: 3,
+	openedSeq: 3,
 	until: 4,
 	readThrough: 0,
 };

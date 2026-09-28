@@ -10,7 +10,6 @@
  * that wrote it, which is what lets a room resume where it stopped.
  */
 
-import { decodeActivationId } from '../activation-id.ts';
 import type { Close, Composition, Seating } from '../journal/events.ts';
 import { type Entry, placed } from '../journal/journal.ts';
 import type { ExchangeRef, Message, Seq } from '../types.ts';
@@ -116,10 +115,7 @@ function cancelledClose(
 
 /** A cancellation ends old leases while retaining their reads. */
 function cancelLeases(leases: Map<string, LeaseHold>, cancelledAt: Seq, at: string): void {
-	for (const [id, lease] of leases) {
-		const parsed = decodeActivationId(id);
-		if (parsed !== undefined) leases.set(id, cancelHold(lease, parsed.position, cancelledAt, at));
-	}
+	for (const [id, lease] of leases) leases.set(id, cancelHold(lease, cancelledAt, at));
 }
 
 export function reserveOf(

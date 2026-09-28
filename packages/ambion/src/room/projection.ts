@@ -15,7 +15,6 @@
  * that resumes rebuilds it by `replay`.
  */
 
-import { decodeActivationId } from '../activation-id.ts';
 import type { Close, Composition, Seating } from '../journal/events.ts';
 import { type Entry, placed } from '../journal/journal.ts';
 import type { ExchangeRef, Message, Seq } from '../types.ts';
@@ -246,24 +245,24 @@ function onLease(
 	applyLease(leases, entry);
 	const hold = leases.get(entry.body.id);
 	const base = { ...prev.base, leases };
-	const parsed = decodeActivationId(entry.body.id);
-	if (hold === undefined || parsed === undefined) return { ...prev, base };
+	if (hold === undefined) return { ...prev, base };
+	const { source, position, seat } = hold.activation;
 	const running = step.own ? prev.running : new Map(prev.running);
 	if (hold.phase === 'running') running.set(hold.id, hold);
 	else running.delete(hold.id);
-	if (parsed.source === 'closed') {
-		const closedLeases = leased(prev.closedLeases, parsed.position, hold, step.own);
+	if (source === 'closed') {
+		const closedLeases = leased(prev.closedLeases, position, hold, step.own);
 		const next = { ...prev, base, running, closedLeases };
 		const owed = rejudgeOwed(
 			prev.owed,
-			(entry) => entry.position === parsed.position,
+			(entry) => entry.position === position,
 			factsOf(next),
 			step.options,
 		);
 		return { ...next, owed };
 	}
-	const seatLeases = leased(prev.seatLeases, parsed.seat, hold, step.own);
-	const wakes = rejudgeSeat(prev.wakes, parsed.seat, seatLeases.get(parsed.seat), step.options);
+	const seatLeases = leased(prev.seatLeases, seat, hold, step.own);
+	const wakes = rejudgeSeat(prev.wakes, seat, seatLeases.get(seat), step.options);
 	return { ...prev, base, running, seatLeases, wakes };
 }
 
@@ -276,11 +275,9 @@ function indexLeases(
 	let closedLeases: LeaseIndex<Seq> = new Map();
 	for (const hold of leases.values()) {
 		if (hold.phase === 'running') running.set(hold.id, hold);
-		const parsed = decodeActivationId(hold.id);
-		if (parsed === undefined) continue;
-		if (parsed.source === 'closed')
-			closedLeases = leased(closedLeases, parsed.position, hold, true);
-		else seatLeases = leased(seatLeases, parsed.seat, hold, true);
+		const { source, position, seat } = hold.activation;
+		if (source === 'closed') closedLeases = leased(closedLeases, position, hold, true);
+		else seatLeases = leased(seatLeases, seat, hold, true);
 	}
 	return { running, seatLeases, closedLeases };
 }

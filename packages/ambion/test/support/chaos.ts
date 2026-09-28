@@ -33,7 +33,8 @@ import {
 	startRoom,
 } from '../../src/index.ts';
 import type { LeaseChange } from '../../src/journal/events.ts';
-import { foldLeases, isLive } from '../../src/room/lease.ts';
+import { foldLeases } from '../../src/room/lease.ts';
+import { isLive } from '../../src/room/rules.verified.ts';
 import { type FakeClock, fakeClock } from '../../src/testing.ts';
 import {
 	agents,

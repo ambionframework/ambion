@@ -49,7 +49,6 @@ import {
 import { type LeaseHold, removedAfter } from './lease.ts';
 import {
 	coversExchange,
-	type Draft,
 	draftsClose,
 	exchangeOutcome,
 	openingQuestion,
@@ -109,27 +108,17 @@ export function summaryCompletion(
 
 /**
  * The drafts of one close's summary: every lease of the writer's closing
- * activations at the close. The validator holds `through >= 1`. A close
- * with no writer has no drafts, and `decodeActivationId` always names a
- * seat.
+ * activations at the close. A lease from another seat is no draft of this
+ * close. The validator holds `through >= 1`. A close with no writer has no
+ * drafts, and every activation id names a seat.
  */
-function draftsOf(
+export function draftsOf(
 	leases: ReadonlyMap<string, LeaseHold>,
 	through: Seq,
 	writer: string | undefined,
-): Draft[] {
+): LeaseHold[] {
 	if (writer === undefined) return [];
-	return [...leases.values()]
-		.filter((lease) => {
-			const parsed = decodeActivationId(lease.id);
-			// A terminal lease from another seat cannot settle this close.
-			return parsed !== undefined && draftsClose(parsed, through, writer);
-		})
-		.map((lease) =>
-			lease.phase === 'running'
-				? { phase: 'running' }
-				: { phase: 'ended', reason: lease.reason, cancelled: lease.cancelled === true },
-		);
+	return [...leases.values()].filter((lease) => draftsClose(lease.activation, through, writer));
 }
 
 /** What one pass over the room shares among its closed exchanges. */
@@ -230,9 +219,7 @@ function closedExchangeView(close: Close, pass: Pass): Extract<ExchangeView, { s
 	return {
 		...closedExchange(close, pass.messages),
 		status: 'closed',
-		activations: activationsInRange(pass.leases, close.from, close.through).map(({ lease }) =>
-			exchangeActivation(lease),
-		),
+		activations: activationsInRange(pass.leases, close.from, close.through).map(exchangeActivation),
 		// The view copies a published summary, as it copies `summaries`, so it
 		// shares nothing with the fold.
 		summary:
@@ -255,12 +242,10 @@ function activationsInRange(
 	leases: ReadonlyMap<string, LeaseHold>,
 	from: Seq,
 	through: Seq,
-): { lease: LeaseHold; source: ActivationSource }[] {
-	return [...leases.values()].flatMap((lease) => {
-		const parsed = decodeActivationId(lease.id);
-		const inRange = parsed !== undefined && parsed.position >= from && parsed.position <= through;
-		return inRange ? [{ lease, source: parsed.source }] : [];
-	});
+): LeaseHold[] {
+	return [...leases.values()].filter(
+		({ activation }) => activation.position >= from && activation.position <= through,
+	);
 }
 
 /** What a lease says about how its activation stands. */
@@ -275,13 +260,12 @@ function outcomeOf(lease: LeaseHold): ActivationOutcome {
 
 /** Map one lease to the activation the exchange read lists. */
 export function exchangeActivation(lease: LeaseHold): ExchangeActivation {
-	const id = decodeActivationId(lease.id);
-	if (id === undefined) throw new Error(`Malformed activation id '${lease.id}'.`);
+	const { seat, attempt, source } = lease.activation;
 	return {
 		id: lease.id,
-		seat: id.seat,
-		attempt: id.attempt,
-		purpose: id.source === 'closed' ? 'summary' : 'respond',
+		seat,
+		attempt,
+		purpose: source === 'closed' ? 'summary' : 'respond',
 		outcome: outcomeOf(lease),
 		...(lease.usage === undefined ? {} : { usage: { ...lease.usage } }),
 		...(lease.session === undefined ? {} : { session: { ...lease.session } }),
@@ -299,10 +283,10 @@ function workOf(
 ): { usage: Usage | undefined; exhausted: boolean } {
 	let usage: Usage | undefined;
 	let exhausted = false;
-	for (const { lease, source } of activationsInRange(leases, from, through)) {
+	for (const lease of activationsInRange(leases, from, through)) {
 		if (lease.usage !== undefined) usage = addUsage(usage, lease.usage);
-		if (source === 'message' && lease.phase === 'ended' && lease.reason === 'abandoned')
-			exhausted = true;
+		const response = lease.activation.source === 'message';
+		if (response && lease.phase === 'ended' && lease.reason === 'abandoned') exhausted = true;
 	}
 	return { usage, exhausted };
 }
@@ -361,7 +345,7 @@ export function exchangeViews(
 	const closed = closes.map((close) => closedExchangeView(close, pass));
 	if (open === undefined) return closed;
 	const activations = [...leases.values()]
-		.filter((lease) => (decodeActivationId(lease.id)?.position ?? 0) >= open.from)
+		.filter((lease) => lease.activation.position >= open.from)
 		.map(exchangeActivation);
 	return [...closed, { status: 'open', ...open, activations }];
 }

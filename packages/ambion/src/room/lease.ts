@@ -34,17 +34,13 @@ import type { HarnessSession, Message, Seq, Usage } from '../types.ts';
 import {
 	applyChange,
 	countsAgainst,
-	coversAttempt as coverageRule,
-	type Hold,
-	isExpired as isExpiredRule,
-	isLive as isLiveRule,
 	nextActivationId,
-	type Taken,
+	type RuleLease,
 	wakeAnswered,
 } from './rules.verified.ts';
 
-/** What the lease entries for one activation fold to: the rules' `Hold`. */
-export type LeaseHold = Hold & {
+/** What the lease entries for one activation fold to: the rules' `RuleLease`. */
+export type LeaseHold = RuleLease & {
 	/** What the activation spent, from the ended entry its driver wrote. */
 	readonly usage?: Usage;
 	/** The harness session the ended entry recorded. */
@@ -64,13 +60,19 @@ export function foldLeases(
 	return leases;
 }
 
-/** Apply one change to a private lease builder. Callers must not share this map. */
+/**
+ * Apply one change to a private lease builder. Callers must not share this
+ * map. The validator refuses a lease entry whose id the room did not derive,
+ * so the fold holds no lease that it cannot decode.
+ */
 export function applyLease(
 	leases: Map<string, LeaseHold>,
 	{ body: change, seq }: JournalEntry<LeaseChange>,
 ): void {
+	const activation = decodeActivationId(change.id);
+	if (activation === undefined) return;
 	const known = leases.get(change.id);
-	const next: LeaseHold = applyChange(known, change, seq);
+	const next: LeaseHold = applyChange(known, change, seq, activation);
 	// An ended lease is final: only the entry that ends it carries usage and session.
 	const ending = change.phase === 'ended' && next !== known ? change : undefined;
 	leases.set(change.id, {
@@ -79,13 +81,6 @@ export function applyLease(
 		...(ending?.session === undefined ? {} : { session: ending.session }),
 	});
 }
-
-export const isExpired = (lease: LeaseHold, now: number): boolean =>
-	isExpiredRule(lease.phase, lease.phase === 'running' ? lease.expiresAt : 0, now);
-
-/** A lease that holds: running, and not past its expiry. */
-export const isLive = (lease: LeaseHold, now: number): boolean =>
-	isLiveRule(lease.phase, lease.phase === 'running' ? lease.expiresAt : 0, now);
 
 /**
  * An activation the room owes a seat, and has not had. A message that woke a
@@ -133,18 +128,6 @@ const removalsOf = (messages: readonly Message[], seat: string): number[] =>
 export const removedAfter = (messages: readonly Message[], seat: string, seq: number): boolean =>
 	removalsOf(messages, seat).some((removal) => removal > seq);
 
-/** A lease as the wake rules read it: its phase, reason, acknowledgment, and the position its id names. */
-export function takenOf(lease: LeaseHold): Taken {
-	const position = decodeActivationId(lease.id)?.position ?? 0;
-	return lease.phase === 'running'
-		? { phase: 'running', readThrough: lease.readThrough, position }
-		: { phase: 'ended', reason: lease.reason, readThrough: lease.readThrough, position };
-}
-
-/** A lease covers a message while it works, or through the end of its attempted work. */
-export const coversAttempt = (lease: LeaseHold, seq: Seq): boolean =>
-	lease.phase === 'ended' ? coverageRule(true, lease.until, seq) : coverageRule(false, 0, seq);
-
 /**
  * The wake as pending, or nothing when a lease answered it. A wake at the
  * cap is still pending, and carries the attempts that reached it: the room
@@ -158,9 +141,8 @@ export function statusOf(
 ): PendingWake | undefined {
 	// A running lease keeps the work claimed. A completed lease settles it only
 	// after the executor recorded explicit progress through this message.
-	const covering = taken.map(takenOf);
-	if (wakeAnswered(covering, message.seq)) return undefined;
-	const failed = taken.filter((lease) => countsAgainst(takenOf(lease), message.seq));
+	if (wakeAnswered(taken, message.seq)) return undefined;
+	const failed = taken.filter((lease) => countsAgainst(lease, message.seq));
 	return { ...pendingActivation('message', message.seq, seat, failed, options), at: message.at };
 }
 
