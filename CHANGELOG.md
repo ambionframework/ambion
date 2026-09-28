@@ -87,6 +87,13 @@ names a snapshot ref, a commit ref, and a message URI. A workspace path and
 a table have no ref form, so the text no longer names them. `say` describes
 its `text`.
 
+**The kernel names no database.** The hand-off guidance of every seat
+said to put structured data in the shared database and named
+`sqlite_master`, even for a seat with no SQL backend. It now says to
+write an artifact once where the tools keep it, and to hand it off with a
+directed say. The guidance of `sql` names the table or view hand-off, and
+the SQLite backend names `sqlite_master`.
+
 ### Simplification
 
 - **The room state has one derivation.** `readRoom` replays the

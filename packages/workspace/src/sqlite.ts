@@ -319,7 +319,8 @@ function guidance(timeout: number): string {
 		`The database is SQLite: dates are functions, || joins text, and a column type is an`,
 		`affinity. Attach a private scratch database with ATTACH ':memory:' inside one call;`,
 		`ATTACH opens no file, and VACUUM INTO is refused. Commit a transaction within the call`,
-		`that begins it. A call stops after ${timeout} seconds.`,
+		`that begins it. sqlite_master shows how a view was built. A call stops after ${timeout}`,
+		`seconds.`,
 	].join('\n');
 }
 

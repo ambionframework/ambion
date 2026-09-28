@@ -110,6 +110,11 @@ describe('a workspace with a SQL backend', () => {
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance).toContain('one shared database, :memory:');
 		expect(guidance).toContain('The database is SQLite: dates are functions');
+		// The workspace names the database hand-off and the SQLite catalog; the kernel names neither.
+		expect(guidance).toContain(
+			'structured data that a colleague needs here as a named table or view',
+		);
+		expect(guidance).toContain('sqlite_master shows how a view was built.');
 	});
 
 	it('runs statements as the calling agent on one database the agents share, views and their definitions included', async () => {
