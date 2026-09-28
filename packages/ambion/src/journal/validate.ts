@@ -2,7 +2,6 @@ import { type TSchema, Type } from 'typebox';
 import { Check, Errors } from 'typebox/value';
 import { decodeActivationId } from '../activation-id.ts';
 import { refsRefusal } from '../refs.ts';
-import { JOURNAL_FORMAT } from './events.ts';
 import type { Kind } from './journal.ts';
 
 const extra = { additionalProperties: true } as const;
@@ -22,6 +21,13 @@ const seating = Type.Object(
 	extra,
 );
 const covers = Type.Object({ from: seq, through: seq }, extra);
+/**
+ * A field that an earlier release wrote, and that this runtime would misread
+ * or drop without a word. A body schema accepts an extra field, so the schema
+ * of the body names each such field and refuses it.
+ */
+const removed = Type.Optional(Type.Never());
+const REMOVED = 'expected no such field; an earlier release wrote it';
 
 const messageSchemas: Record<string, TSchema> = {
 	said: Type.Object(
@@ -144,6 +150,8 @@ const schemas: Record<Kind, TSchema> = {
 			through: seq,
 			at: Type.String(),
 			summary: Type.Optional(Type.String()),
+			// Only the room derives a cancelled close, from a cancel entry.
+			cancelled: removed,
 		},
 		extra,
 	),
@@ -157,21 +165,20 @@ const schemas: Record<Kind, TSchema> = {
 		},
 		extra,
 	),
-	// The format stays permissive here. A schema literal would drop a newer
-	// fence without a word; validateRunFormat refuses it loudly.
-	run: Type.Object({ at: Type.String(), format: Type.Optional(Type.Integer()) }, extra),
-	cancel: Type.Object({ at: Type.String() }, extra),
+	// A journal carries no format number.
+	run: Type.Object({ at: Type.String(), format: removed }, extra),
+	// The room derives the close of a cancellation from the cancel entry.
+	cancel: Type.Object({ at: Type.String(), close: removed }, extra),
 };
 
 /** Validate a room journal body. Unknown entry kinds stay outside this vocabulary. */
 export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 	if (!Object.hasOwn(schemas, kind)) return false;
-	if (kind === 'run') validateRunFormat(body);
 	const schema = schemaFor(kind, body);
 	if (!Check(schema, body)) {
 		const error = Errors(schema, body)[0];
 		const path = error === undefined ? 'body' : instancePath(error);
-		const reason = error?.message ?? 'does not match the stored shape';
+		const reason = reasonOf(error);
 		throw new Error(`Invalid room journal body for kind '${kind}' at ${path}: ${reason}.`);
 	}
 	const at = objectBody(body)?.at;
@@ -244,19 +251,6 @@ function validateRange(kind: string, range: Record<string, unknown>, path: strin
 	);
 }
 
-/**
- * A run entry without a format is format 1. Any other format is a journal a
- * newer runtime wrote. Before 1.0.0 a new format adds no reader for an older
- * one.
- */
-function validateRunFormat(body: unknown): void {
-	const format = objectBody(body)?.format;
-	if (format === undefined || format === JOURNAL_FORMAT) return;
-	throw new Error(
-		`Unsupported journal format (${JSON.stringify(format)}); this runtime reads format ${JOURNAL_FORMAT}. Upgrade the runtime or migrate this journal externally.`,
-	);
-}
-
 function validateActivationId(kind: string, body: Record<string, unknown> | undefined): void {
 	const path = kind === 'lease' ? 'body.id' : kind === 'message' ? 'body.activationId' : undefined;
 	if (path === undefined || body === undefined) return;
@@ -296,6 +290,12 @@ function objectBody(value: unknown): Record<string, unknown> | undefined {
 	return value !== null && typeof value === 'object' && !Array.isArray(value)
 		? (value as Record<string, unknown>)
 		: undefined;
+}
+
+/** Only a removed field fails the `not` keyword, so it gets its own reason. */
+function reasonOf(error: { keyword: string; message: string } | undefined): string {
+	if (error === undefined) return 'does not match the stored shape';
+	return error.keyword === 'not' ? REMOVED : error.message;
 }
 
 function instancePath(error: { instancePath: string; keyword: string; params: object }): string {

@@ -20,7 +20,7 @@ const composition: Composition = {
 const close: Close = { owner: 'priya', from: 4, through: 7, at };
 const id = 'message:4:product:1';
 const entries: Entry[] = [
-	{ kind: 'run', seq: 1, body: { at, format: 1 } },
+	{ kind: 'run', seq: 1, body: { at } },
 	{ kind: 'composition', seq: 2, body: composition },
 	{
 		kind: 'message',

@@ -47,8 +47,8 @@ from the owner's machine, or a user who asks for provenance.
 ## Designs with a shape
 
 **The checkpoint entry.** A checkpoint entry lets a resume skip settled
-history, and full replay stays the reference. It is a format change, so it
-lands with a golden journal of the new format. **Condition:** a measured
+history, and full replay stays the reference. It adds a journal body, so it
+lands with a golden journal that holds one. **Condition:** a measured
 resume time comes near the default `limits.lease.ttl` of 60 seconds ([envelope.md](../docs/envelope.md)). Past
 that point, replay sets the recovery time.
 

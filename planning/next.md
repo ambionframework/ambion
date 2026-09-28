@@ -58,10 +58,10 @@ home, and each seat one boundary. `pnpm check` passes, the coverage of
 each changed package holds, and the changelog states the measured count
 of lines that the release removes.
 
-**Journal bodies.** A close carries `cancelled`, a cancel entry carries
-no close (C3), and a composition carries no `version` (C9). The body
-schemas refuse the old shapes, and the journal carries no format number
-(C12). Ambion supports no downgrade.
+**Journal bodies.** A cancel entry carries no close, and the room
+derives a cancelled close from it (C3). A composition carries no
+`version` (C9). The body schemas refuse the old shapes, and the journal
+carries no format number (C12). Ambion supports no downgrade.
 
 **The `assistant` room option stays.** It is shorthand for `agents`,
 `summary`, and `broadcast` attention. The owner keeps it for now.
@@ -184,16 +184,13 @@ and the process tools. A step names the steps it needs; a step with no
 
 ### Phase 1. The drift
 
-- [ ] **7.** The body schemas guard the journal, and the format number
-      goes. (C12)
 - [ ] **8.** The assistant works a request after its owner leaves. (A1)
 
 **Evidence:** each step keeps `pnpm check` green and holds the coverage
 of each changed package, measured before and after as `CLAUDE.md`
 states. A step that changes a rule runs `pnpm rule:check`. A step that
 changes a journal body updates the golden journals and the export
-snapshot in the same commit, and the changelog names it. Step 7 passes
-`pnpm chaos` and the Cloudflare tests in workerd.
+snapshot in the same commit, and the changelog names it.
 
 ### Phase 2. The contracts
 
@@ -398,29 +395,6 @@ and `wait` as three tools: each answers one question. `wait` took
 It now takes `{ handles, timeout? }`, with 1 to 16 handles, and one handle
 gives the result of `status`. **Evidence:** the process tests, and one
 live file on each harness that shows no loss in the use of a process.
-
-**C12. The body schemas guard the journal.** Each `run` entry carries
-`format`, and `validateRunFormat` refuses a format that the runtime does
-not know. [Durability](../docs/durability.md#journal-format) states that
-a body change raises the format and adds no reader for the older one. A
-raise protects only a downgrade, and Ambion supports none. A raise also
-refuses every journal of the release before. 0.3.0 changed three bodies
-and kept format 1.
-
-- **The format number goes.** `JOURNAL_FORMAT`, `Fence.format`, and
-  `validateRunFormat` go, and a `run` entry carries `at` alone.
-- **A schema refuses an old shape that a runtime would misread.** A body
-  schema accepts extra fields, so an old field that a new runtime does
-  not read disappears without an error. A change that removes or
-  redefines a field makes its schema refuse the old field. The cancel
-  schema of C3 refuses `close`. A composition needs no refusal, since no
-  runtime reads `version`.
-- **[Durability](../docs/durability.md#journal-format) states the rule.**
-  The section names the schemas as the guard, and it states that Ambion
-  supports no downgrade before 1.0.0.
-
-**Evidence:** a journal validation case for each refused old shape, the
-golden journals with no `format`, and `pnpm chaos` on both storages.
 
 **A1. The assistant works a request after its owner leaves.** This item
 fixes a defect and adds no capability. A room stays available between
