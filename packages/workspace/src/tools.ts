@@ -33,8 +33,24 @@ function invocationOf(callId: string): AgentHarnessToolInvocation {
 	};
 }
 
-/** An error, as the audit log records it. */
-function auditError(error: unknown): { name: string; message: string } {
+/**
+ * A failure that keeps the details of its result. The model reads the
+ * message as a tool error, and the audit log keeps the details beside it.
+ */
+export class ToolFailure extends Error {
+	override readonly name = 'ToolFailure';
+	constructor(
+		message: string,
+		readonly details: unknown,
+	) {
+		super(message);
+	}
+}
+
+/** An error, as the audit log records it. A `ToolFailure` keeps its details. */
+function auditError(error: unknown): { name: string; message: string; details?: unknown } {
+	if (error instanceof ToolFailure)
+		return { name: error.name, message: error.message, details: error.details };
 	return error instanceof Error
 		? { name: error.name, message: error.message }
 		: { name: 'Error', message: String(error) };

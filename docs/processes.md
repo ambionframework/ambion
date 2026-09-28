@@ -167,14 +167,14 @@ several.
 ## The result
 
 **Each result of `bash`, `status`, `wait`, and `cancel` is the new output,
-then one bracketed line.** The new output is the output after the cursor:
-the part that no earlier result of the agent showed. The line states the
-process, its handle, its name when it has one, and its output file. A
-`wait` on several handles gives this for each process that ended, then the
+then one bracketed line.** The new output is the output after the cursor: the
+part that no earlier result of the agent showed. The line states the process,
+its handle, its name when it has one, and its output file. A `wait` on several
+handles gives this for each process that ended and fits its budget, then the
 bracketed line of each one that still runs. A process that ended with no
-output shows `(no output)`. A process that wrote
-nothing new since the last result shows `(no new output)`. A running
-process that has written nothing yet shows only the bracketed line.
+output shows `(no output)`. A process that wrote nothing new since the last
+result shows `(no new output)`. A running process that has written nothing yet
+shows only the bracketed line.
 
 **The cursor moves with each result.** A read gives the bytes from the
 cursor to the size of `out` when the read began, and writes that size to
@@ -573,14 +573,25 @@ the wait, and the process keeps running.
 handles, and counts a handle that repeats once. For one process, the result is
 the result of `status`. For several, the result gives the new output and the
 bracketed line of each process that ended, then the bracketed line of each one
-that still runs. `details.processes` holds every status in the order of the
-handles, and `details.ended` holds the details of each process that ended.
+that still runs, within a budget. `details.processes` holds every status in
+the order of the handles, and `details.ended` holds the details of each
+process that it shows.
+
+**A wait on several handles bounds its output.** It shows the processes that
+ended in the order of the handles, until its text holds 50 KB. One view holds
+at most 50 KB, so a result holds at most about 100 KB. Each process after that
+gives its bracketed line and `Its new output did not fit this
+result: call status with its handle to read it.` The wait does not read the
+output of that process, so its cursor stays, and `status` gives the output.
 
 **A process that already ended makes `wait` return at once.** An agent
 that runs a parameter sweep as four processes calls `wait` with the four
 handles, reads the result of the first that ends, and calls `wait` again
-with the handles that still run. A handle of a process that ended badly
-fails each `wait` that holds it, so the agent drops it from the list.
+with the handles that still run. The last line of the result names each
+handle that ended: `Drop <handles> from handles: they have ended, and a wait
+that holds one returns at once.` The description of `wait` states the same
+rule. A handle of a process that ended badly fails each `wait` that holds
+it.
 
 **A wait ends 30 seconds before the room ends the activation.** The room
 ends an activation `limits.lease.deadline` after its first claim, 600
@@ -638,12 +649,14 @@ workstation's Unix accounts.
 
 ## The audit log
 
-**Each call of the five tools has one audit entry.** The entry runs on
-the bash owner after the call ends. The entry of a `bash` call holds the
-state at the end of the call, which can be `running`. A `bash` call that
-an abort cuts while it waits records an error with no handle, and the
-process keeps running. The reminder and `ps` name it. The files of a
-process are its record.
+**Each call of the five tools has one audit entry.** The entry runs on the
+bash owner after the call ends. The entry of a `bash` call holds the state at
+the end of the call, which can be `running`. A call that fails on a process
+that ended badly records `error` with the name `ToolFailure` and the `details`
+of its result: the `ProcessStatus`, and for `wait` on several handles, every
+status. A `bash` call that an abort cuts while it waits records an error with
+no handle, and the process keeps running. The reminder and `ps` name it. The
+files of a process are its record.
 
 ## The guidance
 

@@ -45,7 +45,7 @@ const results: string[] = [];
 const checksLater: Script = (context) => {
 	const last = toolResultTexts(context).at(-1);
 	if (last !== undefined) results.push(last);
-	if (last === 'delivered' || last?.startsWith('scheduled')) return quiet();
+	if (last?.startsWith('said #') || last?.startsWith('scheduled')) return quiet();
 	if (contextText(context).includes('[returned → worker'))
 		return speak('The build passed.', 'priya');
 	return callTool('schedule', {
@@ -199,7 +199,10 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		if (by === 'seat') {
 			expect(kinds(messages)).toEqual(['said', 'said', 'dismissed', 'said']);
 			expect(dismissed).toMatchObject({ from: 'worker' });
-			expect(results.at(-1)).toBe('delivered');
+			// The result names the say it dismissed, the seq that its schedule result gave.
+			const scheduled = dismissed?.kind === 'dismissed' ? dismissed.message : 0;
+			expect(results).toContain(`dismissed #${scheduled}`);
+			expect(results.at(-1)).toMatch(/^said #\d+ to priya$/);
 		} else {
 			expect(kinds(messages)).toEqual(['said', 'said', 'dismissed']);
 			expect(dismissed).not.toHaveProperty('from');

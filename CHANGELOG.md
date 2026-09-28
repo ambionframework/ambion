@@ -62,13 +62,14 @@ with the seq of its message, such as `#12`, so a seat builds the message
 URI of any line. The closing guidance names the URI of the opening message
 of the exchange.
 
-**`recall` reads messages of the room by URI.** An ordinary activation calls
-`recall` with 1 to 16 message URIs of its room and reads one line for each:
-the message, or why the room gave none. It reaches every message that the
-purpose of the activation may read, below the cap of `limits.context.messages`
-too. It commits nothing and never moves the read position. A response reads a
-note about it when a message is out of view. The hosting entry exports
-`RECALL`, and an agent tool named `recall` gets a refusal.
+**`recall` reads messages of the room by seq or by URI.** An ordinary
+activation calls `recall` with 1 to 16 messages of its room, as `#12`, `12`,
+or a message URI, and reads one line for each: the message, or why the room
+gave none. It reaches every message that the purpose of the activation may
+read, below the cap of `limits.context.messages` too. It commits nothing and
+never moves the read position. A response reads a note about it when a message
+is out of view. The hosting entry exports `RECALL`, and an agent tool named
+`recall` gets a refusal.
 
 **`bash` waits 30 seconds by default.** A test run, a build, or an
 install then ends inside its first call more often, so the agent calls
@@ -131,6 +132,23 @@ its `text`.
 
 ### Breaking changes
 
+- **The audit entry of a failed process keeps its details.** A call that
+  fails on a process that ended badly throws a `ToolFailure`, and its audit
+  entry holds `error.details`: the `ProcessStatus` and the read range. The
+  error name is `ToolFailure` in place of `Error`. `AuditEntry.error` has
+  `details`.
+- **A wait on several handles bounds its output and names the handles to
+  drop.** It shows the output of the processes that ended until its text
+  holds about 50 KB. A process past that gives its state line and asks for
+  `status`, and its cursor stays. The last line names each handle that
+  ended, because a wait that holds one returns at once. The description of
+  `wait` states the same rule.
+- **A room tool result names what landed.** `say` gives `said #<seq>`,
+  with `to <name>` for a directed say, so the agent can cite its own
+  message. `seat` and `unseat` give `seated <name> (#<seq>)` and
+  `unseated <name> (#<seq>)`. A membership that the record already holds
+  gives `<name> is already seated` or `<name> is not seated`. The result
+  was `delivered` before.
 - **A view with a range cuts its page from every message the purpose may
   read.** The cap of `limits.context.messages` bounds a view with no range
   alone. A page still reports the cap floor as `earliest`, and a seat with

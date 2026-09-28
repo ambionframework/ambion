@@ -21,6 +21,7 @@
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
 import {
 	type AgentToolResult,
+	DEFAULT_MAX_BYTES,
 	formatSize,
 	type ShellOutputTruncation,
 } from '@earendil-works/pi-agent-core';
@@ -32,7 +33,7 @@ import { readOutput } from './process-output.ts';
 import type { ProcessTable } from './process-table.ts';
 import { deadlineNote, psTable, stateLine } from './process-text.ts';
 import type { WorkspaceResource } from './resource.ts';
-import { recordedOnShell } from './tools.ts';
+import { recordedOnShell, ToolFailure } from './tools.ts';
 
 /** Seconds a process may run when `bash` names no timeout. */
 const DEFAULT_TIMEOUT_SECONDS = 600;
@@ -142,7 +143,7 @@ export interface ProcessDetails {
 	truncation?: ShellOutputTruncation;
 }
 
-/** What `wait` with `handles` gives in `details`: every status in the order of the handles, and each process that ended. */
+/** What `wait` on several handles gives in `details`: every status in the order of the handles, and each process it shows. */
 export interface WaitDetails {
 	processes: readonly ProcessStatus[];
 	ended: readonly ProcessDetails[];
@@ -191,7 +192,7 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			name: 'wait',
 			label: 'Wait for a process',
 			description:
-				'Wait for the first of your processes in handles to end, up to timeout seconds. Give the state and the new output of each one that ended, and the state of each one that still runs. A process keeps running when the time ends first.',
+				'Wait for the first of your processes in handles to end, up to timeout seconds. Give the state and the new output of each one that ended, and the state of each one that still runs. A process keeps running when the time ends first. A process that has ended makes a wait return at once, so drop its handle from handles.',
 			parameters: waitSchema,
 			execute: recorded('wait', (params: WaitParams, ctx) => waited(options, params, ctx)),
 		}),
@@ -217,12 +218,15 @@ function checkedSeconds(value: number | undefined, fallback: number, max: number
 	return value;
 }
 
+/** The seconds a call waits, and whether the deadline of the activation cut them. */
+type WaitWindow = { seconds: number; cut: boolean };
+
 /**
  * The seconds a call may wait: the seconds it asks for, or fewer when the
  * room ends the activation sooner. The wait then ends
  * `DEADLINE_MARGIN_SECONDS` before the deadline.
  */
-function withinActivation(asked: number, ctx: ToolContext): { seconds: number; cut: boolean } {
+function withinActivation(asked: number, ctx: ToolContext): WaitWindow {
 	if (ctx.deadline === undefined) return { seconds: asked, cut: false };
 	const left = Math.max(0, (ctx.deadline - Date.now()) / 1000 - DEADLINE_MARGIN_SECONDS);
 	return left < asked ? { seconds: left, cut: true } : { seconds: asked, cut: false };
@@ -296,9 +300,8 @@ async function started(
 
 /**
  * Wait for the first of the processes in `handles` to end. For one process,
- * the result is the result of `status`. For several, it gives the new
- * output of each process that ended, and the state line of each one that
- * still runs. A handle that repeats counts once.
+ * the result is the result of `status`. For several, see `waitedOnSeveral`.
+ * A handle that repeats counts once.
  */
 async function waited(
 	options: ProcessToolOptions,
@@ -315,25 +318,77 @@ async function waited(
 		const note = deadlineLine(wait, first, [first], ctx);
 		return failedOr(await described(options, first, ctx, note), [first]);
 	}
-	const ended: AgentToolResult<ProcessDetails>[] = [];
-	for (const process of processes) {
-		if (process.state !== 'running') ended.push(await described(options, process, ctx));
-	}
+	return waitedOnSeveral(options, processes, first, wait, ctx);
+}
+
+/**
+ * The result of a wait on several handles: the output of each process that
+ * ended, within one budget, then the state line of each one that still
+ * runs. A last line names each handle that ended, since a wait that holds it
+ * returns at once.
+ */
+async function waitedOnSeveral(
+	options: ProcessToolOptions,
+	processes: readonly ProcessStatus[],
+	first: ProcessStatus,
+	wait: WaitWindow,
+	ctx: ToolContext,
+): Promise<AgentToolResult<WaitDetails>> {
+	const ended = processes.filter((process) => process.state !== 'running');
 	const running = processes.filter((process) => process.state === 'running');
+	const { shown, held } = await describedWithin(options, ended, ctx);
 	const note = deadlineLine(ended.length === 0 ? wait : NOT_CUT, first, running, ctx);
 	const text = [
-		...ended.map(textOf),
+		...shown.map(textOf),
+		...held.map((process) => `[${stateLine(process)} ${HELD}]`),
 		...running.map((process) => `[${stateLine(process)}]`),
+		...(ended.length === 0 ? [] : [`[${dropLine(ended)}]`]),
 		...(note === '' ? [] : [`[${note}]`]),
 	].join('\n\n');
 	const result = {
 		content: [{ type: 'text' as const, text }],
-		details: { processes, ended: ended.map((one) => one.details) },
+		details: { processes: [...processes], ended: shown.map((one) => one.details) },
 	};
-	return failedOr(
-		result,
-		ended.map((one) => one.details.process),
-	);
+	return failedOr(result, ended);
+}
+
+/** The most bytes of text one wait on several handles gives of the output of the processes that ended. */
+const WAIT_OUTPUT_BYTES = DEFAULT_MAX_BYTES;
+
+/** What a process that ended says when its output does not fit the result. */
+const HELD = 'Its new output did not fit this result: call status with its handle to read it.';
+
+/**
+ * Describe the processes that ended, in the order of the handles, until the
+ * text holds `WAIT_OUTPUT_BYTES`. Each one adds at most one view of 50 KB, so
+ * the text holds at most about twice the budget. A process past the budget is not described, so its
+ * cursor stays and a later `status` gives its output.
+ */
+async function describedWithin(
+	options: ProcessToolOptions,
+	ended: readonly ProcessStatus[],
+	ctx: ToolContext,
+): Promise<{ shown: AgentToolResult<ProcessDetails>[]; held: ProcessStatus[] }> {
+	const shown: AgentToolResult<ProcessDetails>[] = [];
+	const held: ProcessStatus[] = [];
+	let bytes = 0;
+	for (const process of ended) {
+		if (bytes >= WAIT_OUTPUT_BYTES) {
+			held.push(process);
+			continue;
+		}
+		const result = await described(options, process, ctx);
+		bytes += new TextEncoder().encode(textOf(result)).length;
+		shown.push(result);
+	}
+	return { shown, held };
+}
+
+/** The line that tells the agent to drop each handle that ended from its next wait. */
+function dropLine(ended: readonly ProcessStatus[]): string {
+	const handles = ended.map((process) => process.handle).join(', ');
+	const which = ended.length === 1 ? 'it has ended' : 'they have ended';
+	return `Drop ${handles} from handles: ${which}, and a wait that holds one returns at once.`;
 }
 
 /**
@@ -364,7 +419,7 @@ function failedOr<D>(
 	result: AgentToolResult<D>,
 	reported: readonly ProcessStatus[],
 ): AgentToolResult<D> {
-	if (reported.some(endedBadly)) throw new Error(textOf(result));
+	if (reported.some(endedBadly)) throw new ToolFailure(textOf(result), result.details);
 	return result;
 }
 

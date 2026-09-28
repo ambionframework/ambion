@@ -189,7 +189,10 @@ to do: an `unknown` or `stale` answer, or the last answer of a closing
 activation.
 
 **`say` commits a `said` intent.** It carries `readThrough` and takes the
-tool call id as its commit key. It accepts `text`, `to`, and `refs`.
+tool call id as its commit key. It accepts `text`, `to`, and `refs`. The
+result names the message, as `said #41` or `said #41 to priya`, so the
+agent can cite it. `seat` and `unseat` give `seated surveyor (#42)`, and a
+membership the record already holds gives `surveyor is already seated`.
 
 **`schedule` commits a `said` intent with `after`.** The intent goes to the
 seat itself. It carries `readThrough`, and the room takes it at any
@@ -200,7 +203,7 @@ the answer.
 **`seat` and `unseat` commit a membership intent**, keyed on the tool call
 id.
 
-**`recall` reads and commits nothing.** For each distinct message URI of its
+**`recall` reads and commits nothing.** For each distinct ref of its
 room, it calls `view(id, { before: seq + 1, limit: 1 })`. A summary sits
 after the range it covers, so that page never folds the message away. The
 tool calls neither `acknowledgeThrough` nor `resultExpected`, and every

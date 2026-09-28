@@ -80,7 +80,8 @@ async function summarisedRoom(storage: JournalOpener, script: Script, transport?
 					byAgent({
 						alpha: script,
 						assistant: (context) =>
-							isClosing(context) && !toolResultTexts(context).includes('delivered')
+							isClosing(context) &&
+							!toolResultTexts(context).some((text) => text.startsWith('said #'))
 								? summarise('The one message.')
 								: quiet(),
 					}),

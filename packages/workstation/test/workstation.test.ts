@@ -468,7 +468,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			wait: 5,
 		});
 		expect(timed).toMatch(
-			/^Error: second\n\n\[Process bash-[0-9a-f]{12} timed out after 1 seconds\./,
+			/^ToolFailure: second\n\n\[Process bash-[0-9a-f]{12} timed out after 1 seconds\./,
 		);
 		expect(await workspace.processes.list({ running: true })).toEqual([]);
 	});
