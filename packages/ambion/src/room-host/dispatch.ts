@@ -57,7 +57,11 @@ export function hearEntry(host: DispatchHost, entry: Entry): void {
 	pruneDeliveryErrors(host);
 }
 
-/** Queue one captured publication without making journal confirmation await listeners or transport. */
+/**
+ * Queue one captured publication without making journal confirmation await
+ * listeners or transport. Each caller that waits on an exchange hears it after
+ * the effect, since each entry the room hears can change what a waiter looks for.
+ */
 function publish(host: DispatchHost, effect: () => void): void {
 	host.publications = host.publications.then(() => {
 		if (host.evicted()) return;
@@ -66,6 +70,7 @@ function publish(host: DispatchHost, effect: () => void): void {
 		} catch {
 			// External publication is best effort after the durable fact is confirmed.
 		}
+		host.notifyExchangeWaiters();
 	});
 }
 
@@ -116,7 +121,6 @@ function queueMessage(host: DispatchHost, entry: Extract<Entry, { kind: 'message
 		host.emit({ type: 'message', message });
 		if (exchange !== undefined) host.emit({ type: 'exchange_opened', exchange });
 		for (const steer of steers) steerTarget(host, steer);
-		host.notifyExchangeWaiters();
 		void host.reconcile();
 	});
 }
@@ -149,7 +153,6 @@ function queueClose(host: DispatchHost, close: Close): void {
 	publish(host, () => {
 		host.emit({ type: 'exchange_closed', exchange });
 		if (opened !== undefined) host.emit({ type: 'exchange_opened', exchange: opened });
-		host.notifyExchangeWaiters();
 	});
 }
 
@@ -174,7 +177,6 @@ function queueCancellation(host: DispatchHost, seq: Seq): void {
 					spoke: state.messages.some((message) => message.activationId === lease.id),
 				});
 		}
-		host.notifyExchangeWaiters();
 	});
 }
 
@@ -190,7 +192,6 @@ function queueLease(host: DispatchHost, lease: LeaseChange, first: boolean): voi
 			if (first) host.emit({ type: 'activation_start', agent: seat, activation: lease.id });
 			// A claim that lost its confirmation never armed the expiry: this pass does.
 			void host.reconcile();
-			host.notifyExchangeWaiters();
 		});
 		return;
 	}
@@ -208,7 +209,6 @@ function queueLease(host: DispatchHost, lease: LeaseChange, first: boolean): voi
 				});
 				void host.reconcile();
 			}
-			host.notifyExchangeWaiters();
 		});
 		return;
 	}
@@ -222,7 +222,6 @@ function queueLease(host: DispatchHost, lease: LeaseChange, first: boolean): voi
 			spoke,
 			...(lease.usage === undefined ? {} : { usage: lease.usage }),
 		});
-		host.notifyExchangeWaiters();
 		if (lease.reason === 'expired')
 			host.emit({
 				type: 'error',

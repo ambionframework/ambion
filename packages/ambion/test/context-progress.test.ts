@@ -19,7 +19,6 @@ const composition: Entry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
-		version: 2,
 		agents: [{ name: 'solo', identity: 'Answers.', attention: 'broadcast' }],
 		available: [],
 		at,

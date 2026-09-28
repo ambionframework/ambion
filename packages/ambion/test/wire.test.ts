@@ -45,7 +45,6 @@ const stored: Record<string, LeaseChange | Close | Composition> = {
 	},
 	close: { owner: 'priya', from: 2, through: 4, seq: 4, at, summary: 'assistant' },
 	composition: {
-		version: 2,
 		goal: 'Decide the pour date.',
 		summary: 'assistant',
 		agents: [

@@ -108,7 +108,6 @@ const composition: Entry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
-		version: 2,
 		summary: 'assistant',
 		agents: [
 			{ name: 'alpha', identity: 'Alpha.', attention: 'broadcast' },

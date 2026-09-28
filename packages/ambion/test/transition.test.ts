@@ -19,7 +19,6 @@ const composition = (summary?: string, agents: Seating[] = [product, writer]): E
 	kind: 'composition',
 	seq: 1,
 	body: {
-		version: 2,
 		...(summary === undefined ? {} : { summary }),
 		agents,
 		available: [{ name: 'reserve', identity: 'Reserve.', attention: 'broadcast' }],
@@ -71,18 +70,6 @@ const event = (decision: RoomDecision<Kind>, seq: number): Entry => {
 const refused = (category: string) => ({ refusal: { category } });
 
 describe('room transition', () => {
-	it('accepts version 2 compositions and rejects old histories explicitly', () => {
-		const empty = fold();
-		const compose = (body: unknown) =>
-			decide(empty, { type: 'compose', composition: body as never }, now);
-		expect(compose({ version: 1, agents: [], available: [], at })).toMatchObject({
-			refusal: { category: 'refused' },
-		});
-		expect(compose(composition().body)).toMatchObject({
-			event: { kind: 'composition', body: { version: 2 } },
-		});
-	});
-
 	it('requires a recorded present human before accepting a delivery', () => {
 		const absent = fold(composition(), person(), left(3));
 		for (const from of ['priya', 'ghost']) {

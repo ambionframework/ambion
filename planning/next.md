@@ -187,18 +187,16 @@ and the process tools. A step names the steps it needs; a step with no
 
 ### Phase 1. The drift
 
-- [ ] **5.** A composition carries no `version`, one capture serves a
-      definition, and one registry serves the waiters. (C9)
 - [ ] **7.** The body schemas guard the journal, and the format number
-      goes. Needs 5. (C12)
+      goes. (C12)
 - [ ] **8.** The assistant works a request after its owner leaves. (A1)
 
 **Evidence:** each step keeps `pnpm check` green and holds the coverage
 of each changed package, measured before and after as `CLAUDE.md`
 states. A step that changes a rule runs `pnpm rule:check`. A step that
 changes a journal body updates the golden journals and the export
-snapshot in the same commit, and the changelog names it. Steps 5 and 7
-pass `pnpm chaos` and the Cloudflare tests in workerd.
+snapshot in the same commit, and the changelog names it. Step 7 passes
+`pnpm chaos` and the Cloudflare tests in workerd.
 
 ### Phase 2. The contracts
 
@@ -384,27 +382,18 @@ snapshot of `@ambionframework/workspace`.
 
 **C9. The host keeps one mechanism for each concern.**
 
-- **A composition carries no `version`.** No other format exists. The
-  refusal of the legacy assistant field in `journal/validate.ts` is a
-  reader for an older format, and it goes with `version`.
-- **One capture serves a definition.** `defineHuman` and `captureHuman`
-  apply the same trim, and so do `defineAgent` and `captureAgent`.
-- **One registry serves the waiters.** `waitForClose` runs the loop that
-  `responseFor` runs, and `publish` notifies after each effect in place
-  of eleven `notifyExchangeWaiters` calls placed by hand.
 - **Cloudflare reuses the core.** `recoveryCall` and `releaseRecovered`
   repeat the call of the runner, `RoomObject.visits` repeats the visits
-  of the room, and `reconcileRoom` repeats `Room.reconcile()`. Phase 2
-  holds this sub-item.
+  of the room, and `reconcileRoom` repeats `Room.reconcile()`.
 - **One scripted room serves the conformance suites.** `scriptedRoom` and
   `executorRoom` merge, and the transport suite keeps the cases that a
   transport adds. `conformance.ts` and `conformance-executor-room.ts` each
   hold their own question, participants block, and `stale` constant; the
   merged room holds one of each, and `until` accepts an async predicate.
-  This sub-item closes M5 of 0.2.0. Phase 2 holds it.
+  This sub-item closes M5 of 0.2.0.
 
-**Evidence:** the golden journals change for `version` alone, the
-coverage of the core holds, and the Cloudflare tests pass in workerd.
+**Evidence:** the coverage of the core holds, and the Cloudflare tests
+pass in workerd.
 
 **C10. One tool for `status` and `wait`.** `status` gives what `wait`
 with a timeout of 0 gives. `ps` gives what `wait` with no handle and a
@@ -429,8 +418,8 @@ and kept format 1.
   schema accepts extra fields, so an old field that a new runtime does
   not read disappears without an error. A change that removes or
   redefines a field makes its schema refuse the old field. The cancel
-  schema of C3 refuses `close`. The composition of C9 needs no refusal,
-  since no runtime reads `version`.
+  schema of C3 refuses `close`. A composition needs no refusal, since no
+  runtime reads `version`.
 - **[Durability](../docs/durability.md#journal-format) states the rule.**
   The section names the schemas as the guard, and it states that Ambion
   supports no downgrade before 1.0.0.

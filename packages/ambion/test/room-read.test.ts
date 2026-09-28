@@ -45,7 +45,6 @@ function state(
 ): RoomState {
 	return {
 		composition: {
-			version: 2,
 			goal: 'Keep the record coherent.',
 			agents: [],
 			available: [],
@@ -89,7 +88,6 @@ const record = (said: object, ...after: { kind: string; body: unknown }[]) => [
 	{
 		kind: 'composition',
 		body: {
-			version: 2,
 			agents: [{ name: 'assistant', identity: 'Assistant.', attention: 'none' }],
 			available: [],
 			at,

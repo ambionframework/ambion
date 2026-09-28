@@ -63,7 +63,7 @@ async function seedStoppedOpen(stub: ReturnType<typeof roomOf>, name: string): P
 			{ kind: 'run', body: { at: '2026-01-01T00:00:00.000Z' }, seq: 1, run: 'seeded-run' },
 			{
 				kind: 'composition',
-				body: { version: 2, agents: [], available: [], at: '2026-01-01T00:00:00.000Z' },
+				body: { agents: [], available: [], at: '2026-01-01T00:00:00.000Z' },
 				seq: 2,
 				run: 'seeded-run',
 			},

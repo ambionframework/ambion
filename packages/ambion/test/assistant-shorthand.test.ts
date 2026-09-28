@@ -89,7 +89,7 @@ describe('assistant room shorthand', () => {
 			const composition = (await storedOf(opened.journals, room.name)).find(
 				(entry) => entry.kind === 'composition',
 			);
-			expect(composition?.body).toMatchObject({ version: 2, summary: seats[0]?.name });
+			expect(composition?.body).toMatchObject({ summary: seats[0]?.name });
 		},
 	);
 

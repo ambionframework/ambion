@@ -15,7 +15,6 @@ const composition = (): Entry => ({
 	kind: 'composition',
 	seq: 1,
 	body: {
-		version: 2,
 		summary: 'writer',
 		agents: [
 			{ name: 'product', identity: 'Product.', attention: 'broadcast' },

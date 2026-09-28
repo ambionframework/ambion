@@ -58,7 +58,6 @@ import { decide, type Refusal } from '../room/transition.ts';
 import type { PendingSay } from '../scheduling.ts';
 import type {
 	AgentDefinition,
-	ClosedExchange,
 	ClosedExchangeView,
 	EndReason,
 	FailureCause,
@@ -173,14 +172,8 @@ export class RoomHost implements Room, RunningRoom {
 		lease: (lease) => this.lease(lease),
 	};
 	private readonly listeners = new Set<(event: RoomNotification) => void>();
-	readonly closeWaiters = new Map<
-		Seq,
-		Array<{
-			resolve: (close: ClosedExchange) => void;
-			reject: (error: Error) => void;
-		}>
-	>();
-	readonly responseWaiters = new Set<() => void>();
+	/** Each caller that waits on an exchange. A publication and the end of the run wake them. */
+	readonly waiters = new Set<() => void>();
 	/** When this room last sent each wake. A cache: a resumed room sends every pending wake again. */
 	readonly sentAt = new Map<string, number>();
 	/** Delivery state is bounded by currently due/live activations and fences late replies by token. */
@@ -469,10 +462,6 @@ export class RoomHost implements Room, RunningRoom {
 		waits.notifyExchangeWaiters(this);
 	}
 
-	rejectExchangeWaiters(error: Error): void {
-		waits.rejectExchangeWaiters(this, error);
-	}
-
 	// -- people -----------------------------------------------------------------
 
 	/** Puts a person in the room. A second visit while they are here is the same visit. */
@@ -594,6 +583,7 @@ export class RoomHost implements Room, RunningRoom {
 		this.cancelAlarm();
 		this.listeners.clear();
 		for (const visit of this.visits.values()) visit.gone = true;
-		this.rejectExchangeWaiters(new AmbionError('room_stopped', `Room '${this.name}' was evicted.`));
+		// The room is gone: each caller that waits looks once more, and stops.
+		this.notifyExchangeWaiters();
 	}
 }

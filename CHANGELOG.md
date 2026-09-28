@@ -104,8 +104,12 @@ of the exchange.
   `ps` that failed once does not hide a live shell: the next read adopts
   it. The status stays the same. A process with no `pid` gets no line.
   See [Processes](docs/processes.md#the-files).
-
-### Breaking changes
+- **One loop serves the waits of an exchange.** `waitForClose` and
+  `waitForSummary` run one loop over one set of waiters. Each publication
+  wakes the set after its effect, and the end of the run wakes it once
+  more. A wait that the stop or the eviction ends rejects with
+  `room_stopped` and the message of the wait, `Exchange '<seq>' was
+  stopped or interrupted.`
 
 - **`schedule` is a room tool, and `say` has no `after`.** An agent calls
   `schedule` with `{ after, text, refs? }` to come back to its work. The
@@ -172,6 +176,16 @@ of the exchange.
   cancellation from the `cancel` entry: it closes the open exchange at the
   last message before the entry. That close carries `cancelled: true`, and
   a closed exchange reads `cancelled` from it.
+- **A `composition` entry carries no `version`.** No other format exists.
+  The body schema has no `version`, and the room reads a composition by
+  its fields alone. The refusal of the legacy `assistant` field goes with
+  it.
+- **One capture serves a definition.** `defineHuman` and the room apply
+  the same capture to a person, and `defineAgent` and the room apply the
+  same capture to an agent. A room trims the `preferences` of a person
+  that `defineHuman` did not make, and drops blank `preferences`.
+  `defineAgent` checks and copies the executor as the room does, so a
+  malformed executor fails at `defineAgent`.
 
 ## 0.3.0 (2026-09-25)
 

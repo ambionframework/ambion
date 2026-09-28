@@ -17,7 +17,6 @@ const entries: Entry[] = [
 		kind: 'composition',
 		seq: 1,
 		body: {
-			version: 2,
 			goal: 'Ship payments v2.',
 			summary: 'worker',
 			agents: [
@@ -206,7 +205,6 @@ describe('structured activation context', () => {
 				kind: 'composition',
 				seq: 1,
 				body: {
-					version: 2,
 					summary: 'worker',
 					agents: [{ name: 'worker', identity: 'Writes decisions.', attention: 'broadcast' }],
 					available: [],

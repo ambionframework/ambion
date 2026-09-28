@@ -98,5 +98,3 @@ do not contain executable definitions or authority.
 
 `resumeRoom` receives the complete definitions again. It preserves recorded
 membership and attention. Startup seating options do not reset a resumed room.
-[Room](room.md#history-and-limits) states what the room does with a legacy
-history.
