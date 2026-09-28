@@ -371,6 +371,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			JSON.stringify({ ...spec, timeout: 600, startedAt: new Date().toISOString() }),
 		);
 		await writeFile(join(lost, 'pid'), `${spawnSync('true').pid}\n`);
+		await env.cleanup();
 		await earlier.dispose?.();
 		const workspace = openWorkspace({
 			name: 'lab',
@@ -393,7 +394,9 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		// A spec with no pid gets no stop, so the read after its shell writes the pid adopts it.
 		await expect(readFile(join(slow, 'stop'), 'utf8')).rejects.toThrow();
 		const other = backendFor(started.options);
-		const slowPid = await shell(slow, await other.connect({ name: 'ada' }));
+		const otherEnv = await other.connect({ name: 'ada' });
+		cleanups.push(() => otherEnv.cleanup());
+		const slowPid = await shell(slow, otherEnv);
 		expect(await call('status', { handle: 'bash-00000000000f' })).toBe('running');
 		expect(await call('cancel', { handle: 'bash-00000000000f' })).toBe('cancelled');
 		expect(ended(slowPid)).toBe(true);

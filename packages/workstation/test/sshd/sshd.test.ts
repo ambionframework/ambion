@@ -4,11 +4,17 @@
  * `sshd` as root, and this tier runs only when `AMBION_WORKSTATION_SSHD`
  * names the file that `setup.sh` writes. It proves what only a real server
  * can: the rename and the group kill on OpenSSH, its status codes, the
- * channel limit, the spill file, and the permissions between accounts.
+ * channel limit, the spill file, the permissions between accounts, and the
+ * adoption of a process that outlives the run of the host that started it.
  */
 
 import type { ToolContext } from '@ambionframework/ambion';
-import { openWorkspace } from '@ambionframework/workspace';
+import {
+	openWorkspace,
+	type ProcessStatus,
+	type Workspace,
+	type WorkspaceEnv,
+} from '@ambionframework/workspace';
 import {
 	type ConformanceBackend,
 	workspaceConformance,
@@ -17,7 +23,7 @@ import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type WorkstationOptions, workstationBackend } from '../../src/index.ts';
-import { type Backend, configPath, options, WIPE, withEnv } from '../support/sshd.ts';
+import { type Backend, configPath, options, run, WIPE, withEnv } from '../support/sshd.ts';
 
 const ctx = BACKGROUND_CONTEXT;
 
@@ -222,6 +228,172 @@ describe.skipIf(configPath === undefined)('a workspace on OpenSSH', () => {
 				.split('\n')
 				.map((line) => JSON.parse(line).agent);
 			expect(agents.slice(-2)).toEqual(['surveyor', 'planner']);
+		} finally {
+			await workspace.dispose();
+		}
+	});
+});
+
+/** The error of a process that no run of the host runs, and that left no end. */
+const LOST = 'The host run ended before the process did.';
+
+/** The agent of the process cases. */
+const OWNER = 'planner';
+
+/** Write the spec of a process of an earlier run of the host into the home of `env`. Returns its directory. */
+async function specOf(
+	env: WorkspaceEnv,
+	handle: string,
+	command: string,
+	timeout = 600,
+	startedAt = new Date().toISOString(),
+): Promise<string> {
+	const dir = await env.absolutePath(`~/.processes/${handle}`, ctx);
+	if (!dir.ok) throw dir.error;
+	const spec = { handle, kind: 'bash', agent: OWNER, command, timeout, startedAt };
+	expect(await env.createDir(dir.value, { recursive: true }, ctx)).toMatchObject({ ok: true });
+	expect(await env.writeFile(`${dir.value}/spec`, JSON.stringify(spec), ctx)).toMatchObject({
+		ok: true,
+	});
+	return dir.value;
+}
+
+/**
+ * Start the wrapper of the process in `dir` over `env`, as the table of an
+ * earlier run does, and give the pid that the wrapper writes. The call does
+ * not wait for the command.
+ */
+async function shellOf(env: WorkspaceEnv, dir: string, command: string): Promise<number> {
+	const script = [
+		`echo "$$" > '${dir}/pid'`,
+		'(',
+		command,
+		`) < /dev/null > '${dir}/out' 2>&1`,
+		`echo "$? $(date -u +%Y-%m-%dT%H:%M:%SZ)" > '${dir}/exit.tmp' && mv '${dir}/exit.tmp' '${dir}/exit'`,
+	].join('\n');
+	void env.exec(script, { timeout: 120 }, ctx);
+	const deadline = Date.now() + 10_000;
+	while (Date.now() < deadline) {
+		const pid = await env.readTextFile(`${dir}/pid`, ctx);
+		if (pid.ok && pid.value.trim() !== '') return Number(pid.value.trim());
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	}
+	throw new Error(`No pid in ${dir}.`);
+}
+
+/** Whether each of `pids` has ended: no process has it, or a zombie that no init reaps. */
+async function allEnded(env: WorkspaceEnv, pids: readonly number[]): Promise<boolean> {
+	const check = pids
+		.map((pid) => `case "$(ps -o stat= -p ${pid})" in "" | Z*) ;; *) exit 1 ;; esac`)
+		.join('\n');
+	return (await run(env, check)).code === 0;
+}
+
+/** A new run of the host: a workspace over a new backend, and that backend. */
+async function nextRun(): Promise<{ workspace: Workspace; backend: Backend }> {
+	const backend = workstationBackend(await options());
+	return { workspace: openWorkspace({ name: 'lab', backend: { bash: backend } }), backend };
+}
+
+/** Call the process tool `name` as the owner, and give the statuses and the text of its result. */
+async function call(workspace: Workspace, name: string, params: unknown) {
+	const tool = workspace.tools().tools.find((candidate) => candidate.name === name);
+	if (tool === undefined) throw new Error(`No tool named ${name}.`);
+	const result = await tool.invoke(params, context(OWNER));
+	if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
+	const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+	const details = result.details as { process?: ProcessStatus; processes?: ProcessStatus[] };
+	return { process: details.process, processes: details.processes ?? [], text };
+}
+
+describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
+	it('adopts the live processes of an earlier run, reads and waits for one, and stops each through its process group', async () => {
+		// An earlier run of the host starts two processes over OpenSSH, and then goes away.
+		const earlier = workstationBackend(await options());
+		const pids = await withEnv(earlier, OWNER, async (env) => {
+			await env.exec(WIPE, undefined, ctx);
+			const kept = 'sleep 300 &\necho "$!" > child\necho adopted\nwait';
+			const late = 'exec sleep 300';
+			const lateStart = new Date(Date.now() - 5_000).toISOString();
+			return [
+				await shellOf(env, await specOf(env, 'bash-0000000000a1', kept), kept),
+				await shellOf(env, await specOf(env, 'bash-0000000000a2', late, 1, lateStart), late),
+			];
+		}).finally(() => earlier.dispose?.());
+		const { workspace, backend } = await nextRun();
+		try {
+			// The first read adopts both. The one past its timeout stops at once.
+			const listed = await call(workspace, 'ps', {});
+			expect(listed.processes.map((one) => one.handle).sort()).toEqual([
+				'bash-0000000000a1',
+				'bash-0000000000a2',
+			]);
+			const status = await call(workspace, 'status', { handle: 'bash-0000000000a1' });
+			expect(status.process?.state).toBe('running');
+			expect(status.text).toMatch(/^adopted\n/);
+			const waited = await call(workspace, 'wait', { handle: 'bash-0000000000a1', timeout: 1 });
+			expect(waited.process?.state).toBe('running');
+			const late = await call(workspace, 'wait', { handle: 'bash-0000000000a2', timeout: 20 });
+			expect(late.process?.state).toBe('timed_out');
+			const cancelled = await call(workspace, 'cancel', { handle: 'bash-0000000000a1' });
+			expect(cancelled.process?.state).toBe('cancelled');
+			// The kill reaches the whole group: each wrapper shell, and the child that one started.
+			await withEnv(backend, OWNER, async (env) => {
+				const child = await env.readTextFile('child', ctx);
+				if (!child.ok) throw child.error;
+				expect(await allEnded(env, [...pids, Number(child.value.trim())])).toBe(true);
+			});
+			expect((await call(workspace, 'ps', {})).text).toBe('No running processes.');
+		} finally {
+			await workspace.dispose();
+		}
+	});
+
+	it('writes the lost stop at the first read of a process with a dead pid, and runs no ps for it after', async () => {
+		const { workspace, backend } = await nextRun();
+		try {
+			const [lost, pending] = await withEnv(backend, OWNER, async (env) => {
+				await env.exec(WIPE, undefined, ctx);
+				// A process whose shell ended and left no end in the files, and a spec with no pid yet.
+				const dir = await specOf(env, 'bash-0000000000b1', 'true');
+				expect(await run(env, `sh -c 'echo "$$"' > '${dir}/pid'`)).toMatchObject({ code: 0 });
+				return [dir, await specOf(env, 'bash-0000000000b2', 'true')];
+			});
+			const first = await call(workspace, 'status', { handle: 'bash-0000000000b1' });
+			expect(first.process).toMatchObject({ state: 'failed', error: LOST });
+			expect(first.process?.endedAt).toBeUndefined();
+			await withEnv(backend, OWNER, async (env) => {
+				expect(await env.readTextFile(`${lost}/stop`, ctx)).toMatchObject({
+					ok: true,
+					value: expect.stringMatching(
+						/^failed \S+ The host run ended before the process did\.\n$/,
+					),
+				});
+				// A process with no pid costs no ps, and its shell can still start: it gets no stop.
+				expect(await env.readTextFile(`${pending}/stop`, ctx)).toMatchObject({
+					ok: false,
+					error: { code: 'not_found' },
+				});
+				// A live process whose command line names the handle now holds the pid. A ps would find it.
+				const decoy = `bash -c 'sleep 300; : bash-0000000000b1' < /dev/null > /dev/null 2>&1 &\necho "$!" > '${lost}/pid'`;
+				expect(await run(env, decoy)).toMatchObject({ code: 0 });
+			});
+			// The stop line keeps the listing from ps, so the process stays failed and out of ps.
+			expect((await call(workspace, 'ps', {})).processes).toEqual([]);
+			const later = await call(workspace, 'status', { handle: 'bash-0000000000b1' });
+			expect(later.process).toMatchObject({ state: 'failed', error: LOST });
+			expect(later.process?.endedAt).toBeUndefined();
+			// Without the stop line, the next read runs ps, finds the decoy, and adopts it.
+			await withEnv(backend, OWNER, (env) => env.remove(`${lost}/stop`, undefined, ctx));
+			const found = await call(workspace, 'status', { handle: 'bash-0000000000b1' });
+			expect(found.process?.state).toBe('running');
+			const cancelled = await call(workspace, 'cancel', { handle: 'bash-0000000000b1' });
+			expect(cancelled.process?.state).toBe('cancelled');
+			await withEnv(backend, OWNER, async (env) => {
+				const pid = await env.readTextFile(`${lost}/pid`, ctx);
+				if (!pid.ok) throw pid.error;
+				expect(await allEnded(env, [Number(pid.value.trim())])).toBe(true);
+			});
 		} finally {
 			await workspace.dispose();
 		}
