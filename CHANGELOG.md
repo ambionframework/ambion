@@ -111,6 +111,8 @@ of the exchange.
   `room_stopped` and the message of the wait, `Exchange '<seq>' was
   stopped or interrupted.`
 
+### Breaking changes
+
 - **`schedule` is a room tool, and `say` has no `after`.** An agent calls
   `schedule` with `{ after, text, refs? }` to come back to its work. The
   tool writes the same `said` entry with `to` and `after` as before, so
@@ -185,7 +187,8 @@ of the exchange.
   same capture to an agent. A room trims the `preferences` of a person
   that `defineHuman` did not make, and drops blank `preferences`.
   `defineAgent` checks and copies the executor as the room does, so a
-  malformed executor fails at `defineAgent`.
+  malformed executor fails at `defineAgent`. The `executor` of the
+  definition is a frozen copy of the executor that the caller gives.
 
 ## 0.3.0 (2026-09-25)
 
