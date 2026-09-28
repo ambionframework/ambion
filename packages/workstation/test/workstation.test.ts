@@ -331,7 +331,7 @@ function toolOf(workspace: Workspace, name: string): AmbionTool {
 }
 
 describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
-	it('adopts the live processes of an earlier run from their files, cancels one through its pid, times out the other, and records a lost one', async () => {
+	it('adopts the live processes of an earlier run from their files, cancels one through its pid, times out the other over a lost stop, and records a lost one', async () => {
 		const started = await server(['ada']);
 		const home = started.homes.get('ada') ?? '';
 		// An earlier run of the host starts two processes, and then goes away.
@@ -358,8 +358,16 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			return Number((await readFile(join(dir, 'pid'), 'utf8')).trim());
 		};
 		const kept = await shell(await specOf('bash-00000000000c', 600, new Date().toISOString()));
-		const late = await shell(
-			await specOf('bash-00000000000d', 1, new Date(Date.now() - 5_000).toISOString()),
+		const lateDir = await specOf(
+			'bash-00000000000d',
+			1,
+			new Date(Date.now() - 5_000).toISOString(),
+		);
+		const late = await shell(lateDir);
+		// A read whose ps failed once wrote the lost stop for this live shell.
+		await writeFile(
+			join(lateDir, 'stop'),
+			'failed 2026-01-01T00:00:00.000Z The host run ended before the process did.\n',
 		);
 		// A process whose shell starts only after the first read: its spec has no pid yet.
 		const slow = await specOf('bash-00000000000f', 600, new Date().toISOString());
@@ -385,9 +393,18 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			return (result.details as { process: { state: string } }).process.state;
 		};
 		// A read adopts what it finds: ps reads both. The one past its timeout stops at once.
-		await toolOf(workspace, 'ps').invoke({}, context('ada'));
+		// The pid of the one with the lost stop is in /proc, so the listing runs ps for it.
+		const listed = await toolOf(workspace, 'ps').invoke({}, context('ada'));
+		if (typeof listed === 'string') throw new Error('A process tool gives a structured result.');
+		const running = (listed.details as { processes: Array<{ handle: string; state: string }> })
+			.processes;
+		expect(running.map((one) => [one.handle, one.state])).toEqual([
+			['bash-00000000000d', 'running'],
+			['bash-00000000000c', 'running'],
+		]);
 		expect(await call('status', { handle: 'bash-00000000000c' })).toBe('running');
-		// The read that found the lost process wrote its stop, so no later listing runs ps for it.
+		// The read that found the lost process wrote its stop. Its pid is not in /proc, so no later
+		// listing runs ps for it.
 		expect(await readFile(join(lost, 'stop'), 'utf8')).toMatch(
 			/^failed \S+ The host run ended before the process did\.\n$/,
 		);

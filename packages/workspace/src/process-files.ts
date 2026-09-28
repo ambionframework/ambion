@@ -47,7 +47,7 @@ export interface ProcessStatus {
 	/** The room of the call that started the process, when it had one. Metadata alone. */
 	readonly room?: string;
 	readonly startedAt: string;
-	/** Set when the state is final and the files name the time. */
+	/** Set when the state is final and the files name the time of the end. */
 	readonly endedAt?: string;
 	/** Set when the state is `exited`. */
 	readonly exitCode?: number;
@@ -161,8 +161,8 @@ export function stopLine(cause: StopCause, message?: string): string {
 
 /**
  * The `stop` line for a lost process. The first read that finds the process
- * lost with a `pid` writes it, and the listing runs no `ps` for a process
- * with this line.
+ * lost with a `pid` writes it. The listing runs no `ps` for a process with
+ * this line while its pid is not in `/proc`.
  */
 export function lostLine(): string {
 	return stopLine('failed', LOST);
@@ -203,8 +203,12 @@ export async function writeSeen(env: WorkspaceEnv, dir: string): Promise<void> {
  * uses none for a finished process. The liveness check runs only where
  * `ps` exists. It matches the handle in the command line of the pid, so a
  * pid that the system reused for another program does not read as the
- * process. It skips a process whose `stop` names it lost: a shell builtin
- * reads that line, so the skip starts no program.
+ * process. It skips a process whose `stop` names it lost and whose pid is
+ * not in `/proc`. Shell builtins read the line and test the directory, so
+ * the skip starts no program. A pid still in `/proc` gets the `ps` check,
+ * so a line that a failed `ps` wrote for a live shell does not hide it. On
+ * a system with no `/proc`, no pid has a directory there, so the line
+ * alone skips the process.
  */
 function listingScript(root: string, handle?: string): string {
 	const from = handle === undefined ? '. -mindepth 2' : quoted(handle);
@@ -216,7 +220,7 @@ function listingScript(root: string, handle?: string): string {
 		`for f in ${names}/pid; do`,
 		`  h="\${f%/pid}"`,
 		`  [ -f "$f" ] && [ ! -f "$h/exit" ] || continue`,
-		`  [ -f "$h/stop" ] && read -r c t m 2>/dev/null < "$h/stop" && [ "$c $m" = ${quoted(`failed ${LOST}`)} ] && continue`,
+		`  [ -f "$h/stop" ] && read -r c t m 2>/dev/null < "$h/stop" && [ "$c $m" = ${quoted(`failed ${LOST}`)} ] && read -r p 2>/dev/null < "$f" && [ ! -d "/proc/$p" ] && continue`,
 		`  ps -ww -o args= -p "$(cat "$f")" 2>/dev/null | grep -q -- "$h" && echo "$h/alive:"`,
 		`done`,
 		`exit 0`,

@@ -166,7 +166,12 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		emit({ type: 'ended', process: status });
 	};
 
-	/** Adopt a live process of an earlier run that a read found: arm its timeout from its spec. */
+	/**
+	 * Adopt a live process of an earlier run that a read found: arm its
+	 * timeout from its spec. A lost line in its `stop` stays. The live shell
+	 * gives `running` over the line, and a stop of the table writes over it.
+	 * When the shell ends with no `exit`, the line names the end again.
+	 */
 	const adopt = (agent: string, files: ProcessFiles): void => {
 		const { spec, dir } = files;
 		if (live.has(spec.handle)) return;
@@ -176,11 +181,13 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	};
 
 	/**
-	 * Write `stop` for a lost process, so later listings run no `ps` for it.
-	 * A process is lost when nothing runs it and its files name no end. The
-	 * line changes no status. A process with no `pid` costs no `ps`, and its
-	 * shell can still start, so it gets no line. Best-effort: the next read
-	 * tries again.
+	 * Write `stop` for a lost process, so later listings run no `ps` for it
+	 * while its pid is not in `/proc`. A process is lost when nothing runs it
+	 * and its files name no end. The line changes no status. A `ps` that
+	 * fails once writes the line for a live shell, and the next read finds
+	 * the shell through its pid in `/proc`. A process with no `pid` costs no
+	 * `ps`, and its shell can still start, so it gets no line. Best-effort:
+	 * the next read tries again.
 	 */
 	const recordLost = async (env: WorkspaceEnv, { files, status }: Found): Promise<void> => {
 		if (status.error !== LOST || files.stop !== undefined || !files.pid) return;

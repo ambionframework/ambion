@@ -722,7 +722,7 @@ describe('the files as the source of truth', () => {
 		const reminded =
 			(await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a1' }, live)) ?? '';
 		expect(reminded).toContain(`- ${lost} failed: sleep 99`);
-		// The first read that finds the process lost writes its stop, so no later listing runs ps for it.
+		// The first read that finds the process lost with a pid writes the lost line to its stop.
 		const [cause, , ...message] = (await readFile(join(home, 'stop'), 'utf8')).split(' ');
 		expect([cause, message.join(' ')]).toEqual(['failed', `${LOST}\n`]);
 		expect(reminded).not.toContain(done.handle);

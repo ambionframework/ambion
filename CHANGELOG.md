@@ -99,9 +99,10 @@ of the exchange.
   and its abort.
 - **The first read that finds a process lost with a `pid` writes its
   `stop`.** The line is `failed <time> The host run ended before the process
-  did.`, and the listing runs no `ps` for that process again. The status
-  stays the same. A process with no `pid` gets no line, so a read adopts it
-  when its shell starts later.
+  did.` The listing runs no `ps` for that process while `/proc` has no
+  directory for its pid. A pid still in `/proc` gets the `ps` check, so a
+  `ps` that failed once does not hide a live shell: the next read adopts
+  it. The status stays the same. A process with no `pid` gets no line.
   See [Processes](docs/processes.md#the-files).
 
 ### Breaking changes

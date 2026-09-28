@@ -346,14 +346,20 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			const kept = 'sleep 300 &\necho "$!" > child\necho adopted\nwait';
 			const late = 'exec sleep 300';
 			const lateStart = new Date(Date.now() - 5_000).toISOString();
-			return [
+			const lateDir = await specOf(env, 'bash-0000000000a2', late, 1, lateStart);
+			const shells = [
 				await shellOf(env, await specOf(env, 'bash-0000000000a1', kept), kept),
-				await shellOf(env, await specOf(env, 'bash-0000000000a2', late, 1, lateStart), late),
+				await shellOf(env, lateDir, late),
 			];
+			// A read whose ps failed once wrote the lost stop for the live shell of the late one.
+			const line = `failed ${new Date().toISOString()} ${LOST}\n`;
+			expect(await env.writeFile(`${lateDir}/stop`, line, ctx)).toMatchObject({ ok: true });
+			return shells;
 		}).finally(() => earlier.dispose?.());
 		const { workspace, backend } = await nextRun();
 		try {
-			// The first read adopts both. The one past its timeout stops at once.
+			// The first read adopts both: the pid of the late one is in /proc, so the listing runs ps
+			// for it despite its lost stop. The one past its timeout stops at once.
 			const listed = await call(workspace, 'ps', {});
 			expect(listed.processes.map((one) => one.handle).sort()).toEqual([
 				'bash-0000000000a1',
@@ -380,15 +386,20 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 		}
 	});
 
-	it('writes the lost stop at the first read of a process with a dead pid, and runs no ps for it after', async () => {
+	it('writes the lost stop at the first read of a process with a dead pid, runs no ps for it while the pid is out of /proc, and adopts it when the pid is back', async () => {
 		const { workspace, backend } = await nextRun();
 		try {
-			const [lost, pending] = await withEnv(backend, OWNER, async (env) => {
+			const [lost, pending, decoy] = await withEnv(backend, OWNER, async (env) => {
 				await env.exec(WIPE, undefined, ctx);
 				// A process whose shell ended and left no end in the files, and a spec with no pid yet.
 				const dir = await specOf(env, 'bash-0000000000b1', 'true');
 				expect(await run(env, `sh -c 'echo "$$"' > '${dir}/pid'`)).toMatchObject({ code: 0 });
-				return [dir, await specOf(env, 'bash-0000000000b2', 'true')];
+				// A live process whose command line names the handle. A ps of its pid finds it.
+				const started = await run(
+					env,
+					`bash -c 'sleep 300; : bash-0000000000b1' < /dev/null > /dev/null 2>&1 &\necho "$!"`,
+				);
+				return [dir, await specOf(env, 'bash-0000000000b2', 'true'), Number(started.output.trim())];
 			});
 			const first = await call(workspace, 'status', { handle: 'bash-0000000000b1' });
 			expect(first.process).toMatchObject({ state: 'failed', error: LOST });
@@ -405,25 +416,31 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 					ok: false,
 					error: { code: 'not_found' },
 				});
-				// A live process whose command line names the handle now holds the pid. A ps would find it.
-				const decoy = `bash -c 'sleep 300; : bash-0000000000b1' < /dev/null > /dev/null 2>&1 &\necho "$!" > '${lost}/pid'`;
-				expect(await run(env, decoy)).toMatchObject({ code: 0 });
 			});
-			// The stop line keeps the listing from ps, so the process stays failed and out of ps.
-			expect((await call(workspace, 'ps', {})).processes).toEqual([]);
+			// The dead pid is out of /proc, so the next read skips the process and it stays failed.
 			const later = await call(workspace, 'status', { handle: 'bash-0000000000b1' });
 			expect(later.process).toMatchObject({ state: 'failed', error: LOST });
-			expect(later.process?.endedAt).toBeUndefined();
-			// Without the stop line, the next read runs ps, finds the decoy, and adopts it.
-			await withEnv(backend, OWNER, (env) => env.remove(`${lost}/stop`, undefined, ctx));
+			// The pid file now names the decoy twice, as a list: ps reads the list, and /proc has no
+			// directory of that name. Only the skip keeps the decoy from the listing.
+			await withEnv(backend, OWNER, (env) =>
+				env.writeFile(`${lost}/pid`, `${decoy},${decoy}\n`, ctx),
+			);
+			expect((await call(workspace, 'ps', {})).processes).toEqual([]);
+			const skipped = await call(workspace, 'status', { handle: 'bash-0000000000b1' });
+			expect(skipped.process).toMatchObject({ state: 'failed', error: LOST });
+			// With the pid of the decoy alone, /proc has it: the listing runs ps and adopts it.
+			await withEnv(backend, OWNER, (env) => env.writeFile(`${lost}/pid`, `${decoy}\n`, ctx));
 			const found = await call(workspace, 'status', { handle: 'bash-0000000000b1' });
 			expect(found.process?.state).toBe('running');
 			const cancelled = await call(workspace, 'cancel', { handle: 'bash-0000000000b1' });
 			expect(cancelled.process?.state).toBe('cancelled');
 			await withEnv(backend, OWNER, async (env) => {
-				const pid = await env.readTextFile(`${lost}/pid`, ctx);
-				if (!pid.ok) throw pid.error;
-				expect(await allEnded(env, [Number(pid.value.trim())])).toBe(true);
+				// The stop of the cancel writes over the lost line.
+				expect(await env.readTextFile(`${lost}/stop`, ctx)).toMatchObject({
+					ok: true,
+					value: expect.stringMatching(/^cancelled /),
+				});
+				expect(await allEnded(env, [decoy])).toBe(true);
 			});
 		} finally {
 			await workspace.dispose();
