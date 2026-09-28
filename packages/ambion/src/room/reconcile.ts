@@ -12,11 +12,11 @@
  * got to.
  */
 
-import { decodeActivationId } from '../activation-id.ts';
 import type { FailureCause, Seq } from '../types.ts';
 import type { RoomState } from './fold.ts';
 import { type PendingActivation, removedAfter, seatOf } from './lease.ts';
 import {
+	type ActivationFields,
 	admitsClose,
 	type CloseRef,
 	endingOf,
@@ -146,17 +146,14 @@ export function planReconciliation(state: RoomState, options: ReconcileOptions):
 }
 
 /**
- * A lease is stale when the room did not derive its id, its seat left the
- * roster, or a removal of its seat landed after its cause. A running lease
- * from before a removal is stale forever. This check is journal-derived so
- * a resumed room repairs a crash between the removal message and the
- * asynchronous cut of the old seat.
+ * A lease is stale when its seat left the roster, or a removal of its seat
+ * landed after its cause. A running lease from before a removal is stale
+ * forever. This check is journal-derived so a resumed room repairs a crash
+ * between the removal message and the asynchronous cut of the old seat.
  */
-function isStale(state: RoomState, id: string): boolean {
-	const parsed = decodeActivationId(id);
-	if (parsed === undefined) return true;
-	if (!state.roster.some((seat) => seat.name === parsed.seat)) return true;
-	return removedAfter(state.messages, parsed.seat, parsed.position);
+function isStale(state: RoomState, activation: ActivationFields): boolean {
+	if (!state.roster.some((seat) => seat.name === activation.seat)) return true;
+	return removedAfter(state.messages, activation.seat, activation.position);
 }
 
 /** Every lease that ends in this pass, by how it ends. A revocation wins over an expiry. */
@@ -166,7 +163,7 @@ function endings(state: RoomState, now: number): { revoked: Ending[]; expired: E
 	for (const lease of state.leases.values()) {
 		const ending = endingOf(
 			lease.phase === 'running',
-			isStale(state, lease.id),
+			isStale(state, lease.activation),
 			isExpired(lease, now),
 		);
 		if (ending === 'stays') continue;
