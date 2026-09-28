@@ -8,12 +8,12 @@
  * give the same object.
  *
  * The digest names the bytes. A later change to the file does not change
- * the object. `readSnapshot` and `fetch` check the bytes against the digest
+ * the object. `readSnapshot` and `restore` check the bytes against the digest
  * through `verified`, so an object that changed in its store is refused,
  * whatever the store.
  *
  * The operations run in turn and never inside each other: `snapshot` reads
- * on the bash owner, then puts on the object owner; `fetch` gets on the
+ * on the bash owner, then puts on the object owner; `restore` gets on the
  * object owner, then writes on the bash owner.
  */
 
@@ -175,7 +175,10 @@ export async function takeSnapshot(
 
 /** `bytes` when their SHA-256 is `digest`, or a thrown error that names `ref`. */
 function verified(ref: string, digest: string, bytes: Uint8Array | undefined): Uint8Array {
-	if (bytes === undefined) throw new Error(`The object store holds no bytes for ${ref}.`);
+	if (bytes === undefined)
+		throw new Error(
+			`The object store holds no bytes for ${ref}. Ask its author for a new snapshot.`,
+		);
 	if (digestOf(bytes) !== digest)
 		throw new Error(
 			`The bytes of ${ref} changed after the snapshot, and the workspace refuses them.`,
@@ -186,7 +189,8 @@ function verified(ref: string, digest: string, bytes: Uint8Array | undefined): U
 /** The parts of a snapshot ref of this workspace, or a thrown error. */
 function namedBy(store: SnapshotStore, ref: string): { digest: string; path: string } {
 	const named = parseSnapshotUri(ref);
-	if (named === undefined) throw new Error(`${ref} is not a snapshot ref.`);
+	if (named === undefined)
+		throw new Error(`${ref} is not a snapshot ref. Give the ref that snapshot gave.`);
 	if (named.workspace !== store.workspace)
 		throw new Error(`${ref} names the workspace '${named.workspace}', not '${store.workspace}'.`);
 	return named;
@@ -258,7 +262,7 @@ export function createSnapshotTool(store: SnapshotStore, audit?: AuditLog): Ambi
 	});
 }
 
-const fetchSchema = Type.Object({
+const restoreSchema = Type.Object({
 	ref: Type.String({ description: 'A snapshot ref of this workspace.' }),
 	path: Type.Optional(
 		Type.String({
@@ -267,10 +271,10 @@ const fetchSchema = Type.Object({
 	),
 });
 
-type FetchParams = Static<typeof fetchSchema>;
+type RestoreParams = Static<typeof restoreSchema>;
 
-/** What `fetch` gives in `details`. */
-interface FetchDetails {
+/** What `restore` gives in `details`. */
+interface RestoreDetails {
 	ref: string;
 	path: string;
 	bytes: number;
@@ -296,12 +300,12 @@ async function writeFile(
  * Put the bytes of a snapshot ref in the files of `agent`, at `path` or at
  * `~/snapshots/<digest>/<name>`, and give the absolute path.
  */
-async function fetchSnapshot(
+async function restoreSnapshot(
 	store: SnapshotStore,
 	agent: WorkspaceAgent,
 	request: { readonly ref: string; readonly path?: string },
 	signal?: AbortSignal,
-): Promise<FetchDetails> {
+): Promise<RestoreDetails> {
 	const { digest, path: named } = namedBy(store, request.ref);
 	const bytes = verified(
 		request.ref,
@@ -314,16 +318,16 @@ async function fetchSnapshot(
 	return { ref: request.ref, path: target, bytes: bytes.byteLength };
 }
 
-/** Build the `fetch` tool. Each call writes the bytes as the calling agent. */
-export function createFetchTool(store: SnapshotStore, audit?: AuditLog): AmbionTool {
+/** Build the `restore` tool. Each call writes the bytes as the calling agent. */
+export function createRestoreTool(store: SnapshotStore, audit?: AuditLog): AmbionTool {
 	return defineTool({
-		name: 'fetch',
-		label: 'Fetch a snapshot',
+		name: 'restore',
+		label: 'Restore a snapshot',
 		description:
 			'Put the bytes of a snapshot ref in a file of your own, and give its path. The bytes are the ones the file held at the snapshot.',
-		parameters: fetchSchema,
-		execute: recordedOnShell('fetch', store.shell, audit, async (params: FetchParams, ctx) => {
-			const details = await fetchSnapshot(
+		parameters: restoreSchema,
+		execute: recordedOnShell('restore', store.shell, audit, async (params: RestoreParams, ctx) => {
+			const details = await restoreSnapshot(
 				store,
 				ctx.agent,
 				{ ref: params.ref, ...(params.path === undefined ? {} : { path: params.path }) },
@@ -348,7 +352,7 @@ export function snapshotGuidance(workspace: string): string {
 		`To cite a file, call snapshot with its path, and put the ref it gives in the refs of a`,
 		`say. The ref has the form ambion://workspace/${workspace}/snapshot/<digest>/<path>. It`,
 		`names the bytes the file holds at the snapshot, and a later change to the file does not`,
-		`change them. To read a cited snapshot, call fetch with its ref: fetch puts the bytes in`,
+		`change them. To read a cited snapshot, call restore with its ref: restore puts the bytes in`,
 		`a file of your own and gives its path.`,
 	].join('\n');
 }

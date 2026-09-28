@@ -134,11 +134,11 @@ export interface Room {
 	 */
 	unseat(name: string): Promise<void>;
 	/**
-	 * Dismiss one scheduled say that waits to return, by its handle: the seq
-	 * of the say. True when the room dismissed it now. False when it no longer
-	 * waits: it returned, or somebody dismissed it, or the room dropped it.
+	 * Dismiss one scheduled say that waits to return, by its seq. True when
+	 * the room dismissed it now. False when it no longer waits: it returned,
+	 * or somebody dismissed it, or the room dropped it.
 	 */
-	dismiss(handle: Seq): Promise<boolean>;
+	dismiss(seq: Seq): Promise<boolean>;
 	/** The scheduled says that wait to return. A detached read: it waits for no work. */
 	scheduled(): Promise<PendingSay[]>;
 	/** Fold, decide, write, send. The room runs it on its own; a host on a platform with its own alarms calls it. */
@@ -453,8 +453,8 @@ export class RoomHost implements Room, RunningRoom {
 		return [...(await this.read({ messages: false })).scheduled];
 	}
 
-	dismiss(handle: Seq): Promise<boolean> {
-		return control.dismissSay(this, handle);
+	dismiss(seq: Seq): Promise<boolean> {
+		return control.dismissSay(this, seq);
 	}
 
 	exchange(from: Seq): waits.ExchangeHandle | undefined {

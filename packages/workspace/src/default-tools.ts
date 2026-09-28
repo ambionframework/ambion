@@ -4,7 +4,7 @@
  *
  * Every workspace gets these three tools, the five process tools
  * (`./process-tools.ts`: bash, ps, status, wait and cancel), and `snapshot`
- * and `fetch` (`./snapshots.ts`) before any tool its bash backend adds of
+ * and `restore` (`./snapshots.ts`) before any tool its bash backend adds of
  * its own. A workspace with a SQL backend also gets
  * `sql` (`./sql-tool.ts`), and one with a git backend gets `repos` and
  * `fork` (`./git-tools.ts`). The file tools run over Pi's `ExecutionEnv`
@@ -23,7 +23,7 @@ import { PROCESS_TOOL_NAMES } from './process-tools.ts';
 const COUNTS = ['ten', 'eleven', 'twelve', 'thirteen'];
 
 /** The tools every workspace has, in the order the tool line names them. */
-const BASE_TOOLS = ['read', 'write', 'edit', ...PROCESS_TOOL_NAMES, 'snapshot', 'fetch'];
+const BASE_TOOLS = ['read', 'write', 'edit', ...PROCESS_TOOL_NAMES, 'snapshot', 'restore'];
 
 /** `a, b and c`. */
 function listOf(names: readonly string[]): string {

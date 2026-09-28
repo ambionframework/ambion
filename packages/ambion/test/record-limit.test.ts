@@ -146,11 +146,16 @@ describe('a limit windows the record', () => {
 		expect(answering.every(({ text }) => !text.includes('alpha marker'))).toBe(true);
 		expect(answering.every(({ text }) => /\d+ earlier messages? not shown/.test(text))).toBe(true);
 		expect(await recorded(room, 'alpha marker')).toBe(true);
-		// Every page of the token-limited seat reports the count the cap omits.
+		// A page reads below the cap, and the token-limited seat stops its window at the cap.
 		const read = pages.filter((page) => page.seat === 'reader');
 		expect(read.length).toBeGreaterThan(0);
 		expect(read.every((page) => page.omitted !== undefined)).toBe(true);
-		expect(read.some((page) => (page.omitted ?? 0) > 0)).toBe(true);
+		const reading = contexts.filter(
+			({ seat, text }) => seat === 'reader' && text.includes('omega marker'),
+		);
+		expect(reading.length).toBeGreaterThan(0);
+		expect(reading.every(({ text }) => !text.includes('alpha marker'))).toBe(true);
+		expect(reading.some(({ text }) => /\d+ earlier messages? not shown/.test(text))).toBe(true);
 	});
 
 	it('lets a summary writer with a limit read its whole exchange', async () => {

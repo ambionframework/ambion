@@ -228,10 +228,10 @@ const scheduled = (): Promise<readonly JournalEntry[]> =>
  */
 const changesItsMind: Script = (context) => {
 	const results = toolResultTexts(context);
-	const [first] = results.flatMap((text) => /^scheduled (\d+):/.exec(text)?.[1] ?? []);
+	const [first] = results.flatMap((text) => /^scheduled #(\d+):/.exec(text)?.[1] ?? []);
 	if (results.length === 0) return later('Check the pour log.', 600);
 	if (results.length === 1) return later('Check the crane log.', 1200);
-	if (results.length === 2) return callTool('dismiss', { handle: Number(first) });
+	if (results.length === 2) return callTool('dismiss', { message: Number(first) });
 	return quiet();
 };
 

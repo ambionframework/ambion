@@ -16,7 +16,7 @@
  * decides. A get gives the 403 as an error, so grant `s3:ListBucket` for a
  * clear answer about a missing object.
  *
- * The host holds the credentials. No agent reaches the store: `fetch` reads
+ * The host holds the credentials. No agent reaches the store: `restore` reads
  * an object on the object owner and writes it into the agent's files.
  */
 

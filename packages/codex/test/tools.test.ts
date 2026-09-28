@@ -58,6 +58,7 @@ describe('the tool list and domain tools', () => {
 			'broken',
 			'dismiss',
 			'lookup',
+			'recall',
 			'say',
 			'schedule',
 			'seat',

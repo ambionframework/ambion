@@ -42,6 +42,37 @@ describe('the omission line', () => {
 	});
 });
 
+describe('the recall note', () => {
+	const worker = scriptedAgent('worker');
+	const spec = { id: 'a', seat: 'worker', attempt: 1 };
+	const respond = { kind: 'respond', message: 5 } as const;
+	const summarize = {
+		kind: 'summarize',
+		exchange: 5,
+		person: 'priya',
+		people: ['priya'],
+		through: 5,
+	} as const;
+	const shown: Message[] = [{ kind: 'said', seq: 5, at, from: 'priya', text: 'Newer.' }];
+	it.each([
+		[
+			'a response whose window or cap left out a message',
+			respond,
+			{ earliest: 5, omitted: 3 },
+			true,
+		],
+		['a response that reads the whole record', respond, {}, false],
+		['a summary whose window left out a message', summarize, { earliest: 5, omitted: 3 }, false],
+	] as const)('%s', (_case, purpose, reach, noted) => {
+		const view: ActivationView = {
+			spec: { ...spec, purpose },
+			through: 5,
+			context: { name: 'site', now: 0, participants: [], messages: shown, reserve: [], ...reach },
+		};
+		expect(renderActivation(view, worker).context.includes('call recall with its URI')).toBe(noted);
+	});
+});
+
 describe('one line of the record', () => {
 	it('reads a say as its author, and names who it was directed at', () => {
 		const said: Message = { kind: 'said', seq: 2, at, from: 'priya', text: 'Is the pour on?' };
@@ -91,8 +122,8 @@ describe('one line of the record', () => {
 	});
 
 	it.each([
-		['the seat', { from: 'worker' }, '#9 · worker dismissed say 3'],
-		['the host', {}, '#9 · the host dismissed say 3'],
+		['the seat', { from: 'worker' }, '#9 · worker dismissed say #3'],
+		['the host', {}, '#9 · the host dismissed say #3'],
 	])('reads a dismissal by %s with the handle it dismissed', (_by, from, line) => {
 		expect(renderLine({ kind: 'dismissed', seq: 9, at, message: 3, ...from })).toBe(line);
 	});
@@ -182,9 +213,9 @@ describe('the URIs a prompt states', () => {
 			'Message 4 is a say you scheduled, and the room returned it: do its work for priya.',
 		);
 		expect(rendered).toContain(
-			`Your says that wait to return. The room gives each back to you at its due time. Call \`dismiss\` with the handle of one that no longer fits:\n- 6, due ${at}: Check again.`,
+			`Your scheduled messages. The room wakes you with each one at its due time. Call \`dismiss\` with the seq of one that no longer fits:\n- #6, due ${at}: Check again.`,
 		);
-		expect(renderActivation(view, worker).context).not.toContain('Your says that wait');
+		expect(renderActivation(view, worker).context).not.toContain('Your scheduled messages');
 	});
 
 	it('states the covered exchange for a summary', () => {

@@ -35,7 +35,7 @@ holds the positioning and the headline of what is new.
 - **One executor contract.** The kernel drives leases, passes, steering, and
   freshness. A framework supplies one session with passes. Pi, the Claude
   Agent SDK, and the Codex SDK ship as adapters. Codex reaches the same
-  three room tools through an MCP server. A conformance suite proves the Pi
+  room tools through an MCP server. A conformance suite proves the Pi
   and Claude adapters on fakes. The Codex adapter runs live.
 - **Speech through `say` only; everything else into a trace.** Every
   activation gives its steps to the host's logger as they happen: thinking,

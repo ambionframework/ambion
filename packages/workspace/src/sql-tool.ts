@@ -66,7 +66,7 @@ const sqlSchema = Type.Object({
 			description: `A CSV file path. Its rows are the table ${IMPORT_TABLE} for this call alone, as text, with \\N as NULL.`,
 		}),
 	),
-	maxRows: Type.Optional(
+	rows: Type.Optional(
 		Type.Integer({
 			minimum: 0,
 			maximum: MAX_PREVIEW_ROWS,
@@ -122,7 +122,7 @@ async function run(
 	const context =
 		ctx.signal === undefined ? BACKGROUND_CONTEXT : withAbortSignal(ctx.signal, BACKGROUND_CONTEXT);
 	const runOptions: SqlRunOptions = {
-		maxRows: params.maxRows ?? PREVIEW_ROWS,
+		maxRows: params.rows ?? PREVIEW_ROWS,
 		...(params.export === undefined ? {} : { export: params.export }),
 		...(params.import === undefined ? {} : { import: params.import }),
 	};
@@ -181,9 +181,10 @@ function plural(count: number): string {
 	return count === 1 ? 'row' : 'rows';
 }
 
-function failed(database: string, message: string): SqlResult {
+/** A statement the database refused: an error whose text names the database and the fault. */
+function failed(database: string, message: string): never {
 	const text = message.trim() === '' ? 'The query failed.' : message.trim();
-	return report(`SQL error on ${database}:\n${text}`, { database, rows: 0 });
+	throw new Error(`SQL error on ${database}:\n${text}\nCorrect the statement and run it again.`);
 }
 
 function report(text: string, details: SqlDetails): SqlResult {

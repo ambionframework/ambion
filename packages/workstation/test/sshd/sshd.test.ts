@@ -236,7 +236,7 @@ describe.skipIf(configPath === undefined)('a workspace on OpenSSH', () => {
 		}
 	});
 
-	it("snapshots a file of an agent's home as that agent, every agent reads the copy and none changes it, and fetch writes it into another home", async () => {
+	it("snapshots a file of an agent's home as that agent, every agent reads the copy and none changes it, and restore writes it into another home", async () => {
 		const resolved = await options();
 		const bashBackend = workstationBackend(resolved);
 		const workspace = openWorkspace({ name: 'lab', backend: { bash: bashBackend } });
@@ -252,10 +252,10 @@ describe.skipIf(configPath === undefined)('a workspace on OpenSSH', () => {
 					error: { code: 'permission_denied' },
 				});
 			});
-			// fetch reads the object as the host and writes it into the home of planner, as planner.
-			const fetch = workspace.tools().tools.find((tool) => tool.name === 'fetch');
-			if (fetch === undefined) throw new Error('No fetch tool.');
-			await fetch.invoke({ ref, path: 'plan.md' }, context('planner'));
+			// restore reads the object as the host and writes it into the home of planner, as planner.
+			const restore = workspace.tools().tools.find((tool) => tool.name === 'restore');
+			if (restore === undefined) throw new Error('No restore tool.');
+			await restore.invoke({ ref, path: 'plan.md' }, context('planner'));
 			await withEnv(bashBackend, 'planner', async (env) => {
 				expect(await env.readTextFile('plan.md', ctx)).toMatchObject({ ok: true, value: 'pour\n' });
 			});
@@ -337,6 +337,17 @@ async function call(workspace: Workspace, name: string, params: unknown) {
 	return { process: details.process, processes: details.processes ?? [], text };
 }
 
+/**
+ * A status call on a lost process fails, and its text states the loss. The
+ * host reads the same table, so it gives the final state of the process.
+ */
+async function lostStatus(workspace: Workspace, handle: string) {
+	await expect(call(workspace, 'status', { handle })).rejects.toThrow(
+		`Process ${handle} failed: ${LOST}`,
+	);
+	return (await workspace.processes.list({ agent: OWNER })).find((one) => one.handle === handle);
+}
+
 describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 	it('adopts the live processes of an earlier run, reads and waits for one, and stops each through its process group', async () => {
 		// An earlier run of the host starts two processes over OpenSSH, and then goes away.
@@ -368,10 +379,15 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			const status = await call(workspace, 'status', { handle: 'bash-0000000000a1' });
 			expect(status.process?.state).toBe('running');
 			expect(status.text).toMatch(/^adopted\n/);
-			const waited = await call(workspace, 'wait', { handle: 'bash-0000000000a1', timeout: 1 });
+			const waited = await call(workspace, 'wait', {
+				handles: ['bash-0000000000a1'],
+				timeout: 1,
+			});
 			expect(waited.process?.state).toBe('running');
-			const late = await call(workspace, 'wait', { handle: 'bash-0000000000a2', timeout: 20 });
-			expect(late.process?.state).toBe('timed_out');
+			// A process that timed out fails the wait, and the text states the timeout.
+			await expect(
+				call(workspace, 'wait', { handles: ['bash-0000000000a2'], timeout: 20 }),
+			).rejects.toThrow(/Process bash-0000000000a2 timed out/);
 			const cancelled = await call(workspace, 'cancel', { handle: 'bash-0000000000a1' });
 			expect(cancelled.process?.state).toBe('cancelled');
 			// The kill reaches the whole group: each wrapper shell, and the child that one started.
@@ -401,9 +417,9 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 				);
 				return [dir, await specOf(env, 'bash-0000000000b2', 'true'), Number(started.output.trim())];
 			});
-			const first = await call(workspace, 'status', { handle: 'bash-0000000000b1' });
-			expect(first.process).toMatchObject({ state: 'failed', error: LOST });
-			expect(first.process?.endedAt).toBeUndefined();
+			const first = await lostStatus(workspace, 'bash-0000000000b1');
+			expect(first).toMatchObject({ state: 'failed', error: LOST });
+			expect(first?.endedAt).toBeUndefined();
 			await withEnv(backend, OWNER, async (env) => {
 				expect(await env.readTextFile(`${lost}/stop`, ctx)).toMatchObject({
 					ok: true,
@@ -418,16 +434,20 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 				});
 			});
 			// The dead pid is out of /proc, so the next read skips the process and it stays failed.
-			const later = await call(workspace, 'status', { handle: 'bash-0000000000b1' });
-			expect(later.process).toMatchObject({ state: 'failed', error: LOST });
+			expect(await lostStatus(workspace, 'bash-0000000000b1')).toMatchObject({
+				state: 'failed',
+				error: LOST,
+			});
 			// The pid file now names the decoy twice, as a list: ps reads the list, and /proc has no
 			// directory of that name. Only the skip keeps the decoy from the listing.
 			await withEnv(backend, OWNER, (env) =>
 				env.writeFile(`${lost}/pid`, `${decoy},${decoy}\n`, ctx),
 			);
 			expect((await call(workspace, 'ps', {})).processes).toEqual([]);
-			const skipped = await call(workspace, 'status', { handle: 'bash-0000000000b1' });
-			expect(skipped.process).toMatchObject({ state: 'failed', error: LOST });
+			expect(await lostStatus(workspace, 'bash-0000000000b1')).toMatchObject({
+				state: 'failed',
+				error: LOST,
+			});
 			// With the pid of the decoy alone, /proc has it: the listing runs ps and adopts it.
 			await withEnv(backend, OWNER, (env) => env.writeFile(`${lost}/pid`, `${decoy}\n`, ctx));
 			const found = await call(workspace, 'status', { handle: 'bash-0000000000b1' });

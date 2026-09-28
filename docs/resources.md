@@ -89,7 +89,7 @@ const agent = defineAgent({ ..., bundles: [lab.tools()] });
 **`query` reads and never writes.** It runs one statement on a read-only
 handle, and it sets `query_only` before each run. An INSERT, an UPDATE, or a
 statement that changes the schema fails. The preview shows 50 rows unless the
-caller sets `maxRows`.
+caller sets `rows`.
 
 **`record` is the only write.** It inserts one row into a table that the host
 lists in `writable`. It refuses any other table and any unknown column. It

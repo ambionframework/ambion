@@ -151,6 +151,7 @@ describe('the room pages the record', () => {
 		['the whole record without a range', undefined, [2, 3, 4, 5], undefined],
 		['one bounded page from the tail, with the record floor', { limit: 2 }, [4, 5], 2],
 		['a page before a cursor', { before: 4, limit: 2 }, [2, 3], 2],
+		['one message by its seq, as recall reads it', { before: 4, limit: 1 }, [3], 2],
 		['the whole record for a zero limit', { limit: 0 }, [2, 3, 4, 5], undefined],
 		['the whole record for a negative limit', { limit: -5 }, [2, 3, 4, 5], undefined],
 		[
@@ -169,6 +170,8 @@ describe('the room pages the record', () => {
 		// moves up past the range, so the page drops the split source and keeps
 		// the summary that stands for it.
 		expect(read(long, respond, undefined, { limit: 6 }).seqs).toEqual([7, 8, 9, 10]);
+		// A page of one message never folds it: the summary sits after the range it covers.
+		expect(read(long, respond, undefined, { before: 6, limit: 1 }).seqs).toEqual([5]);
 	});
 });
 
@@ -208,12 +211,12 @@ describe('the room caps the record', () => {
 			{ seqs: [3, 4], earliest: 3, omitted: 1 },
 		],
 		[
-			'serves no page below the capped floor',
+			'reads a page below the capped floor, and still reports the floor',
 			short,
 			respond,
 			3,
 			{ before: 3, limit: 2 },
-			{ seqs: [], omitted: 1 },
+			{ seqs: [2], earliest: 3, omitted: 0 },
 		],
 		[
 			'reports nothing for an infinite cap without a range',

@@ -31,6 +31,7 @@ import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
 import type { GitEnv, GitRepository } from './git-backend.ts';
 import { NAME_PATTERN } from './git-names.ts';
+import { unwrap } from './object-files.ts';
 import type { WorkspaceResource } from './resource.ts';
 import { recordedOnShell } from './tools.ts';
 
@@ -202,16 +203,12 @@ async function forked(
 		(env) => env.fork(params.source, params.name, ctx.signal),
 		ctx.signal,
 	);
-	if (!outcome.ok && outcome.reason === 'no_source') {
-		return report(`${params.source} does not exist. Call repos to list the repositories.`, {
-			source: params.source,
-		});
-	}
-	if (!outcome.ok && outcome.reason === 'refused') {
-		return report(`The git server refused the fork: ${outcome.message}`, {
-			source: params.source,
-		});
-	}
+	if (!outcome.ok && outcome.reason === 'no_source')
+		throw new Error(`${params.source} does not exist. Call repos to list the repositories.`);
+	if (!outcome.ok && outcome.reason === 'refused')
+		throw new Error(
+			`The git server refused the fork: ${outcome.message} Call repos to see what exists.`,
+		);
 	const repository = outcome.repository;
 	const lead = outcome.ok
 		? `Forked ${params.source} to ${repository.id}. Clone URL: ${repository.url}`
@@ -223,6 +220,8 @@ async function forked(
 	};
 	if (params.clone === undefined) return report(lead, details);
 	const clone = await cloneInto(options, repository, params.clone, !outcome.ok, ctx);
+	// The fork stands, and a failed clone still fails the call: the agent asked for a working copy.
+	if (clone.failed) throw new Error(`${lead}\n${clone.text}`);
 	return report(`${lead}\n${clone.text}`, { ...details, clone: clone.path });
 }
 
@@ -236,15 +235,13 @@ async function cloneInto(
 	path: string,
 	existing: boolean,
 	ctx: ToolContext,
-): Promise<{ path: string; text: string }> {
+): Promise<{ path: string; text: string; failed?: true }> {
 	const context =
 		ctx.signal === undefined ? BACKGROUND_CONTEXT : withAbortSignal(ctx.signal, BACKGROUND_CONTEXT);
 	return options.shell(
 		ctx.agent,
 		async (env) => {
-			const resolved = await env.absolutePath(path, context);
-			if (!resolved.ok) throw resolved.error;
-			const target = resolved.value;
+			const target = unwrap(await env.absolutePath(path, context), `Cannot clone into ${path}`);
 			if (existing) {
 				const found = await env.exists(target, context);
 				if (found.ok && found.value) {
@@ -261,6 +258,7 @@ async function cloneInto(
 			return {
 				path: target,
 				text: `The clone into ${target} failed: ${failure}. The fork stays; clone ${repository.url}.`,
+				failed: true,
 			};
 		},
 		ctx.signal,

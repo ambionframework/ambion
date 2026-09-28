@@ -4,9 +4,9 @@
 call until its command ends, and a workspace has four tools.
 
 **`bash` starts every command as a background process.** The call gives a
-handle for the process. `status`, `wait`, and `cancel` take that handle,
-and `ps` lists the processes. Every workspace has these five tools, on
-every bash backend.
+handle for the process. `status` and `cancel` take that handle, `wait` takes a
+list of handles, and `ps` lists the processes. Every workspace has these five
+tools, on every bash backend.
 
 **The files of the bash backend are the source of truth.** Each process
 is a directory in its owner agent's home. The table reads those files for
@@ -48,18 +48,18 @@ states the owner and the backends that a process runs on.
 
 ## The tools
 
-| Tool     | Parameters                              | What it does                                                         |
-| -------- | --------------------------------------- | -------------------------------------------------------------------- |
-| `bash`   | `command`, `name?`, `timeout?`, `wait?` | Starts a process, waits up to `wait` seconds, and gives its state    |
-| `ps`     | None                                    | Lists the caller's running processes                                 |
-| `status` | `handle`                                | Gives the state of the process and its new output                    |
-| `wait`   | `handle` or `handles`, `timeout?`       | Waits up to `timeout` seconds for the process to end, then as status |
-| `cancel` | `handle`                                | Stops a running process, waits for it to end, then as status         |
+| Tool     | Parameters                              | What it does                                                      |
+| -------- | --------------------------------------- | ----------------------------------------------------------------- |
+| `bash`   | `command`, `name?`, `timeout?`, `wait?` | Starts a process, waits up to `wait` seconds, and gives its state |
+| `ps`     | None                                    | Lists the caller's running processes                              |
+| `status` | `handle`                                | Gives the state of the process and its new output                 |
+| `wait`   | `handles`, `timeout?`                   | Waits up to `timeout` seconds for the first process to end        |
+| `cancel` | `handle`                                | Stops a running process, waits for it to end, then as status      |
 
 | Value                | Default | Range                         |
 | -------------------- | ------- | ----------------------------- |
 | `bash` `timeout`     | 600 s   | Above 0, up to 2,147,483 s    |
-| `bash` `wait`        | 10 s    | 0 to 600 s. 0 returns at once |
+| `bash` `wait`        | 30 s    | 0 to 600 s. 0 returns at once |
 | `wait` `timeout`     | 30 s    | 0 to 600 s                    |
 | The wait of `cancel` | 10 s    | Fixed                         |
 
@@ -160,8 +160,9 @@ lost when `/proc` has no directory for its pid. Shell builtins read that
 `stop` and test the directory, so the skip starts no program. A read
 costs one `exec` on every backend, and just-bash reads a table of 64
 processes in about 30 ms. `ps` and the reminder read the whole table.
-`status` and `cancel` read the one process. `wait` reads the one process,
-or the whole table on each read when it has `handles`.
+`status` and `cancel` read the one process. `wait` reads the one process
+when `handles` holds one, and the whole table on each read when it holds
+several.
 
 ## The result
 
@@ -169,7 +170,7 @@ or the whole table on each read when it has `handles`.
 then one bracketed line.** The new output is the output after the cursor:
 the part that no earlier result of the agent showed. The line states the
 process, its handle, its name when it has one, and its output file. A
-`wait` with `handles` gives this for each process that ended, then the
+`wait` on several handles gives this for each process that ended, then the
 bracketed line of each one that still runs. A process that ended with no
 output shows `(no output)`. A process that wrote
 nothing new since the last result shows `(no new output)`. A running
@@ -195,12 +196,12 @@ slab pour Thu
 ```text
 compiling 14 of 120
 
-[Process bash-3f9a2c1d0b7e (tests) is running. Output: /home/writer/.processes/bash-3f9a2c1d0b7e/out. Call status, wait or cancel with its handle, or ps to list your processes.]
+[Process bash-3f9a2c1d0b7e (tests) is running. Output: /home/writer/.processes/bash-3f9a2c1d0b7e/out. Call status or cancel with its handle, wait with it in handles, or ps to list your processes.]
 ```
 
 | State       | The bracketed line, where `<h>` is the handle and the name |
 | ----------- | ---------------------------------------------------------- |
-| `running`   | `Process <h> is running. ... Call status, wait or ...`     |
+| `running`   | `Process <h> is running. ... Call status or cancel ...`    |
 | `exited`    | `Process <h> exited with code <n>.`                        |
 | `timed_out` | `Process <h> timed out after <timeout> seconds.`           |
 | `cancelled` | `Process <h> is cancelled.`                                |
@@ -226,8 +227,8 @@ a last `wait` against a `schedule` call by that number. When the deadline
 also cut the wait, the note starts with the line of the cut, which names
 the same seconds. The seconds show once.
 
-**The note names each process that qualifies.** `wait` with `handles` adds
-one note, and it names each running process past the reach of a wait.
+**The note names each process that qualifies.** `wait` on several handles
+adds one note, and it names each running process past the reach of a wait.
 `cancel` adds no note.
 
 **The note shows only where `schedule` can help.** Outside a room there is
@@ -260,12 +261,15 @@ same value.
 | `exitCode`  | Set when the state is `exited`                               |
 | `error`     | Set when the state is `failed`                               |
 
-**A `bash` call fails when its process ends inside the window with a
-failure.** The failures are an exit code other than 0, a timeout, and a
-fault of the backend. These are the cases in which Pi's `bash` tool fails.
-The error text is the result text, so it names the handle. `ps`,
-`status`, `wait`, and `cancel` give every state as a result. They fail
-only on an unknown handle or an invalid value.
+**A process that ended badly fails the call that reports it.** An exit
+code other than 0, a timeout, and a failed process make `bash`, `status`,
+and `wait` a tool error. The error text is the result text: the new
+output, then the bracketed line that names the handle and the state. On
+several handles, `wait` fails when a process that it reports as ended
+ended badly. `cancel` gives the state of the process it stopped, and
+`ps` lists running processes, so neither fails on a state. An unknown
+handle and the limit of running processes fail too
+([Workspace](workspace.md#give-the-resource-to-an-agent)).
 
 ## A process
 
@@ -414,7 +418,7 @@ Your background processes in the workspace:
 - tests, bash-3f9a2c1d0b7e, is running for 2m 14s: npm test
 - server-log, bash-5e7b20c4f1d9, is running for 40s in the room review: tail -f server.log
 - bash-9c01d4e2aa31 exited with code 1 at 14:02:11 UTC: make build
-Call status, wait or cancel with a handle. Call ps to list processes.
+Call status or cancel with a handle, and wait with a list of handles. Call ps to list processes.
 ```
 
 **Each line starts with the name when the process has one.** The handle
@@ -484,11 +488,10 @@ this rule to the agent. Codex's unified exec follows the same rule: the
 model polls with `write_stdin`, and nothing wakes it.
 
 **An agent waits for the result that its answer needs.** It calls `wait`
-before it answers. `wait` returns when the process ends, and `wait` with
-`handles` returns when the first of several ends. A wait stops 30 seconds
-before the room ends the activation, so one activation can wait for a
-process for up to 570 seconds with the default lease deadline of 600
-seconds.
+before it answers. `wait` returns when the first process in `handles` ends. A
+wait stops 30 seconds before the room ends the activation, so one activation
+can wait for a process for up to 570 seconds with the default lease deadline
+of 600 seconds.
 
 **The end of a longer process reaches the agent at its next activation.**
 A message of a person or of another seat starts that activation. Until
@@ -566,17 +569,18 @@ host cancels it, or the workspace disposes.
 process that is still running gives `running`. An abort of the call stops
 the wait, and the process keeps running.
 
-**`wait` with `handles` returns when the first of several processes
-ends.** It takes 1 to 16 handles in place of `handle`, and counts a handle
-that repeats once. The result gives the new output and the bracketed line
-of each process that ended, then the bracketed line of each one that still
-runs. `details.processes` holds every status in the order of the handles,
-and `details.ended` holds the details of each process that ended.
+**`wait` returns when the first process in `handles` ends.** It takes 1 to 16
+handles, and counts a handle that repeats once. For one process, the result is
+the result of `status`. For several, the result gives the new output and the
+bracketed line of each process that ended, then the bracketed line of each one
+that still runs. `details.processes` holds every status in the order of the
+handles, and `details.ended` holds the details of each process that ended.
 
-**A process that already ended makes `wait` with `handles` return at
-once.** An agent that runs a parameter sweep as four processes calls `wait`
-with the four handles, reads the result of the first that ends, and calls
-`wait` again with the handles that still run.
+**A process that already ended makes `wait` return at once.** An agent
+that runs a parameter sweep as four processes calls `wait` with the four
+handles, reads the result of the first that ends, and calls `wait` again
+with the handles that still run. A handle of a process that ended badly
+fails each `wait` that holds it, so the agent drops it from the list.
 
 **A wait ends 30 seconds before the room ends the activation.** The room
 ends an activation `limits.lease.deadline` after its first claim, 600
@@ -649,15 +653,15 @@ line.**
 ```text
 bash starts each command as a background process and returns its handle, such as bash-1a2b3c4d5e6f.
 Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.
-The call waits up to wait seconds, 10 by default, and then gives the state of the process and its output.
+The call waits up to wait seconds, 30 by default, and then gives the state of the process and its output.
 The whole output of a process goes to ~/.processes/<handle>/out. Read it with read.
-status, wait and cancel take a handle. status gives the state of the process, wait waits for it to end,
-and cancel stops it. ps lists your running processes.
+status and cancel take a handle, and wait takes a list of handles. status gives the state of a process,
+wait waits for the first of them to end, and cancel stops one. ps lists your running processes.
 A process keeps running after your activation ends. It stops after timeout seconds, 600 by default.
 No message tells you when a process ends. When your answer needs the result, call wait before you answer.
 A wait stops before your activation ends.
 A process that outlives your activation shows in the reminder at the start of your next activation.
-To check a long process later, call schedule with after, in seconds. The room gives the say back to you then.
+To check a long process later, call schedule with after, in seconds. The room wakes you with it then.
 ```
 
 ## Out of scope
