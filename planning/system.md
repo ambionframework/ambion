@@ -100,13 +100,21 @@ exchange steers work, as today.
 **`from` identifies an exchange.** `ExchangeRef` is `{ from, at, person? }`.
 `admitsClose` compares `from` and loses its `owner` clause.
 `room.exchange(from)` and `handleForMessage` in `room-host/waits.ts`
-accept a `posted` opening.
+accept a `posted` opening. The `tail` of the projection holds `posted`
+entries, and `exchangeOf` in `room/projection.ts` recomputes the open
+exchange on one.
 
-**`person` is the first person who spoke in the range.** The projection
-keeps it for the open exchange, and the close stamps it with `through`
-and `summary`. For a person's question, `person` is the author of the
-opening message, as the owner is today. For work that the system starts,
-`person` is absent until a person speaks in the range.
+**`person` is the first person who spoke in the range.** `exchangeAfter`
+derives it from the tail: the first `said` of a person at or after
+`from`. `closing()` copies it from the open exchange beside `through` and
+`summary`, and derives nothing. For a person's question, `person` is the
+author of the opening message, as the owner is today. For work that the
+system starts, `person` is absent until a person speaks in the range.
+
+**A handle holds `person` as it was when the handle was made.** `handleFor`
+copies its fields once, so a handle from `room.post` reads no `person`
+after priya joins. The close and the exchange view hold the final value,
+and `waitForSummary` reads the close.
 
 **Each fact of `owner` gets its own derivation.** The opening message
 names who directs the work. `person` names who receives the result.
@@ -121,7 +129,10 @@ names who directs the work. `person` names who receives the result.
 | `waitForSummary`       | `person`            | The summary for `person`, or `undefined` with no `person`          | `room-host/waits.ts`           |
 
 For a person's question, the author of the opening message and `person`
-are the same person, so each rule reads as today.
+are the same person, so each rule reads as today. `awaiting` reads the
+opening message, and the opening message of a post or a returned say has
+no `from`. `awaitedPerson` thus keeps its body and finds no answer in
+work that the system starts, with no case for the system.
 
 **The summary rules keep their contracts.** `closeMatches` requires a
 writer, and a close with `summary` requires `person`, so `coversExchange`,
@@ -129,10 +140,14 @@ writer, and a close with `summary` requires `person`, so `coversExchange`,
 purpose in `protocol.ts` read a close with a person. `Close` becomes a
 union: `{ summary: string; person: string }` or
 `{ summary?: undefined; person?: string }`. A test of `summary` narrows
-`person`.
+`person`. `OwedClose` in `room/owed.ts` becomes the explicit shape
+`{ summary: string; person: string; from; through }`, because a `Pick`
+over the union loses that narrowing.
 
-**A cancellation close carries no `person`.** It owes no summary, and its
-outcome is `cancelled`, which wins over `awaiting`.
+**A cancellation close carries the `person` of the open exchange.**
+`cancelledClose` in `room/fold.ts` copies it, so the closed view names the
+same person as its opening message. The close names no writer, so it owes
+no summary.
 
 ### What the work of the system reads
 
@@ -216,8 +231,11 @@ the same commit. The changelog names each change. No reader for the old
 bodies is added. [Exchange](../docs/exchange.md) §3, §4, and §6,
 [Summaries](../docs/summary.md), [Trust](../docs/trust.md),
 [Processes](../docs/processes.md), and the glossary in
-[The room](../docs/room.md) change with it. The Workbench instrument reads
-`ctx.exchange.person`, and it refuses an operation when no person spoke.
+[The room](../docs/room.md) change with it. The Workbench changes at five
+readers of `owner`: the instrument reads `ctx.exchange.person` and refuses
+an operation when no person spoke, `approvals.ts` renames its
+`exchange_owner` column, and `timeline.ts`, `transcript.ts`, and
+`session-text.ts` read the opening message or drop the name.
 
 ## Consequences
 
@@ -242,16 +260,16 @@ who started the work, when a person did.
 
 ## The obligations
 
-| Removed                                                         | Added                                                  |
-| --------------------------------------------------------------- | ------------------------------------------------------ |
-| The fake person in the processes page and in each host          | The `posted` kind, its schema, and `room.post`         |
-| Its arrival, departure, roster line, and summary on each post   | The `post` key space and its retry matcher             |
-| `owner` on a scheduled say, a returned say, and `PendingSay`    | The `posted` cases in `reachOf` and `targetOf`         |
-| `ownerOf`, and the pairing of `after` and `owner` in the schema | The first speaker in the projection and in `closing()` |
-| The refusal for a schedule with no open exchange                | The `Close` union                                      |
-| The `owner` clause of `admitsClose`                             | The opening lines for a post and a returned say        |
-| The person check on a returned say in `opensExchange`           |                                                        |
-| The summary loop of a self-scheduling seat                      |                                                        |
+| Removed                                                         | Added                                           |
+| --------------------------------------------------------------- | ----------------------------------------------- |
+| The fake person in the processes page and in each host          | The `posted` kind, its schema, and `room.post`  |
+| Its arrival, departure, roster line, and summary on each post   | The `post` key space and its retry matcher      |
+| `owner` on a scheduled say, a returned say, and `PendingSay`    | The `posted` cases in `reachOf` and `targetOf`  |
+| `ownerOf`, and the pairing of `after` and `owner` in the schema | The first speaker in `exchangeAfter`            |
+| The refusal for a schedule with no open exchange                | The `Close` union                               |
+| The `owner` clause of `admitsClose`                             | The opening lines for a post and a returned say |
+| The person check on a returned say in `opensExchange`           |                                                 |
+| The summary loop of a self-scheduling seat                      |                                                 |
 
 **The field count stays the same, and its meaning narrows.** `owner`
 becomes `person`, derived from the spoken record. The opening message
@@ -270,8 +288,9 @@ starts.
 - **A message to `person`, or to any person who spoke, is an answer.** In
   an exchange of the system, an approver who asks a question back becomes
   `person`, and the next request for the approval then reads `complete`.
-  The author of the opening message keeps the rule of today, and an
-  exchange of the system has no author.
+  The rule of the opening author keeps the behavior of today. Today an
+  owner who asks back loses `awaiting` in the same way, so the rule
+  protects no approval that today does not protect.
 - **A summary for each person that a seat addressed.** A seat that
   addresses a person already writes the report, and each addressed person
   adds a closing say.
@@ -302,8 +321,8 @@ its condition. This change leaves room for both.
 1. **A hard bound on an exchange.** Nothing bounds a loop of posts or the
    usage of one exchange today. `limits.exchange` bounds the activations or
    the usage, the room writes the close, and `exchangeOutcome` gets a
-   terminal outcome beside `exhausted`. **Condition:** the first host that
-   runs a room with nobody present.
+   terminal outcome beside `exhausted`. **Condition:** a host that must
+   cap the spend of one exchange.
 2. **Compaction with no person.** A summary goes to a person, so a monitor
    that never reports never folds. The first step is a render rule: a
    closed exchange with no spoken message shows as one line, and `recall`
@@ -336,6 +355,10 @@ its condition. This change leaves room for both.
   exchange of the system as `awaiting`, `pendingFor` lists it, and an
   approver who asks back in an exchange of the system still reads
   `awaiting`.
+- `summary.test.ts`: the first recipient of each closing activation equals
+  the `person` of its close.
+- `cancellation.test.ts`: a cancelled exchange of a person keeps its
+  `person`.
 - `routing` cases: a directed post wakes its target, and an undirected post
   wakes each seat at `broadcast`.
 - `transition.test.ts` and `journal-validation.test.ts`: the refusals of a
