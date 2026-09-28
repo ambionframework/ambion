@@ -200,15 +200,15 @@ compiling 14 of 120
 - **The process runs past the reach of a wait.** The reach of a wait ends
   30 seconds before `ToolContext.deadline`. The timeout of the process
   ends after that time.
-- **The context carries an open exchange.** The room then takes a say with
-  `after`.
+- **The context carries an open exchange.** The room then takes a
+  `schedule` call.
 
 ```text
-Your activation ends in 95 seconds. Process bash-3f9a2c1d0b7e can run longer. To look at a process later, say to yourself with after, in seconds.
+Your activation ends in 95 seconds. Process bash-3f9a2c1d0b7e can run longer. To look at a process later, call schedule with after, in seconds.
 ```
 
 **The note names the seconds left before the deadline.** The agent weighs
-a last `wait` against a say with `after` by that number. When the deadline
+a last `wait` against a `schedule` call by that number. When the deadline
 also cut the wait, the note starts with the line of the cut, which names
 the same seconds. The seconds show once.
 
@@ -216,8 +216,8 @@ the same seconds. The seconds show once.
 one note, and it names each running process past the reach of a wait.
 `cancel` adds no note.
 
-**The note shows only where a say with `after` can help.** Outside a room
-there is no `say`. A process that ends inside the reach of a wait needs a
+**The note shows only where `schedule` can help.** Outside a room there is
+no `schedule`. A process that ends inside the reach of a wait needs a
 `wait`, and each returned say costs one activation.
 
 **The view keeps the last 2000 lines or 50 KB of the new output.** These
@@ -481,7 +481,7 @@ then, the end stays in the files.
 
 ### The agent can come back later
 
-**An agent schedules its own next activation.** It says to itself with
+**An agent schedules its own next activation.** It calls `schedule` with
 `after`, in seconds, before its activation ends. The room gives the say
 back when it is due, and the returned say starts an activation for the
 same seat ([Exchange](exchange.md#6-a-scheduled-say)). That activation
@@ -642,7 +642,7 @@ A process keeps running after your activation ends. It stops after timeout secon
 No message tells you when a process ends. When your answer needs the result, call wait before you answer.
 A wait stops before your activation ends.
 A process that outlives your activation shows in the reminder at the start of your next activation.
-To check a long process later, say to yourself with after, in seconds. The room gives the say back to you then.
+To check a long process later, call schedule with after, in seconds. The room gives the say back to you then.
 ```
 
 ## Out of scope

@@ -155,6 +155,7 @@ describe('room journal body validation', () => {
 			'body.agents[0].attention',
 		],
 		['run', { at: 7 }, 'body.at'],
+		['run', null, 'body'],
 	] as const)('reports the kind and the path of a malformed %s body at %s', (kind, body, path) => {
 		const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 		expect(() => validateRoomBody(kind, body)).toThrow(new RegExp(`kind '${kind}'.*${escaped}`));

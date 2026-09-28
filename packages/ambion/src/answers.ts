@@ -115,8 +115,10 @@ function liveSpec(room: Answering, id: string, state: RoomState): ActivationSpec
 /**
  * A say commits under `readThrough`, the seq the author has read. The queue
  * refuses a say the record moved past, and the loser is handed what it
- * missed. A summary commits against its fixed closed exchange, so later
- * record entries do not refuse it. A seating also commits without
+ * missed. A scheduled say goes back to its author alone, so the room takes it
+ * at any position and hands the author what it landed past. A summary commits
+ * against its fixed closed exchange, so later record entries do not refuse
+ * it. A seating also commits without
  * `readThrough`. A lease that ended is answered `stale`, before and where
  * the write happens.
  */

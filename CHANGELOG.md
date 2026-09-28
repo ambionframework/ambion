@@ -20,6 +20,48 @@ into `~/.skills` in the agent's home. The seat reads a skill with `read`
 and runs its scripts with `bash`, so a Pi, Claude, or Codex seat uses a
 skill the same way. See [Skills](docs/skills.md).
 
+**A snapshot gives a stable, immutable ref to a workspace file.**
+`workspace.snapshot(paths)` reads each file, hashes its bytes with SHA-256,
+puts the bytes in the object backend, and gives one ref for each file:
+`ambion://workspace/<name>/snapshot/<digest>/<path>`. The same bytes give
+the same object, and a later change to the file does not change the ref.
+One snapshot takes at most 16 files, and one file holds at most 5 GiB, the
+limit of one S3 PutObject. `workspace.readSnapshot(ref)` gives the bytes
+back and refuses bytes that no longer match the digest. The `snapshot`
+tool gives an agent the same refs, and the `fetch` tool writes the bytes
+of a ref into the agent's files. See
+[Snapshot a file](docs/workspace.md#snapshot-a-file).
+
+**An object backend keeps the bytes of each snapshot.**
+`WorkspaceBackends.objects` takes an `ObjectBackend`: `put` and `get` of
+bytes under their SHA-256. When it is absent, `openWorkspace` opens a file
+store at `layout.snapshots` on the bash backend. `s3ObjectBackend` from the
+`@ambionframework/workspace/s3` entry keeps the bytes in a bucket of Amazon
+S3, Cloudflare R2, or MinIO, and a put never rewrites an object. The host
+holds the credential, so no agent reaches the store. `objectConformance`
+holds the cases of a backend, and a CI job runs them on MinIO in Docker.
+See [The object backend](docs/workspace.md#the-object-backend).
+
+**A commit ref cites one commit of a workspace repository.** The ref holds
+the full hash, and the branch or the tag that named the commit:
+`ambion://workspace/<name>/repo/<repository>/branch/<branch>/commit/<hash>`.
+The git note states the form, and an agent writes the ref from `git
+rev-parse` after it pushes. `workspace.commitRef(repository, at)` gives a
+host the ref of a commit on the server, and `workspace.readCommit(ref)`
+gives the commit that a ref names: its message, author, parents, and
+changed files. See [Cite a commit](docs/git.md#cite-a-commit).
+
+**The Workbench previews every ref.** A snapshot opens in the files panel
+as text, a picture, tables, or a note for a binary file. A commit opens as
+its log entry and its changes, with where its branch or tag points now. A
+room ref opens its room, and a message ref opens its room at the message.
+`/attach` cites the copy with a snapshot ref.
+
+**A seat can cite every message it reads.** Each line of the record starts
+with the seq of its message, such as `#12`, so a seat builds the message
+URI of any line. The closing guidance names the URI of the opening message
+of the exchange.
+
 ### Simplification
 
 - **The room state has one derivation.** `readRoom` replays the
@@ -42,6 +84,15 @@ skill the same way. See [Skills](docs/skills.md).
   `room/exchange.ts` serves the summary outcome, the summaries of a
   closed exchange, and the refusal of a second closing commit.
 - **`answerView` reads the grant of an activation once.**
+- **A cancellation has one shape.** `RoomState.cancelClosed` and the
+  schema of the close inside a `cancel` entry go. The wakes and the
+  scheduled says drop at the cancellation, and no later filter applies it
+  again. A grant keeps its filter, since it reads an id against the whole
+  record.
+- **A seat of an unknown executor kind fails at once on every router.**
+  Under `composeExecutions`, its activation fails with a permanent
+  `no_execution` error, as it does in a room with no execution. Before,
+  the room sent the wake again after each resend window, with no end.
 - **The process table keeps one record for each live process.** A
   process of this run and an adopted process share one map, one stop, and
   one end. The record of a process of this run also holds its environment
@@ -54,6 +105,40 @@ skill the same way. See [Skills](docs/skills.md).
   See [Processes](docs/processes.md#the-files).
 
 ### Breaking changes
+
+- **`schedule` is a room tool, and `say` has no `after`.** An agent calls
+  `schedule` with `{ after, text, refs? }` to come back to its work. The
+  tool writes the same `said` entry with `to` and `after` as before, so
+  the journal format does not change. An agent tool named `schedule` gets
+  a refusal. The hosting entry exports `SCHEDULE`. The process note and
+  the guidance of the process tools name `schedule`.
+- **The room takes a scheduled say at any read position.** A scheduled
+  say never gets a `missed` answer. A `committed` answer to it lists in
+  `unread` the messages after its `readThrough` and before the say. The
+  `schedule` tool result shows them.
+- **The kernel defines two more `ambion:` forms.** `snapshotUri`,
+  `parseSnapshotUri`, `commitUri`, `parseCommitUri`, the `SnapshotUri`,
+  `CommitUri`, and `CommitVia` types, and `REF_LIMITS` join the root entry.
+  The room accepts a canonical snapshot ref and commit ref, and refuses any
+  other `ambion://workspace/` string.
+- **`GitEnv` has `resolve(id, at)` and `show(id, hash)`.** A custom git
+  backend gives the full hash that a branch, a tag, or a hash names, and
+  the message, author, parents, and changed files of one commit.
+  `@ambionframework/workspace/git` exports `revisionOf`, `validRefName`,
+  `assertCommitHash`, and `byPath`. The root entry exports `GitRevision`,
+  `GitCommit`, and `GitChange`.
+- **`WorkspaceLayout` has `snapshots`.** A custom bash backend and each
+  `workstationBackend` layout name the folder of the default object store.
+  The just-bash backends use `/snapshots`. On a workstation, the host account
+  owns the folder with mode `2750`, the same as `layout.rooms`.
+- **Every workspace has ten tools.** `snapshot` and `fetch` follow the
+  process tools, and their note follows the process note in the guidance.
+- **The root entry exports `ObjectBackend`, `ObjectEnv`, and `ObjectDigest`.**
+  The `./conformance` entry exports `objectConformance`, and
+  `@ambionframework/workspace` depends on `aws4fetch`.
+- **A rendered record line starts with `#<seq>`.** `renderLine` in
+  `@ambionframework/ambion/hosting` writes it, so a record line, a `[new]`
+  line, and a steer carry it.
 
 - **`fromDirectory` moves to the root entry of `@ambionframework/workspace`.**
   `@ambionframework/workspace/git` no longer exports it.
@@ -82,6 +167,10 @@ skill the same way. See [Skills](docs/skills.md).
 - **`callTool` takes a `JsonObject`.** Pi types tool arguments as JSON.
 - **A journal body with an extra property names the property.** The
   error reads `at body.<name>: schema is false`.
+- **A `cancel` entry carries no close.** The room derives the close of a
+  cancellation from the `cancel` entry: it closes the open exchange at the
+  last message before the entry. That close carries `cancelled: true`, and
+  a closed exchange reads `cancelled` from it.
 
 ## 0.3.0 (2026-09-25)
 

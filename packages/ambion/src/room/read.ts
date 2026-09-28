@@ -53,7 +53,7 @@ export function readView(
 		state.exchange,
 		state.leases,
 		state.cancelledAt,
-		{ people: new Set(state.people.keys()), cancelClosed: state.cancelClosed },
+		new Set(state.people.keys()),
 	);
 	const current = exchanges.find(
 		(exchange): exchange is Extract<ExchangeView, { readonly status: 'open' }> =>

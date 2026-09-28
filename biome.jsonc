@@ -451,7 +451,8 @@
 				"packages/workspace/src/resource.ts",
 				"packages/workspace/src/resource-entry.ts",
 				"packages/workspace/src/backend.ts",
-				"packages/workspace/src/git-backend.ts"
+				"packages/workspace/src/git-backend.ts",
+				"packages/workspace/src/object-backend.ts"
 			],
 			"linter": {
 				"rules": {

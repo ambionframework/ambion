@@ -19,7 +19,7 @@ import {
 	statusOf,
 	takenOf,
 } from './lease.ts';
-import { survivesCancellation, wakeAnswered } from './rules.verified.ts';
+import { wakeAnswered } from './rules.verified.ts';
 
 /** A wake that a running lease answers while it runs. It is pending again when that lease comes to nothing. */
 type HeldWake = Pick<PendingWake, 'seat' | 'position' | 'at'>;
@@ -80,13 +80,5 @@ export const dropSeat = (wakes: readonly OpenWake[], seat: string): OpenWake[] =
 	wakes.filter((wake) => wake.seat !== seat);
 
 /** The wakes still pending for the seats on the roster, in the order they opened. */
-export function pendingOf(
-	wakes: readonly OpenWake[],
-	roster: ReadonlySet<string>,
-	cancelledAt: Seq | undefined,
-): PendingWake[] {
-	return wakes.filter(
-		(wake): wake is PendingWake =>
-			isPending(wake) && roster.has(wake.seat) && survivesCancellation(wake.position, cancelledAt),
-	);
-}
+export const pendingOf = (wakes: readonly OpenWake[], roster: ReadonlySet<string>): PendingWake[] =>
+	wakes.filter((wake): wake is PendingWake => isPending(wake) && roster.has(wake.seat));

@@ -2,9 +2,10 @@
  * The room tools of one activation, and the agent's own tools, in a shape
  * that names no harness.
  *
- * Every ordinary activation can speak, seat an agent, or remove an agent.
- * A closing activation receives only `say`; the room turns that said intent
- * into the assigned summary and supplies its recipient and range.
+ * Every ordinary activation can speak, schedule a say to itself, seat an
+ * agent, remove an agent, or dismiss a scheduled say. A closing activation
+ * receives only `say`; the room turns that said intent into the assigned
+ * summary and supplies its recipient and range.
  *
  * An executor adapts each `RoomTool` to its harness: a Pi tool, an MCP tool,
  * or a tool that a bridge serves over a socket. The executor gives each call
@@ -13,7 +14,7 @@
  */
 
 import type { AmbionTool, ToolContext, ToolResult, ToolUpdate } from '../bundle.ts';
-import { DISMISS, SAY, SEAT, UNSEAT } from '../define.ts';
+import { DISMISS, SAY, SCHEDULE, SEAT, UNSEAT } from '../define.ts';
 import {
 	type ActivationView,
 	type CommitResult,
@@ -22,7 +23,7 @@ import {
 	type RoomProtocol,
 } from '../protocol.ts';
 import type { AgentDefinition, Message, Seq } from '../types.ts';
-import { refusal, summaryToolDescription } from './render.ts';
+import { refusal, renderLine, summaryToolDescription } from './render.ts';
 
 /** One part of what a tool hands back to the model. */
 export type RoomToolContent =
@@ -61,11 +62,11 @@ export interface RoomToolBinding {
 	abort(): void;
 }
 
-/** What an executor adds to the say of its harness. */
+/** What an executor adds to the say and the schedule of its harness. */
 export interface RoomToolOptions {
 	/** The refs a say cites, from the refs the model gave, each trimmed and none empty. */
 	readonly refs?: (cited: readonly string[]) => readonly string[];
-	/** The room took an ordinary say. */
+	/** The room took an ordinary say or a scheduled say. */
 	readonly spoke?: () => void;
 }
 
@@ -80,7 +81,12 @@ interface SayArgs {
 	to?: string;
 	text: string;
 	refs?: string[];
-	after?: number;
+}
+
+interface ScheduleArgs {
+	after: number;
+	text: string;
+	refs?: string[];
 }
 
 const text = (value: string, isError = false): RoomToolResult => ({
@@ -101,6 +107,7 @@ export function roomTools(
 	}
 	return [
 		sayTool(binding, options),
+		scheduleTool(view.spec.seat, binding, options),
 		membershipTool(binding, 'seated'),
 		membershipTool(binding, 'unseated'),
 		dismissTool(binding),
@@ -181,13 +188,11 @@ function landed(binding: RoomToolBinding, response: CommitResult): RoomToolResul
 	return ended(`Your turn ended: ${why}.`);
 }
 
-/** The result of a say the room scheduled: when it returns. */
-function scheduled(response: CommitResult): RoomToolResult | undefined {
-	if (!('committed' in response)) return undefined;
-	const message = response.committed;
-	if (message.kind !== 'said' || message.after === undefined) return undefined;
-	const due = new Date(Date.parse(message.at) + message.after * 1000).toISOString();
-	return text(`scheduled ${message.seq}: the room gives this say back to you at ${due}`);
+/** The line of a say the room scheduled: its handle, and when it returns. */
+function scheduledLine(message: Message): string {
+	const after = message.kind === 'said' ? (message.after ?? 0) : 0;
+	const due = new Date(Date.parse(message.at) + after * 1000).toISOString();
+	return `scheduled ${message.seq}: the room gives this say back to you at ${due}`;
 }
 
 /** The result that tells the model its activation has ended. */
@@ -195,17 +200,32 @@ function ended(why: string): RoomToolResult {
 	return { ...text(`${why} This turn is over.`, true), terminate: true };
 }
 
+/** The refs a say cites: each trimmed, none empty, and what the executor adds. */
+function refsOf(cited: readonly string[] | undefined, options: RoomToolOptions) {
+	const trimmed = (cited ?? []).map((ref) => ref.trim()).filter((ref) => ref.length > 0);
+	const refs = options.refs === undefined ? trimmed : options.refs(trimmed);
+	return refs.length > 0 ? { refs: [...refs] } : {};
+}
+
 /** The intent a say stands for: its text and refs trimmed, and no empty field. */
 function saidBy(args: SayArgs, options: RoomToolOptions): Intent {
 	const to = args.to?.trim();
-	const trimmed = (args.refs ?? []).map((ref) => ref.trim()).filter((ref) => ref.length > 0);
-	const refs = options.refs === undefined ? trimmed : options.refs(trimmed);
 	return {
 		kind: 'said',
 		...(to ? { to } : {}),
 		text: args.text.trim(),
-		...(refs.length > 0 ? { refs: [...refs] } : {}),
-		...(args.after === undefined ? {} : { after: args.after }),
+		...refsOf(args.refs, options),
+	};
+}
+
+/** The intent a schedule stands for: a say to the seat itself, with `after`. */
+function scheduledBy(seat: string, args: ScheduleArgs, options: RoomToolOptions): Intent {
+	return {
+		kind: 'said',
+		to: seat,
+		text: args.text.trim(),
+		...refsOf(args.refs, options),
+		after: args.after,
 	};
 }
 
@@ -237,10 +257,55 @@ async function say(
 	});
 	if ('missed' in response) return missedSay(binding, call, response.missed, closing);
 	if ('committed' in response) accepted(binding, options, response.committed, closing);
-	const result = scheduled(response) ?? landed(binding, response);
+	const result = landed(binding, response);
 	if (closing === undefined || result.isError) return result;
 	// The closing activation ends after the last recipient has a message.
 	return closing.answered >= closing.people.length ? { ...result, terminate: true } : result;
+}
+
+/**
+ * The tool that schedules a say to the seat itself. The room takes a
+ * scheduled say at any position. When the record moved past the read
+ * position, the result carries the messages the say landed past.
+ */
+function scheduleTool(seat: string, binding: RoomToolBinding, options: RoomToolOptions): RoomTool {
+	return {
+		name: SCHEDULE.name,
+		description: SCHEDULE.description,
+		parameters: SCHEDULE.parameters,
+		run: async (args, call) => {
+			const response = await binding.room.commit({
+				activation: binding.id,
+				key: call,
+				readThrough: binding.readThrough,
+				intent: scheduledBy(seat, args as ScheduleArgs, options),
+			});
+			if (!('committed' in response)) return landed(binding, response);
+			options.spoke?.();
+			return scheduleResult(binding, call, response.committed, response.unread ?? []);
+		},
+	};
+}
+
+/**
+ * What the model reads for a scheduled say. With no message landed past it,
+ * the say confirms the read position. Otherwise the result carries those
+ * messages, and the model reads the record through the say when it reads
+ * the result.
+ */
+function scheduleResult(
+	binding: RoomToolBinding,
+	call: string,
+	message: Message,
+	unread: readonly Message[],
+): RoomToolResult {
+	const line = scheduledLine(message);
+	if (unread.length === 0) {
+		binding.acknowledgeThrough(message.seq);
+		return text(line);
+	}
+	binding.resultExpected(call, message.seq);
+	return text([`${line}. New on the record before it:`, ...unread.map(renderLine)].join('\n'));
 }
 
 /** A say the room took. An ordinary say confirms the read position. A closing say counts as an answer. */

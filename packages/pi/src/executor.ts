@@ -501,8 +501,8 @@ export class Activation implements ExecutorSession {
 			this.last = event.message;
 		}
 		if (event.type !== 'tool_start' && event.type !== 'tool_end') return;
-		// `say` is the room's own event, not a tool's.
-		if (event.toolName === 'say') return;
+		// A say or a schedule is the room's own event, not a tool's.
+		if (event.toolName === 'say' || event.toolName === 'schedule') return;
 		this.emit({
 			type: event.type === 'tool_start' ? 'tool_execution_start' : 'tool_execution_end',
 			agent: this.definition.name,

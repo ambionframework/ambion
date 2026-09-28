@@ -1,17 +1,16 @@
 /**
  * The scheduled says that wait to return, as a fold over the record.
  *
- * An agent schedules a say when it says to itself with `after`. The say
- * waits until the room writes a `returned` entry for it. An unseating of its
- * author drops it, and a cancellation drops every say before it. The
- * projection runs one step for each entry, so a replay holds the same list
- * in the same order.
+ * An agent schedules a say with the `schedule` tool: a say to itself with
+ * `after`. The say waits until the room writes a `returned` entry for it. An
+ * unseating of its author drops it, and a cancellation drops every say
+ * before it. The projection runs one step for each entry, so a replay holds
+ * the same list in the same order.
  */
 
 import type { Body } from '../journal/journal.ts';
 import type { PendingSay, ScheduleLimits } from '../scheduling.ts';
 import type { ExchangeRef, Message, ReturnedMessage, Seq } from '../types.ts';
-import { survivesCancellation } from './rules.verified.ts';
 
 /** One say that waits to return to its author. */
 export interface ScheduledSay {
@@ -67,14 +66,6 @@ export function pendingSay({ dueAt, refs, ...say }: ScheduledSay): PendingSay {
 	};
 }
 
-/** The says that a cancellation leaves: the ones after it. */
-export function afterCancellation(
-	list: readonly ScheduledSay[],
-	cancelledAt: Seq | undefined,
-): ScheduledSay[] {
-	return list.filter((say) => survivesCancellation(say.seq, cancelledAt));
-}
-
 /** No bound: a room that passes no limits takes any whole number of seconds and any count. */
 const UNBOUNDED: ScheduleLimits = {
 	minAfter: 1,
@@ -95,13 +86,13 @@ export function scheduleRefusal(
 	schedule: ScheduleLimits = UNBOUNDED,
 ): string | undefined {
 	const { after } = intent;
-	if (intent.to !== seat) return `A say with \`after\` goes to yourself. Set \`to\` to '${seat}'.`;
+	if (intent.to !== seat) return `A scheduled say goes to its author. Set \`to\` to '${seat}'.`;
 	if (after === undefined || !Number.isSafeInteger(after))
 		return '`after` is a whole number of seconds.';
 	if (after < schedule.minAfter || after > schedule.maxAfter)
 		return `\`after\` is ${after} seconds. This room takes from ${schedule.minAfter} to ${schedule.maxAfter} seconds.`;
 	if (open === undefined)
-		return 'No exchange is open, so no person owns the work. Schedule a say while you answer a question.';
+		return 'No exchange is open, so no person owns the work. Call `schedule` while you answer a question.';
 	const waiting = list.filter((say) => say.seat === seat).length;
 	if (waiting >= schedule.pending)
 		return `${waiting} of your says wait to return. This room holds at most ${schedule.pending} for one seat.`;

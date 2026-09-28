@@ -72,9 +72,10 @@ after the close is durable.
 ## 6. A scheduled say
 
 **An agent comes back to its work with a say to itself.** The agent calls
-`say` with `to` set to its own name and `after` set to a number of seconds.
-The room stamps the owner of the open exchange on the say as `owner`. The say
-wakes nobody, and it is not live work, so the exchange closes while it waits.
+`schedule` with `after` set to a number of seconds. The tool writes a `said`
+entry with `to` set to the author's own name and `after` beside it. The room
+stamps the owner of the open exchange on the say as `owner`. The say wakes
+nobody, and it is not live work, so the exchange closes while it waits.
 
 ```mermaid
 sequenceDiagram
@@ -83,7 +84,7 @@ sequenceDiagram
     participant W as worker
     P->>R: question (seq 4) opens exchange 4
     R->>W: activation
-    W->>R: say to worker, after 600 (seq 6, owner priya)
+    W->>R: schedule, after 600 (seq 6, to worker, owner priya)
     R-->>R: close [4, 6]
     Note over R: 600 seconds later, the alarm
     R->>R: returned (seq 9, message 6, owner priya) opens exchange 9
@@ -106,16 +107,19 @@ after the close of the same pass.
 
 **The room decides who may schedule.**
 
-- A say with `after` goes to its author. A say to oneself without `after`
-  gets a refusal.
+- A scheduled say goes to its author. A `say` to oneself gets a refusal.
+- A scheduled say states the read position of its author, and the room
+  takes it at any position. The commit result lists in `unread` the
+  messages after that position and before the say. The tool result shows
+  them, so the model reads the record through the say.
 - The activation must answer a message while an exchange is open. A closing
   activation cannot schedule.
 - `limits.schedule` bounds `after` from `minAfter` to `maxAfter` seconds, 60 to
   604,800 by default, and holds at most `pending` says of one seat, 4 by
   default.
 
-**The agent sees its pending says.** The say result names the seq of the
-say as its handle: `scheduled 41: the room gives this say back to you at
+**The agent sees its pending says.** The schedule result names the seq of
+the say as its handle: `scheduled 41: the room gives this say back to you at
 <time>`. The view of each response activation carries the pending says of
 the seat in `scheduled`, and the render lists each one with its handle, its
 due time, its text, and its refs. A continued Pi session reads the list

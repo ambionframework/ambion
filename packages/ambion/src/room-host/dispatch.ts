@@ -38,6 +38,8 @@ export interface DispatchHost extends RoomBase {
 	readonly deliveryStates: Map<string, DeliveryState>;
 	/** Every lease id this room has heard a change for. It says `activation_start` once. */
 	readonly heardLeases: Set<string>;
+	/** How many closes of the state this room has heard. It says `exchange_closed` once for each. */
+	heardCloses: number;
 	/** Publications run in journal order after the confirmed entry has been folded. */
 	publications: Promise<void>;
 	evicted(): boolean;
@@ -47,9 +49,9 @@ export interface DispatchHost extends RoomBase {
 /** What the room does with one entry. The journal calls it for every entry it takes after the replay. */
 export function hearEntry(host: DispatchHost, entry: Entry): void {
 	if (entry.kind === 'message') queueMessage(host, entry);
-	else if (entry.kind === 'close') queueClose(host, entry.body);
+	else if (entry.kind === 'close') queueCloses(host);
 	else if (entry.kind === 'lease') queueLease(host, entry.body, opens(host, entry.body.id));
-	else if (entry.kind === 'cancel') queueCancellation(host, entry.body.close, entry.seq);
+	else if (entry.kind === 'cancel') queueCancellation(host, entry.seq);
 	// Membership, cancellation, and lease entries can make an earlier
 	// delivery obsolete without dispatching another message immediately.
 	pruneDeliveryErrors(host);
@@ -79,9 +81,11 @@ function opens(host: DispatchHost, id: string): boolean {
 	return first;
 }
 
-/** Every lease id the room has heard a change for, seeded by the replay. */
-export function seedHeardLeases(host: DispatchHost): void {
-	for (const id of host.state().leases.keys()) host.heardLeases.add(id);
+/** Every lease id and every close the room has heard, seeded by the replay. */
+export function seedHeard(host: DispatchHost): void {
+	const state = host.state();
+	for (const id of state.leases.keys()) host.heardLeases.add(id);
+	host.heardCloses = state.closes.length;
 }
 
 /**
@@ -118,6 +122,16 @@ function queueMessage(host: DispatchHost, entry: Extract<Entry, { kind: 'message
 }
 
 /**
+ * Every close the room has not heard yet. A close entry adds one to the
+ * state, and a cancellation adds one when it finds an exchange open.
+ */
+function queueCloses(host: DispatchHost): void {
+	const { closes } = host.state();
+	for (const close of closes.slice(host.heardCloses)) queueClose(host, close);
+	host.heardCloses = closes.length;
+}
+
+/**
  * An exchange ended at the range the close names. The host hears it
  * before any closing summary. A question that landed
  * ahead of the close opens the next exchange, and the room says so.
@@ -140,13 +154,13 @@ function queueClose(host: DispatchHost, close: Close): void {
 }
 
 /** A cancellation closes its current exchange and cuts every lease it superseded. */
-function queueCancellation(host: DispatchHost, close: Close | undefined, seq: Seq): void {
+function queueCancellation(host: DispatchHost, seq: Seq): void {
 	const state = host.state();
 	const revoked = [...state.leases.values()].filter(
 		(lease) => lease.phase === 'ended' && lease.reason === 'revoked' && lease.until === seq,
 	);
 	host.sentAt.clear();
-	if (close !== undefined) queueClose(host, close);
+	queueCloses(host);
 	publish(host, () => {
 		for (const lease of revoked) {
 			const seat = seatOf(lease.id);

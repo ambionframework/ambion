@@ -44,22 +44,24 @@ starts after disposal is refused.
 
 ## The layout and the host identity
 
-**A `BashBackend` names a `layout`: where it keeps the audit log and the
-room mirrors.** `WorkspaceLayout` holds two paths:
+**A `BashBackend` names a `layout`: where it keeps the audit log, the
+room mirrors, and the snapshots.** `WorkspaceLayout` holds three paths:
 
-| Field   | Names the default for                                    |
-| ------- | -------------------------------------------------------- |
-| `audit` | `openWorkspace`'s `audit` option, when it sets no `path` |
-| `rooms` | `mirror()`, the root every room's record writes under    |
+| Field       | Names the default for                                        |
+| ----------- | ------------------------------------------------------------ |
+| `audit`     | `openWorkspace`'s `audit` option, when it sets no `path`     |
+| `rooms`     | `mirror()`, the root every room's record writes under        |
+| `snapshots` | `snapshot()`, the folder that holds one copy for each digest |
 
 A caller's own `audit.path` on `openWorkspace` wins over the layout's
 default. `memoryBackend` and `directoryBackend` name the same layout:
-`/workspace/audit.jsonl` and `/rooms`. A new backend states its own layout;
-nothing in the neutral layer fixes a path of its own.
+`/workspace/audit.jsonl`, `/rooms`, and `/snapshots`. A new backend states
+its own layout; nothing in the neutral layer fixes a path of its own.
 
-**`openWorkspace` builds one host agent, `<name>-host`, and `mirror()`
-writes as it.** `Workspace.host` exposes this identity. A backend with real
-accounts gives it credentials, the same as any other agent it connects.
+**`openWorkspace` builds one host agent, `<name>-host`, and `mirror()` and
+`snapshot()` write as it.** `Workspace.host` exposes this identity. A
+backend with real accounts gives it credentials, the same as any other agent
+it connects.
 
 ```ts
 const drive = openWorkspace({ name: 'town', backend: { bash: memoryBackend() } });
@@ -73,7 +75,11 @@ binds three file tools first: `read`, `write`, and `edit`. The five process
 tools come next: `bash`, `ps`, `status`, `wait`, and `cancel`. `bash` starts
 each command as a background process and returns its handle
 ([Processes](processes.md)). The bundle also reminds each seat of its
-processes at the start of an activation. A workspace
+processes at the start of an activation. `snapshot` and `fetch` come next:
+one freezes files and gives the refs that cite them, and the other puts the
+bytes of a cited snapshot in the agent's files
+([Snapshot a file](#snapshot-a-file)).
+A workspace
 with a SQL backend adds `sql`
 ([Query the shared database](#query-the-shared-database)). A workspace with
 no SQL backend has no `sql` tool. The bash backend then adds its own tools,
@@ -288,15 +294,17 @@ writes themselves still run on the workspace's own queue; `mirror.stop()`
 is what waits for the last of them to land.
 
 **One line per message, in the room's own order.** Every line is the
-room's own `Message` type — `said`, `arrived`, `left`, `seated`, `unseated`,
-or `summary` — plus `room`, the room's name. Every kind also carries `at`,
-an ISO timestamp the runtime stamps when the message lands:
+room's own `Message` type plus `room`, the room's name. Every kind also
+carries `at`, an ISO timestamp the runtime stamps when the message lands.
+`refs` is absent when the message cites nothing:
 
-| `kind`                                  | Fields beyond `room`, `kind`, `seq`, `at`           |
-| --------------------------------------- | --------------------------------------------------- |
-| `said`                                  | `from`, `to` (absent for a broadcast), `text`       |
-| `arrived`, `left`, `seated`, `unseated` | `subject`, and `identity` on `arrived` and `seated` |
-| `summary`                               | `from`, `to`, `text`, `covers: { from, through }`   |
+| `kind`                                  | Fields beyond `room`, `kind`, `seq`, `at`                                                         |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `said`                                  | `from`, `to` (absent for a broadcast), `text`, `refs`, and `after` and `owner` on a scheduled say |
+| `returned`                              | `to`, `owner`, `message` (the seq of the scheduled say), `text`, `refs`                           |
+| `dismissed`                             | `from` (absent for the host), `message` (the seq of the scheduled say)                            |
+| `arrived`, `left`, `seated`, `unseated` | `subject`, and `identity` on `arrived` and `seated`                                               |
+| `summary`                               | `from`, `to`, `text`, `covers: { from, through }`, `refs`                                         |
 
 An agent reads its own room's file with `read` or `bash cat`, the same as
 any file a peer wrote.
@@ -343,6 +351,235 @@ room sharing one workspace shares its filesystem boundary (see
 [Backends and limits](#backends-and-limits)). An agent seated in one room
 reads another room's `messages.jsonl` the same way, with the same `seq`
 and `jq` filter it uses on its own.
+
+## Snapshot a file
+
+**A snapshot freezes the bytes of a file and gives a ref that names them.**
+A path names a file that can change after a message cites it. A snapshot
+ref names the bytes that the file held at the snapshot:
+
+```text
+ambion://workspace/<workspace name>/snapshot/<sha256 of the bytes>/<absolute path>
+```
+
+The kernel owns the form ([Definitions and tools](agent.md)). The workspace
+makes the snapshot, and its object backend keeps the bytes
+([The object backend](#the-object-backend)).
+
+**`workspace.snapshot(paths)` gives one ref for each path, in order.** The
+host calls it. `options.agent` names the agent that reads the files, and the
+default is `workspace.host`. A relative path resolves against the working
+directory of that agent. `workspace.readSnapshot(ref)` gives the bytes back.
+
+```ts
+const [report] = await drive.snapshot(['/home/analyst/report.md'], {
+  agent: { name: 'analyst' },
+});
+await visit.send({ text: 'The report for review.', refs: [report] });
+const bytes = await drive.readSnapshot(report);
+```
+
+**The `snapshot` tool gives an agent the same refs.** It reads the files as
+the calling agent, and its result lists one ref for each path. The guidance
+tells every agent to cite a file with a snapshot ref in the `refs` of a
+say. The audit log records each call.
+
+| Step | Owner  | What happens                                                                                  |
+| ---- | ------ | --------------------------------------------------------------------------------------------- |
+| 1    | bash   | The agent that reads finds every file. A path that is not one readable file refuses the call. |
+| 2    | bash   | For each file in turn, the agent that reads reads the bytes.                                  |
+| 3    | —      | The workspace hashes the bytes with SHA-256.                                                  |
+| 4    | object | The host agent, `<name>-host`, puts the bytes under their digest. Then the next file starts.  |
+| 5    | —      | The workspace gives the refs.                                                                 |
+
+**The `fetch` tool puts the bytes of a cited snapshot in an agent's files.**
+It takes `ref` and an optional `path`. The default path is
+`~/snapshots/<digest>/<name>`, where `<name>` is the last part of the path
+in the ref. The host agent gets the object on the object owner, and the
+workspace checks it. The calling agent then writes the file on the bash
+owner and reads it with `read` or `bash`. No agent holds a credential of
+the object store.
+
+| Outcome | The result                                                                                     |
+| ------- | ---------------------------------------------------------------------------------------------- |
+| Written | `Wrote the <n> bytes of <ref> to <path>.`, and `details` with `ref`, `path`, and `bytes`       |
+| Refused | A tool error: not a snapshot ref, a ref of another workspace, no object, or bytes that changed |
+
+**The same bytes give the same ref.** An object has its digest as its key,
+so a second snapshot of the same bytes at the same path gives the same ref
+and stores nothing new. The same bytes at two paths give two refs and one
+object.
+
+**A later change to the file does not change a ref.** The object holds the
+bytes of the snapshot. A new snapshot of the changed file gives a new ref.
+The object outlasts a restart of the host when its store does. Nothing
+removes an object today.
+
+**`readSnapshot` and `fetch` check the bytes against the digest.** Each
+refuses a ref of another workspace, a missing object, and bytes whose
+SHA-256 differs from the digest. The check holds on every object backend,
+so a backend promises storage alone.
+
+**The limits.** One call takes 1 to 16 paths, the count of refs one message
+carries. One file holds at most what one object holds: 5 GiB, the limit of
+one S3 PutObject ([The object backend](#the-object-backend)).
+`SNAPSHOT_LIMITS` holds both. A ref longer than 2048 characters is refused.
+The call finds every file first. A path that is not a file stores nothing.
+A file that is too large, has too long a ref, or has a second path in the
+call also stores nothing. The call then reads, hashes, and puts one file at
+a time, so it holds one file in memory. A call that fails while it puts can
+leave an object with no ref. The object is harmless, and a later snapshot
+of the same bytes uses it.
+
+**A bash backend can read less than an object holds.** The limits above are
+the object store's. The just-bash directory backend reads at most 10 MiB of
+one file. The memory backend holds 128 MiB in all. On those backends, a
+larger file fails with the backend's own error. The workstation reads a
+file of any size.
+
+## The object backend
+
+**`backend.objects` names where the bytes of each snapshot live.** It is an
+`ObjectBackend`. When it is absent, `openWorkspace` opens a file store at
+`layout.snapshots` on the bash backend. So every workspace has `snapshot`
+and `fetch`, and the bytes have one path.
+
+```ts
+interface ObjectEnv extends ResourceEnv {
+  /** Store `bytes` under `digest`. A put of a digest the store holds writes nothing. */
+  put(digest: ObjectDigest, bytes: Uint8Array, signal?: AbortSignal): Promise<void>;
+  /** The bytes under `digest`, or `undefined` when the store has none. */
+  get(digest: ObjectDigest, signal?: AbortSignal): Promise<Uint8Array | undefined>;
+}
+
+interface ObjectBackend extends ResourceBackend<ObjectEnv> {
+  /** The store that errors name, with no credential: a folder or a bucket URL. */
+  readonly store: string;
+}
+```
+
+**The workspace gives the key.** It hashes the bytes and passes the digest,
+64 lowercase hex digits of SHA-256. A backend refuses any other key with a
+`RangeError`, forms its own key from the digest, and refuses an object past
+5 GiB. No metadata travels with an object: the path and the provenance live
+in the ref and in the message that cites it.
+
+**The limits are the limits of S3.** R2 and MinIO hold the same, so a store
+of any kind takes what S3 takes. One object holds at most 5 GiB, the limit
+of one PutObject. The ports pass whole buffers, and no backend makes a
+multipart upload. One key holds at most 1024 bytes. The digest takes 64,
+so an S3 prefix holds at most 960. `SNAPSHOT_LIMITS.bytes` is
+the object limit. No bash backend sets a limit of the store.
+
+| Backend                    | Entry                           | Where the bytes live                                              |
+| -------------------------- | ------------------------------- | ----------------------------------------------------------------- |
+| The default file store     | none: `openWorkspace` opens it  | One file per digest at `layout.snapshots`, on the bash backend    |
+| `s3ObjectBackend(options)` | `@ambionframework/workspace/s3` | One object per digest at `<bucket>/<prefix><digest>` on an S3 API |
+
+**The default file store writes through the bash owner as the host
+agent.** A put writes a temporary file beside the target, then renames it,
+and it writes nothing when the file exists. On `memoryBackend` the bytes
+live in process, on `directoryBackend` in the directory, and on a
+workstation in a folder that only the host account writes
+([Workstation](workstation.md#the-layout-on-a-server)). just-bash has no
+wall between accounts, so an agent can change a file of the store; the
+digest check then refuses it.
+
+**`s3ObjectBackend` stores the bytes in a bucket of an S3 API.** It serves
+Amazon S3, Cloudflare R2, and MinIO. `aws4fetch` signs each request with
+SigV4 over the global `fetch`, and the entry loads no other library.
+
+```ts
+import { s3ObjectBackend } from '@ambionframework/workspace/s3';
+
+const lab = openWorkspace({
+  name: 'lab',
+  backend: {
+    bash: directoryBackend('./data/lab'),
+    objects: s3ObjectBackend({
+      endpoint: 'http://127.0.0.1:9000',
+      region: 'us-east-1',
+      bucket: 'ambion-snapshots',
+      prefix: 'lab/',
+      accessKeyId: process.env.S3_KEY ?? '',
+      secretAccessKey: process.env.S3_SECRET ?? '',
+    }),
+  },
+});
+```
+
+| Option                                           | Meaning                                                                     |
+| ------------------------------------------------ | --------------------------------------------------------------------------- |
+| `endpoint`, `region`, `bucket`                   | The S3 API. `region` is `us-east-1` for MinIO and `auto` for R2             |
+| `prefix`                                         | A key prefix, so one bucket serves more than one workspace: one prefix each |
+| `accessKeyId`, `secretAccessKey`, `sessionToken` | The credential of the host. No agent holds it                               |
+| `pathStyle`                                      | The bucket in the path. The default is `true`, which MinIO needs            |
+| `retries`                                        | Runs again of a request that failed with a 5xx or a 429. The default is 2   |
+
+**A put never rewrites an object.** It reads the head first and writes
+nothing when the object exists. Otherwise it sends the bytes with
+`If-None-Match: *`. A 412 means that a concurrent put stored the same bytes
+first. A 409 means that a concurrent put is in progress, so the put reads
+the head again and sends again, at most three times. The put also sends
+`x-amz-checksum-sha256`, so the store refuses bytes that changed on the
+way. A `get` refuses an object past 5 GiB before its bytes enter memory.
+`s3ObjectBackend` refuses a prefix past 960 bytes, and a prefix with a
+character outside the ones S3 calls safe: `A-Z a-z 0-9 ! - _ . * ' ( )`
+and `/`. A response that is not
+a success rejects with the status and the S3 error code.
+
+**Grant the host credential `s3:GetObject`, `s3:PutObject`, and
+`s3:ListBucket`.** Without `s3:ListBucket`, S3 gives 403 for a missing
+object. A put then sends the bytes, and the conditional put decides. A
+`get` of a missing object then rejects with the 403.
+
+**Give each workspace its own prefix or bucket.** Two workspaces that share
+a prefix share their objects. A ref names its workspace, and `readSnapshot`
+refuses a ref of another workspace. But the host of either workspace can
+read every object under the prefix.
+
+**The object backend has its own resource owner.** `Workspace.objects`
+exposes it for host code. An object operation may wait on the bash owner,
+since the default store writes through it. No bash operation waits on the
+object owner: `snapshot` reads on the bash owner and then puts on the
+object owner, and `fetch` gets on the object owner and then writes on the
+bash owner. `dispose` drains the SQL owner, the bash owner, the object
+owner, and the git owner, in that order, so a use that starts after
+`dispose` is refused at once.
+
+**A new object backend passes `objectConformance`** from
+`@ambionframework/workspace/conformance`. A harness opens a store and gives
+the backend. A harness that can open the same store again gives `reopen`.
+
+- `put` then `get` gives the same bytes: 1 byte, bytes with zeros, 0 bytes,
+  and 1 MiB.
+- `get` of an unknown digest gives `undefined`.
+- A second `put` of one digest succeeds and keeps the bytes, and two puts
+  of one digest at once both succeed.
+- Every agent reaches one store.
+- `put` and `get` refuse a key that is not a SHA-256 digest.
+- A `put` with an aborted signal rejects and stores nothing.
+- The bytes outlast `dispose`, when the store can open again.
+
+The workspace package runs the cases on the default file store over
+`memoryBackend` and `directoryBackend`. The S3 tier runs them on MinIO.
+
+**The S3 tier runs against MinIO in Docker.** `test/s3/setup.sh` starts the
+server and writes the file that `AMBION_S3` names; without that variable,
+every test of the tier skips. `pnpm --filter @ambionframework/workspace run
+test:s3` runs it, and the `object-store` CI job runs it on each push. The
+official `minio/minio` image no longer exists on Docker Hub. The script
+runs Chainguard's build, `cgr.dev/chainguard/minio`, pinned by digest,
+since only its `latest` tag is free. The container keeps `/data` on a tmpfs
+that the image's user owns. The tier proves what only a real server can:
+
+- The server accepts the SigV4 signature.
+- A bad credential fails with `SignatureDoesNotMatch`.
+- The conditional put keeps the first bytes.
+- A workspace over S3 keeps no copy of a snapshot on its bash filesystem.
+
+A local HTTP server in the unit tests gives the two answers that MinIO does
+not: a 403 head and a 409 put.
 
 ## Query the shared database
 
@@ -574,7 +811,7 @@ The memory and directory backends are the Pi binding. They export from the
 package `@ambionframework/just-bash`, which depends on the workspace. The root
 entry names `WorkspaceEnv`, the Pi `ExecutionEnv` that has a zero-argument
 `cleanup()`. `BashBackend` extends `ResourceBackend<WorkspaceEnv>` and adds
-optional Pi harness tools beyond the eight tools every workspace has, optional
+optional Pi harness tools beyond the ten tools every workspace has, optional
 guidance about the backend's own shell, and a required `layout` (see [The
 layout and the host identity](#the-layout-and-the-host-identity)).
 `openWorkspace` creates the resource owner, builds the three file tools, and
@@ -587,7 +824,7 @@ Direct operations and tool calls share one queue and one lifecycle.
 
 **A new backend implements `connect()` and an `ExecutionEnv`, over the
 shared helpers below, and names its own `layout`.** It adds only the tools
-and the guidance beyond the eight tools every workspace has, passes
+and the guidance beyond the ten tools every workspace has, passes
 `@ambionframework/workspace/conformance`, and loads no just-bash.
 
 **The root entry also exports the environment helpers a new `ExecutionEnv`
@@ -693,7 +930,7 @@ second operation queue.
 **A new backend follows one recipe.** It implements `connect()` and an
 `ExecutionEnv` over the shared helpers (see [The resource
 contract](#the-resource-contract)), names its own `layout`, and adds only
-the tools and the shell guidance beyond the eight tools every workspace
+the tools and the shell guidance beyond the ten tools every workspace
 already has. It passes `@ambionframework/workspace/conformance` and loads
 no just-bash.
 

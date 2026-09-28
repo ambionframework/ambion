@@ -21,9 +21,10 @@
  */
 
 import type { ConformanceCase } from '@ambionframework/ambion/conformance';
-import { BACKGROUND_CONTEXT, type ShellOutputUpdate } from '@earendil-works/pi-agent-core';
 import type { BashBackend } from './backend.ts';
-import type { GitBackend, GitEnv } from './git-backend.ts';
+import type { GitBackend } from './git-backend.ts';
+import { resolvesBranchTagAndHash } from './git-conformance-revisions.ts';
+import { ANALYST, check, ctx, forkAs, git, REVIEWER, sh } from './git-conformance-support.ts';
 import type { WorkspaceAgent } from './resource.ts';
 import { openWorkspace, type Workspace } from './workspace.ts';
 
@@ -86,11 +87,6 @@ export interface GitConformanceBackend<B extends GitBackend = GitBackend> {
 	probeCredential(pair: GitConformancePair<B>, agent: WorkspaceAgent): Promise<GitConformanceProbe>;
 }
 
-const ctx = BACKGROUND_CONTEXT;
-
-const ANALYST: WorkspaceAgent = { name: 'analyst' };
-const REVIEWER: WorkspaceAgent = { name: 'reviewer' };
-
 const TEMPLATES: GitConformanceOptions['templates'] = {
 	'weekly-report': {
 		description: 'A weekly status report.',
@@ -98,10 +94,6 @@ const TEMPLATES: GitConformanceOptions['templates'] = {
 	},
 	blank: { files: { 'README.md': 'blank\n' } },
 };
-
-function check(condition: boolean, what: string): void {
-	if (!condition) throw new Error(what);
-}
 
 /** One case: the pair it opened, and the harness that answers the credential facts. */
 type Body = <B extends GitBackend>(
@@ -127,71 +119,6 @@ async function withWorkspace<B extends GitBackend>(
 		await workspace.dispose();
 		await store.dispose();
 	}
-}
-
-/** Run `operation` on the git owner as `agent`. */
-function git<T>(
-	workspace: Workspace,
-	agent: WorkspaceAgent,
-	operation: (env: GitEnv) => Promise<T>,
-): Promise<T> {
-	const owner = workspace.git;
-	if (owner === undefined) throw new Error('The workspace has no git owner.');
-	return owner.use(agent, operation);
-}
-
-/**
- * Run one shell command as `agent`, and give its exit status and its output.
- * The author variables let a real `git` commit. The just-bash `git` locks
- * the author to the agent, and ignores them.
- */
-async function sh(
-	workspace: Workspace,
-	agent: WorkspaceAgent,
-	command: string,
-): Promise<{ code: number; output: string }> {
-	let output = '';
-	const onUpdate = (update: ShellOutputUpdate): void => {
-		if (update.kind === 'replace') output = update.output.text;
-	};
-	const ran = await workspace.use(agent, (env) =>
-		env.exec(
-			command,
-			{
-				timeout: 120,
-				env: authorOf(agent),
-				capture: { limits: { maxBytes: 100_000, maxLines: 1000 } },
-				onUpdate,
-			},
-			ctx,
-		),
-	);
-	if (!ran.ok) throw ran.error;
-	return { code: ran.value.exitCode, output };
-}
-
-/** The author and committer variables of `agent`. */
-function authorOf(agent: WorkspaceAgent): Record<string, string> {
-	const email = `${agent.name}@ambion.invalid`;
-	return {
-		GIT_AUTHOR_NAME: agent.name,
-		GIT_AUTHOR_EMAIL: email,
-		GIT_COMMITTER_NAME: agent.name,
-		GIT_COMMITTER_EMAIL: email,
-	};
-}
-
-/** Fork `source` to `<agent>/<name>`, and give the fork's clone URL. */
-async function forkAs(
-	workspace: Workspace,
-	agent: WorkspaceAgent,
-	source: string,
-	name: string,
-): Promise<string> {
-	const outcome = await git(workspace, agent, (env) => env.fork(source, name));
-	if (!outcome.ok)
-		throw new Error(`the fork of ${source} to ${name} was refused: ${outcome.reason}`);
-	return outcome.repository.url;
 }
 
 // -- the cases ----------------------------------------------------------------
@@ -506,6 +433,10 @@ const CASES: readonly [string, Body][] = [
 	['a fork of a fork names its direct source', forkOfForkNamesItsSource],
 	['an agent with a reserved name is refused', reservedNamesAreRefused],
 	['the owner pushes a branch, and a peer reads it', ownerPushesPeerReads],
+	[
+		'resolve gives the commit of a branch, a tag, or a hash, and show gives what the commit holds',
+		resolvesBranchTagAndHash,
+	],
 	[
 		"a push to a template or to another agent's fork is refused",
 		pushesOutsideTheNamespaceAreRefused,

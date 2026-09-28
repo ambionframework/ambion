@@ -6,7 +6,17 @@
  * `serve` and the key lines have files of their own.
  */
 
-import { cp, mkdir, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import {
+	cp,
+	mkdir,
+	readdir,
+	readFile,
+	rm,
+	stat,
+	symlink,
+	utimes,
+	writeFile,
+} from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { type WorkstationGitOptions, workstationGitBackend } from '../src/index.ts';
@@ -185,6 +195,23 @@ describe.skipIf(!hasGitTools)('workstationGitBackend', () => {
 			await gitBackend(options).connect(REVIEWER)
 		).fork('analyst/report', 'review');
 		expect(review.ok && review.repository.source).toBe('analyst/report');
+	});
+
+	it('shows a type change as modified, and the message as git stores it', async () => {
+		const { home, options } = await gitServer();
+		const env = await gitBackend(options).connect(ANALYST);
+		await env.fork('templates/weekly-report', 'report');
+		const clone = join(home, 'clone');
+		git(home, 'clone', '--quiet', join(home, 'repos', 'analyst', 'report.git'), clone);
+		const [file = ''] = git(clone, 'ls-files').split('\n');
+		await rm(join(clone, file));
+		await symlink('elsewhere', join(clone, file));
+		git(clone, 'add', file);
+		git(clone, '-c', 'user.name=a', '-c', 'user.email=a@b', 'commit', '-q', '-m', 'Link\n\nWhy.');
+		git(clone, 'push', '--quiet', 'origin', 'main');
+		const shown = await env.show('analyst/report', git(clone, 'rev-parse', 'HEAD').trim());
+		expect(shown?.changes).toEqual([{ path: file, change: 'modified' }]);
+		expect(shown?.message).toBe('Link\n\nWhy.\n');
 	});
 
 	it('keeps template-sources hidden from list, get, and fork', async () => {

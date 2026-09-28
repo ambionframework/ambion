@@ -10,7 +10,8 @@ import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from
 import type { BashBackend, BashServices, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
 import { createFileTools, defaultToolGuidance } from './default-tools.ts';
 import { workspaceFiles } from './files.ts';
-import type { GitBackend, GitEnv } from './git-backend.ts';
+import type { GitBackend, GitCommit, GitEnv, GitRevision } from './git-backend.ts';
+import { commitRefOf, readCommitOf } from './git-refs.ts';
 import { createGitTools, GIT_TOOL_NAMES, gitToolGuidance } from './git-tools.ts';
 import {
 	mirrorRoom,
@@ -18,6 +19,8 @@ import {
 	type RoomMirrorOptions,
 	roomMirrorGuidance,
 } from './mirror.ts';
+import type { ObjectBackend, ObjectEnv } from './object-backend.ts';
+import { fileObjectBackend } from './object-files.ts';
 import type { ProcessStatus } from './process-files.ts';
 import type { ProcessEvent, ProcessQuery, ProcessTable } from './process-table.ts';
 import { createProcessTools, processToolGuidance } from './process-tools.ts';
@@ -29,6 +32,15 @@ import {
 	type WorkspaceResource,
 } from './resource.ts';
 import { type SkillSet, skillGuidance, skillSetOf, syncSkills } from './skills.ts';
+import {
+	createFetchTool,
+	createSnapshotTool,
+	readSnapshot,
+	type SnapshotOptions,
+	type SnapshotStore,
+	snapshotGuidance,
+	takeSnapshot,
+} from './snapshots.ts';
 import type { SqlBackend, SqlEnv } from './sql-backend.ts';
 import { createSqlTool, sqlToolGuidance } from './sql-tool.ts';
 import { bindTools } from './tools.ts';
@@ -88,6 +100,12 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	 */
 	readonly git?: WorkspaceResource<GitEnv>;
 	/**
+	 * The owner of the object backend, where the bytes of each snapshot live.
+	 * It is `backend.objects`, or a file store at `layout.snapshots` when that
+	 * is absent. An object operation may wait on the bash owner.
+	 */
+	readonly objects: WorkspaceResource<ObjectEnv>;
+	/**
 	 * The processes of the agents of this run. Read the output of one through
 	 * `use`, as its owner agent, at `ProcessStatus.output`.
 	 */
@@ -98,6 +116,41 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	 * started.
 	 */
 	mirror(room: Room, options?: RoomMirrorOptions): Promise<RoomMirror>;
+	/**
+	 * Freeze the files at `paths` and give one snapshot ref for each, in
+	 * order: `ambion://workspace/<name>/snapshot/<digest>/<path>`. The
+	 * `agent` of `options` reads the files, and the default is `host`. The
+	 * host agent puts the bytes of each file on the object owner, under their
+	 * digest.
+	 * The same bytes give the same ref.
+	 */
+	snapshot(paths: readonly string[], options?: SnapshotOptions): Promise<readonly string[]>;
+	/**
+	 * The bytes a snapshot ref of this workspace names. The call refuses a
+	 * copy whose bytes do not match the digest in the ref.
+	 */
+	readSnapshot(ref: string, options?: { readonly signal?: AbortSignal }): Promise<Uint8Array>;
+	/**
+	 * The ref of the commit that `at` names in `repository`, with its full
+	 * hash: `ambion://workspace/<name>/repo/<repository>[/branch/<b>|/tag/<t>]/commit/<hash>`.
+	 * A branch or a tag gives the commit it names now. Throws when the
+	 * workspace has no git backend, and when the repository or the name does
+	 * not exist.
+	 */
+	commitRef(
+		repository: string,
+		at: GitRevision,
+		options?: { readonly agent?: WorkspaceAgent; readonly signal?: AbortSignal },
+	): Promise<string>;
+	/**
+	 * The commit that a commit ref of this workspace names: its message, its
+	 * author, its parents, and the paths it changed. Throws when the
+	 * workspace has no git backend, and when the server holds no such commit.
+	 */
+	readCommit(
+		ref: string,
+		options?: { readonly agent?: WorkspaceAgent; readonly signal?: AbortSignal },
+	): Promise<GitCommit>;
 }
 
 /** The notes that are set, joined as paragraphs in the order given. */
@@ -140,36 +193,43 @@ function gitPart(
 ) {
 	if (git === undefined) return { names: [], tools: [], notes: [] };
 	const { server } = git.backend;
+	const workspace = shell.name;
 	return {
 		names: [...GIT_TOOL_NAMES],
 		tools: createGitTools({ git: git.owner.use, shell: shell.use, server, audit }),
-		notes: [gitToolGuidance(server)],
+		notes: [gitToolGuidance(server, workspace)],
 	};
 }
 
 /**
- * Bind the three file tools, the five process tools, `sql` when the
- * workspace has a SQL backend, `repos` and `fork` when it has a git
- * backend, and the bash backend's own tools. The guidance names the tools,
- * then the process note, the SQL notes, the git note, the bash backend's
- * note, the audit note when one is set, and the rooms note, in that order.
+ * Bind the three file tools, the five process tools, `snapshot` and `fetch`, `sql`
+ * when the workspace has a SQL backend, `repos` and `fork` when it has a
+ * git backend, and the bash backend's own tools. The guidance names the
+ * tools, then the process note, the snapshot note, the SQL notes, the git
+ * note, the bash backend's note, the audit note when one is set, and the
+ * rooms note, in that order.
  * The bundle's reminder names each seat's processes.
  */
 function workspaceTools(
 	bash: BashBackend,
 	shell: WorkspaceResource<WorkspaceEnv>,
-	backends: { sql?: SqlBinding; git?: GitBinding; processes: ProcessTable },
+	backends: { sql?: SqlBinding; git?: GitBinding; processes: ProcessTable; store: SnapshotStore },
 	audit: AuditLog | undefined,
 ): ToolBundle {
 	const { layout, tools: own = [], guidance } = bash;
 	const files = bindTools(createFileTools(), shell.use, undefined, audit).tools;
 	const processes = createProcessTools({ shell: shell.use, processes: backends.processes, audit });
+	const snapshots = [
+		createSnapshotTool(backends.store, audit),
+		createFetchTool(backends.store, audit),
+	];
 	const extra = bindTools(own, shell.use, undefined, audit).tools;
 	const sql = sqlPart(backends.sql, shell, audit);
 	const git = gitPart(backends.git, shell, audit);
 	const notes = [
 		defaultToolGuidance([...sql.names, ...git.names]),
 		processToolGuidance(),
+		snapshotGuidance(backends.store.workspace),
 		...sql.notes,
 		...git.notes,
 		guidance,
@@ -177,7 +237,14 @@ function workspaceTools(
 		roomMirrorGuidance(layout.rooms),
 	];
 	return Object.freeze({
-		tools: Object.freeze([...files, ...processes, ...sql.tools, ...git.tools, ...extra]),
+		tools: Object.freeze([
+			...files,
+			...processes,
+			...snapshots,
+			...sql.tools,
+			...git.tools,
+			...extra,
+		]),
 		guidance: joinNotes(notes),
 		remind: (seat: ReminderSeat, signal: AbortSignal) => backends.processes.remind(seat, signal),
 	});
@@ -279,6 +346,15 @@ function withProcesses(
 	};
 }
 
+/** The file store at `root` on the bash owner, written as the host agent. */
+function defaultObjects(
+	shell: WorkspaceResource<WorkspaceEnv>,
+	host: WorkspaceAgent,
+	root: string,
+): ObjectBackend {
+	return fileObjectBackend({ shell: shell.use, host, root });
+}
+
 /** Dispose each owner in turn, and report the first failure once every one has run. */
 async function disposeInOrder(owners: readonly { dispose(): Promise<void> }[]): Promise<void> {
 	let failure: { reason: unknown } | undefined;
@@ -327,7 +403,9 @@ function openSqlOwner(
  * to record every bound tool call at a path of your own; the default is
  * `layout.audit`. Tool guidance then tells every agent the log exists and
  * where to read it, and always names the room mirror convention at
- * `layout.rooms`.
+ * `layout.rooms`. `backend.objects` holds the bytes of each snapshot; absent,
+ * a file store at `layout.snapshots` holds them, written through the bash
+ * owner as the host agent.
  */
 export function openWorkspace(options: {
 	name: string;
@@ -363,7 +441,20 @@ export function openWorkspace(options: {
 		options.audit === undefined
 			? undefined
 			: openAuditLog({ ...options.audit, path: options.audit.path ?? layout.audit });
-	const toolBundle = workspaceTools(bash, resource, { sql, git, processes: table }, audit);
+	// The workspace's own name for a mirror and a snapshot: one agent it
+	// owns, so a caller names only the room or the paths.
+	const host: WorkspaceAgent = { name: `${options.name}-host` };
+	const objects = openResource<ObjectEnv>({
+		name: options.name,
+		backend: options.backend.objects ?? defaultObjects(resource, host, layout.snapshots),
+	});
+	const store: SnapshotStore = {
+		workspace: options.name,
+		host,
+		shell: resource.use,
+		objects: objects.use,
+	};
+	const toolBundle = workspaceTools(bash, resource, { sql, git, processes: table, store }, audit);
 	const processes: WorkspaceProcesses = Object.freeze({
 		list: (query?: ProcessQuery) => table.hostList(query),
 		subscribe: (listener: (event: ProcessEvent) => void) => table.subscribe(listener),
@@ -373,15 +464,15 @@ export function openWorkspace(options: {
 		toolsOptions?.skills === undefined
 			? toolBundle
 			: withSkills(toolBundle, skillSetOf(toolsOptions.skills), resource.use);
-	// The workspace's own name for a mirror: one agent it owns, so a caller
-	// names only the room.
-	const host: WorkspaceAgent = { name: `${options.name}-host` };
 	const mirror = (room: Room, mirrorOptions?: RoomMirrorOptions): Promise<RoomMirror> =>
 		mirrorRoom(room, resource, host, layout.rooms, mirrorOptions);
 	// The SQL owner goes first: a SQL operation may still write through the
 	// bash owner. The git owner goes last: a push in the active bash
 	// operation reaches the git backend, so the bash owner drains first.
-	const owners = [sql?.owner, resource, git?.owner].flatMap((owner) =>
+	// The object owner goes after the bash owner, so a use that starts after
+	// `dispose` is refused at once. An object operation that then asks the
+	// bash owner for a write is refused, the same as any queued operation.
+	const owners = [sql?.owner, resource, objects, git?.owner].flatMap((owner) =>
 		owner === undefined ? [] : [owner],
 	);
 	const dispose = (): Promise<void> => disposeInOrder(owners);
@@ -392,6 +483,38 @@ export function openWorkspace(options: {
 		host,
 		processes,
 		mirror,
+		snapshot: (paths: readonly string[], snapshotOptions?: SnapshotOptions) =>
+			takeSnapshot(store, paths, snapshotOptions),
+		readSnapshot: (ref: string, readOptions?: { readonly signal?: AbortSignal }) =>
+			readSnapshot(store, ref, readOptions),
+		objects,
+		commitRef: async (
+			repository: string,
+			at: GitRevision,
+			refOptions: { agent?: WorkspaceAgent; signal?: AbortSignal } = {},
+		) => {
+			if (git === undefined) throw new Error(`Workspace '${options.name}' has no git backend.`);
+			return commitRefOf(
+				git.owner.use,
+				options.name,
+				refOptions.agent ?? host,
+				{ repository, at },
+				refOptions.signal,
+			);
+		},
+		readCommit: async (
+			ref: string,
+			readOptions: { agent?: WorkspaceAgent; signal?: AbortSignal } = {},
+		) => {
+			if (git === undefined) throw new Error(`Workspace '${options.name}' has no git backend.`);
+			return readCommitOf(
+				git.owner.use,
+				options.name,
+				readOptions.agent ?? host,
+				ref,
+				readOptions.signal,
+			);
+		},
 		...(sql === undefined ? {} : { sql: sql.owner }),
 		...(git === undefined ? {} : { git: git.owner }),
 	});

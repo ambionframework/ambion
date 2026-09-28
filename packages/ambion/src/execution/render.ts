@@ -53,8 +53,15 @@ function plural(n: number, unit: string): string {
  * A presence line names the author only where it differs from the subject. A
  * person arrives by themselves, and reading "priya arrived by priya" tells a
  * reader nothing.
+ *
+ * Every line starts with the seq of its message, so a seat can cite any
+ * line it reads with the message URI.
  */
 export function renderLine(message: Message): string {
+	return `#${message.seq} ${lineBody(message)}`;
+}
+
+function lineBody(message: Message): string {
 	if (message.kind === 'dismissed') {
 		return `· ${message.from ?? 'the host'} dismissed say ${message.message}`;
 	}
@@ -347,8 +354,9 @@ export function renderDelta(view: ActivationView, since: Seq): string | undefine
 const MECHANISM = [
 	`You are an agent seated in a room: a shared room with a record. Every participant sees`,
 	`what is said; nobody sees your tool use. A room has a URI, and a message has the URI`,
-	`<room URI>/message/<seq>. The context gives the room's URI, and the ask line at its end`,
-	`gives the message that opened the current exchange.`,
+	`<room URI>/message/<seq>. The context gives the room's URI. Each line of the record`,
+	`starts with the seq of its message, such as #12. The ask line at the end gives the`,
+	`message that opened the current exchange.`,
 ].join('\n');
 
 /** The seat's identity, its policy for this purpose, and its own instructions. */
@@ -531,7 +539,8 @@ const SUMMARY_DUTIES = [
 	``,
 	`Use the fixed recipient and range in this activation. Do not answer another person, extend the`,
 	`exchange, or mention private context. Write one short message with no preamble or sign-off.`,
-	`Put the URI of the exchange, and of any result that it made, in the refs of the say.`,
+	`Put the URI of the message that opened the exchange, and of any result that the exchange`,
+	`made, in the refs of the say.`,
 	`Ending your turn without calling say leaves the range whole for whoever reads it.`,
 ];
 

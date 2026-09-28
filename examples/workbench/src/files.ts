@@ -33,16 +33,22 @@ const IMAGE_TYPES: Record<string, string> = {
 export const isImagePath = (path: string): boolean =>
 	Object.keys(IMAGE_TYPES).some((extension) => path.toLowerCase().endsWith(extension));
 
-function imageMimeType(path: string): string {
+export function imageMimeType(path: string): string {
 	const extension = Object.keys(IMAGE_TYPES).find((one) => path.toLowerCase().endsWith(one));
 	return (extension && IMAGE_TYPES[extension]) ?? 'application/octet-stream';
 }
 
-/** One file. `kind` is `table` for a table of the lab database, and its path is the lab URI. */
+/**
+ * One entry of the files panel. `kind` is `table` for a table of the lab
+ * database, whose path is the lab URI, and `snapshot` or `commit` for a ref
+ * that the panel opens, whose path is the ref. `label` is the short name the
+ * list shows in place of a long path.
+ */
 export interface FileEntry {
 	path: string;
 	size: number;
-	kind?: 'table';
+	kind?: 'table' | 'snapshot' | 'commit';
+	label?: string;
 }
 
 /** One picture, as the panel renders it: its bytes and the type they decode as. */
@@ -98,13 +104,19 @@ async function readLocal<T>(operation: () => Promise<T>, localPath: string): Pro
 	}
 }
 
+/** One attached file: where it landed, its size, and the snapshot ref that cites it. */
+export interface Attachment extends FileEntry {
+	ref: string;
+}
+
 /**
- * Copy a local file into the workspace, so a `file:///` ref can cite it. The
- * name keeps the local file's own name, prefixed with the time it landed, so
- * two attachments of the same name never collide. Checks the size before
- * reading the file, so an oversized file is never buffered into memory.
+ * Copy a local file into the workspace, and snapshot it, so a message cites
+ * the bytes the person attached. The name keeps the local file's own name,
+ * prefixed with the time it landed, so two attachments of the same name
+ * never collide. Checks the size before reading the file, so an oversized
+ * file is never buffered into memory.
  */
-export async function attachFile(workspace: Workspace, localPath: string): Promise<FileEntry> {
+export async function attachFile(workspace: Workspace, localPath: string): Promise<Attachment> {
 	const resolved = localPath.startsWith('~/') ? join(homedir(), localPath.slice(2)) : localPath;
 	const size = (await readLocal(() => stat(resolved), localPath)).size;
 	if (size > MAX_BYTES.image) fail(`/attach takes files up to ${MAX_BYTES.image / 1_048_576} MiB.`);
@@ -115,7 +127,9 @@ export async function attachFile(workspace: Workspace, localPath: string): Promi
 		const written = await env.writeFile(path, bytes, BACKGROUND_CONTEXT);
 		if (!written.ok) fail(written.error.message);
 	});
-	return { path, size: bytes.length };
+	const [ref] = await workspace.snapshot([path], { agent: browser });
+	if (ref === undefined) return fail(`No snapshot of ${path}.`);
+	return { path, size: bytes.length, ref };
 }
 
 export async function readFile(workspace: Workspace, path: string): Promise<FileContent> {
@@ -137,7 +151,8 @@ export async function readFile(workspace: Workspace, path: string): Promise<File
 	});
 }
 
-const MAX_BYTES: Record<'text' | 'database' | 'image', number> = {
+/** The most bytes the panel previews, by kind. */
+export const MAX_BYTES: Record<'text' | 'database' | 'image', number> = {
 	text: 131_072,
 	database: 8_388_608,
 	image: 8_388_608,

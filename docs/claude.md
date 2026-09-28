@@ -172,8 +172,8 @@ period of 5 seconds.
 **`readThrough` advances on the SDK echo.** The SDK sends each user message
 back with `isReplay` set. The executor asks the SDK for that echo with the
 `replay-user-messages` argument. `readThrough` moves to the position of the
-message when its echo arrives, and on nothing earlier. An accepted `say`
-and a missed `say` also move the position; see
+message when its echo arrives, and on nothing earlier. An accepted `say`,
+a missed `say`, and an accepted `schedule` also move the position; see
 [Executors](executors.md#how-an-activation-runs).
 
 **A steered line moves `readThrough` only when the record before it is
@@ -194,12 +194,12 @@ not bound what a resumed session holds.
 
 ## How room tools reach the harness
 
-[Executors](executors.md#the-room-tools) states the three tools, the commit
+[Executors](executors.md#the-room-tools) states the room tools, the commit
 key, and the room answers.
 
 **The executor builds an in-process SDK MCP server named `ambion` for each
-activation.** It holds `say`, `seat`, `unseat`, and the tools of the
-definition. The model sees them as `mcp__ambion__say` and so on. Steps and
+activation.** It holds `say`, `schedule`, `seat`, `unseat`, `dismiss`, and
+the tools of the definition. The model sees them as `mcp__ambion__say` and so on. Steps and
 events show the plain name.
 
 - The executable calls them over the SDK transport. The tool code never

@@ -44,12 +44,16 @@ export interface Close {
 	at: string;
 	/** The configured seated agent that writes a summary, when one is owed. */
 	summary?: string;
+	/**
+	 * A cancellation closed the exchange. A close entry never carries it: the
+	 * room derives this close from the `cancel` entry. See `room/fold.ts`.
+	 */
+	cancelled?: true;
 }
 
-/** A room-wide cancellation marker, with an optional close for open work. */
+/** A room-wide cancellation marker. It closes the open exchange, when there is one. */
 export interface Cancellation {
 	at: string;
-	close?: Omit<Close, 'summary'>;
 }
 
 /** One seat in a composition: its name, how the room knows it, and what wakes it. */

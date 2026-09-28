@@ -157,24 +157,7 @@ export function decide(
 		case 'run':
 			return { event: { kind: 'run', body: { at: iso(now), format: JOURNAL_FORMAT } } };
 		case 'cancel':
-			return {
-				event: {
-					kind: 'cancel',
-					body: {
-						at: iso(now),
-						...(state.exchange === undefined
-							? {}
-							: {
-									close: {
-										owner: state.exchange.owner,
-										from: state.exchange.from,
-										through: state.lastSeq,
-										at: iso(now),
-									},
-								}),
-					},
-				},
-			};
+			return { event: { kind: 'cancel', body: { at: iso(now) } } };
 		case 'reconcile':
 			return reconcile(state, command, now);
 	}
@@ -460,7 +443,8 @@ function speechFreshness(
 	state: RoomState,
 	request: CommitRequest,
 ): RoomDecision<'message'> | undefined {
-	if (request.intent.kind !== 'said') return undefined;
+	// A scheduled say goes back to its author alone, so it states no read position.
+	if (request.intent.kind !== 'said' || request.intent.after !== undefined) return undefined;
 	// The wire guard stays here: a Dafny int has no fraction and no NaN.
 	const readThrough = safePosition(request.readThrough);
 	const freshness = freshnessRule(readThrough, state.lastSeq);
@@ -535,7 +519,7 @@ function unseating(
 	return message(state, { kind: 'unseated', subject: name, ...stamp }, now);
 }
 
-/** A say goes to someone who hears it. A say with `after` goes to its author, within the bounds. */
+/** A say goes to someone who hears it. A scheduled say goes to its author, within the bounds. */
 function addressRefusal(
 	state: RoomState,
 	seat: string,
@@ -554,7 +538,8 @@ function addressRefusal(
 			`Unknown participant '${target}'. Address someone from the roster.`,
 			'unknown_participant',
 		);
-	if (target === seat) return refused('You cannot address yourself without `after`.');
+	if (target === seat)
+		return refused('You cannot address yourself. Call `schedule` to come back to your work.');
 	return found?.attention === 'none'
 		? refused(`'${target}' wakes for nothing said. Say it to the room, or to somebody else.`)
 		: undefined;

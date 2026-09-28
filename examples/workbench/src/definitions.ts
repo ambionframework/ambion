@@ -45,7 +45,7 @@ export const shared =
 	'The example connects no real hardware, so treat every measurement as a planned value, not a reading. ' +
 	'Respect explicit human constraints; they override role defaults and survive every specialist handoff. When the person says not to edit files, do not call write or shell tools that change files; give the answer in your reply. ' +
 	'The lab database holds the projects, test_plans, runs, results, and operations tables. Read it with `query` and append with `record`. `query` cannot change data. ' +
-	'Cite what you rely on in `refs`, one URI each. A workspace file is file:///<path>, for example file:///library/led-5mm.md. A lab table is lab:///<table>, for example lab:///runs. The terminal opens a ref that names an existing file or table, and marks any other ref. ' +
+	'Cite what you rely on in `refs`, one URI each. To cite a workspace file, call snapshot with its path, for example /library/led-5mm.md, and put the ref it gives in refs. A lab table is lab:///<table>, for example lab:///runs. The terminal opens a ref that names a snapshot, a table, or a message, and marks any other ref. ' +
 	'Report only actions your tool results support. You have local file and shell tools, git repositories through `repos` and `fork`, and no web, email, or hardware tools. ';
 
 /** The specialists. Each one has a narrow scope and reports back once. */

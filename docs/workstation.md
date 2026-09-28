@@ -30,7 +30,11 @@ const lab = openWorkspace({
     bash: workstationBackend({
       host: 'lab.internal',
       hostKey: 'SHA256:<the fingerprint that ssh-keygen -lf prints>',
-      layout: { audit: '/srv/ambion/lab/audit/audit.jsonl', rooms: '/srv/ambion/lab/rooms' },
+      layout: {
+        audit: '/srv/ambion/lab/audit/audit.jsonl',
+        rooms: '/srv/ambion/lab/rooms',
+        snapshots: '/srv/ambion/lab/snapshots',
+      },
       credentialFor: async (agent) => ({
         username: agent.name,
         privateKey: await readFile(`/etc/ambion/keys/${agent.name}`, 'utf8'),
@@ -57,17 +61,18 @@ and no `node:sqlite`. The workstation does not depend on
 workspace supplies everything that holds on every backend
 ([The resource contract](workspace.md#the-resource-contract)).
 
-| Part                                     | Owner                                                        |
-| ---------------------------------------- | ------------------------------------------------------------ |
-| `connect()` and `dispose()`              | The workstation                                              |
-| `SshEnv`, the transport of each call     | The workstation                                              |
-| `layout`: the audit log and the rooms    | The workstation, from its options                            |
-| `guidance` about the shell               | The workstation                                              |
-| `read`, `write`, `edit`                  | The workspace: the three file tools                          |
-| `bash`, `ps`, `status`, `wait`, `cancel` | The workspace: the process tools ([Processes](processes.md)) |
-| `sql`                                    | The workspace, when `backend.sql` is set                     |
-| Path rule, deadline, output view         | The workspace: the environment helpers                       |
-| Audit log and room mirror                | The workspace, at the paths that `layout` names              |
+| Part                                      | Owner                                                           |
+| ----------------------------------------- | --------------------------------------------------------------- |
+| `connect()` and `dispose()`               | The workstation                                                 |
+| `SshEnv`, the transport of each call      | The workstation                                                 |
+| `layout`: the audit log, rooms, snapshots | The workstation, from its options                               |
+| `guidance` about the shell                | The workstation                                                 |
+| `read`, `write`, `edit`                   | The workspace: the three file tools                             |
+| `bash`, `ps`, `status`, `wait`, `cancel`  | The workspace: the process tools ([Processes](processes.md))    |
+| `snapshot`, `fetch`                       | The workspace ([Snapshot a file](workspace.md#snapshot-a-file)) |
+| `sql`                                     | The workspace, when `backend.sql` is set                        |
+| Path rule, deadline, output view          | The workspace: the environment helpers                          |
+| Audit log, room mirror, snapshot copies   | The workspace, at the paths that `layout` names                 |
 
 **The workstation adds no tools.** The file tools and the process tools cover
 every file and shell operation on a server, so `tools` stays unset.
@@ -177,15 +182,18 @@ that runs a command, so `nologin` does not serve.
 
 ## The layout on a server
 
-**`layout` names one file and one folder.** `layout.audit` is the path of
+**`layout` names one file and two folders.** `layout.audit` is the path of
 the audit log. `layout.rooms` is the folder that `mirror()` writes each
-room's record under. Different accounts write the two paths, so they need
+room's record under. `layout.snapshots` is the folder of the default
+object store, one file for each digest, when the workspace names no
+`backend.objects`. Different accounts write these paths, so they need
 different permissions.
 
 | Path                  | Writer                                                 | Mode on the server                                |
 | --------------------- | ------------------------------------------------------ | ------------------------------------------------- |
 | The folder of `audit` | Every agent: each tool call writes its entry as itself | Group write, setgid, and a default ACL of `g::rw` |
 | `rooms`               | The host account alone                                 | Owner write, group read                           |
+| `snapshots`           | The host account alone                                 | Owner write, group read                           |
 | Each agent's home     | That agent alone                                       | `0700`                                            |
 | `/tmp`                | Every account, one private file each                   | The server's own `/tmp`, with the sticky bit      |
 
@@ -484,8 +492,10 @@ file. An agent can edit or remove earlier entries through `bash`. The
 [backlog](../planning/backlog.md#designs-with-a-shape) decides which
 identity writes the audit log.
 
-**No agent can change the room mirror.** Only the host account writes
-`layout.rooms`, and the agents read it through the group.
+**No agent can change the room mirror or a snapshot copy.** Only the host
+account writes `layout.rooms` and `layout.snapshots`, and the agents read
+them through the group. A snapshot reads each file as the agent that asks,
+so the host account never reads a home.
 
 **No agent reads another agent's temporary files.** Each temporary file
 and spill file has mode `0600`, and each temporary directory has mode
@@ -544,7 +554,7 @@ the accounts, and only an `sshd` that runs as root logs in as more than
 one user. `pnpm check` runs without root. The `workstation` job runs
 `test/sshd/setup.sh` with `sudo` on its runner. The script adds one
 account for each agent of the tier, the git account `lab-git`, and one
-group, makes the two layout folders, and starts `sshd` on
+group, makes the three layout folders, and starts `sshd` on
 port 2222. The tier runs only when `AMBION_WORKSTATION_SSHD` names the file
 the script writes. It proves what only OpenSSH can:
 
@@ -555,7 +565,9 @@ the script writes. It proves what only OpenSSH can:
   or spill files
 - that a file one agent creates in the audit folder stays writable for
   the other agent, across a rotation
-- that an agent cannot write under `layout.rooms`
+- that an agent cannot write under `layout.rooms` or `layout.snapshots`
+- that a snapshot reads a file of a home as its agent, and that every agent
+  reads the copy and no agent changes it
 - that the audit log records each agent's tool call as that agent
 
 **The same job runs the tier of the git backend.** It runs

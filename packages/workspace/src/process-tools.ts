@@ -84,7 +84,7 @@ export function processToolGuidance(): string {
 		`No message tells you when a process ends. When your answer needs the result, call wait before you answer.`,
 		`A wait stops before your activation ends.`,
 		`A process that outlives your activation shows in the reminder at the start of your next activation.`,
-		`To check a long process later, say to yourself with after, in seconds. The room gives the say back to you then.`,
+		`To check a long process later, call schedule with after, in seconds. The room gives the say back to you then.`,
 	].join('\n');
 }
 
@@ -233,8 +233,8 @@ function withinActivation(asked: number, ctx: ToolContext): { seconds: number; c
 
 /**
  * Whether a running process can run past the reach of a wait in this
- * activation, and the room would take a say with `after`: the call runs in
- * an activation, and an exchange is open.
+ * activation, and the room would take a `schedule` call: the call runs in an
+ * activation, and an exchange is open.
  */
 function outlasts(process: ProcessStatus, ctx: ToolContext): boolean {
 	if (process.state !== 'running' || ctx.deadline === undefined || ctx.exchange === undefined) {

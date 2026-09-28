@@ -5,6 +5,7 @@ import type { PiExecutionOptions } from '@ambionframework/pi';
 import type { Approval } from './approvals.ts';
 import { type Person, people } from './definitions.ts';
 import {
+	type Attachment,
 	attachFile,
 	type FileContent,
 	type FileEntry,
@@ -14,6 +15,7 @@ import {
 	readLabTable,
 } from './files.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
+import { readCommitFile, readSnapshotFile } from './previews.ts';
 import { byRecency, type ProcessOutput, type ProcessView, readOutput } from './processes.ts';
 import {
 	fail,
@@ -70,8 +72,12 @@ export interface Workbench {
 	create(name: string, goal: string): Promise<RoomView>;
 	files(): Promise<FileEntry[]>;
 	file(path: string): Promise<FileContent>;
-	/** Copy a local file into the workspace, so it can go with a message as a `file:///` ref. */
-	attach(localPath: string): Promise<FileEntry>;
+	/** The bytes of a snapshot ref of the workspace, from its object store. */
+	snapshot(ref: string): Promise<FileContent>;
+	/** The commit a commit ref of the workspace names, from its git server. */
+	commit(ref: string): Promise<FileContent>;
+	/** Copy a local file into the workspace and snapshot it, so it can go with a message as a ref. */
+	attach(localPath: string): Promise<Attachment>;
 	/**
 	 * The background processes of the agents that used the workspace in this
 	 * run: the running processes first, then the newest start first.
@@ -201,6 +207,8 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 		},
 		files: () => rooms.withWorkspace(() => listFiles(rooms.workspace)),
 		file: (path) => rooms.withWorkspace(() => readFile(rooms.workspace, path)),
+		snapshot: (ref) => rooms.withWorkspace(() => readSnapshotFile(rooms.workspace, ref)),
+		commit: (ref) => rooms.withWorkspace(() => readCommitFile(rooms.workspace, ref)),
 		attach: (localPath) => rooms.withWorkspace(() => attachFile(rooms.workspace, localPath)),
 		processes: () =>
 			rooms.withWorkspace(async () => byRecency(await rooms.workspace.processes.list())),

@@ -30,6 +30,7 @@ export {
 	describeExecutor,
 	executorOfKind,
 	SAY,
+	SCHEDULE,
 	SEAT,
 	UNSEAT,
 } from './define.ts';
@@ -61,6 +62,7 @@ export type {
 	RoomToolResult,
 } from './execution/room-tools.ts';
 export { agentTools, roomTools, toolContext } from './execution/room-tools.ts';
+export { composeExecutions } from './execution/route.ts';
 export { AgentRunner, inProcessTransport } from './execution/runner.ts';
 export type { TraceOpener, TraceSink } from './execution/trace.ts';
 export { registerDefaultExecution } from './host/defaults.ts';
@@ -76,7 +78,6 @@ export type {
 } from './host/runtime.ts';
 export {
 	callLimits,
-	composeExecutions,
 	DEFAULT_TRACE_LIMITS,
 	hostingOf,
 	reconcileRoom,

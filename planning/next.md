@@ -33,9 +33,9 @@ holds on main.
 is new. Ambion is reactive: a seat acts when a person speaks, when a seat
 addresses it, or when a say that it scheduled comes due.
 
-**0.4.0 is a release of simplification.** It adds two capabilities, the
-`import` of the `sql` tool and the fixed skills of each agent, which the
-changelog names. It removes each
+**0.4.0 is a release of simplification.** It adds three capabilities, the
+`import` of the `sql` tool, the fixed skills of each agent, and the
+refs to workspace files and commits, which the changelog names. It removes each
 second path to a fact of the room. Every item in the
 [backlog](backlog.md) waits until after 0.4.0, unless its condition holds
 first.
@@ -114,6 +114,11 @@ condition that brings each one back.
   `sqliteBackend` on the Ambion host.
 - **An `apply_patch` tool for Codex seats.** A live comparison with the
   `edit` tool decides it.
+- **A publish flow for snapshots, and more forms of the `ambion` scheme.**
+  Snapshot refs and commit refs land in 0.4.0. A publish to a store outside
+  the workspace, the sweep of copies that no message cites, and the forms
+  for a process output and a query wait for an application that needs
+  them.
 
 ## Decisions taken
 
@@ -121,11 +126,12 @@ condition that brings each one back.
   activation, and a wait stops before the room ends the activation. A host
   that wants a wake posts a message
   ([Processes](../docs/processes.md#the-end-of-a-process)).
-- **A scheduled say goes to its author alone.** `to` names the author if
-  and only if `after` is set. The room stamps everything else: the author,
-  the returned say, and the owner of the exchange that it opens.
-  No seat speaks under the name of a person, and no seat schedules work
-  for another seat.
+- **A scheduled say goes to its author alone.** The `schedule` tool sets
+  `to` to the author and `after` to its argument. On the record, `to` names
+  the author if and only if `after` is set. The room stamps everything
+  else: the author, the returned say, and the owner of the exchange that it
+  opens. No seat speaks under the name of a person, and no seat schedules
+  work for another seat.
 - **A returned say is an ordinary message when it lands.** It opens an
   exchange when none is open. When an exchange is open, it joins it and
   steers work, and the owner of that exchange stays the owner.
@@ -181,20 +187,17 @@ and the process tools. A step names the steps it needs; a step with no
 
 ### Phase 1. The drift
 
-- [ ] **3.** A cancellation has one shape. (C3)
-- [ ] **4.** A seat of an unknown executor kind fails at once, on each
-      of the three routers. (C5)
 - [ ] **5.** A composition carries no `version`, one capture serves a
       definition, and one registry serves the waiters. (C9)
 - [ ] **7.** The body schemas guard the journal, and the format number
-      goes. Needs 3 and 5. (C12)
+      goes. Needs 5. (C12)
 - [ ] **8.** The assistant works a request after its owner leaves. (A1)
 
 **Evidence:** each step keeps `pnpm check` green and holds the coverage
 of each changed package, measured before and after as `CLAUDE.md`
 states. A step that changes a rule runs `pnpm rule:check`. A step that
 changes a journal body updates the golden journals and the export
-snapshot in the same commit, and the changelog names it. Steps 3, 5, and 7
+snapshot in the same commit, and the changelog names it. Steps 5 and 7
 pass `pnpm chaos` and the Cloudflare tests in workerd.
 
 ### Phase 2. The contracts
@@ -204,10 +207,9 @@ Each step states the change to
 page it changes in the same commit.
 
 - [ ] **1.** `decide` builds every journal body and makes every authority
-      decision. Needs phase 1 step 3. (C4)
-- [ ] **2.** One lease shape in the rules. Needs phase 1 step 3. (C2)
-- [ ] **3.** The remote call is an `Execution`, and `Transport` goes.
-      Needs phase 1 step 4. (C5)
+      decision. (C4)
+- [ ] **2.** One lease shape in the rules. (C2)
+- [ ] **3.** The remote call is an `Execution`, and `Transport` goes. (C5)
 - [ ] **4.** The room applies the token limit, and the paging of a view
       goes. (C7)
 - [ ] **5.** The core owns the activation state. Needs 3 and 4. (C6)
@@ -241,35 +243,14 @@ one lease in four shapes.
 - **The rules read one lease shape.** They read a lease as `Hold`,
   `Taken`, `Draft`, and `LiveLease`, and `takenOf`, `draftsOf`, and
   `liveLeases` convert between them. One `RuleLease` replaces the four.
-  This sub-item re-proves the rules that read them, and it follows the
-  cancelled close of C3, which changes what `Hold` holds. Phase 2 step 2
-  holds it.
+  This sub-item re-proves the rules that read them. Phase 2 step 2 holds
+  it.
 - **The lease `since` takes its name in the same proof edit.**
   [Deferred by decision](backlog.md#deferred-by-decision) holds the name until a
   proof edit renames it, and this sub-item is that edit.
 
 **Evidence:** `pnpm rule:check` on each changed rules file, and
 `pnpm check:lemmascript`.
-
-**C3. One shape for a cancellation.** A `cancel` entry can carry a
-close. That close needs its own schema in `journal/validate.ts`, its own
-branch in the fold and the projection, and the list
-`RoomState.cancelClosed`, which exists only so that `exchangeOutcome` can
-ask whether a cancellation wrote a close. The room also applies a
-cancellation twice: at once through `cancelHold` and an empty wake list,
-and later as a `survivesCancellation` filter in four places. In the
-projection, the filter in `pendingOf` is always true.
-
-- **A close carries `cancelled`.** The cancellation writes a close with
-  `cancelled: true` into `closes`. `cancelClosed` and the second close
-  schema go.
-- **Each fact takes one mechanism.** Wakes and scheduled says drop at
-  the cancellation. A grant keeps the filter, since it reads an id against
-  the whole record.
-
-**Evidence:** the `cancelled` golden journal and its `.fold.json` change
-shape, `pnpm rule:check` on the room rules, `pnpm chaos` on both
-storages, and the Cloudflare tests in workerd.
 
 **C4. `decide` is the one decision point.** The reconcile in
 `transition.ts` builds the bodies of returned says, closes, and lease
@@ -300,21 +281,13 @@ the commit runs again. `room.ts` repeats the name and summary checks of
 workerd.
 
 **C5. One boundary between the room and a seat.** Three routers pick an
-execution by executor kind: `composeExecutions` and
-`defaultExecutionFactory` in `host/runtime.ts`, and `missingConnector` in
-`room.ts`. They fail in two ways. `composeExecutions` throws in
-`connect`, `portFor` in `room-host/dispatch.ts` reports a
-`delivery_error`, and the wake stays due, so the room sends it again after
-each resend window with no end. `missingConnector` fails the activation
-at once. `composeConnector` also builds the executor and hands it to the
-`Transport`. Cloudflare's `rpcTransport` keeps only `room` and `seat`, and
-the seat object builds the executor a second time in `configure.ts` and
-`seat-object.ts`.
+execution by executor kind: `composeExecutions` in `execution/route.ts`,
+`defaultExecutionFactory` in `host/defaults.ts`, and `connectorFor` in
+`room.ts`. Each ends in `missingConnector` on a miss. `composeConnector`
+also builds the executor and hands it to the `Transport`. Cloudflare's
+`rpcTransport` keeps only `room` and `seat`, and the seat object builds
+the executor a second time in `configure.ts` and `seat-object.ts`.
 
-- **A kind with no execution fails its activation at once, on every
-  router.** `composeExecutions` returns a port whose activation fails,
-  as `missingConnector` does. This fix changes no contract, and phase 1
-  holds it.
 - **The remote call is an `Execution`.** Its connector returns a port
   over RPC, and the seat object calls the execution of its own host.
   `Transport`, `inProcessTransport`, and the transport options of the
@@ -326,9 +299,8 @@ the seat object builds the executor a second time in `configure.ts` and
   pass `DEFAULT_TRACE_LIMITS` today, and `ConnectorComposition` exists
   for that difference.
 
-**Evidence:** a scripted case of an unknown kind under
-`composeExecutions` that ends the activation, `transportConformance` on
-`rpcTransport` in workerd, and the hosting export snapshot.
+**Evidence:** `transportConformance` on `rpcTransport` in workerd, and
+the hosting export snapshot.
 
 **C6. The core owns the activation state.** Each of the Pi, Claude, and
 Codex executors re-implements the `readThrough` and `cancelled` state,
