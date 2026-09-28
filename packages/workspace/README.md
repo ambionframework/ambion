@@ -57,23 +57,28 @@ contract: `openResource` and its types. It loads neither the Ambion runtime
 nor a model library. `./sqlite` holds `sqliteBackend`,
 the SQL backend over one SQLite database. `./sql` holds `openSqlResource`, a
 resource over its own SQLite database, with its `SqlProvenance` and
-`SqlResourceEnv` types. `./conformance` holds `workspaceConformance`, the
-scenario matrix a new backend runs to prove it meets the resource contract,
-and `sqlConformance` and `gitConformance`, the cases a `SqlBackend` and a
-`GitBackend` run.
+`SqlResourceEnv` types. `./s3` holds `s3ObjectBackend`, the object backend
+over an S3 API, and it loads `aws4fetch`. `./conformance` holds
+`workspaceConformance`, the scenario matrix a new backend runs to prove it
+meets the resource contract, and `sqlConformance`, `gitConformance`, and
+`objectConformance`, the cases a `SqlBackend`, a `GitBackend`, and an
+`ObjectBackend` run.
 
 `./git` holds what every git backend shares, and it loads no git library.
 The name rules of a repository ID are `validName`, `namespaceOf`,
-`assertAgent`, `readOnly`, `TEMPLATES`, and `SOURCES`. The template helpers
+`assertAgent`, `readOnly`, `TEMPLATES`, and `SOURCES`, and `revisionOf` and
+`validRefName` read a branch, a tag, or a hash as a name alone. The template helpers
 are `filesOf`, `hashesOf`, `sameFiles`, and `changeTo`, with the
 `TemplateRegistration` type. `@ambionframework/just-bash/git` holds a git
 backend that uses them. The root entry holds `fromDirectory` and the
 `FileSource`, `SourceFiles`, and `SourceInput` types, which templates and
 skills share.
 
-`openWorkspace` takes its backends by kind: `backend: { bash, sql }`.
-`bash` is required. `sql` is an optional `SqlBackend`, and the `sql` tool
-then runs on that database. With no SQL backend, the workspace has no `sql`
+`openWorkspace` takes its backends by kind: `backend: { bash, sql, git,
+objects }`. `bash` is required. `sql` is an optional `SqlBackend`, and the
+`sql` tool then runs on that database. `objects` is an optional
+`ObjectBackend` for the bytes of each snapshot; absent, a folder of the bash
+backend holds them. With no SQL backend, the workspace has no `sql`
 tool. The root entry exports the `SqlBackend` interface.
 
 ```ts

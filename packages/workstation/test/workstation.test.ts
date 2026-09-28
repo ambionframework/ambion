@@ -7,9 +7,10 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
+import { type AmbionTool, snapshotUri, type ToolContext } from '@ambionframework/ambion';
 import {
 	loadSkills,
 	openWorkspace,
@@ -94,7 +95,7 @@ describe('workstationBackend options', () => {
 	const base = {
 		host: 'lab.internal',
 		hostKey: `SHA256:${'A'.repeat(43)}`,
-		layout: { audit: '/srv/audit.jsonl', rooms: '/srv/rooms' },
+		layout: { audit: '/srv/audit.jsonl', rooms: '/srv/rooms', snapshots: '/srv/snapshots' },
 		credentialFor: () => ({ username: 'x', privateKey: 'x' }),
 	};
 
@@ -418,7 +419,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		expect(await workspace.processes.list({ running: true })).toEqual([]);
 	});
 
-	it('runs the file tools as the agent, audits them at the layout path, and lands a sql export in the home', async () => {
+	it('runs the file tools as the agent, audits them at the layout path, snapshots a file of the home as the host, and lands a sql export in the home', async () => {
 		const started = await server(['ada', 'lab-host']);
 		const workspace = openWorkspace({
 			name: 'lab',
@@ -435,6 +436,16 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			context('ada'),
 		);
 		expect(JSON.stringify(read)).toContain('hello');
+		const frozen = await toolOf(workspace, 'snapshot').invoke(
+			{ paths: ['notes.txt'] },
+			context('ada'),
+		);
+		const digest = createHash('sha256').update('hello').digest('hex');
+		const home = started.homes.get('ada') ?? '';
+		const ref = snapshotUri('lab', digest, join(home, 'notes.txt'));
+		expect(frozen).toMatchObject({ details: { refs: [ref] } });
+		expect(await readFile(join(started.options.layout.snapshots, digest), 'utf8')).toBe('hello');
+		expect(new TextDecoder().decode(await workspace.readSnapshot(ref))).toBe('hello');
 		await toolOf(workspace, 'sql').invoke(
 			{
 				sql: 'CREATE TABLE t (x); INSERT INTO t VALUES (1), (2); SELECT x FROM t',
@@ -442,10 +453,14 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			},
 			context('ada'),
 		);
-		const home = started.homes.get('ada') ?? '';
 		expect(await readFile(join(home, 'out', 't.csv'), 'utf8')).toBe('x\n1\n2\n');
 		const audit = (await readFile(started.options.layout.audit, 'utf8')).trim().split('\n');
-		expect(audit.map((line) => JSON.parse(line).tool)).toEqual(['write', 'bash', 'sql']);
+		expect(audit.map((line) => JSON.parse(line).tool)).toEqual([
+			'write',
+			'bash',
+			'snapshot',
+			'sql',
+		]);
 		expect(workspace.host).toEqual({ name: 'lab-host' });
 	});
 

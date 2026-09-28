@@ -12,7 +12,7 @@ import {
 } from '@opentui/core';
 import { tui as palette } from './brand.ts';
 import type { FileBrowser } from './browser.ts';
-import type { FileContent, ImageContent, TableView } from './workbench.ts';
+import type { FileContent, FileEntry, ImageContent, TableView } from './workbench.ts';
 
 export const LIST_ROWS = 8;
 const HINT = 'Type to search   Up/Down choose   PgUp/PgDn scroll   Ctrl+Y copy   Esc close';
@@ -201,10 +201,11 @@ export class FilesPanel {
 		const matches = browser.matches;
 		if (matches.length === 0) return new StyledText([fg(palette.muted)('No file matches.')]);
 		const start = windowStart(browser.index, matches.length);
-		const width = Math.max(...matches.map((file) => file.path.length));
+		const nameOf = (file: FileEntry) => file.label ?? file.path;
+		const width = Math.max(...matches.map((file) => nameOf(file).length));
 		const chunks = matches.slice(start, start + LIST_ROWS).flatMap((file, offset) => {
 			const chosen = start + offset === browser.index;
-			const line = `${chosen ? '▸ ' : '  '}${file.path.padEnd(width)}  ${file.kind === 'table' ? 'table' : bytes(file.size)}`;
+			const line = `${chosen ? '▸ ' : '  '}${nameOf(file).padEnd(width)}  ${file.kind ?? bytes(file.size)}`;
 			const tail = offset === LIST_ROWS - 1 ? '' : '\n';
 			return [
 				chosen ? bg(palette.selected)(fg(palette.accent)(line)) : fg(palette.muted)(line),

@@ -50,6 +50,8 @@ export type {
 	GitConformanceTemplate,
 } from './git-conformance.ts';
 export { gitConformance } from './git-conformance.ts';
+export type { ObjectConformanceBackend, ObjectConformanceStore } from './object-conformance.ts';
+export { objectConformance } from './object-conformance.ts';
 export type { ConformanceCase };
 
 /**

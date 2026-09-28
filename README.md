@@ -40,12 +40,17 @@ room is a shared journal with rules for taking part.
 **Every workspace gives an agent files and processes.** `read`, `write`, and
 `edit` reach the files. `bash` starts a process that outlives the activation.
 `ps` lists it, and `status`, `wait`, and `cancel` take its handle. Each
-activation starts with a reminder of the seat's processes. An optional SQL
-backend gives tables and adds `sql`: agents pass work to each other through a
-table or a view. An optional git backend gives repositories and adds `repos`
-and `fork`: an agent forks a read-only template, clones it into its home, and
-pushes. See [Workspace](docs/workspace.md), [Processes](docs/processes.md),
-and [Git](docs/git.md).
+activation starts with a reminder of the seat's processes. `snapshot` freezes
+a file and gives a ref that names its bytes. A message then cites what the
+file held when the agent spoke, and `fetch` gives those bytes to another
+agent. The bytes live in an object store: a folder of the workspace by
+default, or an S3 bucket such as MinIO or R2. An optional SQL backend gives
+tables and adds `sql`: agents pass work to each other through a table or a
+view. An optional git backend gives repositories and adds `repos` and
+`fork`. An agent forks a read-only template, clones it into its home,
+pushes, and cites the commit by its full hash. See
+[Workspace](docs/workspace.md), [Processes](docs/processes.md),
+[Snapshot a file](docs/workspace.md#snapshot-a-file), and [Git](docs/git.md).
 
 **An agent comes back to its work later.** It says to itself with `after`, in
 seconds. The exchange closes while the say waits. When the say is due, the

@@ -45,8 +45,8 @@ describe('the omission line', () => {
 describe('one line of the record', () => {
 	it('reads a say as its author, and names who it was directed at', () => {
 		const said: Message = { kind: 'said', seq: 2, at, from: 'priya', text: 'Is the pour on?' };
-		expect(renderLine(said)).toBe('[priya] Is the pour on?');
-		expect(renderLine({ ...said, to: 'product' })).toBe('[priya → product] Is the pour on?');
+		expect(renderLine(said)).toBe('#2 [priya] Is the pour on?');
+		expect(renderLine({ ...said, to: 'product' })).toBe('#2 [priya → product] Is the pour on?');
 	});
 
 	it('appends the refs a message cites', () => {
@@ -59,7 +59,7 @@ describe('one line of the record', () => {
 			text: 'Done.',
 			refs: ['https://x/1', 'file:///2'],
 		};
-		expect(renderLine(said)).toBe('[a → b] Done. (refs: https://x/1 file:///2)');
+		expect(renderLine(said)).toBe('#2 [a → b] Done. (refs: https://x/1 file:///2)');
 	});
 
 	it('reads a scheduled say with the time it returns, and a returned say with its owner', () => {
@@ -74,7 +74,7 @@ describe('one line of the record', () => {
 			owner: 'priya',
 		};
 		const returns = new Date(Date.parse(at) + 600_000).toISOString();
-		expect(renderLine(later)).toBe(`[worker → worker] Check the build. (returns at ${returns})`);
+		expect(renderLine(later)).toBe(`#3 [worker → worker] Check the build. (returns at ${returns})`);
 		const returned: Message = {
 			kind: 'returned',
 			seq: 9,
@@ -86,13 +86,13 @@ describe('one line of the record', () => {
 			refs: ['file:///out.log'],
 		};
 		expect(renderLine(returned)).toBe(
-			'[returned → worker, for priya] Check the build. (refs: file:///out.log)',
+			'#9 [returned → worker, for priya] Check the build. (refs: file:///out.log)',
 		);
 	});
 
 	it.each([
-		['the seat', { from: 'worker' }, '· worker dismissed say 3'],
-		['the host', {}, '· the host dismissed say 3'],
+		['the seat', { from: 'worker' }, '#9 · worker dismissed say 3'],
+		['the host', {}, '#9 · the host dismissed say 3'],
 	])('reads a dismissal by %s with the handle it dismissed', (_by, from, line) => {
 		expect(renderLine({ kind: 'dismissed', seq: 9, at, message: 3, ...from })).toBe(line);
 	});
@@ -107,15 +107,15 @@ describe('one line of the record', () => {
 			text: 'Saturday.',
 			covers: { from: 2, through: 4 },
 		};
-		expect(renderLine(summary)).toBe('[writer → priya] Saturday.');
+		expect(renderLine(summary)).toBe('#6 [writer → priya] Saturday.');
 	});
 
 	it('names a presence author only where it differs from the subject', () => {
 		// A person arrives by themselves, so the two names are one and the
 		// line says it once: "priya arrived by priya" tells a reader nothing.
 		const arrived: Message = { kind: 'arrived', seq: 1, at, from: 'priya', subject: 'priya' };
-		expect(renderLine(arrived)).toBe('· priya arrived');
-		expect(renderLine({ ...arrived, kind: 'left' })).toBe('· priya left');
+		expect(renderLine(arrived)).toBe('#1 · priya arrived');
+		expect(renderLine({ ...arrived, kind: 'left' })).toBe('#1 · priya left');
 
 		// An ordinary seat seated the surveyor, so the line names both.
 		const seated: Message = {
@@ -126,12 +126,12 @@ describe('one line of the record', () => {
 			subject: 'surveyor',
 			identity: 'Holds the tonnage.',
 		};
-		expect(renderLine(seated)).toBe('· surveyor seated by product');
+		expect(renderLine(seated)).toBe('#8 · surveyor seated by product');
 
 		// The host seated it, and the host is not a participant: no author.
 		const byHost: Message = { kind: 'seated', seq: 8, at, subject: 'surveyor' };
-		expect(renderLine(byHost)).toBe('· surveyor seated');
-		expect(renderLine({ ...byHost, kind: 'unseated' })).toBe('· surveyor unseated');
+		expect(renderLine(byHost)).toBe('#8 · surveyor seated');
+		expect(renderLine({ ...byHost, kind: 'unseated' })).toBe('#8 · surveyor unseated');
 	});
 });
 
@@ -217,7 +217,7 @@ describe('renderDelta', () => {
 
 	it('prefixes each later message with [new], in order, and returns nothing past the end', () => {
 		expect(renderDelta(view, 1)).toBe(
-			'[new] [worker → priya] Newer. (refs: file:///a)\n[new] · sam arrived',
+			'[new] #2 [worker → priya] Newer. (refs: file:///a)\n[new] #3 · sam arrived',
 		);
 		expect(renderDelta(view, 3)).toBeUndefined();
 	});

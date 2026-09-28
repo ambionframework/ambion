@@ -5,10 +5,17 @@
  * the workspace serializes. The just-bash adapter has its own tests in
  * `@ambionframework/just-bash`.
  */
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { defineTool, isSpoken, startRoom, type ToolContext } from '@ambionframework/ambion';
+import {
+	defineTool,
+	isSpoken,
+	snapshotUri,
+	startRoom,
+	type ToolContext,
+} from '@ambionframework/ambion';
 import { piExecution } from '@ambionframework/pi';
 import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
@@ -21,6 +28,7 @@ import { defaultToolGuidance } from '../src/default-tools.ts';
 import { openWorkspace } from '../src/index.ts';
 import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
 import { processToolGuidance } from '../src/process-tools.ts';
+import { snapshotGuidance } from '../src/snapshots.ts';
 import { callAs, toolOf, wrapped } from './support/backends.ts';
 import { agent, run, toolResults } from './support/room.ts';
 
@@ -163,10 +171,12 @@ describe('the workspace bundle', () => {
 			'status',
 			'wait',
 			'cancel',
+			'snapshot',
+			'fetch',
 		]);
 		// The /rooms guidance names no room, so a workspace states it with no other guidance.
 		expect(workspace.tools().guidance).toBe(
-			`${defaultToolGuidance()}\n\n${processToolGuidance()}\n\n${ROOM_MIRROR_GUIDANCE}`,
+			`${defaultToolGuidance()}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}\n\n${ROOM_MIRROR_GUIDANCE}`,
 		);
 		await workspace.dispose();
 	});
@@ -192,7 +202,7 @@ describe('the workspace bundle', () => {
 		});
 		const bundle = workspace.tools();
 		expect(bundle.guidance).toBe(
-			`${defaultToolGuidance()}\n\n${processToolGuidance()}\n\nCustom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`,
+			`${defaultToolGuidance()}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}\n\nCustom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`,
 		);
 		expect(bundle.tools.map((tool) => tool.name)).toEqual([
 			'read',
@@ -203,6 +213,8 @@ describe('the workspace bundle', () => {
 			'status',
 			'wait',
 			'cancel',
+			'snapshot',
+			'fetch',
 			'inspect',
 		]);
 		const result = await toolOf(workspace, 'inspect').invoke({}, callAs('alpha'));
@@ -265,8 +277,8 @@ describe('ToolContext', () => {
 // -- a running room ----------------------------------------------------------
 
 describe('a workspace beside a running room', () => {
-	it("audits each call and mirrors the room's record at the paths the backend layout names, and states both", async () => {
-		const own = { audit: '/audit/calls.jsonl', rooms: '/mirror' };
+	it("audits each call, snapshots a file, and mirrors the room's record at the paths the backend layout names, and states each", async () => {
+		const own = { audit: '/audit/calls.jsonl', rooms: '/mirror', snapshots: '/frozen' };
 		const site = openWorkspace({
 			name: name('own-layout'),
 			backend: { bash: wrapped(() => ({ layout: own })) },
@@ -275,6 +287,9 @@ describe('a workspace beside a running room', () => {
 		const guidance = site.tools().guidance ?? '';
 		expect(guidance).toContain(own.audit);
 		expect(guidance).toContain(own.rooms);
+		expect(guidance).toContain('call fetch with its ref');
+		const digest = createHash('sha256').update('done\n').digest('hex');
+		const ref = snapshotUri(site.name, digest, '/home/worker/notes.txt');
 
 		const roomId = name('through-room');
 		const session = await startRoom({
@@ -286,8 +301,9 @@ describe('a workspace beside a running room', () => {
 					byAgent({
 						worker: (_context, _who, call) => {
 							if (call === 1) return callTool('write', { path: 'notes.txt', content: 'done\n' });
-							if (call === 2) return speak('first');
-							return call === 3 ? speak('second') : quiet();
+							if (call === 2) return callTool('snapshot', { paths: ['notes.txt'] });
+							if (call === 3) return callTool('say', { text: 'first', refs: [ref] });
+							return call === 4 ? speak('second') : quiet();
 						},
 					}),
 				),
@@ -305,10 +321,16 @@ describe('a workspace beside a running room', () => {
 		const [audit, lines] = await site.use({ name: 'worker' }, (env) =>
 			Promise.all([linesOf(env, own.audit), linesOf(env, mirror.path)]),
 		);
-		expect(audit).toHaveLength(1);
+		expect(audit.map((entry) => entry.tool)).toEqual(['write', 'snapshot']);
 		expect(audit[0]).toMatchObject({ room: roomId, agent: 'worker', tool: 'write' });
+		expect(audit[1]).toMatchObject({ agent: 'worker', result: { details: { refs: [ref] } } });
 		const spoken = lines.filter((line) => line.kind === 'said' && line.from === 'worker');
 		expect(spoken.map((line) => line.text)).toEqual(['first', 'second']);
+		expect(spoken[0]?.refs).toEqual([ref]);
+		expect(new TextDecoder().decode(await site.readSnapshot(ref))).toBe('done\n');
+		expect(
+			await site.use(site.host, (env) => env.exists(`${own.snapshots}/${digest}`, ctx)),
+		).toEqual({ ok: true, value: true });
 		expect(lines.every((line) => line.room === roomId)).toBe(true);
 		expect(lines).toHaveLength((await session.read()).messages.length);
 		await site.dispose();

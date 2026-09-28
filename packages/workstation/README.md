@@ -32,7 +32,11 @@ const lab = openWorkspace({
     bash: workstationBackend({
       host: 'lab.internal',
       hostKey: 'SHA256:<the fingerprint that ssh-keygen -lf prints>',
-      layout: { audit: '/srv/ambion/lab/audit/audit.jsonl', rooms: '/srv/ambion/lab/rooms' },
+      layout: {
+        audit: '/srv/ambion/lab/audit/audit.jsonl',
+        rooms: '/srv/ambion/lab/rooms',
+        snapshots: '/srv/ambion/lab/snapshots',
+      },
       credentialFor: async (agent) => ({
         username: agent.name,
         privateKey: await readFile(`/etc/ambion/keys/${agent.name}`, 'utf8'),
@@ -47,7 +51,7 @@ const lab = openWorkspace({
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `host`, `port`  | The address of the server. The port is 22 by default                                                                             |
 | `hostKey`       | The SHA-256 fingerprint of the server's host key. The backend refuses any other                                                  |
-| `layout`        | The path of the audit log and the folder of the room mirror on the server                                                        |
+| `layout`        | The path of the audit log, the folder of the room mirror, and the folder of the snapshots on the server                          |
 | `idleTimeout`   | Seconds a connection may stay with no open environment before the backend closes it. A running process holds one. 300 by default |
 | `credentialFor` | The username and private key of an agent, or of the host account `<name>-host`                                                   |
 
@@ -115,8 +119,8 @@ bash backend stores, issues, and rotates no account key.
 - **`bash` and a `setsid` that has `--wait`,** from util-linux.
 - **One group for every account.** The folder of `layout.audit` belongs
   to it, with mode `2770` and `setfacl -d -m g::rw`.
-- **`layout.rooms` belongs to the host account,** with mode `2750` and
-  the same group.
+- **`layout.rooms` and `layout.snapshots` belong to the host account,**
+  with mode `2750` and the same group.
 
 **The git backend needs one more account and one `Match` block.**
 

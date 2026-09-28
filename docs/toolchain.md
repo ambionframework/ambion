@@ -209,7 +209,7 @@ the fake clock makes lease and retry cases deterministic.
 
 ## 8. Continuous integration (`.github/workflows/ci.yml`)
 
-CI runs on pushes to `main`, pull requests, and manual dispatch. It has four
+CI runs on pushes to `main`, pull requests, and manual dispatch. It has five
 repository jobs plus the LemmaScript reusable workflow:
 
 | Job                  | Checks                                                                    |
@@ -218,6 +218,7 @@ repository jobs plus the LemmaScript reusable workflow:
 | `test`               | scripted tests on Node 26.4.0, library packages and `examples/workbench`  |
 | `test-library-floor` | scripted tests on Node 22.19.0, library packages only                     |
 | `workstation`        | the workstation integration tier against OpenSSH, with root on the runner |
+| `object-store`       | the S3 object backend against MinIO in Docker, from a pinned image        |
 
 `test-library-floor` removes `examples/workbench` from its checkout before
 `pnpm install`. That package depends on `@opentui/core`, which needs Node

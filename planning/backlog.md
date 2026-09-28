@@ -112,6 +112,65 @@ comparison of the `edit` tool against an `apply_patch` prototype, on the
 same editing task, shows a real gain in tool-call success for a Codex
 seat. Build the tool only after that measurement.
 
+**A publish flow for snapshots.** A snapshot keeps its copy inside the
+workspace ([Snapshot a file](../docs/workspace.md#snapshot-a-file)). A
+publish copies the bytes of a snapshot ref to a store outside it, such as an
+object store, and gives the URL that a person outside the room opens.
+
+- **The digest stays the key.** A publish of the same ref writes the same
+  object, so a retry is safe, and a reader checks the bytes against the
+  digest.
+- **The target is the object backend.** The bytes already live in an
+  `ObjectBackend` ([The object backend](../docs/workspace.md#the-object-backend)).
+  A publish adds `url(digest, { expiresIn })` to `ObjectEnv`, a presigned
+  GET on `s3ObjectBackend`, which MinIO serves. The default file store has
+  no URL, so a workspace that publishes names an S3 backend.
+- **The record carries both refs.** A message cites the snapshot ref and
+  the published URL, so a reader inside the room and one outside it read
+  the same bytes.
+- **A copy that no message cites is garbage.** A sweep keeps each digest
+  that a ref of a room names and removes the rest.
+
+**Condition:** an application that must share a file outside the room, or an
+object store that grows past what the host keeps.
+
+**Objects past 5 GiB, and a stream through the ports.** One object is one
+S3 PutObject, 5 GiB, and a snapshot holds the whole file in memory: the
+bash port reads whole buffers. A larger object needs a multipart upload,
+and a large file needs a stream from the bash port to the object port.
+**Condition:** an agent that must cite a file past 5 GiB, or a host that
+cannot hold one file in memory.
+
+**Loose ends of the object store.** The adversarial review of the snapshot
+work left these open:
+
+- **Orphaned temporary files.** A host that stops between the write and the
+  rename of the file store leaves `<digest>.<random>.part` under
+  `layout.snapshots`, and nothing removes it.
+- **A large commit on the workstation.** `show` buffers its output in the
+  host, and the capture window of 16 MiB refuses a larger one. just-git has
+  no such bound.
+- **A FIFO or a device on the workstation.** The workstation reads either
+  as a file. `snapshot`, like `read`, then blocks the bash owner until the
+  read ends.
+
+**Condition:** a host that runs for weeks on one store, or a report of one
+of these.
+
+**More forms of the `ambion` scheme.** A snapshot names the bytes of one
+file, and a commit ref names one commit. The output of a process, a
+snapshot of a folder, a file at a commit, and the result of a SQL query have
+no ref of their own, so a message names them in its text. The kernel owns
+each form, and a resource makes the thing it names. **Condition:** an
+agent that must cite one of them from another room.
+
+**A Codex seat cites its changes with snapshots.** The Codex executor cites
+each file that a completed patch changed as a `file:` URI of the host path
+([Codex](../docs/codex.md)). A seat whose working directory is a workspace
+could snapshot each file instead, so its refs keep their bytes and match the
+refs of Pi and Claude seats. **Condition:** a Codex seat over a workspace
+directory with native tools on.
+
 **A durable subscription service across processes.** Subscriptions belong
 to one running host. A client that reconnects reads and reacquires its
 handles. **Condition:** a placement that serves one room from more than one
