@@ -104,6 +104,7 @@ describe('ordinary participation', () => {
 		await waitForRoom(session);
 
 		expect(tools[0]).toEqual(['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall']);
+		expect(contexts[1]).toMatch(/seated surveyor \(#\d+\)/);
 		expect(contexts[0]).toContain('The reserve: agents not in the room.');
 		expect(contexts[0]).toContain('- surveyor: Quantity surveyor. Holds the tonnage.');
 		const record = await messagesOf(session);
@@ -222,7 +223,8 @@ describe('ordinary unseating and host membership', () => {
 		await (await session.visit(priya)).send({ text: 'Is the team ready?' });
 		await waitForRoom(session);
 
-		expect(contexts[1]).toContain('delivered');
+		expect(contexts[1]).toContain(`${surveyor.name} is already seated`);
+		expect(contexts[3]).toMatch(/unseated surveyor \(#\d+\)/);
 		const record = await messagesOf(session);
 		expect(record.filter((message) => message.kind === 'seated')).toHaveLength(0);
 		expect(record.filter((message) => message.kind === 'unseated')).toMatchObject([

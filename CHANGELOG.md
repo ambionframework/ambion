@@ -131,6 +131,12 @@ its `text`.
 
 ### Breaking changes
 
+- **A room tool result names what landed.** `say` gives `said #<seq>`,
+  with `to <name>` for a directed say, so the agent can cite its own
+  message. `seat` and `unseat` give `seated <name> (#<seq>)` and
+  `unseated <name> (#<seq>)`. A membership that the record already holds
+  gives `<name> is already seated` or `<name> is not seated`. The result
+  was `delivered` before.
 - **A view with a range cuts its page from every message the purpose may
   read.** The cap of `limits.context.messages` bounds a view with no range
   alone. A page still reports the cap floor as `earliest`, and a seat with

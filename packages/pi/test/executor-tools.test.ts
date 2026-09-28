@@ -137,7 +137,7 @@ describe('executor tool authority', () => {
 		await expect(call(say, 'same-key', { text: '   ' })).rejects.toThrow(blank);
 		expect(activation.readThrough).toBe(0);
 		await expect(call(say, 'same-key', { text: '  A useful answer.  ' })).resolves.toMatchObject({
-			content: [{ text: 'delivered' }],
+			content: [{ text: 'said #1' }],
 		});
 		expect(activation.cancelled).toBe(false);
 		expect(activation.readThrough).toBe(1);
@@ -159,7 +159,7 @@ describe('executor tool authority', () => {
 			to: ' priya ',
 			text: '  The exchange is complete.  ',
 		});
-		expect(result.content).toEqual([{ type: 'text', text: 'delivered' }]);
+		expect(result.content).toEqual([{ type: 'text', text: 'said #5' }]);
 		expect(result.terminate).toBe(true);
 		const request = (text: string) => ({
 			activation: 'closed:4:worker:1',
@@ -294,7 +294,7 @@ describe('executor tool authority', () => {
 			unchanged: { kind: 'seated', name: 'surveyor' },
 		});
 		await expect(call(tool(2), 'seat-call', { name: 'surveyor' })).resolves.toMatchObject({
-			content: [{ text: 'delivered' }],
+			content: [{ text: 'surveyor is already seated' }],
 		});
 		expect(commits).toEqual([
 			{

@@ -44,7 +44,9 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 				execution: piExecution({
 					sessions: 'memory',
 					stream: scripted((context) =>
-						toolResultTexts(context).includes('delivered') ? quiet() : speak('answer'),
+						toolResultTexts(context).some((text) => text.startsWith('said #'))
+							? quiet()
+							: speak('answer'),
 					),
 				}),
 			}),
