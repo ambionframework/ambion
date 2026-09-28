@@ -42,9 +42,13 @@ holds the positioning and the headline of what is new.
   text, tool calls, room calls, steers, approvals, and usage. The release
   entry keeps the usage sum.
 - **Artifacts by reference.** A message and a summary carry `refs`, URIs the
-  kernel validates, stores, and renders, and never reads behind. Rooms and
-  exchanges have URIs. Every resource change carries the activation, the
-  exchange, and the room that made it. See [Resources](resources.md).
+  kernel validates, stores, and renders, and never reads behind. A room, each
+  message, each snapshot of a workspace file, and each commit of a workspace
+  repository have URIs. A snapshot ref names bytes by their SHA-256. A
+  commit ref names a commit by its full hash. Each keeps its meaning when
+  the file changes or the branch moves. Every resource change carries the
+  activation, the exchange, and the room that made it. See
+  [Resources](resources.md).
 - **The workspace mirrors the collaboration onto itself.** An audit log
   records every tool call the workspace served, as one JSON line: the room,
   the agent, the tool, the arguments, and the result. A room mirror copies

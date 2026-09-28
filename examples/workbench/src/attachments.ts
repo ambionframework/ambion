@@ -1,5 +1,4 @@
 import { isImagePath } from './files.ts';
-import { fileUri } from './refs.ts';
 import type { Workbench } from './workbench.ts';
 
 /** One local file `/attach` copied into the workspace, staged as a ref of the next message. */
@@ -9,8 +8,8 @@ export interface StagedAttachment {
 }
 
 async function attach(host: Workbench, localPath: string): Promise<StagedAttachment> {
-	const entry = await host.attach(localPath);
-	return { path: entry.path, ref: fileUri(entry.path) };
+	const { path, ref } = await host.attach(localPath);
+	return { path, ref };
 }
 
 /** What `/attach` tells the terminal: a notice to say, or an error to show. */

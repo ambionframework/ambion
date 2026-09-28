@@ -75,8 +75,9 @@ account "$GIT_ACCOUNT"
 # group whatever umask the SFTP server has.
 install -d -m 2770 -o root -g "$GROUP" "$ROOT/audit"
 setfacl -d -m g::rw "$ROOT/audit"
-# Only the host account writes the room mirror. The agents read it.
+# Only the host account writes the room mirror and the snapshots. The agents read them.
 install -d -m 2750 -o lab-host -g "$GROUP" "$ROOT/rooms"
+install -d -m 2750 -o lab-host -g "$GROUP" "$ROOT/snapshots"
 
 rm -f "$STATE/ssh_host_ed25519_key" "$STATE/ssh_host_ed25519_key.pub"
 ssh-keygen -q -t ed25519 -N '' -f "$STATE/ssh_host_ed25519_key"
@@ -112,7 +113,7 @@ cat >"$STATE/workstation.json" <<EOF
 	"hostKey": "$fingerprint",
 	"external": "$EXTERNAL",
 	"keys": "$STATE/keys",
-	"layout": { "audit": "$ROOT/audit/audit.jsonl", "rooms": "$ROOT/rooms" }
+	"layout": { "audit": "$ROOT/audit/audit.jsonl", "rooms": "$ROOT/rooms", "snapshots": "$ROOT/snapshots" }
 }
 EOF
 

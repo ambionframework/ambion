@@ -34,6 +34,7 @@ ref that starts a job is a later design, and it builds on this one.
 | Work on a branch    | Ordinary `git` in `bash`: `switch -c`, `add`, `commit`, `merge`    |
 | Persist the edits   | `git push origin <branch>`                                         |
 | Review a peer       | `git clone <URL from repos>` of the peer's fork                    |
+| Cite a commit       | A commit ref with the full hash from `git rev-parse`, in `refs`    |
 
 ## Prompt an agent
 
@@ -72,8 +73,12 @@ that is still in the home, or it clones the fork again
   its repositories, and every agent reads every other repository.
 - **`fork` returns when the fork can be cloned.** An implementation that
   forks in the background waits inside the call.
-- **A message names a commit in its text.** The room does not check that
-  the commit exists. A ref scheme for commits is later work.
+- **A message cites a commit with a commit ref.** The ref holds the full
+  hash, and the branch or the tag that named the commit when the agent
+  cited it ([Cite a commit](#cite-a-commit)). The room checks the form of
+  the ref alone. A host checks the commit with `readCommit`. A message
+  cites a file of a commit with a snapshot ref of the file in a working
+  copy.
 - **A push does not name its activation.** `connect` receives no
   `ToolContext`. The audit log entry of the `bash` call holds the
   activation.
@@ -83,7 +88,7 @@ that is still in the home, or it clones the fork again
 **`git` is a third backend kind, beside `bash` and `sql`.** The
 `WorkspaceBackends` of [Workspace](workspace.md#query-the-shared-database)
 gets an optional `git` key. A workspace with no git backend has no `repos`
-and no `fork` tool, and its shell keeps the local `git` it has today.
+tool and no `fork` tool, and its shell keeps the local `git` it has today.
 
 **The root entry of `@ambionframework/workspace` holds the contract.** It
 imports no git library, the same as `SqlBackend`. The file is
@@ -113,6 +118,24 @@ interface GitAccess {
   readonly transport: string;
 }
 
+/** A branch, a tag, or a commit hash of 7 to 64 lowercase hex digits. */
+type GitRevision =
+  { readonly branch: string } | { readonly tag: string } | { readonly commit: string };
+
+type GitChange = 'added' | 'modified' | 'deleted';
+
+/** One commit: its message, its author, its parents, and the files it changed. */
+interface GitCommit {
+  readonly hash: string;
+  readonly message: string;
+  /** `date` is an ISO 8601 time. */
+  readonly author: { readonly name: string; readonly email: string; readonly date: string };
+  /** The full hashes of the parents. A root commit has none. */
+  readonly parents: readonly string[];
+  /** Each changed file against the first parent, by path. A root commit adds every file. */
+  readonly changes: readonly { readonly path: string; readonly change: GitChange }[];
+}
+
 type GitForkOutcome =
   | { readonly ok: true; readonly repository: GitRepository }
   | { readonly ok: false; readonly reason: 'no_source'; readonly source: GitRepositoryId }
@@ -124,6 +147,10 @@ interface GitEnv extends ResourceEnv {
   list(namespace?: string, signal?: AbortSignal): Promise<readonly GitRepository[]>;
   /** One repository, or `undefined` when it does not exist. */
   get(id: GitRepositoryId, signal?: AbortSignal): Promise<GitRepository | undefined>;
+  /** The full hash of the commit that `at` names, or `undefined` when nothing matches. */
+  resolve(id: GitRepositoryId, at: GitRevision, signal?: AbortSignal): Promise<string | undefined>;
+  /** The commit with the full hash `hash`, or `undefined` when the repository has none. */
+  show(id: GitRepositoryId, hash: string, signal?: AbortSignal): Promise<GitCommit | undefined>;
   /** Fork `source` to `<agent>/<name>`. Resolves when a clone of the fork succeeds. */
   fork(source: GitRepositoryId, name: string, signal?: AbortSignal): Promise<GitForkOutcome>;
 }
@@ -184,14 +211,17 @@ the same as `Workspace.sql`.
 
 - `WorkspaceBackends` gets `git`.
 - `BashBackend.connect` gets its third argument, `BashServices`.
-- `Workspace` gets `git`.
+- `Workspace` gets `git`, `commitRef`, and `readCommit`.
+- `GitEnv` gets `resolve` and `show`, and the root entry exports
+  `GitRevision`, `GitCommit`, and `GitChange`.
 - The root entry exports the types above.
 - The conformance entry exports `gitConformance`.
 - `@ambionframework/just-bash/git` exports `justGitBackend` and
   `sqliteGitStorage`.
 - `@ambionframework/workspace/git` exports the template helpers and the
-  name rules. `fromDirectory` comes from the root entry, since skills
-  read their files from it too ([Skills](skills.md)).
+  name rules, `revisionOf`, `validRefName`, `assertCommitHash`, and
+  `byPath` among them. `fromDirectory` comes from the root entry, since skills read their
+  files from it too ([Skills](skills.md)).
 
 ## Repositories and their names
 
@@ -377,27 +407,99 @@ calls `lab.git.use(agent, (env) => env.fork('templates/weekly-report',
 'report'))`, then clones through `lab.use`. The agent then starts with a
 working copy.
 
+## Cite a commit
+
+**A commit ref holds the full hash.** A branch moves at the next push, so
+a ref that names a branch alone changes its meaning. The ref keeps the
+name that pointed at the commit and the commit itself:
+
+```text
+ambion://workspace/<workspace>/repo/<namespace>/<name>/commit/<hash>
+ambion://workspace/<workspace>/repo/<namespace>/<name>/branch/<branch>/commit/<hash>
+ambion://workspace/<workspace>/repo/<namespace>/<name>/tag/<tag>/commit/<hash>
+```
+
+The kernel owns the form ([Definitions and tools](agent.md)). A branch or a
+tag name is one percent-encoded part, so `feature/pour` is
+`feature%2Fpour`. The hash has 40 hex digits, or 64 in a SHA-256
+repository.
+
+**An agent writes the ref, and a host checks it.** The git note states the
+form, and an agent takes the full hash from `git rev-parse` in its clone
+after it pushes. No tool makes the ref: the form is fixed text, and the
+room refuses a ref that is not canonical when the agent says it. Whether
+the commit exists on the server is a question for the reader of the ref.
+
+**`workspace.commitRef(repository, at)` gives a host the ref of the commit
+on the server.** `at` is `{ branch }`, `{ tag }`, or `{ commit }`, and a
+commit hash may be short. A host compares a cited ref with the one this
+gives, or cites a commit itself. It throws when the workspace has no git
+backend, and when the repository or the name does not exist.
+
+```ts
+const ref = await lab.commitRef('analyst/report', { branch: 'week-39' });
+await visit.send({ text: 'Week 39 is ready for review.', refs: [ref] });
+```
+
+**`workspace.readCommit(ref)` gives the commit that a ref names.** It
+gives a `GitCommit`: the message, the author, the parents, and each
+changed file. A host shows a cited commit with it, and the Workbench
+previews a commit ref with it. It throws when the ref is not a commit ref
+of this workspace, and when the repository holds no commit with the hash.
+The branch or the tag of the ref plays no part. The commit outlasts a move
+or a delete of its branch while the repository keeps it.
+
+```ts
+const commit = await lab.readCommit(ref);
+console.log(commit.message, commit.changes.length);
+```
+
+**`show` reads one commit by its full hash.** `assertCommitHash` in
+`@ambionframework/workspace/git` refuses a hash that is not 40 or 64
+lowercase hex digits, so no backend reads a short hash or a name. The
+message is the text git stores, with its last newline. The changes compare
+the commit with its first parent, with no rename detection, and `byPath`
+in `@ambionframework/workspace/git` gives their order. A file that becomes
+a symbolic link is `modified`. A merge commit lists what it changed against
+its first parent. The workstation passes `--diff-merges=first-parent` to
+`git diff-tree`, which needs git 2.31 or newer on the server.
+
+**`resolve` reads a name as a name.** `revisionOf(at)` in
+`@ambionframework/workspace/git` turns `at` into `refs/heads/<branch>`,
+`refs/tags/<tag>`, or the hash, and a backend adds `^{commit}`, so an
+annotated tag gives the commit it points at. `revisionOf` refuses a name
+that `git check-ref-format` refuses, such as `main~1` or `a..b`, and a hash
+that is not 7 to 64 lowercase hex digits.
+
+**A hash names an object alone.** A backend looks a hash up among the
+objects, and never among the branches and the tags. An agent can push a
+branch named `2076eb9`, and `{ commit: '2076eb9' }` still gives the commit
+whose hash starts with those digits. A prefix of more than one object gives
+nothing. An annotated tag object gives the commit it points at.
+
 ## The guidance
 
 **The workspace gives one guidance text to every agent.** `tools()`
 returns one `ToolBundle` for every seat, so the guidance names no agent.
 It says `<your name>`. The text enters every activation of every seat that
-holds the bundle, so the git note stays at six lines.
+holds the bundle, so the git note stays at nine lines.
 
 **`openWorkspace` joins the notes in this order.**
 
 1. The tool line, which counts the tools. With a git backend it names
-   ten: read, write, edit, bash, ps, status, wait, cancel, repos and fork.
-   With a SQL backend as well, it names eleven.
+   twelve: read, write, edit, bash, ps, status, wait, cancel, snapshot,
+   fetch, repos and fork. With a SQL backend as well, it names thirteen.
 2. The process note ([Processes](processes.md#the-guidance)).
-3. The SQL note, when the workspace has a SQL backend.
-4. The git note.
-5. The bash backend's note about its shell.
-6. The audit note, when `audit` is set.
-7. The rooms note.
+3. The snapshot note ([Snapshot a file](workspace.md#snapshot-a-file)).
+4. The SQL note, when the workspace has a SQL backend.
+5. The git note.
+6. The bash backend's note about its shell.
+7. The audit note, when `audit` is set.
+8. The rooms note.
 
 **The git note states the namespaces and the rule that persists an
-edit.** The workspace writes the backend's `server` into the first line.
+edit.** The workspace writes the backend's `server` into the first line, and
+its own name into the form of a commit ref.
 
 ```text
 repos and fork reach the git server of this workspace, <server>.
@@ -406,6 +508,9 @@ You push only to <your name>/<name>, and you can read every repository.
 To start from a template, fork it and set clone. Clone with the URL that repos or
 fork gives. In the clone, make a branch, commit, and push to origin with git in bash.
 An edit persists only after you commit it and push it. Push before you finish.
+To cite a commit you pushed, put its full hash from git rev-parse in the refs of a say:
+ambion://workspace/<workspace>/repo/<repository>/branch/<branch>/commit/<hash>. Use
+/tag/<tag> for a tag, or leave both out. Percent-encode the branch or tag name as one URI part, so / is %2F and # is %23.
 ```
 
 **The just-bash note changes one sentence.** Today it says: `A remote is
@@ -672,9 +777,9 @@ the agent's name.
 | Package                | File                                   | What it holds                                                                               |
 | ---------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `packages/workspace`   | `src/git-backend.ts`                   | The types of [The contract](#the-contract)                                                  |
-| `packages/workspace`   | `src/git-tools.ts`                     | `repos`, `fork`, and the git note                                                           |
+| `packages/workspace`   | `src/git-tools.ts`, `src/git-refs.ts`  | `repos`, `fork`, the git note, and the host's `commitRef` and `readCommit`                  |
 | `packages/workspace`   | `src/workspace.ts`                     | The git owner, the `connect` wrapper, the check of the transport, and the order of disposal |
-| `packages/workspace`   | `src/git-conformance.ts`               | `gitConformance`                                                                            |
+| `packages/workspace`   | `src/git-conformance*.ts`              | `gitConformance`, with its revision cases and helpers in two more files                     |
 | `packages/workspace`   | `src/git-entry.ts`                     | The `/git` entry                                                                            |
 | `packages/workspace`   | `src/git-names.ts`                     | The name rules of a repository ID                                                           |
 | `packages/workspace`   | `src/git-templates.ts`                 | The template registration, `filesOf`, and `changeTo`                                        |
@@ -714,6 +819,17 @@ the case opened.
 - An agent named `templates` or `template-sources` is refused, and it gets
   no credential (the hook `issueCredentials`).
 - The owner pushes a branch, and a peer reads it.
+- `resolve` gives the full hash for a branch, an annotated tag, a
+  lightweight tag, a short hash, and a full hash. A short hash gives its
+  commit when a branch has the same name. It gives nothing for a missing
+  name, a prefix of two blobs, a missing repository, and
+  `template-sources`, and it refuses `main~1` as a branch. `commitRef`
+  gives the ref of a tag.
+- `show` gives the message as git stores it, the author, the parent, and
+  the changed files of a pushed commit. The root commit of `templates/weekly-report` lists
+  every file as added. A merge commit names both parents, and lists its
+  changes against the first. `show` gives nothing for a missing commit and
+  for `template-sources`. `readCommit` gives the same commit from its ref.
 - A push to a template and a push to another agent's fork are refused,
   and the owner's push is accepted. The case checks the exit status of
   `git push`. The text of a refusal differs from one backend to the

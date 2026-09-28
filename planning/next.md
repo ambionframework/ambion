@@ -33,9 +33,9 @@ holds on main.
 is new. Ambion is reactive: a seat acts when a person speaks, when a seat
 addresses it, or when a say that it scheduled comes due.
 
-**0.4.0 is a release of simplification.** It adds two capabilities, the
-`import` of the `sql` tool and the fixed skills of each agent, which the
-changelog names. It removes each
+**0.4.0 is a release of simplification.** It adds three capabilities, the
+`import` of the `sql` tool, the fixed skills of each agent, and the
+refs to workspace files and commits, which the changelog names. It removes each
 second path to a fact of the room. Every item in the
 [backlog](backlog.md) waits until after 0.4.0, unless its condition holds
 first.
@@ -114,6 +114,11 @@ condition that brings each one back.
   `sqliteBackend` on the Ambion host.
 - **An `apply_patch` tool for Codex seats.** A live comparison with the
   `edit` tool decides it.
+- **A publish flow for snapshots, and more forms of the `ambion` scheme.**
+  Snapshot refs and commit refs land in 0.4.0. A publish to a store outside
+  the workspace, the sweep of copies that no message cites, and the forms
+  for a process output and a query wait for an application that needs
+  them.
 
 ## Decisions taken
 

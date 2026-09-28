@@ -5,6 +5,8 @@
  * tool does one thing. `repos` lists the repositories with their clone
  * URLs. `fork` forks a repository into the calling agent's namespace, and
  * with `clone` it puts a working copy of the fork in the agent's files.
+ * An agent writes a commit ref itself, from `git rev-parse`; the git note
+ * states the form.
  *
  * `fork` runs its fork as one operation on the git owner, and that
  * operation ends before the clone starts. The clone then runs as one
@@ -52,8 +54,11 @@ export interface GitToolOptions {
 /** The tool names, in the order the tool line of the guidance lists them. */
 export const GIT_TOOL_NAMES = ['repos', 'fork'] as const;
 
-/** Guidance for the git tools over a server that the workspace names `server`. */
-export function gitToolGuidance(server: string): string {
+/**
+ * Guidance for the git tools over a server that the workspace names
+ * `server`, in the workspace `workspace`, the first part of a commit ref.
+ */
+export function gitToolGuidance(server: string, workspace: string): string {
 	return [
 		`repos and fork reach the git server of this workspace, ${server}.`,
 		`templates/<name> is a read-only template. <agent>/<name> belongs to that agent.`,
@@ -61,6 +66,9 @@ export function gitToolGuidance(server: string): string {
 		`To start from a template, fork it and set clone. Clone with the URL that repos or`,
 		`fork gives. In the clone, make a branch, commit, and push to origin with git in bash.`,
 		`An edit persists only after you commit it and push it. Push before you finish.`,
+		`To cite a commit you pushed, put its full hash from git rev-parse in the refs of a say:`,
+		`ambion://workspace/${workspace}/repo/<repository>/branch/<branch>/commit/<hash>. Use`,
+		`/tag/<tag> for a tag, or leave both out. Percent-encode the branch or tag name as one URI part, so / is %2F and # is %23.`,
 	].join('\n');
 }
 

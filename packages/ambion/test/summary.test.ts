@@ -927,8 +927,8 @@ describe('a fold', () => {
 		expect(lines).toEqual([
 			'── 3 messages, summarised for priya below ──',
 			'── 3 messages, summarised for sam below ──',
-			'[assistant → sam] the message sam reads  (just now)',
-			'[assistant → priya] the message priya reads  (just now)',
+			'#7 [assistant → sam] the message sam reads  (just now)',
+			'#8 [assistant → priya] the message priya reads  (just now)',
 		]);
 	});
 });

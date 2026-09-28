@@ -58,12 +58,54 @@ export type GitForkOutcome =
 	| { readonly ok: false; readonly reason: 'name_taken'; readonly repository: GitRepository }
 	| { readonly ok: false; readonly reason: 'refused'; readonly message: string };
 
+/**
+ * A name of one commit: a branch, a tag, or a commit hash of 7 to 64
+ * lowercase hex digits. A short hash must name one commit alone.
+ */
+export type GitRevision =
+	{ readonly branch: string } | { readonly tag: string } | { readonly commit: string };
+
+/** How a commit changed one path against its first parent. */
+export type GitChange = 'added' | 'modified' | 'deleted';
+
+/** One commit, as a backend reads it. */
+export interface GitCommit {
+	/** The full hash. */
+	readonly hash: string;
+	/** The whole message, subject and body. */
+	readonly message: string;
+	/** The author, and the author date as an ISO timestamp. */
+	readonly author: { readonly name: string; readonly email: string; readonly date: string };
+	/** The full hash of each parent, in order. A root commit has none. */
+	readonly parents: readonly string[];
+	/**
+	 * Each path the commit changed against its first parent, or against an
+	 * empty tree for a root commit, in path order. A rename is a deletion and
+	 * an addition.
+	 */
+	readonly changes: readonly { readonly path: string; readonly change: GitChange }[];
+}
+
 /** One agent's environment over the git backend. */
 export interface GitEnv extends ResourceEnv {
 	/** The repositories, in ID order. `namespace` limits the list to one namespace. */
 	list(namespace?: string, signal?: AbortSignal): Promise<readonly GitRepository[]>;
 	/** One repository, or `undefined` when it does not exist. */
 	get(id: GitRepositoryId, signal?: AbortSignal): Promise<GitRepository | undefined>;
+	/**
+	 * The full hash of the commit that `at` names in the repository `id`, or
+	 * `undefined` when the repository, the branch, the tag, or the commit
+	 * does not exist. A tag gives the commit it points at. Call
+	 * `revisionOf(at)` for the revision to read: it refuses a name that git
+	 * would read as an expression.
+	 */
+	resolve(id: GitRepositoryId, at: GitRevision, signal?: AbortSignal): Promise<string | undefined>;
+	/**
+	 * The commit with the full hash `hash` in the repository `id`, or
+	 * `undefined` when the repository or the commit does not exist. Call
+	 * `assertCommitHash(hash)` first: it refuses anything but a full hash.
+	 */
+	show(id: GitRepositoryId, hash: string, signal?: AbortSignal): Promise<GitCommit | undefined>;
 	/** Fork `source` to `<agent>/<name>`. Resolves when a clone of the fork succeeds. */
 	fork(source: GitRepositoryId, name: string, signal?: AbortSignal): Promise<GitForkOutcome>;
 }

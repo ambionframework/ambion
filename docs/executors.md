@@ -383,7 +383,7 @@ family. `@ambionframework/claude` is the worked example, and
 2. **Render with the shared helpers.** Call `renderActivation` on the first
    pass and `renderDelta` on later passes. [The prompt the driver
    renders](#the-prompt-the-driver-renders) states where each part goes.
-3. **Expose the three room tools.** Call `roomTools` and `agentTools` for
+3. **Expose the room tools.** Call `roomTools` and `agentTools` for
    one activation, and adapt each result to the form the harness needs.
    [The room tools](#the-room-tools) states the commit key and the room
    answers.

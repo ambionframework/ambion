@@ -46,7 +46,7 @@ export function wrapped(
 	return {
 		connect: (agent, signal, services) => inner.connect(agent, signal, services),
 		gitTransports: inner.gitTransports,
-		layout: { audit: DEFAULT_AUDIT_LOG, rooms: '/rooms' },
+		layout: { audit: DEFAULT_AUDIT_LOG, rooms: '/rooms', snapshots: '/snapshots' },
 		...make(inner),
 	};
 }

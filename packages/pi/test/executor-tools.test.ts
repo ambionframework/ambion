@@ -227,7 +227,7 @@ describe('executor tool authority', () => {
 				type: 'text',
 				text: [
 					'scheduled 6: the room gives this say back to you at 2026-01-01T00:10:00.000Z. New on the record before it:',
-					'[priya] Also the tests.',
+					'#5 [priya] Also the tests.',
 				].join('\n'),
 			},
 		]);

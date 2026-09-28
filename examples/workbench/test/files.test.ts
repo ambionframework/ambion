@@ -5,6 +5,7 @@ import { memoryBackend } from '@ambionframework/just-bash';
 import { BACKGROUND_CONTEXT, openWorkspace } from '@ambionframework/workspace';
 import { afterEach, describe, expect, it } from 'vitest';
 import { attachFile, isImagePath, readFile } from '../src/files.ts';
+import { readSnapshotFile } from '../src/previews.ts';
 
 const scribe = { name: 'scribe' };
 
@@ -54,7 +55,7 @@ describe('readFile on a picture', () => {
 });
 
 describe('attachFile', () => {
-	it('copies a real local file into the workspace, under /attachments', async () => {
+	it('copies a real local file into the workspace, under /attachments, and snapshots it', async () => {
 		const dir = await mkdtemp(join(tmpdir(), 'ambion-attach-'));
 		directories.push(dir);
 		const localPath = join(dir, 'board.png');
@@ -70,6 +71,10 @@ describe('attachFile', () => {
 		);
 		if (!stored.ok) throw new Error('The attached file is missing from the workspace.');
 		expect(Array.from(stored.value)).toEqual(Array.from(FAKE_PNG));
+		expect(Array.from(await site.readSnapshot(entry.ref))).toEqual(Array.from(FAKE_PNG));
+		const shown = await readSnapshotFile(site, entry.ref);
+		expect(shown.image?.mimeType).toBe('image/png');
+		expect(Array.from(shown.image?.data ?? [])).toEqual(Array.from(FAKE_PNG));
 		await site.dispose();
 	});
 

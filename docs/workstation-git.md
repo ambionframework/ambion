@@ -105,7 +105,11 @@ const lab = openWorkspace({
   backend: {
     bash: workstationBackend({
       ...server,
-      layout: { audit: '/srv/ambion/lab/audit/audit.jsonl', rooms: '/srv/ambion/lab/rooms' },
+      layout: {
+        audit: '/srv/ambion/lab/audit/audit.jsonl',
+        rooms: '/srv/ambion/lab/rooms',
+        snapshots: '/srv/ambion/lab/snapshots',
+      },
       credentialFor: async (agent) => ({
         username: agent.name,
         privateKey: await readFile(`/etc/ambion/keys/${agent.name}`, 'utf8'),
