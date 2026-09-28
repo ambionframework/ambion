@@ -358,9 +358,34 @@ describe('the host view', () => {
 		expect(await workspace.processes.list({ agent: 'beta' })).toEqual([]);
 		expect((await workspace.processes.cancel(handle)).state).toBe('cancelled');
 		expect(events).toEqual([`started ${handle}`, `ended ${handle}`]);
+		// A read that sees the exit before the run ends gives no event: the run gives the one end.
+		const gated = await call(workspace, 'bash', {
+			command: 'until [ -f ~/gate ]; do sleep 0.01; done',
+			wait: 0,
+		});
+		const late = gated.details.process;
+		const ended = Promise.withResolvers<void>();
+		workspace.processes.subscribe((event) => {
+			if (event.type === 'ended' && event.process.handle === late.handle) ended.resolve();
+		});
+		const lateDir = late.output.slice(0, late.output.lastIndexOf('/'));
+		await workspace.use({ name: 'alpha' }, (env) => writeExit(env, lateDir, 0));
+		const seen = await workspace.processes.list();
+		expect(seen.find((one) => one.handle === late.handle)?.state).toBe('exited');
+		expect(events).toHaveLength(3);
+		await workspace.use({ name: 'alpha' }, (env) =>
+			env.exec('touch ~/gate', undefined, BACKGROUND_CONTEXT),
+		);
+		await ended.promise;
+		expect(events).toEqual([
+			`started ${handle}`,
+			`ended ${handle}`,
+			`started ${late.handle}`,
+			`ended ${late.handle}`,
+		]);
 		unsubscribe();
 		await call(workspace, 'bash', { command: 'true' });
-		expect(events).toHaveLength(2);
+		expect(events).toHaveLength(4);
 		await expect(workspace.processes.cancel('bash-000000000000')).rejects.toThrow(
 			'The workspace has no process bash-000000000000.',
 		);

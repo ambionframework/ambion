@@ -202,11 +202,11 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		const mine = ours.has(handle) || runs(handle);
 		const found = { files, status: statusOf(files, mine) };
 		await recordLost(env, found);
-		// A process that this run runs reads `running`, so an end here is the end of an adopted one.
+		// The run of a process with `own` gives its one end, so a read ends an adopted process alone.
 		const known = live.get(handle);
 		if (found.status.state === 'running') {
 			if (!mine) adopt(agent, files);
-		} else if (known !== undefined) settle(known, found.status);
+		} else if (known !== undefined && known.own === undefined) settle(known, found.status);
 		return found;
 	};
 
