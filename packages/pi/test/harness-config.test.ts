@@ -139,6 +139,7 @@ describe('the harness of an activation', () => {
 		const [ordinary, closed] = requests;
 		expect(names(ordinary?.context as Context)).toEqual([
 			'say',
+			'schedule',
 			'seat',
 			'unseat',
 			'dismiss',

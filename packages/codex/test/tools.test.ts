@@ -59,6 +59,7 @@ describe('the tool list and domain tools', () => {
 			'dismiss',
 			'lookup',
 			'say',
+			'schedule',
 			'seat',
 			'unseat',
 		]);

@@ -3,14 +3,14 @@
  * activation, and every other seat stays quiet. It routes on the model id,
  * the way the runtime's own test support does.
  *
- * The `checker` seat schedules a say to itself, and answers when it returns.
+ * The `checker` seat calls `schedule`, and answers when the say returns.
  *
  * The `slow` seat waits before it answers. Its activation is then provably
  * in flight while a test takes the room object away, so the commit that
  * follows is served by the room that came back.
  */
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import type { Context, JsonObject } from '@earendil-works/pi-ai';
+import type { Context } from '@earendil-works/pi-ai';
 import {
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,
@@ -23,7 +23,7 @@ let answers = 0;
 const SLOW_MS = 1_000;
 
 /**
- * The checker says to itself with `after`, and answers when the say comes
+ * The checker calls `schedule`, and answers when the say comes
  * back. A question about tomorrow waits an hour, so a test can dismiss it.
  */
 function check(context: Context) {
@@ -31,10 +31,10 @@ function check(context: Context) {
 		context.messages.some(
 			(message) => message.role === 'user' && JSON.stringify(message.content).includes(text),
 		);
-	const say: JsonObject = has('[returned → checker')
-		? { to: 'priya', text: 'The check came back.' }
-		: { to: 'checker', text: 'Check the pour log.', after: has('tomorrow') ? 3600 : 1 };
-	return fauxAssistantMessage([fauxToolCall('say', say)], { stopReason: 'toolUse' });
+	const call = has('[returned → checker')
+		? fauxToolCall('say', { to: 'priya', text: 'The check came back.' })
+		: fauxToolCall('schedule', { text: 'Check the pour log.', after: has('tomorrow') ? 3600 : 1 });
+	return fauxAssistantMessage([call], { stopReason: 'toolUse' });
 }
 
 /** The product answers on the first call of every pass; a call after a tool result is quiet. */

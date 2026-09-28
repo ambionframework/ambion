@@ -73,6 +73,9 @@ export function createClaudeExecutor(options: ClaudeExecutorOptions): Executor {
 	};
 }
 
+/** Whether a tool speaks on the record: the room reports its own event for it. */
+const spoken = (name: string): boolean => name === 'say' || name === 'schedule';
+
 /** A steered line held until its pass starts. */
 interface Held {
 	readonly after: Seq;
@@ -369,8 +372,8 @@ class Activation implements ExecutorSession {
 
 	private started(call: string, name: string): void {
 		this.named.set(call, name);
-		// `say` is the room's own event, not a tool's.
-		if (name !== 'say') this.toolEvent('tool_execution_start', name);
+		// A say or a schedule is the room's own event, not a tool's.
+		if (!spoken(name)) this.toolEvent('tool_execution_start', name);
 	}
 
 	private finished(call: string): void {
@@ -379,7 +382,7 @@ class Activation implements ExecutorSession {
 		const seq = this.expected.get(call);
 		if (seq !== undefined) this.advance(seq);
 		this.expected.delete(call);
-		if (name !== undefined && name !== 'say') this.toolEvent('tool_execution_end', name);
+		if (name !== undefined && !spoken(name)) this.toolEvent('tool_execution_end', name);
 	}
 
 	private toolEvent(type: 'tool_execution_start' | 'tool_execution_end', name: string): void {

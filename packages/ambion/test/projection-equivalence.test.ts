@@ -120,7 +120,7 @@ class Walk {
 		});
 	}
 
-	/** A seat says to itself with `after`, stamped with the owner the room would give it. */
+	/** A seat schedules a say to itself, stamped with the owner the room would give it. */
 	private scheduled(): Entry {
 		const seat = this.pick(SEATS);
 		this.scheduledSays.push({ seq: this.seq, seat });

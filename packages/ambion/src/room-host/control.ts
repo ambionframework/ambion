@@ -115,10 +115,28 @@ export async function writeCommit(
 					reason: messageKeyConflict(commit.key, message),
 				},
 			};
-		return { committed: copyMessage(message) };
+		return { committed: copyMessage(message), ...unreadBefore(host, commit, message) };
 	}
 	if (appended.result === undefined) throw new Error('The commit did not propose a message.');
 	return appended.result;
+}
+
+/**
+ * The messages a scheduled say landed past, from the record: after its
+ * `readThrough` and before the say. A retry under the same key reads the
+ * same record, so it hands back the same messages.
+ */
+function unreadBefore(
+	host: ControlHost,
+	commit: CommitRequest,
+	message: Message,
+): { unread?: Message[] } {
+	const { readThrough, intent } = commit;
+	if (intent.kind !== 'said' || intent.after === undefined || readThrough === undefined) return {};
+	const unread = host
+		.state()
+		.messages.filter((entry) => entry.seq > readThrough && entry.seq < message.seq);
+	return unread.length === 0 ? {} : { unread: unread.map(copyMessage) };
 }
 
 export async function hold(

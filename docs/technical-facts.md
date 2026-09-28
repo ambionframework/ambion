@@ -93,7 +93,7 @@ holds the positioning and the headline of what is new.
   background process with a handle. The files of the bash backend hold the
   process table, so a new run of the host adopts the live processes. See
   [Processes](processes.md).
-- **A clock that the agent sets.** An agent says to itself with `after`,
+- **A clock that the agent sets.** An agent calls `schedule` with `after`,
   and the room returns the say when it is due. The journal holds the
   schedule, and the host arms one alarm. See
   [Exchange](exchange.md#6-a-scheduled-say).

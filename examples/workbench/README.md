@@ -78,7 +78,7 @@ press Ctrl+R to pick a room.
 `/abort` runs at once. Typing the command is the confirmation. Switching
 person leaves the current room, then enters it as the new person.
 
-**A say that waits to return shows as a note.** An agent schedules a say
+**A say that waits to return shows as a note.** An agent calls `schedule`
 with `after`. The conversation notes the say with its seat, its due time,
 its owner, its text, and its handle, as in `(/dismiss 41)`. `/dismiss `
 lists the says that wait. `/dismiss 41` calls `room.dismiss`, and the

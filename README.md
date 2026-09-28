@@ -52,8 +52,8 @@ pushes, and cites the commit by its full hash. See
 [Workspace](docs/workspace.md), [Processes](docs/processes.md),
 [Snapshot a file](docs/workspace.md#snapshot-a-file), and [Git](docs/git.md).
 
-**An agent comes back to its work later.** It says to itself with `after`, in
-seconds. The exchange closes while the say waits. When the say is due, the
+**An agent comes back to its work later.** It calls `schedule` with `after`,
+in seconds. The exchange closes while the say waits. When the say is due, the
 room gives it back, and the returned say opens an exchange for the person who
 owned the first one. An agent checks a long build this way with no event
 source and no host code. See [Exchange](docs/exchange.md#6-a-scheduled-say).

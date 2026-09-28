@@ -126,11 +126,12 @@ condition that brings each one back.
   activation, and a wait stops before the room ends the activation. A host
   that wants a wake posts a message
   ([Processes](../docs/processes.md#the-end-of-a-process)).
-- **A scheduled say goes to its author alone.** `to` names the author if
-  and only if `after` is set. The room stamps everything else: the author,
-  the returned say, and the owner of the exchange that it opens.
-  No seat speaks under the name of a person, and no seat schedules work
-  for another seat.
+- **A scheduled say goes to its author alone.** The `schedule` tool sets
+  `to` to the author and `after` to its argument. On the record, `to` names
+  the author if and only if `after` is set. The room stamps everything
+  else: the author, the returned say, and the owner of the exchange that it
+  opens. No seat speaks under the name of a person, and no seat schedules
+  work for another seat.
 - **A returned say is an ordinary message when it lands.** It opens an
   exchange when none is open. When an exchange is open, it joins it and
   steers work, and the owner of that exchange stays the owner.

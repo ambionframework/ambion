@@ -69,10 +69,11 @@ const lookup = defineTool({
 });
 ```
 
-Every ordinary activation receives `say`, `seat`, and `unseat`, plus the tools
-from its definition. A closing activation receives only `say`. `say` accepts
-`{ text, to?, refs?, after? }`. A say to oneself with `after` is a scheduled
-say ([Exchange](exchange.md#6-a-scheduled-say)). The room stamps the author,
+Every ordinary activation receives `say`, `schedule`, `seat`, `unseat`, and
+`dismiss`, plus the tools from its definition. A closing activation receives
+only `say`. `say` accepts `{ text, to?, refs? }`. `schedule` accepts
+`{ after, text, refs? }` and writes a scheduled say
+([Exchange](exchange.md#6-a-scheduled-say)). The room stamps the author,
 activation, time, and routing facts. `seat` and `unseat` accept an agent
 name. The room validates operations at the commit boundary.
 

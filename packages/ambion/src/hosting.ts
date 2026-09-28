@@ -30,6 +30,7 @@ export {
 	describeExecutor,
 	executorOfKind,
 	SAY,
+	SCHEDULE,
 	SEAT,
 	UNSEAT,
 } from './define.ts';

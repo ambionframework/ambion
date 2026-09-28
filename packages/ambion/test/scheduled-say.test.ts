@@ -1,5 +1,5 @@
 /**
- * A scheduled say, end to end: an agent says to itself with `after`, the
+ * A scheduled say, end to end: an agent calls `schedule` with `after`, the
  * exchange closes while the say waits, and the room gives the say back when
  * it is due. The returned entry opens an exchange for the person who owned
  * the first one, and the agent answers them. A room that stops or crashes
@@ -23,6 +23,7 @@ import { crash, roomName, scriptedAgent, stateOf, waitForRoom } from './support/
 import {
 	callTool,
 	contextText,
+	later,
 	quiet,
 	type Script,
 	scripted,
@@ -47,8 +48,7 @@ const checksLater: Script = (context) => {
 	if (last === 'delivered' || last?.startsWith('scheduled')) return quiet();
 	if (contextText(context).includes('[returned → worker'))
 		return speak('The build passed.', 'priya');
-	return callTool('say', {
-		to: 'worker',
+	return callTool('schedule', {
 		text: 'Check the build.',
 		refs: ['file:///builds/out.log'],
 		after: AFTER,
@@ -67,7 +67,7 @@ const changesItsMind: Script = (context) => {
 	if (handle !== undefined) return callTool('dismiss', { handle: Number(handle) });
 	if (last?.startsWith('dismissed')) return speak('I dropped the check.', 'priya');
 	if (last !== undefined) return quiet();
-	return callTool('say', { to: 'worker', text: 'Check the build.', after: AFTER });
+	return later('Check the build.', AFTER);
 };
 
 const kinds = (messages: readonly Message[]) =>

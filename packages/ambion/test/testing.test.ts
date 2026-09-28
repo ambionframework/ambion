@@ -13,6 +13,7 @@ import {
 	callTool,
 	fakeClock,
 	isClosing,
+	later,
 	quiet,
 	type Script,
 	scripted,
@@ -236,18 +237,23 @@ describe('scriptedExecutor', () => {
 	});
 	const input = (v: ActivationView): PassInput => ({ kind: 'view', view: v });
 
-	it('commits a say against the position it read and advances readThrough', async () => {
-		const { activation, commits } = harness(() => said(4));
+	it('commits a say and a schedule against the position it read and advances readThrough', async () => {
+		const { activation, commits } = harness(() => said(3 + commits.length));
 		const session = scriptedExecutor(
-			(_step, _seat, call) => (call === 1 ? speak('hi') : quiet()),
+			(_step, _seat, call) =>
+				call === 1 ? speak('hi') : call === 2 ? later('Check the build.', 600) : quiet(),
 			agent('a'),
 		).open(activation);
 		await expect(session.pass(input(respond))).resolves.toEqual({ failed: false });
-		expect(commits).toHaveLength(1);
+		expect(commits).toHaveLength(2);
 		expect(commits[0]).toMatchObject({ readThrough: 3, intent: { kind: 'said', text: 'hi' } });
-		expect(session.readThrough).toBe(4);
-		expect(session.shouldRefresh(4)).toBe(false);
-		expect(session.shouldRefresh(5)).toBe(true);
+		expect(commits[1]).toMatchObject({
+			readThrough: 4,
+			intent: { kind: 'said', to: 'a', text: 'Check the build.', after: 600 },
+		});
+		expect(session.readThrough).toBe(5);
+		expect(session.shouldRefresh(5)).toBe(false);
+		expect(session.shouldRefresh(6)).toBe(true);
 	});
 
 	it('takes the messages a refused say missed as read, and lets the script say again', async () => {

@@ -22,6 +22,7 @@ import {
 	callTool,
 	contextText,
 	isClosing,
+	later,
 	quiet,
 	type Script,
 	says,
@@ -195,7 +196,7 @@ const exhausted = (): Promise<readonly JournalEntry[]> =>
 const checksLater: Script = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
 	if (contextText(context).includes('[returned → worker')) return speak('The slab is poured.');
-	return callTool('say', { to: worker.name, text: 'Check the pour log.', after: 600 });
+	return later('Check the pour log.', 600);
 };
 
 /**
@@ -228,10 +229,8 @@ const scheduled = (): Promise<readonly JournalEntry[]> =>
 const changesItsMind: Script = (context) => {
 	const results = toolResultTexts(context);
 	const [first] = results.flatMap((text) => /^scheduled (\d+):/.exec(text)?.[1] ?? []);
-	if (results.length === 0)
-		return callTool('say', { to: worker.name, text: 'Check the pour log.', after: 600 });
-	if (results.length === 1)
-		return callTool('say', { to: worker.name, text: 'Check the crane log.', after: 1200 });
+	if (results.length === 0) return later('Check the pour log.', 600);
+	if (results.length === 1) return later('Check the crane log.', 1200);
 	if (results.length === 2) return callTool('dismiss', { handle: Number(first) });
 	return quiet();
 };

@@ -277,8 +277,8 @@ describe('Workbench host', () => {
 			stream: scriptedStream((agent, call, closing) => {
 				if (closing || agent !== 'assistant' || call !== 1)
 					return fauxAssistantMessage('quiet', { stopReason: 'stop' });
-				const later = { to: 'assistant', text: 'Check the bench supply.', after: 600 };
-				return fauxAssistantMessage([fauxToolCall('say', later)], { stopReason: 'toolUse' });
+				const later = { text: 'Check the bench supply.', after: 600 };
+				return fauxAssistantMessage([fauxToolCall('schedule', later)], { stopReason: 'toolUse' });
 			}),
 		});
 		await workbench.join('bringup', 'mira');
