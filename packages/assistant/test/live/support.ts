@@ -15,13 +15,14 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
+	type HumanDefinition,
 	isSpoken,
 	type Message,
 	type Room,
 	type SpokenMessage,
 	startRoom,
 } from '@ambionframework/ambion';
-import type { Execution } from '@ambionframework/ambion/hosting';
+import { type Execution, visitOf } from '@ambionframework/ambion/hosting';
 import { byAgent, quiet, type Script, scripted, speak } from '@ambionframework/ambion/testing';
 import { type PiOptions, piExecution } from '@ambionframework/pi';
 import type { Run, RunExchange, Verdict } from '@ambionframework/simulator';
@@ -63,29 +64,75 @@ export interface RoomOptions {
 	readonly instructions?: string;
 	/** The assistant's model and execution. Absent, the live model on `piExecution()`. */
 	readonly assistant?: { readonly model: string; readonly execution: Execution };
+	/**
+	 * The person who leaves after the first question, before the first
+	 * activation of the assistant starts. Absent, nobody leaves early.
+	 */
+	readonly leaves?: HumanDefinition;
+}
+
+/**
+ * `execution`, whose every wake waits until `hold` resolves. The first wake
+ * calls `hold`, and each later wake, a resent one included, waits on that
+ * call. No activation starts before the entry that `hold` lands.
+ */
+function heldUntil(execution: Execution, hold: () => Promise<void>): Execution {
+	let held: Promise<void> | undefined;
+	return {
+		...(execution.kind === undefined ? {} : { kind: execution.kind }),
+		connector(host) {
+			const inner = execution.connector(host);
+			return {
+				connect(room, request) {
+					const port = inner.connect(room, request);
+					return {
+						wake: async (wake) => {
+							held ??= hold();
+							await held;
+							return port.wake(wake);
+						},
+						steer: (steer) => port.steer(steer),
+						cut: (activation) => port.cut(activation),
+					};
+				},
+			};
+		},
+	};
 }
 
 /**
  * A room with the default assistant and the `inventory` specialist, on its
  * own runtime, stopped when the test ends. The assistant runs on its model,
- * and the specialist on its script.
+ * and the specialist on its script. With `leaves`, the first wake of the
+ * assistant waits until that person leaves: the person sends the question,
+ * and the departure lands on the record before the first activation starts.
  */
 export async function openRoom(options: RoomOptions): Promise<Room> {
 	const model = options.assistant?.model ?? MODEL;
+	let room: Room | undefined;
+	const { leaves } = options;
+	const assistant = options.assistant?.execution ?? piExecution();
 	// The assistant runs on Pi, and the scripted execution serves every other kind.
 	const execution = [
-		options.assistant?.execution ?? piExecution(),
+		leaves === undefined
+			? assistant
+			: heldUntil(assistant, async () => {
+					const visit = room === undefined ? undefined : visitOf(room, leaves.name);
+					if (visit === undefined) throw new Error(`${leaves.name} is not in the room to leave.`);
+					await visit.leave();
+				}),
 		scripted(byAgent({ inventory: options.specialist })),
 	];
-	const room = await startRoom({
+	const started = await startRoom({
 		name: `assistant-eval-${crypto.randomUUID()}`,
 		assistant: defineAssistant({ model, thinking: THINKING, instructions: options.instructions }),
 		agents: [inventory],
 		seats: options.attention === undefined ? {} : { inventory: options.attention },
 		runtime: createRuntime({ execution }),
 	});
-	onTestFinished(() => room.stop());
-	return room;
+	room = started;
+	onTestFinished(() => started.stop());
+	return started;
 }
 
 /** What a scripted specialist says: text to the room, or text to one participant. */

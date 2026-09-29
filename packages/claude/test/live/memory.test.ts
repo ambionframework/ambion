@@ -9,7 +9,8 @@ import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import type { CommitRequest, RoomProtocol, TraceSink } from '../../../ambion/src/hosting.ts';
+import { ActivationState } from '../../../ambion/src/execution/activation.ts';
+import type { CommitRequest, RoomProtocol, StepSink } from '../../../ambion/src/hosting.ts';
 import { isSpoken, type Step } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
 import { createClaudeExecutor } from '../../src/index.ts';
@@ -109,21 +110,18 @@ live('memory', () => {
 				};
 			},
 		};
-		const trace: TraceSink = {
-			startPass: () => {},
+		const trace: StepSink = {
 			record: (step) => void steps.push(step),
-			usage: () => undefined,
-			close: async () => {},
 		};
-		const executor = createClaudeExecutor({
-			definition: seat('sonnet', 'Answers what is asked.', {
-				instructions: 'Answer the question with one say, in one sentence. Guess if you must.',
-			}),
+		const definition = seat('sonnet', 'Answers what is asked.', {
+			instructions: 'Answer the question with one say, in one sentence. Guess if you must.',
 		});
+		const executor = createClaudeExecutor({ definition });
 		const view = viewOf();
-		const session = executor.open({
+		const session = new ActivationState(executor, {
 			id: view.spec.id,
 			room,
+			definition,
 			emit: () => {},
 			trace,
 		});

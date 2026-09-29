@@ -8,10 +8,6 @@
 import type { FailureCause, PassResult } from '@ambionframework/ambion/hosting';
 import { classifyCause, providerMessage } from '@ambionframework/ambion/hosting';
 
-/** Error text that names a quota, a usage limit, or an authentication refusal, in phrases a retry cannot clear. */
-const PERMANENT_TEXT =
-	/insufficient_quota|exceeded your current quota|usage[_\s-]?limit|credit balance|authentication_error|permission_error|invalid_request_error|invalid[_\s-]?api[_\s-]?key|unauthorized|permission denied|not logged in|missing bearer/i;
-
 /** Error text that names a full context window or a spent output limit. */
 const LENGTH_TEXT =
 	/context[_\s-]?(?:length|window)|max(?:imum)?[_\s-]?output[_\s-]?tokens|exceeds? the (?:model's )?maximum/i;
@@ -23,12 +19,11 @@ function statusOf(text: string): number | undefined {
 }
 
 /**
- * Whether a failure is permanent or transient. A quota or authentication
- * refusal in the text, or a permanent HTTP status, is permanent. Every
- * other failure is transient, so an uncertain message retries.
+ * Whether a failure is permanent or transient, by the shared classifier. The
+ * status is the one the caller gives, else the one the text names.
  */
 export function causeOf(text: string, status?: number | null): FailureCause {
-	return classifyCause({ text, status: status ?? statusOf(text), permanent: PERMANENT_TEXT });
+	return classifyCause({ text, status: status ?? statusOf(text) });
 }
 
 /**

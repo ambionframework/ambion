@@ -6,12 +6,12 @@
  * message of type `ambion.record`: the rendered text, and in its details the
  * position the range starts after and the position it runs through. The
  * session keeps the details on disk and in memory. The harness hook that
- * turns the session into provider messages hands `Freshness` the messages of
- * each request. A range counts as read when a request holds it and it joins
- * the position already read. A user message with the same text never
- * counts: only the custom type and its details do.
+ * turns the session into provider messages reads the messages of each
+ * request, and tells the core each range and each tool result that the
+ * request holds. The core keeps the position read. A user message with the
+ * same text never counts: only the custom type and its details do.
  */
-import type { Seq } from '@ambionframework/ambion/hosting';
+import type { ExecutorActivation, ReadRange, Seq } from '@ambionframework/ambion/hosting';
 import type { AgentMessage, CustomMessage } from '@earendil-works/pi-agent-core';
 import { convertToLlm, createCustomMessage } from '@earendil-works/pi-agent-core';
 import type { Message } from '@earendil-works/pi-ai';
@@ -22,10 +22,8 @@ export const RECORD = 'ambion.record';
 /** The custom entry that holds the position a session read through. */
 export const READ = 'ambion.read';
 
-/** One range of the record: after `after`, through `through`. */
-interface Range {
-	readonly after: Seq;
-	readonly through: Seq;
+/** One range of the record in the session. */
+interface Range extends ReadRange {
 	/** Set on a line steered into a live run. */
 	readonly steer?: true;
 }
@@ -69,69 +67,23 @@ export function providerMessages(messages: AgentMessage[]): Message[] {
 	);
 }
 
-/** The position one activation read through, from what reached the provider. */
-export class Freshness {
-	private read: Seq;
-	/** Ranges a request held that do not yet join the position read. */
-	private readonly consumed = new Map<Seq, Range>();
-	/** Tool results that carry record, by call id. */
-	private readonly toolResults = new Map<string, Seq>();
-
-	constructor(base: Seq = 0) {
-		this.read = base;
-	}
-
-	get readThrough(): Seq {
-		return this.read;
-	}
-
-	/** Something other than provider input confirmed the record through `seq`. */
-	acknowledgeThrough(seq: Seq): void {
-		this.read = Math.max(this.read, seq);
-	}
-
-	/** The result of the tool call `callId` carries the record through `seq`. */
-	toolResultExpected(callId: string, seq: Seq): void {
-		this.toolResults.set(callId, seq);
-	}
-
-	/**
-	 * Read the messages of one provider request. Answer the positions of the
-	 * steered lines the request holds.
-	 */
-	provided(messages: readonly AgentMessage[]): Seq[] {
-		const steers: Seq[] = [];
-		for (const message of messages) {
-			const range = rangeOf(message);
-			if (range !== undefined) this.rangeProvided(range, steers);
-			if (message.role === 'toolResult') this.resultProvided(message.toolCallId);
+/**
+ * Tell the core what the messages of one provider request hold: each range
+ * of the record, and each tool result. Answer the positions of the steered
+ * lines the request holds.
+ */
+export function provided(
+	messages: readonly AgentMessage[],
+	activation: Pick<ExecutorActivation, 'read' | 'delivered'>,
+): Seq[] {
+	const steers: Seq[] = [];
+	for (const message of messages) {
+		const range = rangeOf(message);
+		if (range !== undefined) {
+			activation.read({ after: range.after, through: range.through });
+			if (range.steer === true) steers.push(range.through);
 		}
-		this.join();
-		return steers;
+		if (message.role === 'toolResult') activation.delivered(message.toolCallId);
 	}
-
-	/** Hold a range a request held. A range at or below the position read adds nothing. */
-	private rangeProvided(range: Range, steers: Seq[]): void {
-		if (range.through > this.read) this.consumed.set(range.through, range);
-		if (range.steer === true) steers.push(range.through);
-	}
-
-	private resultProvided(callId: string): void {
-		const through = this.toolResults.get(callId);
-		if (through === undefined) return;
-		this.acknowledgeThrough(through);
-		this.toolResults.delete(callId);
-	}
-
-	/** Advance through every held range that joins the position read, lowest first. */
-	private join(): void {
-		for (;;) {
-			const next = [...this.consumed.values()]
-				.filter((range) => range.after <= this.read && range.through > this.read)
-				.sort((left, right) => left.through - right.through)[0];
-			if (next === undefined) return;
-			this.read = next.through;
-			this.consumed.delete(next.through);
-		}
-	}
+	return steers;
 }

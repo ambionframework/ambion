@@ -147,7 +147,7 @@ transient cause is a rate limit, a server error, or a lost connection.
   the wake again.
 - **The Pi executor reads a status only from a provider diagnostic.** It
   treats 400, 401, 402, 403, 404, 405, and 422 as permanent, and credit,
-  quota, usage-limit, or authentication text as permanent. It never reads a status from free error
+  quota, usage-limit, authentication, or login text as permanent. It never reads a status from free error
   text, because a rate limit names a token count that looks like a 400.
   Every uncertain failure is transient.
 

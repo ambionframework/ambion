@@ -76,11 +76,7 @@ function failureOf(message: AssistantMessage): PassOutcome {
  * message retries: a wasted retry costs less than a question the room drops.
  */
 function providerCause(message: AssistantMessage): FailureCause {
-	return classifyCause({
-		text: message.errorMessage,
-		status: statusOf(message),
-		permanent: PERMANENT_TEXT,
-	});
+	return classifyCause({ text: message.errorMessage, status: statusOf(message) });
 }
 
 /** One provider diagnostic, as the classifier reads it. */
@@ -125,12 +121,3 @@ function httpStatus(value: unknown): number | undefined {
 	if (parsed === undefined || !Number.isInteger(parsed)) return undefined;
 	return parsed >= 400 && parsed <= 599 ? parsed : undefined;
 }
-
-/**
- * Error text that names a credit, a quota, a usage limit, or an authentication
- * refusal, in phrases a retry cannot clear. Pi reaches more than one provider,
- * so the list holds the words of each: a quota refusal from OpenAI comes
- * with a 429, and only its text tells it from a rate limit.
- */
-const PERMANENT_TEXT =
-	/credit balance|billing_error|usage[_\s-]?limit|insufficient_quota|exceeded your current quota|authentication_error|permission_error|invalid_request_error|invalid[_\s]?api[_\s]?key|unauthorized|permission denied/i;

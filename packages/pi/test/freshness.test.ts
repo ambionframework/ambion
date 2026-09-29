@@ -1,13 +1,15 @@
 /**
- * What the provider received of the record. `Freshness` reads the ranges of
- * the record from the exact messages of each provider request, and joins
- * them into the position the activation read through.
+ * What the provider received of the record. `provided` reads the ranges of
+ * the record and the tool results from the exact messages of each provider
+ * request, and tells the core, which joins them into the position the
+ * activation read through.
  */
 import type { AgentMessage, MessageEntry } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, createCustomMessage } from '@earendil-works/pi-agent-core';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { Freshness, providerMessages, RECORD, recordMessage } from '../src/freshness.ts';
+import { Freshness } from '../../ambion/src/execution/freshness.ts';
+import { provided, providerMessages, RECORD, recordMessage } from '../src/freshness.ts';
 import { diskSessions } from '../src/sessions.ts';
 import { tempDir } from './support/temp.ts';
 
@@ -27,6 +29,12 @@ const result = (toolCallId: string): AgentMessage => ({
 	content: [{ type: 'text', text: 'missed' }],
 	isError: true,
 	timestamp: 0,
+});
+
+/** What the core hears from one activation: the ranges read and the results delivered. */
+const core = (freshness: Freshness) => ({
+	read: (range: { after: number; through: number }) => freshness.consumedRange(range),
+	delivered: (call: string) => freshness.delivered(call),
 });
 
 describe('freshness', () => {
@@ -53,12 +61,6 @@ describe('freshness', () => {
 		],
 		['a range seen twice, once', [[mark(0, 2), mark(0, 2)]], 2, []],
 		[
-			'ranges that both join the position read, the lowest first',
-			[[mark(0, 3), mark(0, 2), mark(2, 5)]],
-			5,
-			[],
-		],
-		[
 			'no user message with the same text, and no custom message of another type',
 			[[user('0..5'), createCustomMessage('other', '0..5', false, { after: 0, through: 5 }, 0)]],
 			0,
@@ -72,31 +74,18 @@ describe('freshness', () => {
 		],
 	] as const)('reads %s', (_name, requests, through, steers) => {
 		const freshness = new Freshness();
-		const seen = requests.flatMap((request) => freshness.provided([...request]));
+		const seen = requests.flatMap((request) => provided([...request], core(freshness)));
 		expect(freshness.readThrough).toBe(through);
 		expect(seen).toEqual(steers);
 	});
 
-	it('starts from the position a continued session read, and never moves back', () => {
-		const freshness = new Freshness(5);
-		freshness.provided([mark(0, 3)]);
-		expect(freshness.readThrough).toBe(5);
-		freshness.acknowledgeThrough(4);
-		expect(freshness.readThrough).toBe(5);
-		freshness.provided([mark(5, 7)]);
-		expect(freshness.readThrough).toBe(7);
-	});
-
-	it('advances on a tool result only for the call that expects it, once', () => {
+	it('delivers a tool result that the request holds, and the core advances for the call that expects it', () => {
 		const freshness = new Freshness();
-		freshness.toolResultExpected('call-1', 4);
-		freshness.provided([result('call-2')]);
+		freshness.resultExpected('call-1', 4);
+		provided([result('call-2')], core(freshness));
 		expect(freshness.readThrough).toBe(0);
-		freshness.provided([result('call-1')]);
+		provided([result('call-1')], core(freshness));
 		expect(freshness.readThrough).toBe(4);
-		freshness.acknowledgeThrough(6);
-		freshness.provided([result('call-1')]);
-		expect(freshness.readThrough).toBe(6);
 	});
 
 	it('hands a range to the provider as plain user text, and every other message as Pi converts it', () => {
@@ -135,7 +124,8 @@ describe('freshness', () => {
 		const entries = (await read?.findEntries({ type: 'message' }, BACKGROUND_CONTEXT)) ?? [];
 		await read?.close(BACKGROUND_CONTEXT);
 		const freshness = new Freshness();
-		const steers = freshness.provided(entries.map((entry) => (entry as MessageEntry).message));
+		const messages = entries.map((entry) => (entry as MessageEntry).message);
+		const steers = provided(messages, core(freshness));
 		expect(freshness.readThrough).toBe(3);
 		expect(steers).toEqual([3]);
 	});

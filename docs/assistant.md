@@ -260,6 +260,13 @@ specialist by default. Retain specialists across exchanges by default.
 Unseat when the user requests removal or a clear scope change makes continued
 participation unnecessary. Being idle alone is not a reason to remove an agent.
 
+**The presence of the person who asked does not change the work.** A
+person can ask and leave before the first activation of the assistant. The
+assistant seats and routes as it does for a person who stays. The room
+assigns the closing summary to the `person` of the exchange, the assistant
+writes it, and the person reads it on return. The membership guidance of the package states this
+rule.
+
 Unseating can interrupt active work and settle pending assignments. Do not
 use it as routine cleanup after each contribution. Avoid repeated seating
 and unseating. The assistant's seat is fixed as the summary writer: no
@@ -367,6 +374,7 @@ Include these cases of the purpose:
 - A question that a person addresses to a named specialist.
 - An unseat on request.
 - A request that needs no specialist.
+- A person who asks and leaves before the first activation.
 
 Evaluate explicit application overrides of assistant defaults, including
 the silence at `broadcast`. Check that kernel authority remains unchanged.
@@ -398,6 +406,7 @@ pnpm --filter @ambionframework-examples/workbench test:live
 The assistant suite runs on [the simulator](simulator.md). It uses a real
 assistant with controlled specialist evidence. It checks routing, silence at
 `broadcast`, summaries of obsolete constraints and missing facts, incomplete
-results, direct questions, unseating, and application overrides. The Workbench suite runs two example rooms
+results, direct questions, unseating, a person who asks and leaves, and
+application overrides. The Workbench suite runs two example rooms
 with real agents. These evaluations sample
 model behavior; they do not guarantee that every model follows the defaults.

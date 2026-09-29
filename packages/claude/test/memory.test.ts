@@ -4,12 +4,9 @@
  * starts fresh when the view names none. The fake executable reports a
  * `session` and honors or refuses a `--resume`.
  */
-import type {
-	ActivationView,
-	ExecutorSession,
-	HarnessSession,
-} from '@ambionframework/ambion/hosting';
+import type { ActivationView, HarnessSession } from '@ambionframework/ambion/hosting';
 import { describe, expect, it } from 'vitest';
+import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { RESUMED_NOTE } from '../src/executor.ts';
 import { fakeRoom, viewOf } from './support.ts';
 
@@ -19,7 +16,7 @@ const resumeOf = (argv: string[] = []) =>
 	argv.find((arg) => arg.startsWith('--resume='))?.slice('--resume='.length);
 
 async function run(
-	session: ExecutorSession,
+	session: ActivationState,
 	view: ActivationView,
 ): Promise<HarnessSession | undefined> {
 	const result = await session.pass({ kind: 'view', view });

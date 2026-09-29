@@ -5,7 +5,14 @@
  */
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
-import type { ExecutorActivation, PassInput } from '../src/execution/executor.ts';
+import { ActivationState } from '../src/execution/activation.ts';
+import type {
+	Executor,
+	ExecutorActivation,
+	ExecutorSession,
+	Pass,
+	PassInput,
+} from '../src/execution/executor.ts';
 import { createRuntime, defineAgent, defineTool, startRoom } from '../src/index.ts';
 import type { ActivationView, CommitRequest, CommitResult } from '../src/protocol.ts';
 import {
@@ -213,37 +220,41 @@ describe('scriptedExecutor', () => {
 	});
 	const respond = view(3, { kind: 'respond', message: 3 });
 
+	/** The core state of one activation over `executor`, and a room that answers each commit with `commit`. */
 	function harness(commit: (request: CommitRequest) => CommitResult) {
 		const commits: CommitRequest[] = [];
 		const events: ExecutionEvent[] = [];
-		const activation: ExecutorActivation = {
-			id: 'act-1',
-			room: {
-				view: async () => ({ stale: 'unused' }),
-				commit: async (request) => {
-					commits.push(request);
-					return commit(request);
+		const open = (executor: Executor) =>
+			new ActivationState(executor, {
+				id: 'act-1',
+				room: {
+					view: async () => ({ stale: 'unused' }),
+					commit: async (request) => {
+						commits.push(request);
+						return commit(request);
+					},
 				},
-				lease: async () => ({ stale: 'unused' }),
-			},
-			emit: (event) => events.push(event),
-			trace: { startPass() {}, record() {}, usage: () => undefined, close: async () => {} },
-		};
-		return { activation, commits, events };
+				definition: agent('a'),
+				emit: (event) => events.push(event),
+				trace: { record() {} },
+			});
+		return { open, commits, events };
 	}
 
 	const said = (seq: number): CommitResult => ({
-		committed: { kind: 'said', seq, from: 'a', text: 'hi', at: '' } as never,
+		committed: { kind: 'said', seq, from: 'a', text: 'hi', at: new Date(0).toISOString() } as never,
 	});
 	const input = (v: ActivationView): PassInput => ({ kind: 'view', view: v });
 
 	it('commits a say and a schedule against the position it read and advances readThrough', async () => {
-		const { activation, commits } = harness(() => said(3 + commits.length));
-		const session = scriptedExecutor(
-			(_step, _seat, call) =>
-				call === 1 ? speak('hi') : call === 2 ? later('Check the build.', 600) : quiet(),
-			agent('a'),
-		).open(activation);
+		const { open, commits } = harness(() => said(3 + commits.length));
+		const session = open(
+			scriptedExecutor(
+				(_step, _seat, call) =>
+					call === 1 ? speak('hi') : call === 2 ? later('Check the build.', 600) : quiet(),
+				agent('a'),
+			),
+		);
 		await expect(session.pass(input(respond))).resolves.toEqual({ failed: false });
 		expect(commits).toHaveLength(2);
 		expect(commits[0]).toMatchObject({ readThrough: 3, intent: { kind: 'said', text: 'hi' } });
@@ -258,16 +269,18 @@ describe('scriptedExecutor', () => {
 
 	it('takes the messages a refused say missed as read, and lets the script say again', async () => {
 		let first = true;
-		const { activation, commits } = harness(() => {
+		const { open, commits } = harness(() => {
 			if (!first) return said(9);
 			first = false;
 			return { missed: [{ kind: 'said', seq: 8 } as never] };
 		});
 		const seen: string[] = [];
-		const session = scriptedExecutor((step) => {
-			seen.push(step.results.map((result) => result.text).join(','));
-			return step.results.some((r) => r.text === 'delivered') ? quiet() : speak('again');
-		}, agent('a')).open(activation);
+		const session = open(
+			scriptedExecutor((step) => {
+				seen.push(step.results.map((result) => result.text).join(','));
+				return step.results.some((r) => r.text === 'delivered') ? quiet() : speak('again');
+			}, agent('a')),
+		);
 		await session.pass(input(respond));
 		expect(commits.map((c) => c.key)).toHaveLength(2);
 		expect(new Set(commits.map((c) => c.key)).size).toBe(2);
@@ -276,12 +289,30 @@ describe('scriptedExecutor', () => {
 	});
 
 	it('stops when the room answers stale, and never asks again', async () => {
-		const { activation, commits } = harness(() => ({ stale: 'lease ended' }));
-		const session = scriptedExecutor(() => speak('hi'), agent('a')).open(activation);
+		const { open, commits } = harness(() => ({ stale: 'lease ended' }));
+		const session = open(scriptedExecutor(() => speak('hi'), agent('a')));
 		await session.pass(input(respond));
 		expect(commits).toHaveLength(1);
 		expect(session.cancelled).toBe(true);
 		expect(session.shouldRefresh(99)).toBe(false);
+	});
+
+	it('fails a pass that calls a room tool the purpose does not grant', async () => {
+		const closing = view(5, {
+			kind: 'summarize',
+			exchange: 1,
+			person: 'andrei',
+			people: ['andrei'],
+			through: 5,
+		});
+		const { open, commits } = harness(() => said(6));
+		const session = open(scriptedExecutor(() => later('Again.', 60), agent('a')));
+		await expect(session.pass(input(closing))).resolves.toMatchObject({
+			failed: true,
+			cause: 'transient',
+			message: "The seat has no tool 'schedule'.",
+		});
+		expect(commits).toEqual([]);
 	});
 
 	it('commits a closing say without readThrough and ends the pass', async () => {
@@ -292,23 +323,120 @@ describe('scriptedExecutor', () => {
 			people: ['andrei'],
 			through: 5,
 		});
-		const { activation, commits } = harness(() => said(6));
-		const session = scriptedExecutor(() => speak('summary'), agent('a')).open(activation);
+		const { open, commits } = harness(() => said(6));
+		const session = open(scriptedExecutor(() => speak('summary'), agent('a')));
 		await session.pass(input(closing));
 		expect(commits).toHaveLength(1);
 		expect(commits[0]).not.toHaveProperty('readThrough');
 	});
 
 	it('reports a script that throws as a transient failure and emits the error', async () => {
-		const { activation, events } = harness(() => said(4));
-		const session = scriptedExecutor(() => {
-			throw new Error('broke');
-		}, agent('a')).open(activation);
+		const { open, events } = harness(() => said(4));
+		const session = open(
+			scriptedExecutor(() => {
+				throw new Error('broke');
+			}, agent('a')),
+		);
 		await expect(session.pass(input(respond))).resolves.toEqual({
 			failed: true,
 			cause: 'transient',
 			message: 'broke',
+			error: new Error('broke'),
 		});
 		expect(events).toEqual([expect.objectContaining({ type: 'error', cause: 'transient' })]);
+	});
+
+	/** The core state of one activation over an executor whose sessions run `pass`. */
+	function around(pass: ExecutorSession['pass'], tools: AgentExecutor['tools'] = []) {
+		const opened: ExecutorActivation[] = [];
+		const passes: Pass[] = [];
+		const steered: number[] = [];
+		const events: ExecutionEvent[] = [];
+		const state = new ActivationState(
+			{
+				open: (activation) => {
+					opened.push(activation);
+					return {
+						pass: (one) => {
+							passes.push(one);
+							return pass(one);
+						},
+						steer: (_after, seq) => void steered.push(seq),
+					};
+				},
+			},
+			{
+				id: 'act-1',
+				room: { view: async () => ({ stale: 'unused' }), commit: async () => said(4) },
+				definition: agent('a', tools),
+				emit: (event) => events.push(event),
+				trace: { record() {} },
+			},
+		);
+		const activation = opened[0];
+		if (activation === undefined) throw new Error('The state opened no session.');
+		return { state, activation, passes, steered, events };
+	}
+
+	it.each([
+		['an error', new Error('lost'), new Error('lost')],
+		['a value that is no error', 'gone', new Error('gone')],
+	])('reports a pass that throws %s as one transient failure', async (_name, thrown, error) => {
+		const { state, events } = around(async () => {
+			throw thrown;
+		});
+		await expect(state.pass(input(respond))).resolves.toEqual({
+			failed: true,
+			cause: 'transient',
+			message: error.message,
+			error,
+		});
+		expect(events).toEqual([
+			{ type: 'error', agent: 'a', activation: 'act-1', error, cause: 'transient' },
+		]);
+	});
+
+	it('refuses a view of another seat, and runs no pass', async () => {
+		const { state, passes, events } = around(async () => ({ failed: false }));
+		const other = { ...respond, spec: { ...respond.spec, seat: 'b' } };
+		await expect(state.pass(input(other))).resolves.toMatchObject({
+			failed: true,
+			cause: 'transient',
+			message: "Activation names another seat: 'b'.",
+		});
+		expect(passes).toEqual([]);
+		expect(events).toHaveLength(1);
+	});
+
+	it('runs no pass and takes no steer once cut, and the session sees the cut', async () => {
+		const { state, activation, passes, steered } = around(async () => ({ failed: false }));
+		state.steer(3, 4, 'first');
+		state.cancel();
+		state.steer(4, 5, 'second');
+		await expect(state.pass(input(respond))).resolves.toEqual({ failed: false });
+		expect(activation.signal.aborted).toBe(true);
+		expect(passes).toEqual([]);
+		expect(steered).toEqual([4]);
+	});
+
+	it('raises the tool events from the steps, and hands an agent tool the view of its pass', async () => {
+		const { state, activation, events } = around(
+			async (pass) => {
+				activation.trace.record({ type: 'tool_call', call: 'c1', name: 'echo', input: {} });
+				const tool = pass.agentTools.find((one) => one.name === 'echo');
+				const call = activation.callId('echo');
+				const result = await tool?.run({}, call);
+				activation.trace.record({ type: 'tool_result', call, output: 'echoed' });
+				expect(call).toBe('c1');
+				expect(result).toEqual({ content: [{ type: 'text', text: 'echoed' }] });
+				return { failed: false };
+			},
+			[echo],
+		);
+		await expect(state.pass(input(respond))).resolves.toEqual({ failed: false });
+		expect(events).toEqual([
+			{ type: 'tool_execution_start', agent: 'a', activation: 'act-1', toolName: 'echo' },
+			{ type: 'tool_execution_end', agent: 'a', activation: 'act-1', toolName: 'echo' },
+		]);
 	});
 });

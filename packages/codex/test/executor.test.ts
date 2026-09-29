@@ -3,11 +3,18 @@
  * prompt, exchange continuity, and the recipe that turns native tools off.
  */
 import { existsSync, readdirSync } from 'node:fs';
-import type { ExecutorSession, HarnessSession, PassInput } from '@ambionframework/ambion/hosting';
+import type { Message } from '@ambionframework/ambion';
+import type {
+	CommitRequest,
+	CommitResult,
+	HarnessSession,
+	PassInput,
+} from '@ambionframework/ambion/hosting';
 import { describe, expect, it } from 'vitest';
+import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { HARNESS_NOTE } from '../src/executor.ts';
 import { recorded } from './fixtures.ts';
-import { open, seat, viewOf } from './support.ts';
+import { open, sayingTurn, seat, viewOf } from './support.ts';
 
 const ID = '01a0c21c-ffca-7082-9772-3bac91d64bc7';
 const plain = recorded('plain-answer');
@@ -19,7 +26,7 @@ function input(resume?: HarnessSession): PassInput {
 }
 
 /** Run one pass of a session and read the session it reports. */
-async function run(session: ExecutorSession, resume?: HarnessSession) {
+async function run(session: ActivationState, resume?: HarnessSession) {
 	const result = await session.pass(input(resume));
 	session.close?.();
 	return { result, session: session.session };
@@ -79,6 +86,48 @@ describe('exchange continuity', () => {
 		const { result } = await run(room.activate());
 		expect(result).toMatchObject({ failed: true, cause: 'transient', message: 'connection reset' });
 		expect(room.seen.opened).toEqual([{ resume: undefined }]);
+	});
+});
+
+/**
+ * A room that keeps one message for each commit key, as the journal does. A
+ * commit under a key the room holds gets the message it already holds.
+ */
+function keyedRoom() {
+	const byKey = new Map<string, Message>();
+	return (request: CommitRequest): CommitResult => {
+		const held = byKey.get(request.key);
+		if (held !== undefined) return { committed: held };
+		if (request.intent.kind !== 'said') return { refused: 'unused' };
+		const message: Message = {
+			kind: 'said',
+			seq: byKey.size + 2,
+			key: request.key,
+			activationId: request.activation,
+			at: new Date(0).toISOString(),
+			from: 'gpt',
+			text: request.intent.text,
+		};
+		byKey.set(request.key, message);
+		return { committed: message };
+	};
+}
+
+describe('room tools', () => {
+	it('lands the say of each activation under its own key, though codex numbers the items of each turn again', async () => {
+		const answer = keyedRoom();
+		const room = open(
+			[sayingTurn('The pour is Saturday.'), sayingTurn('The pour is Saturday.')],
+			seat(),
+			answer,
+		);
+		const first = await run(room.activate('message:1:gpt:1'));
+		await run(room.activate('message:3:gpt:1'), first.session);
+		const keys = room.commits.map((request) => request.key);
+		expect(keys).toHaveLength(2);
+		expect(new Set(keys).size).toBe(2);
+		const calls = room.steps.flatMap((step) => (step.type === 'tool_call' ? [step.call] : []));
+		expect(calls).toEqual(keys);
 	});
 });
 

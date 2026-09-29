@@ -118,8 +118,6 @@ export class ClaudeSteps {
 	private readonly open = new Map<number, 'text' | 'thinking'>();
 	/** Tool calls seen, by id, so an assistant message resent adds none. */
 	private readonly seen = new Set<string>();
-	/** Tool call ids the model made and no handler has claimed yet. */
-	private readonly unclaimed: { id: string; name: string }[] = [];
 	private cumulative: Usage | undefined;
 
 	steps(message: SDKMessage): Step[] {
@@ -135,13 +133,6 @@ export class ClaudeSteps {
 			default:
 				return [];
 		}
-	}
-
-	/** The id the model gave the next call of this tool, or nothing when none is waiting. */
-	claim(tool: string): string | undefined {
-		const at = this.unclaimed.findIndex((call) => plainName(call.name) === tool);
-		if (at < 0) return undefined;
-		return this.unclaimed.splice(at, 1)[0]?.id;
 	}
 
 	private stream(event: StreamEvent): Step[] {
@@ -183,7 +174,6 @@ export class ClaudeSteps {
 	private called(block: Block): Step[] {
 		if (block.id === undefined || this.seen.has(block.id)) return [];
 		this.seen.add(block.id);
-		this.unclaimed.push({ id: block.id, name: block.name ?? '' });
 		return [
 			{ type: 'tool_call', call: block.id, name: plainName(block.name ?? ''), input: block.input },
 		];

@@ -1,7 +1,7 @@
 /**
- * Whether an executor failure is permanent or transient, from the text a
- * harness matched and an HTTP status when the provider gave one, and the
- * provider's own words for the failure.
+ * Whether an executor failure is permanent or transient, from its text and
+ * an HTTP status when the provider gave one, and the provider's own words
+ * for the failure. One classifier serves every executor family.
  */
 
 import type { FailureCause } from '../types.ts';
@@ -10,19 +10,27 @@ import type { FailureCause } from '../types.ts';
 export const PERMANENT_STATUS: ReadonlySet<number> = new Set([400, 401, 402, 403, 404, 405, 422]);
 
 /**
- * Whether a failure is permanent or transient. `permanent` is the text a
- * harness matches for a refusal a retry cannot clear; each harness brings
- * its own, because each provider names a refusal in its own words.
- * `status` beats an unmatched text: a permanent status from `PERMANENT_STATUS`
- * is permanent even when the text names nothing. Every other failure is
- * transient, so an uncertain failure retries rather than gives up.
+ * Error text that names a refusal a retry cannot clear: a credit, a quota, a
+ * usage limit, a credential, a login, or a permission. Each provider names
+ * a refusal in its own words, so the list holds the words of each: Anthropic,
+ * OpenAI, the Claude Code login, and the Codex login. OpenAI sends a spent
+ * quota with a 429, and only its text tells it from a rate limit.
+ */
+const PERMANENT_TEXT =
+	/credit balance|billing_error|usage[_\s-]?limit|insufficient_quota|exceeded your current quota|authentication_error|permission_error|invalid_request_error|invalid[_\s-]?api[_\s-]?key|x-api-key|unauthorized|permission denied|not logged in|missing bearer/i;
+
+/**
+ * Whether a failure is permanent or transient. A text that names a refusal
+ * a retry cannot clear is permanent. `status` beats an unmatched text: a
+ * permanent status from `PERMANENT_STATUS` is permanent even when the text
+ * names nothing. Each harness brings its own source of a status. Every other
+ * failure is transient, so an uncertain failure retries.
  */
 export function classifyCause(input: {
 	readonly text?: string;
 	readonly status?: number | null;
-	readonly permanent: RegExp;
 }): FailureCause {
-	if (input.text !== undefined && input.permanent.test(input.text)) return 'permanent';
+	if (input.text !== undefined && PERMANENT_TEXT.test(input.text)) return 'permanent';
 	const status = input.status;
 	return status !== undefined && status !== null && PERMANENT_STATUS.has(status)
 		? 'permanent'

@@ -85,7 +85,6 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'SCHEDULE',
 		'SEAT',
 		'UNSEAT',
-		'agentTools',
 		'assertWire',
 		'callLimits',
 		'classifyCause',
@@ -97,15 +96,9 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'localExecution',
 		'providerMessage',
 		'refusal',
-		'renderActivation',
-		'renderDelta',
 		'renderLine',
-		'renderPending',
-		'resolveReminders',
-		'roomTools',
 		'roundTrip',
 		'runningRoom',
-		'sessionToResume',
 		'summaryToolDescription',
 		'toolContext',
 		'visitOf',
@@ -139,9 +132,7 @@ it('names the ports, the reads, and the visit by their final names', () => {
 	expectTypeOf<main.StartRoomOptions>().not.toHaveProperty('stream');
 	expectTypeOf<main.HarnessSession>().toEqualTypeOf<hosting.HarnessSession>();
 	expectTypeOf<hosting.ActivationSpec['resume']>().toEqualTypeOf<main.HarnessSession | undefined>();
-	expectTypeOf<hosting.ExecutorSession['session']>().toEqualTypeOf<
-		main.HarnessSession | undefined
-	>();
+	expectTypeOf<hosting.ExecutorSession['session']>().toEqualTypeOf<string | undefined>();
 	// The room windows the record: a view names one message at most, and a seat names its estimator.
 	expectTypeOf<Parameters<hosting.RoomProtocol['view']>>().toEqualTypeOf<
 		[activation: string, message?: Seq]

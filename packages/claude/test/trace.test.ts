@@ -139,19 +139,6 @@ it('ignores the messages of a subagent and the echo of a plain user message', ()
 	).toEqual([]);
 });
 
-it('hands a call id to the handler of the tool the model called, in order', () => {
-	const steps = new ClaudeSteps();
-	steps.steps(
-		assistant('m1', [{ type: 'tool_use', id: 't1', name: 'mcp__ambion__say', input: {} }]),
-	);
-	steps.steps(
-		assistant('m2', [{ type: 'tool_use', id: 't2', name: 'mcp__ambion__say', input: {} }]),
-	);
-	expect(steps.claim('say')).toBe('t1');
-	expect(steps.claim('say')).toBe('t2');
-	expect(steps.claim('say')).toBeUndefined();
-});
-
 it('records what each result added to the running totals, and sums the models of one result', () => {
 	const steps = new ClaudeSteps();
 	const totals = (cost: number, usage: ReturnType<typeof model>) =>

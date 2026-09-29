@@ -8,10 +8,11 @@
  * receives only `say`; the room turns that said intent into the assigned
  * summary and supplies its recipient and range.
  *
- * An executor adapts each `RoomTool` to its harness: a Pi tool, an MCP tool,
- * or a tool that a bridge serves over a socket. The executor gives each call
- * its id, and the id is the idempotency key of the commit. The rules for what
- * the model reads, and for when the activation ends, live here once.
+ * The core binds the tools to one activation, and an executor adapts each
+ * `RoomTool` to its harness: a Pi tool, an MCP tool, or a tool that a bridge
+ * serves over a socket. The executor gives each call its id, and the id is
+ * the idempotency key of the commit. The rules for what the model reads, and
+ * for when the activation ends, live here once.
  */
 
 import type { AmbionTool, ToolContext, ToolResult, ToolUpdate } from '../bundle.ts';
@@ -55,7 +56,8 @@ export interface RoomTool {
 /** What every room tool reaches: the activation and the room. */
 export interface RoomToolBinding {
 	readonly id: string;
-	readonly room: RoomProtocol;
+	/** The room calls the tools make: a commit, and the view of one message. */
+	readonly room: Pick<RoomProtocol, 'view' | 'commit'>;
 	/** The freshness boundary of an ordinary say. The tools read it at each call. */
 	readonly readThrough: Seq;
 	/** An accepted ordinary say confirms the activation read the record through here. */
@@ -91,6 +93,29 @@ interface ScheduleArgs {
 	after: number;
 	text: string;
 	refs?: string[];
+}
+
+/**
+ * The room's answer to the commit of each result. Only the scripted executor
+ * of `@ambionframework/ambion/testing` reads it, through `answerOf`. A
+ * script branches on a short answer, such as `delivered`, `missed`, or
+ * `stale: <why>`. The result holds only the text that a model reads, and the
+ * scripted executor makes no call to the room, so it cannot read the answer
+ * through the executor contract. The hosting entry does not export
+ * `answerOf`. The map holds each result weakly, so it keeps no entry past
+ * its result.
+ */
+const answers = new WeakMap<RoomToolResult, CommitResult>();
+
+/** The result of a commit, with the room's answer kept beside it. */
+function answered(result: RoomToolResult, response: CommitResult): RoomToolResult {
+	answers.set(result, response);
+	return result;
+}
+
+/** The room's answer to the commit that gave `result`, or nothing when the tool committed nothing. */
+export function answerOf(result: RoomToolResult): CommitResult | undefined {
+	return answers.get(result);
 }
 
 const text = (value: string, isError = false): RoomToolResult => ({
@@ -278,6 +303,17 @@ async function say(
 		...(closing === undefined ? { readThrough: binding.readThrough } : {}),
 		intent: saidBy(args, options),
 	});
+	return answered(sayResult(binding, options, call, response, closing), response);
+}
+
+/** What the model reads for a say the room answered. */
+function sayResult(
+	binding: RoomToolBinding,
+	options: RoomToolOptions,
+	call: string,
+	response: CommitResult,
+	closing: Closing | undefined,
+): RoomToolResult {
 	if ('missed' in response) return missedSay(binding, call, response.missed, closing);
 	if ('committed' in response) accepted(binding, options, response.committed, closing);
 	const result = landed(binding, response);
@@ -303,9 +339,10 @@ function scheduleTool(seat: string, binding: RoomToolBinding, options: RoomToolO
 				readThrough: binding.readThrough,
 				intent: scheduledBy(seat, args as ScheduleArgs, options),
 			});
-			if (!('committed' in response)) return landed(binding, response);
+			if (!('committed' in response)) return answered(landed(binding, response), response);
 			options.spoke?.();
-			return scheduleResult(binding, call, response.committed, response.unread ?? []);
+			const result = scheduleResult(binding, call, response.committed, response.unread ?? []);
+			return answered(result, response);
 		},
 	};
 }
@@ -379,7 +416,7 @@ function membershipTool(binding: RoomToolBinding, kind: 'seated' | 'unseated'): 
 				key: call,
 				intent: { kind, name: (args as { name: string }).name.trim() },
 			});
-			return landed(binding, response);
+			return answered(landed(binding, response), response);
 		},
 	};
 }
@@ -401,9 +438,9 @@ function dismissTool(binding: RoomToolBinding): RoomTool {
 				// The result shows the entry, so a record read up to it is read through it.
 				const { seq } = response.committed;
 				if (binding.readThrough === seq - 1) binding.resultExpected(call, seq);
-				return text(`dismissed #${message}`);
+				return answered(text(`dismissed #${message}`), response);
 			}
-			return landed(binding, response);
+			return answered(landed(binding, response), response);
 		},
 	};
 }

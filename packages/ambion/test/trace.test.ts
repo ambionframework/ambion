@@ -18,6 +18,7 @@ import {
 import {
 	AgentRunner,
 	type CommitResult,
+	type Executor,
 	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
@@ -337,6 +338,7 @@ function play(
 	stream: StreamFn,
 	logger: TraceLogger = collectSteps().logger,
 	wrap: (opener: TraceOpener) => TraceOpener = (opener) => opener,
+	stub?: Executor,
 ) {
 	const clock = fakeClock();
 	const runtime = createRuntime({ clock, execution: piExecution({ sessions: 'memory', stream }) });
@@ -344,12 +346,14 @@ function play(
 	const hosting = hostingOf(runtime);
 	const room = new PlayedRoom(() => clock.now());
 	const events: ExecutionEvent[] = [];
-	const executor = createPiExecutor({
-		definition: product,
-		model: services.model,
-		stream: services.stream,
-		now: () => clock.now(),
-	});
+	const executor =
+		stub ??
+		createPiExecutor({
+			definition: product,
+			model: services.model,
+			stream: services.stream,
+			now: () => clock.now(),
+		});
 	const actor = new AgentRunner(room, {
 		clock,
 		call: hosting.limits.call,
@@ -464,6 +468,28 @@ describe('the steps the driver owns', () => {
 		const last = log.of(id).at(-1);
 		expect(last).toMatchObject({ type: 'end', ...end });
 		expect(last !== undefined && 'failure' in last).toBe('failure' in end);
+	});
+
+	it('ends a failure that names no message, and raises one error event for it', async () => {
+		const log = collectSteps();
+		const failing: Executor = {
+			open: () => ({ pass: async () => ({ failed: true, cause: 'permanent' }) }),
+		};
+		const { actor, events } = play(
+			scripted(() => quiet()),
+			log.logger,
+			undefined,
+			failing,
+		);
+		await actor.run(id);
+		const message = 'The activation failed.';
+		expect(log.of(id).at(-1)).toMatchObject({
+			type: 'end',
+			failure: { cause: 'permanent', message },
+		});
+		expect(events.filter((event) => event.type === 'error')).toEqual([
+			expect.objectContaining({ cause: 'permanent', error: new Error(message) }),
+		]);
 	});
 
 	const throwing: TraceLogger = () => {

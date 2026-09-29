@@ -191,6 +191,10 @@ and the process tools. A step names the steps it needs; a step with no
 ### Phase 1. The drift
 
 - [ ] **8.** The assistant works a request after the person who asked leaves. (A1)
+      The code landed. On 2026-09-29 the live case "works a request after
+      the person who asked leaves" passed three samples of three on Pi
+      with `openai/gpt-5.6-luna`. The step closes when the live suite of
+      the assistant passes on its default model in the live run on `main`.
 
 **Evidence:** each step keeps `pnpm check` green and holds the coverage
 of each changed package, measured before and after as `CLAUDE.md`
@@ -256,6 +260,14 @@ states the new `pass` contract, `executorConformance` tests it on the
 three executors, the prompt snapshot holds, and one live file passes on
 each harness.
 
+**The code of C6 landed, and the live files pass on Pi and Codex.** On
+2026-09-29 `packages/ambion/test/live/control.test.ts` passed on Pi with
+`openai/gpt-5.6-luna`: a person steers a seat at work, and the seat answers
+the steer. On Codex, `packages/codex/test/live/steer.test.ts` passed, and the
+executor suite in `packages/codex/test/live/conformance.test.ts` passed all
+ten cases. The Claude run of `packages/claude/test/live/steer.test.ts` waits
+for the live run on `main`, and the step closes when it passes.
+
 **C10. `wait` takes `handles` alone.** The owner keeps `status`, `ps`,
 and `wait` as three tools: each answers one question. The change landed
 in #354: `wait` takes `{ handles, timeout? }`, with 1 to 16 handles, and
@@ -301,3 +313,12 @@ interactions, so a person who asks and leaves gets the answer later.
 at pass^3, where the person asks and leaves before the first activation.
 The assistant sends a directed request to a specialist, and the closing
 summary answers the question. The live suite of the assistant stays green.
+
+**The suite on `openai/gpt-5.6-luna` is not green, with or without A1.**
+On 2026-09-29, 17 of 23 cases passed with A1. On `main` without A1, the
+same five cases failed: the three samples of the superseded constraint at
+broadcast, the application override, and the case with no specialist. In
+each, the model speaks where the case expects silence. The case of the
+material fact passed one sample of three with A1 and two of three on
+`main`, and it fails the same way. The suite holds its default model,
+`anthropic/claude-sonnet-5`.

@@ -36,5 +36,8 @@ it('passes tool bundles through the ordinary agent definition', () => {
 
 	expect(assistant.executor.tools).toEqual([]);
 	expect(assistant.executor.guidance).toContain('This is an ordinary activation.');
+	expect(assistant.executor.guidance).toContain(
+		'The presence of the person who asked does not change the work.',
+	);
 	expect(assistant.executor.guidance).toContain('Use the workspace when evidence is needed.');
 });
