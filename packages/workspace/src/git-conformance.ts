@@ -314,9 +314,18 @@ async function registered<T>(
 	templates: GitConformanceOptions['templates'],
 	body: (workspace: Workspace) => Promise<T>,
 ): Promise<T> {
+	// Registration cases reopen a workspace over one persistent store. The
+	// store owns this bash backend and disposes it after the whole sequence;
+	// each short-lived workspace borrows it instead of ending that lifetime.
+	const bash = new Proxy(store.bash, {
+		get(target, property, receiver) {
+			if (property === 'dispose') return async () => {};
+			return Reflect.get(target, property, receiver);
+		},
+	});
 	const workspace = openWorkspace({
 		name: 'git-conformance',
-		backend: { bash: store.bash, git: store.backend({ templates }) },
+		backend: { bash, git: store.backend({ templates }) },
 	});
 	try {
 		return await body(workspace);
