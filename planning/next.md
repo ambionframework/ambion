@@ -23,9 +23,9 @@ and its acceptance. [The backlog](backlog.md) holds everything else.
 
 ## Status
 
-**0.4.0 shipped. SN1, SN27, and SN32 are implemented and validated on this
-branch.** The wire schemas, client types, validated template, and workstation
-port transport exist. SN3, SN4, and the remaining 0.5.0 steps are pending.
+**0.4.0 shipped. SN1, SN4, SN27, and SN32 are implemented and validated on
+this branch.** The wire schemas, conformance runner, validated template, and
+workstation port transport exist. SN3 and the remaining 0.5.0 steps are pending.
 This scope incorporates the owner's response to the review of `origin/main`
 `0f9ef1e27eed0f27c3ec47aef09071d54b044ff8` on 2026-09-29.
 [The review disposition](review-0.5.0.md) records the changed decisions.
@@ -135,10 +135,10 @@ Within a phase, items can proceed together when their dependencies allow.
 - [x] **4.** The workspace port contract and workstation forwarding. (SN32)
 
 **Evidence:** the template can be forked, customized, validated, committed,
-and pushed. Template tests validate its responses against SN1 schemas; they
-do not claim to run SN4. After SN4 lands, its server passes reusable
-conformance over HTTP. A real loopback HTTP fixture is readable through SSH
-on a workstation. A refused forward leaves no transport resources behind.
+and pushed. Template tests validate its responses against SN1 schemas and
+run SN4 conformance against the cloned server. A real loopback HTTP fixture
+is readable through SSH on a workstation. A refused forward leaves no
+transport resources behind. This phase remains pending until SN3 lands.
 
 ### Phase 2. Connect, observe, and retain
 
@@ -185,13 +185,16 @@ invalid bodies, missing files, digest mismatch, disconnects, and aborts
 produce explicit failures. The client preserves timestamps exactly.
 
 **SN4. Conformance.** Export `sensorConformance` from the existing
-conformance entry. Supply a small fixture contract for numeric, text,
-frame, and file parts, with a fixed span. Check the declared `spans`
-capability. Keep the fixture in test support; it is no framework daemon.
+conformance entry. Its fixture contract covers numeric, text, frame, and file
+parts with a fixed span. The cases check the declared `spans` capability.
+Fixtures and the raw HTTP probe stay in test support. The runner starts no
+framework daemon.
 
 **Evidence:** a conforming server passes. A server with a deliberately
-wrong version, digest, span response, or name fails the corresponding
-case. No test needs ffmpeg, instruments, or a model provider.
+wrong index or observation version, digest, span response, or name fails its
+case. The four-part HTTP fixture tests supported spans and sample boundaries.
+The landed template passes with its three parts and unsupported spans. No
+test needs ffmpeg, instruments, or a model provider.
 
 **SN32. Workstation ports.** Add the optional `BashBackend.ports`
 contract from [Workstation ports](../docs/sensors.md#workstation-ports).
@@ -280,9 +283,9 @@ detached runs report their launch metadata correctly. The template tests
 cover schema and HTTP behavior, error cases, digest and data-path safety,
 and clean/dirty/detached metadata. The Workbench lifecycle test proves an
 invalid fixture is rejected, a corrected change is committed and pushed,
-and a fresh clone runs the saved commit and returns the changed value. SN4's
-reusable `sensorConformance` runner remains unimplemented. The template
-requires no framework daemon, ffmpeg, or model provider.
+and a fresh clone runs the saved commit and returns the changed value. The
+Workbench lifecycle test runs `sensorConformance` against the fresh clone.
+The template requires no framework daemon, ffmpeg, or model provider.
 
 **SN35. Lifecycle acceptance.** Run the template through a real room,
 the Git backend, workstation process tools, port transport, and snapshots.

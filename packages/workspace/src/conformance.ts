@@ -38,6 +38,13 @@ export type {
 export { gitConformance } from './git-conformance.ts';
 export type { ObjectConformanceBackend, ObjectConformanceStore } from './object-conformance.ts';
 export { objectConformance } from './object-conformance.ts';
+export type {
+	SensorConformanceFixture,
+	SensorConformanceHarness,
+	SensorConformanceProbe,
+	SensorConformanceReply,
+} from './sensor-conformance.ts';
+export { sensorConformance } from './sensor-conformance.ts';
 export type { ConformanceCase };
 
 /**

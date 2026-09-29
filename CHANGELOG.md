@@ -7,6 +7,11 @@
 client types. `@ambionframework/workspace/sensor-api.schema.json` publishes
 the generated JSON Schema.
 
+**The workspace checks sensor servers.** The existing conformance entry
+exports `sensorConformance`. Its cases check server versions, declared names
+and span support, observation replies, measurement spans, and file digests.
+The Workbench lifecycle test runs the cases against the landed template.
+
 **The workstation forwards private loopback ports over SSH.** The workspace
 root exports `WorkspacePort` and `WorkspacePorts`, and `BashBackend` accepts
 the optional `ports` capability. `workstationBackend` forwards a remote
@@ -19,8 +24,8 @@ metadata at launch, and keeps acquisition files outside its checkout. The
 template imports the workspace schemas from a locally built and packed
 workspace package because npmjs 0.4.0 does not contain SN1. Its README
 documents its setup, customization, validation, process lifecycle, data
-retention, and rollback. This template's tests are not the planned SN4
-`sensorConformance` runner.
+retention, and rollback. The Workbench lifecycle test runs SN4 conformance
+against a fresh clone.
 
 ## 0.4.0 (2026-09-29)
 

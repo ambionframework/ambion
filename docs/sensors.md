@@ -3,8 +3,9 @@
 > **Pending in 0.5.0.** The wire schemas and client types exist in
 > `@ambionframework/workspace`. The current branch includes the implemented
 > and validated SN27 Workbench template, and the workstation port transport
-> is available. Workspace `connect` and `observe`, and SN4's reusable
-> conformance runner remain pending. See the [release plan](../planning/next.md).
+> is available. SN4's conformance runner is available from
+> `@ambionframework/workspace/conformance`. Workspace `connect`, `observe`,
+> and the SN3 production client remain pending. See the [release plan](../planning/next.md).
 
 **A forked Git repository defines a sensor server.** The agent customizes
 its acquisition and reduction code, validates it, and saves working
@@ -26,7 +27,7 @@ be stateful. The API prescribes no internal storage or checkpoint format.
 | -------------- | ------------------------------------------------------ | ---------------------------------------------------- |
 | Fork           | Use `repos` and `fork` on a sensor template            | An agent-owned repository and checkout               |
 | Customize      | Create a branch and edit acquisition or reduction code | A working implementation for the task                |
-| Validate       | Run the template tests; SN4 conformance is pending     | Evidence from the template checks                    |
+| Validate       | Run template tests and `sensorConformance`             | Evidence from the server and protocol checks         |
 | Save           | Commit and push the branch to the owned fork           | A saved version that can be run again                |
 | Start          | Run its launch command through `bash`; read `status`   | Acquisition runs under a process handle              |
 | Connect        | Call `connect` with that handle and port               | Qualified sensor names in the workspace              |
@@ -87,8 +88,8 @@ An agent needs no new sensor installation or configuration tool.
 
 - Runtime and dependency installation, with pinned dependencies where used.
 - The source files to customize and any required device permissions.
-- A validation command. A reusable sensor API conformance runner is planned
-  as SN4 and is not available yet.
+- A validation command. The host can run the reusable SN4 conformance
+  cases against the server.
 - A foreground launch command, loopback binding, and readiness output.
 - The acquisition-data directory and its behavior on restart or rollback.
 - How to stop, save a branch, replace a process, and restore a prior version.
@@ -424,9 +425,25 @@ never fields of the protocol.
 
 **The wire schemas and client types live in
 `@ambionframework/workspace/sensors`.** The package also exports the
-generated `sensor-api.schema.json`. The SN4 `sensorConformance` runner is
-planned for `@ambionframework/workspace/conformance` and is not implemented
-yet. Ambion adds no `@ambionframework/sensors` package in 0.5.0.
+generated `sensor-api.schema.json`. The `sensorConformance` runner is
+available from `@ambionframework/workspace/conformance`. It checks raw server
+replies against a host-supplied fixture. Ambion adds no
+`@ambionframework/sensors` package in 0.5.0.
+
+**A host supplies the transport and expected evidence.** The harness opens a
+probe for each case. A probe sends a method, path, and optional JSON body. It
+returns the HTTP status, content type, and JSON body or file bytes. Its
+`dispose` method closes the request resources. The fixture gives each sensor's
+name, span capability, expected latest observations, expected span response,
+and the expected bytes for every file digest.
+
+```ts
+import { sensorConformance } from '@ambionframework/workspace/conformance';
+
+for (const testCase of sensorConformance(harness, fixture)) {
+  test(testCase.name, testCase.run);
+}
+```
 
 **The schema cannot compare span endpoints.** The JSON Schema checks request
 shape and timestamp form. `isValidObserveRequest` also requires `from < to`.
