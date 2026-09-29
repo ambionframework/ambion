@@ -398,3 +398,9 @@ it('changes membership by name without installing a definition', async () => {
 	await stub.unseat('product');
 	expect(await names()).toEqual(['assistant']);
 });
+
+it('starts a seat that names an estimator the worker registers', async () => {
+	const stub = roomOf('room-estimator');
+	await stub.start({ name: 'room-estimator', agents: ['reader'] });
+	await expect(stub.read({ messages: false })).resolves.toMatchObject({ initialized: true });
+});

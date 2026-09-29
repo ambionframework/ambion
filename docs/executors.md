@@ -50,11 +50,11 @@ room and seat names, the clock, the call retry policy, an executor, a trace
 opener, and notifications. Remote hosts resolve their execution
 dependencies where the agent runs. Only protocol data crosses RPC.
 
-**`AgentRunner` is the driver.** It owns the lease, its renewal, the wake
-queue, and the record window. It knows no model and no provider. For each
-activation it opens one `ExecutorSession` and passes the windowed record to
-it. A session renders a prompt, runs its own model loop for one pass, and
-reports where it left off.
+**`AgentRunner` is the driver.** It owns the lease, its renewal, and the
+wake queue. It knows no model and no provider. For each activation it opens
+one `ExecutorSession` and passes it the view that the room windowed. A
+session renders a prompt, runs its own model loop for one pass, and reports
+where it left off.
 
 | Member                             | What it does                                                           |
 | ---------------------------------- | ---------------------------------------------------------------------- |
@@ -84,6 +84,13 @@ states the commit-freshness promise.
 `hostingOf`, and `describeExecutor` come from `@ambionframework/ambion/hosting`. The main
 entry names none of them. Journal events and projected lease state stay
 internal. Participant views omit `sessionId`.
+
+**`RoomProtocol.view(activation, message?)` takes no range.** The room
+serves the record windowed to its cap and to the token limit of the seat,
+so a seat never pages the record. With `message`, the view holds that one
+message when the purpose may read it; `recall` reads a message below the
+window this way. The hosting entry exports no `ViewRange`, and
+`CollaborationContext` holds `omitted` and no `earliest`.
 
 ## The prompt the driver renders
 
@@ -150,13 +157,14 @@ pass could not use before it ended, and the next delta carries it. Each
 family page states the moment its executor sets `consumed: true`, because
 the moment differs by family.
 
-**The activation token limit windows the record.** The driver pages the
-record from the tail, keeps the newest messages that fit
-`activationTokenLimit`, and keeps the open exchange whole. The limit counts
-record text through `estimateTokens`. It does not count the system prompt,
-the tool schemas, or the model output. It does not compare with the context
-window of the model. This is driver behavior, and it holds for every
-family.
+**The room applies the activation token limit.** It keeps the newest
+messages that fit `activationTokenLimit`, and keeps the open exchange
+whole, inside the view it serves. The limit counts record text through the
+estimator that `estimateTokens` names in the registry of the runtime. It
+does not count the system prompt, the tool schemas, or the model output. It
+does not compare with the context window of the model. The rule holds for
+every family, and one view is one call over the wire.
+[History and limits](room.md#history-and-limits) states the rule.
 
 ## The room tools
 
@@ -204,8 +212,8 @@ the answer.
 id.
 
 **`recall` reads and commits nothing.** For each distinct ref of its
-room, it calls `view(id, { before: seq + 1, limit: 1 })`. A summary sits
-after the range it covers, so that page never folds the message away. The
+room, it calls `view(id, seq)`. The view of one message applies no window
+and folds no summarised range, so it reaches a message below the window. The
 tool calls neither `acknowledgeThrough` nor `resultExpected`, and every
 family reports it as a tool event.
 

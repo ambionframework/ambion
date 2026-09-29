@@ -25,7 +25,12 @@
 import type { Answering } from '../answers.ts';
 import { answerCommit, answerLease, answerView } from '../answers.ts';
 import { AmbionError } from '../errors.ts';
-import type { ExecutionConnector, RoomRuntime, RunningRoom } from '../host/runtime.ts';
+import {
+	type ExecutionConnector,
+	type RoomRuntime,
+	type RunningRoom,
+	tokenWindowOf,
+} from '../host/runtime.ts';
 import type { Composition } from '../journal/events.ts';
 import { type Entry, type RoomJournal, roomJournal } from '../journal/journal.ts';
 import type {
@@ -35,7 +40,6 @@ import type {
 	LeaseRequest,
 	LeaseResponse,
 	RoomProtocol,
-	ViewRange,
 	ViewResponse,
 } from '../protocol.ts';
 import type { RoomState } from '../room/fold.ts';
@@ -55,6 +59,7 @@ import {
 } from '../room/read.ts';
 import { liveWork } from '../room/reconcile.ts';
 import { decide, type Refusal, type ReleaseCommand } from '../room/transition.ts';
+import type { TokenWindow } from '../room/view.ts';
 import type { PendingSay } from '../scheduling.ts';
 import type {
 	AgentDefinition,
@@ -164,7 +169,7 @@ export class RoomHost implements Room, RunningRoom {
 	readonly ports = new Map<string, AgentPort>();
 	/** The three room calls exposed to an in-process seat. */
 	readonly calls: RoomProtocol = {
-		view: (id, range) => this.view(id, range),
+		view: (id, message) => this.view(id, message),
 		commit: (commit) => this.commit(commit),
 		lease: (lease) => this.lease(lease),
 	};
@@ -394,6 +399,12 @@ export class RoomHost implements Room, RunningRoom {
 		if (this.gone()) throw new AmbionError('room_stopped', `Room '${this.name}' is stopped.`);
 	}
 
+	/** The token limit of a seat and the estimator it names. Absent when it sets no limit. */
+	tokenWindow(seat: string): TokenWindow | undefined {
+		const agent = this.defs.get(seat);
+		return agent === undefined ? undefined : tokenWindowOf(agent, this.runtime);
+	}
+
 	/** The seats live now, for a caller that reads no more than the names. */
 	live(state: RoomState): Map<string, string[]> {
 		return liveWork(state, this.now()).seats;
@@ -495,8 +506,8 @@ export class RoomHost implements Room, RunningRoom {
 
 	// -- what a seat asks -------------------------------------------------------
 
-	view(id: string, range?: ViewRange): Promise<ViewResponse> {
-		return answerView(this, id, range);
+	view(id: string, message?: Seq): Promise<ViewResponse> {
+		return answerView(this, id, message);
 	}
 
 	commit(commit: CommitRequest): Promise<CommitResult> {

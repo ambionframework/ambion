@@ -28,7 +28,6 @@ import type {
 	LeaseResponse,
 	RoomProtocol,
 	Transport,
-	ViewRange,
 	ViewResponse,
 } from '@ambionframework/ambion/hosting';
 import { reconcileRoom, runningRoom } from '@ambionframework/ambion/hosting';
@@ -273,8 +272,8 @@ export class RoomObject extends DurableObject<Env> {
 
 	// -- what a seat asks, in wire types --------------------------------------
 
-	async view(activation: string, range?: ViewRange): Promise<ViewResponse> {
-		return this.protocol().view(activation, range);
+	async view(activation: string, message?: Seq): Promise<ViewResponse> {
+		return this.protocol().view(activation, message);
 	}
 
 	async commit(commit: CommitRequest): Promise<CommitResult> {

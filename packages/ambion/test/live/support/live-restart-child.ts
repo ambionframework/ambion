@@ -60,7 +60,7 @@ function startTransport(): Transport {
 		connect(room, context) {
 			if (phase !== 'start' || context.seat !== slow.name) return local.connect(room, context);
 			const gated: RoomProtocol = {
-				view: (activation, range) => room.view(activation, range),
+				view: (activation, message) => room.view(activation, message),
 				commit: (commit) => room.commit(commit),
 				lease: async (lease) => {
 					if (lease.operation === 'claim') await fastReleased.promise;

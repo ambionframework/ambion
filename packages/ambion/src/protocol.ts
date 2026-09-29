@@ -110,29 +110,11 @@ export interface CollaborationContext {
 	 */
 	readonly scheduled?: readonly PendingSay[];
 	/**
-	 * The lowest message position the record holds. The room reports it only for
-	 * a bounded page, so a seat that windows the record knows where the record
-	 * ends and stops paging.
-	 */
-	readonly earliest?: Seq;
-	/**
 	 * How many messages of the record this activation may read lie below the
-	 * first one in `messages`. The room reports it beside `earliest`. A seat
-	 * that windows further adds what it dropped.
+	 * first one in `messages`. The room reports it when the cap or the token
+	 * limit of the seat leaves a message out. Absent means none.
 	 */
 	readonly omitted?: number;
-}
-
-/**
- * A bounded read of the record for one view. The room returns the messages
- * before `before` (the tail when it is absent), keeping the last `limit` of
- * them. The room aligns a page floor to the summaries the page holds, so one
- * page never renders a fold with a wrong count. A seat that wants an older
- * range reads the next page from the lowest position it holds.
- */
-export interface ViewRange {
-	readonly before?: Seq;
-	readonly limit: number;
 }
 
 export interface ActivationView {
@@ -243,7 +225,12 @@ export type LeaseRequest =
 export type LeaseResponse = { ok: { expiresAt: number; lastSeq: Seq } } | Stale;
 
 export interface RoomProtocol {
-	view(activation: string, range?: ViewRange): Promise<ViewResponse>;
+	/**
+	 * The view of an activation. The room windows its record to the cap and
+	 * to the token limit of the seat. With `message`, the view holds that one
+	 * message alone, when the purpose may read it, and no window applies.
+	 */
+	view(activation: string, message?: Seq): Promise<ViewResponse>;
 	commit(commit: CommitRequest): Promise<CommitResult>;
 	lease(lease: LeaseRequest): Promise<LeaseResponse>;
 }

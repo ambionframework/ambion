@@ -37,6 +37,12 @@ export interface ConfigureOptions {
 	stream?: PiExecutionOptions['stream'];
 	limits?: CreateRuntimeOptions['limits'];
 	/**
+	 * The token estimators an agent may name in `estimateTokens`. The room
+	 * object runs the estimator of a seat, so the definition carries the name
+	 * alone. Every runtime also holds `length`.
+	 */
+	estimators?: CreateRuntimeOptions['estimators'];
+	/**
 	 * What to do with an event a seat raised. An activation runs inside the
 	 * seat's own object and its events reach no other, so this is the only way
 	 * a reader outside that object learns a tool was called. It writes one
@@ -90,6 +96,7 @@ export function runtimeFor(
 			...(settings.stream === undefined ? {} : { stream: settings.stream }),
 		}),
 		...(settings.limits === undefined ? {} : { limits: settings.limits }),
+		...(settings.estimators === undefined ? {} : { estimators: settings.estimators }),
 		...options,
 	});
 }

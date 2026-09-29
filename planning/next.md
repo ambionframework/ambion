@@ -199,9 +199,7 @@ Each step states the change to
 page it changes in the same commit.
 
 - [ ] **3.** The remote call is an `Execution`, and `Transport` goes. (C5)
-- [ ] **4.** The room applies the token limit, and the paging of a view
-      goes. (C7)
-- [ ] **5.** The core owns the activation state. Needs 3 and 4. (C6)
+- [ ] **5.** The core owns the activation state. Needs 3. (C6)
 - [ ] **6.** The workspace keeps one SQL path and the ports that a
       backend uses. (C8)
 - [ ] **7.** Cloudflare reuses the core, and one scripted room serves the
@@ -279,27 +277,6 @@ each member that changes. **Evidence:** [Executors](../docs/executors.md)
 states the new `pass` contract, `executorConformance` tests it on the
 three executors, the prompt snapshot holds, and one live file passes on
 each harness.
-
-**C7. One windowing rule.** `room/view.ts` keeps the newest messages,
-never splits a summarised range, and keeps the open exchange whole. The
-runner applies the same rule by tokens in `windowedView` and
-`windowToLimit`, and the `ViewRange` paging of `room.view` exists only
-for it. On Cloudflare each page is an RPC round trip.
-
-- **The room applies the token limit** inside the view, and the paging
-  and the optional `range` of `RoomProtocol.view` go.
-- **`estimateTokens` becomes a name.** A function does not cross the
-  wire, so the room host holds a registry of named estimators. The
-  executor options of `pi()`, `claude()`, and `codex()` take the name,
-  and the Cloudflare room object reads the registry of its runtime.
-- **The decision in [Definitions and tools](../docs/agent.md) changes.**
-  It states that the seat runs `estimateTokens`. The item rewrites it,
-  and [Pi](../docs/pi.md), [Claude](../docs/claude.md), and
-  [Codex](../docs/codex.md) state the name.
-
-**Evidence:** the window tests of the room and the runner merge, the
-rendered record of each case stays the same, and the export snapshot
-names the changed option.
 
 **C8. The workspace keeps one SQL path and the ports that a backend
 uses.**

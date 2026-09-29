@@ -37,7 +37,7 @@ export function tapped(tap: Tap): Transport {
 		connect(room, context) {
 			const port = base.connect(
 				{
-					view: (id, range) => room.view(id, range),
+					view: (id, message) => room.view(id, message),
 					commit: (commit) => room.commit(commit),
 					lease: (lease) => room.lease(lease),
 					...tap.room?.(room, context),

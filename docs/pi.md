@@ -104,16 +104,16 @@ states how a room resolves an execution.
 **`pi(options)` returns a frozen executor of kind `pi`.** The kernel
 validates the shared fields. Pi adds `model` and `compaction`.
 
-| Option                 | Required | Default                       | Meaning                                                                  |
-| ---------------------- | -------- | ----------------------------- | ------------------------------------------------------------------------ |
-| `instructions`         | Yes      | None                          | The private guidance of the agent.                                       |
-| `model`                | Yes      | None                          | A Pi model id, `provider/model-id`.                                      |
-| `tools`                | No       | None                          | The tools of the agent, from `defineTool` or `fromPiTool`.               |
-| `bundles`              | No       | None                          | Tool bundles. Their guidance joins the prompt after the speaking policy. |
-| `speaking`             | No       | `DEFAULT_GUIDANCE`            | The speaking policy. It replaces the default.                            |
-| `activationTokenLimit` | No       | The whole record              | The token limit of the record one activation reads. A positive integer.  |
-| `estimateTokens`       | No       | `Math.ceil(text.length / 4)`  | Counts tokens against the limit. It needs `activationTokenLimit`.        |
-| `compaction`           | No       | `DEFAULT_COMPACTION_SETTINGS` | When the harness compacts the session. Pi's `CompactionSettings`.        |
+| Option                 | Required | Default                       | Meaning                                                                          |
+| ---------------------- | -------- | ----------------------------- | -------------------------------------------------------------------------------- |
+| `instructions`         | Yes      | None                          | The private guidance of the agent.                                               |
+| `model`                | Yes      | None                          | A Pi model id, `provider/model-id`.                                              |
+| `tools`                | No       | None                          | The tools of the agent, from `defineTool` or `fromPiTool`.                       |
+| `bundles`              | No       | None                          | Tool bundles. Their guidance joins the prompt after the speaking policy.         |
+| `speaking`             | No       | `DEFAULT_GUIDANCE`            | The speaking policy. It replaces the default.                                    |
+| `activationTokenLimit` | No       | The whole record              | The token limit of the record one activation reads. A positive integer.          |
+| `estimateTokens`       | No       | `'length'`                    | The name of the estimator in the runtime that counts tokens. It needs the limit. |
+| `compaction`           | No       | `DEFAULT_COMPACTION_SETTINGS` | When the harness compacts the session. Pi's `CompactionSettings`.                |
 
 **Pi's default compaction is on.** `DEFAULT_COMPACTION_SETTINGS` is
 `{ enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 }`. The
@@ -141,8 +141,14 @@ for its summary. It deletes the others.
 
 The runtime supplies the clock, the call limits, the trace limits, the
 logger, and the transport. `pi()` throws at definition time when
-`estimateTokens` has no `activationTokenLimit`, and when the limit is not a
-positive integer.
+`estimateTokens` has no `activationTokenLimit`, when the limit is not a
+positive integer, and when `estimateTokens` is not a name.
+
+**`estimateTokens` names an estimator in the runtime.** The room runs it, so
+the definition carries the name alone. `length`, the default, counts
+`Math.ceil(text.length / 4)`. `createRuntime({ estimators })` registers
+other names. [History and limits](room.md#history-and-limits) states the
+rule.
 
 ## How an activation runs
 
@@ -466,6 +472,7 @@ Pi seats.
 | The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY`, the credit, and the usage limit.  |
 | `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat ran under `piExecution()`. Route with `composeExecutions`.                                   |
 | `An agent estimateTokens needs an activationTokenLimit.`            | `estimateTokens` is set with no limit.                                                                     |
+| `Agent '...' names estimator '...', and the runtime holds none ...` | The room start found no estimator by that name. Pass it in `estimators` to `createRuntime`.                |
 | The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.       |
 | A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again. |
 | A steer shows `consumed: false`                                     | No provider request held the line before the run ended. The next delta carries the line.                   |

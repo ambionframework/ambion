@@ -41,7 +41,10 @@ What is built:
 - **`configure`** names the complete agent definitions the objects resolve by
   name, the model call they make, and an optional `logger` for the steps of
   each activation. To send the steps to Workers Logs, pass
-  `(record) => console.log({ ambion: 'step', ...record })`.
+  `(record) => console.log({ ambion: 'step', ...record })`. Its `estimators`
+  go to the runtime of the room object, which windows each view: an agent
+  with `activationTokenLimit` names one of them, or `length`, in
+  `estimateTokens`.
 
 `RoomObject.start` receives the complete agent definitions in `agents`, an optional
 `summary` name, and an optional `seats` map. The map sets initial members and

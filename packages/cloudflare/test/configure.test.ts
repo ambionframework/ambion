@@ -1,7 +1,13 @@
-import { defineAgent } from '@ambionframework/ambion';
+import { defineAgent, startRoom } from '@ambionframework/ambion';
 import { pi } from '@ambionframework/pi';
 import { describe, expect, it } from 'vitest';
-import { configure, definitionOf, executionFor, traceLogger } from '../src/configure.ts';
+import {
+	configure,
+	definitionOf,
+	executionFor,
+	runtimeFor,
+	traceLogger,
+} from '../src/configure.ts';
 import { scripted } from './scripted.ts';
 
 const agent = (name: string) =>
@@ -36,5 +42,27 @@ describe('configure', () => {
 		expect(traceLogger()).toBe(logger);
 		configure({ agents: [agent('execution')] });
 		expect(traceLogger()).toBeUndefined();
+	});
+
+	it('gives the runtime of an object the configured estimators', async () => {
+		const reader = defineAgent({
+			name: 'reader',
+			identity: 'reader identity',
+			executor: pi({
+				instructions: 'Read.',
+				model: 'scripted/test',
+				activationTokenLimit: 40,
+				estimateTokens: 'chars',
+			}),
+		});
+		configure({ agents: [reader], estimators: { chars: (text: string) => text.length } });
+		const room = await startRoom({ name: 'estimators', runtime: runtimeFor({}), agents: [reader] });
+		await room.stop();
+		configure({ agents: [reader] });
+		await expect(
+			startRoom({ name: 'estimators', runtime: runtimeFor({}), agents: [reader] }),
+		).rejects.toThrow(
+			"Agent 'reader' names estimator 'chars', and the runtime holds none by that name.",
+		);
 	});
 });

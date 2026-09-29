@@ -10,11 +10,13 @@ import {
 	type ExecutionConnector,
 	executionHostOf,
 	hostingOf,
+	type RoomRuntime,
 	type Runtime,
 	registeredRoom,
 	registerRoom,
 	releaseRoom,
 	roomRuntime,
+	tokenWindowOf,
 } from './host/runtime.ts';
 import { roomJournal } from './journal/journal.ts';
 import { discussionMessages } from './room/exchange.ts';
@@ -96,12 +98,10 @@ export async function startRoom(options: StartRoomOptions): Promise<Room> {
 	assertRoomName(options.name);
 	const runtime = options.runtime ?? defaultRuntime();
 	assertFree(runtime, options.name);
-	const room = RoomHost.start(
-		options.name,
-		roomRuntime(runtime, options.name),
-		composeFrom(options),
-		connectorFor(runtime, options.execution),
-	);
+	const hosted = roomRuntime(runtime, options.name);
+	const cast = composeFrom(options);
+	assertEstimators(cast.definitions, hosted);
+	const room = RoomHost.start(options.name, hosted, cast, connectorFor(runtime, options.execution));
 	registerRoom(runtime, room);
 	try {
 		await room.started();
@@ -116,12 +116,10 @@ export async function resumeRoom(name: string, options: ResumeRoomOptions): Prom
 	assertRoomName(name);
 	const runtime = options.runtime ?? defaultRuntime();
 	assertFree(runtime, name);
-	const room = RoomHost.resume(
-		name,
-		roomRuntime(runtime, name),
-		definitionsOf(options.agents),
-		connectorFor(runtime, options.execution),
-	);
+	const hosted = roomRuntime(runtime, name);
+	const bindings = definitionsOf(options.agents);
+	assertEstimators(bindings.values(), hosted);
+	const room = RoomHost.resume(name, hosted, bindings, connectorFor(runtime, options.execution));
 	registerRoom(runtime, room);
 	try {
 		await room.started();
@@ -187,6 +185,15 @@ function assertFree(runtime: Runtime, name: string): void {
 			'room_running',
 			`Room '${name}' is already running: stop it before starting it again.`,
 		);
+}
+
+/**
+ * Every estimator a definition names is in the registry of the runtime. The
+ * room checks when a run starts, the first point where the definition and the
+ * registry meet, so a wrong name fails the start and never an activation.
+ */
+function assertEstimators(definitions: Iterable<AgentDefinition>, runtime: RoomRuntime): void {
+	for (const agent of definitions) tokenWindowOf(agent, runtime);
 }
 
 function composeFrom(options: StartRoomOptions): CompositionDraft {

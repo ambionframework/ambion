@@ -51,7 +51,6 @@ export {
 	refusal,
 	renderActivation,
 	renderDelta,
-	renderLine,
 	renderPending,
 	summaryToolDescription,
 } from './execution/render.ts';
@@ -100,11 +99,11 @@ export type {
 	RoomProtocol,
 	Stale,
 	Steer,
-	ViewRange,
 	ViewResponse,
 	Wake,
 } from './protocol.ts';
 export { assertWire, classifyCommit, roundTrip, sessionToResume } from './protocol.ts';
+export { renderLine } from './record.ts';
 export type {
 	AgentDefinition,
 	AgentExecutor,

@@ -6,16 +6,26 @@ import type {
 	ActivationView,
 	CollaborationContext,
 	ContextParticipant,
-	ViewRange,
 } from '../protocol.ts';
+import { type Block, blocks, renderLine } from '../record.ts';
 import type { AgentParticipantInfo, ParticipantInfo, Seq } from '../types.ts';
 import { isSummary, type Message } from '../types.ts';
 import type { RoomState } from './fold.ts';
 import { pendingSay } from './scheduled.ts';
 
-/** The most messages a view holds beyond the pinned exchange. */
+/** The token limit of one seat, and the estimator that counts against it. */
+export interface TokenWindow {
+	readonly limit: number;
+	readonly estimate: (text: string) => number;
+}
+
+/**
+ * The bounds of one view beyond the pinned exchange: the most messages the
+ * room serves, and the token limit of the seat, when it has one.
+ */
 interface ViewLimits {
 	readonly messages: number;
+	readonly tokens?: TokenWindow;
 }
 
 /** What the view is built from: the fold and current host facts. */
@@ -25,7 +35,7 @@ export interface RoomFacts {
 	readonly state: RoomState;
 	/** The seats live now, by name, with the ids that make them live. */
 	readonly live: ReadonlyMap<string, string[]>;
-	/** The room's cap on the record. Absent means no cap. */
+	/** The cap of the room and the token limit of the seat. Absent means no bound. */
 	readonly limits?: ViewLimits;
 	/** How many messages landed after this seq. */
 	messagesSince(seq: Seq): number;
@@ -55,25 +65,25 @@ function agentsOf(facts: Pick<RoomFacts, 'state' | 'live'>): AgentParticipantInf
 }
 
 /** Select collaboration facts without reading an executable agent definition. */
-export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange): ActivationView {
+export function viewOf(spec: ActivationSpec, facts: RoomFacts, message?: Seq): ActivationView {
 	const state = facts.state;
 	const purpose = spec.purpose;
 	const goal = state.composition?.goal;
 	// A summary reads every message through its closed exchange, background and
 	// current alike; what it covers stays fixed to its own exchange. An ordinary
-	// response reads the whole record instead. Either may read one bounded page
-	// of its record in place of the whole of it. The room caps the record a view
-	// serves, and a page reads below the cap: the cap bounds what a view renders,
-	// and the purpose bounds what a seat may read. A malformed range reads the
-	// whole record, because a seat's request is data.
+	// response reads the whole record instead. The room windows that record to
+	// its cap and to the token limit of the seat. A view of one message reads
+	// it by its seq under the purpose alone, so `recall` reaches below the
+	// window.
 	const bounded =
 		purpose.kind === 'summarize'
-			? state.messages.filter((message) => message.seq <= purpose.through)
+			? state.messages.filter((item) => item.seq <= purpose.through)
 			: state.messages;
-	const page = range !== undefined && validRange(range) ? range : undefined;
 	const pin = purpose.kind === 'respond' ? state.exchange?.from : purpose.exchange;
-	const served = capOf(bounded, facts.limits?.messages, pin);
-	const messages = page !== undefined ? pageOf(bounded, page) : served;
+	const messages =
+		message === undefined
+			? windowOf(bounded, facts.limits, pin)
+			: bounded.filter((item) => item.seq === message);
 	const context: CollaborationContext = {
 		name: facts.name,
 		now: facts.now,
@@ -84,13 +94,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange
 		...(purpose.kind !== 'respond' || state.exchange === undefined
 			? {}
 			: { exchange: { owner: state.exchange.owner, from: state.exchange.from } }),
-		...reachOf(
-			page !== undefined || served.length < bounded.length,
-			bounded,
-			served,
-			messages,
-			page,
-		),
+		...omittedOf(bounded, messages),
 		...purposeContext(purpose, state),
 		...scheduledOf(spec, state),
 	};
@@ -112,29 +116,30 @@ function scheduledOf(
 	return own.length === 0 ? {} : { scheduled: own };
 }
 
-/** A well-formed page request: a positive limit, and a non-negative cursor. */
-function validRange(range: ViewRange): boolean {
-	if (!Number.isSafeInteger(range.limit) || range.limit <= 0) return false;
-	return range.before === undefined || (Number.isSafeInteger(range.before) && range.before >= 0);
+/** How many messages the view leaves out below the first one it holds. Absent when none. */
+function omittedOf(
+	bounded: readonly Message[],
+	messages: readonly Message[],
+): Pick<CollaborationContext, 'omitted'> {
+	const lowest = messages[0]?.seq;
+	if (lowest === undefined) return {};
+	const omitted = bounded.filter((message) => message.seq < lowest).length;
+	return omitted === 0 ? {} : { omitted };
 }
 
 /**
- * The record floor and the count below the view, reported when the view holds
- * less than the whole record, so a seat can stop paging and a reader can see
- * that a gap exists.
+ * The one windowing rule of the record: the room cap, then the token limit
+ * of the seat inside it. Each keeps the newest messages, never splits a
+ * summarised range, and keeps every message at or after the pin, so the open
+ * exchange stays whole.
  */
-function reachOf(
-	limited: boolean,
-	bounded: readonly Message[],
-	served: readonly Message[],
+function windowOf(
 	messages: readonly Message[],
-	page: ViewRange | undefined,
-): { earliest?: Seq; omitted?: number } {
-	if (!limited) return {};
-	const first = served[0];
-	const lowest = messages[0]?.seq ?? page?.before ?? Number.POSITIVE_INFINITY;
-	const omitted = bounded.filter((message) => message.seq < lowest).length;
-	return first === undefined ? { omitted } : { earliest: first.seq, omitted };
+	limits: ViewLimits | undefined,
+	pin: Seq | undefined,
+): Message[] {
+	const capped = capOf(messages, limits?.messages, pin);
+	return limits?.tokens === undefined ? capped : tokensOf(capped, limits.tokens, pin);
 }
 
 /**
@@ -155,24 +160,42 @@ function capOf(
 }
 
 /**
- * One bounded page of the record: the last `limit` messages before the cursor.
- * The floor moves up past a range this page would split, so the page never
- * renders a fold with a wrong count. A range this page holds no summary for
- * stays whole when the seat pages to it; the seat assembles the pages.
+ * The newest blocks whose estimated tokens stay within the limit, and never
+ * fewer than one block, so an activation always reads the latest exchange.
+ * The walk runs over blocks, so a summarised range counts once, as the line
+ * of its summary, and is never split. The floor moves down to the pin.
  */
-function pageOf(messages: readonly Message[], range: ViewRange): Message[] {
-	const before = range.before ?? Number.POSITIVE_INFINITY;
-	const upto = messages.filter((message) => message.seq < before);
-	const first = upto[Math.max(0, upto.length - range.limit)];
-	if (first === undefined) return [];
-	const floor = foldAlignedFloor(upto, first.seq);
-	return upto.filter((message) => message.seq >= floor);
+function tokensOf(
+	messages: readonly Message[],
+	window: TokenWindow,
+	pin: Seq | undefined,
+): Message[] {
+	const all = blocks(messages);
+	const newest = all.at(-1);
+	if (newest === undefined) return [];
+	let cost = 0;
+	let cut = newest;
+	for (let index = all.length - 1; index >= 0; index -= 1) {
+		const block = all[index];
+		if (block === undefined) break;
+		cost += window.estimate(renderLine('fold' in block ? block.by : block.line));
+		if (cost > window.limit) break;
+		cut = block;
+	}
+	let floor = firstSeq(cut);
+	if (pin !== undefined && pin < floor) floor = pin;
+	return messages.filter((message) => message.seq >= floor);
+}
+
+/** The lowest seq one block stands for. */
+function firstSeq(block: Block): Seq {
+	return 'fold' in block ? Math.min(...block.fold.map((message) => message.seq)) : block.line.seq;
 }
 
 /**
- * A page floor that never splits a covered range. A fold that holds part of a
+ * A cap floor that never splits a covered range. A fold that holds part of a
  * summarised range renders a wrong count, so a floor inside a range moves up
- * past it. The summary sits after its range, so the page still holds it and it
+ * past it. The summary sits after its range, so the view still holds it and it
  * stands for the whole range. A summary covers a disjoint range, so one pass
  * finds the range that straddles the floor.
  */

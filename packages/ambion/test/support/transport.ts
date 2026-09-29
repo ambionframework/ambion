@@ -34,12 +34,12 @@ export function serializing(transport: Transport): SerializingTransport {
 		violations,
 		connect(room, context) {
 			const wrapped: RoomProtocol = {
-				view: async (id, range) =>
+				view: async (id, message) =>
 					check(
 						'view response',
 						await room.view(
 							check('view', id),
-							range === undefined ? undefined : check('view range', range),
+							message === undefined ? undefined : check('view message', message),
 						),
 					),
 				commit: async (commit) =>
@@ -106,7 +106,7 @@ export function faultyTransport(transport: Transport, faults: Fault[], clock: Cl
 	return {
 		connect(room, context) {
 			const wrapped: RoomProtocol = {
-				view: (id, range) => through('view', id, () => room.view(id, range)),
+				view: (id, message) => through('view', id, () => room.view(id, message)),
 				commit: (commit) => through('commit', commit, () => room.commit(commit)),
 				lease: (lease) => through('lease', lease, () => room.lease(lease)),
 			};
