@@ -570,6 +570,13 @@ that still runs, within a budget. `details.processes` holds every status in
 the order of the handles, and `details.ended` holds the details of each
 process that it shows.
 
+**The schema of `wait` states the bounds of `handles`.** It sets `minItems`
+to 1 and `maxItems` to 16, so the model reads them. A call outside them, or a
+call with `handle` in place of `handles`, fails. The tool gives `Invalid
+arguments for tool 'wait': must have required properties handles.` for the
+call with `handle`. Pi and the Claude Agent SDK check the schema before the
+tool runs, and give their own text.
+
 **A wait on several handles bounds its output.** It shows the processes that
 ended in the order of the handles, until its text holds 50 KB. One view holds
 at most 50 KB, so a result holds at most about 100 KB. Each process after that

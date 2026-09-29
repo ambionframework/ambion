@@ -281,6 +281,10 @@ It now takes `{ handles, timeout? }`, with 1 to 16 handles, and one handle
 gives the result of `status`. **Evidence:** the process tests, and one
 live file on each harness that shows no loss in the use of a process.
 
+**The code of C10 landed, and the live evidence is pending.** The live file
+is `packages/workspace/test/live/workspace.test.ts`, which runs on Pi,
+Claude, and Codex through `AMBION_HARNESS`.
+
 **A1. The assistant works a request after the person who asked leaves.** This item
 fixes a defect and adds no capability. A room stays available between
 interactions, so a person who asks and leaves gets the answer later.

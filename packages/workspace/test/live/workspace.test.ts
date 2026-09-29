@@ -2,7 +2,9 @@
  * Tools reach a workspace. `docs/workspace.md`: an agent that names a workspace
  * holds `read`, `write`, `edit`, `bash` and `sql`, rooted at its own home. A
  * real provider has to accept those schemas, and a real model has to pick up
- * the file tools and use them against a filesystem it has never seen.
+ * the file tools and use them against a filesystem it has never seen. The
+ * process tools reach the same home: a model starts two processes and calls
+ * `wait` with their handles until both end.
  */
 
 import { expect, it } from 'vitest';
@@ -18,8 +20,17 @@ import {
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
 import { memoryBackend } from '../../../just-bash/src/index.ts';
-import { BACKGROUND_CONTEXT, openWorkspace } from '../../src/index.ts';
+import { type AuditEntry, BACKGROUND_CONTEXT, openWorkspace } from '../../src/index.ts';
 import { sqliteBackend } from '../../src/sqlite-entry.ts';
+
+/** The entries of the audit log at its default path, oldest first. */
+async function auditOf(backend: ReturnType<typeof memoryBackend>): Promise<AuditEntry[]> {
+	const log = (await backend.readFiles()).find((file) => file.path === '/workspace/audit.jsonl');
+	return (log?.text ?? '')
+		.split('\n')
+		.filter((line) => line.trim() !== '')
+		.map((line) => JSON.parse(line) as AuditEntry);
+}
 
 live('the workspace', () => {
 	it('a seat reads a file it was told about, writes one back, and answers from what it read', async () => {
@@ -104,6 +115,55 @@ live('the workspace', () => {
 		const answer = saidBy((await session.read()).messages, 'analyst');
 		expect(answer.length).toBeGreaterThanOrEqual(1);
 		expect(answer.map((m) => m.text).join(' ')).toMatch(/\b25\b/);
+		await invariants(session, events);
+		report('the workspace', await spent(session));
+		await session.stop();
+		await store.dispose();
+	});
+
+	it('a seat starts two processes, waits for them with wait and their handles, and answers from their output', async () => {
+		const backend = memoryBackend();
+		const store = openWorkspace({
+			name: roomName('live-wait'),
+			backend: { bash: backend },
+			audit: {},
+		});
+		const runner = agent('runner', {
+			identity: 'Runs the two checks.',
+			instructions: `
+				To answer a question about the checks, start two processes with the
+				bash tool and wait 0: "sleep 4; echo alpha-ok" with the name alpha,
+				and "sleep 8; echo beta-ok" with the name beta. Then call the wait
+				tool with the handles of the processes that still run, until both
+				have ended. Then answer with one say, in one sentence, that quotes
+				the output of each process.
+			`,
+			bundles: [store.tools()],
+		});
+		const { session, events } = await open('workspace', { agents: [runner] });
+		const visit = await enter(session, person);
+		const exchange = await visit.send({ text: 'Run the two checks and tell me what they print.' });
+		await exchange.waitForSummary();
+
+		const waits = (await auditOf(backend)).filter((entry) => entry.tool === 'wait');
+		const started = events.filter(
+			(e) => e.type === 'tool_execution_start' && e.agent === 'runner' && e.toolName === 'wait',
+		);
+		process.stdout.write(
+			`live · wait: ${started.length} calls started, ${waits.length} reached the tool: ${JSON.stringify(waits.map((entry) => entry.arguments))}\n`,
+		);
+		// Each call reached the tool with a list of handles, and none failed.
+		expect(waits.length).toBeGreaterThanOrEqual(1);
+		for (const entry of waits) {
+			expect(entry.arguments).toMatchObject({ handles: expect.any(Array) });
+			expect(entry.error).toBeUndefined();
+		}
+		const running = await store.processes.list({ agent: 'runner', running: true });
+		expect(running).toEqual([]);
+		const answer = saidBy((await session.read()).messages, 'runner');
+		const text = answer.map((m) => m.text).join(' ');
+		expect(text).toContain('alpha-ok');
+		expect(text).toContain('beta-ok');
 		await invariants(session, events);
 		report('the workspace', await spent(session));
 		await session.stop();

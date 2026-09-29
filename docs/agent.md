@@ -79,6 +79,11 @@ const lookup = defineTool({
 });
 ```
 
+**Arguments that break the schema fail the call.** The error text is
+`Invalid arguments for tool '<name>': <rules>.`, and `<rules>` names each
+property path and the rule it breaks, such as `handles must not have fewer
+than 1 items`. The model reads this text as a tool error.
+
 Every ordinary activation receives `say`, `schedule`, `seat`, `unseat`,
 `dismiss`, and `recall`, plus the tools from its definition. A closing
 activation receives only `say`. `say` accepts `{ text, to?, refs? }`.
