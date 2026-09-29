@@ -5,21 +5,27 @@
  * that arrives while an activation runs is handed to the runner to queue;
  * steering is forwarded separately to the exact live activation. A cut is
  * handed to the runner the same way. The seat gives the steps of each
- * activation to the logger that `configure` takes. The Pi executor lives on
- * the object instance, and it keeps the seat's Pi harness sessions in a
- * `MemorySessionRepo` there. A seat continues its session inside one
- * exchange while the object stays in memory. An eviction loses the
- * sessions, and the next activation starts fresh.
+ * activation to the logger that `configure` takes. The seat object runs the
+ * execution of its own host: it connects the Pi execution once, and the
+ * runner and its executor live on the object instance. The executor keeps
+ * the seat's Pi harness sessions in a `MemorySessionRepo` there. A seat
+ * continues its session inside one exchange while the object stays in
+ * memory. An eviction loses the sessions, and the next activation starts
+ * fresh.
  */
 
 import { DurableObject } from 'cloudflare:workers';
 import type { Clock, ExecutionEvent } from '@ambionframework/ambion';
-import { systemClock } from '@ambionframework/ambion';
-import type { Executor, RoomProtocol, Steer, Wake } from '@ambionframework/ambion/hosting';
-import { AgentRunner, seatContext } from '@ambionframework/ambion/hosting';
-import { createPiExecutor, type ExecutionServices } from '@ambionframework/pi';
+import type {
+	AgentRunner,
+	ExecutionHost,
+	Limits,
+	RoomProtocol,
+	Steer,
+	Wake,
+} from '@ambionframework/ambion/hosting';
 import type { SeatEvent } from './configure.ts';
-import { definitionOf, executionFor, seatEvent, traceLogger } from './configure.ts';
+import { definitionOf, seatEvent, seatExecution, seatHost } from './configure.ts';
 import type { Env } from './room-object.ts';
 import { seatMetadata } from './storage.ts';
 
@@ -50,9 +56,12 @@ function seatLine(room: string, seat: string, event: ExecutionEvent): SeatEvent 
 }
 
 export class SeatObject extends DurableObject<Env> {
+	/** The runner of the activation that runs in this object now. */
 	private runner: AgentRunner | undefined;
-	/** The Pi executor of the seat and its sessions, kept while the object stays in memory. */
-	private executor: { readonly seat: string; readonly executor: Executor } | undefined;
+	/** The port of the seat and its executor, connected once while the object stays in memory. */
+	private port: { readonly key: string; readonly runner: AgentRunner } | undefined;
+	/** The host of the seat: its clock, its limits, and its logger. */
+	private host: ExecutionHost | undefined;
 	/** Whether an alarm runs in this object now. */
 	private alarming = false;
 	private readonly metadata;
@@ -145,15 +154,14 @@ export class SeatObject extends DurableObject<Env> {
 		const state = this.metadata.read();
 		const { activation, room, seat } = state;
 		if (activation === undefined || room === undefined || seat === undefined) return;
-		const protocol = this.roomFor(room);
-		const execution = executionFor({ clock: systemClock() });
+		const host = this.hostOf();
 		if (state.phase === 'running') {
 			// A run that never came back: the object was evicted mid-activation.
 			try {
 				await this.releaseRecovered(
-					protocol,
-					execution.call,
-					execution.clock,
+					this.roomFor(room),
+					host.limits.call,
+					host.clock,
 					room,
 					seat,
 					activation,
@@ -164,23 +172,7 @@ export class SeatObject extends DurableObject<Env> {
 			return;
 		}
 		this.metadata.change(() => ({ patch: { phase: 'running' } }));
-		const definition = definitionOf(seat);
-		const executor = this.executorFor(seat, definition, execution);
-		const emit = (event: ExecutionEvent) => seatEvent(seatLine(room, seat, event));
-		this.runner = new AgentRunner(
-			protocol,
-			seatContext({
-				clock: execution.clock,
-				call: execution.call,
-				definition,
-				room,
-				seat,
-				executor,
-				emit,
-				logger: traceLogger(),
-				limits: execution.trace,
-			}),
-		);
+		this.runner = this.portOf(room, seat);
 		try {
 			await this.runner.run(activation);
 		} finally {
@@ -189,28 +181,41 @@ export class SeatObject extends DurableObject<Env> {
 		}
 	}
 
-	/** The seat's Pi executor: the one this object holds, or a new one. */
-	private executorFor(
-		seat: string,
-		definition: ReturnType<typeof definitionOf>,
-		execution: ExecutionServices,
-	): Executor {
-		if (this.executor?.seat === seat) return this.executor.executor;
-		const executor = createPiExecutor({
-			definition,
-			model: execution.model,
-			stream: execution.stream,
-			now: () => execution.clock.now(),
-			sessions: execution.sessions,
-		});
-		this.executor = { seat, executor };
-		return executor;
+	/** The host of the seat, built once while the object stays in memory. */
+	private hostOf(): ExecutionHost {
+		this.host ??= seatHost();
+		return this.host;
+	}
+
+	/**
+	 * The port of the seat: the one this object holds, or one that the
+	 * execution of this host connects. The execution builds the executor once
+	 * for each connect.
+	 */
+	private portOf(room: string, seat: string): AgentRunner {
+		const key = JSON.stringify([room, seat]);
+		if (this.port?.key === key) return this.port.runner;
+		const calls: RoomProtocol = {
+			view: (id, range) => this.roomFor(room).view(id, range),
+			commit: (commit) => this.roomFor(room).commit(commit),
+			lease: (lease) => this.roomFor(room).lease(lease),
+		};
+		const runner = seatExecution()
+			.connector(this.hostOf())
+			.connect(calls, {
+				room,
+				seat,
+				definition: definitionOf(seat),
+				emit: (event: ExecutionEvent) => seatEvent(seatLine(room, seat, event)),
+			});
+		this.port = { key, runner };
+		return runner;
 	}
 
 	/** Release a recovered activation within the configured call budget. */
 	private async releaseRecovered(
 		protocol: RoomProtocol,
-		call: ExecutionServices['call'],
+		call: Limits['call'],
 		clock: Clock,
 		room: string,
 		seat: string,

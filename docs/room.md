@@ -135,7 +135,7 @@ Error notifications retain the original `Error` object, with its cause and
 provider fields. Errors describe execution and are not room facts. An
 execution event names its activation.
 
-**In-process transports have the same ownership boundary as remote calls.**
+**An in-process port has the same ownership boundary as a remote call.**
 The room captures commit and lease requests before it awaits work. Results and
 steering messages carry detached collaboration facts. A later edit by a caller
 cannot change the submitted request or the context of another executor.

@@ -19,7 +19,7 @@ import {
 import { defineAgent, describeExecutor } from './define.ts';
 import { seatContext } from './execution/connector.ts';
 import type { Executor } from './execution/executor.ts';
-import { inProcessTransport } from './execution/runner.ts';
+import { AgentRunner } from './execution/runner.ts';
 import { systemClock } from './host/clock.ts';
 import { DEFAULT_TRACE_LIMITS } from './host/runtime.ts';
 import type { AgentPort, CommitResult, LeaseRequest } from './protocol.ts';
@@ -437,7 +437,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 		try {
 			const executor = await harness.open(one.plan, definition);
 			const emit = (event: ExecutionEvent) => void events.push(event);
-			const port = inProcessTransport().connect(
+			const port = new AgentRunner(
 				room.protocol,
 				seatContext({
 					clock: systemClock(),

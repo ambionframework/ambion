@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { hostingOf, inProcessTransport } from '../src/hosting.ts';
+import { type Execution, hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
 	type Room,
@@ -28,6 +28,7 @@ import { mulberry32 } from './support/core-failure.ts';
 import { replayState } from './support/fold.ts';
 import { type Entry, History, standing, violations } from './support/history.ts';
 import { invariants } from './support/invariants.ts';
+import { type Fault, faulty, type Operation, serializing } from './support/ports.ts';
 import {
 	messagesOf,
 	roomName,
@@ -38,7 +39,6 @@ import {
 } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { type FailMode, gatedJournals, memory, sqlite, tappedJournals } from './support/storage.ts';
-import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
 
 const OPERATIONS: Operation[] = ['wake', 'steer', 'cut', 'view', 'commit', 'lease'];
 const RETRY = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
@@ -118,11 +118,18 @@ class Cluster {
 			}
 			return current.gate;
 		});
-		return createRuntime({
-			storage: journals,
-			clock: this.clock,
-			transport: serializing(faultyTransport(inProcessTransport(), this.faults, this.clock)),
-		});
+		return createRuntime({ storage: journals, clock: this.clock });
+	}
+
+	/** The execution of each run: through the faults, and every request and response as JSON. */
+	private execution(): Execution {
+		return serializing(
+			faulty(
+				piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }),
+				this.faults,
+				this.clock,
+			),
+		);
 	}
 
 	/** Whether the next append the run makes is the one the nemesis cuts. */
@@ -150,7 +157,7 @@ class Cluster {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			execution: piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }),
+			execution: this.execution(),
 		});
 		this.watch();
 		await messagesOf(this.session);
@@ -235,7 +242,7 @@ class Cluster {
 				this.session = await resumeRoom(this.name, {
 					runtime: this.runtime,
 					agents,
-					execution: piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }),
+					execution: this.execution(),
 				});
 				break;
 			} catch (error) {

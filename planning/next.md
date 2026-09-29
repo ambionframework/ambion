@@ -204,20 +204,19 @@ Each step states the change to
 [Executors](../docs/executors.md#the-hosting-entry-exports) or to the
 page it changes in the same commit.
 
-- [ ] **3.** The remote call is an `Execution`, and `Transport` goes. (C5)
 - [ ] **4.** The room applies the token limit, and the paging of a view
       goes. (C7)
-- [ ] **5.** The core owns the activation state. Needs 3 and 4. (C6)
+- [ ] **5.** The core owns the activation state. Needs 4. (C6)
 - [ ] **6.** The workspace keeps one SQL path and the ports that a
       backend uses. (C8)
 - [ ] **7.** Cloudflare reuses the core, and one scripted room serves the
-      conformance suites. Needs 3. (C9)
+      conformance suites. (C9)
 - [ ] **8.** `wait` takes `handles` alone, beside `status` and `ps`. (C10)
 - [ ] **10.** The system posts, and a post replaces the returned say. (S2)
 
-**Evidence:** the evidence of phase 1 holds for each step. Steps 3 and 7
-pass `transportConformance` on `rpcTransport` in workerd. Steps 5 and 8
-pass one live file on each of Pi, Claude, and Codex before they merge.
+**Evidence:** the evidence of phase 1 holds for each step. Step 7 passes
+`portConformance` on `rpcExecution` in workerd. Steps 5 and 8 pass one
+live file on each of Pi, Claude, and Codex before they merge.
 Step 10 runs `pnpm rule:check` and `pnpm chaos` on both storages, and
 passes one live file on the assistant before it merges.
 
@@ -233,28 +232,6 @@ passes one live file on the assistant before it merges.
 
 **Each item removes one kind of second path.** Each states the problem,
 the change, and the evidence.
-
-**C5. One boundary between the room and a seat.** Three routers pick an
-execution by executor kind: `composeExecutions` in `execution/route.ts`,
-`defaultExecutionFactory` in `host/defaults.ts`, and `connectorFor` in
-`room.ts`. Each ends in `missingConnector` on a miss. `composeConnector`
-also builds the executor and hands it to the `Transport`. Cloudflare's
-`rpcTransport` keeps only `room` and `seat`, and the seat object builds
-the executor a second time in `configure.ts` and `seat-object.ts`.
-
-- **The remote call is an `Execution`.** Its connector returns a port
-  over RPC, and the seat object calls the execution of its own host.
-  `Transport`, `inProcessTransport`, and the transport options of the
-  runtime and the hosting go. [Executors](../docs/executors.md) states
-  the new hosting exports.
-- **One router serves every kind.** `defineExecution(kind, build)`
-  returns an `Execution` and registers the default for its kind.
-- **Every execution keeps the host's trace limits.** Claude and Codex
-  pass `DEFAULT_TRACE_LIMITS` today, and `ConnectorComposition` exists
-  for that difference.
-
-**Evidence:** `transportConformance` on `rpcTransport` in workerd, and
-the hosting export snapshot.
 
 **C6. The core owns the activation state.** Each of the Pi, Claude, and
 Codex executors re-implements the `readThrough` and `cancelled` state,
@@ -342,8 +319,8 @@ snapshot of `@ambionframework/workspace`.
   repeat the call of the runner, `RoomObject.visits` repeats the visits
   of the room, and `reconcileRoom` repeats `Room.reconcile()`.
 - **One scripted room serves the conformance suites.** `scriptedRoom` and
-  `executorRoom` merge, and the transport suite keeps the cases that a
-  transport adds. `conformance.ts` and `conformance-executor-room.ts` each
+  `executorRoom` merge, and the port suite keeps the cases that a port
+  adds. `conformance.ts` and `conformance-executor-room.ts` each
   hold their own question, participants block, and `stale` constant; the
   merged room holds one of each, and `until` accepts an async predicate.
   This sub-item closes M5 of 0.2.0.

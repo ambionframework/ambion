@@ -555,8 +555,9 @@ reached the provider, and the specialist returned one fixed `say`.
 
 - **The specialist runs on the testing entry.** Its definition carries
   `executor: { kind: 'scripted', instructions, tools: [] }`.
-  `composeExecutions` from `@ambionframework/ambion/hosting` runs it on
-  `scripted()`, and runs the assistant on `piExecution()`. `defineAssistant`
+  The room passes `[piExecution(), scripted()]`: the assistant runs on
+  `piExecution()`, and the specialist runs on `scripted()`, which has no
+  kind and serves every kind. `defineAssistant`
   builds its executor with `pi()`, so the assistant has the kind `pi`.
 - **`simulate` replaces `evaluate()`.** A case passes
   `scriptedActor([question])` and `exchanges: 1`. `exchangeMs: 90_000`

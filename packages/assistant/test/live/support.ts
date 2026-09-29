@@ -21,7 +21,7 @@ import {
 	type SpokenMessage,
 	startRoom,
 } from '@ambionframework/ambion';
-import { composeExecutions, type Execution } from '@ambionframework/ambion/hosting';
+import type { Execution } from '@ambionframework/ambion/hosting';
 import { byAgent, quiet, type Script, scripted, speak } from '@ambionframework/ambion/testing';
 import { type PiOptions, piExecution } from '@ambionframework/pi';
 import type { Run, RunExchange, Verdict } from '@ambionframework/simulator';
@@ -72,10 +72,11 @@ export interface RoomOptions {
  */
 export async function openRoom(options: RoomOptions): Promise<Room> {
 	const model = options.assistant?.model ?? MODEL;
-	const execution = composeExecutions({
-		pi: options.assistant?.execution ?? piExecution(),
-		scripted: scripted(byAgent({ inventory: options.specialist })),
-	});
+	// The assistant runs on Pi, and the scripted execution serves every other kind.
+	const execution = [
+		options.assistant?.execution ?? piExecution(),
+		scripted(byAgent({ inventory: options.specialist })),
+	];
 	const room = await startRoom({
 		name: `assistant-eval-${crypto.randomUUID()}`,
 		assistant: defineAssistant({ model, thinking: THINKING, instructions: options.instructions }),

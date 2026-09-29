@@ -7,7 +7,7 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { expect } from 'vitest';
 import { type PiOptions, pi, piExecution } from '../../../pi/src/index.ts';
-import { hostingOf, inProcessTransport } from '../../src/hosting.ts';
+import { type Execution, hostingOf } from '../../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -20,6 +20,7 @@ import {
 } from '../../src/index.ts';
 import { fakeClock } from '../../src/testing.ts';
 import { invariants } from './invariants.ts';
+import { type SerializingExecution, serializing } from './ports.ts';
 import { collect, messagesOf, participantsOf, roomName, waitForRoom } from './room.ts';
 import {
 	answersLastQuestion,
@@ -37,12 +38,13 @@ import {
 	toolResultTexts,
 } from './scripted.ts';
 import type { Storage } from './storage.ts';
-import { serializing } from './transport.ts';
 
 export interface ScenarioContext {
 	readonly runtime: Runtime;
 	/** A room name no other scenario in the process has used. */
 	readonly name: string;
+	/** `execution`, whose requests and responses cross as JSON. Each room of a scenario runs on one. */
+	wire(execution: Execution): Execution;
 }
 
 export interface Scenario {
@@ -105,19 +107,21 @@ export async function finish(
 
 export const oneExchange: Scenario = {
 	name: 'one exchange closes into one message',
-	async run({ runtime, name }) {
+	async run({ runtime, name, wire }) {
 		const session = await startRoom({
 			name,
 			runtime,
 			summary: assistant.name,
 			seats: { [product.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [product, assistant],
-			execution: piExecution({
-				sessions: 'memory',
-				stream: scripted(
-					byAgent({ product: twoAnswersEach, assistant: composes([], 'The one message.') }),
-				),
-			}),
+			execution: wire(
+				piExecution({
+					sessions: 'memory',
+					stream: scripted(
+						byAgent({ product: twoAnswersEach, assistant: composes([], 'The one message.') }),
+					),
+				}),
+			),
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);
@@ -133,7 +137,7 @@ export const oneExchange: Scenario = {
 
 export const twoPeopleTwoExchanges: Scenario = {
 	name: 'two people open two exchanges, and each is written for',
-	async run({ runtime, name }) {
+	async run({ runtime, name, wire }) {
 		const session = await startRoom({
 			name,
 			runtime,
@@ -144,25 +148,27 @@ export const twoPeopleTwoExchanges: Scenario = {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			execution: piExecution({
-				sessions: 'memory',
-				stream: scripted(
-					byAgent({
-						product: answersLastQuestion(['priya', 'sam']),
-						colleague: answersLastQuestion(['priya', 'sam']),
-						assistant: (context) => {
-							const person = /(\w+)'s exchange is over/.exec(contextText(context))?.[1] ?? '';
-							if (
-								!isClosing(context) ||
-								toolResultTexts(context).some((text) => text.startsWith('said #'))
-							) {
-								return quiet();
-							}
-							return summarise(`for ${person}`);
-						},
-					}),
-				),
-			}),
+			execution: wire(
+				piExecution({
+					sessions: 'memory',
+					stream: scripted(
+						byAgent({
+							product: answersLastQuestion(['priya', 'sam']),
+							colleague: answersLastQuestion(['priya', 'sam']),
+							assistant: (context) => {
+								const person = /(\w+)'s exchange is over/.exec(contextText(context))?.[1] ?? '';
+								if (
+									!isClosing(context) ||
+									toolResultTexts(context).some((text) => text.startsWith('said #'))
+								) {
+									return quiet();
+								}
+								return summarise(`for ${person}`);
+							},
+						}),
+					),
+				}),
+			),
 		});
 		const events = collect(session);
 		const hers = await session.visit(priya);
@@ -186,24 +192,26 @@ export const twoPeopleTwoExchanges: Scenario = {
 
 export const seatFromReserve: Scenario = {
 	name: 'the assistant seats from the reserve, and the newcomer answers',
-	async run({ runtime, name }) {
+	async run({ runtime, name, wire }) {
 		const session = await startRoom({
 			name,
 			runtime,
 			summary: assistant.name,
 			agents: [product, surveyor, assistant],
 			seats: { [assistant.name]: 'broadcast', ...{ [product.name]: 'broadcast' } },
-			execution: piExecution({
-				sessions: 'memory',
-				stream: scripted(
-					byAgent({
-						assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
-						product: (_context, _name, call) =>
-							call <= 3 ? speak('The pour is Saturday.') : quiet(),
-						surveyor: insists('11.7 tonnes on site.'),
-					}),
-				),
-			}),
+			execution: wire(
+				piExecution({
+					sessions: 'memory',
+					stream: scripted(
+						byAgent({
+							assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
+							product: (_context, _name, call) =>
+								call <= 3 ? speak('The pour is Saturday.') : quiet(),
+							surveyor: insists('11.7 tonnes on site.'),
+						}),
+					),
+				}),
+			),
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);
@@ -224,8 +232,8 @@ export const seatFromReserve: Scenario = {
 export const scenarios: readonly Scenario[] = [oneExchange, twoPeopleTwoExchanges, seatFromReserve];
 
 /**
- * One scenario on one storage, on a clock the test holds and a transport that
- * checks every request and response against the wire. Both matrices run a
+ * One scenario on one storage, on a clock the test holds and executions that
+ * check every request and response against the wire. Both matrices run a
  * scenario this way: the core's over `scenarios` above, and
  * `@ambionframework/workspace`'s over the one that needs a backend.
  */
@@ -236,11 +244,17 @@ export async function runScenario(
 ): Promise<void> {
 	const opened = await storage.open();
 	// Every request and response between a seat and the room crosses as JSON.
-	const transport = serializing(inProcessTransport());
+	const wired: SerializingExecution[] = [];
+	const wire = (execution: Execution) => {
+		const checked = serializing(execution);
+		wired.push(checked);
+		return checked;
+	};
 	try {
-		const runtime = createRuntime({ storage: opened.storage, clock: fakeClock(), transport });
-		await scenario.run({ runtime, name: roomName(prefix) });
-		expect(transport.violations).toEqual([]);
+		const runtime = createRuntime({ storage: opened.storage, clock: fakeClock() });
+		await scenario.run({ runtime, name: roomName(prefix), wire });
+		expect(wired.reduce((sum, checked) => sum + checked.crossed(), 0)).toBeGreaterThan(0);
+		expect(wired.flatMap((checked) => checked.violations)).toEqual([]);
 	} finally {
 		await opened.dispose();
 	}

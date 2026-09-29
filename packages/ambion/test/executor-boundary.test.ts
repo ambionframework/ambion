@@ -1,19 +1,17 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { pi, piExecution } from '../../pi/src/index.ts';
 import {
-	type AgentExecutionContext,
+	type ConnectorRequest,
 	hostingOf,
-	inProcessTransport,
 	type RoomProtocol,
 	runningRoom,
-	type Transport,
 } from '../src/hosting.ts';
 import { createRuntime, defineAgent, readRoom, resumeRoom, startRoom } from '../src/index.ts';
+import { around, serializing } from './support/ports.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
 import { isClosing, quiet, scripted, seat, speak } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
-import { serializing } from './support/transport.ts';
 
 const writer = defineAgent({
 	name: 'writer',
@@ -36,17 +34,18 @@ const reply = (text: string, exerciseTool = false) =>
 
 describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (mode) => {
 	it('passes only room calls and preserves room-local execution and notifications', async () => {
-		const connections: Array<{ room: RoomProtocol; context: AgentExecutionContext }> = [];
-		const local = inProcessTransport();
-		const observed: Transport = {
-			connect(room, context) {
-				connections.push({ room, context });
-				return local.connect(room, context);
+		const connections: Array<{ room: RoomProtocol; request: ConnectorRequest }> = [];
+		const observed = around(
+			piExecution({ sessions: 'memory', stream: reply('Room override.', true) }),
+			{
+				room(room, request) {
+					connections.push({ room, request });
+					return room;
+				},
 			},
-		};
+		);
 		let defaultCalls = 0;
 		const runtime = createRuntime({
-			transport: mode === 'json' ? serializing(observed) : observed,
 			execution: piExecution({
 				sessions: 'memory',
 				stream: scripted(() => {
@@ -61,7 +60,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 				agents: [writer],
 				summary: writer.name,
 				runtime,
-				execution: piExecution({ sessions: 'memory', stream: reply('Room override.', true) }),
+				execution: mode === 'json' ? serializing(observed) : observed,
 			}),
 		);
 		const events = collect(room);
@@ -76,11 +75,11 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 		if (connection === undefined) throw new Error('No executor connected.');
 		assertRoomCalls(connection.room);
 		expect(connection.room).not.toBe(room);
-		expect(connection.context).toMatchObject({ room: room.name, seat: writer.name });
-		expect(connection.context.definition).toEqual(writer);
-		expect(connection.context.executor).toBeDefined();
-		expect(connection.context).not.toHaveProperty('runtime');
-		expect(connection.context).not.toHaveProperty('evict');
+		expect(connection.request).toMatchObject({ room: room.name, seat: writer.name });
+		expect(connection.request.definition).toEqual(writer);
+		expect(connection.request.emit).toBeTypeOf('function');
+		expect(connection.request).not.toHaveProperty('runtime');
+		expect(connection.request).not.toHaveProperty('evict');
 		const { view } = connection.room;
 		await expect(view('unknown')).resolves.toHaveProperty('stale');
 		expect(events.filter((event) => event.type === 'tool_execution_start')).toEqual([

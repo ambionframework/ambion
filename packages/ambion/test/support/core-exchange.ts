@@ -2,8 +2,9 @@
  * Set-up that the exchange, summary, cancellation and stop tests share.
  */
 import { pi } from '../../../pi/src/index.ts';
-import { type RoomProtocol, runningRoom, type Transport, type Wake } from '../../src/hosting.ts';
+import { type Execution, type RoomProtocol, runningRoom, type Wake } from '../../src/hosting.ts';
 import { defineAgent, defineHuman, type Runtime } from '../../src/index.ts';
+import { portExecution } from './ports.ts';
 
 export const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
 
@@ -13,17 +14,15 @@ export const worker = defineAgent({
 	executor: pi({ instructions: 'answer the question', model: 'scripted/worker' }),
 });
 
-/** A transport that records each wake and runs nothing, so no seat claims its work. */
-export function recordingTransport(wakes: Wake[] = []): Transport {
-	return {
-		connect: () => ({
-			wake: async (wake) => {
-				wakes.push(wake);
-			},
-			steer: async () => {},
-			cut: async () => {},
-		}),
-	};
+/** An execution that records each wake and runs nothing, so no seat claims its work. */
+export function recordingExecution(wakes: Wake[] = []): Execution {
+	return portExecution(() => ({
+		wake: async (wake) => {
+			wakes.push(wake);
+		},
+		steer: async () => {},
+		cut: async () => {},
+	}));
 }
 
 /** The protocol of a running room, as a seat process reaches it. */

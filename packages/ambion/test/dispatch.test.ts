@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { hostingOf, inProcessTransport, type Transport, type Wake } from '../src/hosting.ts';
+import { type Execution, hostingOf, type Wake } from '../src/hosting.ts';
 import {
 	type CreateRuntimeOptions,
 	createRuntime,
@@ -16,7 +16,8 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
-import { flush, tapped } from './support/core-failure.ts';
+import { flush, type Tap, tapped } from './support/core-failure.ts';
+import { portExecution } from './support/ports.ts';
 import {
 	assistant,
 	collect,
@@ -38,15 +39,15 @@ const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
 const quietly = () => piExecution({ sessions: 'memory', stream: scripted(() => quiet()) });
 
 /** Record every wake, and deliver it only when `deliver` says so. */
-function recorded(deliver = true): { transport: Transport; sent: Wake[] } {
+function recorded(deliver = true): { tap: Tap; sent: Wake[] } {
 	const sent: Wake[] = [];
-	const transport = tapped({
+	const tap: Tap = {
 		wake: async (wake, port) => {
 			sent.push(wake);
 			if (deliver) await port.wake(wake);
 		},
-	});
-	return { sent, transport };
+	};
+	return { sent, tap };
 }
 
 const activations = (sent: readonly Wake[]): string[] => sent.map((wake) => wake.activation).sort();
@@ -55,18 +56,25 @@ type DeliveryError = Extract<RoomNotification, { type: 'delivery_error' }>;
 const deliveryErrors = (events: readonly RoomNotification[]): DeliveryError[] =>
 	events.filter((event): event is DeliveryError => event.type === 'delivery_error');
 
-/** One broadcast worker on a fake clock, stopped with its storage when the test ends. */
-async function workerRoom(storage: Storage, options: Omit<CreateRuntimeOptions, 'storage'>) {
+/**
+ * One broadcast worker on a fake clock, stopped with its storage when the
+ * test ends. `wrap` wraps the quiet execution of the worker.
+ */
+async function workerRoom(
+	storage: Storage,
+	options: Pick<CreateRuntimeOptions, 'limits'> & { wrap: (execution: Execution) => Execution },
+) {
 	const opened = await openFor(storage);
 	const clock = fakeClock();
-	const runtime = createRuntime({ storage: opened.storage, clock, ...options });
+	const { wrap, ...rest } = options;
+	const runtime = createRuntime({ storage: opened.storage, clock, ...rest });
 	const room = stopAtEnd(
 		await startRoom({
 			name: roomName(`dispatch-${storage.name}`),
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			runtime,
-			execution: quietly(),
+			execution: wrap(quietly()),
 		}),
 	);
 	return { opened, clock, runtime, room };
@@ -85,22 +93,25 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 				name: roomName('dispatch-causes'),
 				agents: [alpha, beta, assistant],
 				seats: { [assistant.name]: 'broadcast', [alpha.name]: 'broadcast' },
-				runtime: createRuntime({ storage: opened.storage, clock, transport: observed.transport }),
-				execution: piExecution({
-					sessions: 'memory',
-					stream: scripted(
-						byAgent({
-							alpha: () => {
-								alphaStarted.resolve();
-								return quiet();
-							},
-							assistant: () => {
-								assistantStarted.resolve();
-								return quiet();
-							},
-						}),
-					),
-				}),
+				runtime: createRuntime({ storage: opened.storage, clock }),
+				execution: tapped(
+					piExecution({
+						sessions: 'memory',
+						stream: scripted(
+							byAgent({
+								alpha: () => {
+									alphaStarted.resolve();
+									return quiet();
+								},
+								assistant: () => {
+									assistantStarted.resolve();
+									return quiet();
+								},
+							}),
+						),
+					}),
+					observed.tap,
+				),
 			}),
 		);
 		const exchange = await (await room.visit(priya)).send({ text: 'Who can answer?' });
@@ -123,18 +134,14 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 			const opened = await openFor(storage);
 			const clock = fakeClock();
 			const lost = recorded(false);
-			const firstRuntime = createRuntime({
-				storage: opened.storage,
-				clock,
-				transport: lost.transport,
-			});
+			const firstRuntime = createRuntime({ storage: opened.storage, clock });
 			const room = stopAtEnd(
 				await startRoom({
 					name: roomName('dispatch-recovery'),
 					agents: [alpha, beta, assistant],
 					seats: { [assistant.name]: 'broadcast', [alpha.name]: 'broadcast' },
 					runtime: firstRuntime,
-					execution: quietly(),
+					execution: tapped(quietly(), lost.tap),
 				}),
 			);
 			await (await room.visit(priya)).send({ text: 'Recover this work.' });
@@ -150,13 +157,9 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 			const before = clock.now();
 			const resumed = stopAtEnd(
 				await resumeRoom(room.name, {
-					runtime: createRuntime({
-						storage: opened.storage,
-						clock,
-						transport: recovered.transport,
-					}),
+					runtime: createRuntime({ storage: opened.storage, clock }),
 					agents: [alpha, beta, assistant],
-					execution: quietly(),
+					execution: tapped(quietly(), recovered.tap),
 				}),
 			);
 			await waitForRoom(resumed);
@@ -170,12 +173,11 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 	it('reports a synchronous connector throw while accepting the human send', async () => {
 		let connects = 0;
 		const { room } = await workerRoom(storage, {
-			transport: {
-				connect() {
+			wrap: () =>
+				portExecution(() => {
 					connects += 1;
 					throw new Error('connector unavailable');
-				},
-			},
+				}),
 		});
 		room.subscribe((event) => {
 			if (event.type === 'delivery_error') throw new Error('observer failed');
@@ -200,12 +202,13 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		let available = false;
 		const { room, clock, runtime } = await workerRoom(storage, {
 			limits: { delivery: { resend: 10 } },
-			transport: tapped({
-				wake: async (wake, port) => {
-					if (!available) throw new Error('wake unavailable');
-					await port.wake(wake);
-				},
-			}),
+			wrap: (execution) =>
+				tapped(execution, {
+					wake: async (wake, port) => {
+						if (!available) throw new Error('wake unavailable');
+						await port.wake(wake);
+					},
+				}),
 		});
 		const resend = hostingOf(runtime).limits.delivery.resend;
 		const events = collect(room);
@@ -244,12 +247,13 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		let deliveries = 0;
 		const { room, clock } = await workerRoom(storage, {
 			limits: { delivery: { resend: 10 } },
-			transport: tapped({
-				wake: (wake, port) => {
-					deliveries += 1;
-					return deliveries === 1 ? new Promise<void>(() => {}) : port.wake(wake);
-				},
-			}),
+			wrap: (execution) =>
+				tapped(execution, {
+					wake: (wake, port) => {
+						deliveries += 1;
+						return deliveries === 1 ? new Promise<void>(() => {}) : port.wake(wake);
+					},
+				}),
 		});
 		const exchange = await (
 			await room.visit(priya)
@@ -273,7 +277,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 			runtime,
 			room: first,
 		} = await workerRoom(storage, {
-			transport: tapped({ wake: () => new Promise<void>(() => {}) }),
+			wrap: (execution) => tapped(execution, { wake: () => new Promise<void>(() => {}) }),
 		});
 		const exchange = await (await first.visit(priya)).send({ text: 'Cancel this delivery.' });
 		await flush();
@@ -284,7 +288,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		const resumed = stopAtEnd(
 			await resumeRoom(first.name, {
 				agents: [worker],
-				runtime: createRuntime({ storage: opened.storage, clock, transport: inProcessTransport() }),
+				runtime: createRuntime({ storage: opened.storage, clock }),
 				execution: quietly(),
 			}),
 		);
@@ -304,18 +308,19 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		const claimRelease = deferred();
 		let held = true;
 		const { room } = await workerRoom(storage, {
-			transport: tapped({
-				room: (calls) => ({
-					lease: async (request) => {
-						if (held && request.operation === 'claim') {
-							held = false;
-							claimStarted.resolve();
-							await claimRelease.promise;
-						}
-						return calls.lease(request);
-					},
+			wrap: (execution) =>
+				tapped(execution, {
+					room: (calls) => ({
+						lease: async (request) => {
+							if (held && request.operation === 'claim') {
+								held = false;
+								claimStarted.resolve();
+								await claimRelease.promise;
+							}
+							return calls.lease(request);
+						},
+					}),
 				}),
-			}),
 		});
 		const events = collect(room);
 		await (await room.visit(priya)).send({ text: 'Claim this slowly.' });

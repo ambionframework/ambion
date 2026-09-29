@@ -253,7 +253,7 @@ function cutPort(host: DispatchHost, seat: string, activation: string): void {
 	dispatch(host, seat, 'cut', activation, (port) => port.cut(activation));
 }
 
-/** Contain synchronous connector faults and asynchronous transport rejection independently. */
+/** Contain synchronous connector faults and asynchronous port rejection independently. */
 function dispatch(
 	host: DispatchHost,
 	seat: string,

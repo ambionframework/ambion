@@ -1,15 +1,15 @@
 /**
  * Steering: a message that reaches a seat while its activation runs goes
- * into that activation. A steer that the transport loses, delays,
+ * into that activation. A steer that the port loses, delays,
  * reorders or repeats, or that outlives its activation, reaches the seat
  * once, from the journal.
  */
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import type { Steer, Wake } from '../src/hosting.ts';
+import type { Execution, Steer, Wake } from '../src/hosting.ts';
 import { createRuntime, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
-import { tapped } from './support/core-failure.ts';
+import { type Tap, tapped } from './support/core-failure.ts';
 import { pendingOf } from './support/fold.ts';
 import {
 	assistant,
@@ -43,20 +43,20 @@ function observe(options: { holdRelease?: boolean; deferSteers?: boolean } = {})
 	const steers: Steer[] = [];
 	const deliver: (() => Promise<void>)[] = [];
 	let held = false;
-	const transport = tapped({
-		room: (room, context) => ({
-			lease: async (request) => {
+	const tap: Tap = {
+		room: (room, request) => ({
+			lease: async (lease) => {
 				if (
 					options.holdRelease &&
-					context.seat === alpha.name &&
-					request.operation === 'release' &&
+					request.seat === alpha.name &&
+					lease.operation === 'release' &&
 					!held
 				) {
 					held = true;
 					ending.resolve();
 					await release.promise;
 				}
-				return room.lease(request);
+				return room.lease(lease);
 			},
 		}),
 		wake: (wake, port) => {
@@ -68,8 +68,9 @@ function observe(options: { holdRelease?: boolean; deferSteers?: boolean } = {})
 			if (options.deferSteers) deliver.push(() => port.steer(steer));
 			else await port.steer(steer);
 		},
-	});
-	return { transport, ending, release, wakes, steers, deliver };
+	};
+	const wrap = (execution: Execution) => tapped(execution, tap);
+	return { wrap, ending, release, wakes, steers, deliver };
 }
 
 /** Alpha records every context it reads, and holds its activation on call `hold`. */
@@ -109,8 +110,8 @@ describe.each(storages)('steering on $name', (storage) => {
 					name: roomName('steering-release'),
 					agents: [alpha, assistant],
 					seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
-					runtime: createRuntime({ storage: opened.storage, clock, transport: observed.transport }),
-					execution: next.execution,
+					runtime: createRuntime({ storage: opened.storage, clock }),
+					execution: observed.wrap(next.execution),
 				}),
 			);
 			const visit = await room.visit(priya);
@@ -130,7 +131,7 @@ describe.each(storages)('steering on $name', (storage) => {
 				observed.steers[0]?.activation,
 				`message:${update?.seq}:alpha:1`,
 			]);
-			// A delayed transport operation must not enter the later activation.
+			// A delayed port operation must not enter the later activation.
 			if (delivery === 'late') await observed.deliver[0]?.();
 			next.release.resolve();
 			await waitForRoom(room);
@@ -154,8 +155,8 @@ describe.each(storages)('steering on $name', (storage) => {
 				name: roomName('steering-order'),
 				agents: [alpha, assistant],
 				seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
-				runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
-				execution: first.execution,
+				runtime: createRuntime({ storage: opened.storage }),
+				execution: observed.wrap(first.execution),
 			}),
 		);
 		const events = collect(room);
@@ -261,29 +262,31 @@ describe.each(storages)('steering on $name', (storage) => {
 				summary: assistant.name,
 				agents: [alpha, beta, assistant],
 				seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast', [beta.name]: 'named' },
-				runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
-				execution: piExecution({
-					sessions: 'memory',
-					stream: scripted(
-						byAgent({
-							alpha: says(['First fact.', 'Second fact.']),
-							beta: async (_context, _agent, call) => {
-								if (call === 1) {
-									betaStarted.resolve();
-									await betaRelease.promise;
-								}
-								return quiet();
-							},
-							assistant: async (context, _agent, call) => {
-								contexts.push(contextText(context));
-								if (call !== 1) return quiet();
-								summaryStarted.resolve();
-								await summaryRelease.promise;
-								return summarise('First exchange result.');
-							},
-						}),
-					),
-				}),
+				runtime: createRuntime({ storage: opened.storage }),
+				execution: observed.wrap(
+					piExecution({
+						sessions: 'memory',
+						stream: scripted(
+							byAgent({
+								alpha: says(['First fact.', 'Second fact.']),
+								beta: async (_context, _agent, call) => {
+									if (call === 1) {
+										betaStarted.resolve();
+										await betaRelease.promise;
+									}
+									return quiet();
+								},
+								assistant: async (context, _agent, call) => {
+									contexts.push(contextText(context));
+									if (call !== 1) return quiet();
+									summaryStarted.resolve();
+									await summaryRelease.promise;
+									return summarise('First exchange result.');
+								},
+							}),
+						),
+					}),
+				),
 			}),
 		);
 		const visit = await room.visit(priya);
