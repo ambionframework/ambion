@@ -281,9 +281,13 @@ It now takes `{ handles, timeout? }`, with 1 to 16 handles, and one handle
 gives the result of `status`. **Evidence:** the process tests, and one
 live file on each harness that shows no loss in the use of a process.
 
-**The code of C10 landed, and the live evidence is pending.** The live file
-is `packages/workspace/test/live/workspace.test.ts`, which runs on Pi,
-Claude, and Codex through `AMBION_HARNESS`.
+**The code of C10 landed, and the live file passes on Pi and Codex.** The
+live file is `packages/workspace/test/live/workspace.test.ts`, which runs
+on Pi, Claude, and Codex through `AMBION_HARNESS`. On 2026-09-29 its case
+"waits for them with wait" passed on Pi with `openai/gpt-5.6-luna` and on
+Codex: each model made two `wait` calls with `handles`, and the harness
+refused none. The Claude run waits for the live run on `main`, and the
+step closes when it passes.
 
 **A1. The assistant works a request after the person who asked leaves.** This item
 fixes a defect and adds no capability. A room stays available between
