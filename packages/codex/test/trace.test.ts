@@ -172,16 +172,9 @@ describe('usage and paths', () => {
 });
 
 it.each([
-	['unexpected status 401 Unauthorized: invalid api key', undefined, 'permanent'],
-	['You exceeded your current quota, please check your plan.', undefined, 'permanent'],
-	['Not logged in. Run codex login.', undefined, 'permanent'],
-	['insufficient_quota', undefined, 'permanent'],
-	["You've hit your usage limit. Try again later.", undefined, 'permanent'],
-	['unexpected status 429: usage_limit_reached', undefined, 'permanent'],
-	['unexpected status 429: rate_limit_exceeded', undefined, 'transient'],
+	// The status comes from the text when the text names one.
+	['unexpected status 403 Forbidden', undefined, 'permanent'],
 	['stream error: 529 overloaded_error: try again later', undefined, 'transient'],
-	['connection reset by peer', undefined, 'transient'],
-	['something unknown went wrong', undefined, 'transient'],
 	// The caller can give a status.
 	['The request failed.', 403, 'permanent'],
 	['The request failed.', 500, 'transient'],

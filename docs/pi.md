@@ -376,13 +376,9 @@ price table. A provider that reports no usage gives zeros.
 limit names a token count that reads like a status, so free text never
 gives one. The last diagnostic with a status wins.
 
-**A text that names a credit, a quota, a usage limit, or an authentication
-refusal is permanent.** The patterns are `credit balance`, `billing_error`,
-`usage limit`, `insufficient_quota`, `exceeded your current quota`,
-`authentication_error`, `permission_error`, `invalid_request_error`, an
-invalid API key, `unauthorized`, and `permission denied`. Pi reaches more
-than one provider, so the list holds the words of each. OpenAI sends a
-spent quota with a 429, and only the text tells it from a rate limit.
+**The shared classifier reads the text.** The
+[text set](executors.md#failure-classification) holds the words of each
+provider that Pi reaches.
 
 **A fault in the configuration is permanent.** An unknown model id fails
 on the first pass, and the room does not retry it. The harness codes

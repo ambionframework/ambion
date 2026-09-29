@@ -38,14 +38,12 @@ const assistantError = { code: 'assistant_error', message: 'x' };
 describe('the outcome of a run', () => {
 	it.each([
 		['a credit refusal in the text', 'Your credit balance is too low', {}, 'permanent'],
-		['an authentication refusal in the text', 'authentication_error: bad key', {}, 'permanent'],
 		[
 			'a spent usage limit, as Anthropic words it',
 			'400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-10-01 at 00:00 UTC."}}',
 			{},
 			'permanent',
 		],
-		['a billing refusal', 'billing_error: add a payment method', {}, 'permanent'],
 		[
 			'a spent quota, as OpenAI words it, with its 429',
 			'You exceeded your current quota, please check your plan. (insufficient_quota)',

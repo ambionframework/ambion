@@ -2,22 +2,9 @@
  * How a Claude Agent SDK result maps to a pass result: the failure it
  * reports, its cause, and the length stop.
  */
-import type { FailureCause, HarnessSession, PassResult } from '@ambionframework/ambion/hosting';
+import type { HarnessSession, PassResult } from '@ambionframework/ambion/hosting';
 import { classifyCause, providerMessage } from '@ambionframework/ambion/hosting';
 import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
-
-/** Error text that names a credit, a usage limit, or an authentication refusal, in phrases a retry cannot clear. */
-const PERMANENT_TEXT =
-	/credit balance|billing_error|usage[_\s-]?limit|authentication_error|permission_error|invalid_request_error|invalid[_\s-]?api[_\s-]?key|x-api-key|unauthorized|permission denied|not logged in/i;
-
-/**
- * Whether a failure is permanent or transient. A credit or authentication
- * refusal in the text, or a permanent HTTP status, is permanent. Every
- * other failure is transient, so an uncertain message retries.
- */
-export function causeOf(text: string, status?: number | null): FailureCause {
-	return classifyCause({ text, status, permanent: PERMANENT_TEXT });
-}
 
 /** The text a failed result gives: its error list, or its result text. */
 function failureText(result: SDKResultMessage): string {
@@ -47,7 +34,7 @@ export function passResultOf(result: SDKResultMessage): PassResult {
 		const message = failureText(result);
 		return {
 			failed: true,
-			cause: causeOf(message, statusOf(result)),
+			cause: classifyCause({ text: message, status: statusOf(result) }),
 			message: providerMessage(message),
 		};
 	}

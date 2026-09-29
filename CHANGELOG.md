@@ -195,6 +195,16 @@ its `text`.
 
 ### Breaking changes
 
+- **One classifier names a permanent failure.** `classifyCause({ text,
+  status })` takes no `permanent` pattern. The core holds the text set of
+  every provider that a shipped family reaches: the union of the three
+  copies that the Pi, Claude, and Codex executors held. The Pi executor
+  now also reads `not logged in`, `x-api-key`, `missing bearer`, and
+  `invalid-api-key` as permanent. The Claude executor also reads
+  `insufficient_quota`, `exceeded your current quota`, and `missing bearer`.
+  The Codex executor also reads `billing_error` and `x-api-key`. The Claude
+  package no longer has `causeOf`. See
+  [Executors](docs/executors.md#failure-classification).
 - **A returned say is a post.** The `returned` kind goes. The room writes a
   `posted` entry with `to` and `returns`, the seq of the scheduled say, and
   a journal read refuses a `returned` entry. `PostedMessage` and `isPosted`

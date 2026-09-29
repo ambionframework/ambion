@@ -373,10 +373,9 @@ The known limits:
 never gives one, because a rate limit names a token count that reads like a
 status.
 
-**A failed result whose text matches one of these patterns is permanent.**
-`credit balance`, `billing_error`, `usage limit`, `authentication_error`, `permission_error`,
-`invalid_request_error`, an invalid API key, `x-api-key`, `unauthorized`,
-`permission denied`, and `not logged in`.
+**The shared classifier reads the text of a failed result.** The
+[text set](executors.md#failure-classification) holds the words of the
+Claude Code login.
 
 ## Testing
 

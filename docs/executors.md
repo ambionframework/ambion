@@ -391,12 +391,21 @@ retries to the cap of the room.
 [Durability](durability.md#permanent-and-transient-failure) states what the
 room does with the cause.
 
-| Failure                                                                                          | Cause       |
-| ------------------------------------------------------------------------------------------------ | ----------- |
-| An error text that names a credit, a quota, a usage limit, a credential, or a permission refusal | `permanent` |
-| A status of 400, 401, 402, 403, 404, 405, or 422                                                 | `permanent` |
-| An error of the executor, such as a lost room call or a lost process                             | `transient` |
-| Every other failure                                                                              | `transient` |
+| Failure                                                                                                   | Cause       |
+| --------------------------------------------------------------------------------------------------------- | ----------- |
+| An error text that names a credit, a quota, a usage limit, a credential, a login, or a permission refusal | `permanent` |
+| A status of 400, 401, 402, 403, 404, 405, or 422                                                          | `permanent` |
+| An error of the executor, such as a lost room call or a lost process                                      | `transient` |
+| Every other failure                                                                                       | `transient` |
+
+**One classifier serves every family.** `classifyCause({ text, status })`
+from `@ambionframework/ambion/hosting` holds the text set of every provider
+that a shipped family reaches. The patterns are `credit balance`,
+`billing_error`, `usage limit`, `insufficient_quota`, `exceeded your
+current quota`, `authentication_error`, `permission_error`,
+`invalid_request_error`, an invalid API key, `x-api-key`, `unauthorized`,
+`permission denied`, `not logged in`, and `missing bearer`. OpenAI sends a
+spent quota with a 429, and only the text tells it from a rate limit.
 
 **A status decides the cause when no text matches.** An uncertain failure
 is transient, so the room retries it.
@@ -410,10 +419,9 @@ from the original text.
 
 **A length stop is no failure.** The pass reports `stop: 'length'`.
 
-**Each family brings its own text set and its own source of a status.**
+**Each family brings its own source of a status.**
 [Pi](pi.md#failure-classification), [Claude](claude.md#failure-classification),
-and [Codex](codex.md#failures) name the text set and the status source of
-each family.
+and [Codex](codex.md#failures) name the status source of each family.
 
 ## The harness matrix
 
@@ -457,9 +465,9 @@ family. `@ambionframework/claude` is the worked example, and
    `readThrough` when the model has consumed a message, and on nothing
    earlier. [How an activation runs](#how-an-activation-runs) states the
    events that move it.
-6. **Classify every failure.** Sort it into `permanent` and `transient`.
-   [Failure classification](#failure-classification) states the shared
-   rule; bring the family's own text set and status source.
+6. **Classify every failure.** Sort it into `permanent` and `transient`
+   with `classifyCause`. [Failure classification](#failure-classification)
+   states the shared rule; bring the family's own source of a status.
 7. **Record a session, and resume only the one the view names.**
    [Exchange continuity](#exchange-continuity) states the recorded session
    and the fresh start. A harness with no session records none.
