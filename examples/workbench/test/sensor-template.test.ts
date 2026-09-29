@@ -10,6 +10,7 @@ import { labRepositories } from '../src/repositories.ts';
 const template = fileURLToPath(new URL('../templates/sensor-server/', import.meta.url));
 
 describe('the sensor server template', () => {
+	// Allow three npm tests (each capped at 10s), Git operations, and server startup.
 	it('is registered, forkable, and survives a customized Git push and fresh clone', async () => {
 		const repositories = labRepositories(':memory:');
 		onTestFinished(() => repositories.dispose?.());
@@ -90,7 +91,7 @@ describe('the sensor server template', () => {
 		if (series?.kind !== 'series')
 			throw new Error('The calibrated fixture is not a numeric series.');
 		expect(series.values).toEqual([21.5, 22.25, 21.4]);
-	}, 20_000);
+	}, 60_000);
 });
 
 function gitCommand(cwd: string, args: string[]): string {
