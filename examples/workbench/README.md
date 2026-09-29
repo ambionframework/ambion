@@ -52,6 +52,20 @@ error retries to the cap.
 The terminal reads its colors from the repository brand kit in the root
 [`brand/`](../../brand) directory. The example has no HTTP interface.
 
+## Sensor server template
+
+The lab Git backend also offers a [`sensor-server` template](templates/sensor-server).
+It serves deterministic numeric, frame, and text fixtures. An agent can
+fork and customize it like the firmware template. The README covers the
+local workspace-package install needed for SN1, validation, workspace
+process startup, readiness, external data storage, and rollback. The
+workspace `connect` and `observe` tools are still pending in 0.5.0, so this
+template does not yet make sensors available inside the running Workbench.
+The template's `npm test` checks its HTTP behavior, SN1 schemas, digests,
+launch metadata, and data-directory safety. The Workbench's
+`test/sensor-template.test.ts` covers the Git fork, push, fresh clone, and
+rejection of an invalid fixture change.
+
 ## The terminal
 
 **The composer is the control surface.** The chip in front of the input
