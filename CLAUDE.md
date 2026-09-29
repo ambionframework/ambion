@@ -46,7 +46,7 @@ floor.
 | `docs/formal.md`          | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                                                          |
 | `docs/toolchain.md`       | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                                                                       |
 | `examples/workbench`      | Runnable example: rooms and an OpenTUI terminal in one process                                                                                                       |
-| `planning/`               | `next.md`: the scope and plan for 0.5.0; `backlog.md`: everything else                                                                                               |
+| `planning/`               | `next.md`: the scope and plan for 0.5.0; `backlog.md`: everything else; `sensors.md`: the design of sensors; `sensing.md`: its plan                                  |
 
 ## Positioning
 
@@ -61,6 +61,11 @@ alias, reader for an older format, or compatibility test. Update the export
 snapshot and the golden journals in the same commit, and name the change in
 the changelog. The note at the top of [`planning/next.md`](planning/next.md)
 holds the rule.
+
+The sensor wire API of the design in
+[Sensors](planning/sensors.md#the-sensor-api) carries a version number. A
+daemon on a device does not upgrade with the host, so a breaking change
+raises `api`, and a client refuses a daemon at another `api`.
 
 Ambient means a room remains available between interactions. A scheduled say
 lets an agent come back to its work on the room's clock. A host that wants a

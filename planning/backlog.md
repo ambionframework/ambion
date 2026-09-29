@@ -11,10 +11,10 @@ condition holds moves to the top of its section.
 
 | Section                                       | Items  | First item                               |
 | --------------------------------------------- | ------ | ---------------------------------------- |
-| [Known defects](#known-defects)               | K1–K5  | K2, the allow-list of the SQL guard      |
+| [Known defects](#known-defects)               | K1–K6  | K2, the allow-list of the SQL guard      |
 | [Release and CI](#release-and-ci)             | L3, R1 | L3, a billing failure reads as one       |
 | [Rules and proofs](#rules-and-proofs)         | P1–P6  | P1, `returnable` into the verified rules |
-| [Designs with a shape](#designs-with-a-shape) | D1–D20 | D1, a hard bound on an exchange          |
+| [Designs with a shape](#designs-with-a-shape) | D1–D22 | D1, a hard bound on an exchange          |
 | [Deferred by decision](#deferred-by-decision) | None   | None                                     |
 
 ## Known defects
@@ -67,6 +67,13 @@ rate and whether Linux fails too, and report the smallest failing command
 to `just-bash`. **Condition:** a user report, a CI Node version at 26.9 or
 later, or a failed release gate on the owner's machine.
 
+**K6. The neutral-file import rule does not hold for `git-backend.ts` and
+`object-backend.ts`.** The neutral override of `biome.jsonc` lists both
+files. The next override, for `packages/workspace/src/**`, does not
+exclude them, and replaces the options of the neutral rule. So Biome
+does not refuse an import of `@ambionframework/ambion` in either file.
+**Condition:** none. It belongs with the next change of `biome.jsonc`.
+
 ## Release and CI
 
 **L3. A billing failure reads as a billing failure.** Twenty-three red
@@ -116,12 +123,16 @@ for scale.
 
 ### For rooms that run unattended
 
-**D1. A hard bound on an exchange.** Nothing bounds a loop of posts or the
-usage of one exchange ([Exchange](../docs/exchange.md#9-a-gap-the-room-has)).
-`limits.exchange` bounds the activations or the usage of one exchange, the
-room writes the close, and `exchangeOutcome` gets a terminal outcome beside
-`exhausted`. **Condition:** a host that must cap the spend of one
-exchange.
+**D1. A hard bound on an exchange.** Nothing bounds the usage of one
+exchange ([Exchange](../docs/exchange.md#9-a-gap-the-room-has)).
+`limits.exchange` of the runtime bounds the activations or the usage of
+one exchange. The room writes the close, and `exchangeOutcome` gets a
+terminal outcome beside `exhausted`.
+
+D1 closes one exchange, and the next post opens a new exchange. So D1
+bounds the spend of each exchange, and a host bounds the rate of its
+posts. **Condition:** a host that must cap the spend of one exchange, or
+D21.
 
 **D2. Compaction with no person.** A summary goes to a person, so an
 exchange where no person spoke never folds. A monitor that ticks each ten
@@ -180,6 +191,13 @@ The change writes one seating for each seat at a start and drops `agents`
 from the composition. **Condition:** a recomposition that must keep a
 seating that a seat made.
 
+**D22. A count bound on a chain of scheduled says.** A returned say opens
+an exchange, and in it the agent can schedule the next say. The chain has
+a time bound and no count bound. `limits.schedule.chain` would refuse a
+say past a depth, which the fold derives from `returned.message`. D1
+bounds one exchange, and this bound covers the chain of exchanges.
+**Condition:** a chain that runs past the need of its owner.
+
 ### For labs at scale
 
 **D8. A SQL backend over a database server.** `backend.sql` takes any
@@ -234,12 +252,25 @@ an object store, and gives the URL that a person outside the room opens.
 **Condition:** an application that must share a file outside the room, or
 an object store that grows past what the host keeps.
 
-**D13. More forms of the `ambion` scheme.** A snapshot names the bytes of
-one file, and a commit ref names one commit. The output of a process, a
+**D13. More forms of the `ambion` scheme.** The output of a process, a
 snapshot of a folder, a file at a commit, and the result of a SQL query
-have no ref of their own, so a message names them in its text. The kernel
-owns each form, and a resource makes the thing it names. **Condition:** an
-agent that must cite one of them from another room.
+have no ref of their own. A message names them in its text. The kernel
+owns each form, and a resource makes the thing it names.
+
+The sensor forms come first ([Sensors](sensors.md#refs)), because SN3
+and SN26 of [Sensing](sensing.md) need them. They change these:
+
+- The named exports of `packages/ambion/src/index.ts`: `sensorUri`,
+  `parseSensorUri`, and the type `SensorTarget`, exported beside
+  `CommitUri`.
+- The export list of `packages/ambion/test/package.test.ts`.
+- The refusal text `GRAMMAR` of `refs.ts`, which names four forms.
+- The module comment of `refs.ts`, which says it defines four forms.
+- The changelog, and the tests of each form.
+
+A name check can reuse `isName` of the kernel, and add a limit of 32
+characters. **Condition:** an agent that must cite one of them from
+another room, or D21.
 
 **D14. A Codex seat cites its changes with snapshots.** The Codex executor
 cites each file that a completed patch changed as a `file:` URI of the
@@ -299,6 +330,21 @@ exchange. **Condition:** a simulator case that needs one.
 check that fails when it is stale. **Condition:** an adapter or host
 author who cannot work from the typed README examples and the export
 snapshot.
+
+### For sensors
+
+**D21. Sensors in the workspace.** [Sensors](sensors.md) designs a sensor
+as a daemon behind one HTTP API. The daemon runs on the host, on a
+workstation, or on a device. It acquires a source at its full rate, and
+a deterministic reducer keeps the frames, values, and detections that
+matter. The workspace reads each sensor through the `observe` tool and
+its reminder. An electronics bench is the test case.
+
+A sensor starts no activation: the host follows the detections and posts
+with `room.post`. D21 needs two kernel changes first: the sensor forms of
+a ref (D13) and the bound on an exchange (D1). [Sensing](sensing.md)
+holds the order of the work, and the cut for 0.5.0. **Condition:** an
+application that needs a seat to read a source outside the room.
 
 ## Deferred by decision
 
