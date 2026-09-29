@@ -1,7 +1,7 @@
 # Next: the scope for 0.4.0
 
-> **No compatibility promise before 1.0.0.** 0.3.0 shipped on 2026-09-25
-> from commit 2eb30a3, with eleven packages on npmjs. Until 1.0.0, any
+> **No compatibility promise before 1.0.0.** 0.4.0 shipped on 2026-09-29
+> from commit 98ab056, with eleven packages on npmjs. Until 1.0.0, any
 > release may change any export, entry point, journal body, stored format,
 > or package API.
 >
@@ -23,8 +23,9 @@ its priority.
 
 ## Status
 
-**0.4.0 is ready to release.** Every item of the plan merged by
-2026-09-29, from #347 to #372. The [changelog](../CHANGELOG.md#040-2026-09-29)
+**0.4.0 shipped on 2026-09-29.** Every item of the plan merged, from #347
+to #372, and the release commit is #375. The
+[changelog](../CHANGELOG.md#040-2026-09-29)
 holds the entry: each export and each journal body that changed, and each
 concept that had two paths and has one.
 
@@ -70,10 +71,8 @@ supports no downgrade.
 
 ## The open step
 
-- [ ] **The owner releases 0.4.0 to npmjs.** The release commit sets each
-      package to 0.4.0 and moves the dev base to 0.5.0. The owner then runs
-      the sequence in
-      [Release and publishing](../docs/toolchain.md#9-release-and-publishing).
+No step is open. The next release plans its scope from
+[backlog.md](backlog.md).
 
 ## Decisions taken
 
