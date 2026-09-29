@@ -1,9 +1,9 @@
 # Proposal: the system speaks
 
-> **Status: proposal.** This page is not in the 0.4.0 scope until the owner
-> accepts it. [next.md](next.md) holds the scope. On acceptance, the items
-> move into `next.md` and this page goes. The code references are to
-> `main` at 040bdf4.
+> **Status: accepted on 2026-09-29.** [next.md](next.md) holds the work
+> as phase 2 steps 9 and 10 (S1 and S2). This page holds the design until
+> step 10 lands, and step 10 removes it. The code references are to `main`
+> at 040bdf4.
 
 **The change in five points.**
 
@@ -436,7 +436,8 @@ its condition. This change leaves room for both.
 
 **The change fits the theme of 0.4.0.** It removes the fake person, the
 `returned` kind, three `owner` fields, a refusal, a steer, and a proof
-clause, and it adds one kind. It is phase 2 step 9. Its prerequisites,
+clause, and it adds one kind. It lands as phase 2 step 9 (S1, the
+exchange with no owner) and step 10 (S2, the post). Its prerequisites,
 step 1 (C4, #361) and step 2 (C2, #360), have landed. Steps 3 to 5 (C5,
 C7, C6) and phase 1 step 8 (A1) change the seat protocol, the view, the
 prompt, and the assistant guidance, which this change also touches. The
