@@ -1,5 +1,5 @@
 /**
- * The package's six entries, and what each one names. `index.ts` opens a
+ * The package's eight entries, and what each one names. `index.ts` opens a
  * resource and its logs, over no backend. `./resource` holds the neutral
  * contract, and `./sqlite` the SQLite backend. `./git` holds the name
  * rules and the template helpers that every git backend shares. `./s3`
@@ -17,6 +17,7 @@ import * as main from '../src/index.ts';
 import { PACKAGE_NAME } from '../src/index.ts';
 import * as resource from '../src/resource-entry.ts';
 import * as s3 from '../src/s3-entry.ts';
+import * as sensors from '../src/sensors.ts';
 import * as sqlite from '../src/sqlite-entry.ts';
 
 const read = async (name: string) =>
@@ -36,9 +37,10 @@ const STEMS: Record<string, string> = {
 	'./git': 'git-entry',
 	'./s3': 's3-entry',
 	'./conformance': 'conformance',
+	'./sensors': 'sensors',
 };
 
-it('holds exactly six entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
+it('holds exactly eight entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
 	const { name, exports } = await manifest();
 	expect(PACKAGE_NAME).toBe(name);
 	expect(Object.keys(exports).sort()).toEqual([
@@ -48,8 +50,11 @@ it('holds exactly six entries, builds each under the name the manifest gives it,
 		'./package.json',
 		'./resource',
 		'./s3',
+		'./sensor-api.schema.json',
+		'./sensors',
 		'./sqlite',
 	]);
+	expect(exports['./sensor-api.schema.json']).toBe('./dist/sensor-api.schema.json');
 	const config = await read('tsdown.config.ts');
 	const built = [...config.matchAll(/'(src\/[^']+)'/g)].map((m) => m[1]);
 	expect(built).toEqual([
@@ -59,9 +64,10 @@ it('holds exactly six entries, builds each under the name the manifest gives it,
 		'src/git-entry.ts',
 		'src/s3-entry.ts',
 		'src/conformance.ts',
+		'src/sensors.ts',
 	]);
 	for (const [path, target] of Object.entries(exports)) {
-		if (path === './package.json') continue;
+		if (path === './package.json' || path === './sensor-api.schema.json') continue;
 		const stem = STEMS[path];
 		expect(stem).toBeDefined();
 		expect(typeof target === 'string' ? target : target.import).toBe(`./dist/${stem}.mjs`);
@@ -103,6 +109,21 @@ it.each([
 	['./resource', resource, ['openResource']],
 	['./sqlite', sqlite, ['sqliteBackend']],
 	['./s3', s3, ['s3ObjectBackend']],
+	[
+		'./sensors',
+		sensors,
+		[
+			'ObserveRequestSchema',
+			'ObserveResponseSchema',
+			'SensorApiSchema',
+			'SensorErrorSchema',
+			'SensorIndexSchema',
+			'SensorPartSchema',
+			'SensorSourceSchema',
+			'SensorSpanSchema',
+			'isValidObserveRequest',
+		],
+	],
 	['./conformance', conformance, ['gitConformance', 'objectConformance', 'workspaceConformance']],
 	[
 		'./git',
@@ -177,6 +198,18 @@ it.each([
 	['root', 'index.mjs', ['just-bash', 'node:sqlite']],
 	['resource', 'resource-entry.mjs', ['just-bash']],
 	['sqlite', 'sqlite-entry.mjs', ['just-bash']],
+	[
+		'sensors',
+		'sensors.mjs',
+		[
+			'@ambionframework/ambion',
+			'@ambionframework/pi',
+			'@earendil-works/pi-agent-core',
+			'@earendil-works/pi-ai',
+			'just-bash',
+			'vitest',
+		],
+	],
 	[
 		'git',
 		'git-entry.mjs',

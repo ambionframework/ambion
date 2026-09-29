@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-No change has landed since 0.4.0.
+**The workspace defines the sensor wire contract.**
+`@ambionframework/workspace/sensors` exports the version 1 body schemas and
+client types. `@ambionframework/workspace/sensor-api.schema.json` publishes
+the generated JSON Schema.
 
 ## 0.4.0 (2026-09-29)
 

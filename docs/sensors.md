@@ -1,7 +1,7 @@
 # Sensors
 
-> **Pending in 0.5.0.** This page specifies the initial implementation.
-> The tools, transport, and wire API below do not exist yet.
+> **Pending in 0.5.0.** The wire schemas and client types exist in
+> `@ambionframework/workspace`. The client, tools, and transport do not exist.
 > [The release plan](../planning/next.md) owns the implementation steps.
 
 **A forked Git repository defines a sensor server.** The agent customizes
@@ -133,6 +133,10 @@ repository identifier, full commit hash, branch when present, and whether
 the checkout had uncommitted changes. It never substitutes the current
 branch head for that captured value. Metadata comes from the trusted
 server implementation; the workspace does not attest its executable bytes.
+
+**The source fields follow Git rules.** Repository IDs use an agent
+namespace and a Git repository name. A commit uses a full lowercase
+40- or 64-digit hash. A branch follows Git ref-name rules.
 
 **Uncommitted experiments are allowed.** Their source metadata keeps
 `dirty: true`; the commit names their base only. Committing those edits
@@ -395,6 +399,9 @@ The package also exports the generated `sensor-api.schema.json`.
 `sensorConformance` lives in `@ambionframework/workspace/conformance`.
 The client entry imports no test runner, device driver, or model library.
 Ambion adds no `@ambionframework/sensors` package in 0.5.0.
+
+**The schema cannot compare span endpoints.** The JSON Schema checks request
+shape and timestamp form. `isValidObserveRequest` also requires `from < to`.
 
 ## Observe and retain evidence
 
