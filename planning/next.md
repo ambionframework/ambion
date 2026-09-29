@@ -207,7 +207,7 @@ page it changes in the same commit.
 - [ ] **5.** The core owns the activation state. (C6)
 - [ ] **7.** Cloudflare reuses the core, and one scripted room serves the
       conformance suites. (C9)
-- [ ] **8.** `wait` takes `handles` alone, beside `status` and `ps`. (C10)
+- [ ] **8.** A live file on each harness uses `wait` on `handles`. (C10)
 
 **Evidence:** the evidence of phase 1 holds for each step. Step 7 passes
 `portConformance` on `rpcExecution` in workerd. Steps 5 and 8 pass one
@@ -275,11 +275,12 @@ each harness.
 pass in workerd.
 
 **C10. `wait` takes `handles` alone.** The owner keeps `status`, `ps`,
-and `wait` as three tools: each answers one question. `wait` took
-`handle` or `handles`, and the schema did not say that one is required.
-It now takes `{ handles, timeout? }`, with 1 to 16 handles, and one handle
-gives the result of `status`. **Evidence:** the process tests, and one
-live file on each harness that shows no loss in the use of a process.
+and `wait` as three tools: each answers one question. The change landed
+in #354: `wait` takes `{ handles, timeout? }`, with 1 to 16 handles, and
+one handle gives the result of `status`. The evidence is open. No live
+file of `packages/ambion` starts a process, so the harness jobs do not
+exercise `wait`. **Evidence:** one live file on each harness that shows
+no loss in the use of a process.
 
 **A1. The assistant works a request after the person who asked leaves.** This item
 fixes a defect and adds no capability. A room stays available between
