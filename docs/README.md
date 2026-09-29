@@ -24,6 +24,7 @@ each page.
 | [Exchange](exchange.md)               | Human questions, completion, and durable result handles                     |
 | [Presence](presence.md)               | Visits, arrivals, departures, and catch-up                                  |
 | [Roster](roster.md)                   | Agent membership, reserve, and attention                                    |
+| [Sensors](sensors.md)                 | Spec, use cases, and examples: daemons behind one API (pending in 0.5.0)    |
 | [Trust](trust.md)                     | What one owner guarantees another, and what the kernel does not defend      |
 | [Patterns](patterns.md)               | The human collaboration patterns the room represents                        |
 | [Summaries](summary.md)               | Optional closing work and context replacement                               |

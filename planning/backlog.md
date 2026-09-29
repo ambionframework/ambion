@@ -14,7 +14,7 @@ condition holds moves to the top of its section.
 | [Known defects](#known-defects)               | K1–K6  | K2, the allow-list of the SQL guard      |
 | [Release and CI](#release-and-ci)             | L3, R1 | L3, a billing failure reads as one       |
 | [Rules and proofs](#rules-and-proofs)         | P1–P6  | P1, `returnable` into the verified rules |
-| [Designs with a shape](#designs-with-a-shape) | D1–D22 | D1, a hard bound on an exchange          |
+| [Designs with a shape](#designs-with-a-shape) | D2–D22 | D2, compaction with no person            |
 | [Deferred by decision](#deferred-by-decision) | None   | None                                     |
 
 ## Known defects
@@ -123,17 +123,6 @@ for scale.
 
 ### For rooms that run unattended
 
-**D1. A hard bound on an exchange.** Nothing bounds the usage of one
-exchange ([Exchange](../docs/exchange.md#9-a-gap-the-room-has)).
-`limits.exchange` of the runtime bounds the activations or the usage of
-one exchange. The room writes the close, and `exchangeOutcome` gets a
-terminal outcome beside `exhausted`.
-
-D1 closes one exchange, and the next post opens a new exchange. So D1
-bounds the spend of each exchange, and a host bounds the rate of its
-posts. **Condition:** a host that must cap the spend of one exchange, or
-D21.
-
 **D2. Compaction with no person.** A summary goes to a person, so an
 exchange where no person spoke never folds. A monitor that ticks each ten
 minutes adds about 1,000 returned says in a week. The first step is a
@@ -194,9 +183,9 @@ seating that a seat made.
 **D22. A count bound on a chain of scheduled says.** A returned say opens
 an exchange, and in it the agent can schedule the next say. The chain has
 a time bound and no count bound. `limits.schedule.chain` would refuse a
-say past a depth, which the fold derives from `returned.message`. D1
-bounds one exchange, and this bound covers the chain of exchanges.
-**Condition:** a chain that runs past the need of its owner.
+say past a depth, which the fold derives from `returned.message`. SK1 of
+[next.md](next.md#the-kernel) bounds one exchange, and this bound covers
+the chain. **Condition:** a chain that runs past the need of its owner.
 
 ### For labs at scale
 
@@ -257,20 +246,9 @@ snapshot of a folder, a file at a commit, and the result of a SQL query
 have no ref of their own. A message names them in its text. The kernel
 owns each form, and a resource makes the thing it names.
 
-The sensor forms come first ([Sensors](sensors.md#refs)), because SN3
-and SN26 of [Sensing](sensing.md) need them. They change these:
-
-- The named exports of `packages/ambion/src/index.ts`: `sensorUri`,
-  `parseSensorUri`, and the type `SensorTarget`, exported beside
-  `CommitUri`.
-- The export list of `packages/ambion/test/package.test.ts`.
-- The refusal text `GRAMMAR` of `refs.ts`, which names four forms.
-- The module comment of `refs.ts`, which says it defines four forms.
-- The changelog, and the tests of each form.
-
-A name check can reuse `isName` of the kernel, and add a limit of 32
-characters. **Condition:** an agent that must cite one of them from
-another room, or D21.
+The sensor forms land in 0.5.0 as [SK2 of next.md](next.md#the-kernel),
+and a new form follows the same list of changes. **Condition:** an agent
+that must cite one of them from another room.
 
 **D14. A Codex seat cites its changes with snapshots.** The Codex executor
 cites each file that a completed patch changed as a `file:` URI of the
@@ -333,18 +311,79 @@ snapshot.
 
 ### For sensors
 
-**D21. Sensors in the workspace.** [Sensors](sensors.md) designs a sensor
-as a daemon behind one HTTP API. The daemon runs on the host, on a
-workstation, or on a device. It acquires a source at its full rate, and
-a deterministic reducer keeps the frames, values, and detections that
-matter. The workspace reads each sensor through the `observe` tool and
-its reminder. An electronics bench is the test case.
+**D21. The rest of sensors, after 0.5.0.** 0.5.0 ships the cut of
+[next.md](next.md#the-cut). Each part below keeps the id of its step, and
+[Sensors](../docs/sensors.md) holds its design under a pending label. A
+part that lands removes its pending label, and names its exports in the
+changelog, in the same commit. The live stream comes first, because the
+live parts and audio need it.
 
-A sensor starts no activation: the host follows the detections and posts
-with `room.post`. D21 needs two kernel changes first: the sensor forms of
-a ref (D13) and the bound on an exchange (D1). [Sensing](sensing.md)
-holds the order of the work, and the cut for 0.5.0. **Condition:** an
-application that needs a seat to read a source outside the room.
+- **The live stream (SN14).** `GET /live`, the `live` option of
+  `serveSensors`, `live` and `viewers()` of `AcquireContext`, and the live
+  parts of `scriptedAcquire` (SN11). It removes `live` from the refusal of
+  SN10. It brings the live fragments of SN16 and SN17, the live pipe of
+  SN20, and the live lines of SN23.
+
+  **Evidence:** a viewer gets each event kind in order. A viewer at
+  `fps: 2` over a tap of 10 frames each second gets two frames each
+  second. A viewer that reads nothing gets a `gap`, and the acquisition
+  and the reduce loop keep their rate. An idle stream gets `: ping` on the
+  fake clock, and the ninth viewer gets `429 viewers`.
+
+  A viewer gets one fragment of each channel for each 100 ms, and a
+  `text` event for each line. The pipe gives frames at `live.fps` while a
+  viewer reads, and none while `viewers()` gives 0.
+
+- **Audio (SN22).** `ffmpegAudio`, `speech`, `transcribe`, `/audio`, and
+  live chunks, with the WAV of `fixtureMedia`. It removes `audio` from the
+  refusal of SN10. The tokens line of
+  [Trust](../docs/trust.md#what-the-kernel-does-not-defend) then names the
+  live video and audio that a `read` token sees, and the mic.
+
+  **Evidence:** a WAV fixture with two tone bursts gives two audio parts
+  and two detections. `transcribe` over a scripted program adds one text
+  part to each. `/audio` gives the samples of the stretch. The live stream
+  gives one WAV chunk for each 100 ms. Each chunk has a `RIFF` header, a
+  `fmt ` chunk of 16 bits, and 100 ms of samples.
+
+- **Images in `runAgent` (SN24).** `RunAgentRequest` of `@ambionframework/pi`
+  gets `images`, which `runAgent` passes to `lane.prompt`.
+  [Simulator](../docs/simulator.md#the-model-call) states the field.
+
+  **Evidence:** the user message of the scripted Pi stream holds the images in
+  order, and a request with no images runs as today.
+
+- **`windowCaption` (SN25).** `windowCaption(services, { model, last })` gives
+  the frames to `runAgent` in order, and ends on a `caption` tool call. It
+  needs SN13 and SN24.
+
+  **Evidence:** the user message of the scripted Pi stream holds the frames in
+  order, and the caption lands as a text part on the observation. Services
+  with `sessions: 'memory'` leave no session file.
+
+- **Triggered captures (`scpiTriggered` in SN17).** `scpiTriggered` polls the
+  trigger state every `pollMs`, and fetches each capture with a `triggered`
+  detection. A scripted scope gives the captures.
+
+  **Evidence:** `scpiTriggered` puts the trigger time in `details`, and the
+  scripted scope receives the re-arm of a single capture.
+
+- **Clips (`/clip` in SN19, and the clip of `level` in SN21).** `/clip` cuts
+  at the keyframe at or before `from`. It adds `clip` to the `paths` of
+  `ffmpegVideo`, and removes `clip` from the refusal of SN10.
+
+  **Evidence:** `/clip` gives the stretch that `X-From` names, and `level`
+  also keeps a clip of one second.
+
+- **The later questions and scenarios of the bench (SN27, SN29).** SN27
+  adds `mic` and `windowCaption`, and questions 4 and 7. SN29 adds `scope`
+  on each trigger for scenarios 1, 3, and 5, and a host that posts for
+  scenarios 2 and 11. It also adds `mic` for scenario 7, `windowCaption`,
+  and the views of scenarios 8 and 10 that read `/live`.
+
+  **Evidence:** each question and scenario runs on the scripted tier, as in
+  0.5.0.
+  **Condition:** 0.5.0 shipped its cut, and an application needs the part.
 
 ## Deferred by decision
 

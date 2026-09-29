@@ -1,11 +1,30 @@
 # Sensors
 
-**This page is a design. No code implements it.** It designs sensors
-that a workspace reads, which Ambion does not have today. 0.5.0 ships a
-part of this design, and [Sensing](sensing.md#the-cut-for-050) names the
-cut. SN31 of Sensing writes `docs/sensors.md` for the implemented surface
-of 0.5.0. This page keeps each pending part until that part lands, and a
-part that lands moves into `docs/sensors.md`.
+> **Pending in 0.5.0.** No code implements this page yet. Every example
+> shows the API that its step of [next.md](../planning/next.md) lands. Each
+> step removes the pending label of the part that it implements, in the
+> same commit.
+
+**The page holds the spec, and then the use cases with their examples.**
+The sections keep their order. The bench, a use case, stands between two
+sections of the spec.
+
+| Part                       | Sections                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The spec                   | [Terms](#terms), [Parts](#parts), [The sensor API](#the-sensor-api), [Where a daemon runs](#where-a-daemon-runs), [Open a workspace with sensors](#open-a-workspace-with-sensors), [Serve a sensor](#serve-a-sensor), [What the agent reads](#what-the-agent-reads) with [Refs](#refs), [What a person reads](#what-a-person-reads), [Sensors and the room](#sensors-and-the-room), [The client and the backend](#the-client-and-the-backend), [Failure and restart](#failure-and-restart), [Cost](#cost), [Privacy and trust](#privacy-and-trust), [Tests](#tests) |
+| The record of the design   | [Later parts](#later-parts), [Out of scope](#out-of-scope), [Decisions taken](#decisions-taken), [Pseudo code](#pseudo-code)                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| The use cases and examples | [The bench](#the-bench): nine questions; [Use cases](#use-cases-scenarios-on-an-electronics-bench): twelve scenarios                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+
+**0.5.0 ships a part of this page.** It ships the API, the refs, the
+client, the conformance suite, and the workspace. It ships the daemon
+with the sources of still frames, series, and text, `followAndPost`, and
+the bench.
+[The scope of 0.5.0](../planning/next.md#050-is-the-release-of-sensors)
+holds the cut of each step.
+
+**Clips, audio, the live stream, images in `runAgent`, `windowCaption`,
+and triggered captures follow in 0.5.x.** They stay pending after 0.5.0,
+and [D21 of the backlog](../planning/backlog.md#for-sensors) holds them.
 
 **A sensor is a daemon behind one HTTP API.** The daemon acquires a
 source at its full rate. It reduces the acquisition, by deterministic
@@ -17,10 +36,11 @@ them.
 sensor live, or over a stretch of time, through the same API. A sensor
 wakes no seat. A host that wants a wake posts a detection with
 `room.post` ([Sensors and the room](#sensors-and-the-room)).
-[Sensing](sensing.md) holds the order of the work.
+[The order of work](../planning/next.md#the-order-of-work) of next.md
+holds the steps.
 
 **The attention of a seat is a separate mechanism.** The room implements
-it ([Roster](../docs/roster.md)).
+it ([Roster](roster.md)).
 
 **The API is the contract of a sensor.** A daemon can run in the host
 process, on a workstation next to the devices, or on a dedicated server or
@@ -32,14 +52,16 @@ workspace, the tools, or the agent.
 program can be the daemon of `@ambionframework/sensors`, a Python script
 on a Raspberry Pi, or the firmware of an instrument.
 
-**The design changes the workspace, and needs two kernel changes from
-the backlog.** The workspace gets one backend kind, a client of the API,
-and one tool. It gets one option on `tools()`, and one line in its
-reminder for each sensor. Pi's `runAgent` takes images. A host posts
-with `room.post`, which exists today
-([Exchange](../docs/exchange.md#7-the-edges-a-host-sees)). The kernel
-must accept the sensor forms of a ref ([Refs](#refs)), and must bound one
-exchange ([Sensors and the room](#sensors-and-the-room)).
+**The design changes the workspace, and needs two kernel changes.** The
+workspace gets one backend kind, a client of the API, and one tool. It
+gets one option on `tools()`, and one line in its reminder for each
+sensor. Pi's `runAgent` takes images. A host posts with `room.post`,
+which exists today ([Exchange](exchange.md#7-the-edges-a-host-sees)).
+
+**The kernel must accept the sensor forms of a ref, and must bound one
+exchange.** [Refs](#refs) and [Sensors and the room](#sensors-and-the-room)
+state the two changes. SK2 and SK1 of
+[next.md](../planning/next.md#the-kernel) make them.
 
 **The test case is an electronics bench.** Two cameras, a microphone, a
 bench multimeter, an oscilloscope, and three temperature sensors serve
@@ -625,9 +647,8 @@ default, and `pingMs` is 15,000 by default.
 
 **The example serves two sources for brevity.** The bench runs `dut-cam`
 on the bench workstation and `dmm` on the LXI gateway, each with a
-program of this form. The example uses two parts of 0.5.x: `live` of
-`ffmpegVideo`, and `windowCaption`. The example that SN31 writes in
-`docs/sensors.md` uses the 0.5.0 API alone.
+program of this form. The example uses two parts of 0.5.x, which stay
+pending after 0.5.0: `live` of `ffmpegVideo`, and `windowCaption`.
 
 **`serveSensors` gives `Promise<{ url: string; close(): Promise<void> }>`.**
 `url` is the root URL that the daemon listens on. `close` stops the
@@ -967,7 +988,7 @@ seconds. A line holds these facts:
 **The two parts of the reminder run at the same time, each with its own
 timeout.** The workspace bundle has one `remind`. The core aborts it at
 `REMINDER_TIMEOUT_MS`, 5 seconds, and drops its whole text
-([Processes](../docs/processes.md)). The sensor lines keep the timeout
+([Processes](processes.md)). The sensor lines keep the timeout
 of 2 seconds of the index.
 
 **The combined `remind` races the process part against its own timer,
@@ -984,7 +1005,7 @@ a second bundle with its own `remind`, which gets its own bound of 5
 seconds from the core.
 
 **The example takes sensors from [The bench](#the-bench) and from the
-[appendix](#appendix-scenarios-on-an-electronics-bench).**
+[scenarios](#use-cases-scenarios-on-an-electronics-bench).**
 
 ```text
 Sensors of this workspace:
@@ -1133,7 +1154,7 @@ the frame when the answer needs it.
 **`tools({ images: false })` makes `images: false` the default of each
 call, for a seat that reads no images.** `images` is a second field of
 `WorkspaceToolsOptions`, beside `skills`. The Codex executor reads text
-only ([Codex](../docs/codex.md)), so a Codex definition takes this
+only ([Codex](codex.md)), so a Codex definition takes this
 bundle. Pi and Claude copy an image part into the model's input. No test
 proves the Claude path yet.
 
@@ -1147,7 +1168,7 @@ with the other seats.
 
 **A sensor ref names what a daemon stored.** It is a ref of the
 `ambion` scheme, which the kernel owns
-([Definitions and tools](../docs/agent.md#tools)). Three forms name what
+([Definitions and tools](agent.md#tools)). Three forms name what
 a sensor stored.
 
 | Form                                                  | Names                                                      |
@@ -1187,11 +1208,10 @@ parseSensorUri(uri: string): SensorTarget | undefined; // undefined for any othe
 ```
 
 **The kernel refuses these forms today.** `isRef` accepts an `ambion:`
-ref only in the four forms of the kernel. D13 of the
-[backlog](backlog.md#for-refs-and-objects) adds forms of the
-scheme, and the sensor forms must land as a part of it first. That change
-adds `sensorUri`, `parseSensorUri`, and their acceptance by `isRef`. The
-room then checks the grammar of a sensor ref, and never reads behind it.
+ref only in the four forms of the kernel. SK2 of
+[next.md](../planning/next.md#the-kernel) adds the sensor forms:
+`sensorUri`, `parseSensorUri`, and their acceptance by `isRef`. The room
+then checks the grammar of a sensor ref, and never reads behind it.
 
 **A sensor ref keeps its meaning while the deployment keeps the log.**
 The line of a log names its media by file id, and a media file lasts
@@ -1273,7 +1293,7 @@ deployment keeps the log. It replays the span through `/clip`, `/audio`,
 **A sensor writes no journal entry.** A detection is a line in the store
 of a daemon. The room reads none of it. Two paths start an activation
 from a sensor when no person is present. Both use the post of the system
-([Exchange](../docs/exchange.md#7-the-edges-a-host-sees)): a returned say
+([Exchange](exchange.md#7-the-edges-a-host-sees)): a returned say
 is a post with `returns`.
 
 | Path                        | Who sets the condition             | What wakes the seat                 | Cost when nothing happens     |
@@ -1287,7 +1307,7 @@ returned say opened, when no person spoke in it. A sensor that posts
 often, and a check that runs often, add such exchanges to the context of
 each later activation. `limits.context.messages` and
 `activationTokenLimit` bound the view. D2 of the
-[backlog](backlog.md#for-rooms-that-run-unattended) removes
+[backlog](../planning/backlog.md#for-rooms-that-run-unattended) removes
 this cost.
 
 ### The host posts a detection
@@ -1373,7 +1393,7 @@ for await (const d of sensor.follow('detections', { after, signal })) {
   of the conflicting message. So it matches
   `The key '<key>' already names a different room operation`, advances
   the cursor, and posts nothing. A dedicated error code is a kernel
-  change outside this plan.
+  change outside 0.5.0.
 - **Any other refusal rejects the promise.** The cursor stays at the last
   detection that the helper handled.
 - **The host directs each post.** A post with no `to` wakes each idle
@@ -1385,7 +1405,7 @@ for await (const d of sensor.follow('detections', { after, signal })) {
   detection.
 - **The seat reads the post, the reminder line, and `observe`.** A say to
   mira ends the exchange as `awaiting` mira, and `pendingFor` lists it
-  for mira ([Exchange](../docs/exchange.md#7-the-edges-a-host-sees)).
+  for mira ([Exchange](exchange.md#7-the-edges-a-host-sees)).
 
 **The key makes each post land once, and the cursor stops a replay.** A
 post under a repeated key lands once, for example when the host stops
@@ -1413,11 +1433,12 @@ acts again. A post to an open exchange steers the work, so the exchange
 stays open. The key stops a repeated post, and nothing in the loop stops
 a new one.
 
-**D1 bounds the spend of each exchange.** `limits.exchange`, D1 of the
-[backlog](backlog.md#for-rooms-that-run-unattended), bounds the
+**`limits.exchange` bounds the spend of each exchange.** SK1 of
+[next.md](../planning/next.md#the-kernel) adds it. It bounds the
 activations or the usage of one exchange, and the room writes the close.
-D1 closes one exchange, and the next post opens a new exchange. The post
-of a detection waits for D1 ([Sensing](sensing.md#the-cut-for-050)).
+The bound closes one exchange, and the next post opens a new exchange.
+The post of a detection waits for SK1
+([The order of work](../planning/next.md#the-order-of-work)).
 
 **`limits` applies to the whole runtime.** A host sets it on
 `createRuntime`, so `limits.exchange` bounds each room of the runtime.
@@ -1425,8 +1446,8 @@ of a detection waits for D1 ([Sensing](sensing.md#the-cut-for-050)).
 **`maxPerMinute` and D22 bound a loop across exchanges.** `maxPerMinute`
 bounds the posts of one sensor in each minute, and so the exchanges that
 those posts open. D22 of the
-[backlog](backlog.md#for-rooms-that-run-unattended) bounds the count of a
-chain of scheduled says.
+[backlog](../planning/backlog.md#for-rooms-that-run-unattended) bounds
+the count of a chain of scheduled says.
 
 ### The agent schedules a check
 
@@ -1442,8 +1463,8 @@ with no summary. When the check fails, it says to the person.
   checks.
 - **Each check costs one activation.** A check each 5 minutes for 8 hours
   is 96 activations. D22 of the
-  [backlog](backlog.md#for-rooms-that-run-unattended) bounds the count of
-  such a chain.
+  [backlog](../planning/backlog.md#for-rooms-that-run-unattended) bounds
+  the count of such a chain.
 
 ## The bench
 
@@ -1668,7 +1689,7 @@ calls, the workspace sends nothing and writes nothing.
 
 **An observe stays in the session for the rest of the exchange.** A
 continued session keeps its tool results
-([Executors](../docs/executors.md#exchange-continuity)). So each later
+([Executors](executors.md#exchange-continuity)). So each later
 request to the provider in the exchange sends the observations again.
 The guidance asks for one observe of a camera for each moment that the
 answer needs, and a span holds at most 10 frames.
@@ -1700,7 +1721,7 @@ limit on every platform, so a frame at 768 pixels is safe.
   the host prunes the homes.
 - **The harness session keeps each result.** Pi writes each session, tool
   results included, to a JSONL file under `sessionDir`
-  ([Trust](../docs/trust.md)). Claude Code keeps a transcript too.
+  ([Trust](trust.md)). Claude Code keeps a transcript too.
 - **The trace keeps the text and the size of each image.**
   `loggedToolResult` drops the bytes of an image.
 - **An annotation sends what it reads to its provider.** The daemon holds
@@ -1808,11 +1829,11 @@ and the workbench use them.
 | The result of `observe`                                                          | The header with the span and the skew; each detection with its `seq` and reading; `Stale`; the counts of a history span                                                                                                                     |
 | An origin outside `cors`                                                         | No preflight answer                                                                                                                                                                                                                         |
 | `follow`                                                                         | It resumes from a cursor after a restart of the daemon, and loses no detection                                                                                                                                                              |
-| A host post of a detection                                                       | It opens an exchange with no person; a second post under the key lands once; a loop of posts that steers one exchange stops at `limits.exchange` (D1), and the next post opens a new exchange                                               |
+| A host post of a detection                                                       | It opens an exchange with no person; a second post under the key lands once; a loop of posts that steers one exchange stops at `limits.exchange` (SK1), and the next post opens a new exchange                                              |
 | `followAndPost`                                                                  | Labels filter; a replay lands each key once; a key conflict advances the cursor; `maxPerMinute` skips and advances; a stopped room ends the loop; a restart with a `cursor` resumes; the post carries the ref of its detection              |
 | A daemon at another `api`                                                        | The reminder states `incompatible`; `observe` refuses its sensors with the same text; the suite fails a body with no `api`                                                                                                                  |
 | A path that `paths` does not list                                                | `404 unknown`; the suite runs each listed path, and checks the 404 for the others                                                                                                                                                           |
-| `sensorUri`, `parseSensorUri`, and `isRef` (the tests of D13, in the kernel)     | Each form reads back as it was built; `%3A`, a name outside the grammar, and `from` after `to` give `undefined`; `isRef` accepts each form                                                                                                  |
+| `sensorUri`, `parseSensorUri`, and `isRef` (the tests of SK2, in the kernel)     | Each form reads back as it was built; `%3A`, a name outside the grammar, and `from` after `to` give `undefined`; `isRef` accepts each form                                                                                                  |
 | The refs of `observe`                                                            | The ref of each observation and detection that the result shows; one span ref for a span of history                                                                                                                                         |
 | Text from the source in `observe`                                                | Each text part, line, transcript, caption, and string of `details` stands between the marks; the note stands outside                                                                                                                        |
 | The bench questions                                                              | A scripted seat reads the reminder, calls `observe`, and its say lands                                                                                                                                                                      |
@@ -2023,7 +2044,7 @@ followAndPost(room, sensor, { labels, to, text, maxPerMinute = 6, from = 0, curs
             catch key conflict: pass                               # refused; the text starts "The key '<key>' already names a different room operation": it landed
             posted.add(x.at)
         cursor?.write(x.seq)                                       # after a post and after a skip
-                                                                   # D1 bounds each exchange; maxPerMinute bounds the posts of one sensor
+                                                                   # SK1 bounds each exchange; maxPerMinute bounds the posts of one sensor
 
 test 'level flags the blink of the fixture at the right frames':
     segments = fixtureSegments('led-blink-100ms.mp4')              # 30 fps; on at frame 42, off at 45
@@ -2034,7 +2055,7 @@ test 'level flags the blink of the fixture at the right frames':
     expect(reduce(segments, { signal, since: segments.first.from })).toEqual(out)
 ```
 
-## Appendix: scenarios on an electronics bench
+## Use cases: scenarios on an electronics bench
 
 **Twelve scenarios test the design on a bench for the bring-up of a
 circuit board.** Each one names the sensors, what the daemon does, and
@@ -2046,14 +2067,15 @@ change.
 
 **Thirteen sensors run behind three daemons.** The signal generator is a
 sensor of its own settings. No sensor sets a setting. The `scope` of the
-appendix acquires on each trigger; the `scope` of [The bench](#the-bench)
-reads on each observe.
+scenarios acquires on each trigger; the `scope` of
+[The bench](#the-bench) reads on each observe.
 
-**The workbench runs the appendix as a second host.** The second host has
-its own `sensors()` configuration and its own workspace. Its daemons also
-have the names `bench-ws`, `lxi-gw`, and `thermo-pi`, so each ref names
-one daemon of one host. In 0.5.0, the views of scenarios 8 and 10 that
-read `/live` wait for the live-stream step, SN14 of [Sensing](sensing.md).
+**The workbench runs the bench of the scenarios as a second host.** The
+second host has its own `sensors()` configuration and its own workspace.
+Its daemons also have the names `bench-ws`, `lxi-gw`, and `thermo-pi`, so
+each ref names one daemon of one host. In 0.5.0, the views of scenarios 8
+and 10 that read `/live` stay pending. They wait for the live stream,
+SN14 in [D21 of the backlog](../planning/backlog.md#for-sensors).
 
 | Sensor        | Daemon      | Source                                            | Acquisition and reducer                                                                                      |
 | ------------- | ----------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
