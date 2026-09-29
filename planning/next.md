@@ -33,9 +33,10 @@ holds on main.
 is new. Ambion is reactive: a seat acts when a person speaks, when a seat
 addresses it, or when a say that it scheduled comes due.
 
-**0.4.0 is a release of simplification.** It adds three capabilities, the
-`import` of the `sql` tool, the fixed skills of each agent, and the
-refs to workspace files and commits, which the changelog names. It removes each
+**0.4.0 is a release of simplification.** It adds four capabilities, the
+`import` of the `sql` tool, the fixed skills of each agent, the
+refs to workspace files and commits, and the post of the host, which the
+changelog names. It removes each
 second path to a fact of the room. Every item in the
 [backlog](backlog.md) waits until after 0.4.0, unless its condition holds
 first.
@@ -126,12 +127,17 @@ condition that brings each one back.
 - **A scheduled say goes to its author alone.** The `schedule` tool sets
   `to` to the author and `after` to its argument. On the record, `to` names
   the author if and only if `after` is set. The room stamps everything
-  else: the author, the returned say, and the owner of the exchange that it
-  opens. No seat speaks under the name of a person, and no seat schedules
-  work for another seat.
+  else: the author and the returned say. No seat speaks under the name of
+  a person, and no seat schedules work for another seat.
 - **A returned say is an ordinary message when it lands.** It opens an
   exchange when none is open. When an exchange is open, it joins it and
-  steers work, and the owner of that exchange stays the owner.
+  steers the seat that it returns to.
+- **The system speaks, and an exchange has no owner.** The host and the
+  room's clock write a `posted` entry with no author, and a returned say
+  is a post with `returns`. A post opens an exchange. An exchange has an
+  opening message and a `person`, the first person who spoke in its range.
+  Steps 9 and 10 land it, and [the design](system.md) holds it until
+  then.
 - **The journal records the schedule, and the host arms the clock.** The
   fold holds the pending says, and the room's alarm takes the earliest due
   time beside the lease expiries and the retry times. A restart reads the
@@ -207,10 +213,16 @@ page it changes in the same commit.
 - [ ] **7.** Cloudflare reuses the core, and one scripted room serves the
       conformance suites. Needs 3. (C9)
 - [ ] **8.** `wait` takes `handles` alone, beside `status` and `ps`. (C10)
+- [ ] **9.** An exchange has no owner, and a scheduled say carries none.
+      (S1)
+- [ ] **10.** The system posts, and a post replaces the returned say.
+      Needs 9. (S2)
 
 **Evidence:** the evidence of phase 1 holds for each step. Steps 3 and 7
 pass `transportConformance` on `rpcTransport` in workerd. Steps 5 and 8
 pass one live file on each of Pi, Claude, and Codex before they merge.
+Steps 9 and 10 run `pnpm rule:check` and `pnpm chaos` on both storages,
+and step 10 passes one live file on the assistant before it merges.
 
 ### Phase 3. Release
 
@@ -377,3 +389,41 @@ interactions, so a person who asks and leaves gets the answer later.
 at pass^3, where the person asks and leaves before the first activation.
 The assistant sends a directed request to a specialist, and the closing
 summary answers the question. The live suite of the assistant stays green.
+
+**S1. An exchange has no owner.** [The design](system.md) holds the
+problem, the rules, and the evidence of S1 and S2.
+
+- **The problem.** `owner` holds two facts: who directs the work and who
+  receives the result. A returned say keeps the owner of the exchange
+  that scheduled it, so a monitor that returns each ten minutes owes one
+  person a summary each ten minutes. A seat cannot schedule when no
+  exchange is open, and a say to oneself steers each colleague at work.
+- **The change.** The opening message names who directs the work, and
+  `awaiting` reads its author. `person`, the first person who spoke in the
+  range, names who receives the result: the summary, its recipients,
+  `ctx.exchange.person`, and `waitForSummary` read it. A close with
+  `summary` carries `person`. `admitsClose` compares `from` alone. A
+  scheduled say and a returned say carry no owner, a seat schedules from
+  any response activation, and a scheduled say steers no seat.
+
+**Evidence:** `scheduled-say.test.ts`, `exchange-outcome.test.ts`,
+`summary.test.ts`, `cancellation.test.ts`, and `steering-delivery.test.ts`
+hold the cases of the design, and `pnpm rule:check` proves `opensExchange`
+and `admitsClose`.
+
+**S2. The system posts.** A host that wants a wake defines a fake person
+today, and the room applies each rule for people to it.
+
+- **The change.** `room.post({ to?, text, refs?, key? })` writes a
+  `posted` entry with no author, in its own key space. The room's clock
+  writes a post with `returns` when a scheduled say is due, and the
+  `returned` kind goes. A post opens an exchange. A post with `to` wakes
+  and steers its target, and a post with no `to` reaches each seat at
+  `broadcast`. The Cloudflare room object takes `post`, and
+  [Processes](../docs/processes.md) posts in place of the fake person.
+
+**Evidence:** `exchange-completion.test.ts`, `routing.test.ts`,
+`steering-delivery.test.ts`, `transition.test.ts`, and
+`journal-validation.test.ts` hold the cases of the design, the Cloudflare
+tests pass in workerd, and one live file on the assistant shows a post
+that wakes a seat. The step removes [the design](system.md).
