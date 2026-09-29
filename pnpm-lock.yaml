@@ -252,8 +252,8 @@ importers:
         specifier: ^3.4.2
         version: 3.4.2
       just-git:
-        specifier: ^1.8.3
-        version: 1.8.3
+        specifier: 1.8.2
+        version: 1.8.2
     devDependencies:
       tsdown:
         specifier: ^0.23.0
@@ -2934,8 +2934,8 @@ packages:
     engines: {node: '>=20.18.1'}
     hasBin: true
 
-  just-git@1.8.3:
-    resolution: {integrity: sha512-u3gwMCHH6e1Q4DaoOe2IgUx5zisXlqKyvcqgw4rkqMfz97Jhr5lhNJ0AMwkK/j1uGQ6hE74aneDpXx1npBeliA==}
+  just-git@1.8.2:
+    resolution: {integrity: sha512-0DVPqml0VVzjK3DompySws16j+jQTnw1TSExHPl/f1uTikYduza0V36Q+4ViORhIfAxxKTaNbc8S7Wx1avnOLw==}
 
   jwa@2.0.1:
     resolution: {integrity: sha512-hRF04fqJIP8Abbkq5NKGN0Bbr3JxlQ+qhZufXVr0DvujKy93ZCbXZMHDL4EOtodSbCWxOqR8MS1tXA5hwqCXDg==}
@@ -6263,7 +6263,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  just-git@1.8.3: {}
+  just-git@1.8.2: {}
 
   jwa@2.0.1:
     dependencies:
