@@ -206,3 +206,12 @@ export function isValidObserveRequest(value: unknown): value is ObserveRequest {
 	if (value.span === undefined) return true;
 	return value.span.from < value.span.to;
 }
+
+export {
+	createSensorClient,
+	SensorDigestError,
+	SensorHttpError,
+	SensorProtocolError,
+	type SensorClient,
+	type SensorFile,
+} from './sensor-client.ts';

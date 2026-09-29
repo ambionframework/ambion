@@ -4,7 +4,7 @@ import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from '
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ObserveResponse, SensorIndex } from '@ambionframework/workspace/sensors';
+import { createSensorClient } from '@ambionframework/workspace/sensors';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { labRepositories } from '../src/repositories.ts';
 import {
@@ -83,14 +83,14 @@ describe('the sensor server template', () => {
 
 		const server = await start(fresh, join(root, 'sensor-data'));
 		onTestFinished(() => server.stop());
-		const index = await server.get('/');
+		const index = await server.client.index();
 		expect(index.source).toMatchObject({
 			repository: 'agent/sensors',
 			commit: savedCommit,
 			branch: 'calibrated',
 			dirty: false,
 		});
-		const result = await server.observe('room-temperature');
+		const result = await server.client.observe('room-temperature');
 		const series = result.observations[0]?.parts[0];
 		expect(series?.kind).toBe('series');
 		if (series?.kind !== 'series')
@@ -102,6 +102,19 @@ describe('the sensor server template', () => {
 			`http://127.0.0.1:${server.port}`,
 			templateSensorFixture(frameDigest, frameBytes, [21.5, 22.25, 21.4]),
 		);
+		const camera = await server.client.observe('bench-camera');
+		expect(camera.observations[0]?.at).toBe('2025-01-02T03:04:06.000Z');
+		const frame = camera.observations[0]?.parts[0];
+		expect(frame?.kind).toBe('frame');
+		if (frame?.kind !== 'frame') throw new Error('The camera fixture is not a frame.');
+		const image = await server.client.file(frame.file);
+		expect(image.mediaType).toBe('image/png');
+		expect([...image.bytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+		const notes = await server.client.observe('operator-notes');
+		expect(notes.observations[0]).toEqual({
+			at: '2025-01-02T03:04:07.000Z',
+			parts: [{ kind: 'text', text: 'Fixture run: the indicator is green.' }],
+		});
 	}, 60_000);
 });
 
@@ -185,20 +198,7 @@ async function start(cwd: string, dataPath: string) {
 	});
 	return {
 		port,
-		async get(path: string) {
-			const response = await fetch(`http://127.0.0.1:${port}${path}`);
-			expect(response.status).toBe(200);
-			return (await response.json()) as SensorIndex;
-		},
-		async observe(name: string) {
-			const response = await fetch(`http://127.0.0.1:${port}/${name}/observe`, {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: '{"api":1}',
-			});
-			expect(response.status).toBe(200);
-			return (await response.json()) as ObserveResponse;
-		},
+		client: createSensorClient(`http://127.0.0.1:${port}`),
 		async stop() {
 			if (child.exitCode !== null) return;
 			child.kill('SIGTERM');

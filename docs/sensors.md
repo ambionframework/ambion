@@ -1,11 +1,12 @@
 # Sensors
 
-> **Pending in 0.5.0.** The wire schemas and client types exist in
+> **Pending in 0.5.0.** The wire schemas, client types, and HTTP client exist in
 > `@ambionframework/workspace`. The current branch includes the implemented
 > and validated SN27 Workbench template, and the workstation port transport
 > is available. SN4's conformance runner is available from
-> `@ambionframework/workspace/conformance`. Workspace `connect`, `observe`,
-> and the SN3 production client remain pending. See the [release plan](../planning/next.md).
+> `@ambionframework/workspace/conformance`, and the SN3 production HTTP client
+> is available from `@ambionframework/workspace/sensors`. Workspace `connect`
+> and `observe` remain pending. See the [release plan](../planning/next.md).
 
 **A forked Git repository defines a sensor server.** The agent customizes
 its acquisition and reduction code, validates it, and saves working
@@ -423,7 +424,7 @@ wire change raises `api`. The client refuses another version. Version 1
 describes this initial subset alone. Acquisition and reducer state are
 never fields of the protocol.
 
-**The wire schemas and client types live in
+**The wire schemas, types, and HTTP client live in
 `@ambionframework/workspace/sensors`.** The package also exports the
 generated `sensor-api.schema.json`. The `sensorConformance` runner is
 available from `@ambionframework/workspace/conformance`. It checks raw server
@@ -444,6 +445,21 @@ for (const testCase of sensorConformance(harness, fixture)) {
   test(testCase.name, testCase.run);
 }
 ```
+
+**`createSensorClient(root)` reads a sensor server through a private
+transport URL.** Its `index(signal?)`,
+`observe(name, request = { api: 1 }, signal?)`, and `file(digest, signal?)`
+methods implement the three operations above.
+The root is a directory base: a root ending in `/prefix` keeps that prefix
+for `/prefix/`, `/prefix/<sensor>/observe`, and `/prefix/files/<digest>`.
+Observe requests are checked against the version 1 schema before sending.
+The client checks every JSON success and error body, rejects redirects, and
+never retries a request. `file` returns `{ bytes, mediaType }` only after
+the bytes match the requested SHA-256 digest. Measurement timestamp strings
+are returned unchanged. Invalid wire data raises `SensorProtocolError`,
+valid non-success envelopes raise `SensorHttpError` with the HTTP status and
+`sensorError` envelope, and digest mismatch raises `SensorDigestError`;
+fetch, disconnect, and abort failures propagate to the caller.
 
 **The schema cannot compare span endpoints.** The JSON Schema checks request
 shape and timestamp form. `isValidObserveRequest` also requires `from < to`.
