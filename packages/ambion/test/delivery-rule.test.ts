@@ -192,7 +192,7 @@ const entries: Entry[] = [
 	{
 		kind: 'close',
 		seq: 29,
-		body: { owner: 'priya', from: 3, through: 27, at, summary: 'assistant' },
+		body: { person: 'priya', from: 3, through: 27, at, summary: 'assistant' },
 	},
 	lease(30, 'closed:27:assistant:1', { phase: 'running', expiresAt: 60_000, readThrough: 0 }),
 	{

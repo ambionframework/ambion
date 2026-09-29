@@ -158,7 +158,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		const participants = await participantsOf(session);
 		const exchange = await currentExchange(session);
 		expect(participants.find((s) => s.name === 'alpha')).toMatchObject({ status: 'active' });
-		expect(exchange).toMatchObject({ owner: 'priya' });
+		expect(exchange).toMatchObject({ person: 'priya' });
 		crash(first, session);
 
 		const resumed = await resume(name, runtime(), script);
@@ -173,14 +173,14 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			'beta',
 			'beta',
 		]);
-		expect(await currentExchange(resumed)).toMatchObject({ owner: 'priya' });
+		expect(await currentExchange(resumed)).toMatchObject({ person: 'priya' });
 
 		// alpha's lease is held by a run that is gone: it expires, alpha is woken
 		// again after the backoff, and the exchange closes once alpha stands down
 		held.resolve();
 		await clock.advance(60_000);
 		expect(events.some((e) => e.type === 'error' && e.agent === 'alpha')).toBe(true);
-		expect(await currentExchange(resumed)).toMatchObject({ owner: 'priya' });
+		expect(await currentExchange(resumed)).toMatchObject({ person: 'priya' });
 		await clock.advance(30_000);
 		await waitForRoom(resumed);
 		expect(starts(events, 'alpha')).toHaveLength(1);
@@ -208,7 +208,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		const events = collect(resumed);
 		// the resume itself expired the lease: the wake it took is pending again,
 		// so the exchange stays open until the seat is woken after the backoff
-		expect(await currentExchange(resumed)).toMatchObject({ owner: 'priya' });
+		expect(await currentExchange(resumed)).toMatchObject({ person: 'priya' });
 		expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(0);
 		await clock.advance(30_000);
 		await waitForRoom(resumed);
@@ -287,7 +287,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			(entry) => entry.kind === 'close',
 		);
 		expect(closes).toHaveLength(1);
-		expect(closes[0]?.body).toMatchObject({ owner: 'priya', from: question?.seq });
+		expect(closes[0]?.body).toMatchObject({ person: 'priya', from: question?.seq });
 		await two.stop();
 	});
 

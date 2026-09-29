@@ -17,7 +17,7 @@ const composition: Composition = {
 	agents: [{ name: 'product', identity: 'Product.', attention: 'broadcast' }],
 	available: [{ name: 'surveyor', identity: 'Surveyor.', attention: 'named' }],
 };
-const close: Close = { owner: 'priya', from: 4, through: 7, at };
+const close: Close = { person: 'priya', from: 4, through: 7, at };
 const id = 'message:4:product:1';
 const entries: Entry[] = [
 	{ kind: 'run', seq: 1, body: { at } },

@@ -315,7 +315,7 @@ describe('a lease', () => {
 		expect(ends(events)).toBe(1);
 		// a lease that expired without a word answers nothing: the exchange stays
 		// open, and the seat is woken again after the backoff
-		expect(await currentExchange(session)).toMatchObject({ owner: 'andrei' });
+		expect(await currentExchange(session)).toMatchObject({ person: 'andrei' });
 		expect(starts(events)).toBe(1);
 		await clock.advance(30_000);
 		await waitForRoom(session);

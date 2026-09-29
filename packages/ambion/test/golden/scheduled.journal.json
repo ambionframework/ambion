@@ -74,7 +74,6 @@
 			"to": "worker",
 			"text": "Check the pour log.",
 			"after": 600,
-			"owner": "priya",
 			"at": "2026-01-01T09:00:00.000Z",
 			"activationId": "message:4:worker:1",
 			"from": "worker"
@@ -121,7 +120,7 @@
 	{
 		"kind": "close",
 		"body": {
-			"owner": "priya",
+			"person": "priya",
 			"from": 4,
 			"through": 6,
 			"at": "2026-01-01T09:00:00.000Z",
@@ -190,7 +189,6 @@
 			"at": "2026-01-01T09:10:00.000Z",
 			"to": "worker",
 			"message": 6,
-			"owner": "priya",
 			"text": "Check the pour log.",
 			"wakes": ["worker"]
 		},
@@ -260,66 +258,11 @@
 	{
 		"kind": "close",
 		"body": {
-			"owner": "priya",
 			"from": 13,
 			"through": 15,
-			"at": "2026-01-01T09:10:00.000Z",
-			"summary": "assistant"
+			"at": "2026-01-01T09:10:00.000Z"
 		},
 		"seq": 18,
-		"run": "run-1"
-	},
-	{
-		"kind": "lease",
-		"body": {
-			"id": "closed:15:assistant:1",
-			"phase": "running",
-			"expiresAt": 1767258660000,
-			"at": "2026-01-01T09:10:00.000Z",
-			"readThrough": 0
-		},
-		"seq": 19,
-		"run": "run-1"
-	},
-	{
-		"kind": "message",
-		"body": {
-			"kind": "summary",
-			"text": "The worker checks the pour later.",
-			"to": "priya",
-			"covers": {
-				"from": 13,
-				"through": 15
-			},
-			"at": "2026-01-01T09:10:00.000Z",
-			"activationId": "closed:15:assistant:1",
-			"from": "assistant"
-		},
-		"seq": 20,
-		"key": "key-6",
-		"run": "run-1"
-	},
-	{
-		"kind": "lease",
-		"body": {
-			"id": "closed:15:assistant:1",
-			"phase": "ended",
-			"reason": "released",
-			"at": "2026-01-01T09:10:00.000Z",
-			"readThrough": 15,
-			"usage": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0,
-				"cost": 0
-			},
-			"session": {
-				"harness": "pi",
-				"id": "closed:15:assistant:1"
-			}
-		},
-		"seq": 21,
 		"run": "run-1"
 	},
 	{
@@ -330,8 +273,8 @@
 			"subject": "priya",
 			"at": "2026-01-01T09:10:00.000Z"
 		},
-		"seq": 22,
-		"key": "key-7",
+		"seq": 19,
+		"key": "key-6",
 		"run": "run-1"
 	}
 ]

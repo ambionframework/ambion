@@ -236,7 +236,7 @@ describe('Workbench host', () => {
 		expect(await workbench.approvals('bringup')).toEqual([]);
 		const lab = new DatabaseSync(joinPath(directory, 'lab.db'));
 		const insert = lab.prepare(
-			'INSERT INTO operations (instrument, setpoint, outcome, request_id, room, exchange_owner, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+			'INSERT INTO operations (instrument, setpoint, outcome, request_id, room, exchange_person, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
 		);
 		insert.run('led-current', 30, 'requested', null, 'bringup', 'mira', '2026-01-01T00:00:00Z');
 		insert.run('bench-supply', 9, 'requested', null, 'sensing', 'theo', '2026-01-01T00:00:01Z');
@@ -246,11 +246,11 @@ describe('Workbench host', () => {
 				instrument: 'led-current',
 				setpoint: 30,
 				unit: 'mA',
-				owner: 'mira',
+				person: 'mira',
 				at: '2026-01-01T00:00:00Z',
 			},
 		]);
-		expect((await workbench.approvals('sensing')).map((approval) => approval.owner)).toEqual([
+		expect((await workbench.approvals('sensing')).map((approval) => approval.person)).toEqual([
 			'theo',
 		]);
 		insert.run('led-current', 30, 'approved', 1, 'bringup', 'mira', '2026-01-01T00:00:02Z');
@@ -288,7 +288,7 @@ describe('Workbench host', () => {
 			if (!say) throw new Error('No say waits yet.');
 			return say;
 		});
-		expect(waiting).toMatchObject({ seat: 'assistant', owner: 'mira' });
+		expect(waiting).toMatchObject({ seat: 'assistant' });
 		expect(await workbench.dismiss('bringup', waiting.seq)).toBe(true);
 		expect(await workbench.dismiss('bringup', waiting.seq)).toBe(false);
 		expect((await workbench.read('bringup', 0)).scheduled).toEqual([]);

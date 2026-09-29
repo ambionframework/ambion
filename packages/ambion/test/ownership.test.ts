@@ -149,9 +149,9 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 		});
 		expect(seen).toContainEqual({
 			type: 'exchange_opened',
-			exchange: expect.objectContaining({ owner: andrei.name }),
+			exchange: expect.objectContaining({ person: andrei.name }),
 		});
-		expect(exchange.owner).toBe(andrei.name);
+		expect(exchange.person).toBe(andrei.name);
 		await expectReplayed(room, runtime, opened);
 	});
 });
@@ -251,7 +251,7 @@ describe.each(storages)('protocol value ownership on $name', (storage) => {
 		const exchange = structuredClone(snapshot.exchange);
 		Reflect.set(snapshot.exchange, 'owner', 'intruder');
 		expect((await readRoom(room.name, { runtime })).exchange).toEqual(exchange);
-		expect(room.exchange(exchange.from)?.owner).toBe(andrei.name);
+		expect(room.exchange(exchange.from)?.person).toBe(andrei.name);
 		await expectReplayed(room, runtime, opened);
 	});
 

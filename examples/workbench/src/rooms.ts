@@ -340,7 +340,7 @@ export async function openRooms(
 		lifecycle,
 		/** The steps of one activation that this process logged. */
 		activation: (name: string, id: string) => withRoom(name, async () => log.read(name, id)),
-		/** The operations of a room that wait for the owner of the exchange. */
+		/** The operations of a room that wait for the person of their exchange. */
 		approvals: (name: string) => withRoom(name, () => readApprovals(lab, name)),
 		list: () =>
 			Promise.all([...entries.values()].map((entry) => serial(entry, () => status(entry)))),

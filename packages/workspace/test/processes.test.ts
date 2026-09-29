@@ -633,7 +633,7 @@ describe('a wait near the end of the activation', () => {
 		// In an open exchange the note also points to a scheduled say, and names the seconds once.
 		const late = callAs('alpha', {
 			deadline: Date.now() + 10_000,
-			exchange: { owner: 'priya', from: 4 },
+			exchange: { person: 'priya', from: 4 },
 		});
 		const before = Date.now();
 		const waited = await invokeText(
@@ -651,11 +651,11 @@ describe('a wait near the end of the activation', () => {
 });
 
 describe('the note that points to a scheduled say', () => {
-	const exchange = { owner: 'priya', from: 4 };
+	const exchange = { person: 'priya', from: 4 };
 	it.each([
 		['can run past the wait of the activation, in an exchange', 100, 600, { exchange }, true],
 		['ends before the wait of the activation ends', 100, 60, { exchange }, false],
-		['runs in an activation with no open exchange', 100, 600, {}, false],
+		['can run past the wait of the activation, with no open exchange', 100, 600, {}, true],
 		['runs over 120 seconds before the deadline', 600, 600, { exchange }, false],
 	])('for a process that %s', async (_case, seconds, timeout, context, shows) => {
 		const workspace = site();

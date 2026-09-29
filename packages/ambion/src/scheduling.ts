@@ -15,13 +15,12 @@ export interface ScheduleLimits {
 }
 
 /**
- * A say that waits to return to its seat for its owner, as a read shows it.
- * `seq` names it, as the record shows it, and `due` is ISO.
+ * A say that waits to return to its seat, as a read shows it. `seq` names
+ * it, as the record shows it, and `due` is ISO.
  */
 export interface PendingSay {
 	readonly seq: Seq;
 	readonly seat: string;
-	readonly owner: string;
 	readonly due: string;
 	readonly text: string;
 	readonly refs?: readonly string[];

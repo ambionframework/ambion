@@ -85,7 +85,6 @@ function headerOf(block: MessageBlock, fill?: string): Chunk[] {
 		return [
 			paint('returned', { color: palette.green, strong: true, fill }),
 			paint(` → ${message.to}`, { color: palette.muted, fill }),
-			paint(` for ${message.owner}`, { color: palette.muted, fill }),
 			at,
 		];
 	const arrow = to ? paint(` → ${to}`, { color: palette.muted, fill }) : paint('', { fill });

@@ -41,7 +41,7 @@ export function attentionOf(
 		)
 		.map((exchange) => `The exchange from message ${exchange.from} waits for your reply.`);
 	const operations = approvals
-		.filter((approval) => approval.owner === person)
+		.filter((approval) => approval.person === person)
 		.map(
 			(approval) =>
 				`Operation ${approval.id} needs your answer: ${approval.instrument} to ${approval.setpoint} ${approval.unit} is above its limit. Say allow or deny in the room, and the agent records it.`,

@@ -24,8 +24,8 @@ mechanism. The [repository README](../README.md) holds the positioning.
 
 ## Two people in one discussion
 
-**A second question joins the open exchange.** The owner stays the person
-whose question opened it. The room does not open a second exchange.
+**A second question joins the open exchange.** The person whose question
+opened it stays its `person`. The room does not open a second exchange.
 
 **Each person who spoke gets a summary.** The closed exchange view carries
 `summaries`. [The closing activation](summary.md#closing-activation) states
@@ -48,8 +48,8 @@ resumed room reads the same answer.
 **The directed question is the approval request.** An agent asks a person
 with `say({ to })` and ends its activation. The exchange closes and reads
 `awaiting`. `pendingFor` shows the request to that person. The person must
-differ from the exchange owner. A message to the owner answers the owner's
-question, so the exchange reads `complete`. See
+differ from the author of the opening message. A message to that author
+answers their question, so the exchange reads `complete`. See
 [exchange outcomes](exchange.md#7-the-edges-a-host-sees).
 
 **The person's reply is the approval.** A message from the person clears

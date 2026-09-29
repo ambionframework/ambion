@@ -300,7 +300,7 @@ describe('a storage that fails', () => {
 		// took the first two and the record starts at 3.
 		fail(false);
 		const kept = await visit.send({ text: 'kept' });
-		expect(kept).toMatchObject({ owner: 'andrei', from: 4 });
+		expect(kept).toMatchObject({ person: 'andrei', from: 4 });
 		const record = await messagesOf(session);
 		expect(record.map((m) => m.seq)).toEqual([3, 4]);
 		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said']);
@@ -319,7 +319,7 @@ describe('a storage that fails', () => {
 		await expect(messagesOf(session)).resolves.toEqual(expect.any(Array));
 		expect(events.map((e) => e.type)).not.toContain('exchange_closed');
 		expect(events.map((e) => e.type)).not.toContain('quiet');
-		expect(await currentExchange(session)).toMatchObject({ owner: 'andrei' });
+		expect(await currentExchange(session)).toMatchObject({ person: 'andrei' });
 
 		// the storage mends, the seats work and stop again, and the close is written then
 		fail(false);
@@ -330,7 +330,7 @@ describe('a storage that fails', () => {
 		expect(closed).toHaveLength(1);
 		const record = await messagesOf(session);
 		expect(closed[0]).toMatchObject({
-			exchange: { owner: 'andrei', from: record[1]?.seq, through: record.at(-1)?.seq },
+			exchange: { person: 'andrei', from: record[1]?.seq, through: record.at(-1)?.seq },
 		});
 		await session.stop();
 	});

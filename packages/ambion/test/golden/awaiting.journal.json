@@ -126,7 +126,7 @@
 	{
 		"kind": "close",
 		"body": {
-			"owner": "priya",
+			"person": "priya",
 			"from": 5,
 			"through": 7,
 			"at": "2026-01-01T09:00:00.000Z"

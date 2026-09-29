@@ -67,7 +67,7 @@ export interface Workbench {
 	 * did not run returns nothing.
 	 */
 	activation(room: string, id: string): Promise<ActivationSteps | undefined>;
-	/** The operations of a room that wait for an answer from the owner of their exchange. */
+	/** The operations of a room that wait for an answer from the person of their exchange. */
 	approvals(room: string): Promise<Approval[]>;
 	create(name: string, goal: string): Promise<RoomView>;
 	files(): Promise<FileEntry[]>;

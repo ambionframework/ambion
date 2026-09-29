@@ -66,7 +66,7 @@ function lineBody(message: Message): string {
 		return `· ${message.from ?? 'the host'} dismissed say #${message.message}`;
 	}
 	if (isReturned(message)) {
-		return `[returned → ${message.to}, for ${message.owner}] ${message.text}${refsOf(message)}`;
+		return `[returned → ${message.to}] ${message.text}${refsOf(message)}`;
 	}
 	if (isSpoken(message) || isSummary(message)) return spokenLine(message);
 	const by = message.from === undefined || message.from === message.subject;
@@ -471,12 +471,17 @@ function renderReserve(reserve: readonly { name: string; identity: string }[]): 
 	];
 }
 
-/** When a returned say opened the exchange, the model reads that the say is its own. */
-function returnedOpening({ context }: ActivationView): string {
-	const from = context.exchange?.from;
-	const opening = context.messages.find((message) => message.seq === from);
-	if (opening?.kind !== 'returned') return '';
-	return `Message ${opening.seq} is a say you scheduled, and the room returned it: do its work for ${opening.owner}. `;
+/** The open exchange, named by its opening message: a person's question, or a returned say. */
+function openingLine({ context: { exchange, messages, name } }: ActivationView, seat: string) {
+	if (exchange === undefined) return '';
+	const uri = `The opening message's URI is ${messageUri(name, exchange.from)}. `;
+	const opening = messages.find((message) => message.seq === exchange.from);
+	const asker = opening?.from ?? exchange.person;
+	if (opening?.kind !== 'returned' && asker !== undefined)
+		return `${asker}'s exchange opened by message ${exchange.from} is active; the marked request is the current human direction. ${uri}`;
+	if (opening?.kind !== 'returned') return `Exchange ${exchange.from} is active. ${uri}`;
+	const whose = opening.to === seat ? 'you' : opening.to;
+	return `Exchange ${exchange.from} is active: message ${opening.seq} is a say ${whose} scheduled, and the room returned it. ${uri}`;
 }
 
 /** What this activation is for, in the last line the model reads. */
@@ -491,9 +496,7 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 		);
 	}
 	// A seat seated during an exchange reads which question it was seated for.
-	const open = context.exchange
-		? `${context.exchange.owner}'s exchange opened by message ${context.exchange.from} is active; the marked request is the current human direction. The opening message's URI is ${messageUri(context.name, context.exchange.from)}. ${returnedOpening(view)}`
-		: '';
+	const open = openingLine(view, def.name);
 	return (
 		`${open}Take your turn, ${def.name}: this is ordinary work. ` +
 		`Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed ` +

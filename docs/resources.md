@@ -122,19 +122,19 @@ that the workspace holds the copy.
 **Provenance names who made a change.** Every tool call receives a
 `ToolContext`. It holds `room`, `activation`, and `exchange`. `room` names
 the room. `activation` is the id that every event and message of the
-activation carries. `exchange` holds the `owner` and `from` of the exchange
-that was open when the activation read the record, and it is absent when no
-exchange was open. All three are absent outside a room. A binding stamps
-them where its data allows.
+activation carries. `exchange` holds the `from` of the exchange that was
+open when the activation read the record, and its `person` once a person
+spoke in it. It is absent when no exchange was open. All three are absent
+outside a room. A binding stamps them where its data allows.
 
 | Binding    | Where provenance lands                                               |
 | ---------- | -------------------------------------------------------------------- |
 | SQL        | The `PROVENANCE_COLUMNS` on an inserted row, when the table has them |
 | Filesystem | The audit log                                                        |
 
-The `PROVENANCE_COLUMNS` are `agent`, `room`, `activation`, `exchange_owner`,
-`exchange_from`, and `at`. `insert` fills each column that the table has and
-that the context supplies.
+The `PROVENANCE_COLUMNS` are `agent`, `room`, `activation`,
+`exchange_person`, `exchange_from`, and `at`. `insert` fills each column
+that the table has and that the context supplies.
 
 **Provenance grants no authority.** A tool does not check it to allow or
 refuse a call. A tool that needs current state reads the room.

@@ -20,7 +20,7 @@ function MathMin(a: int, b: int): int { if a <= b then a else b }
 
 function MathMax(a: int, b: int): int { if a >= b then a else b }
 
-datatype Message = Message(kind: string, seq_: int, from: string, owner: string, at: string)
+datatype Message = Message(kind: string, seq_: int, from: string, at: string)
 
 datatype LeasePhase = running | ended
 
@@ -36,9 +36,9 @@ datatype RuleLease = running(id: string, activation: ActivationFields, at: strin
 
 datatype Freshness = invalid | missed | fresh_
 
-datatype OpenExchange = OpenExchange(owner: string, from: int)
+datatype OpenExchange = OpenExchange(from: int)
 
-datatype CloseRef = CloseRef(owner: string, from: int, through: int)
+datatype CloseRef = CloseRef(from: int, through: int)
 
 datatype Change = running(id: string, expiresAt: int, at: string, readThrough: int) | ended(id: string, reason: LeaseEndReason, at: string, readThrough: int, cause: Option<string>)
 
@@ -48,7 +48,7 @@ datatype OutcomeKind = complete | cancelled | exhausted | awaiting
 
 datatype OwedActivation = OwedActivation(source: Source, seat: string)
 
-datatype CloseFact = CloseFact(owner: string, from: int, through: int, summary: Option<string>)
+datatype CloseFact = CloseFact(person: string, from: int, through: int, summary: Option<string>)
 
 datatype GrantPurpose = respond(message: int) | summarize(exchange: int, person: string, through: int)
 
@@ -200,7 +200,7 @@ function admitsClose(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, 
 {
   match open {
     case Some(i_open_val) =>
-      ((((i_open_val.from == close.from) && (i_open_val.owner == close.owner)) && (close.through == lastSeq)) && !(exchangeLive))
+      (((i_open_val.from == close.from) && (close.through == lastSeq)) && !(exchangeLive))
     case None =>
       false
   }
@@ -208,7 +208,7 @@ function admitsClose(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, 
 
 lemma admitsClose_ensures(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, exchangeLive: bool)
   ensures (admitsClose(open, close, lastSeq, exchangeLive) ==> (match open { case Some(i_) => true case None => false }))
-  ensures (match open { case Some(i_open_val) => (admitsClose(open, close, lastSeq, exchangeLive) <==> ((((i_open_val.from == close.from) && (i_open_val.owner == close.owner)) && (close.through == lastSeq)) && !(exchangeLive))) case None => true })
+  ensures (match open { case Some(i_open_val) => (admitsClose(open, close, lastSeq, exchangeLive) <==> (((i_open_val.from == close.from) && (close.through == lastSeq)) && !(exchangeLive))) case None => true })
   ensures (exchangeLive ==> !(admitsClose(open, close, lastSeq, exchangeLive)))
   ensures (admitsClose(open, close, lastSeq, exchangeLive) ==> (close.through == lastSeq))
 {
@@ -224,16 +224,16 @@ lemma coversClose_ensures(summaryFrom: int, summaryThrough: int, closeFrom: int,
 {
 }
 
-function coversExchange(summaryTo: string, summaryFrom: int, summaryThrough: int, owner: string, from: int, through: int): bool
+function coversExchange(summaryTo: string, summaryFrom: int, summaryThrough: int, person: string, from: int, through: int): bool
 {
-  ((summaryTo == owner) && coversClose(summaryFrom, summaryThrough, from, through))
+  ((summaryTo == person) && coversClose(summaryFrom, summaryThrough, from, through))
 }
 
-lemma coversExchange_ensures(summaryTo: string, summaryFrom: int, summaryThrough: int, owner: string, from: int, through: int)
-  ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, owner, from, through) <==> (((summaryTo == owner) && (summaryFrom <= from)) && (summaryThrough >= through)))
-  ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, owner, from, through) ==> (summaryTo == owner))
-  ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, owner, from, through) ==> (from <= through) ==> (summaryFrom <= summaryThrough))
-  ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, owner, from, through) <==> ((summaryTo == owner) && coversClose(summaryFrom, summaryThrough, from, through)))
+lemma coversExchange_ensures(summaryTo: string, summaryFrom: int, summaryThrough: int, person: string, from: int, through: int)
+  ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, person, from, through) <==> (((summaryTo == person) && (summaryFrom <= from)) && (summaryThrough >= through)))
+  ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, person, from, through) ==> (summaryTo == person))
+  ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, person, from, through) ==> (from <= through) ==> (summaryFrom <= summaryThrough))
+  ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, person, from, through) <==> ((summaryTo == person) && coversClose(summaryFrom, summaryThrough, from, through)))
 {
 }
 
@@ -606,7 +606,7 @@ function activationGrant(id: ActivationFields, cancelledAt: Option<int>, seated:
         else
           match close {
             case Some(i_close_val) =>
-              Some(Grant(id.seat, id.attempt, summarize(i_close_val.from, i_close_val.owner, i_close_val.through)))
+              Some(Grant(id.seat, id.attempt, summarize(i_close_val.from, i_close_val.person, i_close_val.through)))
             case None =>
               None
           }
@@ -623,7 +623,7 @@ lemma activationGrant_ensures(id: ActivationFields, cancelledAt: Option<int>, se
   ensures (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => (i_result_val.purpose.respond? <==> id.source.message?) case None => true })
   ensures (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => (id.source.message? ==> (recorded && (i_result_val.purpose.message == id.position))) case None => true })
   ensures (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => (id.source.closed? ==> ((match close { case Some(i_) => true case None => false }) && (i_result_val.purpose.through == id.position))) case None => true })
-  ensures (match close { case Some(i_close_val) => (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => (id.source.closed? ==> (((i_result_val.purpose.exchange == i_close_val.from) && (i_result_val.purpose.person == i_close_val.owner)) && (i_result_val.purpose.through == i_close_val.through))) case None => true }) case None => true })
+  ensures (match close { case Some(i_close_val) => (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => (id.source.closed? ==> (((i_result_val.purpose.exchange == i_close_val.from) && (i_result_val.purpose.person == i_close_val.person)) && (i_result_val.purpose.through == i_close_val.through))) case None => true }) case None => true })
   ensures (id.source.message? ==> recorded ==> survivesCancellation(id.position, cancelledAt) ==> seated ==> !(removed) ==> (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_) => true case None => false }))
   ensures (match close { case Some(i_close_val) => (id.source.closed? ==> survivesCancellation(id.position, cancelledAt) ==> seated ==> !(removed) ==> (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_) => true case None => false })) case None => true })
 {
@@ -767,16 +767,16 @@ lemma admitsLease_ensures(kind: LeaseKind, known: Option<LeasePhase>, live: bool
 {
 }
 
-function stampedSummary(owner: string, from: int, through: int): Stamped
+function stampedSummary(person: string, from: int, through: int): Stamped
 {
-  Stamped(owner, Range(from, through))
+  Stamped(person, Range(from, through))
 }
 
-lemma stampedSummary_ensures(owner: string, from: int, through: int)
-  ensures (stampedSummary(owner, from, through).to == owner)
-  ensures (stampedSummary(owner, from, through).covers.from == from)
-  ensures (stampedSummary(owner, from, through).covers.through == through)
-  ensures coversExchange(stampedSummary(owner, from, through).to, stampedSummary(owner, from, through).covers.from, stampedSummary(owner, from, through).covers.through, owner, from, through)
+lemma stampedSummary_ensures(person: string, from: int, through: int)
+  ensures (stampedSummary(person, from, through).to == person)
+  ensures (stampedSummary(person, from, through).covers.from == from)
+  ensures (stampedSummary(person, from, through).covers.through == through)
+  ensures coversExchange(stampedSummary(person, from, through).to, stampedSummary(person, from, through).covers.from, stampedSummary(person, from, through).covers.through, person, from, through)
 {
 }
 
@@ -785,15 +785,12 @@ function opensExchange(message: Message, people: seq<string>, closedThrough: int
   if (message.seq_ <= closedThrough) then
     false
   else
-    if (message.kind == "returned") then
-      (message.owner in people)
-    else
-      ((message.kind == "said") && (message.from in people))
+    ((message.kind == "returned") || ((message.kind == "said") && (message.from in people)))
 }
 
 lemma opensExchange_ensures(message: Message, people: seq<string>, closedThrough: int)
   ensures ((message.kind == "said") ==> (opensExchange(message, people, closedThrough) <==> ((message.from in people) && (message.seq_ > closedThrough))))
-  ensures ((message.kind == "returned") ==> (opensExchange(message, people, closedThrough) <==> ((message.owner in people) && (message.seq_ > closedThrough))))
+  ensures ((message.kind == "returned") ==> (opensExchange(message, people, closedThrough) <==> (message.seq_ > closedThrough)))
   ensures ((message.kind != "said") ==> (message.kind != "returned") ==> !(opensExchange(message, people, closedThrough)))
   ensures ((message.seq_ <= closedThrough) ==> !(opensExchange(message, people, closedThrough)))
 {

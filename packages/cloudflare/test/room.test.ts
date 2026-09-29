@@ -18,7 +18,7 @@ interface Room {
 		to?: string;
 		text: string;
 		key?: string;
-	}): Promise<{ owner: string }>;
+	}): Promise<{ person?: string }>;
 	leave(name: string): Promise<void>;
 	visits: Map<string, { leave(): Promise<void> }>;
 	metadata: {
@@ -109,7 +109,7 @@ it('starts, admits a person, and returns one plain exchange for repeated sends, 
 	const question = { from: 'priya', text: 'Can I tell the client Thursday?', key: 'question-1' };
 	const exchange = await stub.send(question);
 	const retry = await stub.send(question);
-	expect(exchange).toEqual({ owner: 'priya', from: expect.any(Number), at: expect.any(String) });
+	expect(exchange).toEqual({ person: 'priya', from: expect.any(Number), at: expect.any(String) });
 	expect(retry).toEqual(exchange);
 	const conversation = await stub.waitForClose(exchange.from);
 	expect(conversation.map((message) => message.seq)).toEqual([exchange.from]);
@@ -141,7 +141,7 @@ it('resumes over its own storage after eviction: it fences the old run, keeps th
 	const stub = await visited(name);
 	await refusesImpostor(stub);
 	const first = await stub.send({ from: 'priya', text: 'Before the restart.', key: 'q1' });
-	expect(first.owner).toBe('priya');
+	expect(first.person).toBe('priya');
 
 	await evict(stub, 'the test takes the object');
 	const again = roomOf(name);
@@ -155,7 +155,7 @@ it('resumes over its own storage after eviction: it fences the old run, keeps th
 			return undefined;
 		}
 	});
-	expect(retry.owner).toBe('priya');
+	expect(retry.person).toBe('priya');
 	// The rebuild's visit is idempotent, so it adds no arrival.
 	expect(await count(again, 'arrived')).toBe(1);
 	expect(await presenceOf(again, 'priya')).toBe('present');
@@ -237,10 +237,10 @@ it('rebuilds an admitted visit after the adapter loses its cache on eviction', a
 	});
 	await evict(stub, 'lose adapter admission cache');
 	const again = roomOf(name);
-	const exchange = await inside<Room, { owner: string }>(again, (object) =>
+	const exchange = await inside<Room, { person?: string }>(again, (object) =>
 		object.send({ from: 'priya', text: 'The admitted visit survived.', key: 'q1' }),
 	);
-	expect(exchange.owner).toBe('priya');
+	expect(exchange.person).toBe('priya');
 	expect(await count(again, 'arrived')).toBe(1);
 });
 
