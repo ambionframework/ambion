@@ -35,7 +35,7 @@ function messageLine(message: Message): string {
 		return `[${message.seq}] ${message.from} to ${message.to ?? 'the room'}: ${text}`;
 	}
 	if (isReturned(message)) {
-		return `[${message.seq}] the room returned a say to ${message.to} for ${message.owner}: ${text}`;
+		return `[${message.seq}] the room returned a say to ${message.to}: ${text}`;
 	}
 	if (message.kind === 'dismissed') {
 		return `[${message.seq}] ${message.from ?? 'the host'} dismissed say ${message.message}`;

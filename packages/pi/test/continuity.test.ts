@@ -79,7 +79,7 @@ class TwoQuestions implements RoomProtocol {
 					now: 0,
 					participants: [],
 					messages: RECORD.filter((entry) => entry.seq <= message),
-					exchange: { owner: 'andrei', from: 1 },
+					exchange: { person: 'andrei', from: 1 },
 					reserve: [],
 				},
 			},
@@ -190,7 +190,6 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		const later = {
 			seq: 1,
 			seat: 'product',
-			owner: 'andrei',
 			due: 'soon',
 			text: 'Check the pump.',
 		};

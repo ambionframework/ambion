@@ -8,7 +8,7 @@ import type {
 	ContextParticipant,
 	ViewRange,
 } from '../protocol.ts';
-import type { AgentParticipantInfo, ParticipantInfo, Seq } from '../types.ts';
+import type { AgentParticipantInfo, ExchangeRef, ParticipantInfo, Seq } from '../types.ts';
 import { isSummary, type Message } from '../types.ts';
 import type { RoomState } from './fold.ts';
 import { pendingSay } from './scheduled.ts';
@@ -83,7 +83,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange
 		reserve: state.reserve.map(({ name, identity }) => ({ name, identity })),
 		...(purpose.kind !== 'respond' || state.exchange === undefined
 			? {}
-			: { exchange: { owner: state.exchange.owner, from: state.exchange.from } }),
+			: { exchange: exchangeContext(state.exchange) }),
 		...reachOf(
 			page !== undefined || served.length < bounded.length,
 			bounded,
@@ -216,4 +216,9 @@ function peopleOf(facts: RoomFacts): Extract<ContextParticipant, { kind: 'human'
 		messagesSinceDeparture:
 			person.lastDeparture === undefined ? 0 : facts.messagesSince(person.lastDeparture),
 	}));
+}
+
+/** The open exchange as an activation reads it: its start, and its person once one spoke. */
+function exchangeContext({ person, from }: ExchangeRef): { person?: string; from: Seq } {
+	return { ...(person === undefined ? {} : { person }), from };
 }

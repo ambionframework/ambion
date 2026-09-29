@@ -46,7 +46,7 @@ floor.
 | `docs/formal.md`          | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                                                          |
 | `docs/toolchain.md`       | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                                                                       |
 | `examples/workbench`      | Runnable example: rooms and an OpenTUI terminal in one process                                                                                                       |
-| `planning/`               | `next.md`: the scope and plan for 0.4.0; `backlog.md`: everything after 0.4.0                                                                                        |
+| `planning/`               | `next.md`: the scope and plan for 0.4.0; `backlog.md`: everything after 0.4.0; `system.md`: the design of step 10 until it lands                                     |
 
 ## Positioning
 

@@ -33,9 +33,9 @@ export type ActivationPurpose =
 	| {
 			readonly kind: 'summarize';
 			readonly exchange: Seq;
-			/** The exchange owner, whose summary completes the close. */
+			/** The person of the exchange, whose summary completes the close. */
 			readonly person: string;
-			/** Every person the closing activation addresses, the owner first. */
+			/** Every person the closing activation addresses, `person` first. */
 			readonly people: readonly string[];
 			readonly through: Seq;
 	  };
@@ -99,10 +99,10 @@ export interface CollaborationContext {
 	readonly participants: readonly ContextParticipant[];
 	readonly messages: readonly Without<Message, 'preferences'>[];
 	/** The open exchange for an ordinary response. */
-	readonly exchange?: { readonly owner: string; readonly from: Seq };
+	readonly exchange?: { readonly person?: string; readonly from: Seq };
 	/** Reserve identities are available to every responding agent. */
 	readonly reserve: readonly { readonly name: string; readonly identity: string }[];
-	/** Only the summary writer reads the owner's preferences. */
+	/** Only the summary writer reads the preferences of the person it writes for. */
 	readonly preferences?: string;
 	/**
 	 * The says of this seat that wait to return, for a response. The seq of

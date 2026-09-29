@@ -253,7 +253,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 		const reentered = await resumed.visit(person);
 		await expect(
 			observed(reentered.send({ text: 'second', key: 'submission-second' })),
-		).resolves.toMatchObject({ owner: person.name });
+		).resolves.toMatchObject({ person: person.name });
 		expect((await messagesOf(resumed)).filter((message) => message.kind === 'said')).toHaveLength(
 			2,
 		);
@@ -323,7 +323,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 				text: 'evict while publishing',
 				key: 'submission-eviction-trigger',
 			}),
-		).resolves.toMatchObject({ owner: person.name });
+		).resolves.toMatchObject({ person: person.name });
 		await new Promise<void>((resolve) => setImmediate(resolve));
 		off();
 		expect(evicted).toBe(true);
@@ -370,9 +370,9 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 		});
 		await expect(
 			observed(visit.send({ text: 'outer', key: 'submission-outer' })),
-		).resolves.toMatchObject({ owner: person.name });
+		).resolves.toMatchObject({ person: person.name });
 		expect(nested).toBeDefined();
-		await expect(nested).resolves.toMatchObject({ owner: person.name });
+		await expect(nested).resolves.toMatchObject({ person: person.name });
 		off();
 		expect(
 			(await messagesOf(room))
@@ -450,7 +450,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 		]);
 
 		const later = await visit.send({ text: 'later', key: 'submission-later' });
-		expect(later.owner).toBe(person.name);
+		expect(later.person).toBe(person.name);
 		await waitForRoom(room);
 		expect(keyed('submission-later')).toHaveLength(1);
 		expect((await messagesOf(room)).filter((message) => message.kind === 'said')).toHaveLength(2);

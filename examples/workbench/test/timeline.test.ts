@@ -13,7 +13,7 @@ const arrived = (seq: number): Message =>
 const closedExchange = (
 	from: number,
 	through: number,
-	owner: string,
+	person: string,
 	summary: object = { status: 'silent' },
 ): ExchangeView =>
 	({
@@ -22,14 +22,14 @@ const closedExchange = (
 		status: 'closed',
 		activations: [],
 		outcome: { kind: 'complete' },
-		owner,
+		person,
 		at: AT,
 		summary,
 	}) as ExchangeView;
 const openExchange = (from: number): ExchangeView => ({
 	from,
 	status: 'open',
-	owner: 'mira',
+	person: 'mira',
 	at: AT,
 	activations: [],
 });
@@ -113,7 +113,7 @@ describe('buildTimeline', () => {
 			kind: 'returned',
 			to: 'agent',
 			message: 61,
-			owner: 'mira',
+			person: 'mira',
 			text: 'Check the build.',
 			at: AT,
 		} as Message;
@@ -150,7 +150,7 @@ describe('buildTimeline', () => {
 			kind: 'returned',
 			to: 'agent',
 			message: 61,
-			owner: 'mira',
+			person: 'mira',
 			text: 'Check the build.',
 			at: AT,
 		} as Message;
@@ -252,7 +252,7 @@ describe('buildTimeline', () => {
 	it('keeps the open exchange in the open, and ends with a live block', () => {
 		const messages = [said(4, 'mira'), said(6, 'assistant', 'design'), said(9, 'mira')];
 		const blocks = build(messages, [openExchange(4)], {
-			open: { owner: 'mira' },
+			open: { person: 'mira' },
 			working: ['assistant', 'design'],
 		});
 		expect(shape(blocks)).toEqual(['question:4', 'said:6', 'question:9', 'live']);
@@ -298,7 +298,7 @@ describe('cost and awaiting', () => {
 
 	it('shows an earlier exchange collapsed beside a newer open one, with the tail blocks before the live block', () => {
 		const blocks = build([...thread, said(150, 'mira')], [closed, openExchange(150)], {
-			open: { owner: 'mira' },
+			open: { person: 'mira' },
 			tail: [{ type: 'note', text: 'Waiting.' }],
 		});
 		expect(shape(blocks)).toEqual([

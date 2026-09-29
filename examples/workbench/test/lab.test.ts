@@ -6,13 +6,13 @@ import { openInstrument } from '../src/instrument.ts';
 import { instruments, labSchema, labWritable } from '../src/scenarios.ts';
 import { freshDirectory, openHost } from './hosting.ts';
 
-function contextOf(agent: string, activation: string, owner = 'mira'): ToolContext {
+function contextOf(agent: string, activation: string, person = 'mira'): ToolContext {
 	return {
 		agent: { name: agent, identity: agent },
 		callId: `${agent}-call`,
 		room: 'bringup',
 		activation,
-		exchange: { owner, from: 2 },
+		exchange: { person, from: 2 },
 	};
 }
 
@@ -56,7 +56,7 @@ describe('the lab SQL resource', () => {
 			room: 'sensing',
 		});
 		await call(
-			'record',
+			'insert',
 			{ table: 'runs', values: { project: 'sensing', label: 'range at 50 cm' } },
 			at('experiments', 'act-1'),
 		);
@@ -67,8 +67,8 @@ describe('the lab SQL resource', () => {
 		);
 		expect(shown).toContain('| sensing | range at 50 cm | experiments | sensing | act-1 |');
 		await expect(
-			call('record', { table: 'projects', values: { name: 'x', goal: 'y' } }, at('design', 'a')),
-		).rejects.toThrow(/does not accept records/);
+			call('insert', { table: 'projects', values: { name: 'x', goal: 'y' } }, at('design', 'a')),
+		).rejects.toThrow(/does not accept inserts/);
 	});
 
 	it('opens the lab database beside the journal database and seeds the projects', async () => {
@@ -106,7 +106,7 @@ describe('the instrument resource', () => {
 			agent: 'design',
 			room: 'bringup',
 			activation: 'act-1',
-			exchange_owner: 'mira',
+			exchange_person: 'mira',
 			exchange_from: '2',
 		});
 		expect(row?.at).toEqual(expect.any(String));

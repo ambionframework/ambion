@@ -34,11 +34,14 @@ export type Intent =
 	| { kind: 'unseated'; name: string }
 	| { kind: 'dismissed'; message: Seq };
 
-/** A question the room is working on. */
+/** The work the room is on, from the message that opened it. */
 export interface ExchangeRef {
-	/** The person whose question opened it, and who owns what follows. */
-	readonly owner: string;
-	/** The seq of that question: where the exchange starts. */
+	/**
+	 * The person the result goes to: the first person who spoke in the
+	 * range. Absent until a person speaks, as in the work of a returned say.
+	 */
+	readonly person?: string;
+	/** The seq of the message that opened it: where the exchange starts. */
 	readonly from: Seq;
 	/** When it opened, ISO. */
 	readonly at: string;
@@ -110,7 +113,7 @@ export type ExchangeView =
 			readonly activations: readonly ExchangeActivation[];
 			readonly summary: SummaryOutcome;
 			readonly outcome: ExchangeOutcome;
-			/** Every published summary of the range, the owner's included, one for each recipient. */
+			/** Every published summary of the range, one for each recipient, `person` first. */
 			readonly summaries?: readonly SummaryMessage[];
 			/** The sum of every activation in the range, the summary activation included. */
 			readonly usage?: Usage;
@@ -193,17 +196,12 @@ export interface SpokenMessage extends Landed {
 	 * only on a say that an agent addressed to itself: a scheduled say.
 	 */
 	after?: number;
-	/**
-	 * On a scheduled say, the owner of the exchange it landed in: the person
-	 * the say returns for. The room stamps it from the open exchange.
-	 */
-	owner?: string;
 }
 
 /**
  * A scheduled say that the room gave back to its author when it was due.
- * The room writes it, so it has no author. It opens an exchange for `owner`
- * when none is open, as a person's question does.
+ * The room writes it, so it has no author. It opens an exchange when none
+ * is open, as a person's question does.
  */
 export interface ReturnedMessage extends Landed {
 	kind: 'returned';
@@ -213,8 +211,6 @@ export interface ReturnedMessage extends Landed {
 	to: string;
 	/** The seq of the scheduled say. */
 	message: Seq;
-	/** The owner of the exchange that the scheduled say landed in. */
-	owner: string;
 	/** The text of the scheduled say. */
 	text: string;
 	/** The refs of the scheduled say. */
@@ -272,7 +268,7 @@ export interface SummaryMessage extends Landed {
 	kind: 'summary';
 	/** The agent that wrote it. */
 	from: string;
-	/** The person the summary addresses: the owner, or another person who spoke in the range. */
+	/** The person the summary addresses: a person who spoke in the range. */
 	to: string;
 	text: string;
 	/** The range it stands for, ending at the last message before this one. */

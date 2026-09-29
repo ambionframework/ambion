@@ -124,7 +124,7 @@ describe('the message byte limit', () => {
 		);
 		expect((await messagesOf(room)).some((m) => 'text' in m && m.text === long)).toBe(false);
 		await expect(visit.send({ text: 'short', key: 'k' })).resolves.toMatchObject({
-			owner: person.name,
+			person: person.name,
 		});
 	});
 
@@ -173,7 +173,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 			/different room operation/,
 		);
 		expect(await first.send({ key, to: secondPerson.name, text: 'Original.' })).toMatchObject({
-			owner: original.owner,
+			person: original.person,
 			from: original.from,
 			at: original.at,
 		});
@@ -182,7 +182,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		// An explicitly supplied empty key is still a real idempotency key.
 		const empty = await first.send({ key: '', text: 'Empty key.' });
 		expect(await first.send({ key: '', text: 'Empty key.' })).toMatchObject({
-			owner: empty.owner,
+			person: empty.person,
 			from: empty.from,
 			at: empty.at,
 		});
@@ -199,7 +199,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		expect((await messagesOf(world.room)).length).toBe(before);
 		const cited = await first.send({ key: 'refs', text: 'Cited.', refs });
 		expect(await first.send({ key: 'refs', text: 'Cited.', refs: [...refs] })).toMatchObject({
-			owner: cited.owner,
+			person: cited.person,
 			from: cited.from,
 		});
 		for (const other of [['https://x/a'], [...refs].reverse(), undefined])
@@ -217,7 +217,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		// Two concurrent sends under one key: the first lands, the second conflicts.
 		const winner = first.send({ key: 'concurrent', text: 'First.' });
 		const conflict = first.send({ key: 'concurrent', text: 'Second.' });
-		await expect(winner).resolves.toMatchObject({ owner: person.name });
+		await expect(winner).resolves.toMatchObject({ person: person.name });
 		await expect(conflict).rejects.toThrow(/different room operation/);
 		expect(await keyed(world, 'concurrent')).toHaveLength(1);
 	});
@@ -232,7 +232,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		faulty.fail('after', 'message');
 		await expect(visit.send(input)).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
-		expect((await visit.send(input)).owner).toBe(person.name);
+		expect((await visit.send(input)).person).toBe(person.name);
 		expect(await keyed({ room }, input.key)).toHaveLength(1);
 	});
 
@@ -265,7 +265,8 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		// A scheduled say lands past what its author has not read, and names it.
 		const behind = { after: 600, readThrough: world.first };
 		const later = await world.say('after-key', 'Check later.', behind);
-		expect(later).toMatchObject({ committed: { after: 600, owner: person.name } });
+		expect(later).toMatchObject({ committed: { after: 600 } });
+		expect(later).not.toHaveProperty('committed.owner');
 		const unread = 'unread' in later ? (later.unread ?? []) : [];
 		expect(unread.map((message) => (message.kind === 'said' ? message.text : ''))).toEqual([
 			'An answer.',

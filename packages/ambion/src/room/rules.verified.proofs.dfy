@@ -309,11 +309,11 @@ lemma AdmittedCloseExtendsTheRecord(messages: seq<Message>, people: seq<string>,
   requires closesOrdered(closes)
   requires openingQuestion(messages, people, closedThrough(closes)).Some?
   requires var q := openingQuestion(messages, people, closedThrough(closes)).value;
-    admitsClose(Some(OpenExchange(q.from, q.seq_)), close, lastSeq, live)
+    admitsClose(Some(OpenExchange(q.seq_)), close, lastSeq, live)
   ensures closesOrdered(closes + [close])
   ensures !live
 {
   var q := openingQuestion(messages, people, closedThrough(closes)).value;
-  admitsClose_ensures(Some(OpenExchange(q.from, q.seq_)), close, lastSeq, live);
+  admitsClose_ensures(Some(OpenExchange(q.seq_)), close, lastSeq, live);
   CloseExtendsTheRecord(messages, people, closes, close, lastSeq);
 }

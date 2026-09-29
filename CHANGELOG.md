@@ -203,6 +203,45 @@ its `text`.
     the Pi execution of the worker once, and it keeps the runner and the
     executor on the object instance. The room object reaches each seat
     through `rpcExecution`.
+- **An exchange has no owner.** The opening message names who directs the
+  work, and `awaiting` reads its author. `person`, the first person who
+  spoke in the range, names who receives the result: the summary, its
+  recipients, `ctx.exchange.person`, and `waitForSummary`. `ExchangeRef`,
+  `ExchangeHandle`, `ExchangeView`, the `exchange_opened` and
+  `exchange_closed` events, `ToolContext.exchange`, and the seat protocol
+  carry `person?` in place of `owner`. A `close` entry carries `person`,
+  refuses `owner`, and refuses `summary` with no `person`. The close
+  command carries no owner, and `admitsClose` compares `from` alone.
+- **A scheduled say carries no owner.** The `said` entry with `after` and
+  the `returned` entry refuse `owner`, and `PendingSay` has none. A
+  returned say opens an exchange with no `person`, and an exchange where
+  no person spoke owes no summary, so a seat that schedules again no
+  longer owes a person a summary for each return. A seat schedules from
+  any response activation: the refusal "No exchange is open" goes. The
+  note of a process tool that points to `schedule` shows with no exchange
+  open.
+- **A say to oneself steers no seat.** A scheduled say steered each
+  colleague at work, and a colleague read another seat's note to itself.
+- **The prompt names a returned say by its seat.** The opening line of an
+  exchange that a returned say opened reads `Exchange <n> is active:
+  message <n> is a say you scheduled, and the room returned it.`, and a
+  colleague reads the name of the seat. The record line of a returned say
+  drops `for <owner>`.
+- **The provenance column `exchange_owner` becomes `exchange_person`.**
+  `PROVENANCE_COLUMNS` of the SQL resource and the `exchange` of an audit
+  entry carry `person`.
+- **The kernel names no database.** The hand-off guidance of every seat said
+  to put structured data in the shared database and named `sqlite_master`,
+  even for a seat with no SQL backend. It now says to write an artifact once
+  where the tools keep it, and to hand it off with a directed say. The
+  guidance of `sql` names the table or view hand-off, and the SQLite backend
+  names `sqlite_master`.
+- **The SQL resource inserts with `insert`.** The tool `record` becomes
+  `insert`, and `SqlResourceEnv.record` becomes `SqlResourceEnv.insert`.
+  The record is the journal of a room, so the tool no longer shares its
+  word. The result reads `Inserted row <id> into <table>.` The `rows` of
+  `query` is a whole number from 0 to 1000, as for `sql`, and its
+  description states the default.
 - **The audit entry of a failed process keeps its details.** A call that
   fails on a process that ended badly throws a `ToolFailure`, and its audit
   entry holds `error.details`: the `ProcessStatus` and the read range. The

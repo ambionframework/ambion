@@ -62,7 +62,7 @@ describe('the Workbench tool set', () => {
 				'repos',
 				'fork',
 				'query',
-				'record',
+				'insert',
 				'operate',
 			]),
 		);

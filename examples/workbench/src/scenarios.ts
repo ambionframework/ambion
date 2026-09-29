@@ -119,14 +119,14 @@ CREATE TABLE IF NOT EXISTS test_plans (
 	project TEXT NOT NULL REFERENCES projects (name),
 	title TEXT NOT NULL,
 	steps TEXT NOT NULL,
-	agent TEXT, room TEXT, activation TEXT, exchange_owner TEXT, exchange_from TEXT, at TEXT
+	agent TEXT, room TEXT, activation TEXT, exchange_person TEXT, exchange_from TEXT, at TEXT
 );
 CREATE TABLE IF NOT EXISTS runs (
 	id INTEGER PRIMARY KEY,
 	project TEXT NOT NULL REFERENCES projects (name),
 	plan_id INTEGER REFERENCES test_plans (id),
 	label TEXT NOT NULL,
-	agent TEXT, room TEXT, activation TEXT, exchange_owner TEXT, exchange_from TEXT, at TEXT,
+	agent TEXT, room TEXT, activation TEXT, exchange_person TEXT, exchange_from TEXT, at TEXT,
 	UNIQUE (activation, label)
 );
 CREATE TABLE IF NOT EXISTS results (
@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS results (
 	metric TEXT NOT NULL,
 	value REAL NOT NULL,
 	unit TEXT NOT NULL,
-	agent TEXT, room TEXT, activation TEXT, exchange_owner TEXT, exchange_from TEXT, at TEXT
+	agent TEXT, room TEXT, activation TEXT, exchange_person TEXT, exchange_from TEXT, at TEXT
 );
 CREATE TABLE IF NOT EXISTS operations (
 	id INTEGER PRIMARY KEY,
@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS operations (
 	outcome TEXT NOT NULL,
 	request_id INTEGER REFERENCES operations (id),
 	reading REAL,
-	agent TEXT, room TEXT, activation TEXT, exchange_owner TEXT, exchange_from TEXT, at TEXT
+	agent TEXT, room TEXT, activation TEXT, exchange_person TEXT, exchange_from TEXT, at TEXT
 );
 ${scenarios
 	.map(

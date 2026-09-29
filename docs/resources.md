@@ -89,17 +89,18 @@ const agent = defineAgent({ ..., bundles: [lab.tools()] });
 **`query` reads and never writes.** It runs one statement on a read-only
 handle, and it sets `query_only` before each run. An INSERT, an UPDATE, or a
 statement that changes the schema fails. The preview shows 50 rows unless the
-caller sets `rows`.
+caller sets `rows`, from 0 to 1000. The host option `maxRows` sets the
+default, and the resource holds it to 1000.
 
-**`record` is the only write.** It inserts one row into a table that the host
+**`insert` is the only write.** It adds one row to a table that the host
 lists in `writable`. It refuses any other table and any unknown column. It
 also refuses a provenance column that the caller sets.
 
-**The resource does not deduplicate.** A retried activation that calls `record`
+**The resource does not deduplicate.** A retried activation that calls `insert`
 again inserts again. Give the table a UNIQUE constraint when a row must appear
 once. The `schema` runs at every open, so write it to run again.
 
-**The resource shares no journal transaction.** A crash between a `record`
+**The resource shares no journal transaction.** A crash between an `insert`
 call and the journal write of the activation can leave a row for an
 activation that the journal never committed. The journal stays the record of
 the room.
@@ -121,19 +122,19 @@ that the workspace holds the copy.
 **Provenance names who made a change.** Every tool call receives a
 `ToolContext`. It holds `room`, `activation`, and `exchange`. `room` names
 the room. `activation` is the id that every event and message of the
-activation carries. `exchange` holds the `owner` and `from` of the exchange
-that was open when the activation read the record, and it is absent when no
-exchange was open. All three are absent outside a room. A binding stamps
-them where its data allows.
+activation carries. `exchange` holds the `from` of the exchange that was
+open when the activation read the record, and its `person` once a person
+spoke in it. It is absent when no exchange was open. All three are absent
+outside a room. A binding stamps them where its data allows.
 
-| Binding    | Where provenance lands                                              |
-| ---------- | ------------------------------------------------------------------- |
-| SQL        | The `PROVENANCE_COLUMNS` on a recorded row, when the table has them |
-| Filesystem | The audit log                                                       |
+| Binding    | Where provenance lands                                               |
+| ---------- | -------------------------------------------------------------------- |
+| SQL        | The `PROVENANCE_COLUMNS` on an inserted row, when the table has them |
+| Filesystem | The audit log                                                        |
 
-The `PROVENANCE_COLUMNS` are `agent`, `room`, `activation`, `exchange_owner`,
-`exchange_from`, and `at`. `record` fills each column that the table has and
-that the context supplies.
+The `PROVENANCE_COLUMNS` are `agent`, `room`, `activation`,
+`exchange_person`, `exchange_from`, and `at`. `insert` fills each column
+that the table has and that the context supplies.
 
 **Provenance grants no authority.** A tool does not check it to allow or
 refuse a call. A tool that needs current state reads the room.

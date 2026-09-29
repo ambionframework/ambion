@@ -16,7 +16,7 @@
  */
 
 import type { Message } from '../types.ts';
-//@ declare-type Message { kind: string, seq: number, from: string, owner: string, at: string }
+//@ declare-type Message { kind: string, seq: number, from: string, at: string }
 
 /** The two phases a lease holds. */
 export type LeasePhase = 'running' | 'ended';
@@ -162,13 +162,11 @@ export function speechFreshness(readThrough: number | undefined, lastSeq: number
 
 /** The open exchange, as the close admission reads it. */
 export interface OpenExchange {
-	readonly owner: string;
 	readonly from: number;
 }
 
 /** A close, as the close admission reads it. */
 export interface CloseRef {
-	readonly owner: string;
 	readonly from: number;
 	readonly through: number;
 }
@@ -181,16 +179,11 @@ export function admitsClose(
 	exchangeLive: boolean,
 ): boolean {
 	//@ ensures \result ==> open != undefined
-	//@ ensures open != undefined ==> (\result <==> (open.from == close.from && open.owner == close.owner && close.through == lastSeq && !exchangeLive))
+	//@ ensures open != undefined ==> (\result <==> (open.from == close.from && close.through == lastSeq && !exchangeLive))
 	//@ ensures exchangeLive ==> !\result
 	//@ ensures \result ==> close.through == lastSeq
 	if (open === undefined) return false;
-	return (
-		open.from === close.from &&
-		open.owner === close.owner &&
-		close.through === lastSeq &&
-		!exchangeLive
-	);
+	return open.from === close.from && close.through === lastSeq && !exchangeLive;
 }
 
 //@ contract A summary covers a close when its range contains the close's range.
@@ -204,20 +197,20 @@ function coversClose(
 	return summaryFrom <= closeFrom && summaryThrough >= closeThrough;
 }
 
-//@ contract A summary covers a closed exchange when it addresses the owner and its range contains the exchange's range.
+//@ contract A summary covers a closed exchange for a person when it addresses that person and its range contains the exchange's range.
 export function coversExchange(
 	summaryTo: string,
 	summaryFrom: number,
 	summaryThrough: number,
-	owner: string,
+	person: string,
 	from: number,
 	through: number,
 ): boolean {
-	//@ ensures \result <==> (summaryTo == owner && summaryFrom <= from && summaryThrough >= through)
-	//@ ensures \result ==> summaryTo == owner
+	//@ ensures \result <==> (summaryTo == person && summaryFrom <= from && summaryThrough >= through)
+	//@ ensures \result ==> summaryTo == person
 	//@ ensures \result && from <= through ==> summaryFrom <= summaryThrough
-	//@ ensures \result <==> (summaryTo == owner && coversClose(summaryFrom, summaryThrough, from, through))
-	return summaryTo === owner && coversClose(summaryFrom, summaryThrough, from, through);
+	//@ ensures \result <==> (summaryTo == person && coversClose(summaryFrom, summaryThrough, from, through))
+	return summaryTo === person && coversClose(summaryFrom, summaryThrough, from, through);
 }
 
 //@ contract Work survives a cancellation when no marker stands, or its cause is at or after the marker.
@@ -456,9 +449,9 @@ export function exchangeLive(
 	);
 }
 
-/** A close, as the closing grant reads it. `Close` in `events.ts` passes as this. */
+/** A close that owes a summary, as the closing grant reads it. */
 export interface CloseFact {
-	readonly owner: string;
+	readonly person: string;
 	readonly from: number;
 	readonly through: number;
 	readonly summary?: string;
@@ -530,7 +523,7 @@ export function closeFor(
 	return closes.find((close) => closeMatches(close, through, writer));
 }
 
-//@ contract A decoded id grants exactly one authority, or nothing. Nothing for a cause before the cancellation marker, for a seat off the roster, or for a seat removed after the cause. A message id grants a response only for a recorded message. A closed id grants a summary only for the close that names the seat, and the summary is over that close's exchange, for its owner, through its boundary. The grant's seat and attempt are the id's own.
+//@ contract A decoded id grants exactly one authority, or nothing. Nothing for a cause before the cancellation marker, for a seat off the roster, or for a seat removed after the cause. A message id grants a response only for a recorded message. A closed id grants a summary only for the close that names the seat, and the summary is over that close's exchange, for its person, through its boundary. The grant's seat and attempt are the id's own.
 export function activationGrant(
 	id: ActivationFields,
 	cancelledAt: number | undefined,
@@ -549,7 +542,7 @@ export function activationGrant(
 	//@ ensures \result != undefined ==> (\result.purpose.kind == 'respond' <==> id.source == 'message')
 	//@ ensures \result != undefined && id.source == 'message' ==> recorded && \result.purpose.message == id.position
 	//@ ensures \result != undefined && id.source == 'closed' ==> close != undefined && \result.purpose.through == id.position
-	//@ ensures \result != undefined && id.source == 'closed' && close != undefined ==> \result.purpose.exchange == close.from && \result.purpose.person == close.owner && \result.purpose.through == close.through
+	//@ ensures \result != undefined && id.source == 'closed' && close != undefined ==> \result.purpose.exchange == close.from && \result.purpose.person == close.person && \result.purpose.through == close.through
 	//@ ensures id.source == 'message' && recorded && survivesCancellation(id.position, cancelledAt) && seated && !removed ==> \result != undefined
 	//@ ensures id.source == 'closed' && close != undefined && survivesCancellation(id.position, cancelledAt) && seated && !removed ==> \result != undefined
 	if (!survivesCancellation(id.position, cancelledAt)) return undefined;
@@ -570,7 +563,7 @@ export function activationGrant(
 		purpose: {
 			kind: 'summarize',
 			exchange: close.from,
-			person: close.owner,
+			person: close.person,
 			through: close.through,
 		},
 	};
@@ -697,25 +690,25 @@ export interface Stamped {
 }
 
 //@ contract The summary a closing commit stamps covers its own exchange, so a second closing commit for the same exchange is refused.
-export function stampedSummary(owner: string, from: number, through: number): Stamped {
-	//@ ensures \result.to == owner
+export function stampedSummary(person: string, from: number, through: number): Stamped {
+	//@ ensures \result.to == person
 	//@ ensures \result.covers.from == from && \result.covers.through == through
-	//@ ensures coversExchange(\result.to, \result.covers.from, \result.covers.through, owner, from, through)
-	return { to: owner, covers: { from, through } };
+	//@ ensures coversExchange(\result.to, \result.covers.from, \result.covers.through, person, from, through)
+	return { to: person, covers: { from, through } };
 }
 
-//@ contract A message opens an exchange after the last close when a person spoke it, or when the room returned a say for a person: agent speech, arrivals and departures open nothing.
+//@ contract A message opens an exchange after the last close when a person spoke it, or when the room returned a say: agent speech, arrivals and departures open nothing.
 function opensExchange(
 	message: Message,
 	people: readonly string[],
 	closedThrough: number,
 ): boolean {
 	//@ ensures message.kind == 'said' ==> (\result <==> people.includes(message.from) && message.seq > closedThrough)
-	//@ ensures message.kind == 'returned' ==> (\result <==> people.includes(message.owner) && message.seq > closedThrough)
+	//@ ensures message.kind == 'returned' ==> (\result <==> message.seq > closedThrough)
 	//@ ensures message.kind != 'said' && message.kind != 'returned' ==> !\result
 	//@ ensures message.seq <= closedThrough ==> !\result
 	if (message.seq <= closedThrough) return false;
-	if (message.kind === 'returned') return people.includes(message.owner);
+	if (message.kind === 'returned') return true;
 	return message.kind === 'said' && people.includes(message.from);
 }
 

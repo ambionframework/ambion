@@ -200,7 +200,7 @@ export class RoomObject extends DurableObject<Env> {
 			...(input.to === undefined ? {} : { to: input.to }),
 			...(input.key === undefined ? {} : { key: input.key }),
 		});
-		return { owner: exchange.owner, from: exchange.from, at: exchange.at };
+		return exchangeRef(exchange);
 	}
 
 	async leave(name: string): Promise<void> {
@@ -256,9 +256,7 @@ export class RoomObject extends DurableObject<Env> {
 	async exchange(from: Seq) {
 		const snapshot = await this.read({ messages: false });
 		const exchange = snapshot.exchanges.find((item) => item.from === from);
-		return exchange === undefined
-			? undefined
-			: { owner: exchange.owner, from: exchange.from, at: exchange.at };
+		return exchange === undefined ? undefined : exchangeRef(exchange);
 	}
 
 	async waitForClose(from: Seq): Promise<Message[]> {
@@ -304,4 +302,9 @@ export class RoomObject extends DurableObject<Env> {
 		if (room === undefined) throw new Error('The room is not running.');
 		return room;
 	}
+}
+
+/** The identity of an exchange that crosses the wire: its start, and its person once one spoke. */
+function exchangeRef({ person, from, at }: ExchangeRef): ExchangeRef {
+	return { ...(person === undefined ? {} : { person }), from, at };
 }

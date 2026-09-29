@@ -21,14 +21,12 @@ const choices: Choices = {
 		{
 			seq: 41,
 			seat: 'bench',
-			owner: 'mira',
 			due: '2026-09-25T10:00:00.000Z',
 			text: 'Check the sweep.',
 		},
 		{
 			seq: 57,
 			seat: 'bench',
-			owner: 'mira',
 			due: '2026-09-25T11:00:00.000Z',
 			text: 'Read the log.',
 		},

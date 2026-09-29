@@ -27,7 +27,7 @@
 	],
 	"exchanges": [
 		{
-			"owner": "priya",
+			"person": "priya",
 			"from": 4,
 			"through": 12,
 			"at": "2026-01-01T09:00:00.000Z",
@@ -109,7 +109,7 @@
 			}
 		},
 		{
-			"owner": "priya",
+			"person": "priya",
 			"from": 18,
 			"through": 20,
 			"at": "2026-01-01T09:00:00.000Z",

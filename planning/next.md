@@ -33,9 +33,10 @@ holds on main.
 is new. Ambion is reactive: a seat acts when a person speaks, when a seat
 addresses it, or when a say that it scheduled comes due.
 
-**0.4.0 is a release of simplification.** It adds three capabilities, the
-`import` of the `sql` tool, the fixed skills of each agent, and the
-refs to workspace files and commits, which the changelog names. It removes each
+**0.4.0 is a release of simplification.** It adds four capabilities, the
+`import` of the `sql` tool, the fixed skills of each agent, the
+refs to workspace files and commits, and the post of the host, which the
+changelog names. It removes each
 second path to a fact of the room. Every item in the
 [backlog](backlog.md) waits until after 0.4.0, unless its condition holds
 first.
@@ -126,12 +127,17 @@ condition that brings each one back.
 - **A scheduled say goes to its author alone.** The `schedule` tool sets
   `to` to the author and `after` to its argument. On the record, `to` names
   the author if and only if `after` is set. The room stamps everything
-  else: the author, the returned say, and the owner of the exchange that it
-  opens. No seat speaks under the name of a person, and no seat schedules
-  work for another seat.
+  else: the author and the returned say. No seat speaks under the name of
+  a person, and no seat schedules work for another seat.
 - **A returned say is an ordinary message when it lands.** It opens an
   exchange when none is open. When an exchange is open, it joins it and
-  steers work, and the owner of that exchange stays the owner.
+  steers the seat that it returns to.
+- **The system speaks, and an exchange has no owner.** The host and the
+  room's clock write a `posted` entry with no author, and a returned say
+  is a post with `returns`. A post opens an exchange. An exchange has an
+  opening message and a `person`, the first person who spoke in its range.
+  Step 9 landed the exchange with no owner. Step 10 lands the post, and
+  [the design](system.md) holds it until then.
 - **The journal records the schedule, and the host arms the clock.** The
   fold holds the pending says, and the room's alarm takes the earliest due
   time beside the lease expiries and the retry times. A restart reads the
@@ -184,7 +190,7 @@ and the process tools. A step names the steps it needs; a step with no
 
 ### Phase 1. The drift
 
-- [ ] **8.** The assistant works a request after its owner leaves. (A1)
+- [ ] **8.** The assistant works a request after the person who asked leaves. (A1)
 
 **Evidence:** each step keeps `pnpm check` green and holds the coverage
 of each changed package, measured before and after as `CLAUDE.md`
@@ -206,10 +212,13 @@ page it changes in the same commit.
 - [ ] **7.** Cloudflare reuses the core, and one scripted room serves the
       conformance suites. (C9)
 - [ ] **8.** `wait` takes `handles` alone, beside `status` and `ps`. (C10)
+- [ ] **10.** The system posts, and a post replaces the returned say. (S2)
 
 **Evidence:** the evidence of phase 1 holds for each step. Step 7 passes
 `portConformance` on `rpcExecution` in workerd. Steps 5 and 8 pass one
 live file on each of Pi, Claude, and Codex before they merge.
+Step 10 runs `pnpm rule:check` and `pnpm chaos` on both storages, and
+passes one live file on the assistant before it merges.
 
 ### Phase 3. Release
 
@@ -326,7 +335,7 @@ It now takes `{ handles, timeout? }`, with 1 to 16 handles, and one handle
 gives the result of `status`. **Evidence:** the process tests, and one
 live file on each harness that shows no loss in the use of a process.
 
-**A1. The assistant works a request after its owner leaves.** This item
+**A1. The assistant works a request after the person who asked leaves.** This item
 fixes a defect and adds no capability. A room stays available between
 interactions, so a person who asks and leaves gets the answer later.
 
@@ -341,8 +350,9 @@ interactions, so a person who asks and leaves gets the answer later.
   guidance of `packages/assistant` says nothing about presence, so the
   model decides.
 - **The change.** The membership guidance states that the presence of the
-  owner does not change the work. The assistant seats and routes as it
-  does for a person who stays, and the closing summary goes to the owner.
+  person who asked does not change the work. The assistant seats and routes
+  as it does for a person who stays, and the closing summary goes to the
+  `person` of the exchange.
 - **Seen in the same run, not in scope.** In `firmware`, the assistant
   forked, edited, and pushed the work itself and sent nothing to a
   specialist, while [Default assistant](../docs/assistant.md) keeps it to
@@ -354,3 +364,21 @@ interactions, so a person who asks and leaves gets the answer later.
 at pass^3, where the person asks and leaves before the first activation.
 The assistant sends a directed request to a specialist, and the closing
 summary answers the question. The live suite of the assistant stays green.
+
+**S2. The system posts.** A host that wants a wake defines a fake person
+today, and the room applies each rule for people to it. [The design](system.md)
+holds the problem, the rules, and the evidence.
+
+- **The change.** `room.post({ to?, text, refs?, key? })` writes a
+  `posted` entry with no author, in its own key space. The room's clock
+  writes a post with `returns` when a scheduled say is due, and the
+  `returned` kind goes. A post opens an exchange. A post with `to` wakes
+  and steers its target, and a post with no `to` reaches each seat at
+  `broadcast`. The Cloudflare room object takes `post`, and
+  [Processes](../docs/processes.md) posts in place of the fake person.
+
+**Evidence:** `exchange-completion.test.ts`, `routing.test.ts`,
+`steering-delivery.test.ts`, `transition.test.ts`, and
+`journal-validation.test.ts` hold the cases of the design, the Cloudflare
+tests pass in workerd, and one live file on the assistant shows a post
+that wakes a seat. The step removes [the design](system.md).

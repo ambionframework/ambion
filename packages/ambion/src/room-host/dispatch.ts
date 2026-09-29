@@ -144,7 +144,7 @@ function queueCloses(host: DispatchHost): void {
 function queueClose(host: DispatchHost, close: Close): void {
 	const question = host.state().messages.find((m) => m.seq === close.from);
 	const exchange: ClosedExchange = {
-		owner: close.owner,
+		...(close.person === undefined ? {} : { person: close.person }),
 		from: close.from,
 		at: question?.at ?? close.at,
 		through: close.through,

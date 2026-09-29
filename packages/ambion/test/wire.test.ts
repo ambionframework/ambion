@@ -43,7 +43,7 @@ const stored: Record<string, LeaseChange | Close | Composition> = {
 		readThrough: 0,
 		usage: { input: 5, output: 3, cacheRead: 2, cacheWrite: 1 },
 	},
-	close: { owner: 'priya', from: 2, through: 4, seq: 4, at, summary: 'assistant' },
+	close: { person: 'priya', from: 2, through: 4, seq: 4, at, summary: 'assistant' },
 	composition: {
 		goal: 'Decide the pour date.',
 		summary: 'assistant',

@@ -27,7 +27,7 @@
 	],
 	"exchanges": [
 		{
-			"owner": "priya",
+			"person": "priya",
 			"from": 4,
 			"through": 6,
 			"at": "2026-01-01T09:00:00.000Z",
@@ -119,7 +119,6 @@
 			}
 		},
 		{
-			"owner": "priya",
 			"from": 13,
 			"through": 15,
 			"at": "2026-01-01T09:10:00.000Z",
@@ -144,64 +143,14 @@
 						"harness": "pi",
 						"id": "message:13:worker:1"
 					}
-				},
-				{
-					"id": "closed:15:assistant:1",
-					"seat": "assistant",
-					"attempt": 1,
-					"purpose": "summary",
-					"outcome": {
-						"status": "released"
-					},
-					"usage": {
-						"input": 0,
-						"output": 0,
-						"cacheRead": 0,
-						"cacheWrite": 0,
-						"cost": 0
-					},
-					"session": {
-						"harness": "pi",
-						"id": "closed:15:assistant:1"
-					}
 				}
 			],
 			"summary": {
-				"status": "published",
-				"summary": {
-					"kind": "summary",
-					"text": "The worker checks the pour later.",
-					"to": "priya",
-					"covers": {
-						"from": 13,
-						"through": 15
-					},
-					"at": "2026-01-01T09:10:00.000Z",
-					"activationId": "closed:15:assistant:1",
-					"from": "assistant",
-					"seq": 20,
-					"key": "key-6"
-				}
+				"status": "silent"
 			},
 			"outcome": {
 				"kind": "complete"
 			},
-			"summaries": [
-				{
-					"kind": "summary",
-					"text": "The worker checks the pour later.",
-					"to": "priya",
-					"covers": {
-						"from": 13,
-						"through": 15
-					},
-					"at": "2026-01-01T09:10:00.000Z",
-					"activationId": "closed:15:assistant:1",
-					"from": "assistant",
-					"seq": 20,
-					"key": "key-6"
-				}
-			],
 			"usage": {
 				"input": 0,
 				"output": 0,
@@ -211,5 +160,5 @@
 			}
 		}
 	],
-	"watermark": 22
+	"watermark": 19
 }

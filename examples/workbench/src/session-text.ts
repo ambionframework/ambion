@@ -80,5 +80,5 @@ function pendingLine(say: PendingSay): string {
 				hour: '2-digit',
 				minute: '2-digit',
 			});
-	return `${say.seat} comes back at ${time} for ${say.owner}: ${say.text} (/dismiss ${say.seq})`;
+	return `${say.seat} comes back at ${time}: ${say.text} (/dismiss ${say.seq})`;
 }

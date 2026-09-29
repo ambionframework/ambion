@@ -196,11 +196,11 @@ describe('the room API', () => {
 		await waitForRoom(room);
 		const exchange = await visit.send({ text: 'Can we ship?', key: 'ship-1' });
 
-		expect(exchange.owner).toBe(priya.name);
+		expect(exchange.person).toBe(priya.name);
 		const conversation = await exchange.waitForClose();
 		const close = closedExchange(room, exchange.from);
 		expect(conversation.filter(isSpoken).length).toBeGreaterThanOrEqual(3);
-		expect(close).toMatchObject({ owner: priya.name, from: exchange.from });
+		expect(close).toMatchObject({ person: priya.name, from: exchange.from });
 		const response = await exchange.waitForSummary();
 		expect(response).toMatchObject({ kind: 'summary', to: priya.name });
 		expect(conversation.every((message) => message.kind !== 'summary')).toBe(true);
@@ -230,7 +230,7 @@ describe('the room API', () => {
 		const { room } = await world(answer, options);
 		const exchange = await (await room.visit(priya)).send({ text: 'Question?', key: 'none-1' });
 		expect(await exchange.waitForClose()).toHaveLength(1);
-		expect(closedExchange(room, exchange.from)).toMatchObject({ owner: priya.name });
+		expect(closedExchange(room, exchange.from)).toMatchObject({ person: priya.name });
 		await expect(exchange.waitForSummary()).resolves.toBeUndefined();
 	});
 

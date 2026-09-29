@@ -545,7 +545,7 @@ workspace.processes.subscribe((event) => {
 
 - It opens an exchange when none is open, and the closing summary goes to
   the host's person. When an exchange is open, the message joins it, and
-  the summary goes to the owner of that exchange.
+  the summary goes to the `person` of that exchange.
 - The owner agent must hold a seat in that room. The room refuses a
   delivery to an agent in the reserve, and `send` rejects. A stopped room
   rejects too, so the host catches each delivery.

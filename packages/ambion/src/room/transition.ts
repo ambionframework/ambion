@@ -39,7 +39,7 @@ import {
 	onRecord,
 	stampedSummary,
 } from './rules.verified.ts';
-import { dismissal, ownerOf, returning, scheduleRefusal } from './scheduled.ts';
+import { dismissal, returning, scheduleRefusal } from './scheduled.ts';
 import { summaryWriter } from './summary.ts';
 
 type ProposedEvent<K extends Kind = Kind> = {
@@ -429,7 +429,7 @@ function ordinaryCommit(
 	const refusal = addressRefusal(state, live.seat, intent, schedule);
 	if (refusal !== undefined) return refusal;
 	const { refs, ...rest } = intent;
-	const body = { ...rest, ...refsField(refs), ...ownerOf(intent, state.exchange), ...stamp };
+	const body = { ...rest, ...refsField(refs), ...stamp };
 	return message(state, body, now, true, bytes);
 }
 
@@ -534,7 +534,7 @@ function addressRefusal(
 ): { refusal: Refusal } | undefined {
 	const target = intent.to;
 	if (intent.after !== undefined) {
-		const reason = scheduleRefusal(state.exchange, state.scheduled, seat, intent, schedule);
+		const reason = scheduleRefusal(state.scheduled, seat, intent, schedule);
 		return reason === undefined ? undefined : refused(reason);
 	}
 	if (target === undefined) return undefined;
@@ -671,25 +671,26 @@ function compose(state: RoomState, composition: Body<Composition>): RoomDecision
 
 /**
  * The close of the exchange that the pass saw, as `admitsClose` admits it
- * where the write lands. The close names the configured summary writer
- * when the owner is a person of the room.
+ * where the write lands. The close names the `person` of the exchange, and
+ * the configured summary writer when it has one.
  */
 function closing(state: RoomState, command: CloseCommand, now: number): RoomDecision<'close'> {
-	if (!admitsClose(state.exchange, command, state.lastSeq, liveWork(state, now).exchange))
+	const exchange = state.exchange;
+	if (!admitsClose(exchange, command, state.lastSeq, liveWork(state, now).exchange))
 		return { event: undefined };
-	const { owner, from, through } = command;
-	const writer = state.people.has(owner)
-		? summaryWriter(state.composition, state.roster)
-		: undefined;
+	const { from, through } = command;
+	const person = exchange?.person;
+	const writer = person === undefined ? undefined : summaryWriter(state.composition, state.roster);
+	const owed = person === undefined || writer === undefined ? {} : { person, summary: writer };
 	return {
 		event: {
 			kind: 'close',
 			body: {
-				owner,
+				...(person === undefined ? {} : { person }),
 				from,
 				through,
 				at: iso(now),
-				...(writer === undefined ? {} : { summary: writer }),
+				...owed,
 			},
 		},
 	};

@@ -1,8 +1,8 @@
 # Summaries
 
-**A summary is an optional message for the person who opened a human
-exchange.** The room assigns a writer by name. The name refers to one agent in
-the room's `agents` definitions.
+**A summary is an optional message for the `person` of a closed
+exchange: the first person who spoke in it.** The room assigns a writer by
+name. The name refers to one agent in the room's `agents` definitions.
 
 The writer is an ordinary agent. It has the same identity, instructions,
 model, domain tools, membership, and attention rules as every other agent.
@@ -58,15 +58,18 @@ explicit summary writer is refused. This shorthand preserves the closing
 activation and membership rules described here. See
 [Default assistant](assistant.md) for the built-in implementation.
 
-Every human exchange is eligible for a summary. Eligibility does not depend on
-the number of messages or speakers. A room with no configured summary writer
-still closes exchanges and retains their source messages.
+Every exchange where a person spoke is eligible for a summary. Eligibility
+does not depend on the number of messages or speakers. An exchange where no
+person spoke, such as a returned say that nobody answers, owes no summary. A
+room with no configured summary writer still closes exchanges and retains
+their source messages.
 
 ## Closing activation
 
 When the room records a close, it assigns a dedicated activation only when
-`summary` names a seated agent. The activation fixes the exchange range and
-the person who opened it. It receives that person's current preferences.
+`summary` names a seated agent and the close names a `person`. The
+activation fixes the exchange range and that person. It receives that
+person's current preferences.
 Later messages do not change the source range or recipient.
 
 The closing `say` may carry `refs`. The room stores them on the summary. The
@@ -87,15 +90,15 @@ The closing activation receives the regular `say` tool with this shape:
 say({ text: 'Thursday delivery is limited to eight units.', to: 'priya' });
 ```
 
-**The recipients are the people who spoke in the exchange.** The owner is
-the first. The activation lists them in `purpose.people`. A `say` without `to`
-addresses the owner. A `say` to a person who did not speak in the exchange is
-refused, and so is a second summary for the same person.
+**The recipients are the people who spoke in the exchange.** The `person`
+is the first. The activation lists them in `purpose.people`. A `say` without
+`to` addresses the `person`. A `say` to a person who did not speak in the
+exchange is refused, and so is a second summary for the same person.
 
 The activation ends after the writer has said one message to each person.
-The owner's summary completes the close. A summary for another person
-appears in `summaries` on the closed exchange view. Only the owner's reading
-preferences reach the writer.
+The summary for the `person` completes the close. A summary for another
+person appears in `summaries` on the closed exchange view. Only the reading
+preferences of the `person` reach the writer.
 
 The room stamps the writer, recipient, covered range, activation id, and
 timestamp on the stored summary. The writer cannot supply or alter those

@@ -62,7 +62,7 @@ describe('what a message reaches', () => {
 			roster: [{ name: 'writer', identity: 'Writer.', attention: 'broadcast' }],
 			messages: [],
 			people: new Map(),
-			closes: [{ owner: 'priya', from: 1, through: 3, at, summary: 'writer' }],
+			closes: [{ person: 'priya', from: 1, through: 3, at, summary: 'writer' }],
 		} as unknown as RoomState;
 		expect(
 			routes({ ...said(), seq: 4 }, state, new Map([['writer', ['closed:3:writer:1']]])),

@@ -212,7 +212,7 @@ function abandonments(state: RoomState, options: ReconcileOptions): Ending[] {
 function closing(state: RoomState, work: LiveWork): CloseRef | undefined {
 	const exchange = state.exchange;
 	if (exchange === undefined) return undefined;
-	const close = { owner: exchange.owner, from: exchange.from, through: state.lastSeq };
+	const close = { from: exchange.from, through: state.lastSeq };
 	return admitsClose(exchange, close, state.lastSeq, work.exchange) ? close : undefined;
 }
 

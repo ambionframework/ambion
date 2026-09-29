@@ -61,7 +61,7 @@ export type Block = MessageBlock | DiscussionBlock | NoteBlock | StepsBlock | Li
 export interface TimelineInput {
 	messages: readonly Message[];
 	exchanges: readonly ExchangeView[];
-	open?: { owner: string };
+	open?: { person?: string };
 	/** The latest work an agent reported in the open exchange. */
 	activity?: string;
 	humans: ReadonlySet<string>;
@@ -216,7 +216,7 @@ class Builder {
 		for (const group of this.groups) this.emit(group);
 		this.blocks.push(...(this.input.tail ?? []));
 		if (this.input.open)
-			this.blocks.push(liveBlock(this.input.open.owner, this.input.working, this.input.activity));
+			this.blocks.push(liveBlock(this.input.open.person, this.input.working, this.input.activity));
 		return this.blocks;
 	}
 
@@ -295,9 +295,14 @@ function groupBlocks(
 	return [discussion, ...summary];
 }
 
-function liveBlock(owner: string, working: readonly string[], activity?: string): LiveBlock {
+function liveBlock(
+	person: string | undefined,
+	working: readonly string[],
+	activity?: string,
+): LiveBlock {
 	const agents = working.length > 0 ? ` with ${working.join(', ')}` : '';
-	return { type: 'live', text: `Working on ${owner}’s question${agents}`, detail: activity };
+	const work = person === undefined ? 'the room’s work' : `${person}’s question`;
+	return { type: 'live', text: `Working on ${work}${agents}`, detail: activity };
 }
 
 /** The keys of the discussions in the blocks, top to bottom. */

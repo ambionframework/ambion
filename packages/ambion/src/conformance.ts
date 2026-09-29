@@ -205,7 +205,7 @@ function scriptedRoom(name: string, seat: string, script: Script): ScriptedRoom 
 					},
 				],
 				messages: [question],
-				exchange: { owner: 'priya', from: 1 },
+				exchange: { person: 'priya', from: 1 },
 				reserve: [],
 			},
 		},
