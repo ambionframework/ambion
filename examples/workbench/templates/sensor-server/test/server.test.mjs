@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { inflateSync } from 'node:zlib';
 import {
 	ObserveResponseSchema,
 	SensorErrorSchema,
@@ -78,6 +79,12 @@ test('server fixtures, launch metadata, and data safety follow SN1', async (cont
 	const digest = frame.observations[0].parts[0].file;
 	const bytes = await clean.bytes(`/files/${digest}`);
 	assert.equal(createHash('sha256').update(bytes).digest('hex'), digest);
+	const chunks = assertPng(bytes);
+	const idat = chunks.find((chunk) => chunk.type === 'IDAT');
+	assert.ok(idat);
+	const damaged = Buffer.from(bytes);
+	damaged.writeUInt32BE((idat.crc ^ 1) >>> 0, idat.crcOffset);
+	assert.throws(() => assertPng(damaged), /PNG IDAT chunk has a valid CRC/);
 	const fixturePath = join(checkout, 'fixtures/frame.png');
 	const fixtureBytes = await readFile(fixturePath);
 	await writeFile(fixturePath, 'edited fixture after launch');
@@ -154,6 +161,54 @@ function git(cwd, args) {
 	const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
 	assert.equal(result.status, 0, `git ${args.join(' ')} failed: ${result.stderr}`);
 	return result.stdout.trim();
+}
+
+function assertPng(bytes) {
+	assert.deepEqual(bytes.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+	const chunks = [];
+	const imageData = [];
+	let offset = 8;
+	while (offset < bytes.length) {
+		const length = bytes.readUInt32BE(offset);
+		const typeStart = offset + 4;
+		const dataStart = typeStart + 4;
+		const dataEnd = dataStart + length;
+		const crcEnd = dataEnd + 4;
+		assert.ok(crcEnd <= bytes.length, 'PNG chunk length stays within the file');
+		const type = bytes.toString('ascii', typeStart, dataStart);
+		const expectedCrc = bytes.readUInt32BE(dataEnd);
+		const actualCrc = crc32(
+			Buffer.concat([bytes.subarray(typeStart, dataStart), bytes.subarray(dataStart, dataEnd)]),
+		);
+		assert.equal(actualCrc, expectedCrc, `PNG ${type} chunk has a valid CRC`);
+		chunks.push({ type, crc: expectedCrc, crcOffset: dataEnd, length });
+		if (type === 'IDAT') imageData.push(bytes.subarray(dataStart, dataEnd));
+		offset = crcEnd;
+	}
+	assert.equal(offset, bytes.length, 'PNG has no bytes after IEND');
+	assert.equal(chunks[0]?.type, 'IHDR');
+	assert.equal(chunks[0]?.length, 13);
+	assert.equal(chunks.at(-1)?.type, 'IEND');
+	assert.equal(chunks.at(-1)?.length, 0);
+	assert.equal(chunks.filter((chunk) => chunk.type === 'IHDR').length, 1);
+	assert.ok(chunks.some((chunk) => chunk.type === 'IDAT'));
+	const header = bytes.subarray(16, 29);
+	assert.ok(header.readUInt32BE(0) > 0);
+	assert.ok(header.readUInt32BE(4) > 0);
+	const decoded = inflateSync(Buffer.concat(imageData));
+	assert.ok(decoded.length > 0, 'PNG image data inflates');
+	return chunks;
+}
+
+function crc32(bytes) {
+	let crc = 0xffffffff;
+	for (const byte of bytes) {
+		crc ^= byte;
+		for (let bit = 0; bit < 8; bit++) {
+			crc = (crc & 1) === 1 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1;
+		}
+	}
+	return (crc ^ 0xffffffff) >>> 0;
 }
 
 async function findPackageRoot(file, name) {
