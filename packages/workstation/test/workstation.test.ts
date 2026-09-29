@@ -459,6 +459,10 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		);
 		expect(await call('status', { handle: process.handle })).toMatch(/^\(no new output\)\n\n/);
 		expect(await call('cancel', { handle: process.handle })).toContain('is cancelled.');
+		// A wait on one handle gives the result of status, at once for a process that ended.
+		expect(await call('wait', { handles: [process.handle], timeout: 5 })).toMatch(
+			/^\(no new output\)\n\n\[Process .* is cancelled\./,
+		);
 		expect(await readFile(process.output, 'utf8')).toBe('first\nsecond\n');
 		// The table holds the timeout, and stops the process the way a cancel does.
 		const timed = await call('bash', {

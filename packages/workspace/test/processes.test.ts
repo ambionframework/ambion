@@ -605,10 +605,25 @@ describe('a wait on several handles', () => {
 			{ handles: ['KNOWN', 'bash-000000000001'] },
 			/You have no process bash-000000000001/,
 		],
-	])('refuses %s', async (_case, params, message) => {
+		[
+			'one handle given as handle',
+			{ handle: 'KNOWN' },
+			"Invalid arguments for tool 'wait': must have required properties handles.",
+		],
+		[
+			'no handles',
+			{ handles: [] },
+			"Invalid arguments for tool 'wait': handles must not have fewer than 1 items.",
+		],
+		[
+			'17 handles',
+			{ handles: Array.from({ length: 17 }, () => 'KNOWN') },
+			"Invalid arguments for tool 'wait': handles must not have more than 16 items.",
+		],
+	])('refuses %s', async (_case, params: { handle?: string; handles?: string[] }, message) => {
 		const workspace = site();
 		const known = (await call(workspace, 'bash', { command: 'true' })).details.process.handle;
-		const given = { handles: params.handles.map((one) => one.replace('KNOWN', known)) };
+		const given = JSON.parse(JSON.stringify(params).replaceAll('KNOWN', known));
 		await expect(
 			Promise.resolve().then(() => toolOf(workspace, 'wait').invoke(given, callAs('alpha'))),
 		).rejects.toThrow(message);
