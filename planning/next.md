@@ -31,7 +31,8 @@ holds on main.
 [README](../README.md) holds the statement, and
 [Technical facts](../docs/technical-facts.md) holds the key facts and what
 is new. Ambion is reactive: a seat acts when a person speaks, when a seat
-addresses it, or when a say that it scheduled comes due.
+addresses it, when the host posts, or when a say that it scheduled comes
+due.
 
 **0.4.0 is a release of simplification.** It adds four capabilities, the
 `import` of the `sql` tool, the fixed skills of each agent, the
@@ -129,13 +130,12 @@ condition that brings each one back.
   the author if and only if `after` is set. The room stamps everything
   else: the author and the returned say. No seat speaks under the name of
   a person, and no seat schedules work for another seat.
-- **A returned say is an ordinary message when it lands.** It opens an
-  exchange when none is open. When an exchange is open, it joins it and
-  steers the seat that it returns to.
 - **The system speaks, and an exchange has no owner.** The host and the
   room's clock write a `posted` entry with no author, and a returned say
-  is a post with `returns`. A post opens an exchange. An exchange has an
-  opening message and a `person`, the first person who spoke in its range.
+  is a post with `returns`. A post opens an exchange when none is open.
+  Otherwise it joins the open exchange and steers its target, or each seat
+  at work when it has no target. An exchange has an opening message and a
+  `person`, the first person who spoke in its range.
   [Exchange](../docs/exchange.md#4-who-directs-one-and-who-receives-its-result)
   holds the rules.
 - **The journal records the schedule, and the host arms the clock.** The
@@ -205,7 +205,7 @@ Each step states the change to
 page it changes in the same commit.
 
 - [ ] **5.** The core owns the activation state. (C6)
-- [ ] **8.** `wait` takes `handles` alone, beside `status` and `ps`. (C10)
+- [ ] **8.** A live file on each harness uses `wait` on `handles`. (C10)
 
 **Evidence:** the evidence of phase 1 holds for each step. Steps 5 and 8
 pass one live file on each of Pi, Claude, and Codex before they merge.
@@ -257,11 +257,12 @@ three executors, the prompt snapshot holds, and one live file passes on
 each harness.
 
 **C10. `wait` takes `handles` alone.** The owner keeps `status`, `ps`,
-and `wait` as three tools: each answers one question. `wait` took
-`handle` or `handles`, and the schema did not say that one is required.
-It now takes `{ handles, timeout? }`, with 1 to 16 handles, and one handle
-gives the result of `status`. **Evidence:** the process tests, and one
-live file on each harness that shows no loss in the use of a process.
+and `wait` as three tools: each answers one question. The change landed
+in #354: `wait` takes `{ handles, timeout? }`, with 1 to 16 handles, and
+one handle gives the result of `status`. The evidence is open. No live
+file of `packages/ambion` starts a process, so the harness jobs do not
+exercise `wait`. **Evidence:** one live file on each harness that shows
+no loss in the use of a process.
 
 **A1. The assistant works a request after the person who asked leaves.** This item
 fixes a defect and adds no capability. A room stays available between
