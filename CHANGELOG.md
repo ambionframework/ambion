@@ -387,7 +387,9 @@ its `text`.
   of a workspace holds records:
   `sqliteBackend(location, { schema, appendOnly, provenance })` runs the
   schema at each open, keeps each `appendOnly` table to INSERT alone, and
-  fills the provenance columns of a new row. `SqlRunOptions` has
+  fills the provenance columns of a new row. With `appendOnly`, a call
+  cannot create a trigger, and only the guard triggers call the guard
+  functions. `SqlRunOptions` has
   `provenance`, the root entry exports the type `SqlProvenance`, and the
   `sql` tool passes the provenance of each call. The Workbench keeps its lab
   records in the database of the `sql` tool, `lab.db`, and `shared.db`

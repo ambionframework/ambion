@@ -4,7 +4,9 @@
  * engine's authorizer and without it; a call commits its own transaction;
  * a result keeps one value per column name; a call stops on an abort and
  * past its time limit, an import among them; and an export lands on a
- * directory workspace.
+ * directory workspace. With append-only tables, no call creates a trigger
+ * or calls a guard function, with the authorizer and without it, and the
+ * stamp fills only the row that its INSERT added.
  */
 import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -601,5 +603,172 @@ describe('the append-only tables of the SQLite backend', () => {
 		created.close();
 		const deleted = await run(site, 'INSERT INTO absent VALUES (1); DELETE FROM absent');
 		expect(messageOf(deleted)).toMatch(/append-only/);
+	});
+});
+
+// -- no agent trigger, and no call of a guard function ------------------------
+
+const alice = callAs('alice', { room: 'bringup', exchange: { person: 'pat', from: 1 } });
+const bob = callAs('bob', { room: 'bringup', exchange: { person: 'pat', from: 1 } });
+
+/** Why the backend refuses an agent trigger: in the text, or in the engine where Node has an authorizer. */
+const TRIGGER_REFUSED = /CREATE TRIGGER is refused/;
+
+describe.each(engines)('no agent trigger runs in the call of another agent, $name', ({ wrap }) => {
+	it.each([
+		[
+			'a trigger on a plain table',
+			"CREATE TRIGGER evil AFTER INSERT ON notes BEGIN INSERT INTO runs (label) VALUES ('planted by alice ' || NEW.body); END",
+			"INSERT INTO notes (body) VALUES ('hello')",
+		],
+		[
+			'a trigger on an append-only table that picks its victim',
+			"CREATE TRIGGER evil AFTER INSERT ON runs WHEN ambion_provenance('agent') = 'bob' BEGIN INSERT INTO plain (body) VALUES ('planted by alice ' || NEW.label); END",
+			"INSERT INTO runs (label) VALUES ('hello')",
+		],
+		[
+			'an INSTEAD OF trigger on a view',
+			"CREATE VIEW inbox AS SELECT body FROM notes; CREATE TRIGGER evil INSTEAD OF INSERT ON inbox BEGIN INSERT INTO runs (label) VALUES ('planted by alice ' || NEW.body); END",
+			"INSERT INTO inbox (body) VALUES ('hello')",
+		],
+		[
+			'a temporary trigger',
+			"CREATE TEMP TRIGGER evil AFTER INSERT ON main.notes BEGIN INSERT INTO runs (label) VALUES ('planted by alice ' || NEW.body); END",
+			"INSERT INTO notes (body) VALUES ('hello')",
+		],
+	])('refuses %s, so no row lands under the name of bob', (_name, plant, victim) =>
+		wrap(async () => {
+			const site = records();
+			await expect(sqlTool(site, plant, alice)).rejects.toThrow(
+				/CREATE TRIGGER is refused|function 'ambion_provenance' is refused/,
+			);
+			await sqlTool(site, victim, bob).catch(() => undefined);
+			const planted = await run(
+				site,
+				"SELECT 'runs' AS tbl, label AS body, agent FROM runs WHERE label LIKE 'planted%' UNION ALL SELECT 'plain', body, agent FROM plain WHERE body LIKE 'planted%'",
+			);
+			expect(planted.ok && planted.rows).toEqual([]);
+			const triggers = await run(
+				site,
+				"SELECT name FROM sqlite_master WHERE type = 'trigger' UNION ALL SELECT name FROM temp.sqlite_master WHERE type = 'trigger' AND name NOT LIKE 'ambion_%'",
+			);
+			expect(triggers.ok && triggers.rows).toEqual([]);
+		}),
+	);
+
+	it('refuses a trigger that skips the stamp, so each row of alice keeps her provenance', () =>
+		wrap(async () => {
+			const site = records();
+			await expect(
+				sqlTool(
+					site,
+					"CREATE TRIGGER skipme BEFORE UPDATE ON runs WHEN ambion_provenance('agent') = 'alice' BEGIN SELECT RAISE(IGNORE); END",
+					alice,
+				),
+			).rejects.toThrow(/CREATE TRIGGER is refused|function 'ambion_provenance' is refused/);
+			await expect(
+				sqlTool(
+					site,
+					'CREATE TRIGGER skipme BEFORE UPDATE ON runs BEGIN SELECT RAISE(IGNORE); END',
+					alice,
+				),
+			).rejects.toThrow(TRIGGER_REFUSED);
+			await sqlTool(site, "INSERT INTO runs (label) VALUES ('mine')", alice);
+			const rows = await run(site, 'SELECT label, agent, exchange_person FROM runs');
+			expect(rows.ok && rows.rows).toEqual([
+				{ label: 'mine', agent: 'alice', exchange_person: 'pat' },
+			]);
+		}));
+
+	it.each([
+		'create trigger evil after insert on notes begin select 1; end',
+		'CREATE TEMPORARY TRIGGER IF NOT EXISTS evil AFTER INSERT ON main.notes BEGIN SELECT 1; END',
+		'CREATE /* a comment */ TRIGGER evil AFTER INSERT ON notes BEGIN SELECT 1; END',
+		'CREATE -- a comment\n TEMP/**/TRIGGER evil AFTER INSERT ON main.notes BEGIN SELECT 1; END',
+		'/* lead */ Create Temp Trigger "evil" BEFORE DELETE ON main.notes BEGIN SELECT 1; END',
+	])('refuses %s, and runs no later statement', (statement) =>
+		wrap(async () => {
+			const site = records();
+			const outcome = await run(site, `${statement}; INSERT INTO notes (body) VALUES ('after')`);
+			expect(messageOf(outcome)).toMatch(TRIGGER_REFUSED);
+			const notes = await run(site, 'SELECT count(*) AS n FROM notes');
+			expect(notes.ok && notes.rows).toEqual([{ n: 0 }]);
+		}),
+	);
+
+	it.each([
+		"SELECT ambion_provenance('agent') AS agent",
+		'SELECT "AMBION_PROVENANCE"(\'agent\') AS agent',
+		"CREATE TABLE gate (x CHECK (ambion_provenance('agent') IS NOT 'bob'))",
+		"CREATE VIEW who AS SELECT [ambion_provenance]('agent') AS agent",
+		"SELECT ambion_stamp('runs', 1) AS armed",
+	])('refuses %s: the guard alone calls its functions', (statement) =>
+		wrap(async () => {
+			const site = records();
+			await expect(sqlTool(site, statement, bob)).rejects.toThrow(
+				/The function 'ambion_(provenance|stamp)' is refused/,
+			);
+		}),
+	);
+
+	it('fills only the row that the INSERT added, so bob cannot claim a row of the host', () =>
+		wrap(async () => {
+			const site = openWorkspace({
+				name: 'claims',
+				backend: {
+					bash: memoryBackend(),
+					sql: sqliteBackend(':memory:', {
+						schema: `${RECORDS} CREATE TABLE IF NOT EXISTS claims (id INTEGER PRIMARY KEY, body TEXT, agent TEXT);
+							INSERT OR IGNORE INTO claims (id, body) VALUES (7, 'seed')`,
+						appendOnly: ['runs', 'claims'],
+						provenance: true,
+					}),
+				},
+			});
+			cleanups.push(() => site.dispose());
+			const host = await run(site, "INSERT INTO runs (id, label) VALUES (5, 'host')");
+			expect(host.ok).toBe(true);
+			for (const claim of [
+				// The row that the connection inserted last is the row of the host.
+				"UPDATE claims SET agent = 'bob' WHERE id = 7",
+				"INSERT INTO notes (id, body) VALUES (7, 'x'); UPDATE claims SET agent = 'bob' WHERE id = 7",
+				"INSERT INTO claims (id, body) VALUES (7, 'x') ON CONFLICT (id) DO UPDATE SET agent = 'bob'",
+				"INSERT INTO notes (id, body) VALUES (5, 'x'); UPDATE runs SET agent = ambion_provenance('agent'), room = ambion_provenance('room'), activation = ambion_provenance('activation'), exchange_person = ambion_provenance('exchange_person'), exchange_from = ambion_provenance('exchange_from'), at = ambion_provenance('at') WHERE id = 5",
+			]) {
+				await expect(sqlTool(site, claim, bob), claim).rejects.toThrow(
+					/append-only|function 'ambion_provenance' is refused/,
+				);
+			}
+			const rows = await run(
+				site,
+				'SELECT id, agent FROM runs UNION ALL SELECT id, agent FROM claims ORDER BY id',
+			);
+			expect(rows.ok && rows.rows).toEqual([
+				{ id: 5, agent: null },
+				{ id: 7, agent: null },
+			]);
+		}));
+});
+
+describe('a trigger of the host schema', () => {
+	it('opens, and runs in the call of each agent with its provenance', async () => {
+		const site = openWorkspace({
+			name: 'audited',
+			backend: {
+				bash: memoryBackend(),
+				sql: sqliteBackend(':memory:', {
+					schema: `${RECORDS} CREATE TRIGGER IF NOT EXISTS audit AFTER INSERT ON notes
+						BEGIN INSERT INTO runs (label) VALUES ('noted ' || NEW.body); END`,
+					appendOnly: ['runs'],
+					provenance: true,
+				}),
+			},
+		});
+		cleanups.push(() => site.dispose());
+		await sqlTool(site, "INSERT INTO notes (body) VALUES ('hello')", bob);
+		const rows = await run(site, 'SELECT label, agent, exchange_person FROM runs');
+		expect(rows.ok && rows.rows).toEqual([
+			{ label: 'noted hello', agent: 'bob', exchange_person: 'pat' },
+		]);
 	});
 });

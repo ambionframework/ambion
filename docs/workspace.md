@@ -787,11 +787,24 @@ const sql = sqliteBackend('./data/lab.db', {
   unqualified name in `temp` first. After each statement the backend
   drops a temporary table or view with the name of an append-only table,
   and refuses the statement.
+- **No call creates a trigger.** A trigger runs in the call of the agent
+  that fires it. So a trigger of one agent could insert a row under the
+  provenance of another agent, or skip the stamp. With `appendOnly`, the
+  backend refuses `CREATE TRIGGER` and `CREATE TEMP TRIGGER`, also the
+  `INSTEAD OF` trigger of a view. The text check reads the keywords with
+  white space or comments between them. On a Node whose `node:sqlite` has
+  `setAuthorizer`, the engine also denies each trigger. On Node 22 the text
+  check holds alone. The `schema` can create a trigger, because it runs
+  before the guard. That trigger runs in each call.
+- **The guard triggers alone call the guard functions.** The stamp calls
+  `ambion_provenance`, `ambion_stamp`, and `ambion_stamped`. The backend
+  refuses a statement that names one of them, in any quotes. The engine
+  also denies a call outside a guard trigger, where Node has an authorizer.
 - **Provenance fills the columns that a table declares.** The columns are
   `agent`, `room`, `activation`, `exchange_person`, `exchange_from`, and
   `at`. The `sql` tool passes the provenance of each tool call in
-  `SqlRunOptions.provenance`, and a trigger after each INSERT writes it.
-  An INSERT that sets one of these columns fails. An exchange with no
+  `SqlRunOptions.provenance`, and a guard trigger after each INSERT writes
+  it. An INSERT that sets one of these columns fails. An exchange with no
   person leaves `exchange_person` NULL. A host call with no provenance
   leaves them all NULL. A RETURNING clause gives the row before the
   stamp fills it, so a caller reads the provenance with a SELECT.
@@ -800,11 +813,23 @@ const sql = sqliteBackend('./data/lab.db', {
   when it opens the database. SQLite writes a DEFAULT before the guard
   reads the new row, so the backend also refuses a provenance column with
   a DEFAULT other than NULL. The message names the table or the column.
-- **A row with NULL provenance can take the provenance of a later call.**
-  The guard lets the UPDATE of the stamp through: it sets each provenance
-  column from NULL to the value of the running call. An agent can run the
-  same UPDATE on a row from the schema or from a host call. No UPDATE
-  changes a data column or a provenance column that holds a value.
+- **The stamp fills only the row that its INSERT added.** The guard lets
+  the UPDATE of the stamp through: it sets each provenance column from
+  NULL to the value of the running call. The stamp marks its row before
+  the UPDATE, and the guard refuses an UPDATE of a row with no mark. The
+  backend clears the marks before each statement.
+- **Only the host writes a row with no provenance.** A seed row of the
+  schema and a row of a host call with no provenance keep NULL in each
+  provenance column. A row of an agent keeps NULL only where its call has
+  no value, such as `exchange_person`. No later call fills a NULL, and no
+  UPDATE changes a data column.
+- **One agent can stop the writes of every agent.** The guard keeps the
+  rows. It does not keep the database open for writes. For example,
+  `CREATE UNIQUE INDEX one ON runs ((1))` refuses each INSERT after the
+  first row. `PRAGMA foreign_keys = ON` stays on for later calls, and on a
+  schema with `REFERENCES` it refuses an INSERT with no parent row. Another
+  agent can drop the index or set the PRAGMA back. The refusal of
+  `CREATE TRIGGER` also removes a trigger that denies with `RAISE(ABORT)`.
 - **The backend does not deduplicate.** A retried activation that inserts
   again inserts again. Give the table a UNIQUE constraint when a row must
   appear once.

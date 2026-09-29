@@ -32,14 +32,17 @@
  * host file. `ATTACH` opens `:memory:` alone, and `VACUUM INTO` is refused.
  * A check of each statement's text holds this on every supported Node. On a
  * Node whose `node:sqlite` has `setAuthorizer`, the engine refuses the same
- * operations a second time. `node:sqlite` loads no extension unless its
- * caller allows it, and this backend does not.
+ * operations a second time, and the refusal gives the reason of the
+ * authorizer. `node:sqlite` loads no extension unless its caller allows it,
+ * and this backend does not.
  *
  * The options `schema`, `appendOnly`, and `provenance` shape the database
  * at each open. The schema runs first. Each append-only table then accepts
  * INSERT alone, and with provenance the database fills the provenance
  * columns of a new row from the call (`sqlite-guard.ts`). The `sql` tool
- * passes the provenance of each tool call.
+ * passes the provenance of each tool call. After the guard, the authorizer
+ * and the text check refuse each CREATE TRIGGER, so a trigger of the schema
+ * runs and no call adds one.
  */
 
 import { mkdirSync } from 'node:fs';
@@ -61,6 +64,7 @@ import { sqlResult } from './sql-result.ts';
 import {
 	flagRefusal,
 	type Guard,
+	guardDenial,
 	guardRefusal,
 	guardTables,
 	PROVENANCE_COLUMNS,
@@ -95,6 +99,8 @@ const LEADING = /^(?:\s+|;|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/|\/\*[\s\S]*$)+/;
 /** The largest time limit, in seconds, that a timer holds. */
 const MAX_TIMEOUT_SECONDS = 2_147_483;
 
+const ATTACH_REFUSED = "ATTACH opens ':memory:' alone. This database cannot open another file.";
+
 /** A statement that the backend refuses, reported as an `ok: false` outcome. */
 class Refusal extends Error {}
 
@@ -106,7 +112,8 @@ export interface SqliteBackendOptions {
 	/**
 	 * The tables that accept INSERT alone. An UPDATE, a DELETE, a REPLACE, a
 	 * DROP, and an ALTER of each one fail. Each table must exist after the
-	 * schema runs.
+	 * schema runs. With one or more tables, a call cannot create a trigger:
+	 * a trigger of the schema runs, and a CREATE TRIGGER in a call fails.
 	 */
 	appendOnly?: readonly string[];
 	/**
@@ -115,17 +122,24 @@ export interface SqliteBackendOptions {
 	 * `exchange_person`, `exchange_from`, and `at`, each one that the table
 	 * declares. An INSERT that sets one of them fails. The guard lets one
 	 * UPDATE through: it sets each of these columns from NULL to the value
-	 * of the running call. Each append-only table with a provenance column
-	 * must have a rowid, and no provenance column may have a DEFAULT other
-	 * than NULL. The default is false.
+	 * of the running call, on the row that the INSERT added. Each
+	 * append-only table with a provenance column must have a rowid, and no
+	 * provenance column may have a DEFAULT other than NULL. The default is
+	 * false.
 	 */
 	provenance?: boolean;
 }
 
-/** One open database, and the guard of its append-only tables. */
+/** The reason of the last denial of the engine authorizer, for the message of the refusal. */
+interface Denial {
+	reason: string | undefined;
+}
+
+/** One open database, the guard of its append-only tables, and the last denial of its authorizer. */
 interface Handle {
 	readonly db: DatabaseSync;
 	readonly guard: Guard;
+	readonly denial: Denial;
 }
 
 /** `text` without what SQLite skips before its first keyword. */
@@ -142,7 +156,7 @@ function blank(text: string): boolean {
 function refusal(statement: string, guard: Guard): string | undefined {
 	const text = statementText(statement);
 	if (/^attach\b/i.test(text) && ATTACH_LITERAL.exec(text)?.[1] !== `'${MEMORY}'`) {
-		return "ATTACH opens ':memory:' alone. This database cannot open another file.";
+		return ATTACH_REFUSED;
 	}
 	if (/^vacuum\b/i.test(text) && /\binto\b/i.test(text)) {
 		return 'VACUUM INTO writes a file, and this database cannot write another file.';
@@ -150,23 +164,52 @@ function refusal(statement: string, guard: Guard): string | undefined {
 	return guardRefusal(text, guard);
 }
 
-type Authorizer = (action: number, first: string | null) => number;
+type Authorizer = (
+	action: number,
+	first: string | null,
+	second: string | null,
+	database: string | null,
+	trigger: string | null,
+) => number;
 
-/** Refuse, in the engine, an `ATTACH` of anything but `:memory:`. Node before 24.10 has no authorizer. */
-function authorize(db: DatabaseSync): void {
+/**
+ * Refuse, in the engine, an `ATTACH` of anything but `:memory:`, and with
+ * `guard`, what the guard denies. Record the reason of each denial in
+ * `denial`. Node before 24.10 has no authorizer.
+ */
+function authorize(db: DatabaseSync, denial: Denial, guard?: Guard): void {
 	const withAuthorizer = db as DatabaseSync & { setAuthorizer?: (callback: Authorizer) => void };
-	withAuthorizer.setAuthorizer?.((action, first) =>
-		action === SQLITE_ATTACH && first !== MEMORY ? SQLITE_DENY : SQLITE_OK,
-	);
+	withAuthorizer.setAuthorizer?.((action, first, second, _database, trigger) => {
+		const attach = action === SQLITE_ATTACH && first !== MEMORY ? ATTACH_REFUSED : undefined;
+		const reason =
+			attach ?? (guard === undefined ? undefined : guardDenial(guard, action, second, trigger));
+		if (reason === undefined) return SQLITE_OK;
+		denial.reason = reason;
+		return SQLITE_DENY;
+	});
+}
+
+/** Compile the statement at the front of `text`. A denial of the authorizer is a refusal with its reason. */
+function compile(handle: Handle, text: string): StatementSync {
+	handle.denial.reason = undefined;
+	try {
+		return handle.db.prepare(text);
+	} catch (error) {
+		const reason = handle.denial.reason;
+		if (reason !== undefined) throw new Refusal(reason);
+		throw error;
+	}
 }
 
 /**
  * Compile the statement at the front of `text`, refuse it if it opens a
  * host file or lifts the guard, and give the rest. The flag check comes
- * first, so a refused flag PRAGMA gets its value back.
+ * first, so a refused flag PRAGMA gets its value back. The marks of the
+ * stamp belong to one statement, so they start empty.
  */
 function prepare(handle: Handle, text: string): { statement: StatementSync; rest: string } {
-	const statement = handle.db.prepare(text);
+	handle.guard.stamped.clear();
+	const statement = compile(handle, text);
 	const source = statement.sourceSQL;
 	const refused = flagRefusal(handle.db, handle.guard) ?? refusal(source, handle.guard);
 	if (refused !== undefined) throw new Refusal(refused);
@@ -364,10 +407,13 @@ async function runCall(
 function open(location: string, options: SqliteBackendOptions): Handle {
 	if (location !== MEMORY) mkdirSync(dirname(location), { recursive: true });
 	const db = new DatabaseSync(location);
+	const denial: Denial = { reason: undefined };
 	try {
-		authorize(db);
+		authorize(db, denial);
 		if (options.schema !== undefined) db.exec(options.schema);
-		return { db, guard: guardTables(db, options.appendOnly ?? [], options.provenance === true) };
+		const guard = guardTables(db, options.appendOnly ?? [], options.provenance === true);
+		authorize(db, denial, guard);
+		return { db, guard, denial };
 	} catch (error) {
 		db.close();
 		throw error;
@@ -380,7 +426,7 @@ function appendOnlyGuidance(options: SqliteBackendOptions): string[] {
 	if (tables.length === 0) return [];
 	const lines = [
 		`The tables ${tables.join(', ')} accept INSERT alone: an UPDATE, a DELETE, a REPLACE, a DROP,`,
-		`and an ALTER of them fail.`,
+		`and an ALTER of them fail. CREATE TRIGGER fails.`,
 	];
 	if (options.provenance !== true) return lines;
 	return [

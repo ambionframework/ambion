@@ -9,7 +9,10 @@
  * INSERT fills the provenance columns that the table declares from the
  * running call. The guard lets that one UPDATE through: it changes no other
  * column, it sets each provenance column from NULL to the value of the call,
- * and it touches the row that the connection inserted last.
+ * and it touches the row that the INSERT added. The stamp marks that row
+ * through the function `ambion_stamp` before its UPDATE, and the update
+ * trigger reads the mark through `ambion_stamped`. The backend clears the
+ * marks before each statement.
  *
  * `guardTables` finds each table by its name in any case, as SQLite does,
  * and uses the stored name. With provenance, it refuses a table that the
@@ -24,6 +27,13 @@
  * because it stops the writes of every agent on the shared connection.
  * `guardRefusal` reads names as the SQLite tokenizer does, and refuses a
  * DROP, an ALTER, or a PRAGMA whose target it cannot read.
+ *
+ * `guardRefusal` also refuses each CREATE TRIGGER. A trigger runs in the
+ * call of the agent that fires it, so it could insert a row under the
+ * provenance of that agent, or skip the stamp. It refuses each statement
+ * that names a guard function, so the guard triggers alone call them.
+ * `guardDenial` gives the same two rules to the engine authorizer, where
+ * Node has one. On Node 22 the text check holds them alone.
  *
  * Two checks of the engine state hold the guard where the text check
  * cannot. SQLite applies a flag PRAGMA when it compiles the statement, also
@@ -49,6 +59,33 @@ export const PROVENANCE_COLUMNS = [
 
 /** The function that the stamp trigger calls for the value of one column. */
 const PROVENANCE_FUNCTION = 'ambion_provenance';
+
+/** The function that marks the row that the stamp fills. It gives 1. */
+const STAMP_FUNCTION = 'ambion_stamp';
+
+/** The function that tells the update trigger if the stamp marked a row. */
+const STAMPED_FUNCTION = 'ambion_stamped';
+
+/**
+ * A name of a guard function in the text of a statement. SQLite reads a
+ * function name in ASCII case alone, and an identifier has no escape, so each
+ * call of a guard function holds this text.
+ */
+const GUARD_FUNCTION = /ambion_(?:provenance|stamp)\w*/i;
+
+/** What SQLite skips between two tokens: white space and comments. */
+const SKIP = String.raw`(?:\s|--[^\n]*(?:\n|$)|/\*[\s\S]*?(?:\*/|$))+`;
+
+/** A CREATE TRIGGER, also a temporary one, with white space or comments between the keywords. */
+const CREATE_TRIGGER = new RegExp(`^create${SKIP}(?:temp(?:orary)?${SKIP})?trigger\\b`, 'i');
+
+const TRIGGER_REFUSED =
+	'CREATE TRIGGER is refused: a trigger would run in the call of another agent, and it could write rows under the provenance of that agent.';
+
+/** The action codes of the SQLite authorizer that the guard denies. */
+const SQLITE_CREATE_TEMP_TRIGGER = 5;
+const SQLITE_CREATE_TRIGGER = 7;
+const SQLITE_FUNCTION = 31;
 
 const LIFTS_GUARD = 'it would lift the guard of the append-only tables';
 
@@ -90,6 +127,10 @@ export interface Guard {
 	readonly names: ReadonlySet<string>;
 	/** The lower-case names of the append-only tables. */
 	readonly tables: ReadonlySet<string>;
+	/** The lower-case names of the guard triggers: the one place that calls a guard function. */
+	readonly triggers: ReadonlySet<string>;
+	/** The rows that the stamp marked in the running statement, as keys of `stampKey`. */
+	readonly stamped: Set<string>;
 	/** The value of each flag PRAGMA after the guard began. */
 	readonly flags: Readonly<Record<string, number>>;
 	/** The provenance of the call that runs now. */
@@ -167,8 +208,13 @@ function checkStamp(table: Table, stamped: readonly string[]): void {
 	}
 }
 
+/** The key of one row that the stamp marks: the stored table name, and the rowid. */
+function stampKey(table: unknown, rowid: unknown): string {
+	return `${String(table)}\0${String(rowid)}`;
+}
+
 /** The condition of the one UPDATE that the guard lets through: the stamp of the row just inserted. */
-function stampOnly(columns: readonly string[], stamped: readonly string[]): string {
+function stampOnly(table: string, columns: readonly string[], stamped: readonly string[]): string {
 	const kept = columns
 		.filter((column) => !stamped.includes(column))
 		.map((column) => `NEW.${quoteName(column)} IS OLD.${quoteName(column)}`);
@@ -176,9 +222,12 @@ function stampOnly(columns: readonly string[], stamped: readonly string[]): stri
 		(column) =>
 			`OLD.${quoteName(column)} IS NULL AND NEW.${quoteName(column)} IS ${PROVENANCE_FUNCTION}(${literal(column)})`,
 	);
-	return [...kept, ...filled, 'NEW.rowid IS OLD.rowid', 'NEW.rowid = last_insert_rowid()'].join(
-		' AND ',
-	);
+	return [
+		...kept,
+		...filled,
+		'NEW.rowid IS OLD.rowid',
+		`${STAMPED_FUNCTION}(${literal(table)}, OLD.rowid)`,
+	].join(' AND ');
 }
 
 /** Create the triggers of one append-only table. Give its stored name and the names of its triggers. */
@@ -195,7 +244,7 @@ function guardTable(
 	const name = (kind: string) => `ambion_${table}_${kind}`;
 	const refuse = (why: string) => `SELECT RAISE(ABORT, ${literal(why)});`;
 	const appendOnly = refuse(`Table '${table}' is append-only: it accepts INSERT alone.`);
-	const when = stamped.length === 0 ? '' : ` WHEN NOT (${stampOnly(columns, stamped)})`;
+	const when = stamped.length === 0 ? '' : ` WHEN NOT (${stampOnly(table, columns, stamped)})`;
 	db.exec(
 		`CREATE TEMP TRIGGER ${quoteName(name('delete'))} BEFORE DELETE ON ${target} BEGIN ${appendOnly} END`,
 	);
@@ -214,7 +263,7 @@ function guardTable(
 		.map((column) => `${quoteName(column)} = ${PROVENANCE_FUNCTION}(${literal(column)})`)
 		.join(', ');
 	db.exec(
-		`CREATE TEMP TRIGGER ${quoteName(name('stamp'))} AFTER INSERT ON ${target} BEGIN UPDATE ${quoteName(table)} SET ${values} WHERE rowid = NEW.rowid; END`,
+		`CREATE TEMP TRIGGER ${quoteName(name('stamp'))} AFTER INSERT ON ${target} BEGIN UPDATE ${quoteName(table)} SET ${values} WHERE rowid = NEW.rowid AND ${STAMP_FUNCTION}(${literal(table)}, NEW.rowid); END`,
 	);
 	return { table, triggers: [name('delete'), name('update'), name('insert'), name('stamp')] };
 }
@@ -231,17 +280,37 @@ export function guardTables(
 ): Guard {
 	const names = new Set<string>();
 	const tables = new Set<string>();
-	if (appendOnly.length === 0) return { names, tables, flags: {}, current: undefined };
+	const triggers = new Set<string>();
+	const stamped = new Set<string>();
+	if (appendOnly.length === 0) {
+		return { names, tables, triggers, stamped, flags: {}, current: undefined };
+	}
 	db.exec('PRAGMA recursive_triggers = ON');
-	const guard: Guard = { names, tables, flags: readFlags(db), current: undefined };
+	const guard: Guard = {
+		names,
+		tables,
+		triggers,
+		stamped,
+		flags: readFlags(db),
+		current: undefined,
+	};
 	db.function(PROVENANCE_FUNCTION, (column) => {
 		const value = guard.current?.[String(column) as keyof SqlProvenance];
 		return value ?? null;
 	});
+	// The rowid comes as a BigInt, so the key holds each rowid exactly.
+	db.function(STAMP_FUNCTION, { useBigIntArguments: true }, (table, rowid) => {
+		stamped.add(stampKey(table, rowid));
+		return 1;
+	});
+	db.function(STAMPED_FUNCTION, { useBigIntArguments: true }, (table, rowid) =>
+		stamped.has(stampKey(table, rowid)) ? 1 : 0,
+	);
 	for (const wanted of appendOnly) {
-		const { table, triggers } = guardTable(db, wanted, provenance);
-		tables.add(table.toLowerCase());
-		for (const name of [table, ...triggers]) names.add(name.toLowerCase());
+		const guarded = guardTable(db, wanted, provenance);
+		tables.add(guarded.table.toLowerCase());
+		for (const name of guarded.triggers) triggers.add(name.toLowerCase());
+		for (const name of [guarded.table, ...guarded.triggers]) names.add(name.toLowerCase());
 	}
 	return guard;
 }
@@ -295,9 +364,43 @@ export function shadowRefusal(db: DatabaseSync, guard: Guard): string | undefine
 		: `A temporary ${String(first.type)} named '${String(first.name)}' is refused: it would hide the append-only table.`;
 }
 
+/** Why the guard refuses a call of the function `name`, a guard function. */
+function functionMessage(name: string): string {
+	return `The function '${name.toLowerCase()}' is refused: the guard of the append-only tables calls it alone.`;
+}
+
+/**
+ * Why the engine authorizer denies an action, or undefined. The guard denies
+ * each CREATE TRIGGER, and a call of a guard function outside a guard
+ * trigger. `trigger` is the innermost trigger or view of the action.
+ */
+export function guardDenial(
+	guard: Guard,
+	action: number,
+	name: string | null,
+	trigger: string | null,
+): string | undefined {
+	if (guard.tables.size === 0) return undefined;
+	if (action === SQLITE_CREATE_TRIGGER || action === SQLITE_CREATE_TEMP_TRIGGER) {
+		return TRIGGER_REFUSED;
+	}
+	if (action !== SQLITE_FUNCTION || name === null || !GUARD_FUNCTION.test(name)) return undefined;
+	return trigger !== null && guard.triggers.has(trigger.toLowerCase())
+		? undefined
+		: functionMessage(name);
+}
+
 /** Why the guard refuses `text`, one statement without its leading comments, or undefined. */
 export function guardRefusal(text: string, guard: Guard): string | undefined {
 	if (guard.names.size === 0) return undefined;
+	if (CREATE_TRIGGER.test(text)) return TRIGGER_REFUSED;
+	const called = GUARD_FUNCTION.exec(text)?.[0];
+	if (called !== undefined) return functionMessage(called);
+	return targetRefusal(text, guard);
+}
+
+/** Why the guard refuses a DROP, an ALTER, or a PRAGMA in `text`, or undefined. */
+function targetRefusal(text: string, guard: Guard): string | undefined {
 	const kind = /^(drop|alter|pragma)\b/i.exec(text)?.[1]?.toLowerCase();
 	const pattern = kind === undefined ? undefined : TARGETS[kind];
 	if (kind === undefined || pattern === undefined) return undefined;
