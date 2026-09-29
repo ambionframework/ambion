@@ -41,7 +41,7 @@ floor.
 | `docs/workstation-git.md` | Design contract for the git backend on the workstation: one account for the repositories, git over SSH — read with `git.md`                                          |
 | `docs/example.md`         | The one runnable example, an agentic lab workspace, and what it must show                                                                                            |
 | `docs/roster.md`          | Design contract for a roster that changes while the room runs — read with `agent.md`                                                                                 |
-| `docs/sensors.md`         | Design contract for sensors, pending in 0.5.0: daemons behind one API, which a workspace and a person read — read with `workspace.md`                                |
+| `docs/sensors.md`         | Design contract for sensors, pending in 0.5.0: agent-managed server processes, connected through the workspace — read with `workspace.md`                            |
 | `docs/durability.md`      | What the record promises under failure, and how the tiers prove it — read with `agent.md`                                                                            |
 | `docs/deployment.md`      | Host placement, storage, reconnect, and the recovery evidence — read with `durability.md`                                                                            |
 | `docs/formal.md`          | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                                                          |
@@ -64,9 +64,14 @@ the changelog. The note at the top of [`planning/next.md`](planning/next.md)
 holds the rule.
 
 The sensor wire API of [Sensors](docs/sensors.md#the-sensor-api) carries
-a version number. A daemon on a device does not upgrade with the host. So
-a breaking change raises `api`, and a client refuses a daemon at another
-`api`.
+a version number. A supplied server does not upgrade with the host.
+A breaking change raises `api`, and a client refuses a server at another `api`. Reducer
+state belongs to the server implementation. The workspace retains observed
+evidence through existing snapshot refs. Measurement timestamps are the
+source of truth; host time governs host interactions.
+Sensor definitions start as Git templates. The agent forks, customizes,
+validates, commits, and pushes before running a saved version. Replacement
+and rollback use the existing Git and process tools.
 
 Ambient means a room remains available between interactions. A scheduled say
 lets an agent come back to its work on the room's clock. A host that wants a

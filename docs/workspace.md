@@ -1,5 +1,9 @@
 # The workspace
 
+> **Pending in 0.5.0:** [Sensors](sensors.md) specifies `connect`,
+> `observe`, and automatic evidence retention through snapshots. These
+> tools require a bash backend with the proposed workstation port capability.
+
 **The workspace is the Pi binding of the resource contract.** The optional
 `@ambionframework/workspace` package provides a workspace resource and its
 tools. The package `@ambionframework/just-bash` provides the memory and

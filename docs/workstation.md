@@ -1,5 +1,10 @@
 # The workstation
 
+> **Pending in 0.5.0:** [Workstation ports](sensors.md#workstation-ports)
+> specifies HTTP access to sensor-server processes through SSH forwarding.
+> The current backend has no port capability. Its implementation must add
+> hostname guidance and forwarding lifecycle handling.
+
 **`@ambionframework/workstation` implements this page.** It builds on the
 workspace interface that [Workspace](workspace.md) states. The
 [package guide](../packages/workstation/README.md) shows how to prepare a

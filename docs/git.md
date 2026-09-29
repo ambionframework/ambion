@@ -1,5 +1,10 @@
 # The git backend
 
+> **Pending in 0.5.0:** [Sensors](sensors.md#run-a-server-from-git) uses
+> templates and agent-owned forks to define, customize, and save sensor
+> servers. Branches, commits, and pushes use the existing Git tools.
+> Starting, replacing, and rolling back a server are explicit agent actions.
+
 **`@ambionframework/just-bash/git` implements this page.** The contract
 lives in the root entry of `@ambionframework/workspace`, and the name
 rules and the template helpers live in `@ambionframework/workspace/git`.

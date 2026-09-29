@@ -14,7 +14,7 @@ condition holds moves to the top of its section.
 | [Known defects](#known-defects)               | K1–K6  | K2, the allow-list of the SQL guard      |
 | [Release and CI](#release-and-ci)             | L3, R1 | L3, a billing failure reads as one       |
 | [Rules and proofs](#rules-and-proofs)         | P1–P6  | P1, `returnable` into the verified rules |
-| [Designs with a shape](#designs-with-a-shape) | D2–D22 | D2, compaction with no person            |
+| [Designs with a shape](#designs-with-a-shape) | D1–D22 | D1, exchange bounds                      |
 | [Deferred by decision](#deferred-by-decision) | None   | None                                     |
 
 ## Known defects
@@ -123,6 +123,12 @@ for scale.
 
 ### For rooms that run unattended
 
+**D1. Exchange limits, spend, and quotas.** These are outside the
+initial sensor implementation. The former SK1 proposal did not define
+its accounting or admission contract. A future design must state what
+it bounds, how concurrent work counts, and what happens at the boundary.
+**Condition:** an application requires a kernel-enforced work bound.
+
 **D2. Compaction with no person.** A summary goes to a person, so an
 exchange where no person spoke never folds. A monitor that ticks each ten
 minutes adds about 1,000 returned says in a week. The first step is a
@@ -180,12 +186,10 @@ The change writes one seating for each seat at a start and drops `agents`
 from the composition. **Condition:** a recomposition that must keep a
 seating that a seat made.
 
-**D22. A count bound on a chain of scheduled says.** A returned say opens
-an exchange, and in it the agent can schedule the next say. The chain has
-a time bound and no count bound. `limits.schedule.chain` would refuse a
-say past a depth, which the fold derives from `returned.message`. SK1 of
-[next.md](next.md#the-kernel) bounds one exchange, and this bound covers
-the chain. **Condition:** a chain that runs past the need of its owner.
+**D22. A bound on a chain of scheduled says.** A returned say can lead
+to another scheduled say. Existing schedule limits bound one delay and
+the pending count, not the full chain. This is outside 0.5.0.
+**Condition:** an application needs a finite chain enforced by the room.
 
 ### For labs at scale
 
@@ -236,7 +240,8 @@ an object store, and gives the URL that a person outside the room opens.
   the published URL, so a reader inside the room and one outside it read
   the same bytes.
 - **A copy that no message cites is garbage.** A sweep keeps each digest
-  that a ref of a room names and removes the rest.
+  that a ref of a room names and removes the rest. A retained manifest
+  also keeps the objects that its snapshot refs name.
 
 **Condition:** an application that must share a file outside the room, or
 an object store that grows past what the host keeps.
@@ -246,9 +251,8 @@ snapshot of a folder, a file at a commit, and the result of a SQL query
 have no ref of their own. A message names them in its text. The kernel
 owns each form, and a resource makes the thing it names.
 
-The sensor forms land in 0.5.0 as [SK2 of next.md](next.md#the-kernel),
-and a new form follows the same list of changes. **Condition:** an agent
-that must cite one of them from another room.
+Sensor evidence in 0.5.0 uses existing snapshot refs. **Condition:** an
+agent needs a reference whose meaning an existing snapshot cannot carry.
 
 **D14. A Codex seat cites its changes with snapshots.** The Codex executor
 cites each file that a completed patch changed as a `file:` URI of the
@@ -311,79 +315,41 @@ snapshot.
 
 ### For sensors
 
-**D21. The rest of sensors, after 0.5.0.** 0.5.0 ships the cut of
-[next.md](next.md#the-cut). Each part below keeps the id of its step, and
-[Sensors](../docs/sensors.md) holds its design under a pending label. A
-part that lands removes its pending label, and names its exports in the
-changelog, in the same commit. The live stream comes first, because the
-live parts and audio need it.
+**D21. Sensor capabilities after the functional core.** 0.5.0 uses Git
+templates for the fork, customize, validate, save, run, and rollback
+lifecycle. Connected processes supply observations retained as snapshots. [Sensors](../docs/sensors.md) is the current contract.
+The previous broad daemon design is superseded by that boundary.
 
-- **The live stream (SN14).** `GET /live`, the `live` option of
-  `serveSensors`, `live` and `viewers()` of `AcquireContext`, and the live
-  parts of `scriptedAcquire` (SN11). It removes `live` from the refusal of
-  SN10. It brings the live fragments of SN16 and SN17, the live pipe of
-  SN20, and the live lines of SN23.
+- **A framework server and SDK.** The old SN9-SN25 daemon work belongs
+  here only if several server repositories need a shared implementation.
+  Reducer state remains internal to those implementations. Instrument
+  drivers, SCPI, serial helpers, ffmpeg, annotation, and model captions
+  require no framework commitment in 0.5.0.
+- **Automatic event delivery.** SN26 and SN28 become an optional host
+  integration. A later design must define delivery, cursor recovery, and
+  policy changes. Host time governs host interaction. Measurement times
+  remain the source of truth. Existing `room.post` needs no change.
+- **Additional sensor views.** Live streams, clips, audio playback, browser
+  views, CORS, public endpoints, and public tunnels require an application
+  that needs them. They add no required API or client code to 0.5.0.
+- **Service automation.** Persistent connections, automatic restart,
+  upgrades, external URL connections, and hot-plug discovery wait for
+  experience with explicit process management and `connect`.
+- **Additional scenarios.** SN29 and the old multi-instrument bench
+  become use cases for server repositories. The initial release has one
+  small workstation example. SN30's paid live case is optional evidence.
+- **Advanced reads.** Pagination, re-reduction controls, multi-sensor
+  requests, and configurable rendering wait for a caller that needs them.
+  Initial span reads use the same `observe` operation as latest reads.
 
-  **Evidence:** a viewer gets each event kind in order. A viewer at
-  `fps: 2` over a tap of 10 frames each second gets two frames each
-  second. A viewer that reads nothing gets a `gap`, and the acquisition
-  and the reduce loop keep their rate. An idle stream gets `: ping` on the
-  fake clock, and the ninth viewer gets `429 viewers`.
+**Superseded items add no future obligation.** SN2's full scripted daemon
+is replaced by a small conformance fixture. SN7's separate history export
+is replaced by span reads and snapshots. SK2's sensor URI forms are
+replaced by existing snapshot refs. SN32-SN35 cover workstation ports,
+connections, automatic retention, and lifecycle acceptance in the plan.
 
-  A viewer gets one fragment of each channel for each 100 ms, and a
-  `text` event for each line. The pipe gives frames at `live.fps` while a
-  viewer reads, and none while `viewers()` gives 0.
-
-- **Audio (SN22).** `ffmpegAudio`, `speech`, `transcribe`, `/audio`, and
-  live chunks, with the WAV of `fixtureMedia`. It removes `audio` from the
-  refusal of SN10. The tokens line of
-  [Trust](../docs/trust.md#what-the-kernel-does-not-defend) then names the
-  live video and audio that a `read` token sees, and the mic.
-
-  **Evidence:** a WAV fixture with two tone bursts gives two audio parts
-  and two detections. `transcribe` over a scripted program adds one text
-  part to each. `/audio` gives the samples of the stretch. The live stream
-  gives one WAV chunk for each 100 ms. Each chunk has a `RIFF` header, a
-  `fmt ` chunk of 16 bits, and 100 ms of samples.
-
-- **Images in `runAgent` (SN24).** `RunAgentRequest` of `@ambionframework/pi`
-  gets `images`, which `runAgent` passes to `lane.prompt`.
-  [Simulator](../docs/simulator.md#the-model-call) states the field.
-
-  **Evidence:** the user message of the scripted Pi stream holds the images in
-  order, and a request with no images runs as today.
-
-- **`windowCaption` (SN25).** `windowCaption(services, { model, last })` gives
-  the frames to `runAgent` in order, and ends on a `caption` tool call. It
-  needs SN13 and SN24.
-
-  **Evidence:** the user message of the scripted Pi stream holds the frames in
-  order, and the caption lands as a text part on the observation. Services
-  with `sessions: 'memory'` leave no session file.
-
-- **Triggered captures (`scpiTriggered` in SN17).** `scpiTriggered` polls the
-  trigger state every `pollMs`, and fetches each capture with a `triggered`
-  detection. A scripted scope gives the captures.
-
-  **Evidence:** `scpiTriggered` puts the trigger time in `details`, and the
-  scripted scope receives the re-arm of a single capture.
-
-- **Clips (`/clip` in SN19, and the clip of `level` in SN21).** `/clip` cuts
-  at the keyframe at or before `from`. It adds `clip` to the `paths` of
-  `ffmpegVideo`, and removes `clip` from the refusal of SN10.
-
-  **Evidence:** `/clip` gives the stretch that `X-From` names, and `level`
-  also keeps a clip of one second.
-
-- **The later questions and scenarios of the bench (SN27, SN29).** SN27
-  adds `mic` and `windowCaption`, and questions 4 and 7. SN29 adds `scope`
-  on each trigger for scenarios 1, 3, and 5, and a host that posts for
-  scenarios 2 and 11. It also adds `mic` for scenario 7, `windowCaption`,
-  and the views of scenarios 8 and 10 that read `/live`.
-
-  **Evidence:** each question and scenario runs on the scripted tier, as in
-  0.5.0.
-  **Condition:** 0.5.0 shipped its cut, and an application needs the part.
+**Condition:** the core workflow has shipped, and an application needs
+one of these capabilities. No order between these items is promised.
 
 ## Deferred by decision
 
