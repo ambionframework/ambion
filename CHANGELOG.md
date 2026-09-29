@@ -7,6 +7,12 @@
 client types. `@ambionframework/workspace/sensor-api.schema.json` publishes
 the generated JSON Schema.
 
+**The workstation forwards private loopback ports over SSH.** The workspace
+root exports `WorkspacePort` and `WorkspacePorts`, and `BashBackend` accepts
+the optional `ports` capability. `workstationBackend` forwards a remote
+`127.0.0.1` service port to an automatically assigned host loopback port.
+The caller closes each transport. The URL is private and temporary.
+
 ## 0.4.0 (2026-09-29)
 
 **0.4.0 is a release of simplification.** Each fact of the room has one

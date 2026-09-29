@@ -47,13 +47,38 @@ const lab = openWorkspace({
 });
 ```
 
-| Option          | What it is                                                                                                                       |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `host`, `port`  | The address of the server. The port is 22 by default                                                                             |
-| `hostKey`       | The SHA-256 fingerprint of the server's host key. The backend refuses any other                                                  |
-| `layout`        | The path of the audit log, the folder of the room mirror, and the folder of the snapshots on the server                          |
-| `idleTimeout`   | Seconds a connection may stay with no open environment before the backend closes it. A running process holds one. 300 by default |
-| `credentialFor` | The username and private key of an agent, or of the host account `<name>-host`                                                   |
+| Option          | What it is                                                                                                       |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `host`          | The configured workstation hostname                                                                              |
+| `port`          | The SSH login port. It is 22 by default                                                                          |
+| `hostKey`       | The SHA-256 fingerprint of the server's host key. The backend refuses any other                                  |
+| `layout`        | The path of the audit log, the folder of the room mirror, and the folder of the snapshots on the server          |
+| `idleTimeout`   | Seconds a connection may stay with no environment or port open. Processes and open ports hold it. 300 by default |
+| `credentialFor` | The username and private key of an agent, or of the host account `<name>-host`                                   |
+
+**A workstation exposes a private port transport.** The `hostname` field
+names `host`. The port passed to `ports.open` is the remote HTTP service
+port. `options.port` is the SSH login port. The transport URL uses a
+temporary host loopback port. The private URL is an HTTP root. The workspace
+exports the `WorkspacePort` and `WorkspacePorts` types from its root entry.
+The owner manages a sensor server as an ordinary process from its Git
+repository.
+
+```ts
+const backend = workstationBackend(options);
+if (!backend.ports) throw new Error('This backend has no port transport.');
+
+const transport = await backend.ports.open({ name: 'instruments' }, 43127);
+try {
+  const response = await fetch(transport.url);
+  await response.text();
+} finally {
+  await transport.close();
+}
+```
+
+The caller closes each successful transport. An abort signal cancels
+establishment. It does not close a transport after `open` succeeds.
 
 ## The git backend
 
@@ -114,6 +139,17 @@ only from the loopback address, until it expires.
 **The host provisions every account and the key of each account.** The
 bash backend stores, issues, and rotates no account key.
 
+**OpenSSH permits local forwards to workstation loopback services.** The
+SSH account configuration must allow local forwarding and restrict its
+destination to `127.0.0.1:*`. For example, an applicable `Match` block uses:
+
+```text
+AllowTcpForwarding local
+PermitOpen 127.0.0.1:*
+```
+
+The backend reports an explicit error when OpenSSH refuses a forward.
+
 - **One account for each agent and for `<name>-host`,** each with a
   login shell that runs a command, and a home of mode `0700`.
 - **`bash` and a `setsid` that has `--wait`,** from util-linux.
@@ -148,12 +184,16 @@ machine.
 
 - **`pnpm test`** runs the scripted tier. An `ssh2` server in the test
   process serves a temporary directory, and `workspaceConformance` runs on
-  it. It needs `setsid`, so it skips on macOS. The tests of the git
-  backend also need `git` and `flock`, and skip without them.
-- **`pnpm test:sshd`** runs the integration tier against OpenSSH. Run
-  `sudo bash test/sshd/setup.sh <dir>` first, and set
+  it. It needs `setsid`, so it skips on macOS. Port tests also forward a real
+  HTTP server through this tier. The tests of the git backend need `git` and
+  `flock`, and skip without them.
+- **`pnpm test:sshd`** runs the integration tier against OpenSSH. When
+  `/usr/sbin/sshd` exists, four port tests start a temporary unprivileged
+  server. They check HTTP forwarding, disabled forwarding, a denied
+  non-loopback destination, and host-key refusal. The rest of the tier uses
+  a provisioned setup. Run `sudo bash test/sshd/setup.sh <dir>` first, and set
   `AMBION_WORKSTATION_SSHD=<dir>/workstation.json`. The script adds users,
-  so run it on a machine you can throw away. The tier runs
+  so run it on a machine you can throw away. The provisioned tier runs
   `gitConformance` on the git account `lab-git`.
 
 [Workstation](https://github.com/ambionframework/ambion/blob/main/docs/workstation.md)
