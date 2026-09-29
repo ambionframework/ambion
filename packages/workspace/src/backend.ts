@@ -33,6 +33,26 @@ export interface BashServices {
 	readonly git?: GitAccess;
 }
 
+/** A private HTTP endpoint that reaches a service through a bash backend. */
+export interface WorkspacePort {
+	/** The transient HTTP root URL that the workspace host can reach. */
+	readonly url: string;
+	/** Close the listener and release the backend resources. */
+	close(): Promise<void>;
+}
+
+/** Optional access to services that run on the machine of a bash backend. */
+export interface WorkspacePorts {
+	/** The configured machine where workspace commands run. */
+	readonly hostname: string;
+	/** Forward a remote loopback service to a private host loopback listener. */
+	open(
+		agent: { readonly name: string },
+		port: number,
+		signal?: AbortSignal,
+	): Promise<WorkspacePort>;
+}
+
 /**
  * The bash backend: a shell over a persistent filesystem, with a home for
  * each agent. The workspace binds its tools over this shell.
@@ -50,6 +70,8 @@ export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
 	 * `access.transport` is not in the list. Absent, the backend carries none.
 	 */
 	readonly gitTransports?: readonly string[];
+	/** Optional private transport to services on the backend machine. */
+	readonly ports?: WorkspacePorts;
 	/** Guidance for the backend's own shell: its commands, its network, and its isolation. */
 	guidance?: string;
 	/** Where this backend keeps the audit log, the room mirrors, and the snapshots. */

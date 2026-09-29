@@ -40,6 +40,8 @@ export type {
 	WorkspaceBackends,
 	WorkspaceEnv,
 	WorkspaceLayout,
+	WorkspacePort,
+	WorkspacePorts,
 } from './backend.ts';
 export type { ScriptRun } from './execution-env.ts';
 export {

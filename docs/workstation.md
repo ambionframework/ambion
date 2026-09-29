@@ -1,9 +1,7 @@
 # The workstation
 
-> **Pending in 0.5.0:** [Workstation ports](sensors.md#workstation-ports)
-> specifies HTTP access to sensor-server processes through SSH forwarding.
-> The current backend has no port capability. Its implementation must add
-> hostname guidance and forwarding lifecycle handling.
+**The workstation forwards ports through SSH.** See
+[Workstation ports](sensors.md#workstation-ports) for the transport contract.
 
 **`@ambionframework/workstation` implements this page.** It builds on the
 workspace interface that [Workspace](workspace.md) states. The
@@ -71,7 +69,8 @@ workspace supplies everything that holds on every backend
 | `connect()` and `dispose()`               | The workstation                                                 |
 | `SshEnv`, the transport of each call      | The workstation                                                 |
 | `layout`: the audit log, rooms, snapshots | The workstation, from its options                               |
-| `guidance` about the shell                | The workstation                                                 |
+| `guidance` about the shell and hostname   | The workstation                                                 |
+| `ports.open()` for loopback services      | The workstation                                                 |
 | `read`, `write`, `edit`                   | The workspace: the three file tools                             |
 | `bash`, `ps`, `status`, `wait`, `cancel`  | The workspace: the process tools ([Processes](processes.md))    |
 | `snapshot`, `restore`                     | The workspace ([Snapshot a file](workspace.md#snapshot-a-file)) |
@@ -393,14 +392,15 @@ call adds network round trips to every tool call.
   `unknown` with no exit code. An append that the connection lost can have
   landed or not, and the caller cannot tell which.
 - **`idleTimeout` closes an unused client.** A client with no open
-  environment for `idleTimeout` seconds closes, and the default is 300.
-  A background process holds an environment of its own for its whole run
-  ([Processes](processes.md#backends)), so a process keeps its client open. The timer
-  starts when the last environment is cleaned up. The
-  next `connect()` for that agent builds a new client. A long workspace
-  run holds a client only for an agent that works.
-- **`dispose()` closes every client.** The backend deletes no data on the
-  server. The host removes a workspace's folders with its own tools.
+  environment or port transport for `idleTimeout` seconds closes. The
+  default is 300. A background process holds an environment of its own for
+  its whole run ([Processes](processes.md#backends)). An open port transport
+  holds a client until its caller closes the transport. The timer starts
+  when the last lease ends. The next `connect()` for that agent builds a
+  new client. A long workspace run holds a client only for an agent that works.
+- **`dispose()` closes every client and port listener.** The backend deletes
+  no data on the server. The host removes a workspace's folders with its own
+  tools.
 
 **The channels stay under the server's limit.** OpenSSH allows 10 sessions
 on one connection by default (`MaxSessions`). The bash owner runs one
@@ -474,7 +474,9 @@ new keys.
 **The workspace describes the tools, and the workstation describes its
 shell.** The workstation's `guidance` states what every workstation has:
 a real shell, open network access, and one account for each agent. The
-application names the commands that its server installs.
+application names the commands that its server installs. Guidance also
+names the configured workstation hostname and separates the remote service
+port from the SSH login port and the private host loopback URL.
 
 ## Trust
 

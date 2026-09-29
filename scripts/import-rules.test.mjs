@@ -39,6 +39,12 @@ const CASES = [
 	['packages/workspace/src', '@ambionframework/ambion/testing', true],
 	['packages/workspace/src', 'just-bash', true],
 	['packages/workspace/src', '@ambionframework/just-bash', true],
+	[
+		'packages/workspace/src',
+		['@ambionframework/just-bash', '@ambionframework/ambion'],
+		true,
+		'backend.ts',
+	],
 	// The workstation knows the workspace interface, the git helpers, and no room.
 	['packages/workstation/src', '@ambionframework/workspace', false],
 	['packages/workstation/src', '@ambionframework/workspace/resource', false],
@@ -75,7 +81,7 @@ const CASES = [
 	['packages/ambion/src', 'node:sqlite', true],
 ];
 
-/** The probe files Biome refused, by the path of each in the copied tree. */
+/** The number of restricted-import diagnostics for each probe path. */
 function refusedProbes(tree) {
 	let output = '';
 	try {
@@ -87,27 +93,39 @@ function refusedProbes(tree) {
 	} catch (error) {
 		output = `${error.stdout ?? ''}${error.stderr ?? ''}`;
 	}
-	const refused = output.matchAll(/^(\S+\.ts):\d+:\d+ lint\/style\/noRestrictedImports/gm);
-	return new Set([...refused].map((match) => match[1]));
+	const refused = output.matchAll(/^(\S+\.ts):(\d+):\d+ lint\/style\/noRestrictedImports/gm);
+	const lines = new Map();
+	for (const match of refused) {
+		const path = match[1];
+		if (!path) continue;
+		const found = lines.get(path) ?? new Set();
+		found.add(match[2]);
+		lines.set(path, found);
+	}
+	return lines;
 }
 
 test('the import rules refuse each import they name, and pass each published entry', () => {
 	const tree = mkdtempSync(join(tmpdir(), 'ambion-import-rules-'));
 	try {
 		copyFileSync(join(root, 'biome.jsonc'), join(tree, 'biome.jsonc'));
-		const probes = CASES.map(([folder, specifier, refuse], index) => {
-			const path = `${folder}/import-probe-${index}.ts`;
+		const probes = CASES.map(([folder, value, refuse, file], index) => {
+			const path = `${folder}/${file ?? `import-probe-${index}.ts`}`;
+			const specifiers = Array.isArray(value) ? value : [value];
 			mkdirSync(dirname(join(tree, path)), { recursive: true });
-			writeFileSync(join(tree, path), `import * as m from '${specifier}';\nexport const y = m;\n`);
-			return { path, specifier, refuse };
+			const imports = specifiers
+				.map((specifier, importIndex) => `import * as m${importIndex} from '${specifier}';`)
+				.join('\n');
+			writeFileSync(join(tree, path), `${imports}\n`);
+			return { path, specifiers, refuse, expected: specifiers.length };
 		});
 		const refused = refusedProbes(tree);
-		for (const { path, specifier, refuse } of probes) {
+		for (const { path, specifiers, refuse, expected } of probes) {
 			const verb = refuse ? 'refuse' : 'pass';
 			assert.equal(
-				refused.has(path),
-				refuse,
-				`${dirname(path)}: the rules do not ${verb} ${specifier}`,
+				refused.get(path)?.size ?? 0,
+				refuse ? expected : 0,
+				`${dirname(path)}: the rules do not ${verb} ${specifiers.join(', ')}`,
 			);
 		}
 	} finally {

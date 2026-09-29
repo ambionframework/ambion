@@ -94,6 +94,12 @@ PasswordAuthentication no
 KbdInteractiveAuthentication no
 AllowUsers ${ACCOUNTS[*]} $GIT_ACCOUNT
 Subsystem sftp internal-sftp
+AllowTcpForwarding no
+AllowStreamLocalForwarding no
+GatewayPorts no
+Match Group $GROUP
+	AllowTcpForwarding local
+	PermitOpen 127.0.0.1:*
 Match User $GIT_ACCOUNT
 	AuthorizedKeysFile .ssh/authorized_keys .ssh/authorized_keys.ambion
 EOF

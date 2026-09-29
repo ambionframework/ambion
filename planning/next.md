@@ -23,9 +23,9 @@ and its acceptance. [The backlog](backlog.md) holds everything else.
 
 ## Status
 
-**0.4.0 shipped. SN1 and SN27 are implemented and validated on this
-branch.** The wire schemas, client types, and forkable sensor-server
-template exist. SN3, SN4, SN32, and the remaining 0.5.0 steps are pending.
+**0.4.0 shipped. SN1, SN27, and SN32 are implemented and validated on this
+branch.** The wire schemas, client types, validated template, and workstation
+port transport exist. SN3, SN4, and the remaining 0.5.0 steps are pending.
 This scope incorporates the owner's response to the review of `origin/main`
 `0f9ef1e27eed0f27c3ec47aef09071d54b044ff8` on 2026-09-29.
 [The review disposition](review-0.5.0.md) records the changed decisions.
@@ -132,14 +132,13 @@ Within a phase, items can proceed together when their dependencies allow.
 - [x] **1.** The minimal schema and launch source metadata. (SN1)
 - [x] **2.** The forkable template and its lifecycle contract. Needs 1. (SN27)
 - [ ] **3.** The client and conformance cases. Needs 1 and 2. (SN3, SN4)
-- [ ] **4.** The workspace port contract and workstation forwarding. (SN32)
+- [x] **4.** The workspace port contract and workstation forwarding. (SN32)
 
 **Evidence:** the template can be forked, customized, validated, committed,
 and pushed. Template tests validate its responses against SN1 schemas; they
 do not claim to run SN4. After SN4 lands, its server passes reusable
-conformance over HTTP. The same server is readable through SSH on a
-workstation loopback port. A refused forward leaves no transport resources
-behind.
+conformance over HTTP. A real loopback HTTP fixture is readable through SSH
+on a workstation. A refused forward leaves no transport resources behind.
 
 ### Phase 2. Connect, observe, and retain
 
@@ -200,11 +199,12 @@ Implement it through the existing workstation SSH session machinery.
 Expose the configured hostname in guidance. Reuse account credentials
 and host-key verification. Keep the destination at remote loopback.
 
-**Evidence:** both the in-process SSH tier and OpenSSH tier reach a real
-HTTP server. Abort, failure, and disposal release session references,
-channels, and local listeners. Forwarding denial is visible. just-bash
-keeps no port capability. Update the applicable neutral import rules and
-their existing probe when adding the transport types.
+**Evidence:** the in-process SSH and rootless OpenSSH tiers reach a real
+loopback HTTP server. Tests cover disabled forwarding, a destination outside
+loopback, invalid ports, establishment cancellation, disconnect, close, and
+backend disposal. They verify release of session leases, channels, and local
+listeners. Forwarding refusal is explicit. just-bash has no port capability.
+The import rules and their probe cover the neutral transport types.
 
 **SN33. Connections.** Add `connect` only when the backend has ports.
 Implement ownership checks, readiness validation, qualified sensor names,

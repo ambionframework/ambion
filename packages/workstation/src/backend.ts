@@ -26,10 +26,13 @@ import type {
 	BashServices,
 	WorkspaceEnv,
 	WorkspaceLayout,
+	WorkspacePort,
+	WorkspacePorts,
 } from '@ambionframework/workspace';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import { WORKSTATION_TRANSPORTS, writeGitFiles } from './git-agent.ts';
 import type { WorkstationGitAccess } from './git-backend.ts';
+import { openWorkspacePort } from './ports.ts';
 import { Session, type WorkstationCredential } from './session.ts';
 import { SshEnv } from './ssh-env.ts';
 
@@ -54,18 +57,24 @@ export interface WorkstationOptions {
 }
 
 /** The facts that hold on every workstation. The application names the commands its server installs. */
-const GUIDANCE = [
-	'Your workspace is a real server. You log in to it as your own Unix account, and your',
-	'home is your working directory. Other agents have accounts of their own, and the',
-	"server's permissions keep your home apart from theirs. bash is a real shell with open",
-	'network access, and the commands you can run are the ones the server installs.',
-].join('\n');
+const guidance = (host: string, loginPort: number) =>
+	[
+		'Your workspace is a real server. You log in to it as your own Unix account, and your',
+		'home is your working directory. Other agents have accounts of their own, and the',
+		"server's permissions keep your home apart from theirs. bash is a real shell with open",
+		'network access, and the commands you can run are the ones the server installs.',
+		`Your workstation hostname is ${host}. SSH login uses port ${loginPort}.`,
+		'A forwarded service port targets remote 127.0.0.1. Its private HTTP URL uses a',
+		'temporary loopback port on the Ambion host.',
+	].join('\n');
 
 /** One agent's session, and the idle timer that closes it. */
 interface Entry {
 	readonly session: Promise<Session>;
+	readonly startup: AbortController;
+	ready?: Session;
 	timer: NodeJS.Timeout | undefined;
-	/** The envs over this session that are not yet cleaned up. A background process holds one. */
+	/** Environments, pending acquisitions, and open ports that hold this session. */
 	open: number;
 }
 
@@ -105,21 +114,36 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 	const { port, idleMs } = checkedServer('workstationBackend', options);
 	const address = { host: options.host, port, hostKey: options.hostKey };
 	const entries = new Map<string, Entry>();
+	const activePorts = new Set<() => Promise<void>>();
+	let disposed = false;
 
 	const forget = (name: string, entry: Entry) => {
 		clearTimeout(entry.timer);
 		if (entries.get(name) === entry) entries.delete(name);
 	};
 
-	const open = (agent: WorkspaceAgent, signal: AbortSignal | undefined): Entry => {
+	const open = (agent: WorkspaceAgent): Entry => {
+		const startup = new AbortController();
 		const entry: Entry = {
-			session: (async () => Session.connect(address, await options.credentialFor(agent), signal))(),
+			startup,
+			session: (async () => {
+				const credential = await options.credentialFor(agent);
+				if (startup.signal.aborted) throw startup.signal.reason;
+				return Session.connect(address, credential, startup.signal);
+			})(),
 			timer: undefined,
 			open: 0,
 		};
 		entries.set(agent.name, entry);
 		entry.session.then(
-			(session) => session.whenEnded(() => forget(agent.name, entry)),
+			(session) => {
+				entry.ready = session;
+				session.whenEnded(() => forget(agent.name, entry));
+				if (disposed || entry.open === 0) {
+					forget(agent.name, entry);
+					session.close();
+				}
+			},
 			() => forget(agent.name, entry),
 		);
 		return entry;
@@ -130,6 +154,15 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 		entry.open -= 1;
 		if (entry.open > 0) return;
 		clearTimeout(entry.timer);
+		if (session.closed) {
+			forget(name, entry);
+			return;
+		}
+		if (disposed) {
+			forget(name, entry);
+			session.close();
+			return;
+		}
 		entry.timer = setTimeout(() => {
 			forget(name, entry);
 			session.close();
@@ -137,25 +170,84 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 		entry.timer.unref();
 	};
 
-	/** An env over the agent's live session, and a new session when the last one closed. */
+	/** Reserve a session reference while the caller awaits a pending SSH setup. */
+	const acquireEntry = async (
+		agent: WorkspaceAgent,
+		entry: Entry,
+		signal: AbortSignal | undefined,
+	): Promise<{ session: Session; release(): void }> => {
+		clearTimeout(entry.timer);
+		entry.open += 1;
+		const release = leaseRelease(agent.name, entry, idle, releasePending);
+		const setupSignal =
+			signal === undefined ? entry.startup.signal : AbortSignal.any([signal, entry.startup.signal]);
+		let session: Session;
+		try {
+			session = await waitFor(entry.session, setupSignal);
+		} catch (error) {
+			release();
+			throw error;
+		}
+		if (session.closed) {
+			release();
+			forget(agent.name, entry);
+			return leaseFor(agent, signal);
+		}
+		return { session, release };
+	};
+
+	/** A lease over the agent's session, and a new session when the last one closed. */
+	const leaseFor = async (
+		agent: WorkspaceAgent,
+		signal: AbortSignal | undefined,
+	): Promise<{ session: Session; release(): void }> => {
+		if (disposed) throw new Error('The workstation backend is disposed.');
+		if (signal?.aborted) throw signal.reason ?? new Error('Connection aborted.');
+		return acquireEntry(agent, entries.get(agent.name) ?? open(agent), signal);
+	};
+
+	const releasePending = (name: string, entry: Entry) => {
+		if (entry.open > 0) entry.open -= 1;
+		if (entry.open === 0) {
+			if (entry.ready === undefined) {
+				entry.startup.abort(new Error('Workstation session setup has no active owner.'));
+			} else {
+				entry.ready.close();
+			}
+			forget(name, entry);
+		}
+	};
+
 	const envFor = async (
 		agent: WorkspaceAgent,
 		signal: AbortSignal | undefined,
 	): Promise<SshEnv> => {
-		const entry = entries.get(agent.name) ?? open(agent, signal);
-		const session = await entry.session;
-		if (session.closed) {
-			forget(agent.name, entry);
-			return envFor(agent, signal);
-		}
-		clearTimeout(entry.timer);
-		entry.open += 1;
-		return new SshEnv(session, () => idle(agent.name, entry, session));
+		const lease = await leaseFor(agent, signal);
+		return new SshEnv(lease.session, lease.release);
+	};
+
+	const ports: WorkspacePorts = {
+		hostname: options.host,
+		async open(agent, remotePort, signal): Promise<WorkspacePort> {
+			if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65_535) {
+				throw new RangeError('The workstation service port must be an integer from 1 to 65535.');
+			}
+			const lease = await leaseFor(agent, signal);
+			if (disposed) {
+				lease.release();
+				throw new Error('The workstation backend is disposed.');
+			}
+			return openWorkspacePort(lease.session, remotePort, signal, lease.release, (close) => {
+				activePorts.add(close);
+				return () => activePorts.delete(close);
+			});
+		},
 	};
 
 	return {
 		layout: options.layout,
-		guidance: GUIDANCE,
+		guidance: guidance(options.host, port),
+		ports,
 		gitTransports: WORKSTATION_TRANSPORTS,
 		async connect(
 			agent: WorkspaceAgent,
@@ -175,11 +267,54 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 			return env;
 		},
 		async dispose(): Promise<void> {
+			disposed = true;
 			const all = [...entries.values()];
 			entries.clear();
-			for (const entry of all) clearTimeout(entry.timer);
-			const sessions = await Promise.allSettled(all.map((entry) => entry.session));
-			for (const settled of sessions) if (settled.status === 'fulfilled') settled.value.close();
+			for (const entry of all) {
+				clearTimeout(entry.timer);
+				entry.startup.abort(new Error('Workstation backend disposed.'));
+			}
+			await Promise.all([...activePorts].map((close) => close()));
+			for (const entry of all) {
+				void entry.session.then(
+					(session) => session.close(),
+					() => undefined,
+				);
+			}
 		},
 	};
+}
+
+function waitFor<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+	if (signal.aborted) {
+		void work.catch(() => undefined);
+		return Promise.reject(signal.reason ?? new Error('Operation aborted.'));
+	}
+	return new Promise<T>((resolve, reject) => {
+		const abort = () => reject(signal.reason ?? new Error('Operation aborted.'));
+		signal.addEventListener('abort', abort, { once: true });
+		work.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+	});
+}
+
+function once(fn: () => void): () => void {
+	let called = false;
+	return () => {
+		if (called) return;
+		called = true;
+		fn();
+	};
+}
+
+function leaseRelease(
+	name: string,
+	entry: Entry,
+	idle: (name: string, entry: Entry, session: Session) => void,
+	releasePending: (name: string, entry: Entry) => void,
+): () => void {
+	return once(() => {
+		const session = entry.ready;
+		if (session === undefined) releasePending(name, entry);
+		else idle(name, entry, session);
+	});
 }

@@ -16,7 +16,7 @@
 import { spawn } from 'node:child_process';
 import { timingSafeEqual } from 'node:crypto';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
-import type { AddressInfo } from 'node:net';
+import net, { type AddressInfo, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ssh2, { type Connection, type ServerChannel } from 'ssh2';
@@ -33,12 +33,23 @@ export interface TestServer {
 	readonly homes: ReadonlyMap<string, string>;
 	/** How many times a client has authenticated, by account. */
 	readonly logins: Map<string, number>;
+	/** Direct-tcpip channels currently held by a port transport. */
+	readonly forwards: Set<ServerChannel>;
+	/** Pending SSH forwarding decisions held by the fixture for cancellation tests. */
+	readonly pendingForwards: Set<() => void>;
+	/** SSH clients still held open by the fixture. */
+	readonly clients: ReadonlySet<Connection>;
 	/** End every client connection the server holds, as a dropped network would. */
 	dropClients(): void;
 	/** Refuse each new session channel while `refuse` is true, as a full `MaxSessions` would. */
 	refuseChannels(refuse: boolean): void;
 	/** Write `text` to stderr before each command, as a login shell's `.bashrc` can. */
 	setLoginNoise(text: string): void;
+	/** Refuse forwarding requests while `refuse` is true. */
+	refuseForwarding(refuse: boolean): void;
+	/** Hold or release pending forwarding decisions. */
+	holdForwarding(hold: boolean): void;
+	releaseForwarding(): void;
 	stop(): Promise<void>;
 }
 
@@ -90,12 +101,20 @@ interface ServerState {
 	readonly logins: Map<string, number>;
 	readonly key: Parsed;
 	refuse: boolean;
+	refuseForwarding: boolean;
+	holdForwarding: boolean;
 	loginNoise: string;
+	readonly forwards: Set<ServerChannel>;
+	readonly pendingForwards: Set<() => void>;
+	readonly cancelPendingForwards: Map<Connection, Map<() => void, () => void>>;
 }
 
 function onClient(client: Connection, state: ServerState) {
 	const { homes, logins, key } = state;
 	let account: string | undefined;
+	client.once('close', () => {
+		for (const cancel of state.cancelPendingForwards.get(client)?.values() ?? []) cancel();
+	});
 	client.on('authentication', (ctx) => {
 		const home = homes.get(ctx.username);
 		if (ctx.method !== 'publickey' || home === undefined) return ctx.reject(['publickey']);
@@ -118,6 +137,68 @@ function onClient(client: Connection, state: ServerState) {
 			);
 			session.on('sftp', (acceptSftp) => serveSftp(acceptSftp(), home));
 		});
+		client.on('tcpip', (accept, reject, info) => {
+			if (
+				state.refuseForwarding ||
+				info.destIP !== '127.0.0.1' ||
+				!Number.isInteger(info.destPort)
+			) {
+				return reject();
+			}
+			const socket: Socket = net.connect(info.destPort, '127.0.0.1');
+			let decided = false;
+			let decide = () => undefined;
+			const pending = () => {
+				const forClient = state.cancelPendingForwards.get(client);
+				forClient?.delete(decide);
+				if (forClient?.size === 0) state.cancelPendingForwards.delete(client);
+			};
+			const cancel = () => {
+				state.pendingForwards.delete(decide);
+				pending();
+				decided = true;
+				socket.destroy();
+			};
+			decide = () => {
+				state.pendingForwards.delete(decide);
+				pending();
+				if (decided) return;
+				decided = true;
+				if (!socket.destroyed && socket.readable && socket.writable) {
+					const channel = accept();
+					state.forwards.add(channel);
+					const done = () => {
+						state.forwards.delete(channel);
+						channel.destroy();
+						socket.destroy();
+					};
+					channel.once('close', done);
+					channel.once('error', done);
+					socket.once('close', done);
+					socket.once('error', done);
+					channel.pipe(socket).pipe(channel);
+				} else {
+					reject();
+				}
+			};
+			const connected = () => {
+				if (state.holdForwarding) {
+					state.pendingForwards.add(decide);
+					const forClient = state.cancelPendingForwards.get(client) ?? new Map();
+					forClient.set(decide, cancel);
+					state.cancelPendingForwards.set(client, forClient);
+				} else decide();
+			};
+			socket.once('connect', connected);
+			socket.once('error', () => {
+				if (!decided) {
+					state.pendingForwards.delete(decide);
+					pending();
+					decided = true;
+					reject();
+				}
+			});
+		});
 	});
 	client.on('error', () => undefined);
 }
@@ -133,7 +214,19 @@ export async function startSshServer(accounts: readonly string[]): Promise<TestS
 	}
 	const logins = new Map<string, number>();
 	const clients = new Set<Connection>();
-	const state: ServerState = { homes, logins, key: allowed, refuse: false, loginNoise: '' };
+	const forwards = new Set<ServerChannel>();
+	const state: ServerState = {
+		homes,
+		logins,
+		key: allowed,
+		refuse: false,
+		refuseForwarding: false,
+		holdForwarding: false,
+		loginNoise: '',
+		forwards,
+		pendingForwards: new Set(),
+		cancelPendingForwards: new Map(),
+	};
 	const server = new Server({ hostKeys: [hostKey.private] }, (client) => {
 		// The server side of a connection has `setNoDelay` at runtime, and its types omit it.
 		(client as Connection & { setNoDelay(on: boolean): void }).setNoDelay(true);
@@ -158,6 +251,9 @@ export async function startSshServer(accounts: readonly string[]): Promise<TestS
 		},
 		homes,
 		logins,
+		forwards,
+		pendingForwards: state.pendingForwards,
+		clients,
 		dropClients: () => {
 			for (const client of clients) client.end();
 		},
@@ -166,6 +262,15 @@ export async function startSshServer(accounts: readonly string[]): Promise<TestS
 		},
 		setLoginNoise: (text) => {
 			state.loginNoise = text;
+		},
+		refuseForwarding: (refuse) => {
+			state.refuseForwarding = refuse;
+		},
+		holdForwarding: (hold) => {
+			state.holdForwarding = hold;
+		},
+		releaseForwarding: () => {
+			for (const decide of [...state.pendingForwards]) decide();
 		},
 		stop: async () => {
 			for (const client of clients) client.end();

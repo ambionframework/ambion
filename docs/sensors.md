@@ -1,10 +1,10 @@
 # Sensors
 
-> **Pending in 0.5.0.** SN1's wire schemas and client types exist in
+> **Pending in 0.5.0.** The wire schemas and client types exist in
 > `@ambionframework/workspace`. The current branch includes the implemented
-> and validated SN27 Workbench template. Workspace `connect` and `observe`,
-> port transport, and SN4's reusable conformance runner remain pending. See the
-> [release plan](../planning/next.md).
+> and validated SN27 Workbench template, and the workstation port transport
+> is available. Workspace `connect` and `observe`, and SN4's reusable
+> conformance runner remain pending. See the [release plan](../planning/next.md).
 
 **A forked Git repository defines a sensor server.** The agent customizes
 its acquisition and reduction code, validates it, and saves working
@@ -266,9 +266,8 @@ give the configured workstation hostname. They distinguish the remote
 sensor port from the SSH login port and any local transport address.
 The agent does not need to construct a tunnel command.
 
-**The bash backend exposes one optional port capability.** This is a
-proposed transport contract, separate from its existing environment
-`connect` method:
+**The bash backend exposes one optional port capability.** This transport
+contract is separate from its existing environment `connect` method:
 
 ```ts
 interface WorkspacePort {
@@ -285,26 +284,31 @@ interface WorkspacePorts {
   ): Promise<WorkspacePort>;
 }
 
-// Proposed optional member of BashBackend:
+// Optional member of BashBackend:
 // readonly ports?: WorkspacePorts;
 ```
 
 **The workstation implements the capability through SSH forwarding.**
-It forwards only to workstation `127.0.0.1:<port>`, using the process
-owner's existing credentials and host-key verification. Any host listener
-binds to loopback and uses an automatically assigned port. Its address
-is an implementation detail and never becomes a ref or stored identity.
+`hostname` is the configured workstation hostname. The `port` argument is
+the remote HTTP service port on workstation `127.0.0.1`. `WorkstationOptions.port`
+is the SSH login port. The remote service port must be an integer from 1 to 65535. The returned URL uses a private host loopback address and an
+automatically assigned local port. It contains no SSH credentials and is
+temporary. It is not a ref or stored identity. The transport reuses the
+process owner's credentials and host-key verification.
 
-**The transport owns its SSH lifetime.** It holds a session reference
-while open. The opening signal cancels establishment. After a successful
-open, the connection registry owns its lifetime and calls `close`. A tool
-request abort closes that request, without closing another reader's work.
-A lost session fails the request. A later `observe` may rebuild the transport
-after rechecking the process. It does not replay a failed observe
-automatically, because the server may acquire on request.
+**The caller owns the open transport.** `open` holds an SSH session reference
+until `close` completes. Its optional signal cancels establishment and releases
+partial resources. After success, the caller must call `close`. Closing is
+safe more than once. An aborted request does not close this shared transport.
+SSH disconnect, forwarding failure, and backend disposal release its channels,
+session reference, and local listener.
 
-**OpenSSH must permit this forwarding.** The connection error names a
-forwarding refusal. The example setup enables the required loopback
+**Sensor request recovery remains pending.** The future observe flow may
+rebuild a transport only after it rechecks the process. It will not replay a
+failed observe automatically, because the server may acquire data on request.
+
+**OpenSSH must permit this forwarding.** The backend reports a forwarding
+refusal explicitly. The example setup enables the required loopback
 destination. Tests cover both permitted and denied forwarding.
 
 **A process handle is a lifecycle link.** It does not prove that an

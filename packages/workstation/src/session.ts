@@ -52,7 +52,7 @@ function hostKeyText(key: Buffer): string {
 /** One live client for one agent. */
 export class Session {
 	private open = true;
-	private readonly onEnd: Array<() => void> = [];
+	private readonly onEnd = new Set<() => void>();
 	private stop: (error: Error) => void = () => undefined;
 	/**
 	 * Rejects when the session ends. `ssh2` fails the SFTP requests in flight
@@ -89,8 +89,17 @@ export class Session {
 	): Promise<Session> {
 		const { client, hostKey } = await authenticated(address, credential, signal);
 		try {
-			const sftp = await call<SFTPWrapper>((done) => client.sftp(done));
-			const home = await call<string>((done) => sftp.realpath('.', done));
+			const sftp = await setupCall(
+				client,
+				call<SFTPWrapper>((done) => client.sftp(done)),
+				signal,
+			);
+			const home = await setupCall(
+				client,
+				call<string>((done) => sftp.realpath('.', done)),
+				signal,
+				sftp,
+			);
 			return new Session(client, sftp, home, hostKeyText(hostKey));
 		} catch (error) {
 			client.end();
@@ -103,9 +112,13 @@ export class Session {
 	}
 
 	/** Run `fn` once, when the session ends for any reason. */
-	whenEnded(fn: () => void): void {
-		if (this.open) this.onEnd.push(fn);
-		else fn();
+	whenEnded(fn: () => void): () => void {
+		if (this.open) {
+			this.onEnd.add(fn);
+			return () => this.onEnd.delete(fn);
+		}
+		fn();
+		return () => undefined;
 	}
 
 	/** `work`, or a rejection as soon as the session ends. */
@@ -127,6 +140,40 @@ export class Session {
 		}
 	}
 
+	/** Open one SSH direct-tcpip channel to the workstation's loopback. */
+	async forwardOut(port: number, signal?: AbortSignal): Promise<ClientChannel> {
+		if (!this.open) throw new ConnectionClosed();
+		if (signal?.aborted) throw signal.reason ?? new Error('Port opening aborted.');
+		return new Promise<ClientChannel>((resolve, reject) => {
+			let settled = false;
+			let removeEnd: () => void = () => {};
+			const finish = (error?: Error, channel?: ClientChannel) => {
+				if (settled) {
+					if (channel !== undefined) drainAndDestroy(channel);
+					return;
+				}
+				settled = true;
+				signal?.removeEventListener('abort', abort);
+				removeEnd();
+				settleForward(error, channel, this.open, resolve, reject);
+			};
+			const abort = () =>
+				finish(
+					signal?.reason instanceof Error ? signal.reason : new Error('Port opening aborted.'),
+				);
+			const ended = () => finish(closedError());
+			signal?.addEventListener('abort', abort, { once: true });
+			removeEnd = this.whenEnded(ended);
+			try {
+				this.client.forwardOut('127.0.0.1', 0, '127.0.0.1', port, (error, channel) =>
+					finish(error ?? undefined, channel),
+				);
+			} catch (error) {
+				finish(error instanceof Error ? error : new Error(String(error)));
+			}
+		});
+	}
+
 	close(): void {
 		this.client.end();
 		this.end();
@@ -136,8 +183,40 @@ export class Session {
 		if (!this.open) return;
 		this.open = false;
 		this.stop(closedError());
-		for (const fn of this.onEnd.splice(0)) fn();
+		for (const fn of this.onEnd) fn();
+		this.onEnd.clear();
 	}
+}
+
+function settleForward(
+	error: Error | undefined,
+	channel: ClientChannel | undefined,
+	open: boolean,
+	resolve: (channel: ClientChannel) => void,
+	reject: (error: Error) => void,
+): void {
+	if (error !== undefined) {
+		if (channel !== undefined) drainAndDestroy(channel);
+		reject(error);
+		return;
+	}
+	if (channel === undefined) {
+		reject(new Error('SSH returned no forwarding channel.'));
+		return;
+	}
+	if (!open) {
+		drainAndDestroy(channel);
+		reject(closedError());
+		return;
+	}
+	channel.on('error', () => undefined);
+	resolve(channel);
+}
+
+function drainAndDestroy(channel: ClientChannel): void {
+	channel.unpipe();
+	channel.resume();
+	channel.destroy();
 }
 
 /** The error of a call that the session's end cut short. */
@@ -149,6 +228,55 @@ export class ConnectionClosed extends Error {
 }
 
 const closedError = () => new ConnectionClosed();
+
+/** Reject an SFTP setup stage when its authenticated SSH client ends. */
+async function setupCall<T>(
+	client: Client,
+	work: Promise<T>,
+	signal: AbortSignal | undefined,
+	sftp?: SFTPWrapper,
+): Promise<T> {
+	let fail: (error: Error) => void = () => {};
+	const disconnected = new Promise<T>((_, reject) => {
+		fail = reject;
+	});
+	const failed = (error: Error) => fail(error);
+	const closed = () => fail(closedError());
+	client.on('error', failed);
+	client.on('close', closed);
+	sftp?.on('error', failed);
+	sftp?.on('close', closed);
+	try {
+		return await abortable(Promise.race([work, disconnected]), signal, () => client.end());
+	} finally {
+		client.off('error', failed);
+		client.off('close', closed);
+		sftp?.off('error', failed);
+		sftp?.off('close', closed);
+	}
+}
+
+/** Race one SSH setup stage against cancellation, and release its client on abort. */
+function abortable<T>(
+	work: Promise<T>,
+	signal: AbortSignal | undefined,
+	cleanup: () => void,
+): Promise<T> {
+	if (signal === undefined) return work;
+	if (signal.aborted) {
+		cleanup();
+		void work.catch(() => undefined);
+		return Promise.reject(signal.reason ?? new Error('Connection aborted.'));
+	}
+	return new Promise<T>((resolve, reject) => {
+		const abort = () => {
+			cleanup();
+			reject(signal.reason ?? new Error('Connection aborted.'));
+		};
+		signal.addEventListener('abort', abort, { once: true });
+		work.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+	});
+}
 
 /** A client that has authenticated, and the host key it verified. */
 interface Authenticated {
@@ -164,15 +292,27 @@ function authenticated(
 ): Promise<Authenticated> {
 	return new Promise<Authenticated>((resolve, reject) => {
 		const client = new Client();
+		// Keep the event handled between authentication and Session construction.
+		client.on('error', () => undefined);
 		let mismatch: string | undefined;
 		let verified: Buffer = Buffer.alloc(0);
 		const abort = () => {
 			client.end();
 			reject(signal?.reason ?? new Error('Connection aborted.'));
 		};
+		const failure = (error: Error) => {
+			settle();
+			client.end();
+			reject(mismatch === undefined ? error : new Error(mismatch));
+		};
+		const closed = () => failure(closedError());
 		if (signal?.aborted) return abort();
 		signal?.addEventListener('abort', abort, { once: true });
-		const settle = () => signal?.removeEventListener('abort', abort);
+		const settle = () => {
+			signal?.removeEventListener('abort', abort);
+			client.off('error', failure);
+			client.off('close', closed);
+		};
 		client.once('ready', () => {
 			settle();
 			// Each SFTP call waits for its answer. Nagle's algorithm holds a small
@@ -181,10 +321,8 @@ function authenticated(
 			client.setNoDelay(true);
 			resolve({ client, hostKey: verified });
 		});
-		client.once('error', (error) => {
-			settle();
-			reject(mismatch === undefined ? error : new Error(mismatch));
-		});
+		client.on('error', failure);
+		client.once('close', closed);
 		const options = {
 			host: address.host,
 			port: address.port,
@@ -207,8 +345,7 @@ function authenticated(
 			client.connect(options);
 		} catch (error) {
 			// `ssh2` throws at once for a key it cannot read.
-			settle();
-			reject(error);
+			failure(error instanceof Error ? error : new Error(String(error)));
 		}
 	});
 }

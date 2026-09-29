@@ -36,6 +36,11 @@ it.each([
 	expect(Object.keys(entry).sort()).toEqual(names);
 });
 
+it('does not offer real workstation ports', () => {
+	expect(main.memoryBackend().ports).toBeUndefined();
+	expect(main.directoryBackend('/tmp').ports).toBeUndefined();
+});
+
 /** The specifiers one built file imports, whatever the quote or the form. */
 const importsOf = (code: string): string[] =>
 	[...code.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1] ?? '');
