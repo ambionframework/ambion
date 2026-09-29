@@ -13,11 +13,10 @@
  * test framework, so it runs in Node and in workerd alike.
  */
 import type { ConformanceCase } from '@ambionframework/journal/conformance';
+import { type RoomScript, type ScriptedRoom, scriptedRoom } from './conformance-room.ts';
 import {
-	type Call,
 	check,
 	claims,
-	LEASE_MS,
 	leases,
 	operations,
 	pause,
@@ -30,18 +29,14 @@ import type {
 	ExecutorSession,
 	PassInput,
 } from './execution/executor.ts';
-import {
-	type AgentPort,
-	assertWire,
-	type CommitRequest,
-	type CommitResult,
-	type LeaseRequest,
-	type LeaseResponse,
-	type RoomProtocol,
-	roundTrip,
-	type ViewResponse,
+import type {
+	AgentPort,
+	CommitRequest,
+	CommitResult,
+	LeaseRequest,
+	RoomProtocol,
 } from './protocol.ts';
-import type { Message, Seq } from './types.ts';
+import type { Seq } from './types.ts';
 
 export {
 	type ExecutorCapabilities,
@@ -113,148 +108,6 @@ export function speakOnce(): Executor {
 	};
 }
 
-// -- the scripted room --------------------------------------------------------
-
-interface Script {
-	/** The view answer waits until the case calls `release`. */
-	readonly holdView?: boolean;
-	/** The first commit records its request, then throws once. */
-	readonly failFirstCommit?: boolean;
-}
-
-interface ScriptedRoom {
-	readonly protocol: RoomProtocol;
-	/** Lets a held view answer. */
-	release(): void;
-	readonly calls: Call[];
-	readonly violations: string[];
-}
-
-/** The room the suite plays: one person, one question, one seat, one activation. */
-function scriptedRoom(name: string, seat: string, script: Script): ScriptedRoom {
-	const activation = `message:1:${seat}:1`;
-	const calls: Call[] = [];
-	const violations: string[] = [];
-	const landed = new Map<string, Message>();
-	let lastSeq: Seq = 1;
-	let ended = false;
-	let open = () => {};
-	const held =
-		script.holdView === true
-			? new Promise<void>((resolve) => {
-					open = resolve;
-				})
-			: undefined;
-	let failed = false;
-	const question: Message = {
-		kind: 'said',
-		seq: 1,
-		at: new Date(0).toISOString(),
-		from: 'priya',
-		text: 'When is the pour?',
-	};
-
-	const record = <T>(op: Call['op'], request: unknown, answer: () => T | Promise<T>) => {
-		const wire = (what: string, value: unknown) => {
-			try {
-				assertWire(value);
-			} catch (error) {
-				violations.push(`${op} ${what}: ${error instanceof Error ? error.message : String(error)}`);
-			}
-		};
-		wire('request', request);
-		const entry = { op, request: roundTrip(request), response: undefined as unknown };
-		calls.push(entry);
-		return Promise.resolve()
-			.then(answer)
-			.then((response) => {
-				wire('response', response);
-				calls[calls.indexOf(entry)] = { ...entry, response: roundTrip(response) };
-				return response;
-			});
-	};
-
-	const stale = { stale: 'the lease ended' };
-
-	const view = (): ViewResponse => ({
-		view: {
-			spec: {
-				id: activation,
-				seat,
-				attempt: 1,
-				purpose: { kind: 'respond', message: 1 },
-			},
-			through: 1,
-			context: {
-				name,
-				now: Date.now(),
-				participants: [
-					{
-						kind: 'human',
-						name: 'priya',
-						identity: 'Project manager.',
-						presence: 'present',
-						messagesSinceDeparture: 0,
-					},
-					{
-						kind: 'agent',
-						name: seat,
-						identity: 'Answers once.',
-						status: 'active',
-						attention: 'broadcast',
-					},
-				],
-				messages: [question],
-				exchange: { person: 'priya', from: 1 },
-				reserve: [],
-			},
-		},
-	});
-
-	const commit = (request: CommitRequest): CommitResult => {
-		if (ended || request.activation !== activation) return stale;
-		const again = landed.get(request.key);
-		if (again !== undefined) return { committed: again };
-		if (request.intent.kind !== 'said') return { refused: 'the suite takes a said only' };
-		lastSeq += 1;
-		const message: Message = {
-			kind: 'said',
-			seq: lastSeq,
-			key: request.key,
-			activationId: activation,
-			at: new Date().toISOString(),
-			from: seat,
-			text: request.intent.text,
-		};
-		landed.set(request.key, message);
-		return { committed: message };
-	};
-
-	const lease = (request: LeaseRequest): LeaseResponse => {
-		if (ended || request.activation !== activation) return stale;
-		if (request.operation === 'release') ended = true;
-		return { ok: { expiresAt: Date.now() + LEASE_MS, lastSeq } };
-	};
-
-	const protocol: RoomProtocol = {
-		view: (id, message) =>
-			record('view', message === undefined ? { id } : { id, message }, async () => {
-				await held;
-				return id === activation && !ended ? view() : stale;
-			}),
-		commit: (request) =>
-			record('commit', request, () => {
-				if (script.failFirstCommit === true && !failed) {
-					failed = true;
-					throw new Error('the commit answer was lost');
-				}
-				return commit(request);
-			}),
-		lease: (request) => record('lease', request, () => lease(request)),
-	};
-	return { protocol, release: open, calls, violations };
-}
-
 // -- the cases ----------------------------------------------------------------
 
 interface Session {
@@ -264,11 +117,11 @@ interface Session {
 	readonly activation: string;
 	readonly patience: number;
 	wake(): Promise<void>;
-	waitFor(read: () => boolean, what: string): Promise<void>;
+	waitFor(read: () => boolean | Promise<boolean>, what: string): Promise<void>;
 }
 
 type Body = (session: Session) => Promise<void>;
-const cases: readonly (readonly [string, Script, Body])[] = [
+const cases: readonly (readonly [string, RoomScript, Body])[] = [
 	[
 		'carries a wake to the seat, which claims, views, commits, and releases over the wire',
 		{},
@@ -358,7 +211,7 @@ const cases: readonly (readonly [string, Script, Body])[] = [
 	],
 	[
 		'cuts the running activation, and nothing more lands under its lease',
-		{ holdView: true },
+		{ hold: 'view' },
 		async (s) => {
 			await s.wake();
 			await s.waitFor(() => operations(s.room, 'view').length > 0, 'the view request');
@@ -395,7 +248,7 @@ export function portConformance(harness: PortHarness): readonly ConformanceCase[
 	const suite = Math.random().toString(36).slice(2);
 	const patience = harness.patience ?? 5_000;
 	let count = 0;
-	const run = async (script: Script, body: Body): Promise<void> => {
+	const run = async (script: RoomScript, body: Body): Promise<void> => {
 		count += 1;
 		const names = { room: `port-${suite}-${count}`, seat: 'product' };
 		const room = scriptedRoom(names.room, names.seat, script);

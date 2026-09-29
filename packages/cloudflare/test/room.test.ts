@@ -24,7 +24,7 @@ interface Room {
 		key?: string;
 	}): Promise<{ person?: string }>;
 	leave(name: string): Promise<void>;
-	visits: Map<string, { leave(): Promise<void> }>;
+	presentVisit(name: string): { leave(): Promise<void> } | undefined;
 	metadata: {
 		read(): Promise<Record<string, unknown>>;
 		change(change: () => { patch: Record<string, unknown> }): Promise<unknown>;
@@ -150,8 +150,8 @@ it('resumes over its own storage after eviction: it fences the old run, keeps th
 	await evict(stub, 'the test takes the object');
 	const again = roomOf(name);
 	// The next call builds the object again, and its constructor resumes the name.
-	// Startup rebuilds the live handle from journal presence, so a send needs no
-	// second visit. The abort may still be settling: the call that finds it retries.
+	// The room takes the visit from journal presence, so a send needs no second
+	// visit. The abort may still be settling: the call that finds it retries.
 	const retry = await until(async () => {
 		try {
 			return await again.send({ from: 'priya', text: 'After the restart.', key: 'q2' });
@@ -160,7 +160,7 @@ it('resumes over its own storage after eviction: it fences the old run, keeps th
 		}
 	});
 	expect(retry.person).toBe('priya');
-	// The rebuild's visit is idempotent, so it adds no arrival.
+	// The visit from the record writes nothing, so it adds no arrival.
 	expect(await count(again, 'arrived')).toBe(1);
 	expect(await presenceOf(again, 'priya')).toBe('present');
 	await refusesImpostor(again);
@@ -227,27 +227,6 @@ it('rejects a conflicting delivery key payload and recipient over RPC', async ()
 	});
 });
 
-it('rebuilds an admitted visit after the adapter loses its cache on eviction', async () => {
-	const name = 'room-interrupted-admission';
-	const stub = roomOf(name);
-	await stub.start({ name, agents: [] });
-	await inside<Room, void>(stub, async (object) => {
-		const originalSet = object.visits.set.bind(object.visits);
-		object.visits.set = ((key: string, value: { leave(): Promise<void> }) => {
-			if (key === 'priya') throw new Error('lose adapter admission cache');
-			return originalSet(key, value);
-		}) as typeof object.visits.set;
-		await expect(object.visit(priya)).rejects.toThrow(/lose adapter admission cache/);
-	});
-	await evict(stub, 'lose adapter admission cache');
-	const again = roomOf(name);
-	const exchange = await inside<Room, { person?: string }>(again, (object) =>
-		object.send({ from: 'priya', text: 'The admitted visit survived.', key: 'q1' }),
-	);
-	expect(exchange.person).toBe('priya');
-	expect(await count(again, 'arrived')).toBe(1);
-});
-
 it('keeps a departed human absent after restart', async () => {
 	const name = 'room-departure-restart';
 	const stub = await visited(name);
@@ -269,25 +248,36 @@ it('keeps a departed human absent after restart', async () => {
 	expect(await count(again, 'arrived')).toBe(1);
 });
 
-it('does not delete a deliberately reentered handle after an older leave returns', async () => {
+it('keeps a visit that reenters while an older leave is in flight', async () => {
 	const stub = await visited('room-leave-reentry-fence');
 	await inside<Room, void>(stub, async (object) => {
-		const old = object.visits.get('priya');
-		if (old === undefined) throw new Error('The test visit was not cached.');
-		const original = old.leave.bind(old);
-		const gate = Promise.withResolvers<void>();
+		// Hold the older leave after its departure lands, until the reentry lands.
+		const presentVisit = object.presentVisit.bind(object);
 		const departure = Promise.withResolvers<void>();
-		old.leave = async () => {
-			await original();
-			departure.resolve();
-			await gate.promise;
+		const gate = Promise.withResolvers<void>();
+		object.presentVisit = (name) => {
+			const visit = presentVisit(name);
+			if (visit === undefined) return undefined;
+			object.presentVisit = presentVisit;
+			return {
+				async leave() {
+					await visit.leave();
+					departure.resolve();
+					await gate.promise;
+				},
+			};
 		};
 		const leaving = object.leave('priya');
 		await departure.promise;
 		await object.visit(priya);
 		gate.resolve();
 		await leaving;
-		await object.send({ from: 'priya', text: 'The new visit remains cached.', key: 'q1' });
+		const exchange = await object.send({
+			from: 'priya',
+			text: 'The new visit remains.',
+			key: 'q1',
+		});
+		expect(exchange.person).toBe('priya');
 	});
 	expect(await count(stub, 'arrived')).toBe(2);
 	expect(await count(stub, 'left')).toBe(1);

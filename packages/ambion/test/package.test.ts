@@ -96,7 +96,6 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'hostingOf',
 		'localExecution',
 		'providerMessage',
-		'reconcileRoom',
 		'refusal',
 		'renderActivation',
 		'renderDelta',
@@ -109,6 +108,7 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'sessionToResume',
 		'summaryToolDescription',
 		'toolContext',
+		'visitOf',
 	]);
 	for (const name of Object.keys(main)) {
 		expect(hosting).not.toHaveProperty(name);

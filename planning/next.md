@@ -205,13 +205,10 @@ Each step states the change to
 page it changes in the same commit.
 
 - [ ] **5.** The core owns the activation state. (C6)
-- [ ] **7.** Cloudflare reuses the core, and one scripted room serves the
-      conformance suites. (C9)
 - [ ] **8.** A live file on each harness uses `wait` on `handles`. (C10)
 
-**Evidence:** the evidence of phase 1 holds for each step. Step 7 passes
-`portConformance` on `rpcExecution` in workerd. Steps 5 and 8 pass one
-live file on each of Pi, Claude, and Codex before they merge.
+**Evidence:** the evidence of phase 1 holds for each step. Steps 5 and 8
+pass one live file on each of Pi, Claude, and Codex before they merge.
 
 ### Phase 3. Release
 
@@ -258,21 +255,6 @@ each member that changes. **Evidence:** [Executors](../docs/executors.md)
 states the new `pass` contract, `executorConformance` tests it on the
 three executors, the prompt snapshot holds, and one live file passes on
 each harness.
-
-**C9. The host keeps one mechanism for each concern.**
-
-- **Cloudflare reuses the core.** `recoveryCall` and `releaseRecovered`
-  repeat the call of the runner, `RoomObject.visits` repeats the visits
-  of the room, and `reconcileRoom` repeats `Room.reconcile()`.
-- **One scripted room serves the conformance suites.** `scriptedRoom` and
-  `executorRoom` merge, and the port suite keeps the cases that a port
-  adds. `conformance.ts` and `conformance-executor-room.ts` each
-  hold their own question, participants block, and `stale` constant; the
-  merged room holds one of each, and `until` accepts an async predicate.
-  This sub-item closes M5 of 0.2.0.
-
-**Evidence:** the coverage of the core holds, and the Cloudflare tests
-pass in workerd.
 
 **C10. `wait` takes `handles` alone.** The owner keeps `status`, `ps`,
 and `wait` as three tools: each answers one question. The change landed

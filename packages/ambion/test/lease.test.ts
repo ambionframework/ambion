@@ -9,7 +9,15 @@ import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { decodeActivationId } from '../src/activation-id.ts';
-import { hostingOf, type RoomProtocol } from '../src/hosting.ts';
+import { speakOnce } from '../src/conformance.ts';
+import { executionHostOf, runningRoom } from '../src/host/runtime.ts';
+import {
+	type ExecutionEvent,
+	hostingOf,
+	type LeaseResponse,
+	localExecution,
+	type RoomProtocol,
+} from '../src/hosting.ts';
 import {
 	type CreateRuntimeOptions,
 	createRuntime,
@@ -23,7 +31,7 @@ import {
 } from '../src/index.ts';
 import type { LeaseChange } from '../src/journal/events.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
-import { type Fault, faulty } from './support/ports.ts';
+import { type Fault, faulty, portExecution } from './support/ports.ts';
 import {
 	assistant,
 	assistantEnded,
@@ -373,6 +381,54 @@ describe('a lease', () => {
 		expect(contexts).toHaveLength(2);
 		expect(contexts[0]).not.toContain('second');
 		expect(contexts[1]).toContain('second');
+	});
+
+	it('releases as failed a run that the host lost, and reports a release that no attempt confirms', async () => {
+		const clock = fakeClock();
+		const runtime = createRuntime({ clock });
+		const session = stopAtEnd(
+			await startRoom({
+				name: roomName('recover'),
+				agents: [solo],
+				seats: { [solo.name]: 'named' },
+				runtime,
+				execution: portExecution(() => ({
+					wake: async () => {},
+					steer: async () => {},
+					cut: async () => {},
+				})),
+			}),
+		);
+		const exchange = await (await enter(session)).send({ to: solo.name, text: 'say hi' });
+		const activation = `message:${exchange.from}:${solo.name}:1`;
+		const peer = runningRoom(runtime, session.name);
+		if (peer === undefined) throw new Error('The room is absent.');
+		expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
+		const events: ExecutionEvent[] = [];
+		const runner = (room: RoomProtocol) =>
+			localExecution('recover', () => () => speakOnce())
+				.connector(executionHostOf(runtime))
+				.connect(room, {
+					room: session.name,
+					seat: solo.name,
+					definition: solo,
+					emit: (event) => void events.push(event),
+				});
+		const lost = async (): Promise<LeaseResponse> => {
+			throw new Error('the release was lost');
+		};
+		await runner({ ...peer, lease: lost }).recover(activation);
+		expect(events).toEqual([
+			expect.objectContaining({ type: 'delivery_error', activation, operation: 'release' }),
+		]);
+		await runner(peer).recover(activation);
+		expect((await leaseChanges(runtime, session)).at(-1)).toMatchObject({
+			id: activation,
+			phase: 'ended',
+			reason: 'failed',
+			readThrough: 0,
+		});
+		expect(events).toHaveLength(1);
 	});
 });
 

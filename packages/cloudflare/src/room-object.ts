@@ -29,7 +29,7 @@ import type {
 	RoomProtocol,
 	ViewResponse,
 } from '@ambionframework/ambion/hosting';
-import { reconcileRoom, runningRoom } from '@ambionframework/ambion/hosting';
+import { runningRoom, visitOf } from '@ambionframework/ambion/hosting';
 import type { JournalOpener } from '@ambionframework/journal';
 import { definitionOf, runtimeFor } from './configure.ts';
 import type { SeatObject } from './seat-object.ts';
@@ -99,7 +99,6 @@ export class RoomObject extends DurableObject<Env> {
 	protected readonly storage: JournalOpener;
 	private room: Room | undefined;
 	private starting: Promise<void> | undefined;
-	private readonly visits = new Map<string, Visit>();
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
@@ -117,23 +116,10 @@ export class RoomObject extends DurableObject<Env> {
 				throw new Error(`Room '${name}' has no definitions in its metadata.`);
 			const recorded = await readRoom(name, { runtime: this.runtime, messages: false });
 			if (!recorded.initialized) return;
-			const room = await resumeRoom(name, {
+			this.room = await resumeRoom(name, {
 				runtime: this.runtime,
 				agents: agents.map(definitionOf),
 			});
-			this.room = room;
-			// Rebuild only live handles. The journal already contains each
-			// admitted identity (and private preferences); this idempotent core
-			// call does not append another arrival for a person already present.
-			const snapshot = await room.read({ messages: false });
-			for (const participant of snapshot.participants.filter(
-				(participant) => participant.kind === 'human' && participant.presence === 'present',
-			)) {
-				const visit = await room.visit(
-					defineHuman({ name: participant.name, identity: participant.identity }),
-				);
-				this.visits.set(participant.name, visit);
-			}
 		});
 	}
 
@@ -169,20 +155,14 @@ export class RoomObject extends DurableObject<Env> {
 		}
 	}
 
+	/** The room journal holds identity and presence. The object keeps no copy of either. */
 	async visit(person: Person): Promise<void> {
-		// The room journal is the authority for identity and presence. In
-		// particular, do not cache or persist the adapter value before core has
-		// admitted it: a rejected visit must not poison a later send or restart.
-		const human = defineHuman(person);
-		const visit = await this.running().visit(human);
-		this.visits.set(human.name, visit);
+		await this.running().visit(defineHuman(person));
 	}
 
-	/** The live visit for a person. A resumed room reconstructs it from durable presence. */
-	private visitOf(name: string): Visit {
-		const known = this.visits.get(name);
-		if (known !== undefined) return known;
-		throw new Error(`'${name}' has not visited this room.`);
+	/** The visit of a person whom the record holds present. A resumed room takes it from the record. */
+	private presentVisit(name: string): Visit | undefined {
+		return this.room === undefined ? undefined : visitOf(this.room, name);
 	}
 
 	async send(input: {
@@ -192,7 +172,8 @@ export class RoomObject extends DurableObject<Env> {
 		refs?: string[];
 		key?: string;
 	}): Promise<ExchangeRef> {
-		const visit = this.visitOf(input.from);
+		const visit = this.presentVisit(input.from);
+		if (visit === undefined) throw new Error(`'${input.from}' has not visited this room.`);
 		const exchange = await visit.send({
 			text: input.text,
 			...(input.refs === undefined ? {} : { refs: input.refs }),
@@ -202,13 +183,9 @@ export class RoomObject extends DurableObject<Env> {
 		return exchangeRef(exchange);
 	}
 
+	/** A person who is not present has nothing to leave, so a repeated leave does nothing. */
 	async leave(name: string): Promise<void> {
-		const visit = this.visits.get(name);
-		if (visit === undefined) return;
-		await visit.leave();
-		// A deliberate reentry may install a new handle while the old departure
-		// is awaiting its journal acknowledgement. Never remove that new handle.
-		if (this.visits.get(name) === visit) this.visits.delete(name);
+		await this.presentVisit(name)?.leave();
 	}
 
 	async seat(name: string, options?: { attention?: Attention }): Promise<void> {
@@ -252,7 +229,6 @@ export class RoomObject extends DurableObject<Env> {
 		await room.stop();
 		this.metadata.change(() => ({ patch: { stopped: true } }));
 		this.room = undefined;
-		this.visits.clear();
 	}
 
 	/** Read a detached coherent projection, including stopped records. */
@@ -298,7 +274,7 @@ export class RoomObject extends DurableObject<Env> {
 
 	/** The room's alarm is its clock: it folds, decides, writes and sends. */
 	override async alarm(): Promise<void> {
-		if (this.room !== undefined) await reconcileRoom(this.runtime, this.room.name);
+		await this.room?.reconcile();
 	}
 
 	private running(): Room {

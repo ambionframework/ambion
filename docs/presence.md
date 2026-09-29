@@ -93,6 +93,11 @@ ends it.** Calling `visit(human)` repeatedly is idempotent:
 uncertain departure with the same handle. An ended handle rejects `send`.
 Another `visit()` deliberately enters again and returns a new live handle.
 
+**A host reaches a present person with `visitOf(room, name)`.** The hosting
+entry exports it. It returns the visit of a person whom the record holds
+present, and it writes nothing. A resumed room holds no handle, so the first
+call takes one from the record.
+
 A cached handle must pass the journal's recovery and run checks before a visit returns.
 Applications own navigation policy, including rejection of delayed requests
 after departure.

@@ -14,10 +14,14 @@ export interface Call {
 /** The length of a lease a scripted room grants, in milliseconds. */
 export const LEASE_MS = 60_000;
 
-/** Polls every 20 ms until `read` holds, or fails after `patience`. */
-export async function until(read: () => boolean, patience: number, what: string): Promise<void> {
+/** Polls every 20 ms until `read` holds, or fails after `patience`. `read` may be async. */
+export async function until(
+	read: () => boolean | Promise<boolean>,
+	patience: number,
+	what: string,
+): Promise<void> {
 	const deadline = Date.now() + patience;
-	while (!read()) {
+	while (!(await read())) {
 		if (Date.now() > deadline) throw new Error(`Nothing came within ${patience} ms: ${what}.`);
 		await new Promise((resolve) => setTimeout(resolve, 20));
 	}

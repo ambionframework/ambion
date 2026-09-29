@@ -106,6 +106,27 @@ export async function visit(host: PeopleHost, human: HumanDefinition): Promise<V
 	}
 }
 
+/**
+ * The visit of a person whom the record holds present, or undefined. It
+ * writes nothing. A room that resumed holds no handle for the people who
+ * stayed, so the first call takes one from the record.
+ */
+export function presentVisit(host: PeopleHost, name: string): Visit | undefined {
+	if (host.gone()) return undefined;
+	const known = host.visits.get(name);
+	if (known !== undefined) return handle(host, known);
+	const person = host.state().people.get(name);
+	if (person?.presence !== 'present') return undefined;
+	const human = captureHuman({
+		name,
+		identity: person.identity,
+		...(person.preferences === undefined ? {} : { preferences: person.preferences }),
+	});
+	const runtime: VisitRuntime = { human, gone: false };
+	host.visits.set(name, runtime);
+	return handle(host, runtime);
+}
+
 /** Complete one arrival and cache the handle only after its presence is durable. */
 async function arrive(host: PeopleHost, captured: HumanDefinition): Promise<VisitRuntime> {
 	await host.ready;

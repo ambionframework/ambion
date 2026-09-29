@@ -5,6 +5,7 @@
  */
 import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { visitOf } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineHuman,
@@ -14,12 +15,14 @@ import {
 	type Visit,
 } from '../src/index.ts';
 import { observed } from './support/core-failure.ts';
+import { refusal } from './support/errors.ts';
 import { deferred, messagesOf, roomName, scriptedAgent } from './support/room.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { gatedJournals, type Storage, storages, tappedJournals } from './support/storage.ts';
 
 const person = defineHuman({ name: 'andrei', identity: 'Founder.' });
 const returnedPerson = defineHuman({ name: 'andrei', identity: 'Founder, returned.' });
+const reader = defineHuman({ name: 'mira', identity: 'Reader.', preferences: 'Short answers.' });
 
 it('types visit as an idempotent definite handle', () => {
 	const checkTypes = (room: Room) => {
@@ -158,15 +161,33 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 			await startRoom({ name, runtime: createRuntime({ storage: opened.storage }) }),
 		);
 		await first.visit(person);
+		await first.visit(reader);
 		const resumed = stopAtEnd(
 			await resumeRoom(name, { agents: [], runtime: createRuntime({ storage: opened.storage }) }),
 		);
 		await expect(observed(first.visit(person))).rejects.toThrow(/stopped|evicted|gone|superseded/);
+		// The resumed room takes each visit from the record, with the preferences, and writes nothing.
+		expect(visitOf(first, person.name)).toBeUndefined();
+		expect(visitOf(resumed, person.name)?.human).toEqual(person);
+		expect(visitOf(resumed, reader.name)?.human).toEqual(reader);
+		expect(visitOf(resumed, 'nobody')).toBeUndefined();
+		expect(() => visitOf({} as Room, person.name)).toThrow(TypeError);
 		const [one, two] = await Promise.all([resumed.visit(person), resumed.visit(person)]);
 		expect(one.human).toEqual(person);
-		await one.leave();
+		// After a visit, visitOf shares it: its send lands as the person.
+		const shared = visitOf(resumed, person.name);
+		if (shared === undefined) throw new Error('The visit is not shared.');
+		const asked = await shared.send({ text: 'through the shared visit', key: 'shared' });
+		expect(asked.person).toBe(person.name);
+		// A leave in flight ends the shared handle, and its own leave records no second departure.
+		const leaving = one.leave();
+		await expect(shared.send({ text: 'while leaving' })).rejects.toEqual(refusal('visit_ended'));
+		await Promise.all([leaving, shared.leave()]);
 		await expect(two.send({ text: 'after the shared leave' })).rejects.toThrow(/ended|leaving/);
-		expect(await count(resumed, 'arrived')).toBe(1);
+		expect(visitOf(resumed, person.name)).toBeUndefined();
+		// One arrival for each person, and one departure.
+		expect(await count(resumed, 'arrived')).toBe(2);
+		expect(await count(resumed, 'left')).toBe(1);
 	});
 
 	it('recovers an uncertain departure before recording one explicit reentry', async () => {

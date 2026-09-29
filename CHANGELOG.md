@@ -419,6 +419,18 @@ its `text`.
   `defineAgent` checks and copies the executor as the room does, so a
   malformed executor fails at `defineAgent`. The `executor` of the
   definition is a frozen copy of the executor that the caller gives.
+- **The Cloudflare objects call the core.** The hosting entry removes
+  `reconcileRoom`: a host calls `reconcile()` on the room. It exports
+  `visitOf(room, name)`, the visit of a person whom the record holds
+  present, and it writes nothing. `AgentRunner.recover(activation)`
+  releases as failed a run that the host lost. The room object keeps no
+  copy of the visits, and its alarm calls `reconcile()`. The seat object
+  releases a run that an eviction lost through `recover`. See
+  [Executors](docs/executors.md#the-hosting-entry-exports).
+- **One scripted room serves both conformance suites.** `portConformance`
+  and `executorConformance` play the same room, with one question, one
+  participants block, and one stale answer. The cases and their names
+  stay. The polling of a case takes an async predicate.
 - **The `./sql` entry of `@ambionframework/workspace` goes.**
   `openSqlResource`, `PROVENANCE_COLUMNS`, and the types `SqlResource`,
   `SqlResourceEnv`, and `SqlResourceOptions` go, with the `query` and
