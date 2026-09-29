@@ -73,11 +73,47 @@ const STAMPED_FUNCTION = 'ambion_stamped';
  */
 const GUARD_FUNCTION = /ambion_(?:provenance|stamp)\w*/i;
 
-/** What SQLite skips between two tokens: white space and comments. */
-const SKIP = String.raw`(?:\s|--[^\n]*(?:\n|$)|/\*[\s\S]*?(?:\*/|$))+`;
+/**
+ * The index past the white space and comments at `from`, as SQLite skips
+ * them. One pass with no backtracking, so no text makes it slow.
+ */
+function skipGap(text: string, from: number): number {
+	let at = from;
+	for (;;) {
+		if (/\s/.test(text.charAt(at))) at += 1;
+		else if (text.startsWith('--', at)) at = endOf(text, '\n', at + 2, 1);
+		else if (text.startsWith('/*', at)) at = endOf(text, '*/', at + 2, 2);
+		else return at;
+	}
+}
 
-/** A CREATE TRIGGER, also a temporary one, with white space or comments between the keywords. */
-const CREATE_TRIGGER = new RegExp(`^create${SKIP}(?:temp(?:orary)?${SKIP})?trigger\\b`, 'i');
+/** The index past the next `mark` from `from`, or the end of `text`. */
+function endOf(text: string, mark: string, from: number, width: number): number {
+	const found = text.indexOf(mark, from);
+	return found < 0 ? text.length : found + width;
+}
+
+/** The first `count` words of a statement in lower case, past white space and comments. */
+function leadingWords(text: string, count: number): string[] {
+	const words: string[] = [];
+	let at = skipGap(text, 0);
+	while (words.length < count) {
+		const word = /^[A-Za-z_][\w$]*/.exec(text.slice(at, at + 64))?.[0];
+		if (word === undefined) break;
+		words.push(word.toLowerCase());
+		at = skipGap(text, at + word.length);
+	}
+	return words;
+}
+
+/** True when a statement is a CREATE TRIGGER, also a temporary one, with white space or comments between the keywords. */
+function createsTrigger(text: string): boolean {
+	const [first, second, third] = leadingWords(text, 3);
+	if (first !== 'create') return false;
+	return (
+		second === 'trigger' || ((second === 'temp' || second === 'temporary') && third === 'trigger')
+	);
+}
 
 const TRIGGER_REFUSED =
 	'CREATE TRIGGER is refused: a trigger would run in the call of another agent, and it could write rows under the provenance of that agent.';
@@ -393,7 +429,7 @@ export function guardDenial(
 /** Why the guard refuses `text`, one statement without its leading comments, or undefined. */
 export function guardRefusal(text: string, guard: Guard): string | undefined {
 	if (guard.names.size === 0) return undefined;
-	if (CREATE_TRIGGER.test(text)) return TRIGGER_REFUSED;
+	if (createsTrigger(text)) return TRIGGER_REFUSED;
 	const called = GUARD_FUNCTION.exec(text)?.[0];
 	if (called !== undefined) return functionMessage(called);
 	return targetRefusal(text, guard);

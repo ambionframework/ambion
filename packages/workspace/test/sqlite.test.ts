@@ -686,6 +686,7 @@ describe.each(engines)('no agent trigger runs in the call of another agent, $nam
 		'CREATE /* a comment */ TRIGGER evil AFTER INSERT ON notes BEGIN SELECT 1; END',
 		'CREATE -- a comment\n TEMP/**/TRIGGER evil AFTER INSERT ON main.notes BEGIN SELECT 1; END',
 		'/* lead */ Create Temp Trigger "evil" BEFORE DELETE ON main.notes BEGIN SELECT 1; END',
+		`CREATE${'/**/'.repeat(40)}TRIGGER evil AFTER INSERT ON notes BEGIN SELECT 1; END`,
 	])('refuses %s, and runs no later statement', (statement) =>
 		wrap(async () => {
 			const site = records();
@@ -695,6 +696,15 @@ describe.each(engines)('no agent trigger runs in the call of another agent, $nam
 			expect(notes.ok && notes.rows).toEqual([{ n: 0 }]);
 		}),
 	);
+
+	it('reads a statement with many comments between its keywords in one pass', () =>
+		wrap(async () => {
+			const site = records();
+			const started = performance.now();
+			const outcome = await run(site, `CREATE${'/**/'.repeat(5000)}TABLE crowded (a)`);
+			expect(outcome.ok).toBe(true);
+			expect(performance.now() - started).toBeLessThan(2000);
+		}));
 
 	it.each([
 		"SELECT ambion_provenance('agent') AS agent",
