@@ -110,7 +110,13 @@ function cancelledClose(
 	at: string,
 ): Close | undefined {
 	if (open === undefined) return undefined;
-	return { owner: open.owner, from: open.from, through, at, cancelled: true };
+	return {
+		...(open.person === undefined ? {} : { person: open.person }),
+		from: open.from,
+		through,
+		at,
+		cancelled: true,
+	};
 }
 
 /** A cancellation ends old leases while retaining their reads. */

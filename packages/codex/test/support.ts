@@ -80,7 +80,7 @@ export function viewOf(
 					text: 'When is the pour?',
 				},
 			],
-			exchange: { owner: 'priya', from: 1 },
+			exchange: { person: 'priya', from: 1 },
 			reserve: [],
 		},
 	};

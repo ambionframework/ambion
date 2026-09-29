@@ -51,7 +51,7 @@ export const seat = (
 export async function open(
 	prefix: string,
 	agents: AgentDefinition[],
-	execution: Execution = claudeExecution(),
+	execution: Execution | readonly Execution[] = claudeExecution(),
 ) {
 	const log = collectSteps();
 	const runtime = createRuntime({ storage: memoryJournals(), execution, logger: log.logger });

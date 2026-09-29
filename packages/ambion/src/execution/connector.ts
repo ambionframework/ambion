@@ -1,14 +1,10 @@
 /**
- * The connector composer: what every executor package wires the same way.
+ * The local connector: each seat runs as an `AgentRunner` in this process.
  *
- * A connector picks the host's transport or the in-process default, and
- * builds one seat's execution context from the request the room sends.
  * `seatContext` is the inner value: the context one seat needs to run, with
- * a trace opener over the host's logger and the definition's policy.
- * `composeConnector` folds it into an `ExecutionConnector`, and takes the
- * executor build as a closure, so an executor package supplies only what
- * makes it different: how it builds one seat's `Executor`, and what its
- * trace keeps.
+ * a trace opener over the host's logger, the host's trace limits, and the
+ * definition's policy. `localConnector` builds one runner for each seat
+ * that the room connects, over the executor that `executorOf` builds.
  */
 
 import { DEFAULT_TRACE } from '../define.ts';
@@ -21,7 +17,7 @@ import type {
 } from '../host/runtime.ts';
 import type { AgentDefinition, Clock, ExecutionEvent, TraceLogger } from '../types.ts';
 import type { Executor } from './executor.ts';
-import { inProcessTransport } from './runner.ts';
+import { AgentRunner } from './runner.ts';
 import { traceOpener } from './trace.ts';
 
 /** What one seat needs to run: its definition, its executor, and where its trace goes. */
@@ -54,22 +50,14 @@ export function seatContext(input: SeatContextInput): AgentExecutionContext {
 	};
 }
 
-/** What an execution package gives the composer. */
-export interface ConnectorComposition {
-	readonly host: ExecutionHost;
-	/** Builds the executor of one seat. The composer calls it once per connect. */
-	buildExecutor(request: ConnectorRequest): Executor;
-	/** What the trace keeps. Pi passes the host's; Claude and Codex pass `DEFAULT_TRACE_LIMITS`. */
-	readonly traceLimits: Limits['trace'];
-}
-
-/** One `ExecutionConnector`, wired from an executor package's own build and trace limits. */
-export function composeConnector(composition: ConnectorComposition): ExecutionConnector {
-	const { host, buildExecutor, traceLimits } = composition;
-	const transport = host.transport ?? inProcessTransport();
+/** A connector that runs each seat in this process, on the executor that `executorOf` builds for it. */
+export function localConnector(
+	host: ExecutionHost,
+	executorOf: (request: ConnectorRequest) => Executor,
+): ExecutionConnector<AgentRunner> {
 	return {
 		connect(room, request) {
-			return transport.connect(
+			return new AgentRunner(
 				room,
 				seatContext({
 					clock: host.clock,
@@ -77,10 +65,10 @@ export function composeConnector(composition: ConnectorComposition): ExecutionCo
 					definition: request.definition,
 					room: request.room,
 					seat: request.seat,
-					executor: buildExecutor(request),
+					executor: executorOf(request),
 					emit: request.emit,
 					logger: host.logger,
-					limits: traceLimits,
+					limits: host.limits.trace,
 				}),
 			);
 		},

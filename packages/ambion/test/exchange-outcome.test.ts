@@ -42,7 +42,7 @@ const summary = (seq: number, to: string, from: number, through: number): Entry 
 	body: { kind: 'summary', at, from: 'worker', to, text: `For ${to}.`, covers: { from, through } },
 });
 const closeBody = (from: number, through: number, writer?: string): Close => ({
-	owner: 'priya',
+	person: 'priya',
 	from,
 	through,
 	at,
@@ -86,7 +86,7 @@ describe('exchange outcomes', () => {
 	const asked = [...room, said(4, 'priya')];
 
 	it.each([
-		['complete', 'a reply to the owner', [said(5, 'worker', 'priya'), close(6, 4, 5)]],
+		['complete', 'a reply to the person who asked', [said(5, 'worker', 'priya'), close(6, 4, 5)]],
 		['complete', 'a reply to an agent', [said(5, 'worker', 'worker'), close(6, 4, 5)]],
 		[
 			'complete',
@@ -128,6 +128,34 @@ describe('exchange outcomes', () => {
 			expect(pendingFor(readOf(entries), person).map((exchange) => exchange.from)).toEqual(
 				person === awaited ? [4] : [],
 			);
+	});
+
+	it('reads awaiting in the exchange of a returned say, also for an approver who asks back', () => {
+		const returned: Entry = {
+			kind: 'message',
+			seq: 4,
+			body: { kind: 'returned', at, to: 'worker', message: 3, text: 'Check the build.' },
+		};
+		const closeOf = (through: number, person?: string): Entry => ({
+			kind: 'close',
+			seq: through + 1,
+			body: { ...(person === undefined ? {} : { person }), from: 4, through, at },
+		});
+		// A returned say has no author, so a report to a person asks that person.
+		const report = [...room, returned, said(5, 'worker', 'priya'), closeOf(5)];
+		expect(outcomes(report)).toEqual([{ kind: 'awaiting', person: 'priya' }]);
+		expect(pendingFor(readOf(report), 'priya').map((exchange) => exchange.from)).toEqual([4]);
+		// sam asks back and becomes the person of the exchange, and the approval still waits.
+		const approval = [
+			...room,
+			returned,
+			said(5, 'worker', 'sam'),
+			said(6, 'sam'),
+			said(7, 'worker', 'sam'),
+			closeOf(7, 'sam'),
+		];
+		expect(outcomes(approval)).toEqual([{ kind: 'awaiting', person: 'sam' }]);
+		expect(closed(readOf(approval))[0]).toMatchObject({ person: 'sam', from: 4 });
 	});
 
 	it('reads complete for a normal close that a later cancellation follows', () => {
@@ -414,8 +442,8 @@ describe('exchange session', () => {
 		until,
 		session: { harness: 'pi', id },
 	});
-	const closes: Close[] = [{ owner: 'priya', from: 4, through: 9, at, summary: 'writer' }];
-	const open = { owner: 'priya', from: 12, at };
+	const closes: Close[] = [{ person: 'priya', from: 4, through: 9, at, summary: 'writer' }];
+	const open = { person: 'priya', from: 12, at };
 	const leases = new Map(
 		[
 			ended('message:4:worker:1', 'first', 6),

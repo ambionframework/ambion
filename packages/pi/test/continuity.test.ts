@@ -33,7 +33,6 @@ import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
-import { noTrace } from '../../ambion/test/support/trace.ts';
 import { createExecutionServices, createPiExecutor, stubModel } from '../src/index.ts';
 import {
 	defaultSessionDir,
@@ -44,6 +43,7 @@ import {
 } from '../src/sessions.ts';
 import { contextText, quiet, type Script, scripted, speak } from '../src/testing.ts';
 import { tempDir } from './support/temp.ts';
+import { noTrace } from './support/trace.ts';
 
 const said = (seq: number, text: string): Message => ({
 	kind: 'said',
@@ -79,7 +79,7 @@ class TwoQuestions implements RoomProtocol {
 					now: 0,
 					participants: [],
 					messages: RECORD.filter((entry) => entry.seq <= message),
-					exchange: { owner: 'andrei', from: 1 },
+					exchange: { person: 'andrei', from: 1 },
 					reserve: [],
 				},
 			},
@@ -190,7 +190,6 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		const later = {
 			seq: 1,
 			seat: 'product',
-			owner: 'andrei',
 			due: 'soon',
 			text: 'Check the pump.',
 		};

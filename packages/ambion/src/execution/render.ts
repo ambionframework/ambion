@@ -342,12 +342,17 @@ function renderReserve(reserve: readonly { name: string; identity: string }[]): 
 	];
 }
 
-/** When a returned say opened the exchange, the model reads that the say is its own. */
-function returnedOpening({ context }: ActivationView): string {
-	const from = context.exchange?.from;
-	const opening = context.messages.find((message) => message.seq === from);
-	if (opening?.kind !== 'returned') return '';
-	return `Message ${opening.seq} is a say you scheduled, and the room returned it: do its work for ${opening.owner}. `;
+/** The open exchange, named by its opening message: a person's question, or a returned say. */
+function openingLine({ context: { exchange, messages, name } }: ActivationView, seat: string) {
+	if (exchange === undefined) return '';
+	const uri = `The opening message's URI is ${messageUri(name, exchange.from)}. `;
+	const opening = messages.find((message) => message.seq === exchange.from);
+	const asker = opening?.from ?? exchange.person;
+	if (opening?.kind !== 'returned' && asker !== undefined)
+		return `${asker}'s exchange opened by message ${exchange.from} is active; the marked request is the current human direction. ${uri}`;
+	if (opening?.kind !== 'returned') return `Exchange ${exchange.from} is active. ${uri}`;
+	const whose = opening.to === seat ? 'you' : opening.to;
+	return `Exchange ${exchange.from} is active: message ${opening.seq} is a say ${whose} scheduled, and the room returned it. ${uri}`;
 }
 
 /** What this activation is for, in the last line the model reads. */
@@ -362,9 +367,7 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 		);
 	}
 	// A seat seated during an exchange reads which question it was seated for.
-	const open = context.exchange
-		? `${context.exchange.owner}'s exchange opened by message ${context.exchange.from} is active; the marked request is the current human direction. The opening message's URI is ${messageUri(context.name, context.exchange.from)}. ${returnedOpening(view)}`
-		: '';
+	const open = openingLine(view, def.name);
 	return (
 		`${open}Take your turn, ${def.name}: this is ordinary work. ` +
 		`Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed ` +
@@ -393,16 +396,14 @@ const AUDIENCE_PARAGRAPH = [
 
 /** How a seat hands an artifact to a colleague, and where its own work stops. */
 const HANDOFF_PARAGRAPH = [
-	`The record holds conversation. An artifact goes to the workspace: write a document or a`,
-	`generated result to a file once, and put structured data in the shared database as a named`,
-	`table or view. A colleague reads the file by its path and queries the table by its name, and`,
-	`sqlite_master shows how a view was built. A hand-off is still a message: say what you wrote`,
-	`and where, in a directed say to the agent that needs it. Do not leave a file and assume the`,
-	`reader finds it. Your identity on the roster names your work. When a task falls under a`,
-	`colleague's identity, hand it to them with a directed say. Seat them first if they are in`,
-	`the reserve. Do not do their work, and do not copy what they already hold into the record.`,
-	`Put the URI of what you cite or changed in refs on the say, and keep the text for what the`,
-	`reader must know.`,
+	`The record holds conversation. An artifact goes where your tools keep it: write a`,
+	`document, a generated result, or structured data there once, and a colleague reads it from`,
+	`there. A hand-off is still a message: say what you wrote and where, in a directed say to`,
+	`the agent that needs it. Do not leave an artifact and assume the reader finds it. Your`,
+	`identity on the roster names your work. When a task falls under a colleague's identity,`,
+	`hand it to them with a directed say. Seat them first if they are in the reserve. Do not do`,
+	`their work, and do not copy what they already hold into the record. Put the URI of what`,
+	`you cite or changed in refs on the say, and keep the text for what the reader must know.`,
 ];
 
 /** What the closing seat does: write the one message for a closed exchange. */

@@ -220,7 +220,6 @@ describe('agentJudge', () => {
 			at: '2026-01-01T09:10:00.000Z',
 			to: 'desk',
 			message: 3,
-			owner: 'priya',
 			text: 'Check the forecast.',
 		};
 		if (!run.room.initialized) throw new Error('The run read no room.');
@@ -228,9 +227,7 @@ describe('agentJudge', () => {
 			...run,
 			room: { ...run.room, messages: [...run.room.messages, returned] },
 		});
-		expect(record).toContain(
-			'[20] the room returned a say to desk for priya: "Check the forecast."',
-		);
+		expect(record).toContain('[20] the room returned a say to desk: "Check the forecast."');
 	});
 
 	it('refuses a grade that misses a criterion or breaks the schema, and takes the next', async () => {

@@ -486,7 +486,8 @@ different account than the one that started the thread.
 does not retry. Set `CODEX_API_KEY`, or run `codex login`.
 
 **`Cannot run an executor of kind '...': this seat needs 'codex'.`** A Pi or
-Claude seat ran under `codexExecution()`. Route with `composeExecutions`.
+Claude seat reached a Codex executor through an execution with no kind.
+Pass the execution of each family.
 
 **A native tool shows up after a Codex upgrade.** The seat lists or calls a
 tool that is not a room tool and not one of yours. A newer `codex` added a

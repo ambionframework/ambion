@@ -235,12 +235,10 @@ function withinActivation(asked: number, ctx: ToolContext): WaitWindow {
 /**
  * Whether a running process can run past the reach of a wait in this
  * activation, and the room would take a `schedule` call: the call runs in an
- * activation, and an exchange is open.
+ * activation of the room.
  */
 function outlasts(process: ProcessStatus, ctx: ToolContext): boolean {
-	if (process.state !== 'running' || ctx.deadline === undefined || ctx.exchange === undefined) {
-		return false;
-	}
+	if (process.state !== 'running' || ctx.deadline === undefined) return false;
 	const ends = Date.parse(process.startedAt) + process.timeout * 1000;
 	return ends > ctx.deadline - DEADLINE_MARGIN_SECONDS * 1000;
 }

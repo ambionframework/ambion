@@ -10,25 +10,27 @@ import { until } from './until.ts';
 
 const NAME = 'room-scheduled';
 
-it("returns a scheduled say through the room object's alarm, for the owner of its exchange", async () => {
+it("returns a scheduled say through the room object's alarm, into an exchange with no person", async () => {
 	const stub = roomOf(NAME);
 	await stub.start({ name: NAME, seats: { checker: 'broadcast' }, agents: ['checker'] });
 	await stub.visit({ name: 'priya', identity: 'Project manager.' });
 	const first = await stub.send({ from: 'priya', text: 'Is the pour logged?', key: 'q1' });
 	await stub.waitForClose(first.from);
 	const before = await stub.read({ messages: false });
-	expect(before.scheduled).toMatchObject([{ seat: 'checker', owner: 'priya' }]);
+	expect(before.scheduled).toMatchObject([{ seat: 'checker' }]);
 	const find = (test: (message: Message) => boolean) => async () =>
 		(await stub.read()).messages.find(test);
 	const returned = await until(find((message) => message.kind === 'returned'));
-	expect(returned).toMatchObject({ to: 'checker', owner: 'priya', text: 'Check the pour log.' });
+	expect(returned).toMatchObject({ to: 'checker', text: 'Check the pour log.' });
+	expect(returned).not.toHaveProperty('owner');
 	await until(
 		find((message) => message.kind === 'said' && message.text === 'The check came back.'),
 	);
 	const second = await until(async () =>
 		(await stub.read()).exchanges.find((exchange) => exchange.from === returned.seq),
 	);
-	expect(second).toMatchObject({ owner: 'priya' });
+	expect(second).toMatchObject({ from: returned.seq });
+	expect(second).not.toHaveProperty('person');
 });
 
 it('lists the says that wait, and dismisses one through the room object', async () => {
@@ -39,7 +41,7 @@ it('lists the says that wait, and dismisses one through the room object', async 
 	const first = await stub.send({ from: 'priya', text: 'Is the pour logged tomorrow?', key: 'q1' });
 	await stub.waitForClose(first.from);
 	const [say] = await stub.scheduledSays();
-	expect(say).toMatchObject({ seat: 'checker', owner: 'priya', text: 'Check the pour log.' });
+	expect(say).toMatchObject({ seat: 'checker', text: 'Check the pour log.' });
 	expect(await stub.dismiss(say?.seq ?? 0)).toBe(true);
 	expect(await stub.dismiss(say?.seq ?? 0)).toBe(false);
 	expect(await stub.scheduledSays()).toEqual([]);

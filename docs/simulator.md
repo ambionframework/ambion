@@ -314,8 +314,8 @@ passes. The room records no tool call of the person, so a check reads
 `run.moves[].calls`.
 
 **A question to the person is in the discussion, and the brief decides
-the answer.** The person owns every exchange that the actor opens. A
-message to the owner answers the owner's question, so the exchange closes
+the answer.** The actor opens every exchange with its question. A message
+to the author of the opening message answers the question, so the exchange closes
 as `complete` ([Exchange](exchange.md#7-the-edges-a-host-sees)). The
 outcome `awaiting` never names the actor. The actor reads the question in
 the discussion, and its next move answers it or stops.
@@ -555,8 +555,9 @@ reached the provider, and the specialist returned one fixed `say`.
 
 - **The specialist runs on the testing entry.** Its definition carries
   `executor: { kind: 'scripted', instructions, tools: [] }`.
-  `composeExecutions` from `@ambionframework/ambion/hosting` runs it on
-  `scripted()`, and runs the assistant on `piExecution()`. `defineAssistant`
+  The room passes `[piExecution(), scripted()]`: the assistant runs on
+  `piExecution()`, and the specialist runs on `scripted()`, which has no
+  kind and serves every kind. `defineAssistant`
   builds its executor with `pi()`, so the assistant has the kind `pi`.
 - **`simulate` replaces `evaluate()`.** A case passes
   `scriptedActor([question])` and `exchanges: 1`. `exchangeMs: 90_000`

@@ -18,9 +18,10 @@ exchange. This page holds the exchange.
 
 ## 2. The shape
 
-An exchange records its owner, opening time, and opening message seq
-(`from`). A durable close fixes its inclusive final message seq
-(`through`). Journal administration can occupy seqs between messages.
+An exchange records its opening message seq (`from`), its opening time,
+and its `person` when a person spoke in it. A durable close fixes its
+inclusive final message seq (`through`). Journal administration can occupy
+seqs between messages.
 `ExchangeRef` carries identity. `ExchangeView` carries recorded state.
 `ExchangeHandle` provides live waits. An `ExchangeRead` contains a view,
 its original discussion, and the observed journal watermark.
@@ -40,8 +41,10 @@ stored field.
    and pending wakes, then appends a close with the observed `through` boundary.
    Work that reaches a terminal state is handled the same way.
 3. Ordinary messages landing while it is open steer eligible active seats and
-   do not change its owner, range, or recipient. A later human question is
-   therefore part of the current work, not a second exchange.
+   do not change its opening message or range. A later human question is
+   therefore part of the current work, not a second exchange. The first
+   person who speaks becomes its `person` when it had none
+   ([§4](#4-who-directs-one-and-who-receives-its-result)).
 
 ```mermaid
 stateDiagram-v2
@@ -51,14 +54,30 @@ stateDiagram-v2
     open --> quiet : no live work
 ```
 
-## 4. Who owns one
+## 4. Who directs one, and who receives its result
 
-The person whose question opened the exchange owns it. A returned say opens
-an exchange for the owner that the room stamped on the say. Ownership
-survives that person leaving the room, and the closing result remains
-addressed to them. A second person may speak into the open exchange without
-taking ownership; their next question owns a later exchange once the room is
-quiet.
+**An exchange has no owner. Two facts of the record stand in for one.**
+
+| Fact                    | Where it comes from                               | What reads it                                                           |
+| ----------------------- | ------------------------------------------------- | ----------------------------------------------------------------------- |
+| Who directs the work    | The author of the opening message                 | The opening line of the prompt, and the answer rule of `awaiting`       |
+| Who receives the result | `person`: the first person who spoke in the range | The summary and its recipients, `ctx.exchange.person`, `waitForSummary` |
+
+**For a person's question, both facts name that person.** The person stays
+the `person` after leaving the room, and the summary remains addressed to
+them. A second person may speak into the open exchange; their next question
+opens a later exchange once the room is quiet.
+
+**A returned say opens an exchange with no author.** Its exchange has no
+`person` until a person speaks in the range. The first person who speaks
+becomes its `person` and receives its summary. An exchange where no person
+spoke owes no summary.
+
+**The room derives `person` from the record.** `exchangeAfter` reads the
+first spoken message of a person at or after `from`, and the close stamps
+it. A handle and the `exchange_opened` event hold `person` as it was when
+they were made, and no event follows when a person joins. The close and
+the exchange view hold the final value.
 
 ## 5. A fold over the journal
 
@@ -73,9 +92,9 @@ after the close is durable.
 
 **An agent comes back to its work with a say to itself.** The agent calls
 `schedule` with `after` set to a number of seconds. The tool writes a `said`
-entry with `to` set to the author's own name and `after` beside it. The room
-stamps the owner of the open exchange on the say as `owner`. The say wakes
-nobody, and it is not live work, so the exchange closes while it waits.
+entry with `to` set to the author's own name and `after` beside it. The say
+wakes nobody and steers nobody, and it is not live work, so the exchange
+closes while it waits.
 
 ```mermaid
 sequenceDiagram
@@ -84,16 +103,17 @@ sequenceDiagram
     participant W as worker
     P->>R: question (seq 4) opens exchange 4
     R->>W: activation
-    W->>R: schedule, after 600 (seq 6, to worker, owner priya)
-    R-->>R: close [4, 6]
+    W->>R: schedule, after 600 (seq 6, to worker)
+    R-->>R: close [4, 6], person priya
     Note over R: 600 seconds later, the alarm
-    R->>R: returned (seq 9, message 6, owner priya) opens exchange 9
+    R->>R: returned (seq 9, message 6) opens exchange 9, no person
     R->>W: activation
     W->>R: say to priya
+    R-->>R: close [9, 10], awaiting priya
 ```
 
 **The room returns the say when it is due.** The reconcile writes a
-`returned` entry `{ to, message, owner, text, refs }`: the returned say. It
+`returned` entry `{ to, message, text, refs }`: the returned say. It
 copies the text and the refs of the say, so the agent reads them when the
 record window or a summary no longer shows the say. The room wrote it, so it
 has no `from`. It wakes one seat, the one that `to` names, and steers no
@@ -112,8 +132,8 @@ after the close of the same pass.
   takes it at any position. The commit result lists in `unread` the
   messages after that position and before the say. The tool result shows
   them, so the model reads the record through the say.
-- The activation must answer a message while an exchange is open. A closing
-  activation cannot schedule.
+- A response activation schedules, whether an exchange is open or not. A
+  closing activation cannot schedule.
 - `limits.schedule` bounds `after` from `minAfter` to `maxAfter` seconds, 60 to
   604,800 by default, and holds at most `pending` says of one seat, 4 by
   default.
@@ -187,8 +207,8 @@ position; a later send that joins an already-open exchange gets `opened:
 false`, even though `handle.from` matches. A retry of the opening delivery
 key also reads back `opened: true`. `room.exchange(from)` always returns
 `opened: false`, because reacquiring a handle is never the act that opens
-the exchange. `owner` can name a person other than the one who sent a given
-message, when that message joined an exchange another person opened.
+the exchange. `person` can name a person other than the one who sent a
+given message, when that message joined an exchange another person opened.
 
 Live notifications include `message`, `exchange_opened`, and
 `exchange_closed` events, plus execution events. An execution event names its
@@ -236,8 +256,11 @@ the same outcome. The first case that holds wins:
 | `awaiting`  | The last spoken message asks a person, and that person has said nothing since. |
 | `complete`  | None of the above.                                                             |
 
-A message to the owner is the answer to the owner's question, so it never
-makes an exchange `awaiting`. `awaiting` carries the `person`. It clears when
+A message to the author of the opening message is the answer to that
+person's question, so it never makes an exchange `awaiting`. A returned say
+has no author, so in its exchange each message to a person can make it
+`awaiting`. `pendingFor` then lists what the work of a returned say needs of
+that person. `awaiting` carries the `person`. It clears when
 that person speaks. `pendingFor(read, person)` and `room.pendingFor(person)`
 return the closed exchanges that await one person. A failed summary reads
 through `summary`, not `outcome`. The verified rule `exchangeOutcome` fixes the
@@ -283,9 +306,9 @@ apply their own operational limits where needed.
 ## 10. What proves it
 
 [`exchange-completion.test.ts`](../packages/ambion/test/exchange-completion.test.ts)
-checks opening ownership, quiescent close boundaries, steering, owner
-departure, multiple exchanges, and the ordering of `waitForClose()` before
-`waitForSummary()`. Replay and storage variants are included. Restart behavior is
+checks the opening message and `person`, quiescent close boundaries,
+steering, the departure of the person, multiple exchanges, and the ordering
+of `waitForClose()` before `waitForSummary()`. Replay and storage variants are included. Restart behavior is
 covered by [`restart.test.ts`](../packages/ambion/test/restart.test.ts) and
 presence/reconnect cases by [`presence.test.ts`](../packages/ambion/test/presence.test.ts).
 [`exchange-outcome.test.ts`](../packages/ambion/test/exchange-outcome.test.ts)

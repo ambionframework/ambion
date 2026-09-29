@@ -10,7 +10,7 @@
 
 import type { Body } from '../journal/journal.ts';
 import type { PendingSay, ScheduleLimits } from '../scheduling.ts';
-import type { ExchangeRef, Message, ReturnedMessage, Seq } from '../types.ts';
+import type { Message, ReturnedMessage, Seq } from '../types.ts';
 
 /** One say that waits to return to its author. */
 export interface ScheduledSay {
@@ -18,8 +18,6 @@ export interface ScheduledSay {
 	readonly seq: Seq;
 	/** The seat that said it, and the seat it returns to. */
 	readonly seat: string;
-	/** The owner of the exchange that the say landed in, as the room stamped it. */
-	readonly owner: string;
 	/** When the say is due, in milliseconds on the wall clock. */
 	readonly dueAt: number;
 	readonly text: string;
@@ -42,14 +40,12 @@ export function scheduleStep(list: readonly ScheduledSay[], message: Message): S
 	if (message.kind === 'returned' || message.kind === 'dismissed')
 		return list.filter((say) => say.seq !== message.message);
 	if (message.kind === 'unseated') return list.filter((say) => say.seat !== message.subject);
-	if (!isScheduled(message) || message.after === undefined || message.owner === undefined)
-		return [...list];
+	if (!isScheduled(message) || message.after === undefined) return [...list];
 	return [
 		...list,
 		{
 			seq: message.seq,
 			seat: message.from,
-			owner: message.owner,
 			dueAt: Date.parse(message.at) + message.after * 1000,
 			text: message.text,
 			...(message.refs === undefined ? {} : { refs: message.refs }),
@@ -75,11 +71,9 @@ const UNBOUNDED: ScheduleLimits = {
 
 /**
  * Why the room refuses a say with `after`, or nothing. The say goes to its
- * author, while an exchange is open, within the bounds. The open exchange
- * names the person the say returns for.
+ * author, within the bounds.
  */
 export function scheduleRefusal(
-	open: ExchangeRef | undefined,
 	list: readonly ScheduledSay[],
 	seat: string,
 	intent: { to?: string; after?: number },
@@ -91,17 +85,11 @@ export function scheduleRefusal(
 		return '`after` is a whole number of seconds.';
 	if (after < schedule.minAfter || after > schedule.maxAfter)
 		return `\`after\` is ${after} seconds. This room takes from ${schedule.minAfter} to ${schedule.maxAfter} seconds.`;
-	if (open === undefined)
-		return 'No exchange is open, so no person owns the work. Call `schedule` while you answer a question.';
 	const waiting = list.filter((say) => say.seat === seat).length;
 	if (waiting >= schedule.pending)
 		return `${waiting} of your says wait to return. This room holds at most ${schedule.pending} for one seat.`;
 	return undefined;
 }
-
-/** A scheduled say returns for the owner of the open exchange, which its refusal requires. */
-export const ownerOf = (intent: { after?: number }, open: ExchangeRef | undefined) =>
-	intent.after === undefined || open === undefined ? {} : { owner: open.owner };
 
 /**
  * Whether the room returns one say now: it is due, and its seat is on the
@@ -133,7 +121,6 @@ export function returning(
 		at: new Date(now).toISOString(),
 		to: say.seat,
 		message: say.seq,
-		owner: say.owner,
 		text: say.text,
 		...(say.refs === undefined ? {} : { refs: [...say.refs] }),
 	};

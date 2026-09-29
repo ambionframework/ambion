@@ -81,9 +81,9 @@ try {
 ```
 
 **A room with no `execution` runs each Pi seat on the default Pi
-execution.** Importing the package registers it. A host that needs a
-scripted stream, custom storage, a transport, or limits passes
-`piExecution(options)` to a room or to `createRuntime`.
+execution.** Importing the package defines it. A host that needs a
+scripted stream or its own session place passes `piExecution(options)` to a
+room or to `createRuntime`.
 
 ## Options
 

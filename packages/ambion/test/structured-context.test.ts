@@ -43,7 +43,7 @@ const entries: Entry[] = [
 	{
 		kind: 'close',
 		seq: 4,
-		body: { owner: 'priya', from: 3, through: 3, at, summary: 'worker' },
+		body: { person: 'priya', from: 3, through: 3, at, summary: 'worker' },
 	},
 	{
 		kind: 'message',
@@ -213,7 +213,11 @@ describe('structured activation context', () => {
 			},
 			{ kind: 'message', seq: 2, body: { kind: 'arrived', at, from: 'sam', subject: 'sam' } },
 			{ kind: 'message', seq: 3, body: { kind: 'said', at, from: 'sam', text: "Sam's question." } },
-			{ kind: 'close', seq: 4, body: { owner: 'sam', from: 3, through: 3, at, summary: 'worker' } },
+			{
+				kind: 'close',
+				seq: 4,
+				body: { person: 'sam', from: 3, through: 3, at, summary: 'worker' },
+			},
 			{
 				kind: 'message',
 				seq: 5,
@@ -235,7 +239,7 @@ describe('structured activation context', () => {
 			{
 				kind: 'close',
 				seq: 8,
-				body: { owner: 'priya', from: 7, through: 7, at, summary: 'worker' },
+				body: { person: 'priya', from: 7, through: 7, at, summary: 'worker' },
 			},
 		];
 		const priyaClose: ActivationSpec = {

@@ -42,7 +42,7 @@ const record: readonly Written[] = [
 	),
 	entry(
 		'close',
-		{ owner: 'priya', from: firstFrom, through: firstFrom, at, summary: 'assistant' },
+		{ person: 'priya', from: firstFrom, through: firstFrom, at, summary: 'assistant' },
 		5,
 	),
 	entry('message', { kind: 'said', at, from: 'priya', text: 'Second question?' }, 6),
@@ -147,7 +147,7 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 		const open = await read(6);
 		expect(open?.exchange).toEqual({
 			status: 'open',
-			owner: 'priya',
+			person: 'priya',
 			from: 6,
 			at,
 			activations: [],

@@ -17,7 +17,7 @@ const summary = {
 	text: 'x',
 	covers: { from: 1, through: 2 },
 };
-const returned = { kind: 'returned', at, to: 'alpha', message: 3, owner: 'andrei', text: 'x' };
+const returned = { kind: 'returned', at, to: 'alpha', message: 3, text: 'x' };
 const ended = { id: 'message:1:alpha:1', phase: 'ended', reason: 'released', at, readThrough: 3 };
 
 /** A journal that replays these stored entries, one place each. */
@@ -47,10 +47,7 @@ describe('room journal body validation', () => {
 		],
 		['message', { ...summary, refs: ['https://x/a'] }],
 		['message', summary],
-		[
-			'message',
-			{ kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', after: 600, owner: 'andrei' },
-		],
+		['message', { kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', after: 600 }],
 		['message', { ...returned, refs: ['https://x/a'], wakes: ['alpha'] }],
 		['message', { kind: 'dismissed', at, message: 3 }],
 		[
@@ -68,7 +65,7 @@ describe('room journal body validation', () => {
 		],
 		['lease', ended],
 		['lease', { ...ended, session: { harness: 'claude', id: 'abc' } }],
-		['close', { owner: 'andrei', from: 1, through: 5, at, summary: 'assistant' }],
+		['close', { person: 'andrei', from: 1, through: 5, at, summary: 'assistant' }],
 		[
 			'composition',
 			{
@@ -104,7 +101,7 @@ describe('room journal body validation', () => {
 		['message', { kind: 'said', at, from: 'alpha', text: 'x', after: 0 }, 'body.after'],
 		['message', { kind: 'said', at, from: 'alpha', text: 'x', after: 1.5 }, 'body.after'],
 		['message', { ...returned, message: 0 }, 'body.message'],
-		['message', { kind: 'returned', at, to: 'alpha', message: 3, text: 'x' }, 'body.owner'],
+		['message', { ...returned, owner: 'andrei' }, 'body.owner'],
 		['message', { ...returned, from: 'alpha' }, 'body.from'],
 		['message', { kind: 'dismissed', at, message: 0 }, 'body.message'],
 		['message', { kind: 'dismissed', at, message: 3, from: 'alpha' }, 'body.activationId'],
@@ -116,15 +113,10 @@ describe('room journal body validation', () => {
 		['message', { kind: 'dismissed', at, message: 3, text: 'x' }, 'body.text'],
 		[
 			'message',
-			{ kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', after: 60 },
+			{ kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', after: 60, owner: 'andrei' },
 			'body.owner',
 		],
-		['message', { kind: 'said', at, from: 'alpha', text: 'x', owner: 'andrei' }, 'body.after'],
-		[
-			'message',
-			{ kind: 'said', at, from: 'alpha', to: 'beta', text: 'x', after: 60, owner: 'andrei' },
-			'body.to',
-		],
+		['message', { kind: 'said', at, from: 'alpha', to: 'beta', text: 'x', after: 60 }, 'body.to'],
 		['message', { kind: 'seated', at, subject: 'andrei', fixed: 'yes' }, 'body.fixed'],
 		[
 			'message',
@@ -147,7 +139,9 @@ describe('room journal body validation', () => {
 			{ id: 'x', phase: 'running', expiresAt: 1, at: 'nonsense', readThrough: 0 },
 			'body.at',
 		],
-		['close', { owner: 'a', from: 1, through: 2.5, at: 'now' }, 'body.through'],
+		['close', { person: 'a', from: 1, through: 2.5, at: 'now' }, 'body.through'],
+		['close', { owner: 'a', from: 1, through: 2, at }, 'body.owner'],
+		['close', { from: 1, through: 2, at, summary: 'assistant' }, 'body.person'],
 		[
 			'composition',
 			{ agents: [{ ...seating, attention: 'sometimes' }], available: [], at: 'now' },
@@ -161,8 +155,8 @@ describe('room journal body validation', () => {
 	});
 
 	it.each([
-		['cancel', { at, close: { owner: 'andrei', from: 1, through: 2, at } }, 'body.close'],
-		['close', { owner: 'andrei', from: 1, through: 2, at, cancelled: true }, 'body.cancelled'],
+		['cancel', { at, close: { person: 'andrei', from: 1, through: 2, at } }, 'body.close'],
+		['close', { person: 'andrei', from: 1, through: 2, at, cancelled: true }, 'body.cancelled'],
 		['run', { at, format: 1 }, 'body.format'],
 	] as const)('refuses a %s body with the old field at %s', (kind, body, path) => {
 		const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

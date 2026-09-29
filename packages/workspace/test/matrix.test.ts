@@ -34,7 +34,7 @@ import { openWorkspace } from '../src/index.ts';
 
 const twoWorkspaces: Scenario = {
 	name: 'two workspaces on two backends, and one disposed mid-activation',
-	async run({ runtime, name }) {
+	async run({ runtime, name, wire }) {
 		const [memoryBackend, directoryBackend] = await Promise.all(backends.map((b) => b.open()));
 		if (!memoryBackend || !directoryBackend) throw new Error('two backends are expected');
 		const memoryDrive = openWorkspace({
@@ -55,41 +55,43 @@ const twoWorkspaces: Scenario = {
 			name,
 			runtime,
 			agents: [alpha, beta, gamma],
-			execution: piExecution({
-				sessions: 'memory',
-				stream: scripted(
-					byAgent({
-						alpha: async (context, _name, call) => {
-							alphaResults.push(...toolResultTexts(context).slice(alphaResults.length));
-							if (call === 1)
-								return callTool('write', { path: '/home/alpha/note.txt', content: 'one' });
-							if (call === 2) {
-								await disposed.promise;
-								return callTool('read', { path: '/home/alpha/note.txt' });
-							}
-							return call === 3 ? speak('alpha done') : quiet();
-						},
-						beta: (context, _name, call) => {
-							betaResults.push(...toolResultTexts(context).slice(betaResults.length));
-							if (call === 1)
-								return callTool('bash', { command: 'echo two > /home/beta/note.txt' });
-							if (call === 2) return callTool('read', { path: '/home/beta/note.txt' });
-							return call === 3 ? speak('beta done') : quiet();
-						},
-						gamma: (context) => {
-							expect(toolNames(context)).toEqual([
-								'say',
-								'schedule',
-								'seat',
-								'unseat',
-								'dismiss',
-								'recall',
-							]);
-							return quiet();
-						},
-					}),
-				),
-			}),
+			execution: wire(
+				piExecution({
+					sessions: 'memory',
+					stream: scripted(
+						byAgent({
+							alpha: async (context, _name, call) => {
+								alphaResults.push(...toolResultTexts(context).slice(alphaResults.length));
+								if (call === 1)
+									return callTool('write', { path: '/home/alpha/note.txt', content: 'one' });
+								if (call === 2) {
+									await disposed.promise;
+									return callTool('read', { path: '/home/alpha/note.txt' });
+								}
+								return call === 3 ? speak('alpha done') : quiet();
+							},
+							beta: (context, _name, call) => {
+								betaResults.push(...toolResultTexts(context).slice(betaResults.length));
+								if (call === 1)
+									return callTool('bash', { command: 'echo two > /home/beta/note.txt' });
+								if (call === 2) return callTool('read', { path: '/home/beta/note.txt' });
+								return call === 3 ? speak('beta done') : quiet();
+							},
+							gamma: (context) => {
+								expect(toolNames(context)).toEqual([
+									'say',
+									'schedule',
+									'seat',
+									'unseat',
+									'dismiss',
+									'recall',
+								]);
+								return quiet();
+							},
+						}),
+					),
+				}),
+			),
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);

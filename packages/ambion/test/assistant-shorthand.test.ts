@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineHuman,
@@ -24,7 +23,6 @@ async function open(options: Partial<StartRoomOptions> = {}) {
 	const runtime = createRuntime({
 		storage: opened.storage,
 		clock: fakeClock(),
-		transport: inProcessTransport(),
 	});
 	const room = await startRoom({
 		name: roomName('assistant-shorthand'),

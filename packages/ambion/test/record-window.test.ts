@@ -75,7 +75,7 @@ const summarizeWide: ActivationSpec = {
 
 // Each line of `short` renders as "#N [priya] aaaa", 15 characters.
 const short = replayState([composition, ...[2, 3, 4, 5].map((seq) => message(said(seq)))], options);
-const pinned: RoomState = { ...short, exchange: { owner: 'priya', from: 3, at } };
+const pinned: RoomState = { ...short, exchange: { person: 'priya', from: 3, at } };
 // A summary at seq 8 stands for the closed range [4, 6].
 const long = replayState(
 	[
@@ -96,7 +96,7 @@ function wideState(): RoomState {
 		else record.push(said(seq, 'x'.repeat(((seq * 7) % 23) + 1)));
 	}
 	const state = replayState([composition, ...record.map(message)], options);
-	return { ...state, exchange: { owner: 'priya', from: 120, at } };
+	return { ...state, exchange: { person: 'priya', from: 120, at } };
 }
 const wide = wideState();
 

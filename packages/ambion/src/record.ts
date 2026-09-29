@@ -35,7 +35,7 @@ function lineBody(message: Message): string {
 		return `· ${message.from ?? 'the host'} dismissed say #${message.message}`;
 	}
 	if (isReturned(message)) {
-		return `[returned → ${message.to}, for ${message.owner}] ${message.text}${refsOf(message)}`;
+		return `[returned → ${message.to}] ${message.text}${refsOf(message)}`;
 	}
 	if (isSpoken(message) || isSummary(message)) return spokenLine(message);
 	const by = message.from === undefined || message.from === message.subject;

@@ -5,10 +5,11 @@
  * record a seat reads, and the decision to run another pass. It knows
  * nothing about a model, a provider, or a transcript: an activation's
  * executor renders the prompt, runs its own loop, and reports where it left
- * off. Wake, steer, and cut reach this driver through the transport.
+ * off. The runner is the port of its seat: the room calls its wake, steer,
+ * and cut.
  */
 
-import type { AgentExecutionContext, Transport } from '../host/runtime.ts';
+import type { AgentExecutionContext } from '../host/runtime.ts';
 import type {
 	ActivationView,
 	AgentPort,
@@ -550,15 +551,4 @@ function endStep(current: Current, last: PassResult | undefined): Step {
 /** The first pass reads the whole view. A later pass reads what came after `since`. */
 function passInput(view: ActivationView, since: Seq | undefined): PassInput {
 	return since === undefined ? { kind: 'view', view } : { kind: 'delta', since, view };
-}
-
-// -- the transport ------------------------------------------------------------
-
-/** Run each seat locally through the room-call facade and its executor context. */
-export function inProcessTransport(): Transport {
-	return {
-		connect(room, context) {
-			return new AgentRunner(room, context);
-		},
-	};
 }

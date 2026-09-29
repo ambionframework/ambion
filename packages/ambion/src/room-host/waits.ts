@@ -50,7 +50,7 @@ export function exchange(host: WaitsHost, from: Seq): ExchangeHandle | undefined
 function handleFor(host: WaitsHost, found: ExchangeRef, opened: boolean): ExchangeHandle {
 	const at = host.state().messages.find((message) => message.seq === found.from)?.at ?? found.at;
 	return {
-		owner: found.owner,
+		...(found.person === undefined ? {} : { person: found.person }),
 		from: found.from,
 		at,
 		opened,

@@ -2,13 +2,14 @@
 
 import { assertRoomName, captureAgent } from './define.ts';
 import { AmbionError } from './errors.ts';
-import { missingConnector } from './execution/route.ts';
+import { route } from './execution/route.ts';
 import {
-	defaultConnectorOf,
+	defaultConnectors,
 	defaultRuntime,
 	type Execution,
 	type ExecutionConnector,
 	executionHostOf,
+	executionsOf,
 	hostingOf,
 	type RoomRuntime,
 	type Runtime,
@@ -49,8 +50,12 @@ export interface StartRoomOptions {
 	summary?: string;
 	/** Public context that states what the room is for. */
 	goal?: string;
-	/** The execution for this room, such as `piExecution()`. Defaults to the runtime's. */
-	execution?: Execution;
+	/**
+	 * The execution for this room, such as `piExecution()`, or one for each
+	 * executor kind. A seat runs on the first that serves its kind, then on
+	 * the runtime's, then on the default of its kind.
+	 */
+	execution?: Execution | readonly Execution[];
 	/** The runtime that owns storage and lifecycle. Defaults to `defaultRuntime`. */
 	runtime?: Runtime;
 }
@@ -67,32 +72,26 @@ export interface ResumeRoomOptions {
 	agents: readonly AgentDefinition[];
 	/** The runtime that owns the room journal. */
 	runtime?: Runtime;
-	/** The execution for this room, such as `piExecution()`. Defaults to the runtime's. */
-	execution?: Execution;
+	/** The execution for this room, as `StartRoomOptions.execution` states. */
+	execution?: Execution | readonly Execution[];
 }
 
 /**
- * The connector for one room: its own execution, else the runtime's, else
- * the default of each seat's executor kind, else one whose seats fail when
- * the room wakes them. A room with no execution
- * still runs its people, its record, and any transport it was given.
+ * The connector for one room: the room's executions, then the runtime's,
+ * then the default of each seat's executor kind. A seat that none serves
+ * fails when the room wakes it. A room with no execution still runs its
+ * people and its record.
  */
-function connectorFor(runtime: Runtime, own: Execution | undefined): ExecutionConnector {
-	const host = executionHostOf(runtime);
-	const execution = own ?? hostingOf(runtime).execution;
-	if (execution !== undefined) return execution.connector(host);
-	const missing = missingConnector(host, noExecution);
-	return {
-		connect(room, request) {
-			const kind = request.definition.executor.kind;
-			return (defaultConnectorOf(runtime, kind) ?? missing).connect(room, request);
-		},
-	};
+function connectorFor(
+	runtime: Runtime,
+	own: Execution | readonly Execution[] | undefined,
+): ExecutionConnector {
+	return route({
+		executions: [...executionsOf(own), ...hostingOf(runtime).executions],
+		host: executionHostOf(runtime),
+		built: defaultConnectors(runtime),
+	});
 }
-
-/** Why a seat fails when no execution serves its kind and no package registered a default. */
-const noExecution = (): string =>
-	'The room has no execution. Load the executor package of the agent, or pass `execution`, such as `piExecution()` from @ambionframework/pi, to startRoom or createRuntime.';
 
 export async function startRoom(options: StartRoomOptions): Promise<Room> {
 	assertRoomName(options.name);

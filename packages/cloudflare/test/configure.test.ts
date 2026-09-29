@@ -1,13 +1,7 @@
 import { defineAgent, startRoom } from '@ambionframework/ambion';
 import { pi } from '@ambionframework/pi';
 import { describe, expect, it } from 'vitest';
-import {
-	configure,
-	definitionOf,
-	executionFor,
-	runtimeFor,
-	traceLogger,
-} from '../src/configure.ts';
+import { configure, definitionOf, runtimeFor, seatExecution, seatHost } from '../src/configure.ts';
 import { scripted } from './scripted.ts';
 
 const agent = (name: string) =>
@@ -34,14 +28,20 @@ describe('configure', () => {
 		expect(() => configure({ agents: [first, second] })).toThrow(/repeat agent 'duplicate'/);
 	});
 
-	it('composes the configured stream and logger', () => {
-		const stream = scripted;
+	it('gives a seat the Pi execution, and a host with the configured limits and logger', () => {
 		const logger = () => {};
-		configure({ agents: [agent('execution')], stream, logger });
-		expect(executionFor({}).stream).toBe(stream);
-		expect(traceLogger()).toBe(logger);
+		configure({
+			agents: [agent('execution')],
+			stream: scripted,
+			logger,
+			limits: { call: { attempts: 5 } },
+		});
+		expect(seatExecution().kind).toBe('pi');
+		expect(seatHost().logger).toBe(logger);
+		expect(seatHost().limits.call).toMatchObject({ attempts: 5 });
 		configure({ agents: [agent('execution')] });
-		expect(traceLogger()).toBeUndefined();
+		expect(seatHost().logger).toBeUndefined();
+		expect(seatHost().limits.call).toMatchObject({ attempts: 2 });
 	});
 
 	it('gives the runtime of an object the configured estimators', async () => {

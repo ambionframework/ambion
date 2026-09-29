@@ -68,7 +68,6 @@
 			"to": "worker",
 			"text": "Check the pour log.",
 			"after": 600,
-			"owner": "priya",
 			"at": "2026-01-01T09:00:00.000Z",
 			"activationId": "message:4:worker:1",
 			"from": "worker"
@@ -84,7 +83,6 @@
 			"to": "worker",
 			"text": "Check the crane log.",
 			"after": 1200,
-			"owner": "priya",
 			"at": "2026-01-01T09:00:00.000Z",
 			"activationId": "message:4:worker:1",
 			"from": "worker"
@@ -144,7 +142,7 @@
 	{
 		"kind": "close",
 		"body": {
-			"owner": "priya",
+			"person": "priya",
 			"from": 4,
 			"through": 8,
 			"at": "2026-01-01T09:00:00.000Z"

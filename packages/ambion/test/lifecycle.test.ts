@@ -375,7 +375,7 @@ describe.each(storages)('durable visits on $name storage', (storage) => {
 		const reentered = await room.visit(person);
 		const retryExchange = await reentered.send({ text: 'same question', key: 'same-question' });
 		expect(retryExchange.from).toBe(firstExchange.from);
-		expect(retryExchange.owner).toBe(firstExchange.owner);
+		expect(retryExchange.person).toBe(firstExchange.person);
 		expect(
 			(await kinds(room, 'said')).filter((message) => message.key === 'same-question'),
 		).toHaveLength(1);

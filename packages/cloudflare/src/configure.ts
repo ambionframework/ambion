@@ -11,7 +11,9 @@ import type {
 	TraceLogger,
 } from '@ambionframework/ambion';
 import { createRuntime } from '@ambionframework/ambion';
-import { createExecutionServices, type PiExecutionOptions, piExecution } from '@ambionframework/pi';
+import type { AgentRunner, Execution, ExecutionHost } from '@ambionframework/ambion/hosting';
+import { hostingOf } from '@ambionframework/ambion/hosting';
+import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
 
 /**
  * One event a seat raised inside its own object, flat enough to be a journal
@@ -77,44 +79,46 @@ export function seatEvent(event: SeatEvent): void {
 	take(event);
 }
 
-/** Where a seat gives the steps of each activation, or nothing when the worker passed no logger. */
-export function traceLogger(): TraceLogger | undefined {
-	return settings?.logger;
+/** The settings that `configure` took, or an error when a worker never called it. */
+function configured(): ConfigureOptions {
+	if (settings === undefined) {
+		throw new Error('Call configure() at module scope before an object runs.');
+	}
+	return settings;
 }
 
-/** A runtime over this object's storage and clock, with the worker's model call. */
+/** A runtime over this object's storage and clock, on the execution that reaches each seat. */
 export function runtimeFor(
-	options: Pick<CreateRuntimeOptions, 'storage' | 'clock' | 'transport'>,
+	options: Pick<CreateRuntimeOptions, 'storage' | 'clock' | 'execution'>,
 ): Runtime {
-	if (settings === undefined) {
-		throw new Error('Call configure() at module scope before an object runs.');
-	}
+	const { limits, estimators } = configured();
 	return createRuntime({
-		// An object has no local disk. A seat object keeps its own sessions.
-		execution: piExecution({
-			sessions: 'memory',
-			...(settings.stream === undefined ? {} : { stream: settings.stream }),
-		}),
-		...(settings.limits === undefined ? {} : { limits: settings.limits }),
-		...(settings.estimators === undefined ? {} : { estimators: settings.estimators }),
+		...(limits === undefined ? {} : { limits }),
+		...(estimators === undefined ? {} : { estimators }),
 		...options,
 	});
 }
 
-/** Compose the model services and the limits for a seat object. */
-export function executionFor(
-	options: Pick<NonNullable<Parameters<typeof createExecutionServices>[0]>, 'clock'>,
-): ReturnType<typeof createExecutionServices> {
-	if (settings === undefined) {
-		throw new Error('Call configure() at module scope before an object runs.');
-	}
-	return createExecutionServices({
-		...options,
-		sessions: 'memory',
-		...(settings.stream === undefined ? {} : { stream: settings.stream }),
-		...(settings.limits?.call === undefined ? {} : { call: settings.limits.call }),
-		...(settings.limits?.trace === undefined ? {} : { trace: settings.limits.trace }),
-	});
+/**
+ * The execution of a seat object: the Pi execution with the worker's model
+ * call. An object has no local disk, so the seat keeps its sessions in
+ * memory for as long as the connector lives.
+ */
+export function seatExecution(): Execution<AgentRunner> {
+	const { stream } = configured();
+	return piExecution({ sessions: 'memory', ...(stream === undefined ? {} : { stream }) });
+}
+
+/** The host of a seat object: the system clock, and the worker's limits and logger. */
+export function seatHost(): ExecutionHost {
+	const { limits, logger } = configured();
+	const runtime = createRuntime({ ...(limits === undefined ? {} : { limits }) });
+	return {
+		clock: runtime.clock,
+		storage: runtime.storage,
+		limits: hostingOf(runtime).limits,
+		...(logger === undefined ? {} : { logger }),
+	};
 }
 
 export function definitionOf(name: string): AgentDefinition {

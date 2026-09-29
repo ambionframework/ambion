@@ -5,13 +5,13 @@
  * execution or routes each seat to the default of its family.
  */
 import { defineAgent, isSpoken, type Room, startRoom } from '@ambionframework/ambion';
-import { composeExecutions, registerDefaultExecution } from '@ambionframework/ambion/hosting';
-import { piExecution } from '@ambionframework/pi';
+import { defineExecution } from '@ambionframework/ambion/hosting';
+import { createExecutionServices, createPiExecutor, piExecution } from '@ambionframework/pi';
 import { expect, it } from 'vitest';
 import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
-import { claude, claudeExecution } from '../src/index.ts';
+import { claude, claudeExecution, createClaudeExecutor } from '../src/index.ts';
 import { executable } from './support.ts';
 
 const agents = [
@@ -23,24 +23,24 @@ const agents = [
 	}),
 ];
 
-const pilot = () =>
-	piExecution({
-		sessions: 'memory',
-		stream: scripted((_context, _agent, call) =>
-			call === 1 ? speak('The pour is Saturday, says Pi.') : quiet(),
-		),
-	});
+const pilotStream = () =>
+	scripted((_context, _agent, call) =>
+		call === 1 ? speak('The pour is Saturday, says Pi.') : quiet(),
+	);
 
-const sonnet = () =>
-	claudeExecution({
-		pathToClaudeCodeExecutable: executable,
-		env: {
-			...process.env,
-			AMBION_FAKE: JSON.stringify({
-				turns: [[{ sayUntilLanded: 'The pour is Saturday, says Claude.' }]],
-			}),
-		},
-	});
+const pilot = () => piExecution({ sessions: 'memory', stream: pilotStream() });
+
+const sonnetOptions = () => ({
+	pathToClaudeCodeExecutable: executable,
+	env: {
+		...process.env,
+		AMBION_FAKE: JSON.stringify({
+			turns: [[{ sayUntilLanded: 'The pour is Saturday, says Claude.' }]],
+		}),
+	},
+});
+
+const sonnet = () => claudeExecution(sonnetOptions());
 
 async function expectBothSay(room: Room): Promise<void> {
 	stopAtEnd(room);
@@ -54,12 +54,29 @@ async function expectBothSay(room: Room): Promise<void> {
 }
 
 it('runs a Pi seat and a Claude seat in one room, and the record holds both says', async () => {
-	const execution = composeExecutions({ pi: pilot(), claude: sonnet() });
+	const execution = [pilot(), sonnet()];
 	await expectBothSay(await startRoom({ name: roomName('mixed'), agents, execution }));
 });
 
-it('routes a Pi seat and a Claude seat to the default of each family', async () => {
-	registerDefaultExecution('pi', pilot);
-	registerDefaultExecution('claude', sonnet);
+it('routes a Pi seat and a Claude seat to the default of each family, which a built execution keeps', async () => {
+	// A definition of an execution makes it the default of its kind.
+	defineExecution('pi', (host) => {
+		const services = createExecutionServices({ sessions: 'memory', stream: pilotStream() });
+		return (request) =>
+			createPiExecutor({
+				definition: request.definition,
+				model: services.model,
+				stream: services.stream,
+				now: () => host.clock.now(),
+				sessions: services.sessions,
+			});
+	});
+	defineExecution(
+		'claude',
+		() => (request) => createClaudeExecutor({ definition: request.definition, ...sonnetOptions() }),
+	);
+	// An execution that a host builds for one room does not change the default.
+	piExecution({ sessions: 'memory', stream: scripted(() => speak('Leaked from another room.')) });
+	claudeExecution({ pathToClaudeCodeExecutable: 'no-such-executable' });
 	await expectBothSay(await startRoom({ name: roomName('mixed-default'), agents }));
 });

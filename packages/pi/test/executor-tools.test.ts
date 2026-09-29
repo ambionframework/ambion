@@ -198,7 +198,6 @@ describe('executor tool authority', () => {
 			to: 'worker',
 			text: 'Check the build.',
 			after: 600,
-			owner: 'priya',
 		});
 		const clean = bound('message:4:worker:1', respond, { committed: scheduled(5) });
 		const result = await call(clean.tool(1), 'clean', { text: ' Check the build. ', after: 600 });
@@ -330,7 +329,7 @@ describe('executor tool authority', () => {
 			{
 				kind: 'close',
 				seq: 4,
-				body: { owner: 'priya', from: 3, through: 3, at, summary: 'worker' },
+				body: { person: 'priya', from: 3, through: 3, at, summary: 'worker' },
 			},
 			{
 				kind: 'message',
@@ -373,7 +372,7 @@ describe('executor tool authority', () => {
 		const open: ActivationView = {
 			...base,
 			spec: { ...base.spec, id: 'message:4:worker:1' },
-			context: { ...base.context, exchange: { owner: 'priya', from: 4 } },
+			context: { ...base.context, exchange: { person: 'priya', from: 4 } },
 		};
 		const held = binding(activationFor('message:4:worker:1', worker), unusedRoom);
 		await call(toolsFor(open, worker, held).at(-1), 'call-1', {});
@@ -388,7 +387,7 @@ describe('executor tool authority', () => {
 			callId: 'call-1',
 			room: 'room',
 			activation: 'message:4:worker:1',
-			exchange: { owner: 'priya', from: 4 },
+			exchange: { person: 'priya', from: 4 },
 		});
 		expect(Object.isFrozen(first)).toBe(true);
 		expect(Object.isFrozen(first?.exchange)).toBe(true);

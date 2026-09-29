@@ -93,11 +93,12 @@ try {
 }
 ```
 
-**Importing `@ambionframework/pi` registers the default Pi execution.** It
+**Importing `@ambionframework/pi` defines the default Pi execution.** It
 gives the steps of each activation to the logger of the runtime. A host that
-needs a scripted stream, custom storage, a transport, or limits passes
-`piExecution(options)` as `execution`. [Executors](executors.md#the-executor-contract)
-states how a room resolves an execution.
+needs a scripted stream or its own session place passes
+`piExecution(options)` as `execution`. The runtime supplies the storage and
+the limits. [Executors](executors.md#the-executor-contract) states how a
+room resolves an execution.
 
 ## Options
 
@@ -139,10 +140,10 @@ session of the open exchange, and the session of the exchange before it
 for its summary. It deletes the others.
 `createExecutionServices` takes the same three options.
 
-The runtime supplies the clock, the call limits, the trace limits, the
-logger, and the transport. `pi()` throws at definition time when
-`estimateTokens` has no `activationTokenLimit`, when the limit is not a
-positive integer, and when `estimateTokens` is not a name.
+The runtime supplies the clock, the call limits, the trace limits, and the
+logger. `pi()` throws at definition time when `estimateTokens` has no
+`activationTokenLimit`, when the limit is not a positive integer, and when
+`estimateTokens` is not a name.
 
 **`estimateTokens` names an estimator in the runtime.** The room runs it, so
 the definition carries the name alone. `length`, the default, counts
@@ -470,7 +471,7 @@ Pi seats.
 | Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `piExecution()`.       |
 | `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is permanent.                         |
 | The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY`, the credit, and the usage limit.  |
-| `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat ran under `piExecution()`. Route with `composeExecutions`.                                   |
+| `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat reached a Pi executor through an execution with no kind. Pass the execution of each family.  |
 | `An agent estimateTokens needs an activationTokenLimit.`            | `estimateTokens` is set with no limit.                                                                     |
 | `Agent '...' names estimator '...', and the runtime holds none ...` | The room start found no estimator by that name. Pass it in `estimators` to `createRuntime`.                |
 | The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.       |

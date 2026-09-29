@@ -79,7 +79,7 @@ describe('the tool list and domain tools', () => {
 				callId: 'lookup:0',
 				room: 'lab',
 				activation: 'message:1:gpt:1',
-				exchange: { owner: 'priya', from: 1 },
+				exchange: { person: 'priya', from: 1 },
 			},
 		]);
 		const failed = await client.callTool({ name: 'broken', arguments: {} });

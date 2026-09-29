@@ -13,42 +13,64 @@ write an adapter. [The Pi guide](pi.md), [the Claude guide](claude.md), and
 
 **The host configures execution before it starts the room.** An `Execution`
 is a value that an executor package builds, such as `piExecution()` from
-`@ambionframework/pi`. The runtime gives it the clock, the storage, the call
-retry policy, and the transport. It returns a connector. The room supplies
-the captured agent definition and receives an execution port. It does not
+`@ambionframework/pi`. It names the `kind` of executor that it serves. The
+runtime gives it the clock, the storage, the call retry policy, the trace
+limits, and the logger. It returns a connector. The room supplies the
+captured agent definition and receives an execution port. It does not
 construct a model runner.
 
-`createRuntime` takes an `execution` for every room of the runtime.
-`startRoom` and `resumeRoom` take an `execution` for one room run. An
-explicit `execution` wins over every default. A room whose seats run on
-more than one family passes `composeExecutions`, which routes each seat on
-the `kind` of its executor. A seat of a kind that the composition does not
-name fails at once with a `no_execution` error, and the failure is
-permanent.
+**One router serves every seat.** `createRuntime` takes an `execution` for
+every room of the runtime. `startRoom` and `resumeRoom` take an `execution`
+for one room run. Each takes one execution or a list, such as
+`[piExecution(), claudeExecution()]`. A seat runs on the first execution of
+the room that serves its kind, then on the first of the runtime, then on
+the default of its kind. An execution with no `kind` serves every kind. A
+seat that no execution serves fails at once with a `no_execution` error,
+and the failure is permanent. A room with no execution still runs its
+people and its record.
 
-**A room with no `execution` uses the default of each executor kind.** An
-executor package calls `registerDefaultExecution(kind, factory)` when the
-host loads it. The registry holds functions and stays outside the journal,
-the captured definition, and the JSON protocol. The kernel imports no
-executor package. The runtime builds the default of a kind once, on the
-first seat of that kind, over its own storage, clock, limits, and
-transport. A seat of a kind with no default fails at once with a
-`no_execution` error, and the failure is permanent. A room with no default
-still runs its people and its record. A room whose seats run on more than
-one family needs no `composeExecutions` when each family's package is
-loaded, because each package registers its own default. A host that needs
-custom storage, transport, or limits passes an `execution`. Cloudflare and
-other separate hosts resolve their execution on the host and never read
-the registry.
+**`localExecution(kind, build)` makes the execution of one kind.** It
+returns an `Execution` of that kind and changes no default. Each executor
+package builds its execution with it, such as `piExecution(options)`. An
+execution with options serves only the rooms and the runtimes that it is
+passed to.
 
-**A transport receives room calls and executor dependencies separately.**
-`Transport.connect(room, context)` receives a plain `RoomProtocol` facade
-with `view`, `commit`, and `lease`. The facade gives no access to room
-lifecycle methods. The returned `AgentPort` handles `wake`, `steer`, and
-`cut`. `AgentExecutionContext` supplies one captured agent definition, the
-room and seat names, the clock, the call retry policy, an executor, a trace
-opener, and notifications. Remote hosts resolve their execution
-dependencies where the agent runs. Only protocol data crosses RPC.
+**`defineExecution(kind, build)` also makes the execution the default of
+the kind.** A later definition of the same kind replaces the default. The
+registry holds functions and stays outside the journal, the captured
+definition, and the JSON protocol. The kernel imports no executor package.
+Each executor package defines its default once, with no options, when the
+host loads it. The runtime builds the default of a kind once, on the first
+seat of that kind, over its own storage, clock, limits, and logger.
+
+```ts
+export function localExecution(
+  kind: string,
+  build: (host: ExecutionHost) => (request: ConnectorRequest) => Executor,
+): Execution<AgentRunner>;
+
+export function defineExecution(
+  kind: string,
+  build: (host: ExecutionHost) => (request: ConnectorRequest) => Executor,
+): Execution<AgentRunner>;
+```
+
+**The port of a local execution is an `AgentRunner` in this process.**
+`build` runs once for each connector. The room builds the connector of
+its own execution when the first seat that the execution serves connects.
+`startRoom` does not build it. The function that `build` returns builds the
+executor of one seat. Every seat keeps the trace limits and the logger
+of the host. The runner receives a plain `RoomProtocol` facade with
+`view`, `commit`, and `lease`. The facade gives no access to room lifecycle
+methods.
+
+**A remote host writes an execution whose port crosses the boundary.** Its
+connector returns an `AgentPort` that carries `wake`, `steer`, and `cut` to
+the host that runs the seat. That host calls the execution of its own
+runtime for the seat, and the seat reaches back through the same boundary.
+Only protocol data crosses. The room object of `@ambionframework/cloudflare`
+runs one such execution, `rpcExecution`. The seat object connects the Pi
+execution once, and awaits `AgentRunner.run` inside its alarm.
 
 **`AgentRunner` is the driver.** It owns the lease, its renewal, and the
 wake queue. It knows no model and no provider. For each activation it opens
@@ -78,12 +100,25 @@ again. An executor that cannot steer omits `steer`. The next pass rereads
 the record, so a dropped steer is not lost. [Durability](durability.md)
 states the commit-freshness promise.
 
-**The hosting entry exports the execution protocol.** `Execution`,
-`ExecutionConnector`, `ExecutionHost`, `Transport`, `AgentRunner`,
-`inProcessTransport`, `composeExecutions`, `registerDefaultExecution`,
-`hostingOf`, and `describeExecutor` come from `@ambionframework/ambion/hosting`. The main
-entry names none of them. Journal events and projected lease state stay
+## The hosting entry exports
+
+**`@ambionframework/ambion/hosting` exports the execution protocol.** The
+main entry names none of it. Journal events and projected lease state stay
 internal. Participant views omit `sessionId`.
+
+| Export               | What it is                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------------- |
+| `Execution`          | What a runtime or a room takes: the `kind` that it serves, and its connector                 |
+| `ExecutionHost`      | What the runtime gives a connector: the clock, the storage, the limits, and the logger       |
+| `ExecutionConnector` | `connect(room, request)` returns the port of one seat                                        |
+| `ConnectorRequest`   | What the room gives for one seat: the room and seat names, the definition, and `emit`        |
+| `AgentPort`          | The side that the room calls: `wake`, `steer`, and `cut`                                     |
+| `RoomProtocol`       | The side that a seat calls: `view`, `commit`, and `lease`                                    |
+| `AgentRunner`        | The driver, and the port of a seat in this process. `run(activation)` resolves when it ends  |
+| `localExecution`     | Builds the execution of one kind, whose port is an `AgentRunner` in this process             |
+| `defineExecution`    | Builds the execution of one kind as `localExecution` does, and makes it the default          |
+| `hostingOf`          | The journal namespace, the limits, the executions, and the room registry of a runtime        |
+| `describeExecutor`   | The neutral half of an executor definition, which an executor family extends with its fields |
 
 **`RoomProtocol.view(activation, message?)` takes no range.** The room
 serves the record windowed to its cap and to the token limit of the seat,
@@ -297,9 +332,8 @@ trace is not part of the record or of the durability promise.
 a `thinking` or `text` block into one step. `limits.trace.stepsPerPass`
 caps the steps of one pass, and an `end` step is always kept.
 `limits.trace.toolOutputBytes` cuts a tool output that is larger, and the
-step keeps the start of it with a note of the size. The Pi execution
-applies the limits of the host. The Claude execution applies the defaults
-and ignores `limits.trace`.
+step keeps the start of it with a note of the size. Every execution that
+`localExecution` or `defineExecution` builds applies the limits of the host.
 
 **A definition sets its trace policy.** `defineAgent({ trace })` takes
 `thinking` (`omit`, `summary`, or `full`) and `toolOutput` (`omit` or
@@ -430,9 +464,10 @@ family. `@ambionframework/claude` is the worked example, and
    and the fresh start. A harness with no session records none.
 8. **Wrap the executor in an `Execution`.** Export a function that defines
    the executor of an agent and a function that gives the host its
-   execution. Claude offers `claude()` and `claudeExecution()`. Call
-   `registerDefaultExecution` with the kind, so a room with no `execution`
-   serves the seats of the family.
+   execution. Claude offers `claude()` and `claudeExecution()`. Build the
+   execution with `localExecution` and the kind. Define the default once
+   with `defineExecution` when the package loads, so a room with no
+   `execution` serves the seats of the family.
 
 ```ts
 import { defineAgent, startRoom } from '@ambionframework/ambion';

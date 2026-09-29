@@ -75,8 +75,8 @@ function contributionMatches(commit: CommitRequest, message: Message): boolean {
 	if (intent.kind !== 'said') return operationMatches(intent, message);
 	if (message.kind === 'said') return saidContentMatches(message, intent);
 	// A closing agent says through the same `said` intent, but the room records
-	// its contribution as a summary addressed to the exchange owner. An omitted
-	// recipient is that canonical owner; a supplied recipient must still match.
+	// its contribution as a summary addressed to the `person` of the exchange.
+	// An omitted recipient is that person; a supplied recipient must still match.
 	return (
 		message.kind === 'summary' &&
 		(intent.to === undefined || message.to === intent.to) &&

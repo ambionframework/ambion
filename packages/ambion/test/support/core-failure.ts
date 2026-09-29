@@ -1,56 +1,49 @@
 /**
  * Shared parts of the failure tests: a storage that closes when the test
- * ends, an in-process transport with some calls replaced, a seeded random
+ * ends, an execution with some calls of its ports replaced, a seeded random
  * source, and the reader of a child process that reports its writes.
  * The test runner imports this file, and no child process does.
  */
 import { expect } from 'vitest';
-import {
-	type AgentPort,
-	inProcessTransport,
-	type RoomProtocol,
-	type Steer,
-	type Transport,
-	type Wake,
+import type {
+	AgentPort,
+	ConnectorRequest,
+	Execution,
+	RoomProtocol,
+	Steer,
+	Wake,
 } from '../../src/hosting.ts';
 import type { Room } from '../../src/index.ts';
 import type { FakeClock } from '../../src/testing.ts';
 import type { Cast } from './cast.ts';
 import { type CrashPoint, idle, World, within } from './chaos.ts';
+import { around } from './ports.ts';
 import { messagesOf, roomName } from './room.ts';
 import { openFor } from './stop.ts';
 import type { Storage } from './storage.ts';
 
-type Context = Parameters<Transport['connect']>[1];
-
-/** The calls a test replaces. Each replacement gets the in-process port or the room. */
+/** The calls a test replaces. Each replacement gets the port of the execution or the room. */
 export interface Tap {
 	wake?: (wake: Wake, port: AgentPort) => Promise<void>;
 	steer?: (steer: Steer, port: AgentPort) => Promise<void>;
-	room?: (room: RoomProtocol, context: Context) => Partial<RoomProtocol>;
+	room?: (room: RoomProtocol, request: ConnectorRequest) => Partial<RoomProtocol>;
 }
 
-/** The in-process transport with the calls of `tap` replaced. */
-export function tapped(tap: Tap): Transport {
-	const base = inProcessTransport();
-	return {
-		connect(room, context) {
-			const port = base.connect(
-				{
-					view: (id, message) => room.view(id, message),
-					commit: (commit) => room.commit(commit),
-					lease: (lease) => room.lease(lease),
-					...tap.room?.(room, context),
-				},
-				context,
-			);
-			return {
-				cut: (activation) => port.cut(activation),
-				wake: (wake) => (tap.wake ? tap.wake(wake, port) : port.wake(wake)),
-				steer: (steer) => (tap.steer ? tap.steer(steer, port) : port.steer(steer)),
-			};
-		},
-	};
+/** `execution`, with the calls of `tap` replaced on each port that it connects. */
+export function tapped(execution: Execution, tap: Tap): Execution {
+	return around(execution, {
+		room: (room, request) => ({
+			view: (id, message) => room.view(id, message),
+			commit: (commit) => room.commit(commit),
+			lease: (lease) => room.lease(lease),
+			...tap.room?.(room, request),
+		}),
+		port: (port) => ({
+			cut: (activation) => port.cut(activation),
+			wake: (wake) => (tap.wake ? tap.wake(wake, port) : port.wake(wake)),
+			steer: (steer) => (tap.steer ? tap.steer(steer, port) : port.steer(steer)),
+		}),
+	});
 }
 
 /** Mark a rejection as observed, so a test can assert it later. */

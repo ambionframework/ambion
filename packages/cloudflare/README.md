@@ -21,7 +21,9 @@ What is built:
   an explicit `start`. It exposes `start`, `visit`, `send`, `leave`, `seat`,
   `unseat`, `abort`, `read`, `exchange`, `dismiss`, `scheduledSays`,
   `waitForClose` and `waitForSummary` over RPC, and the three calls a seat makes: `view`, `commit`
-  and `lease`. Its `alarm()` runs `reconcileRoom`.
+  and `lease`. Its runtime reaches each seat through `rpcExecution`, an
+  execution with no kind whose port calls the seat object over RPC. Its
+  `alarm()` runs `reconcileRoom`.
   Identity and presence come from the room journal. Restart restores handles
   only for present humans; `send` never enters the room implicitly. Explicit
   `visit` ensures presence, and repeated `leave` is harmless.
@@ -33,11 +35,12 @@ What is built:
   activation metadata and sets no alarm. Unread messages remain recoverable
   from the room journal. `cut` stops the activation the room ended. The seat
   gives the steps of each activation to the `logger` that `configure` takes.
-  Absent, it drops them. The Pi executor lives on the object instance, and it
-  keeps the Pi harness sessions of the seat in a `MemorySessionRepo` there. An
-  eviction loses the sessions, and the next activation starts fresh. It
-  composes `AgentRunner` services directly from the worker configuration. It
-  does not create a room runtime.
+  Absent, it drops them. The seat object runs the execution of its own host:
+  it connects the Pi execution of the worker once, and the `AgentRunner` and
+  its executor live on the object instance. The executor keeps the Pi harness
+  sessions of the seat in a `MemorySessionRepo` there. An eviction loses the
+  sessions, and the next activation starts fresh. The seat object does not
+  create a room.
 - **`configure`** names the complete agent definitions the objects resolve by
   name, the model call they make, and an optional `logger` for the steps of
   each activation. To send the steps to Workers Logs, pass

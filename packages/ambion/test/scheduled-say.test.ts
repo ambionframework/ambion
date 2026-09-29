@@ -1,8 +1,8 @@
 /**
  * A scheduled say, end to end: an agent calls `schedule` with `after`, the
  * exchange closes while the say waits, and the room gives the say back when
- * it is due. The returned entry opens an exchange for the person who owned
- * the first one, and the agent answers them. A room that stops or crashes
+ * it is due. The returned entry opens an exchange with no person, and the
+ * agent answers the person who asked. A room that stops or crashes
  * before the say is due, or while it is overdue, returns it once when it
  * resumes.
  */
@@ -100,13 +100,13 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 			}),
 		);
 
-	it('closes the exchange while the say waits, and returns it for the owner when it is due', async () => {
+	it('closes the exchange while the say waits, and returns it into an exchange with no person', async () => {
 		const { clock, runtime } = await setup();
 		const room = await start(runtime());
 		const first = await (await room.visit(priya)).send({ text: 'Is the build green?' });
 		await first.waitForClose();
 		const [say] = stateOf(room).scheduled;
-		expect(say).toMatchObject({ seat: 'worker', owner: 'priya', text: 'Check the build.' });
+		expect(say).toMatchObject({ seat: 'worker', text: 'Check the build.' });
 		const due = new Date(clock.now() + AFTER * 1000).toISOString();
 		expect(results).toContain(
 			`scheduled #${say?.seq}: the room wakes you with this message at ${due}`,
@@ -115,7 +115,6 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 			{
 				seq: say?.seq,
 				seat: 'worker',
-				owner: 'priya',
 				due: new Date(clock.now() + AFTER * 1000).toISOString(),
 				text: 'Check the build.',
 				refs: ['file:///builds/out.log'],
@@ -141,18 +140,23 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		expect(returned).toMatchObject({
 			to: 'worker',
 			message: say?.seq,
-			owner: 'priya',
 			text: 'Check the build.',
 			refs: ['file:///builds/out.log'],
 			wakes: ['worker'],
 		});
 		const second = room.exchange(returned?.seq ?? 0);
-		expect(second).toMatchObject({ owner: 'priya', from: returned?.seq });
+		expect(second).toMatchObject({ from: returned?.seq });
+		expect(second).not.toHaveProperty('person');
 		await expect(second?.waitForClose()).resolves.toMatchObject([
 			{ kind: 'returned' },
 			{ kind: 'said', from: 'worker', to: 'priya', text: 'The build passed.' },
 		]);
-		expect((await room.read({ messages: false })).scheduled).toEqual([]);
+		const after = await room.read({ messages: false });
+		expect(after.scheduled).toEqual([]);
+		// The answer to priya in an exchange that no person opened waits on her.
+		const closed = after.exchanges.find((exchange) => exchange.from === returned?.seq);
+		expect(closed).toMatchObject({ outcome: { kind: 'awaiting', person: 'priya' } });
+		expect(closed).not.toHaveProperty('person');
 	});
 
 	it.each([
@@ -168,7 +172,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		if (end === 'stop') await room.stop();
 		else crash(first, room);
 		const read = await readRoom(room.name, { runtime: runtime() });
-		expect(read.scheduled).toMatchObject([{ seat: 'worker', owner: 'priya' }]);
+		expect(read.scheduled).toMatchObject([{ seat: 'worker' }]);
 		await clock.advance(stopped);
 		const resumed = await resume(room, runtime());
 		await clock.advance(AFTER * 1000);
@@ -187,7 +191,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		await (await (await room.visit(priya)).send({ text: 'Is the build green?' })).waitForClose();
 		if (by === 'host') {
 			const [say] = await room.scheduled();
-			expect(say).toMatchObject({ seat: 'worker', owner: 'priya' });
+			expect(say).toMatchObject({ seat: 'worker' });
 			expect(await room.dismiss(say?.seq ?? 0)).toBe(true);
 			expect(await room.dismiss(say?.seq ?? 0)).toBe(false);
 		}
