@@ -23,7 +23,8 @@ and its acceptance. [The backlog](backlog.md) holds everything else.
 
 ## Status
 
-**0.4.0 shipped. No 0.5.0 implementation step has landed.** This scope
+**0.4.0 shipped. SN1 is implemented on this branch.** The wire schemas
+and client types exist. The other 0.5.0 steps remain pending. This scope
 incorporates the owner's response to the review of `origin/main`
 `0f9ef1e27eed0f27c3ec47aef09071d54b044ff8` on 2026-09-29.
 [The review disposition](review-0.5.0.md) records the changed decisions.
@@ -127,7 +128,7 @@ Within a phase, items can proceed together when their dependencies allow.
 
 ### Phase 1. The template, wire, and workstation transport
 
-- [ ] **1.** The minimal schema and launch source metadata. (SN1)
+- [x] **1.** The minimal schema and launch source metadata. (SN1)
 - [ ] **2.** The forkable template and its lifecycle contract. Needs 1. (SN27)
 - [ ] **3.** The client and conformance cases. Needs 1 and 2. (SN3, SN4)
 - [ ] **4.** The workspace port contract and workstation forwarding. (SN32)
