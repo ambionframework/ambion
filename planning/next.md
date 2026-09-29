@@ -191,8 +191,10 @@ and the process tools. A step names the steps it needs; a step with no
 ### Phase 1. The drift
 
 - [ ] **8.** The assistant works a request after the person who asked leaves. (A1)
-      The code landed. The live case "works a request after the person who
-      asked leaves" waits for its runs.
+      The code landed. On 2026-09-29 the live case "works a request after
+      the person who asked leaves" passed three samples of three on Pi
+      with `openai/gpt-5.6-luna`. The step closes when the live suite of
+      the assistant passes on its default model in the live run on `main`.
 
 **Evidence:** each step keeps `pnpm check` green and holds the coverage
 of each changed package, measured before and after as `CLAUDE.md`
@@ -303,3 +305,12 @@ interactions, so a person who asks and leaves gets the answer later.
 at pass^3, where the person asks and leaves before the first activation.
 The assistant sends a directed request to a specialist, and the closing
 summary answers the question. The live suite of the assistant stays green.
+
+**The suite on `openai/gpt-5.6-luna` is not green, with or without A1.**
+On 2026-09-29, 17 of 23 cases passed with A1. On `main` without A1, the
+same five cases failed: the three samples of the superseded constraint at
+broadcast, the application override, and the case with no specialist. In
+each, the model speaks where the case expects silence. The case of the
+material fact passed one sample of three with A1 and two of three on
+`main`, and it fails the same way. The suite holds its default model,
+`anthropic/claude-sonnet-5`.
