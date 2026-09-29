@@ -1,6 +1,5 @@
 /**
- * The lab's repositories: a git backend with one read-only template, the
- * firmware sketch for the kit.
+ * The lab's repositories: read-only firmware and sensor server templates.
  *
  * An agent forks the template with `fork`, clones the fork into its home,
  * and pushes its branch with `git` in `bash`. The storage is one SQLite
@@ -26,6 +25,10 @@ const templates = {
 		description:
 			'Arduino Uno firmware for the kit: a pin map, a sketch that blinks the LED and reads the HC-SR04, and a sweep of the LED resistor.',
 		source: fromDirectory(resolve(templatesDirectory, 'firmware-sketch')),
+	},
+	'sensor-server': {
+		description: 'A small Node sensor server with deterministic numeric, frame, and text fixtures.',
+		source: fromDirectory(resolve(templatesDirectory, 'sensor-server')),
 	},
 };
 

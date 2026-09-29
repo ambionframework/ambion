@@ -13,6 +13,15 @@ the optional `ports` capability. `workstationBackend` forwards a remote
 `127.0.0.1` service port to an automatically assigned host loopback port.
 The caller closes each transport. The URL is private and temporary.
 
+**The Workbench adds a forkable sensor-server template.** It serves
+deterministic numeric, frame, and text fixtures, captures Git source
+metadata at launch, and keeps acquisition files outside its checkout. The
+template imports the workspace schemas from a locally built and packed
+workspace package because npmjs 0.4.0 does not contain SN1. Its README
+documents its setup, customization, validation, process lifecycle, data
+retention, and rollback. This template's tests are not the planned SN4
+`sensorConformance` runner.
+
 ## 0.4.0 (2026-09-29)
 
 **0.4.0 is a release of simplification.** Each fact of the room has one

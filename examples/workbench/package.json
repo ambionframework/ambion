@@ -10,7 +10,7 @@
 	"scripts": {
 		"start": "node --experimental-ffi --env-file-if-exists=.env src/main.ts",
 		"check:types": "tsc --noEmit",
-		"test": "vitest run --exclude 'test/live/**'",
+		"test": "vitest run --exclude 'test/live/**' --exclude 'templates/**'",
 		"test:live": "pnpm --filter '@ambionframework-examples/workbench^...' build && vitest run --config vitest.live.config.ts"
 	},
 	"dependencies": {
