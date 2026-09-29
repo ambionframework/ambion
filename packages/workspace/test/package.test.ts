@@ -128,7 +128,11 @@ it.each([
 			'isValidObserveRequest',
 		],
 	],
-	['./conformance', conformance, ['gitConformance', 'objectConformance', 'workspaceConformance']],
+	[
+		'./conformance',
+		conformance,
+		['gitConformance', 'objectConformance', 'sensorConformance', 'workspaceConformance'],
+	],
 	[
 		'./git',
 		git,

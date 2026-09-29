@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
@@ -6,6 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { createSensorClient } from '@ambionframework/workspace/sensors';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { labRepositories } from '../src/repositories.ts';
+import {
+	runTemplateSensorConformance,
+	templateSensorFixture,
+} from './support/sensor-conformance.ts';
 
 const template = fileURLToPath(new URL('../templates/sensor-server/', import.meta.url));
 
@@ -91,6 +96,12 @@ describe('the sensor server template', () => {
 		if (series?.kind !== 'series')
 			throw new Error('The calibrated fixture is not a numeric series.');
 		expect(series.values).toEqual([21.5, 22.25, 21.4]);
+		const frameBytes = await readFile(join(fresh, 'fixtures', 'frame.png'));
+		const frameDigest = createHash('sha256').update(frameBytes).digest('hex');
+		await runTemplateSensorConformance(
+			`http://127.0.0.1:${server.port}`,
+			templateSensorFixture(frameDigest, frameBytes, [21.5, 22.25, 21.4]),
+		);
 		const camera = await server.client.observe('bench-camera');
 		expect(camera.observations[0]?.at).toBe('2025-01-02T03:04:06.000Z');
 		const frame = camera.observations[0]?.parts[0];
@@ -186,6 +197,7 @@ async function start(cwd: string, dataPath: string) {
 		throw error;
 	});
 	return {
+		port,
 		client: createSensorClient(`http://127.0.0.1:${port}`),
 		async stop() {
 			if (child.exitCode !== null) return;
