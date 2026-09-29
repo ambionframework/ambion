@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+No change has landed since 0.4.0.
+
 ## 0.4.0 (2026-09-29)
 
 **0.4.0 is a release of simplification.** Each fact of the room has one
