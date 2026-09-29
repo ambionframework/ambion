@@ -34,6 +34,7 @@ import type {
 
 export {
 	type ExecutorCapabilities,
+	type ExecutorCaseReport,
 	type ExecutorHarness,
 	type ExecutorPlan,
 	executorConformance,

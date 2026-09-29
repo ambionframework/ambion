@@ -97,6 +97,12 @@ names a snapshot ref, a commit ref, and a message URI. A workspace path and
 a table have no ref form, so the text no longer names them. `say` describes
 its `text`.
 
+**The executor suite reports each case.** `ExecutorHarness.close` takes an
+`ExecutorCaseReport`: the name of the case, every room call with its
+answer, and every step the logger received. The live Codex suite writes it
+to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
+[Executors](docs/executors.md).
+
 ### Simplification
 
 - **The room state has one derivation.** `readRoom` replays the

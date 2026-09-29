@@ -634,7 +634,9 @@ An adapter supplies an `ExecutorHarness`. `open(plan, definition)` builds
 the executor for one `ExecutorPlan`, using a fake model or a fake
 executable. `can` is an `ExecutorCapabilities` value with `steer`, `usage`,
 and `permanentFailure`. The suite drops each case that a false capability
-gates.
+gates. `close(report)` runs after each case. The report holds the name of
+the case, every room call with its answer, and every step the logger
+received.
 
 Three runs exist as evidence. The scripted executor runs the suite in
 `packages/ambion/test/executor-conformance.test.ts`. The Pi executor runs

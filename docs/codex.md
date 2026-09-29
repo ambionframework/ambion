@@ -436,6 +436,12 @@ plan from its instructions. A key that the provider refuses gives the
 permanent failure, and a `codex` binary that does not exist gives the
 transient one.
 
+**A dump shows what a live case saw.** Set `AMBION_LIVE_DUMP=<dir>` to write
+one JSON file for each case of the live suite. The file holds the room calls
+with their answers, every step, and for each activation the prompt of each
+pass and each call that the executor made to the core. Without the
+variable, the suite writes nothing.
+
 **The unit tests run on recorded events.** `test/fixtures/` holds event
 streams that a real `codex` 0.155.1 produced through the SDK 0.155.1, on the
 model `gpt-5.6-luna`. The tests map them to steps, count usage, and report

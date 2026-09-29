@@ -28,7 +28,14 @@ import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conf
 import { settled } from '@ambionframework/ambion/testing';
 import { memoryJournals } from '@ambionframework/journal';
 import { describe } from 'vitest';
-import { type CodexOptions, codex, codexExecution, createCodexExecutor } from '../../src/index.ts';
+import {
+	type CodexExecutorOptions,
+	type CodexOptions,
+	codex,
+	codexExecution,
+	createCodexExecutor,
+} from '../../src/index.ts';
+import { dumpDirectory, liveDump } from './dump.ts';
 
 /** The model every live Codex seat runs on. */
 export const MODEL = 'gpt-5.6-luna';
@@ -150,6 +157,8 @@ function instructionsOf(plan: ExecutorPlan): string {
  * the harness declares neither.
  */
 export function codexExecutorHarness(): ExecutorHarness {
+	const dir = dumpDirectory();
+	const dump = dir === undefined ? undefined : liveDump(dir);
 	return {
 		open: (plan, definition) => {
 			const failing = plan.kind === 'fail' ? plan.cause : undefined;
@@ -161,15 +170,18 @@ export function codexExecutorHarness(): ExecutorHarness {
 				// A binary that does not exist fails before Codex reads the catalog.
 				...(failing === 'transient' ? { nativeTools: 'codex' as const } : {}),
 			});
-			return createCodexExecutor({
+			const options: CodexExecutorOptions = {
 				definition: { ...definition, executor },
 				...(failing === 'permanent'
 					? { env: { ...process.env, [KEY_VAR]: 'sk-invalid-ambion-conformance' } }
 					: {}),
 				...(failing === 'transient' ? { codexPath: '/nonexistent/ambion/codex' } : {}),
-			});
+			};
+			if (dump === undefined) return createCodexExecutor(options);
+			return dump.wrap(createCodexExecutor(dump.options(options)));
 		},
 		can: { steer: false, usage: false, permanentFailure: true, memory: true },
 		patience: QUIET_MS,
+		...(dump === undefined ? {} : { close: async (report) => dump.write(report) }),
 	};
 }

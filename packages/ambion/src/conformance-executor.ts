@@ -8,6 +8,7 @@
 import type { ConformanceCase } from '@ambionframework/journal/conformance';
 import { type RoomScript, type ScriptedRoom, scriptedRoom } from './conformance-room.ts';
 import {
+	type Call,
 	check,
 	claims,
 	leases,
@@ -79,8 +80,17 @@ export interface ExecutorHarness {
 	readonly can: ExecutorCapabilities;
 	/** How long a case waits, in milliseconds. The default is 5_000. */
 	readonly patience?: number;
-	/** Runs after every case. */
-	close?(): Promise<void>;
+	/** Runs after every case, with what the case saw. */
+	close?(report: ExecutorCaseReport): Promise<void>;
+}
+
+/** What one case saw: every room call with its answer, and every step the logger received. */
+export interface ExecutorCaseReport {
+	readonly name: string;
+	readonly calls: readonly Call[];
+	/** What would not survive the wire, one line for each request or answer. */
+	readonly violations: readonly string[];
+	readonly records: readonly TraceRecord[];
 }
 
 interface Run {
@@ -476,7 +486,12 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 			});
 		} finally {
 			room.release();
-			await harness.close?.();
+			await harness.close?.({
+				name: one.name,
+				calls: room.calls,
+				violations: room.violations,
+				records,
+			});
 		}
 	};
 	return cases.map((one) => ({ name: one.name, run: () => run(one) }));
