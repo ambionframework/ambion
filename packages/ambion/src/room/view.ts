@@ -94,7 +94,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, message?: Seq): A
 		...(purpose.kind !== 'respond' || state.exchange === undefined
 			? {}
 			: { exchange: { owner: state.exchange.owner, from: state.exchange.from } }),
-		...omittedOf(bounded, messages),
+		...(message === undefined ? omittedOf(bounded, messages) : {}),
 		...purposeContext(purpose, state),
 		...scheduledOf(spec, state),
 	};
@@ -116,14 +116,15 @@ function scheduledOf(
 	return own.length === 0 ? {} : { scheduled: own };
 }
 
-/** How many messages the view leaves out below the first one it holds. Absent when none. */
+/**
+ * How many messages the window leaves out. A window is a tail of the record
+ * it reads, so the count is the difference in length. Absent when none.
+ */
 function omittedOf(
 	bounded: readonly Message[],
 	messages: readonly Message[],
 ): Pick<CollaborationContext, 'omitted'> {
-	const lowest = messages[0]?.seq;
-	if (lowest === undefined) return {};
-	const omitted = bounded.filter((message) => message.seq < lowest).length;
+	const omitted = bounded.length - messages.length;
 	return omitted === 0 ? {} : { omitted };
 }
 

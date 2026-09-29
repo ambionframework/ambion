@@ -118,6 +118,8 @@ interface Case {
 	/** The first seq the view holds, and how many messages it leaves out. */
 	from: Seq;
 	omitted?: number;
+	/** The seq the view acknowledges. A window moves the floor and leaves this position. */
+	through?: Seq;
 }
 
 /** The view of one case, as the room serves it, and the context the seat reads. */
@@ -152,7 +154,7 @@ describe('the room windows the record', () => {
 		['the whole record with no bound', { state: short, spec: respond, from: 2 }],
 		[
 			'a cap serves the newest messages and counts what it drops',
-			{ state: short, spec: respond, cap: 2, from: 4, omitted: 2 },
+			{ state: short, spec: respond, cap: 2, from: 4, omitted: 2, through: short.lastSeq },
 		],
 		[
 			'a cap serves the open exchange whole',
@@ -172,7 +174,15 @@ describe('the room windows the record', () => {
 		],
 		[
 			'a token limit keeps the newest lines that fit',
-			{ state: short, spec: respond, tokens: 30, estimator: chars, from: 4, omitted: 2 },
+			{
+				state: short,
+				spec: respond,
+				tokens: 30,
+				estimator: chars,
+				from: 4,
+				omitted: 2,
+				through: short.lastSeq,
+			},
 		],
 		[
 			'a token limit keeps at least the newest line',
@@ -253,6 +263,7 @@ describe('the room windows the record', () => {
 				.map((item) => item.seq),
 		);
 		expect(view.context.omitted).toBe(one.omitted);
+		if (one.through !== undefined) expect(view.through).toBe(one.through);
 		expect(rendered).toMatchSnapshot();
 	});
 });
@@ -275,6 +286,8 @@ describe('the view of one message', () => {
 		};
 		const view = viewOf(spec, facts, seq);
 		expect(view.context.messages.map((item) => item.seq)).toEqual(seqs);
+		// No window applies to one message, so the view leaves nothing out.
+		expect(view.context.omitted).toBeUndefined();
 	});
 });
 

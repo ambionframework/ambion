@@ -5,10 +5,14 @@
 import { runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import type { Message } from '@ambionframework/ambion';
 import { namespaced } from '@ambionframework/journal';
-import { expect, it } from 'vitest';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
+import { expect, it, onTestFinished } from 'vitest';
+import { configure } from '../src/configure.ts';
 import { sqlStorage } from '../src/storage.ts';
-import { evict, inside, roomOf } from './objects.ts';
+import { evict, inside, roomOf, seatOf } from './objects.ts';
+import { scripted } from './scripted.ts';
 import { until } from './until.ts';
+import { configuration } from './worker.ts';
 
 /** The internals of the room object that a test reaches. */
 interface Room {
@@ -399,8 +403,27 @@ it('changes membership by name without installing a definition', async () => {
 	expect(await names()).toEqual(['assistant']);
 });
 
-it('starts a seat that names an estimator the worker registers', async () => {
-	const stub = roomOf('room-estimator');
-	await stub.start({ name: 'room-estimator', agents: ['reader'] });
-	await expect(stub.read({ messages: false })).resolves.toMatchObject({ initialized: true });
+it('serves a token-windowed view over RPC to a seat that names a registered estimator', async () => {
+	// The scripted stream records what the reader reads, and answers as the tier does.
+	const prompts: string[] = [];
+	const stream: StreamFn = (model, context, options) => {
+		if (model.id === 'scripted/reader') prompts.push(JSON.stringify(context.messages));
+		return scripted(model, context, options);
+	};
+	configure({ ...configuration, stream });
+	onTestFinished(() => configure(configuration));
+	const stub = roomOf('room-window');
+	await stub.start({ name: 'room-window', agents: ['reader'] });
+	await stub.visit(priya);
+	// Four questions of 40 characters each: the window of 40 tokens holds one.
+	const question = (index: number) => `Question ${index} about the pour.`.padEnd(40, '.');
+	const questions = [0, 1, 2, 3].map(question);
+	for (const text of questions) await stub.send({ from: 'priya', text });
+	await runDurableObjectAlarm(seatOf('room-window', 'reader'));
+	// workerd may run the alarm before the last question lands; a later activation reads it.
+	const prompt = await until(async () => prompts.find((one) => one.includes(question(3))));
+	expect(prompt).toContain('── 1 earlier message not shown ──');
+	expect(prompt).not.toContain('priya arrived');
+	// The open exchange stays whole past the window.
+	for (const text of questions) expect(prompt).toContain(text);
 });
