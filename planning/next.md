@@ -1,4 +1,4 @@
-# Next: the scope for 0.4.0
+# Next: the scope for 0.5.0
 
 > **No compatibility promise before 1.0.0.** 0.4.0 shipped on 2026-09-29
 > from commit 98ab056, with eleven packages on npmjs. Until 1.0.0, any
@@ -16,10 +16,10 @@
 >   that nobody intended. A deliberate change updates them in the same
 >   commit.
 
-This file holds the open work for 0.4.0 and the decisions that shape it.
+This file holds the open work for 0.5.0 and the decisions that shape it.
 What landed leaves this file, and the [changelog](../CHANGELOG.md) records
-it. [backlog.md](backlog.md) holds everything after 0.4.0, in the order of
-its priority.
+it. [backlog.md](backlog.md) holds everything that this file does not, in
+the order of its priority.
 
 ## Status
 
@@ -36,11 +36,6 @@ concept that had two paths and has one.
 [Technical facts](../docs/technical-facts.md) holds the key facts and what
 is new.
 
-**0.4.0 is a release of simplification.** It adds four capabilities. They
-are the `import` of the `sql` tool, the fixed skills of each agent, the
-refs to workspace files and commits, and the post of the host. It removes
-each second path to a fact of the room.
-
 ## The scope
 
 **The journal holds five facts, and one projection reads them.** The facts
@@ -48,17 +43,6 @@ are messages, lease changes, closes, cancellations, and compositions. A
 `run` entry fences each run. One pure `decide` admits one entry for each
 command inside the journal queue, and the reconcile runs `decide` until
 nothing changes.
-
-**Acceptance.** Each fact of the room has one derivation, each rule one
-home, and each seat one boundary. `pnpm check` passes, the coverage of
-each changed package holds, and the changelog names each second path that
-the release removes.
-
-**Journal bodies.** A cancel entry carries no close, and the room derives
-a cancelled close from it. A composition carries no `version`. A body
-schema refuses each field that an earlier release wrote and that this
-runtime would misread. The journal carries no format number. Ambion
-supports no downgrade.
 
 **Deployment models.** The same rules serve four placements.
 
@@ -71,8 +55,9 @@ supports no downgrade.
 
 ## The open step
 
-No step is open. The next release plans its scope from
-[backlog.md](backlog.md).
+- [ ] **The owner sets the scope of 0.5.0.** The owner picks the items
+      from [backlog.md](backlog.md) and moves each one to this file with
+      its condition and its evidence.
 
 ## Decisions taken
 

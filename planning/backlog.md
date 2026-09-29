@@ -1,8 +1,8 @@
-# Backlog: after 0.4.0
+# Backlog
 
 Everything that is not in [next.md](next.md). Each item names the
-condition that brings it into a release. Nothing here blocks the 0.4.0
-tag.
+condition that brings it into a release. Nothing here blocks a release
+until the item moves to that file.
 
 **The sections come in the order of their priority.** Known defects come
 first, then the release and CI, then the rules and proofs, then
