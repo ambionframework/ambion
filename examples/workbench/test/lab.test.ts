@@ -10,13 +10,13 @@ import { openInstrument } from '../src/instrument.ts';
 import { instruments, labAppendOnly, labSchema } from '../src/scenarios.ts';
 import { freshDirectory, openHost } from './hosting.ts';
 
-function contextOf(agent: string, activation: string, owner = 'mira'): ToolContext {
+function contextOf(agent: string, activation: string, person = 'mira'): ToolContext {
 	return {
 		agent: { name: agent, identity: agent },
 		callId: `${agent}-call`,
 		room: 'bringup',
 		activation,
-		exchange: { owner, from: 2 },
+		exchange: { person, from: 2 },
 	};
 }
 
@@ -141,7 +141,7 @@ describe('the instrument resource', () => {
 			agent: 'design',
 			room: 'bringup',
 			activation: 'act-1',
-			exchange_owner: 'mira',
+			exchange_person: 'mira',
 			exchange_from: '2',
 		});
 		expect(row?.at).toEqual(expect.any(String));
@@ -193,7 +193,7 @@ describe('the instrument resource', () => {
 		// Within the limit, an operation runs with no exchange, and its exchange columns stay NULL.
 		expect(await operate('led-current', 5, bare)).toContain('reading 5');
 		expect(await operations(lab)).toEqual([
-			expect.objectContaining({ agent: 'design', exchange_owner: null, exchange_from: null }),
+			expect.objectContaining({ agent: 'design', exchange_person: null, exchange_from: null }),
 		]);
 	});
 

@@ -73,7 +73,7 @@ export interface RoomToolOptions {
 	readonly spoke?: () => void;
 }
 
-/** A closing activation: its owner, everyone it addresses, and how many it has answered. */
+/** A closing activation: its person, everyone it addresses, and how many it has answered. */
 interface Closing {
 	readonly person: string;
 	readonly people: readonly string[];
@@ -164,9 +164,7 @@ export function toolContext(
 		...(onUpdate === undefined ? {} : { onUpdate }),
 		room: view.context.name,
 		activation: view.spec.id,
-		...(exchange === undefined
-			? {}
-			: { exchange: Object.freeze({ owner: exchange.owner, from: exchange.from }) }),
+		...(exchange === undefined ? {} : { exchange: Object.freeze({ ...exchange }) }),
 		...(view.deadline === undefined ? {} : { deadline: view.deadline }),
 	});
 }

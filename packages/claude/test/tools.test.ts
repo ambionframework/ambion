@@ -77,7 +77,7 @@ it('lists the room tools with JSON Schema beside the agent tools, runs an agent 
 			callId: expect.stringMatching(/^toolu_/),
 			room: 'lab',
 			activation: 'message:1:sonnet:1',
-			exchange: { owner: 'priya', from: 1 },
+			exchange: { person: 'priya', from: 1 },
 		},
 	]);
 	const results = run.steps.filter((step) => step.type === 'tool_result');

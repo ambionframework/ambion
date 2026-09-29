@@ -22,7 +22,6 @@ import {
 	startRoom,
 	type TraceRecord,
 } from '@ambionframework/ambion';
-import { composeExecutions } from '@ambionframework/ambion/hosting';
 import { settled } from '@ambionframework/ambion/testing';
 import { claudeExecution } from '@ambionframework/claude';
 import { codexExecution } from '@ambionframework/codex';
@@ -105,11 +104,7 @@ async function openRoom(seats: readonly string[]) {
 	const runtime = createRuntime({
 		storage: memoryJournals(),
 		logger: (record) => void records.push(record),
-		execution: composeExecutions({
-			pi: piExecution({}),
-			claude: claudeExecution({}),
-			codex: codexExecution({}),
-		}),
+		execution: [piExecution({}), claudeExecution({}), codexExecution({})],
 	});
 	const name = `toolset-live-${process.pid}-${Date.now()}`;
 	const room = await startRoom({

@@ -42,7 +42,7 @@ export const PROVENANCE_COLUMNS = [
 	'agent',
 	'room',
 	'activation',
-	'exchange_owner',
+	'exchange_person',
 	'exchange_from',
 	'at',
 ] as const satisfies readonly (keyof SqlProvenance)[];

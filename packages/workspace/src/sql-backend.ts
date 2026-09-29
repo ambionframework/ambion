@@ -74,8 +74,11 @@ export interface SqlProvenance {
 	readonly agent?: string;
 	readonly room?: string;
 	readonly activation?: string;
-	/** The owner of the exchange that was open when the activation read the record. */
-	readonly exchange_owner?: string;
+	/**
+	 * The person of the exchange that was open when the activation read the
+	 * record. An exchange with no person leaves the column NULL.
+	 */
+	readonly exchange_person?: string;
 	/** The seq that opened that exchange, as text. */
 	readonly exchange_from?: string;
 	/** The time of the call, as an ISO 8601 string. */

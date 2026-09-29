@@ -175,7 +175,7 @@ describe('the room pages the record', () => {
 });
 
 describe('the room caps the record', () => {
-	const pinned: RoomState = { ...short, exchange: { owner: 'priya', from: 3, at } };
+	const pinned: RoomState = { ...short, exchange: { person: 'priya', from: 3, at } };
 	it.each([
 		[
 			'serves the newest messages and counts what it drops',

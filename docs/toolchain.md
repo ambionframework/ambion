@@ -64,7 +64,7 @@ The core has four published entries:
 
 - `@ambionframework/ambion` for hosts.
 - `@ambionframework/ambion/hosting` for a room and seat separated by a wire.
-- `@ambionframework/ambion/conformance` for the transport suite and the
+- `@ambionframework/ambion/conformance` for the port suite and the
   executor suite.
 - `@ambionframework/ambion/testing` for the scripted executor, `settled`, and
   `fakeClock`. It imports no model library. `@ambionframework/pi/testing`

@@ -44,7 +44,7 @@ export interface AuditEntry {
 	/** The activation the call ran in. Absent for a call made outside a room. */
 	readonly activation?: string;
 	/** The exchange open when the activation read the record. Absent when none was open. */
-	readonly exchange?: { readonly owner: string; readonly from: number };
+	readonly exchange?: { readonly person?: string; readonly from: number };
 	/** The tool's full parameters. */
 	readonly arguments: unknown;
 	/**

@@ -39,7 +39,8 @@ const messageSchemas: Record<string, TSchema> = {
 			text: Type.String(),
 			refs,
 			after: Type.Optional(Type.Integer({ minimum: 1 })),
-			owner: Type.Optional(Type.String()),
+			// An exchange has no owner, so a scheduled say names none.
+			owner: removed,
 		},
 		extra,
 	),
@@ -58,7 +59,7 @@ const messageSchemas: Record<string, TSchema> = {
 			kind: Type.Literal('returned'),
 			to: Type.String(),
 			message: Type.Integer({ minimum: 1 }),
-			owner: Type.String(),
+			owner: removed,
 			text: Type.String(),
 			refs,
 		},
@@ -145,7 +146,9 @@ const schemas: Record<Kind, TSchema> = {
 	lease,
 	close: Type.Object(
 		{
-			owner: Type.String(),
+			// An exchange has no owner. `person` names the first person who spoke.
+			owner: removed,
+			person: Type.Optional(Type.String()),
 			from: seq,
 			through: seq,
 			at: Type.String(),
@@ -191,12 +194,13 @@ export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 	validateRefs(kind, objectBody(body));
 	validateSchedule(kind, objectBody(body));
 	validateDismissal(kind, objectBody(body));
+	validateSummaryPerson(kind, objectBody(body));
 	return true;
 }
 
 /**
- * A scheduled say goes to its author and carries both `after` and `owner`.
- * The room writes a returned say, so it has no author.
+ * A scheduled say goes to its author. The room writes a returned say, so it
+ * has no author.
  */
 function validateSchedule(kind: string, body: Record<string, unknown> | undefined): void {
 	if (kind !== 'message' || body === undefined) return;
@@ -204,11 +208,16 @@ function validateSchedule(kind: string, body: Record<string, unknown> | undefine
 		throw new Error(`Invalid room journal body for kind '${kind}' at ${path}: ${reason}.`);
 	};
 	if (body.kind === 'returned' && body.from !== undefined) fail('body.from', 'expected no author');
-	if (body.kind !== 'said') return;
-	const scheduled = body.after !== undefined;
-	if (scheduled !== (body.owner !== undefined))
-		fail(scheduled ? 'body.owner' : 'body.after', 'expected after and owner together');
-	if (scheduled && body.to !== body.from) fail('body.to', 'expected the author');
+	if (body.kind === 'said' && body.after !== undefined && body.to !== body.from)
+		fail('body.to', 'expected the author');
+}
+
+/** A close that owes a summary names the person it goes to. */
+function validateSummaryPerson(kind: string, body: Record<string, unknown> | undefined): void {
+	if (kind !== 'close' || body?.summary === undefined || body.person !== undefined) return;
+	throw new Error(
+		`Invalid room journal body for kind '${kind}' at body.person: expected a person with summary.`,
+	);
 }
 
 /** A seat's dismissal names its author and its activation. The host's names neither. */

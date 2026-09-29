@@ -9,7 +9,7 @@ import {
 	startRoom,
 	type TraceStep,
 } from '@ambionframework/ambion';
-import { composeExecutions, type Execution } from '@ambionframework/ambion/hosting';
+import type { Execution } from '@ambionframework/ambion/hosting';
 import { claudeExecution } from '@ambionframework/claude';
 import { codexExecution } from '@ambionframework/codex';
 import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
@@ -84,31 +84,34 @@ export interface RoomsOptions {
 }
 
 /**
- * The execution of each family. A family with a replacement or a stream runs
- * that. A live family with no key gets an execution that fails its seats with
- * the name of the missing variable, so the other seats keep running.
+ * The execution of each family, for the seats of that family alone. A family
+ * with a replacement or a stream runs that. A live family with no key gets
+ * an execution that fails its seats with the name of the missing variable,
+ * so the other seats keep running.
  */
-function familyExecutions(options: RoomsOptions = {}): Execution {
+function familyExecutions(options: RoomsOptions = {}): readonly Execution[] {
 	const { stream, executions, env = process.env } = options;
 	const scripted = stream !== undefined || executions !== undefined;
-	const pick = (family: Family, live: Execution, replacement?: Execution): Execution => {
-		if (replacement) return replacement;
-		if (scripted) return unavailable(`the test gave the ${family} family no scripted execution.`);
-		if (hasKey(family, env)) return live;
+	const pick = (family: Family, live: () => Execution, replacement?: Execution): Execution => {
+		if (replacement) return { kind: family, connector: (host) => replacement.connector(host) };
+		if (scripted)
+			return unavailable(family, `the test gave the ${family} family no scripted execution.`);
+		if (hasKey(family, env)) return live();
 		return unavailable(
+			family,
 			`${keyVariable(family, env)} is not set, and the ${family} family needs it.`,
 		);
 	};
-	return composeExecutions({
-		pi: pick(
+	return [
+		pick(
 			'pi',
-			piExecution({ stream }),
+			() => piExecution({ stream }),
 			// A test gives the stream, and its sessions stay in memory.
 			stream && piExecution({ stream, sessions: 'memory' }),
 		),
-		claude: pick('claude', claudeExecution({ env }), executions?.claude),
-		codex: pick('codex', codexExecution({ env }), executions?.codex),
-	});
+		pick('claude', () => claudeExecution({ env }), executions?.claude),
+		pick('codex', () => codexExecution({ env }), executions?.codex),
+	];
 }
 
 /** The catalog records hosting intent. Collaboration state stays in each room journal. */
@@ -334,7 +337,7 @@ export async function openRooms(
 		lifecycle,
 		/** The steps of one activation that this process logged. */
 		activation: (name: string, id: string) => withRoom(name, async () => log.read(name, id)),
-		/** The operations of a room that wait for the owner of the exchange. */
+		/** The operations of a room that wait for the person of their exchange. */
 		approvals: (name: string) => withRoom(name, () => readApprovals(lab, name)),
 		list: () =>
 			Promise.all([...entries.values()].map((entry) => serial(entry, () => status(entry)))),

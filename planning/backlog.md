@@ -203,6 +203,35 @@ design decides which identity writes the audit log. It builds on
 the workspace interface of 0.2.0 item M7. **Condition:** a workstation
 run where one agent's command delays another agent's file tool.
 
+**A hard bound on an exchange.** Nothing bounds a loop of posts or the
+usage of one exchange ([Exchange](../docs/exchange.md#9-a-gap-the-room-has)).
+`limits.exchange` bounds the activations or the usage of one exchange,
+the room writes the close, and `exchangeOutcome` gets a terminal outcome
+beside `exhausted`. **Condition:** a host that must cap the spend of one
+exchange.
+
+**Compaction with no person.** A summary goes to a person, so an exchange
+where no person spoke never folds, and a monitor that ticks each ten
+minutes adds about 1,000 returned says in a week. The first step is a
+render rule: a closed exchange with no spoken message shows as one line,
+and `recall` still reads it. A later step lets a seat write a summary over
+its own range. **Condition:** a measured context cost from a
+self-scheduling seat.
+
+**A post with `after`.** The host sets a clock on the journal, and the
+room posts when it is due, so a reminder of the host survives a restart.
+**Condition:** a host that loses a reminder across a restart.
+
+**Posts in `simulate()`.** A scenario posts an event during an exchange.
+**Condition:** a simulator case that needs one.
+
+**One stored source for the roster.** A composition seeds the roster from
+its `agents`, and each seating and unseating changes it. A recomposition
+resets the roster, so it drops a seating that a seat made. The change
+writes one seating for each seat at a start and drops `agents` from the
+composition. **Condition:** a recomposition that must keep a seating that
+a seat made.
+
 ## Proofs to write
 
 [docs/formal.md](../docs/formal.md) states the mechanism and the line a

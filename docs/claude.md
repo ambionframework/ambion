@@ -144,11 +144,9 @@ unchanged.
 | `pathToClaudeCodeExecutable` | The executable of the SDK           | The Claude Code executable to spawn.                                                            |
 | `env`                        | The environment of the host process | The environment of the executable. A value **replaces** the environment. See the trust section. |
 
-The runtime supplies the clock, the call limits, the logger, and the
-transport. The Claude execution does not read `limits.trace` from the host.
-It applies the default trace limits, 65,536 bytes of tool output and 1,000
-steps for each pass. `createClaudeExecutor` builds one executor for a seat,
-and its `query` option replaces the SDK entry.
+The runtime supplies the clock, the call limits, the trace limits, and the
+logger. `createClaudeExecutor` builds one executor for a seat, and its
+`query` option replaces the SDK entry.
 
 ## How an activation runs
 
@@ -428,7 +426,7 @@ for its tool list and for `/etc/hosts`. See [Example](example.md).
 | Symptom                                                             | Cause                                                                                                                      |
 | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `claudeExecution()`.                   |
-| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat ran under `claudeExecution()`. Route with `composeExecutions`.                                                   |
+| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each family.                  |
 | The model cannot see `Bash` or `Read`                               | `allowedTools` does not name it. The list gives the built-in tools, and an empty list gives none.                          |
 | Every request is denied                                             | `canUseTool` is absent, or it throws. The executor denies both. Read the `approval` steps.                                 |
 | The model ignores `CLAUDE.md` and project settings                  | `settingSources` is empty by design. Put the guidance in `instructions`.                                                   |

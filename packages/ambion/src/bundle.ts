@@ -28,7 +28,7 @@ export interface ToolContext {
 	 * The exchange that was open when the activation read the record. Absent
 	 * outside a room, and absent when no exchange was open.
 	 */
-	readonly exchange?: Pick<ExchangeRef, 'owner' | 'from'>;
+	readonly exchange?: Pick<ExchangeRef, 'person' | 'from'>;
 	/** When the room ends the activation, in ms since the epoch on the wall clock. Absent outside a room. */
 	readonly deadline?: number;
 }

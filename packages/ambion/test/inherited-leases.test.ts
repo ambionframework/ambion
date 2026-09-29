@@ -4,13 +4,12 @@
  * Both cases use the public seat calls over memory and SQLite journals.
  */
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { piExecution } from '../../pi/src/index.ts';
 import {
 	type AgentPort,
+	type Execution,
 	hostingOf,
 	type RoomProtocol,
 	runningRoom,
-	type Transport,
 	type Wake,
 } from '../src/hosting.ts';
 import {
@@ -23,23 +22,22 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
+import { portExecution } from './support/ports.ts';
 import { roomName, scriptedAgent, storedOf } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { type OpenedStorage, type Storage, storages } from './support/storage.ts';
 
 const runner = scriptedAgent('runner', 'Runs on a separate host.');
 const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
-const execution = piExecution({ sessions: 'memory', stream: scripted(() => quiet()) });
 
-interface RecordingTransport {
-	readonly transport: Transport;
+interface RecordingSeat {
+	readonly execution: Execution;
 	readonly wakes: Wake[];
 	calls: RoomProtocol | undefined;
 }
 
 /** Keep a detached seat endpoint that a test can call like a remote runner. */
-function recordingTransport(): RecordingTransport {
+function recordingSeat(): RecordingSeat {
 	const wakes: Wake[] = [];
 	let calls: RoomProtocol | undefined;
 	return {
@@ -47,26 +45,24 @@ function recordingTransport(): RecordingTransport {
 		get calls() {
 			return calls;
 		},
-		transport: {
-			connect(room, _context) {
-				calls = room;
-				const port: AgentPort = {
-					wake: async (wake) => void wakes.push(wake),
-					steer: async () => {},
-					cut: async () => {},
-				};
-				return port;
-			},
-		},
+		execution: portExecution((room) => {
+			calls = room;
+			const port: AgentPort = {
+				wake: async (wake) => void wakes.push(wake),
+				steer: async () => {},
+				cut: async () => {},
+			};
+			return port;
+		}),
 	};
 }
 
 /** A host over the storage whose leases expire after a second and retry at once. */
-const runtimeOver = (opened: OpenedStorage, clock: FakeClock, recording: RecordingTransport) =>
+const runtimeOver = (opened: OpenedStorage, clock: FakeClock, recording: RecordingSeat) =>
 	createRuntime({
 		storage: opened.storage,
 		clock,
-		transport: recording.transport,
+		execution: recording.execution,
 		limits: { lease: { ttl: 1_000, deadline: 10_000 }, activation: { backoff: () => 0 } },
 	});
 
@@ -86,7 +82,7 @@ async function interrupted(storage: Storage): Promise<InterruptedRoom> {
 	const opened = await storage.open();
 	onTestFinished(() => opened.dispose());
 	const clock = fakeClock();
-	const recording = recordingTransport();
+	const recording = recordingSeat();
 	const first = runtimeOver(opened, clock, recording);
 	const name = roomName(`inherited-${storage.name}`);
 	const session = await startRoom({
@@ -94,7 +90,6 @@ async function interrupted(storage: Storage): Promise<InterruptedRoom> {
 		agents: [runner],
 		seats: { [runner.name]: 'broadcast' },
 		runtime: first,
-		execution,
 	});
 	const visit = await session.visit(person);
 	await session.reconcile();
@@ -134,11 +129,9 @@ async function interrupted(storage: Storage): Promise<InterruptedRoom> {
 async function resumed(state: InterruptedRoom) {
 	hostingOf(state.first).evict(state.name);
 	await assertOldHostStale(state);
-	const recording = recordingTransport();
+	const recording = recordingSeat();
 	const second = runtimeOver(state.opened, state.clock, recording);
-	const room = stopAtEnd(
-		await resumeRoom(state.name, { runtime: second, agents: [runner], execution }),
-	);
+	const room = stopAtEnd(await resumeRoom(state.name, { runtime: second, agents: [runner] }));
 	expect(recording.wakes).toEqual([]);
 	const calls = runningRoom(second, state.name);
 	if (calls === undefined) throw new Error('The resumed room did not register.');

@@ -219,9 +219,9 @@ room seats the specialists it needs. The reserve holds the rest. The header
 of the terminal shows the family beside each agent name.
 
 The workspace, lab, and instrument tools reach every seat as tool bundles.
-`src/rooms.ts` composes the three executions with `composeExecutions` from
-`@ambionframework/ambion/hosting`. It passes them because it checks keys,
-sets the environment, and lets a test script a family. A room with no such
+`src/rooms.ts` passes a list of three executions, one for the kind of each
+family. It passes them because it checks keys, sets the environment, and
+lets a test script a family. A room with no such
 need takes the default execution of each family.
 
 ### One tool set, one filesystem, no native tool

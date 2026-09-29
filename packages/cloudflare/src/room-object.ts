@@ -21,13 +21,12 @@ import type {
 } from '@ambionframework/ambion';
 import { defineHuman, readRoom, resumeRoom, startRoom } from '@ambionframework/ambion';
 import type {
-	AgentExecutionContext,
 	CommitRequest,
 	CommitResult,
+	Execution,
 	LeaseRequest,
 	LeaseResponse,
 	RoomProtocol,
-	Transport,
 	ViewRange,
 	ViewResponse,
 } from '@ambionframework/ambion/hosting';
@@ -73,20 +72,25 @@ function alarmClock(state: DurableObjectState): Clock {
 	};
 }
 
-/** The room reaches a seat over RPC to the seat object named for it. */
-export function rpcTransport(env: Env): Transport {
+/**
+ * The room reaches a seat over RPC to the seat object named for it. The
+ * execution has no kind, so it serves every seat. The seat object runs the
+ * execution of its own host, and calls the room back over RPC.
+ */
+export function rpcExecution(env: Env): Execution {
 	return {
-		connect(_room, context: AgentExecutionContext) {
-			const { room: roomName, seat } = context;
-			const stub = env.SEAT.get(
-				env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', roomName, seat])),
-			);
-			return {
-				wake: (wake) => stub.wake(wake),
-				steer: (steer) => stub.steer(steer),
-				cut: (activation) => stub.cut(activation),
-			};
-		},
+		connector: () => ({
+			connect(_room, request) {
+				const stub = env.SEAT.get(
+					env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', request.room, request.seat])),
+				);
+				return {
+					wake: (wake) => stub.wake(wake),
+					steer: (steer) => stub.steer(steer),
+					cut: (activation) => stub.cut(activation),
+				};
+			},
+		}),
 	};
 }
 
@@ -104,7 +108,7 @@ export class RoomObject extends DurableObject<Env> {
 		this.runtime = runtimeFor({
 			storage: this.storage,
 			clock: alarmClock(ctx),
-			transport: rpcTransport(env),
+			execution: rpcExecution(env),
 		});
 		this.metadata = roomMetadata(ctx);
 		ctx.blockConcurrencyWhile(async () => {
@@ -196,7 +200,7 @@ export class RoomObject extends DurableObject<Env> {
 			...(input.to === undefined ? {} : { to: input.to }),
 			...(input.key === undefined ? {} : { key: input.key }),
 		});
-		return { owner: exchange.owner, from: exchange.from, at: exchange.at };
+		return exchangeRef(exchange);
 	}
 
 	async leave(name: string): Promise<void> {
@@ -252,9 +256,7 @@ export class RoomObject extends DurableObject<Env> {
 	async exchange(from: Seq) {
 		const snapshot = await this.read({ messages: false });
 		const exchange = snapshot.exchanges.find((item) => item.from === from);
-		return exchange === undefined
-			? undefined
-			: { owner: exchange.owner, from: exchange.from, at: exchange.at };
+		return exchange === undefined ? undefined : exchangeRef(exchange);
 	}
 
 	async waitForClose(from: Seq): Promise<Message[]> {
@@ -300,4 +302,9 @@ export class RoomObject extends DurableObject<Env> {
 		if (room === undefined) throw new Error('The room is not running.');
 		return room;
 	}
+}
+
+/** The identity of an exchange that crosses the wire: its start, and its person once one spoke. */
+function exchangeRef({ person, from, at }: ExchangeRef): ExchangeRef {
+	return { ...(person === undefined ? {} : { person }), from, at };
 }

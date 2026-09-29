@@ -38,7 +38,7 @@ const seated = (seq: number) =>
 const closed = (seq = 4, through = 3): Entry => ({
 	kind: 'close',
 	seq,
-	body: { owner: 'priya', from: 3, through, at, summary: 'writer' },
+	body: { person: 'priya', from: 3, through, at, summary: 'writer' },
 });
 const lease = (id: string, seq: number): Entry => ({
 	kind: 'lease',
@@ -363,7 +363,6 @@ describe('a scheduled say', () => {
 			text: 'Check the build.',
 			refs: ['file:///out.log'],
 			after,
-			owner: 'priya',
 			activationId: 'message:3:product:1',
 		});
 	/** A question, the say that the answering seat scheduled, and the close of the exchange. */
@@ -382,7 +381,7 @@ describe('a scheduled say', () => {
 	const quietClose = (seq: number, through: number): Entry => ({
 		kind: 'close',
 		seq,
-		body: { owner: 'priya', from: 3, through, at },
+		body: { person: 'priya', from: 3, through, at },
 	});
 	const reconcile = (state: RoomState, at: number) =>
 		decide(
@@ -400,7 +399,7 @@ describe('a scheduled say', () => {
 	});
 	const due = now + 600_000;
 
-	it('stamps the owner of the open exchange on a say to oneself, and wakes nobody', () => {
+	it('writes a say to oneself with no owner, and wakes nobody', () => {
 		expect(say(answering(), later())).toEqual({
 			event: {
 				kind: 'message',
@@ -409,7 +408,6 @@ describe('a scheduled say', () => {
 					to: 'product',
 					text: 'Check the build.',
 					after: 600,
-					owner: 'priya',
 					at,
 					activationId: 'message:3:product:1',
 					from: 'product',
@@ -460,21 +458,21 @@ describe('a scheduled say', () => {
 		expect(say(state, intent)).toMatchObject(because(reason));
 	});
 
-	it('refuses a say with after outside every exchange, and in a closing response', () => {
+	it('takes a say with after outside every exchange, and refuses one in a closing response', () => {
 		const quiet = fold(composition(), person(), lease('message:2:product:1', 3));
-		expect(say(quiet, later(), 'message:2:product:1')).toMatchObject(because(/No exchange/));
+		expect(quiet.exchange).toBeUndefined();
+		expect(say(quiet, later(), 'message:2:product:1')).toHaveProperty('event');
 		expect(summary(closing(), { kind: 'said', text: 'Later.', after: 600 })).toMatchObject(
 			because(/cannot schedule/),
 		);
 	});
 
-	it('waits outside live work, returns when due after the close, and opens an exchange for its owner', () => {
+	it('waits outside live work, returns when due after the close, and opens an exchange with no person', () => {
 		const closedWaiting = waiting(released(6), quietClose(7, 6));
 		expect(closedWaiting.scheduled).toEqual([
 			{
 				seq: 5,
 				seat: 'product',
-				owner: 'priya',
 				dueAt: due,
 				text: 'Check the build.',
 				refs: ['file:///out.log'],
@@ -488,7 +486,6 @@ describe('a scheduled say', () => {
 			at: new Date(due).toISOString(),
 			to: 'product',
 			message: 5,
-			owner: 'priya',
 			text: 'Check the build.',
 			refs: ['file:///out.log'],
 		};
@@ -499,7 +496,7 @@ describe('a scheduled say', () => {
 		});
 		const after = evolve(closedWaiting, event(written, 8), options);
 		expect(after.scheduled).toEqual([]);
-		expect(after.exchange).toEqual({ owner: 'priya', from: 8, at: returned.at });
+		expect(after.exchange).toEqual({ from: 8, at: returned.at });
 		expect(after.due.map((owed) => owed.id)).toEqual(['message:8:product:1']);
 		expect(decide(after, { type: 'return', message: 5 }, due)).toEqual({ event: undefined });
 		// A dismissal that loses the race to the due time changes nothing.
@@ -531,7 +528,7 @@ describe('a scheduled say', () => {
 		const state = waiting(released(6), quietClose(7, 6), ...sam);
 		const written = decide(state, { type: 'return', message: 5 }, due);
 		const after = evolve(state, event(written, 10), options);
-		expect(after.exchange).toMatchObject({ owner: 'sam', from: 9 });
+		expect(after.exchange).toMatchObject({ person: 'sam', from: 9 });
 		expect(after.scheduled).toEqual([]);
 	});
 
@@ -624,7 +621,6 @@ describe('a scheduled say', () => {
 			{
 				seq: 5,
 				seat: 'product',
-				owner: 'priya',
 				due: new Date(due).toISOString(),
 				text: 'Check the build.',
 				refs: ['file:///out.log'],
@@ -633,7 +629,7 @@ describe('a scheduled say', () => {
 		expect(view('message:3:writer:1').context.scheduled).toBeUndefined();
 	});
 
-	it('steers only the seat that scheduled it while both seats work', () => {
+	it('steers no seat with a say to oneself, and only its seat with the returned say', () => {
 		const state = fold(
 			composition(undefined, [product, watcher]),
 			person(),
@@ -641,8 +637,9 @@ describe('a scheduled say', () => {
 			lease('message:3:product:1', 4),
 			lease('message:3:writer:1', 5),
 			scheduled(6),
-			message(7, { kind: 'returned', to: 'product', message: 6, owner: 'priya', text: 'Check.' }),
+			message(7, { kind: 'returned', to: 'product', message: 6, text: 'Check.' }),
 		);
+		expect(state.deliveries.get(6)).toEqual({ wakes: [], steers: [] });
 		expect(state.deliveries.get(7)).toEqual({
 			wakes: [],
 			steers: [{ seat: 'product', activation: 'message:3:product:1' }],

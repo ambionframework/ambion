@@ -2,7 +2,6 @@ import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/host/runtime.ts';
-import { inProcessTransport } from '../src/hosting.ts';
 import {
 	type Attention,
 	createRuntime,
@@ -14,6 +13,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { refusedAs } from './support/core-room.ts';
+import { around, portExecution } from './support/ports.ts';
 import {
 	andrei,
 	assistant,
@@ -53,13 +53,9 @@ async function open(
 	);
 }
 
-/** A transport whose seats hear nothing, so the test holds the seat side of the wire itself. */
+/** An execution whose seats hear nothing, so the test holds the seat side of the wire itself. */
 const deaf = () =>
-	createRuntime({
-		transport: {
-			connect: () => ({ wake: async () => {}, steer: async () => {}, cut: async () => {} }),
-		},
-	});
+	portExecution(() => ({ wake: async () => {}, steer: async () => {}, cut: async () => {} }));
 
 describe('startRoom', () => {
 	it('activates idle agents in parallel, steers a working colleague, wakes an idle one', async () => {
@@ -427,33 +423,26 @@ describe('startRoom', () => {
 
 	it('tells the seat side to stop, over the wire, when it cuts a lease', async () => {
 		const hangs = deferred();
-		// a transport of the host's own: the room reaches it through the wire alone
+		// a port of the host's own: the room reaches it through the wire alone
 		const cuts: string[] = [];
-		const inProcess = inProcessTransport();
-		const runtime = createRuntime({
-			transport: {
-				connect: (room, context) => {
-					const port = inProcess.connect(room, context);
-					return {
-						wake: (wake) => port.wake(wake),
-						steer: (steer) => port.steer(steer),
-						cut: (activation) => {
-							cuts.push(activation);
-							return port.cut(activation);
-						},
-					};
+		const script: Script = async () => {
+			hangs.resolve();
+			return new Promise<never>(() => {});
+		};
+		const execution = around(piExecution({ sessions: 'memory', stream: scripted(script) }), {
+			port: (port) => ({
+				wake: (wake) => port.wake(wake),
+				steer: (steer) => port.steer(steer),
+				cut: (activation) => {
+					cuts.push(activation);
+					return port.cut(activation);
 				},
-			},
+			}),
 		});
-		const session = await open(
-			'cut',
-			{ solo: 'broadcast' },
-			async () => {
-				hangs.resolve();
-				return new Promise<never>(() => {});
-			},
-			{ runtime },
-		);
+		const session = await open('cut', { solo: 'broadcast' }, script, {
+			runtime: createRuntime(),
+			execution,
+		});
 		const visit = await enter(session);
 		await visit.send({ text: 'wait for me' });
 		await hangs.promise;
@@ -467,8 +456,11 @@ describe('startRoom', () => {
 	});
 
 	it('refuses stale leases, missing or invalid freshness, and a commit from a lease that ended', async () => {
-		const runtime = deaf();
-		const session = await open('stale', { solo: 'broadcast' }, undefined, { runtime });
+		const runtime = createRuntime();
+		const session = await open('stale', { solo: 'broadcast' }, undefined, {
+			runtime,
+			execution: deaf(),
+		});
 		const events = collect(session);
 		const visit = await enter(session);
 		await visit.send({ text: 'first' });

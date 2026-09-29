@@ -194,6 +194,7 @@ function foldOwed(
 	cancelledAt: Seq | undefined,
 ): Owed[] {
 	return closes.flatMap((close) => {
+		if (close.summary === undefined) return [];
 		const completion = summaryCompletion(close, messages, leases, cancelledAt);
 		if (completion.status !== 'pending' || completion.writer === undefined) return [];
 		return [withAttempts(close, completion.writer, leases, options)];

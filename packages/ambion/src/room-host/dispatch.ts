@@ -144,7 +144,7 @@ function queueCloses(host: DispatchHost): void {
 function queueClose(host: DispatchHost, close: Close): void {
 	const question = host.state().messages.find((m) => m.seq === close.from);
 	const exchange: ClosedExchange = {
-		owner: close.owner,
+		...(close.person === undefined ? {} : { person: close.person }),
 		from: close.from,
 		at: question?.at ?? close.at,
 		through: close.through,
@@ -253,7 +253,7 @@ function cutPort(host: DispatchHost, seat: string, activation: string): void {
 	dispatch(host, seat, 'cut', activation, (port) => port.cut(activation));
 }
 
-/** Contain synchronous connector faults and asynchronous transport rejection independently. */
+/** Contain synchronous connector faults and asynchronous port rejection independently. */
 function dispatch(
 	host: DispatchHost,
 	seat: string,

@@ -205,7 +205,7 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 		const retry = await fresh.send(question);
 		expect(fresh).not.toBe(old);
 		expect(retry.from).toBe(original.from);
-		expect(retry.owner).toBe(original.owner);
+		expect(retry.person).toBe(original.person);
 		expect(
 			(await messagesOf(room)).filter(
 				(message) => message.kind === 'said' && message.key === question.key,

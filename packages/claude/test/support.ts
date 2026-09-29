@@ -67,7 +67,7 @@ export function viewOf(through = 1): ActivationView {
 					text: 'When is the pour?',
 				},
 			],
-			exchange: { owner: 'priya', from: 1 },
+			exchange: { person: 'priya', from: 1 },
 			reserve: [],
 		},
 	};

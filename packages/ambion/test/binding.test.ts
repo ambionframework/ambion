@@ -7,7 +7,7 @@
  */
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { inProcessTransport, runningRoom } from '../src/hosting.ts';
+import { runningRoom } from '../src/hosting.ts';
 import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
@@ -71,7 +71,7 @@ const writerNamed: Entry = { ...composition, body: { ...composition.body, summar
 const closed3: Entry = {
 	kind: 'close',
 	seq: 4,
-	body: { owner: 'priya', from: 3, through: 3, at, summary: 'product' },
+	body: { person: 'priya', from: 3, through: 3, at, summary: 'product' },
 };
 const quietQuestion: Entry = { ...question, body: { ...question.body, wakes: [] } };
 const claimed = () => replayState([composition, person, question, running], options);
@@ -111,7 +111,7 @@ describe('the room runs the verified rules', () => {
 	});
 
 	it('writes a close only when admitsClose says so', () => {
-		const close = { type: 'close', owner: 'priya', from: 3, through: 3 } as const;
+		const close = { type: 'close', person: 'priya', from: 3, through: 3 } as const;
 		bind.once(rules.admitsClose, false);
 		expect(decide(asked(), close, now)).toEqual({ event: undefined });
 		bind.once(rules.admitsClose, true);
@@ -225,7 +225,7 @@ describe('the room runs the verified rules', () => {
 		bind.always(rules.openingQuestion, () => undefined);
 		expect(asked().exchange).toBeUndefined();
 		bind.restore(rules.openingQuestion);
-		expect(asked().exchange).toMatchObject({ owner: 'priya', from: 3 });
+		expect(asked().exchange).toMatchObject({ person: 'priya', from: 3 });
 	});
 
 	it('owes a summary only when summaryVerdict says the close owes one', () => {
@@ -358,9 +358,7 @@ describe('the room runs the verified rules', () => {
 
 	it('closes only when exchangeLive says nothing of the exchange is live', () => {
 		const quiet = replayState([writerNamed, person, quietQuestion], options);
-		expect(reconcile(quiet).steps).toEqual([
-			{ type: 'close', owner: 'priya', from: 3, through: 3 },
-		]);
+		expect(reconcile(quiet).steps).toEqual([{ type: 'close', from: 3, through: 3 }]);
 		bind.once(rules.exchangeLive, true);
 		expect(reconcile(quiet).steps).toEqual([]);
 	});
@@ -368,7 +366,6 @@ describe('the room runs the verified rules', () => {
 	it('closes on a later pass when admitsClose refuses once', async () => {
 		const runtime = createRuntime({
 			clock: fakeClock(),
-			transport: inProcessTransport(),
 			execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
 		});
 		const room = stopAtEnd(

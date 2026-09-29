@@ -314,13 +314,13 @@ room's own `Message` type plus `room`, the room's name. Every kind also
 carries `at`, an ISO timestamp the runtime stamps when the message lands.
 `refs` is absent when the message cites nothing:
 
-| `kind`                                  | Fields beyond `room`, `kind`, `seq`, `at`                                                         |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `said`                                  | `from`, `to` (absent for a broadcast), `text`, `refs`, and `after` and `owner` on a scheduled say |
-| `returned`                              | `to`, `owner`, `message` (the seq of the scheduled say), `text`, `refs`                           |
-| `dismissed`                             | `from` (absent for the host), `message` (the seq of the scheduled say)                            |
-| `arrived`, `left`, `seated`, `unseated` | `subject`, and `identity` on `arrived` and `seated`                                               |
-| `summary`                               | `from`, `to`, `text`, `covers: { from, through }`, `refs`                                         |
+| `kind`                                  | Fields beyond `room`, `kind`, `seq`, `at`                                             |
+| --------------------------------------- | ------------------------------------------------------------------------------------- |
+| `said`                                  | `from`, `to` (absent for a broadcast), `text`, `refs`, and `after` on a scheduled say |
+| `returned`                              | `to`, `message` (the seq of the scheduled say), `text`, `refs`                        |
+| `dismissed`                             | `from` (absent for the host), `message` (the seq of the scheduled say)                |
+| `arrived`, `left`, `seated`, `unseated` | `subject`, and `identity` on `arrived` and `seated`                                   |
+| `summary`                               | `from`, `to`, `text`, `covers: { from, through }`, `refs`                             |
 
 An agent reads its own room's file with `read` or `bash cat`, the same as
 any file a peer wrote.
@@ -788,11 +788,12 @@ const sql = sqliteBackend('./data/lab.db', {
   drops a temporary table or view with the name of an append-only table,
   and refuses the statement.
 - **Provenance fills the columns that a table declares.** The columns are
-  `agent`, `room`, `activation`, `exchange_owner`, `exchange_from`, and
+  `agent`, `room`, `activation`, `exchange_person`, `exchange_from`, and
   `at`. The `sql` tool passes the provenance of each tool call in
   `SqlRunOptions.provenance`, and a trigger after each INSERT writes it.
-  An INSERT that sets one of these columns fails. A host call with no
-  provenance leaves them NULL. A RETURNING clause gives the row before the
+  An INSERT that sets one of these columns fails. An exchange with no
+  person leaves `exchange_person` NULL. A host call with no provenance
+  leaves them all NULL. A RETURNING clause gives the row before the
   stamp fills it, so a caller reads the provenance with a SELECT.
 - **Provenance needs a table that the stamp can fill.** The stamp finds
   the new row by its rowid, so the backend refuses a table WITHOUT ROWID

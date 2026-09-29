@@ -129,7 +129,7 @@ class Walk {
 			to: seat,
 			text: 'Check later.',
 			after: 1 + Math.floor(this.random() * 600),
-			owner: this.pick(PEOPLE),
+			person: this.pick(PEOPLE),
 		});
 	}
 
@@ -150,7 +150,7 @@ class Walk {
 			kind: 'returned',
 			to: say.seat,
 			message: say.seq,
-			owner: this.pick(PEOPLE),
+			person: this.pick(PEOPLE),
 			text: 'Check later.',
 		});
 	}
@@ -196,17 +196,17 @@ class Walk {
 	}
 
 	/** A close names the range up to the last entry, and only ever moves forward. */
-	private range(): Omit<Close, 'summary'> | undefined {
+	private range(): { person: string; from: number; through: number; at: string } | undefined {
 		const through = this.seq - 1;
 		if (through <= this.lastThrough || this.messages.length === 0) return undefined;
 		const from = this.pick(this.messages);
-		return { owner: this.pick(PEOPLE), from, through, at: this.at() };
+		return { person: this.pick(PEOPLE), from, through, at: this.at() };
 	}
 
 	private close(): Entry | undefined {
 		const range = this.range();
 		if (range === undefined) return undefined;
-		const body: Close = { ...range, ...(this.chance(0.8) ? { summary: this.pick(SEATS) } : {}) };
+		const body: Close = this.chance(0.8) ? { ...range, summary: this.pick(SEATS) } : range;
 		this.lastThrough = body.through;
 		this.closes.push(body);
 		return { kind: 'close', seq: this.seq, body };
@@ -225,7 +225,7 @@ class Walk {
 		return this.message({
 			kind: 'summary',
 			from: close.summary ?? this.pick(SEATS),
-			to: this.chance(0.9) ? close.owner : this.pick(PEOPLE),
+			to: this.chance(0.9) ? close.person : this.pick(PEOPLE),
 			text: 'Summary.',
 			covers: this.chance(0.9) ? covers : { from: covers.from, through: covers.through + 1 },
 		});

@@ -333,7 +333,7 @@ const closedExchange = (from: number, extra: Record<string, unknown> = {}) => ({
 	from,
 	through: from + 1,
 	status: 'closed',
-	owner: 'mira',
+	person: 'mira',
 	at: AT,
 	outcome: { kind: 'complete' },
 	summary: { status: 'silent' },
@@ -426,14 +426,14 @@ describe('Session steps', () => {
 });
 
 describe('Session scheduled says', () => {
-	it('notes each say that waits to return, with its seat, its time, and its owner', async () => {
+	it('notes each say that waits to return, with its seat and its time', async () => {
 		const { host, session } = await started();
-		const say = { seq: 5, seat: 'bench', owner: 'mira', due: 'soon', text: 'Check the build.' };
+		const say = { seq: 5, seat: 'bench', due: 'soon', text: 'Check the build.' };
 		host.table.set('bringup', view('bringup', { scheduled: [say] }));
 		await session.refresh();
 		expect(session.blocks).toContainEqual({
 			type: 'note',
-			text: 'bench comes back at soon for mira: Check the build. (/dismiss 5)',
+			text: 'bench comes back at soon: Check the build. (/dismiss 5)',
 		});
 		expect(session.suggestions('/dismiss ').map((row) => row.insert)).toEqual(['/dismiss 5']);
 		host.table.set('bringup', view('bringup'));
@@ -443,7 +443,7 @@ describe('Session scheduled says', () => {
 
 	it('dismisses a say by the handle that the note shows, and refuses any other', async () => {
 		const { host, session } = await started();
-		const say = { seq: 5, seat: 'bench', owner: 'mira', due: 'soon', text: 'Check the build.' };
+		const say = { seq: 5, seat: 'bench', due: 'soon', text: 'Check the build.' };
 		host.table.set('bringup', view('bringup', { scheduled: [say] }));
 		await session.refresh();
 		for (const typed of ['/dismiss 6', '/dismiss']) {
@@ -477,7 +477,7 @@ describe('Session awaiting and approval', () => {
 		const awaiting = closedExchange(4, { outcome: { kind: 'awaiting', person: 'mira' } });
 		host.table.set('bringup', view('bringup', { exchanges: [awaiting] }));
 		host.pendingApprovals = [
-			{ id: 3, instrument: 'led-current', setpoint: 30, unit: 'mA', owner: 'mira', at: AT },
+			{ id: 3, instrument: 'led-current', setpoint: 30, unit: 'mA', person: 'mira', at: AT },
 		];
 		await session.refresh();
 		expect(session.attention).toEqual([

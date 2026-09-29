@@ -17,10 +17,11 @@
  * - **Quiescence closes it.** The room reconciles when nothing is live, and
  *   writes a close that names the range the exchange turned out to hold.
  * - **What lands while it is open steers it and changes nothing.** Not the
- *   owner, not the range, not who the answer belongs to.
+ *   opening message, and not the range. The first person who speaks becomes
+ *   the `person` of an exchange that had none.
  *
- * An exchange is a fold over the journal: the first person's question after the
- * last close is the open one. A room resumed mid-exchange continues it.
+ * An exchange is a fold over the journal: the first person's question or
+ * returned say after the last close is the open one. A room resumed mid-exchange continues it.
  *
  * The design contract is `docs/exchange.md`.
  */
@@ -37,7 +38,6 @@ import {
 	type ExchangeRef,
 	type ExchangeView,
 	type HarnessSession,
-	isReturned,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -81,9 +81,13 @@ export function coveringSummary(
 	);
 }
 
+/** A close as the summary completion reads it: a writer comes with the person it writes for. */
+export type SummaryClose = Pick<Close, 'from' | 'through'> &
+	({ summary: string; person: string } | { summary?: undefined });
+
 /** The recorded response outcome, with its writer only while summary work remains owed. */
 export function summaryCompletion(
-	close: Pick<Close, 'owner' | 'from' | 'through' | 'summary'>,
+	close: SummaryClose,
 	messages: readonly Message[],
 	leases: ReadonlyMap<string, LeaseHold>,
 	cancelledAt?: number,
@@ -91,7 +95,9 @@ export function summaryCompletion(
 	const writer = close.summary;
 	// A close with no writer has no summary to publish.
 	const summary =
-		writer === undefined ? undefined : coveringSummary(messages, close.owner, close, writer);
+		close.summary === undefined
+			? undefined
+			: coveringSummary(messages, close.person, close, close.summary);
 	if (summary !== undefined) return { status: 'published', summary };
 	const verdict = summaryVerdict(
 		writer !== undefined,
@@ -151,17 +157,17 @@ function rangeOf(messages: readonly Message[], from: Seq, through: Seq): Message
 }
 
 /**
- * The people a closing activation addresses: the owner first, then every
- * other person who spoke in the range, in the order they first spoke.
+ * The people a closing activation addresses: every person who spoke in the
+ * range, in the order they first spoke. The first is the `person` of the
+ * exchange.
  */
 export function recipientsOf(
 	messages: readonly Message[],
 	from: Seq,
 	through: Seq,
-	owner: string,
 	people: ReadonlySet<string>,
 ): string[] {
-	const recipients = [owner];
+	const recipients: string[] = [];
 	for (const message of rangeOf(messages, from, through)) {
 		if (message.kind !== 'said' || !people.has(message.from)) continue;
 		if (!recipients.includes(message.from)) recipients.push(message.from);
@@ -171,18 +177,19 @@ export function recipientsOf(
 
 /**
  * The person the last spoken message of the range asks, when they have said
- * nothing since. The owner asked the question, so a message to the owner is
- * the answer and asks nothing.
+ * nothing since. The author of the opening message asked the question, so a
+ * message to them is the answer and asks nothing. A returned say has no
+ * author, so in its exchange every message to a person asks.
  */
 function awaitedPerson(
-	owner: string,
 	range: readonly Message[],
 	people: ReadonlySet<string>,
 	lastSaid: ReadonlyMap<string, Seq>,
 ): string | undefined {
+	const asker = range[0]?.from;
 	const last = range.findLast(isSpoken);
 	const person = last?.to;
-	if (last === undefined || person === undefined || person === owner) return undefined;
+	if (last === undefined || person === undefined || person === asker) return undefined;
 	if (!people.has(person)) return undefined;
 	return (lastSaid.get(person) ?? 0) > last.seq ? undefined : person;
 }
@@ -194,7 +201,7 @@ function exchangeOutcomeOf(
 	pass: Pass,
 	exhausted: boolean,
 ): ExchangeOutcome {
-	const person = awaitedPerson(close.owner, range, pass.people, pass.lastSaid);
+	const person = awaitedPerson(range, pass.people, pass.lastSaid);
 	const kind = exchangeOutcome(close.cancelled === true, exhausted, person !== undefined);
 	// The rule decides. The re-test narrows the TypeScript type only.
 	if (kind === 'awaiting' && person !== undefined) return { kind, person };
@@ -203,7 +210,7 @@ function exchangeOutcomeOf(
 
 /** The summaries of a closed range, one per recipient, in recipient order. */
 function summariesOf(close: Close, range: readonly Message[], pass: Pass): SummaryMessage[] {
-	const recipients = recipientsOf(range, close.from, close.through, close.owner, pass.people);
+	const recipients = recipientsOf(range, close.from, close.through, pass.people);
 	return recipients.flatMap((person) => {
 		const summary = coveringSummary(pass.summaries, person, close);
 		return summary === undefined ? [] : [copyMessage(summary)];
@@ -293,11 +300,11 @@ function workOf(
 
 /** Select the detached closed handle shared by waits and read views. */
 export function closedExchange(
-	close: Pick<Close, 'owner' | 'from' | 'through' | 'at'>,
+	close: Pick<Close, 'person' | 'from' | 'through' | 'at'>,
 	messages: readonly Message[],
 ): ClosedExchange {
 	return {
-		owner: close.owner,
+		...(close.person === undefined ? {} : { person: close.person }),
 		from: close.from,
 		through: close.through,
 		at: messages.find((message) => message.seq === close.from)?.at ?? close.at,
@@ -418,9 +425,11 @@ function seatAndExchange(
 }
 
 /**
- * The open exchange, or nothing when nobody has asked since the boundary:
- * the first question a person asked after the last close's `through`. The
- * projection keeps only the messages after the boundary.
+ * The open exchange, or nothing when nothing opened one since the boundary:
+ * the first question a person asked, or the first returned say, after the
+ * last close's `through`. Its `person` is the first person who spoke at or
+ * after that message. The projection keeps only the messages after the
+ * boundary.
  */
 export function exchangeAfter(
 	messages: readonly Message[],
@@ -429,9 +438,8 @@ export function exchangeAfter(
 ): ExchangeRef | undefined {
 	const question = openingQuestion(messages, people, closedThrough);
 	if (question === undefined) return undefined;
-	// The re-test narrows the TypeScript type only: the contract fixes the kind.
-	if (isReturned(question)) return { owner: question.owner, from: question.seq, at: question.at };
-	return isSpoken(question)
-		? { owner: question.from, from: question.seq, at: question.at }
-		: undefined;
+	const person = messages.find(
+		(message) => message.seq >= question.seq && isSpoken(message) && people.includes(message.from),
+	)?.from;
+	return { ...(person === undefined ? {} : { person }), from: question.seq, at: question.at };
 }

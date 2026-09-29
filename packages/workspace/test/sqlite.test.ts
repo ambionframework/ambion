@@ -284,7 +284,7 @@ const RECORDS = `
 CREATE TABLE IF NOT EXISTS runs (
 	id INTEGER PRIMARY KEY,
 	label TEXT NOT NULL,
-	agent TEXT, room TEXT, activation TEXT, exchange_owner TEXT, exchange_from TEXT, at TEXT,
+	agent TEXT, room TEXT, activation TEXT, exchange_person TEXT, exchange_from TEXT, at TEXT,
 	UNIQUE (label)
 );
 CREATE TABLE IF NOT EXISTS plain (id INTEGER PRIMARY KEY, body TEXT, agent TEXT);
@@ -311,7 +311,7 @@ function records(location = ':memory:', provenance = true): Workspace {
 const inRoom = callAs('design', {
 	room: 'bringup',
 	activation: 'act-7',
-	exchange: { owner: 'mira', from: 3 },
+	exchange: { person: 'mira', from: 3 },
 });
 
 /** Call the `sql` tool of `site` as `context`, and give its text. */
@@ -323,6 +323,12 @@ describe('the append-only tables of the SQLite backend', () => {
 		const site = records();
 		await sqlTool(site, "INSERT INTO runs (label) VALUES ('first'), ('second')");
 		await sqlTool(site, "INSERT INTO runs (label) VALUES ('outside')", callAs('experiments'));
+		// An exchange with no person, such as the return of a scheduled say, leaves the column NULL.
+		await sqlTool(
+			site,
+			"INSERT INTO runs (label) VALUES ('scheduled')",
+			callAs('design', { room: 'bringup', exchange: { from: 9 } }),
+		);
 		const rows = await run(site, 'SELECT * FROM runs ORDER BY id');
 		expect(rows.ok && rows.rows).toMatchObject([
 			{
@@ -330,11 +336,12 @@ describe('the append-only tables of the SQLite backend', () => {
 				agent: 'design',
 				room: 'bringup',
 				activation: 'act-7',
-				exchange_owner: 'mira',
+				exchange_person: 'mira',
 				exchange_from: '3',
 			},
 			{ label: 'second', agent: 'design', activation: 'act-7' },
-			{ label: 'outside', agent: 'experiments', room: null, exchange_owner: null },
+			{ label: 'outside', agent: 'experiments', room: null, exchange_person: null },
+			{ label: 'scheduled', agent: 'design', exchange_person: null, exchange_from: '9' },
 		]);
 		expect(rows.ok && Date.parse(String(rows.rows[0]?.at))).not.toBeNaN();
 		await expect(
@@ -342,8 +349,8 @@ describe('the append-only tables of the SQLite backend', () => {
 		).rejects.toThrow(/fills the provenance columns of 'runs': agent, room, activation/);
 		// A host call with no provenance leaves the columns NULL.
 		const host = await run(site, "INSERT INTO runs (label) VALUES ('host') RETURNING id");
-		expect(host.ok && host.rows).toEqual([{ id: 4 }]);
-		expect(messageOf(await run(site, "UPDATE runs SET agent = 'alpha' WHERE id = 4"))).toMatch(
+		expect(host.ok && host.rows).toEqual([{ id: 5 }]);
+		expect(messageOf(await run(site, "UPDATE runs SET agent = 'alpha' WHERE id = 5"))).toMatch(
 			/append-only/,
 		);
 	});
@@ -478,7 +485,7 @@ describe('the append-only tables of the SQLite backend', () => {
 				'DROP TABLE IF EXISTS"gone"; PRAGMA table_info(runs)',
 			].join('; '),
 		);
-		expect(outcome.ok && outcome.rows.map((row) => row.name)).toContain('exchange_owner');
+		expect(outcome.ok && outcome.rows.map((row) => row.name)).toContain('exchange_person');
 	});
 
 	it('finds an append-only table by its name in any case, as SQLite does', async () => {
@@ -557,7 +564,7 @@ describe('the append-only tables of the SQLite backend', () => {
 		const guidance = records().tools().guidance ?? '';
 		expect(guidance).toContain('The tables runs, plain accept INSERT alone');
 		expect(guidance).toContain(
-			'provenance columns (agent, room, activation, exchange_owner, exchange_from, at)',
+			'provenance columns (agent, room, activation, exchange_person, exchange_from, at)',
 		);
 	});
 

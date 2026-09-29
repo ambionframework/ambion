@@ -177,6 +177,74 @@ its `text`.
 
 ### Breaking changes
 
+- **The remote call is an `Execution`, and one router serves every kind.**
+  The hosting entry exports `localExecution(kind, build)`. It returns an
+  `Execution` of that kind, whose port is an `AgentRunner` in this process.
+  `defineExecution(kind, build)` returns the same execution and makes it
+  the default of its kind. `Execution` has an optional `kind`, and an
+  execution with no kind serves every kind.
+  `execution` of `createRuntime`, `startRoom`, and `resumeRoom` takes one
+  execution or a list. A seat runs on the first execution of the room for
+  its kind, then on the first of the runtime, then on the default of its
+  kind. A miss fails at once with a permanent `no_execution` error whose
+  message names the seat and the kind. `Hosting.execution` is
+  `Hosting.executions`, and `ExecutionHost` has no `transport`. See
+  [Executors](docs/executors.md#the-hosting-entry-exports).
+  - **The hosting entry removes** `Transport`, `inProcessTransport`,
+    `composeExecutions`, `registerDefaultExecution`, `composeConnector`,
+    `ConnectorComposition`, `seatContext`, and `SeatContextInput`.
+    `createRuntime` has no `transport` option. A list in `execution`
+    replaces `composeExecutions`. `defineExecution` replaces
+    `registerDefaultExecution`, and `localExecution` replaces
+    `composeConnector`. A test wraps the ports of an execution where it
+    wrapped a transport.
+  - **The conformance entry renames** `transportConformance` to
+    `portConformance`, and `TransportHarness` to `PortHarness`. The cases
+    and their names stay.
+  - **Every execution keeps the trace limits of the host.**
+    `claudeExecution()` and `codexExecution()` read `limits.trace` of the
+    runtime. Before, they applied `DEFAULT_TRACE_LIMITS`.
+  - **`piExecution()`, `claudeExecution()`, and `codexExecution()` return
+    `Execution<AgentRunner>`.** A call changes no default. Loading the
+    package defines the default of its kind once, with no options.
+  - **The Cloudflare seat object builds its executor once.** It connects
+    the Pi execution of the worker once, and it keeps the runner and the
+    executor on the object instance. The room object reaches each seat
+    through `rpcExecution`.
+- **An exchange has no owner.** The opening message names who directs the
+  work, and `awaiting` reads its author. `person`, the first person who
+  spoke in the range, names who receives the result: the summary, its
+  recipients, `ctx.exchange.person`, and `waitForSummary`. `ExchangeRef`,
+  `ExchangeHandle`, `ExchangeView`, the `exchange_opened` and
+  `exchange_closed` events, `ToolContext.exchange`, and the seat protocol
+  carry `person?` in place of `owner`. A `close` entry carries `person`,
+  refuses `owner`, and refuses `summary` with no `person`. The close
+  command carries no owner, and `admitsClose` compares `from` alone.
+- **A scheduled say carries no owner.** The `said` entry with `after` and
+  the `returned` entry refuse `owner`, and `PendingSay` has none. A
+  returned say opens an exchange with no `person`, and an exchange where
+  no person spoke owes no summary, so a seat that schedules again no
+  longer owes a person a summary for each return. A seat schedules from
+  any response activation: the refusal "No exchange is open" goes. The
+  note of a process tool that points to `schedule` shows with no exchange
+  open.
+- **A say to oneself steers no seat.** A scheduled say steered each
+  colleague at work, and a colleague read another seat's note to itself.
+- **The prompt names a returned say by its seat.** The opening line of an
+  exchange that a returned say opened reads `Exchange <n> is active:
+  message <n> is a say you scheduled, and the room returned it.`, and a
+  colleague reads the name of the seat. The record line of a returned say
+  drops `for <owner>`.
+- **The provenance column `exchange_owner` becomes `exchange_person`.**
+  The provenance columns that `sqliteBackend` fills, `SqlProvenance`, and
+  the `exchange` of an audit entry carry `person`. An exchange with no
+  person leaves `exchange_person` NULL.
+- **The kernel names no database.** The hand-off guidance of every seat said
+  to put structured data in the shared database and named `sqlite_master`,
+  even for a seat with no SQL backend. It now says to write an artifact once
+  where the tools keep it, and to hand it off with a directed say. The
+  guidance of `sql` names the table or view hand-off, and the SQLite backend
+  names `sqlite_master`.
 - **The audit entry of a failed process keeps its details.** A call that
   fails on a process that ended badly throws a `ToolFailure`, and its audit
   entry holds `error.details`: the `ProcessStatus` and the read range. The
@@ -214,7 +282,7 @@ its `text`.
   holds 1 to 16 handles. One handle gives the result of `status`. Several
   give the output of each process that ended and the state of each one
   that still runs.
-- **The preview size of `sql` and `query` is `rows`.** The tool parameter
+- **The preview size of `sql` is `rows`.** The tool parameter
   `maxRows` becomes `rows`, the one camelCase name that a model wrote. The
   host option and `SqlRunOptions` keep `maxRows`.
 - **`dismiss` takes `{ message }`, the seq of a scheduled say.** The word
@@ -314,7 +382,9 @@ its `text`.
 - **The `./sql` entry of `@ambionframework/workspace` goes.**
   `openSqlResource`, `PROVENANCE_COLUMNS`, and the types `SqlResource`,
   `SqlResourceEnv`, and `SqlResourceOptions` go, with the `query` and
-  `record` tools. The SQL backend of a workspace holds records:
+  `record` tools. An agent adds a row with an INSERT through `sql`, so no
+  tool shares the word record with the journal of a room. The SQL backend
+  of a workspace holds records:
   `sqliteBackend(location, { schema, appendOnly, provenance })` runs the
   schema at each open, keeps each `appendOnly` table to INSERT alone, and
   fills the provenance columns of a new row. `SqlRunOptions` has

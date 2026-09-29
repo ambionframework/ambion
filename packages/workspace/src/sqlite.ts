@@ -112,7 +112,7 @@ export interface SqliteBackendOptions {
 	/**
 	 * Fill the provenance columns of each append-only table on INSERT, from
 	 * the provenance of the call: `agent`, `room`, `activation`,
-	 * `exchange_owner`, `exchange_from`, and `at`, each one that the table
+	 * `exchange_person`, `exchange_from`, and `at`, each one that the table
 	 * declares. An INSERT that sets one of them fails. The guard lets one
 	 * UPDATE through: it sets each of these columns from NULL to the value
 	 * of the running call. Each append-only table with a provenance column
@@ -397,7 +397,8 @@ function guidance(timeout: number, options: SqliteBackendOptions): string {
 		`The database is SQLite: dates are functions, || joins text, and a column type is an`,
 		`affinity. Attach a private scratch database with ATTACH ':memory:' inside one call;`,
 		`ATTACH opens no file, and VACUUM INTO is refused. Commit a transaction within the call`,
-		`that begins it. A call stops after ${timeout} seconds.`,
+		`that begins it. sqlite_master holds the definition of each view. A call stops after ${timeout}`,
+		`seconds.`,
 		...appendOnlyGuidance(options),
 	].join('\n');
 }

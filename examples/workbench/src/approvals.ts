@@ -2,15 +2,15 @@ import { BACKGROUND_CONTEXT, type SqlEnv } from '@ambionframework/workspace';
 import type { WorkspaceResource } from '@ambionframework/workspace/resource';
 import { instruments } from './scenarios.ts';
 
-/** An operation the instrument refused to run until the owner of the exchange answers. */
+/** An operation the instrument refused to run until the person of the exchange answers. */
 export interface Approval {
 	/** The operation id. `approve_operation` takes it. */
 	readonly id: number;
 	readonly instrument: string;
 	readonly setpoint: number;
 	readonly unit: string;
-	/** The person whose question opened the exchange. Only this person answers. */
-	readonly owner: string;
+	/** The person of the exchange that requested it. Only this person answers. */
+	readonly person: string;
 	/** When the instrument recorded the request, ISO. */
 	readonly at: string;
 }
@@ -18,7 +18,7 @@ export interface Approval {
 const reader = { name: 'assistant', identity: 'Approval reader' };
 
 /** A request stays pending until a later row names it in `request_id`. */
-const pending = (room: string): string => `SELECT id, instrument, setpoint, exchange_owner, at
+const pending = (room: string): string => `SELECT id, instrument, setpoint, exchange_person, at
 FROM operations AS request
 WHERE outcome = 'requested' AND room = '${room.replace(/'/g, "''")}'
 AND NOT EXISTS (SELECT 1 FROM operations AS answer WHERE answer.request_id = request.id)
@@ -38,7 +38,7 @@ export function readApprovals(lab: WorkspaceResource<SqlEnv>, room: string): Pro
 			instrument: String(row.instrument),
 			setpoint: Number(row.setpoint),
 			unit: instruments.find((spec) => spec.name === row.instrument)?.unit ?? '',
-			owner: String(row.exchange_owner ?? ''),
+			person: String(row.exchange_person ?? ''),
 			at: String(row.at ?? ''),
 		}));
 	});

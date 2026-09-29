@@ -1,7 +1,7 @@
 /**
- * The cases every `Transport` must pass. A transport carries a wake, a
- * steer, and a cut from the room to a seat, and carries the seat's `view`,
- * `commit`, and `lease` calls back. The suite plays the room: it serves one
+ * The cases every port of an `Execution` must pass. A port carries a wake,
+ * a steer, and a cut from the room to a seat, and the seat's `view`,
+ * `commit`, and `lease` calls go back. The suite plays the room: it serves one
  * scripted activation, records every call the seat makes, and checks the
  * sequence and the shape of those calls. It never checks what an executor
  * says, so any executor that speaks once passes the same cases.
@@ -51,11 +51,11 @@ export {
 } from './conformance-executor.ts';
 export type { ConformanceCase };
 
-/** What a transport under test gives the suite. */
-export interface TransportHarness {
+/** What an execution under test gives the suite. */
+export interface PortHarness {
 	/**
 	 * Serve `room` to the seat side and connect one seat's port. In process,
-	 * `room` is the argument to `Transport.connect`. Over a boundary, the
+	 * `room` is the argument to `ExecutionConnector.connect`. Over a boundary, the
 	 * harness installs `room` where the seat's `view`, `commit`, and `lease`
 	 * arrive, so the suite observes every call the seat makes.
 	 *
@@ -205,7 +205,7 @@ function scriptedRoom(name: string, seat: string, script: Script): ScriptedRoom 
 					},
 				],
 				messages: [question],
-				exchange: { owner: 'priya', from: 1 },
+				exchange: { person: 'priya', from: 1 },
 				reserve: [],
 			},
 		},
@@ -390,14 +390,14 @@ const cases: readonly (readonly [string, Script, Body])[] = [
 	],
 ];
 
-/** The cases every `Transport` must pass. The order is stable and the names are the contract. */
-export function transportConformance(harness: TransportHarness): readonly ConformanceCase[] {
+/** The cases every port must pass. The order is stable and the names are the contract. */
+export function portConformance(harness: PortHarness): readonly ConformanceCase[] {
 	const suite = Math.random().toString(36).slice(2);
 	const patience = harness.patience ?? 5_000;
 	let count = 0;
 	const run = async (script: Script, body: Body): Promise<void> => {
 		count += 1;
-		const names = { room: `transport-${suite}-${count}`, seat: 'product' };
+		const names = { room: `port-${suite}-${count}`, seat: 'product' };
 		const room = scriptedRoom(names.room, names.seat, script);
 		const activation = `message:1:${names.seat}:1`;
 		try {

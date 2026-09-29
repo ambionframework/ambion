@@ -51,8 +51,8 @@ specialists collaborate through directed messages and report back once.
 **The team runs on three executor families.** The assistant and the
 datasheets specialist run on Pi. The design specialist runs on
 `@ambionframework/claude`. The experiments specialist runs on
-`@ambionframework/codex`. The workbench passes its own executions with
-`composeExecutions`, because it checks keys and lets a test script a family.
+`@ambionframework/codex`. The workbench passes its own execution for each
+family, because it checks keys and lets a test script a family.
 
 | Family | Model                              | Key                 | Seats                 |
 | ------ | ---------------------------------- | ------------------- | --------------------- |
@@ -138,14 +138,16 @@ the assistant call `operate`.
 - A setpoint at or below the limit runs. The tool appends a `done` row with
   the reading. The reading equals the setpoint.
 - A setpoint above the limit does not run. The tool appends a `requested`
-  row and names the exchange owner as the approver.
-- The agent asks the owner. When the owner answers, the agent calls
+  row and names the `person` of the exchange as the approver. With no
+  `person`, the tool refuses the operation.
+- The agent asks that person. When the person answers, the agent calls
   `approve_operation`. The tool appends an `approved` or `denied` row with
   the `request_id`.
 
 The table is append-only. The status of an operation is its latest row. The
 instrument checks the numeric limit only. It does not verify who approved.
-The terminal shows a `requested` operation to the exchange owner until a later row answers it.
+The terminal shows a `requested` operation to the `person` of the exchange
+until a later row answers it.
 
 ### The rooms
 
@@ -228,7 +230,7 @@ automated test yet.
 | A person pastes a bare picture path into an empty composer                  | The paste fills `/attach`, not the message | Scripted: `pastedImagePath` draws the line — a path, not a sentence, a multi-line paste, or a path with a space. By hand: the composer fills `/attach` only when it was empty                                                         |
 | The terminal opens the steps of an activation                               | A drill-down into the trace                | Scripted: the host keeps the steps its logger receives, and the model groups passes and steps                                                                                                                                         |
 | An exchange ends on a message to a person                                   | `awaiting` reads as waiting on that person | Scripted: the discussion flag, and a note for the person named                                                                                                                                                                        |
-| An instrument request waits for its owner                                   | The terminal shows an approval             | Scripted: the host lists the request, and drops it once a later row answers                                                                                                                                                           |
+| An instrument request waits for its approver                                | The terminal shows an approval             | Scripted: the host lists the request, and drops it once a later row answers                                                                                                                                                           |
 | The Design specialist starts the firmware from a template                   | A fork, a clone, and a pushed branch       | Scripted: Design forks `templates/firmware-sketch`, sets a pin, and pushes `sensing`. Experiments clones the fork and reads the pin                                                                                                   |
 | A sweep runs in the background past its exchange                            | A later exchange reads the sweep's state   | Scripted: Design starts `sweep/sweep.sh`, and the next exchange finds it with `ps` and waits on its handle. Live: the second summary names the handle, and the sweep exits 0                                                          |
 

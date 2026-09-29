@@ -9,7 +9,7 @@ import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { decodeActivationId } from '../src/activation-id.ts';
-import { hostingOf, inProcessTransport, type RoomProtocol } from '../src/hosting.ts';
+import { hostingOf, type RoomProtocol } from '../src/hosting.ts';
 import {
 	type CreateRuntimeOptions,
 	createRuntime,
@@ -23,6 +23,7 @@ import {
 } from '../src/index.ts';
 import type { LeaseChange } from '../src/journal/events.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
+import { type Fault, faulty } from './support/ports.ts';
 import {
 	assistant,
 	assistantEnded,
@@ -52,7 +53,6 @@ import {
 } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { gatedJournals, memory } from './support/storage.ts';
-import { type Fault, faultyTransport } from './support/transport.ts';
 
 const solo = scriptedAgent('solo', 'Speaks once.');
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
@@ -61,7 +61,7 @@ interface Options {
 	faults?: Fault[];
 	limits?: CreateRuntimeOptions['limits'];
 	summary?: boolean;
-	/** A runtime of the test's own on the clock, in place of the faulty transport. */
+	/** A runtime of the test's own on the clock, in place of the faulty ports. */
 	runtime?: (clock: FakeClock) => Runtime;
 }
 
@@ -71,12 +71,8 @@ async function open(
 ): Promise<{ session: Room; clock: FakeClock; runtime: Runtime }> {
 	const clock = fakeClock();
 	const runtime =
-		own?.(clock) ??
-		createRuntime({
-			clock,
-			transport: faultyTransport(inProcessTransport(), faults, clock),
-			...(limits === undefined ? {} : { limits }),
-		});
+		own?.(clock) ?? createRuntime({ clock, ...(limits === undefined ? {} : { limits }) });
+	const execution = piExecution({ sessions: 'memory', stream: scripted(script) });
 	const session = stopAtEnd(
 		await startRoom({
 			name: roomName('lease'),
@@ -84,7 +80,7 @@ async function open(
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
 			runtime,
-			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+			execution: own === undefined ? faulty(execution, faults, clock) : execution,
 		}),
 	);
 	return { session, clock, runtime };
@@ -315,7 +311,7 @@ describe('a lease', () => {
 		expect(ends(events)).toBe(1);
 		// a lease that expired without a word answers nothing: the exchange stays
 		// open, and the seat is woken again after the backoff
-		expect(await currentExchange(session)).toMatchObject({ owner: 'andrei' });
+		expect(await currentExchange(session)).toMatchObject({ person: 'andrei' });
 		expect(starts(events)).toBe(1);
 		await clock.advance(30_000);
 		await waitForRoom(session);

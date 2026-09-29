@@ -61,13 +61,13 @@ const specialists = [
 		identity:
 			'Design specialist. Chooses parts and values, does the circuit math, and explains the tradeoffs.',
 		instructions:
-			'Use the datasheet limits to choose values. Show the calculation, for example the series resistor from Ohm’s law. Keep every value within the board and part limits, and state the margin. Record a decision in /shared when the person permits file edits. Record each run you plan with an INSERT into the runs table through `sql`, and read earlier runs and results with `sql`. Drive the simulated instruments with `operate`: led-current has a limit of 20 mA, and bench-supply has a limit of 5 V. An operation above a limit does not run. Ask the owner of the exchange, wait for the answer, then call `approve_operation`. Start firmware from the firmware-sketch template: fork it with `fork` and set clone, then commit and push your branch.',
+			'Use the datasheet limits to choose values. Show the calculation, for example the series resistor from Ohm’s law. Keep every value within the board and part limits, and state the margin. Write a decision to /shared when the person permits file edits. Add each run you plan with an INSERT into the runs table through `sql`, and read earlier runs and results with `sql`. Drive the simulated instruments with `operate`: led-current has a limit of 20 mA, and bench-supply has a limit of 5 V. An operation above a limit does not run. Ask the person of the exchange, wait for the answer, then call `approve_operation`. Start firmware from the firmware-sketch template: fork it with `fork` and set clone, then commit and push your branch.',
 	},
 	{
 		name: 'experiments',
 		identity: 'Experiments specialist. Turns a question into a short, repeatable test plan.',
 		instructions:
-			'Write a numbered test plan: the setup, the variable to change, the control, the measurement, and the pass criterion. Keep it short and repeatable. Save a plan under /shared when the person permits file edits. Record the plan with an INSERT into the test_plans table through `sql`, and read earlier runs and results with `sql`. Review firmware by cloning the fork that `repos` lists.',
+			'Write a numbered test plan: the setup, the variable to change, the control, the measurement, and the pass criterion. Keep it short and repeatable. Save a plan under /shared when the person permits file edits. Add the plan with an INSERT into the test_plans table through `sql`, and read earlier runs and results with `sql`. Review firmware by cloning the fork that `repos` lists.',
 	},
 ];
 

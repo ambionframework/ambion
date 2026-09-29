@@ -120,7 +120,7 @@ export function executorRoom(name: string, seat: string, script: RoomScript): Ex
 					},
 				],
 				messages: [...messages],
-				exchange: { owner: 'priya', from: 1 },
+				exchange: { person: 'priya', from: 1 },
 				reserve: [],
 			},
 		},

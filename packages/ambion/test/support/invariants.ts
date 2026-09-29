@@ -106,7 +106,7 @@ async function summariesMatchCloses(
 			continue;
 		}
 		expect(summary.covers.through).toBe(close.through);
-		expect(summary.to).toBe(close.owner);
+		expect(summary.to).toBe(close.person);
 		const activation =
 			summary.activationId === undefined ? undefined : decodeActivationId(summary.activationId);
 		expect(activation?.source).toBe('closed');
@@ -118,7 +118,7 @@ async function summariesMatchCloses(
 	}
 }
 
-type RecordedClose = { owner: string; from: number; through: number; wakes?: string[] };
+type RecordedClose = { person?: string; from: number; through: number; wakes?: string[] };
 
 async function recordedCloses(
 	events: RoomNotification[],

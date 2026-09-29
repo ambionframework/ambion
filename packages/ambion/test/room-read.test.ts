@@ -19,7 +19,7 @@ const opening: Message = {
 };
 
 const close = (summary?: string): Close => ({
-	owner: 'priya',
+	person: 'priya',
 	from: 2,
 	through: 3,
 	at: '2026-01-01T00:00:02.000Z',
@@ -114,7 +114,7 @@ describe('coherent room reads', () => {
 			text: 'Done.',
 			covers: { from: 2, through: 3 },
 		};
-		const open = { owner: 'sam', from: 4, at: '2026-01-01T00:00:04.000Z' };
+		const open = { person: 'sam', from: 4, at: '2026-01-01T00:00:04.000Z' };
 		const read = () => {
 			const snapshot = readView(
 				'room',
@@ -203,7 +203,7 @@ describe.each(storages)('stored room reads on $name storage', (storage) => {
 					{},
 					{
 						kind: 'close',
-						body: { owner: 'priya', from: 4, through: 4, at, summary: 'assistant' },
+						body: { person: 'priya', from: 4, through: 4, at, summary: 'assistant' },
 					},
 					lease({ id: 'closed:4:assistant:1', phase: 'running', expiresAt: 60_000 }),
 				),
