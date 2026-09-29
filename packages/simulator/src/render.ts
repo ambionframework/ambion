@@ -12,10 +12,11 @@
 import {
 	type ExchangeActivation,
 	type HumanDefinition,
-	isReturned,
+	isPosted,
 	isSpoken,
 	isSummary,
 	type Message,
+	type PostedMessage,
 	type RoomNotification,
 } from '@ambionframework/ambion';
 import type { Run, SeenExchange } from './types.ts';
@@ -34,15 +35,19 @@ function messageLine(message: Message): string {
 	if (isSpoken(message)) {
 		return `[${message.seq}] ${message.from} to ${message.to ?? 'the room'}: ${text}`;
 	}
-	if (isReturned(message)) {
-		return `[${message.seq}] the room returned a say to ${message.to}: ${text}`;
-	}
+	if (isPosted(message)) return postedLine(message, text);
 	if (message.kind === 'dismissed') {
 		return `[${message.seq}] ${message.from ?? 'the host'} dismissed say ${message.message}`;
 	}
 	const by =
 		message.from === undefined || message.from === message.subject ? '' : ` by ${message.from}`;
 	return `[${message.seq}] ${message.subject} ${message.kind}${by}`;
+}
+
+/** A post of the host, or a say that the room returned to its seat. */
+function postedLine(message: PostedMessage, text: string): string {
+	const verb = message.returns === undefined ? 'the host posted' : 'the room returned a say';
+	return `[${message.seq}] ${verb} to ${message.to ?? 'the room'}: ${text}`;
 }
 
 /** What the person saw in one exchange. */

@@ -5,9 +5,10 @@ type ClosedView = Extract<ExchangeView, { status: 'closed' }>;
 
 /**
  * How a message reads in the conversation. A steer is a person's message
- * inside a thread. A returned say is the room giving an agent's say back to it.
+ * inside a thread. A post is a message of the system: the host posted it, or
+ * the room gave an agent's say back to it.
  */
-export type Role = 'question' | 'said' | 'summary' | 'steer' | 'returned';
+export type Role = 'question' | 'said' | 'summary' | 'steer' | 'posted';
 
 export interface MessageBlock {
 	type: 'message';
@@ -83,7 +84,7 @@ interface Group {
 }
 
 const spoken = (message: Message): boolean =>
-	message.kind === 'said' || message.kind === 'summary' || message.kind === 'returned';
+	message.kind === 'said' || message.kind === 'summary' || message.kind === 'posted';
 
 function waitingOn(exchange: ClosedView): string | undefined {
 	return exchange.outcome.kind === 'awaiting' ? `Waiting on ${exchange.outcome.person}` : undefined;
@@ -151,7 +152,7 @@ function groupsOf(input: TimelineInput): Group[] {
 		.map((exchange) => {
 			const source = input.messages.filter(
 				(message) =>
-					(message.kind === 'said' || message.kind === 'returned') &&
+					(message.kind === 'said' || message.kind === 'posted') &&
 					message.seq > exchange.from &&
 					message.seq <= exchange.through,
 			);
@@ -222,7 +223,7 @@ class Builder {
 
 	private roleOf = (message: Message, inThread: boolean): Role => {
 		if (message.kind === 'summary') return 'summary';
-		if (message.kind === 'returned') return 'returned';
+		if (message.kind === 'posted') return 'posted';
 		if (!this.input.humans.has(message.from ?? '')) return 'said';
 		return inThread ? 'steer' : 'question';
 	};

@@ -31,13 +31,15 @@ const WIDTH: Record<Attention, number> = { none: 0, named: 1, broadcast: 2, pres
  */
 type RoutedMessage = Message | Body<Message>;
 
-function spoken(message: RoutedMessage): message is Extract<RoutedMessage, { kind: 'said' }> {
-	return message.kind === 'said';
+/** A say or a post: text that reaches the seat it names, or the room. */
+function spoken(
+	message: RoutedMessage,
+): message is Extract<RoutedMessage, { kind: 'said' | 'posted' }> {
+	return message.kind === 'said' || message.kind === 'posted';
 }
 
 function reachOf(message: RoutedMessage): Attention {
 	if (message.kind === 'summary') return 'none';
-	if (message.kind === 'returned') return 'named';
 	if (message.kind === 'dismissed') return 'none';
 	if (!spoken(message)) return 'presence';
 	return message.to === undefined ? 'broadcast' : 'named';
@@ -66,7 +68,7 @@ function wakes(
 
 /** The seat a message names: a directed say names who it addresses, a seating names who it seats. */
 function targetOf(message: RoutedMessage): string | undefined {
-	if (spoken(message) || message.kind === 'returned') return message.to;
+	if (spoken(message)) return message.to;
 	return message.kind === 'seated' ? message.subject : undefined;
 }
 

@@ -61,7 +61,7 @@ function startExecution(execution: Execution): Execution {
 		room(room, request) {
 			if (phase !== 'start' || request.seat !== slow.name) return room;
 			const gated: RoomProtocol = {
-				view: (activation, range) => room.view(activation, range),
+				view: (activation, message) => room.view(activation, message),
 				commit: (commit) => room.commit(commit),
 				lease: async (lease) => {
 					if (lease.operation === 'claim') await fastReleased.promise;

@@ -35,7 +35,8 @@ call is work that the room does not replay.
 | Entry        | One item that the journal holds                                                     | [durability.md](durability.md)                                           |
 | Message      | Spoken text with an author, a position, routing facts, and refs                     | [agent.md](agent.md), [presence.md](presence.md)                         |
 | Summary      | A closing message that stands for a closed exchange in agent context                | [summary.md](summary.md)                                                 |
-| Returned say | A say that an agent scheduled for itself, which the room gives back when it is due  | [exchange.md](exchange.md#6-a-scheduled-say)                             |
+| Post         | A message of the system with no author: a post of the host, or a returned say       | [exchange.md](exchange.md#7-the-edges-a-host-sees)                       |
+| Returned say | A post that gives a say that an agent scheduled for itself back when it is due      | [exchange.md](exchange.md#6-a-scheduled-say)                             |
 | Lease        | The time-limited right of one activation to run and commit                          | [durability.md](durability.md)                                           |
 | Ref          | One absolute URI that a message cites                                               | [agent.md](agent.md)                                                     |
 | Snapshot     | The frozen bytes of one workspace file, and the ref that names them by digest       | [workspace.md](workspace.md#snapshot-a-file)                             |
@@ -58,10 +59,10 @@ call is work that the room does not replay.
 
 ## The two spans
 
-| Span           | Starts                                                                      | Ends                                         |
-| -------------- | --------------------------------------------------------------------------- | -------------------------------------------- |
-| **activation** | The room wakes one seat                                                     | That seat's work ends                        |
-| **exchange**   | A person's spoken message or a returned say lands while no exchange is open | The room reaches quiescence or terminal work |
+| Span           | Starts                                                              | Ends                                         |
+| -------------- | ------------------------------------------------------------------- | -------------------------------------------- |
+| **activation** | The room wakes one seat                                             | That seat's work ends                        |
+| **exchange**   | A person's spoken message or a post lands while no exchange is open | The room reaches quiescence or terminal work |
 
 An activation may contain more than one provider request. The exchange spans
 every activation from its opening question to its durable close. See
@@ -108,8 +109,9 @@ recorded entries. A host can resume the same behavior by replaying the
 journal.
 
 The journal records messages, membership changes, leases, exchange closes,
-composition, cancellation boundaries, and run fences. A returned say is a
-message that the room writes when a scheduled say is due. It also records the
+composition, cancellation boundaries, and run fences. A post is a message
+of the system, with no author: the host writes one with `room.post`, and
+the room writes a returned say when a scheduled say is due. It also records the
 activation id that authorized an agent contribution. The room stamps
 provenance fields. A caller cannot claim the name of another participant.
 
@@ -162,28 +164,35 @@ activation consumed.
 A seat keeps its harness session for one exchange.
 [Exchange continuity](executors.md#exchange-continuity) states the rule.
 
-The journal retains complete history. An agent that sets
-`activationTokenLimit` reads a bounded record. The seat pages the record from
-the tail through the call `view(activation, range)`. It keeps the newest part
-that fits the limit, plus the open exchange whole. An older exchange falls out
-of context, and its summary stands for it when one exists. An agent with no
-limit reads the whole record. The record keeps every message for human review
-in both cases.
+The journal retains complete history. The room windows the record of each
+view by one rule: it keeps the newest messages, never splits a summarised
+range, and keeps the open exchange whole. A summary activation keeps its own
+closed exchange whole the same way. The record keeps every message for human
+review.
 
-`limits.context.messages` caps the record at the room, for every seat and
-for every executor. The room serves the newest `messages` entries of the
+**`limits.context.messages` caps the record at the room**, for every seat
+and for every executor. The room serves the newest `messages` entries of the
 record an activation may read. The floor moves past a summarised range it
 would split. The open exchange stays whole, so a cap smaller than the open
 exchange serves the exchange in full. The view holds up to `messages`
 entries plus the open exchange. The cap counts messages and does not count
-bytes. The default is unbounded. A seat with `activationTokenLimit` windows
-further, inside what the room serves.
+bytes. The default is unbounded.
 
-**The cap bounds a view, and a page reads below it.** A view with a range
-cuts its page from every message that the purpose may read, so `recall`
-reaches a message below the cap. The page still reports the cap floor as
-`earliest`. A seat that pages its context window stops at `earliest`, so
-its window stays inside the cap.
+**`activationTokenLimit` windows further, inside the cap.** The room keeps
+the newest blocks of the record whose estimated tokens fit the limit, and
+at least the newest block. A summarised range counts once, as the line of
+its summary. An older exchange falls out of context, and its summary stands
+for it when one exists. An agent with no limit reads what the cap serves.
+
+**The room runs the estimator that the seat names.** `estimateTokens` names
+an estimator in the registry of the runtime. `length`, the default, counts
+`Math.ceil(text.length / 4)`, and `createRuntime({ estimators })` adds other
+names. A host cannot replace `length`. A name that the registry does not
+hold fails `startRoom` and `resumeRoom`.
+
+**`recall` reads below the window.** `view(activation, message)` returns
+the view of that one message when the purpose may read it. No cap and no
+token limit apply to it.
 
 When a view holds less than the whole record, `context.omitted` counts the
 messages below the first one served. The rendered record then opens with one

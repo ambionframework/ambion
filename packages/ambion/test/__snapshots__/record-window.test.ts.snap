@@ -1,0 +1,913 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the room windows the record > a cap moves the floor past a summarised range and keeps the summary 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+Part of the record may read as "── N messages, summarised for <name> below ──". Those
+messages are still on the record; what stands for them is the summary further down,
+written for that person, and you read it in place of them. The line names who
+it was written for, because two people's summaries may cover the same stretch. Treat a
+summary as a recorded report, preserving its uncertainty and qualifications. Later corrections
+or conflicting concrete evidence take precedence over a summarized claim. The summary asks
+you for nothing and addresses one person, not you.
+If you need a fact it left out, do not ask the room to repeat itself.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 5 earlier messages not shown ──
+#7 [priya] aaaa  (just now)
+#8 [worker → priya] Done.  (just now)
+#9 [priya] aaaa  (just now)
+#10 [priya] aaaa  (just now)
+
+Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a cap serves the closing exchange whole to a summary purpose 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 1 earlier message not shown ──
+── Current exchange begins here; earlier exchanges are background ──
+#3 [priya] aaaa  (just now)
+#4 [priya] aaaa  (just now)
+#5 [priya] aaaa  (just now)
+
+priya's exchange is over: it holds the messages from seq 3 to seq 5. The opening message's URI is ambion://room/window/message/3. Write the one message with say, or end your turn."
+`;
+
+exports[`the room windows the record > a cap serves the newest messages and counts what it drops 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 2 earlier messages not shown ──
+#4 [priya] aaaa  (just now)
+#5 [priya] aaaa  (just now)
+
+Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a cap serves the open exchange whole 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 1 earlier message not shown ──
+── Current exchange begins here; earlier exchanges are background ──
+#3 [priya] aaaa  (just now)
+#4 [priya] aaaa  (just now)
+#5 [priya] aaaa  (just now)
+
+priya's exchange opened by message 3 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/3. Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a long record by the default estimate 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 104 earlier messages not shown ──
+#106 [priya] xxxxxxx  (just now)
+#107 [priya] xxxxxxxxxxxxxx  (just now)
+#108 [priya] xxxxxxxxxxxxxxxxxxxxx  (just now)
+#109 [priya] xxxxx  (just now)
+#110 [priya] xxxxxxxxxxxx  (just now)
+#111 [priya] xxxxxxxxxxxxxxxxxxx  (just now)
+#112 [priya] xxx  (just now)
+#113 [priya] xxxxxxxxxx  (just now)
+#114 [priya] xxxxxxxxxxxxxxxxx  (just now)
+#115 [priya] x  (just now)
+#116 [priya] xxxxxxxx  (just now)
+#117 [priya] xxxxxxxxxxxxxxx  (just now)
+#118 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
+#119 [priya] xxxxxx  (just now)
+── Current exchange begins here; earlier exchanges are background ──
+#120 [priya] xxxxxxxxxxxxx  (just now)
+#121 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#122 [priya] xxxx  (just now)
+#123 [priya] xxxxxxxxxxx  (just now)
+#124 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#125 [priya] xx  (just now)
+#126 [priya] xxxxxxxxx  (just now)
+#127 [priya] xxxxxxxxxxxxxxxx  (just now)
+#128 [priya] xxxxxxxxxxxxxxxxxxxxxxx  (just now)
+#129 [priya] xxxxxxx  (just now)
+#130 [priya] xxxxxxxxxxxxxx  (just now)
+#131 [priya] xxxxxxxxxxxxxxxxxxxxx  (just now)
+#132 [priya] xxxxx  (just now)
+#133 [priya] xxxxxxxxxxxx  (just now)
+#134 [priya] xxxxxxxxxxxxxxxxxxx  (just now)
+#135 [priya] xxx  (just now)
+#136 [priya] xxxxxxxxxx  (just now)
+#137 [priya] xxxxxxxxxxxxxxxxx  (just now)
+#138 [priya] x  (just now)
+#139 [priya] xxxxxxxx  (just now)
+#140 [priya] xxxxxxxxxxxxxxx  (just now)
+#141 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
+#142 [priya] xxxxxx  (just now)
+#143 [priya] xxxxxxxxxxxxx  (just now)
+#144 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#145 [priya] xxxx  (just now)
+#146 [priya] xxxxxxxxxxx  (just now)
+#147 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#148 [priya] xx  (just now)
+#149 [priya] xxxxxxxxx  (just now)
+#150 [priya] xxxxxxxxxxxxxxxx  (just now)
+
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a long record cut deep by the token limit 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 113 earlier messages not shown ──
+#115 [priya] x  (just now)
+#116 [priya] xxxxxxxx  (just now)
+#117 [priya] xxxxxxxxxxxxxxx  (just now)
+#118 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
+#119 [priya] xxxxxx  (just now)
+── Current exchange begins here; earlier exchanges are background ──
+#120 [priya] xxxxxxxxxxxxx  (just now)
+#121 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#122 [priya] xxxx  (just now)
+#123 [priya] xxxxxxxxxxx  (just now)
+#124 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#125 [priya] xx  (just now)
+#126 [priya] xxxxxxxxx  (just now)
+#127 [priya] xxxxxxxxxxxxxxxx  (just now)
+#128 [priya] xxxxxxxxxxxxxxxxxxxxxxx  (just now)
+#129 [priya] xxxxxxx  (just now)
+#130 [priya] xxxxxxxxxxxxxx  (just now)
+#131 [priya] xxxxxxxxxxxxxxxxxxxxx  (just now)
+#132 [priya] xxxxx  (just now)
+#133 [priya] xxxxxxxxxxxx  (just now)
+#134 [priya] xxxxxxxxxxxxxxxxxxx  (just now)
+#135 [priya] xxx  (just now)
+#136 [priya] xxxxxxxxxx  (just now)
+#137 [priya] xxxxxxxxxxxxxxxxx  (just now)
+#138 [priya] x  (just now)
+#139 [priya] xxxxxxxx  (just now)
+#140 [priya] xxxxxxxxxxxxxxx  (just now)
+#141 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
+#142 [priya] xxxxxx  (just now)
+#143 [priya] xxxxxxxxxxxxx  (just now)
+#144 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#145 [priya] xxxx  (just now)
+#146 [priya] xxxxxxxxxxx  (just now)
+#147 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#148 [priya] xx  (just now)
+#149 [priya] xxxxxxxxx  (just now)
+#150 [priya] xxxxxxxxxxxxxxxx  (just now)
+
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a long record for a summary purpose 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+Part of the record may read as "── N messages, summarised for <name> below ──". Those
+messages are still on the record; what stands for them is the summary further down,
+written for that person, and you read it in place of them. The line names who
+it was written for, because two people's summaries may cover the same stretch. Treat a
+summary as a recorded report, preserving its uncertainty and qualifications. Later corrections
+or conflicting concrete evidence take precedence over a summarized claim. The summary asks
+you for nothing and addresses one person, not you.
+If you need a fact it left out, do not ask the room to repeat itself.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 97 earlier messages not shown ──
+#99 [priya] xxxx  (just now)
+#100 [worker → priya] Done.  (just now)
+── Current exchange begins here; earlier exchanges are background ──
+#101 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#102 [priya] xx  (just now)
+#103 [priya] xxxxxxxxx  (just now)
+#104 [priya] xxxxxxxxxxxxxxxx  (just now)
+#105 [priya] xxxxxxxxxxxxxxxxxxxxxxx  (just now)
+#106 [priya] xxxxxxx  (just now)
+#107 [priya] xxxxxxxxxxxxxx  (just now)
+#108 [priya] xxxxxxxxxxxxxxxxxxxxx  (just now)
+#109 [priya] xxxxx  (just now)
+#110 [priya] xxxxxxxxxxxx  (just now)
+#111 [priya] xxxxxxxxxxxxxxxxxxx  (just now)
+#112 [priya] xxx  (just now)
+#113 [priya] xxxxxxxxxx  (just now)
+#114 [priya] xxxxxxxxxxxxxxxxx  (just now)
+#115 [priya] x  (just now)
+#116 [priya] xxxxxxxx  (just now)
+#117 [priya] xxxxxxxxxxxxxxx  (just now)
+#118 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
+
+priya's exchange is over: it holds the messages from seq 101 to seq 118. The opening message's URI is ambion://room/window/message/101. Write the one message with say, or end your turn."
+`;
+
+exports[`the room windows the record > a long record that fits the token limit 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+Part of the record may read as "── N messages, summarised for <name> below ──". Those
+messages are still on the record; what stands for them is the summary further down,
+written for that person, and you read it in place of them. The line names who
+it was written for, because two people's summaries may cover the same stretch. Treat a
+summary as a recorded report, preserving its uncertainty and qualifications. Later corrections
+or conflicting concrete evidence take precedence over a summarized claim. The summary asks
+you for nothing and addresses one person, not you.
+If you need a fact it left out, do not ask the room to repeat itself.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+#2 [priya] xxxxxxxxxxxxxxx  (just now)
+#3 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
+#4 [priya] xxxxxx  (just now)
+#5 [priya] xxxxxxxxxxxxx  (just now)
+#6 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#7 [priya] xxxx  (just now)
+#8 [priya] xxxxxxxxxxx  (just now)
+#9 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#10 [priya] xx  (just now)
+#11 [priya] xxxxxxxxx  (just now)
+#12 [priya] xxxxxxxxxxxxxxxx  (just now)
+#13 [priya] xxxxxxxxxxxxxxxxxxxxxxx  (just now)
+#14 [priya] xxxxxxx  (just now)
+#15 [priya] xxxxxxxxxxxxxx  (just now)
+#16 [priya] xxxxxxxxxxxxxxxxxxxxx  (just now)
+#17 [priya] xxxxx  (just now)
+#18 [priya] xxxxxxxxxxxx  (just now)
+#19 [priya] xxxxxxxxxxxxxxxxxxx  (just now)
+── 16 messages, summarised for priya below ──
+#36 [priya] xxxxxxxxxxxxxxxxxxxxxxx  (just now)
+#37 [priya] xxxxxxx  (just now)
+#38 [priya] xxxxxxxxxxxxxx  (just now)
+#39 [priya] xxxxxxxxxxxxxxxxxxxxx  (just now)
+#40 [worker → priya] Done.  (just now)
+#41 [priya] xxxxxxxxxxxx  (just now)
+#42 [priya] xxxxxxxxxxxxxxxxxxx  (just now)
+#43 [priya] xxx  (just now)
+#44 [priya] xxxxxxxxxx  (just now)
+#45 [priya] xxxxxxxxxxxxxxxxx  (just now)
+#46 [priya] x  (just now)
+#47 [priya] xxxxxxxx  (just now)
+#48 [priya] xxxxxxxxxxxxxxx  (just now)
+#49 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
+#50 [priya] xxxxxx  (just now)
+#51 [priya] xxxxxxxxxxxxx  (just now)
+#52 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#53 [priya] xxxx  (just now)
+#54 [priya] xxxxxxxxxxx  (just now)
+#55 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#56 [priya] xx  (just now)
+#57 [priya] xxxxxxxxx  (just now)
+#58 [priya] xxxxxxxxxxxxxxxx  (just now)
+#59 [priya] xxxxxxxxxxxxxxxxxxxxxxx  (just now)
+── 36 messages, summarised for priya below ──
+#96 [priya] xxxxxx  (just now)
+#97 [priya] xxxxxxxxxxxxx  (just now)
+#98 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#99 [priya] xxxx  (just now)
+#100 [worker → priya] Done.  (just now)
+#101 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#102 [priya] xx  (just now)
+#103 [priya] xxxxxxxxx  (just now)
+#104 [priya] xxxxxxxxxxxxxxxx  (just now)
+#105 [priya] xxxxxxxxxxxxxxxxxxxxxxx  (just now)
+#106 [priya] xxxxxxx  (just now)
+#107 [priya] xxxxxxxxxxxxxx  (just now)
+#108 [priya] xxxxxxxxxxxxxxxxxxxxx  (just now)
+#109 [priya] xxxxx  (just now)
+#110 [priya] xxxxxxxxxxxx  (just now)
+#111 [priya] xxxxxxxxxxxxxxxxxxx  (just now)
+#112 [priya] xxx  (just now)
+#113 [priya] xxxxxxxxxx  (just now)
+#114 [priya] xxxxxxxxxxxxxxxxx  (just now)
+#115 [priya] x  (just now)
+#116 [priya] xxxxxxxx  (just now)
+#117 [priya] xxxxxxxxxxxxxxx  (just now)
+#118 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
+#119 [priya] xxxxxx  (just now)
+── Current exchange begins here; earlier exchanges are background ──
+#120 [priya] xxxxxxxxxxxxx  (just now)
+#121 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#122 [priya] xxxx  (just now)
+#123 [priya] xxxxxxxxxxx  (just now)
+#124 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#125 [priya] xx  (just now)
+#126 [priya] xxxxxxxxx  (just now)
+#127 [priya] xxxxxxxxxxxxxxxx  (just now)
+#128 [priya] xxxxxxxxxxxxxxxxxxxxxxx  (just now)
+#129 [priya] xxxxxxx  (just now)
+#130 [priya] xxxxxxxxxxxxxx  (just now)
+#131 [priya] xxxxxxxxxxxxxxxxxxxxx  (just now)
+#132 [priya] xxxxx  (just now)
+#133 [priya] xxxxxxxxxxxx  (just now)
+#134 [priya] xxxxxxxxxxxxxxxxxxx  (just now)
+#135 [priya] xxx  (just now)
+#136 [priya] xxxxxxxxxx  (just now)
+#137 [priya] xxxxxxxxxxxxxxxxx  (just now)
+#138 [priya] x  (just now)
+#139 [priya] xxxxxxxx  (just now)
+#140 [priya] xxxxxxxxxxxxxxx  (just now)
+#141 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
+#142 [priya] xxxxxx  (just now)
+#143 [priya] xxxxxxxxxxxxx  (just now)
+#144 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#145 [priya] xxxx  (just now)
+#146 [priya] xxxxxxxxxxx  (just now)
+#147 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#148 [priya] xx  (just now)
+#149 [priya] xxxxxxxxx  (just now)
+#150 [priya] xxxxxxxxxxxxxxxx  (just now)
+
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a long record under a cap and a token limit 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+Part of the record may read as "── N messages, summarised for <name> below ──". Those
+messages are still on the record; what stands for them is the summary further down,
+written for that person, and you read it in place of them. The line names who
+it was written for, because two people's summaries may cover the same stretch. Treat a
+summary as a recorded report, preserving its uncertainty and qualifications. Later corrections
+or conflicting concrete evidence take precedence over a summarized claim. The summary asks
+you for nothing and addresses one person, not you.
+If you need a fact it left out, do not ask the room to repeat itself.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 54 earlier messages not shown ──
+#56 [priya] xx  (just now)
+#57 [priya] xxxxxxxxx  (just now)
+#58 [priya] xxxxxxxxxxxxxxxx  (just now)
+#59 [priya] xxxxxxxxxxxxxxxxxxxxxxx  (just now)
+── 36 messages, summarised for priya below ──
+#96 [priya] xxxxxx  (just now)
+#97 [priya] xxxxxxxxxxxxx  (just now)
+#98 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#99 [priya] xxxx  (just now)
+#100 [worker → priya] Done.  (just now)
+#101 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#102 [priya] xx  (just now)
+#103 [priya] xxxxxxxxx  (just now)
+#104 [priya] xxxxxxxxxxxxxxxx  (just now)
+#105 [priya] xxxxxxxxxxxxxxxxxxxxxxx  (just now)
+#106 [priya] xxxxxxx  (just now)
+#107 [priya] xxxxxxxxxxxxxx  (just now)
+#108 [priya] xxxxxxxxxxxxxxxxxxxxx  (just now)
+#109 [priya] xxxxx  (just now)
+#110 [priya] xxxxxxxxxxxx  (just now)
+#111 [priya] xxxxxxxxxxxxxxxxxxx  (just now)
+#112 [priya] xxx  (just now)
+#113 [priya] xxxxxxxxxx  (just now)
+#114 [priya] xxxxxxxxxxxxxxxxx  (just now)
+#115 [priya] x  (just now)
+#116 [priya] xxxxxxxx  (just now)
+#117 [priya] xxxxxxxxxxxxxxx  (just now)
+#118 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
+#119 [priya] xxxxxx  (just now)
+── Current exchange begins here; earlier exchanges are background ──
+#120 [priya] xxxxxxxxxxxxx  (just now)
+#121 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#122 [priya] xxxx  (just now)
+#123 [priya] xxxxxxxxxxx  (just now)
+#124 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#125 [priya] xx  (just now)
+#126 [priya] xxxxxxxxx  (just now)
+#127 [priya] xxxxxxxxxxxxxxxx  (just now)
+#128 [priya] xxxxxxxxxxxxxxxxxxxxxxx  (just now)
+#129 [priya] xxxxxxx  (just now)
+#130 [priya] xxxxxxxxxxxxxx  (just now)
+#131 [priya] xxxxxxxxxxxxxxxxxxxxx  (just now)
+#132 [priya] xxxxx  (just now)
+#133 [priya] xxxxxxxxxxxx  (just now)
+#134 [priya] xxxxxxxxxxxxxxxxxxx  (just now)
+#135 [priya] xxx  (just now)
+#136 [priya] xxxxxxxxxx  (just now)
+#137 [priya] xxxxxxxxxxxxxxxxx  (just now)
+#138 [priya] x  (just now)
+#139 [priya] xxxxxxxx  (just now)
+#140 [priya] xxxxxxxxxxxxxxx  (just now)
+#141 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
+#142 [priya] xxxxxx  (just now)
+#143 [priya] xxxxxxxxxxxxx  (just now)
+#144 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#145 [priya] xxxx  (just now)
+#146 [priya] xxxxxxxxxxx  (just now)
+#147 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#148 [priya] xx  (just now)
+#149 [priya] xxxxxxxxx  (just now)
+#150 [priya] xxxxxxxxxxxxxxxx  (just now)
+
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a long record under a cap below the open exchange 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 118 earlier messages not shown ──
+── Current exchange begins here; earlier exchanges are background ──
+#120 [priya] xxxxxxxxxxxxx  (just now)
+#121 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#122 [priya] xxxx  (just now)
+#123 [priya] xxxxxxxxxxx  (just now)
+#124 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#125 [priya] xx  (just now)
+#126 [priya] xxxxxxxxx  (just now)
+#127 [priya] xxxxxxxxxxxxxxxx  (just now)
+#128 [priya] xxxxxxxxxxxxxxxxxxxxxxx  (just now)
+#129 [priya] xxxxxxx  (just now)
+#130 [priya] xxxxxxxxxxxxxx  (just now)
+#131 [priya] xxxxxxxxxxxxxxxxxxxxx  (just now)
+#132 [priya] xxxxx  (just now)
+#133 [priya] xxxxxxxxxxxx  (just now)
+#134 [priya] xxxxxxxxxxxxxxxxxxx  (just now)
+#135 [priya] xxx  (just now)
+#136 [priya] xxxxxxxxxx  (just now)
+#137 [priya] xxxxxxxxxxxxxxxxx  (just now)
+#138 [priya] x  (just now)
+#139 [priya] xxxxxxxx  (just now)
+#140 [priya] xxxxxxxxxxxxxxx  (just now)
+#141 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
+#142 [priya] xxxxxx  (just now)
+#143 [priya] xxxxxxxxxxxxx  (just now)
+#144 [priya] xxxxxxxxxxxxxxxxxxxx  (just now)
+#145 [priya] xxxx  (just now)
+#146 [priya] xxxxxxxxxxx  (just now)
+#147 [priya] xxxxxxxxxxxxxxxxxx  (just now)
+#148 [priya] xx  (just now)
+#149 [priya] xxxxxxxxx  (just now)
+#150 [priya] xxxxxxxxxxxxxxxx  (just now)
+
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a token limit counts a summarised range once 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+Part of the record may read as "── N messages, summarised for <name> below ──". Those
+messages are still on the record; what stands for them is the summary further down,
+written for that person, and you read it in place of them. The line names who
+it was written for, because two people's summaries may cover the same stretch. Treat a
+summary as a recorded report, preserving its uncertainty and qualifications. Later corrections
+or conflicting concrete evidence take precedence over a summarized claim. The summary asks
+you for nothing and addresses one person, not you.
+If you need a fact it left out, do not ask the room to repeat itself.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+#2 [priya] aaaa  (just now)
+#3 [priya] aaaa  (just now)
+── 3 messages, summarised for priya below ──
+#7 [priya] aaaa  (just now)
+#8 [worker → priya] Done.  (just now)
+#9 [priya] aaaa  (just now)
+#10 [priya] aaaa  (just now)
+
+Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a token limit keeps a summarised range whole 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+Part of the record may read as "── N messages, summarised for <name> below ──". Those
+messages are still on the record; what stands for them is the summary further down,
+written for that person, and you read it in place of them. The line names who
+it was written for, because two people's summaries may cover the same stretch. Treat a
+summary as a recorded report, preserving its uncertainty and qualifications. Later corrections
+or conflicting concrete evidence take precedence over a summarized claim. The summary asks
+you for nothing and addresses one person, not you.
+If you need a fact it left out, do not ask the room to repeat itself.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 2 earlier messages not shown ──
+── 3 messages, summarised for priya below ──
+#7 [priya] aaaa  (just now)
+#8 [worker → priya] Done.  (just now)
+#9 [priya] aaaa  (just now)
+#10 [priya] aaaa  (just now)
+
+Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a token limit keeps at least the newest line 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 3 earlier messages not shown ──
+#5 [priya] aaaa  (just now)
+
+Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a token limit keeps the exchange of a summary purpose whole 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 1 earlier message not shown ──
+── Current exchange begins here; earlier exchanges are background ──
+#3 [priya] aaaa  (just now)
+#4 [priya] aaaa  (just now)
+#5 [priya] aaaa  (just now)
+
+priya's exchange is over: it holds the messages from seq 3 to seq 5. The opening message's URI is ambion://room/window/message/3. Write the one message with say, or end your turn."
+`;
+
+exports[`the room windows the record > a token limit keeps the newest lines that fit 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 2 earlier messages not shown ──
+#4 [priya] aaaa  (just now)
+#5 [priya] aaaa  (just now)
+
+Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a token limit pins the open exchange whole 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 1 earlier message not shown ──
+── Current exchange begins here; earlier exchanges are background ──
+#3 [priya] aaaa  (just now)
+#4 [priya] aaaa  (just now)
+#5 [priya] aaaa  (just now)
+
+priya's exchange opened by message 3 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/3. Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a token limit stops above a summarised range that does not fit 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+Part of the record may read as "── N messages, summarised for <name> below ──". Those
+messages are still on the record; what stands for them is the summary further down,
+written for that person, and you read it in place of them. The line names who
+it was written for, because two people's summaries may cover the same stretch. Treat a
+summary as a recorded report, preserving its uncertainty and qualifications. Later corrections
+or conflicting concrete evidence take precedence over a summarized claim. The summary asks
+you for nothing and addresses one person, not you.
+If you need a fact it left out, do not ask the room to repeat itself.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 5 earlier messages not shown ──
+#7 [priya] aaaa  (just now)
+#8 [worker → priya] Done.  (just now)
+#9 [priya] aaaa  (just now)
+#10 [priya] aaaa  (just now)
+
+Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > a token limit stops at the cap 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+A message out of view is still on the record: call recall with its seq, as #12, to read it.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+── 1 earlier message not shown ──
+#3 [priya] aaaa  (just now)
+#4 [priya] aaaa  (just now)
+#5 [priya] aaaa  (just now)
+
+Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > an infinite cap reports nothing 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+#2 [priya] aaaa  (just now)
+#3 [priya] aaaa  (just now)
+#4 [priya] aaaa  (just now)
+#5 [priya] aaaa  (just now)
+
+Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;
+
+exports[`the room windows the record > the whole record with no bound 1`] = `
+"The time is 2026-01-01T09:00:00.000Z.
+
+The room is 'window'. Its URI is ambion://room/window.
+
+The agents. Each is seated at one point of a scale — the widest kind of message
+that wakes it. Unmarked: anything said. "named only": a say addressed to it.
+"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
+nothing reaches it and you cannot address it. A closing assignment writes the one
+message a person reads when their exchange closes.
+(active: taking a turn now; idle: at rest.)
+- worker (active): Works.
+
+The reserve: agents not in the room. You may seat a colleague when the question needs them.
+
+The people (present: in the room now; absent: not in the room):
+Nobody has been in this room.
+
+The record of 'window' so far:
+#2 [priya] aaaa  (just now)
+#3 [priya] aaaa  (just now)
+#4 [priya] aaaa  (just now)
+#5 [priya] aaaa  (just now)
+
+Take your turn, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+`;

@@ -46,7 +46,7 @@ floor.
 | `docs/formal.md`          | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                                                          |
 | `docs/toolchain.md`       | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                                                                       |
 | `examples/workbench`      | Runnable example: rooms and an OpenTUI terminal in one process                                                                                                       |
-| `planning/`               | `next.md`: the scope and plan for 0.4.0; `backlog.md`: everything after 0.4.0; `system.md`: the design of step 10 until it lands                                     |
+| `planning/`               | `next.md`: the scope and plan for 0.4.0; `backlog.md`: everything after 0.4.0                                                                                        |
 
 ## Positioning
 
@@ -64,7 +64,7 @@ holds the rule.
 
 Ambient means a room remains available between interactions. A scheduled say
 lets an agent come back to its work on the room's clock. A host that wants a
-wake posts a message.
+wake calls `room.post`.
 
 [`planning/next.md`](planning/next.md) defines the 0.4.0 scope and owns the
 work and its evidence. [`planning/backlog.md`](planning/backlog.md) holds

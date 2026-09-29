@@ -147,10 +147,9 @@ class Walk {
 				...(this.chance(0.5) ? { from: say.seat, activationId: `message:1:${say.seat}:1` } : {}),
 			});
 		return this.message({
-			kind: 'returned',
+			kind: 'posted',
 			to: say.seat,
-			message: say.seq,
-			person: this.pick(PEOPLE),
+			returns: say.seq,
 			text: 'Check later.',
 		});
 	}

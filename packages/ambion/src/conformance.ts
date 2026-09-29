@@ -237,8 +237,8 @@ function scriptedRoom(name: string, seat: string, script: Script): ScriptedRoom 
 	};
 
 	const protocol: RoomProtocol = {
-		view: (id, range) =>
-			record('view', range === undefined ? { id } : { id, range }, async () => {
+		view: (id, message) =>
+			record('view', message === undefined ? { id } : { id, message }, async () => {
 				await held;
 				return id === activation && !ended ? view() : stale;
 			}),

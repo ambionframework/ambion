@@ -62,8 +62,11 @@ export interface AgentExecutorBaseOptions {
 	readonly speaking?: string;
 	/** The token limit for the record one activation reads. Absent reads the whole record. */
 	readonly activationTokenLimit?: number;
-	/** How the agent counts tokens against its limit. Absent uses a length estimate. */
-	readonly estimateTokens?: (text: string) => number;
+	/**
+	 * The name of the estimator that counts tokens against the limit, from the
+	 * registry of the runtime. Absent names `length`.
+	 */
+	readonly estimateTokens?: string;
 }
 
 /** What `describeExecutor` reads: the fields every executor family shares. */
@@ -113,8 +116,8 @@ export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 /** The record-window fields, validated and written only when a limit is set. */
 function recordLimit(
 	activationTokenLimit: number | undefined,
-	estimateTokens: ((text: string) => number) | undefined,
-): { activationTokenLimit?: number; estimateTokens?: (text: string) => number } {
+	estimateTokens: string | undefined,
+): { activationTokenLimit?: number; estimateTokens?: string } {
 	if (activationTokenLimit === undefined) {
 		if (estimateTokens !== undefined)
 			throw new Error('An agent estimateTokens needs an activationTokenLimit.');
@@ -122,8 +125,8 @@ function recordLimit(
 	}
 	if (!Number.isSafeInteger(activationTokenLimit) || activationTokenLimit <= 0)
 		throw new Error('An agent activationTokenLimit must be a positive integer.');
-	if (estimateTokens !== undefined && typeof estimateTokens !== 'function')
-		throw new Error('An agent estimateTokens must be a function.');
+	if (estimateTokens !== undefined && (typeof estimateTokens !== 'string' || estimateTokens === ''))
+		throw new Error('An agent estimateTokens must be the name of an estimator.');
 	return {
 		activationTokenLimit,
 		...(estimateTokens === undefined ? {} : { estimateTokens }),

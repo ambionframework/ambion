@@ -37,11 +37,21 @@ configuration. `pi`, `claude`, and `codex` are the executors that ship; see
 guide](codex.md). The `instructions`
 are private model guidance. `model` names a model of that family. `tools`
 and `bundles` supply the agent's domain tools. `activationTokenLimit`
-bounds the record one activation reads, and `estimateTokens` counts tokens
-against it. Without a limit, an activation reads the whole record the room serves. See
-`limits.context.messages` in [History and limits](room.md#history-and-limits).
-The seat runs `estimateTokens`, so it never crosses the wire. `trace` sets what the trace
-keeps of the agent's work; see [the step vocabulary](executors.md#the-step-vocabulary).
+bounds the record one activation reads. Without a limit, an activation reads
+the whole record the room serves. See `limits.context.messages` in
+[History and limits](room.md#history-and-limits). `trace` sets what the
+trace keeps of the agent's work; see
+[the step vocabulary](executors.md#the-step-vocabulary).
+
+**The room runs the token estimator.** `estimateTokens` is the name of an
+estimator in the registry of the runtime, and the default name is `length`,
+`Math.ceil(text.length / 4)`. A function does not cross the wire, so
+`createRuntime({ estimators })` holds each other estimator by name, and a
+definition carries the name alone. The room applies the limit inside the
+view, so a seat on another host reads the same window. A name that the
+registry does not hold fails `startRoom` and `resumeRoom`. The start is the
+first point where the definition and the registry meet, and a failure there
+reaches the host before any activation reads a view.
 
 `summary` is an optional name from `agents`. It assigns closing work to that
 ordinary agent. `assistant` accepts an ordinary agent definition and supplies
@@ -87,7 +97,7 @@ A ref to another room, a ref that names no message, and a seq that the view of
 the activation cannot read each give a line. A ref that finds no message makes
 the call a tool error, and the text still holds every line. `recall` reaches
 every message that the purpose of the activation may read. A summary can fold
-such a message, the context window of the seat can leave it out, or the cap of
+such a message, the token limit of the seat can leave it out, or the cap of
 `limits.context.messages` can keep it below the view. `recall` commits
 nothing, and it never moves the read position.
 

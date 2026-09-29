@@ -6,15 +6,14 @@ import type {
 	LeaseRequest,
 	LeaseResponse,
 	Stale,
-	ViewRange,
 	ViewResponse,
 } from './protocol.ts';
 import { seatAuthority } from './room/activation.ts';
 import { exchangeSession } from './room/exchange.ts';
 import type { RoomState } from './room/fold.ts';
 import type { Refusal, ReleaseCommand } from './room/transition.ts';
-import { type RoomFacts, viewOf } from './room/view.ts';
-import { copyMessage, type RoomNotification } from './types.ts';
+import { type RoomFacts, type TokenWindow, viewOf } from './room/view.ts';
+import { copyMessage, type RoomNotification, type Seq } from './types.ts';
 
 const stale = (why: string): Stale => ({ stale: why });
 
@@ -40,6 +39,8 @@ export interface Answering {
 	state(): RoomState;
 	/** The seats live now, by name, with the ids that make them live. */
 	live(state: RoomState): Map<string, string[]>;
+	/** The token limit of a seat and its estimator. Absent when the seat sets no limit. */
+	tokenWindow(seat: string): TokenWindow | undefined;
 	emit(event: RoomNotification): void;
 	/** One operation on the room's commit queue, with the wakes the room routes. */
 	write(commit: CommitRequest): Promise<CommitResult | { refusal: Refusal }>;
@@ -55,7 +56,7 @@ export interface Answering {
 export async function answerView(
 	room: Answering,
 	id: string,
-	range?: ViewRange,
+	message?: Seq,
 ): Promise<ViewResponse> {
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
@@ -65,19 +66,20 @@ export async function answerView(
 	const { spec, lease } = authority;
 	const resume = exchangeSession(id, state.closes, state.exchange, state.leases);
 	const granted = resume === undefined ? spec : { ...spec, resume };
-	const view = viewOf(granted, facts(room, state), range);
+	const view = viewOf(granted, facts(room, state, spec.seat), message);
 	// The room ends the lease on its own clock. The tools of a seat read the wall clock.
 	const left = Date.parse(lease.claimedAt) + room.limits.lease.deadline - room.now();
 	return { view: { ...view, deadline: Date.now() + left } };
 }
 
 /** What a view is built from: the fold, and what the room holds beside it. */
-function facts(room: Answering, state: RoomState): RoomFacts {
+function facts(room: Answering, state: RoomState, seat: string): RoomFacts {
+	const tokens = room.tokenWindow(seat);
 	return {
 		name: room.name,
 		now: room.now(),
 		state,
-		limits: room.limits.context,
+		limits: { ...room.limits.context, ...(tokens === undefined ? {} : { tokens }) },
 		live: room.live(state),
 		messagesSince: (seq) => state.messages.filter((message) => message.seq > seq).length,
 	};

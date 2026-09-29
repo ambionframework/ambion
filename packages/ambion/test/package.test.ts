@@ -52,8 +52,8 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 		'defineAgent',
 		'defineHuman',
 		'defineTool',
+		'isPosted',
 		'isPresence',
-		'isReturned',
 		'isSpoken',
 		'isSummary',
 		'loggedToolResult',
@@ -142,6 +142,13 @@ it('names the ports, the reads, and the visit by their final names', () => {
 	expectTypeOf<hosting.ExecutorSession['session']>().toEqualTypeOf<
 		main.HarnessSession | undefined
 	>();
+	// The room windows the record: a view names one message at most, and a seat names its estimator.
+	expectTypeOf<Parameters<hosting.RoomProtocol['view']>>().toEqualTypeOf<
+		[activation: string, message?: Seq]
+	>();
+	expectTypeOf<hosting.CollaborationContext>().not.toHaveProperty('earliest');
+	expectTypeOf<main.AgentExecutor['estimateTokens']>().toEqualTypeOf<string | undefined>();
+	expectTypeOf<main.CreateRuntimeOptions>().toHaveProperty('estimators');
 });
 
 /** The specifiers one built file imports, whatever the quote or the form. */

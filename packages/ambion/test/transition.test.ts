@@ -482,10 +482,10 @@ describe('a scheduled say', () => {
 		expect(early.steps).toEqual([]);
 		expect(early.effects.alarmAt).toBe(due);
 		const returned = {
-			kind: 'returned',
+			kind: 'posted',
 			at: new Date(due).toISOString(),
 			to: 'product',
-			message: 5,
+			returns: 5,
 			text: 'Check the build.',
 			refs: ['file:///out.log'],
 		};
@@ -629,7 +629,7 @@ describe('a scheduled say', () => {
 		expect(view('message:3:writer:1').context.scheduled).toBeUndefined();
 	});
 
-	it('steers no seat with a say to oneself, and only its seat with the returned say', () => {
+	it('steers no seat with a say to oneself, only its target with a directed post, and each seat with a post to the room', () => {
 		const state = fold(
 			composition(undefined, [product, watcher]),
 			person(),
@@ -637,9 +637,19 @@ describe('a scheduled say', () => {
 			lease('message:3:product:1', 4),
 			lease('message:3:writer:1', 5),
 			scheduled(6),
-			message(7, { kind: 'returned', to: 'product', message: 6, text: 'Check.' }),
+			message(7, { kind: 'posted', to: 'product', returns: 6, text: 'Check.' }),
+			message(8, { kind: 'posted', to: 'product', text: 'lab: process build ended.' }),
+			message(9, { kind: 'posted', text: 'ci: build 412 failed.' }),
 		);
 		expect(state.deliveries.get(6)).toEqual({ wakes: [], steers: [] });
+		// A post with `to` steers its target alone, and a post to the room steers each seat at work.
+		expect(state.deliveries.get(8)?.steers.map((steer) => steer.seat)).toEqual(['product']);
+		expect(
+			state.deliveries
+				.get(9)
+				?.steers.map((steer) => steer.seat)
+				.sort(),
+		).toEqual(['product', 'writer']);
 		expect(state.deliveries.get(7)).toEqual({
 			wakes: [],
 			steers: [{ seat: 'product', activation: 'message:3:product:1' }],
