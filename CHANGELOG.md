@@ -97,6 +97,17 @@ names a snapshot ref, a commit ref, and a message URI. A workspace path and
 a table have no ref form, so the text no longer names them. `say` describes
 its `text`.
 
+### Fixes
+
+- **The default assistant works a request after the person who asked
+  leaves.** The membership guidance of `@ambionframework/assistant` states
+  that the presence of the person who asked does not change the work. The
+  assistant seats and routes as for a person who stays, and the closing
+  summary goes to the `person` of the exchange. Before this change, the
+  model decided, and a question followed by a departure sometimes closed
+  with no answer. See
+  [Default assistant](docs/assistant.md#membership-and-completion).
+
 ### Simplification
 
 - **The room state has one derivation.** `readRoom` replays the

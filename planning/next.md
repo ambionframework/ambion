@@ -191,6 +191,8 @@ and the process tools. A step names the steps it needs; a step with no
 ### Phase 1. The drift
 
 - [ ] **8.** The assistant works a request after the person who asked leaves. (A1)
+      The code landed. The live case "works a request after the person who
+      asked leaves" waits for its runs.
 
 **Evidence:** each step keeps `pnpm check` green and holds the coverage
 of each changed package, measured before and after as `CLAUDE.md`
