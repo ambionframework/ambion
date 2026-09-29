@@ -4,7 +4,6 @@
  */
 
 import { expect, it } from 'vitest';
-import { composeExecutions } from '../../../ambion/src/hosting.ts';
 import { defineAgent, isSpoken } from '../../../ambion/src/index.ts';
 import { invariants } from '../../../ambion/test/support/invariants.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
@@ -38,7 +37,7 @@ live('a mixed room', () => {
 		const { session, events } = await open(
 			'mixed',
 			[pilot, sonnet],
-			composeExecutions({ pi: piExecution(), claude: claudeExecution() }),
+			[piExecution(), claudeExecution()],
 		);
 		try {
 			const visit = await enter(session, person);

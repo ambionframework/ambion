@@ -1,15 +1,4 @@
-import type { TraceOpener, TraceSink } from '../../src/execution/trace.ts';
 import type { TraceLogger, TraceRecord, TraceStep } from '../../src/index.ts';
-
-/** A sink that keeps nothing, for a test that drives an executor or a driver by hand. */
-export const noTrace: TraceSink = {
-	startPass: () => {},
-	record: () => {},
-	usage: () => undefined,
-	close: async () => {},
-};
-
-export const noTraces: TraceOpener = { open: () => noTrace };
 
 /** A logger that keeps every record it receives. The sink logs each step before the release. */
 export function collectSteps() {

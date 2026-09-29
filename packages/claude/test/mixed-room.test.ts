@@ -5,7 +5,6 @@
  * execution or routes each seat to the default of its family.
  */
 import { defineAgent, isSpoken, type Room, startRoom } from '@ambionframework/ambion';
-import { composeExecutions, registerDefaultExecution } from '@ambionframework/ambion/hosting';
 import { piExecution } from '@ambionframework/pi';
 import { expect, it } from 'vitest';
 import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.ts';
@@ -54,12 +53,13 @@ async function expectBothSay(room: Room): Promise<void> {
 }
 
 it('runs a Pi seat and a Claude seat in one room, and the record holds both says', async () => {
-	const execution = composeExecutions({ pi: pilot(), claude: sonnet() });
+	const execution = [pilot(), sonnet()];
 	await expectBothSay(await startRoom({ name: roomName('mixed'), agents, execution }));
 });
 
 it('routes a Pi seat and a Claude seat to the default of each family', async () => {
-	registerDefaultExecution('pi', pilot);
-	registerDefaultExecution('claude', sonnet);
+	// Each definition of an execution makes it the default of its kind.
+	pilot();
+	sonnet();
 	await expectBothSay(await startRoom({ name: roomName('mixed-default'), agents }));
 });

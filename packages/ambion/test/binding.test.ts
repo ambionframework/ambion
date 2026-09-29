@@ -7,7 +7,7 @@
  */
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { inProcessTransport, runningRoom } from '../src/hosting.ts';
+import { runningRoom } from '../src/hosting.ts';
 import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
@@ -368,7 +368,6 @@ describe('the room runs the verified rules', () => {
 	it('closes on a later pass when admitsClose refuses once', async () => {
 		const runtime = createRuntime({
 			clock: fakeClock(),
-			transport: inProcessTransport(),
 			execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
 		});
 		const room = stopAtEnd(

@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { hostingOf, inProcessTransport } from '../src/hosting.ts';
+import { type Execution, hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineHuman,
@@ -25,6 +25,7 @@ import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { liveLeases, within } from './support/chaos.ts';
 import { mulberry32 } from './support/core-failure.ts';
 import { invariants } from './support/invariants.ts';
+import { type Fault, faulty, type Operation, serializing } from './support/ports.ts';
 import {
 	assistant,
 	currentExchange,
@@ -46,7 +47,6 @@ import {
 	toolResultTexts,
 } from './support/scripted.ts';
 import { type FailMode, memory, tappedJournals } from './support/storage.ts';
-import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
 
 const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');
@@ -138,11 +138,18 @@ class Walk {
 	}
 
 	private host(): Runtime {
-		return createRuntime({
-			storage: this.storage,
-			clock: this.clock,
-			transport: serializing(faultyTransport(inProcessTransport(), this.faults, this.clock)),
-		});
+		return createRuntime({ storage: this.storage, clock: this.clock });
+	}
+
+	/** The execution of each run: through the faults, and every request and response as JSON. */
+	private execution(): Execution {
+		return serializing(
+			faulty(
+				piExecution({ sessions: 'memory', stream: scripted(script) }),
+				this.faults,
+				this.clock,
+			),
+		);
 	}
 
 	async start(): Promise<void> {
@@ -153,7 +160,7 @@ class Walk {
 			summary: assistant.name,
 			agents: [alpha, beta, gamma, assistant],
 			seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast', [beta.name]: 'named' },
-			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+			execution: this.execution(),
 		});
 		this.watch();
 		await messagesOf(this.session);
@@ -245,7 +252,7 @@ class Walk {
 				this.session = await resumeRoom(this.name, {
 					runtime: this.runtime,
 					agents: [assistant, alpha, beta, gamma],
-					execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+					execution: this.execution(),
 				});
 				break;
 			} catch (error) {

@@ -56,8 +56,8 @@ holds the positioning and the headline of what is new.
   its own messages to one file per room. Both rotate the same way, and both
   read like any file an agent already reads. See [Workspace](workspace.md).
 - **Three JSON calls each way.** A seat calls `view`, `commit`, and `lease`.
-  The room calls `wake`, `steer`, and `cut`. In-process and RPC transports
-  share the rules. See [Deployment](deployment.md).
+  The room calls `wake`, `steer`, and `cut`. In-process and RPC ports share
+  the rules. See [Deployment](deployment.md).
 - **Correctness as evidence.** Pure rules carry Dafny-verified contracts. A
   scripted suite runs on memory and SQLite, a chaos sweep crashes before and
   after every append, and a process-kill test resumes over the same

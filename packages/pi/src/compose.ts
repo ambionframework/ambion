@@ -1,7 +1,7 @@
-/** Compose Pi execution services and a transport into one room connector. */
+/** The Pi execution: Pi's model services and one Pi executor for each seat. */
 
-import type { Execution } from '@ambionframework/ambion/hosting';
-import { composeConnector, registerDefaultExecution } from '@ambionframework/ambion/hosting';
+import type { AgentRunner, Execution } from '@ambionframework/ambion/hosting';
+import { defineExecution } from '@ambionframework/ambion/hosting';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createPiExecutor } from './executor.ts';
 import { createExecutionServices, type SessionPlace } from './services.ts';
@@ -28,37 +28,32 @@ export interface PiExecutionOptions {
 /**
  * The Pi execution for a runtime or a room. Pass it as `execution` to
  * `createRuntime`, `startRoom` or `resumeRoom`. The runtime supplies its
- * clock, limits, logger and transport when it builds the connector.
+ * clock, limits, and logger when it builds the connector. It serves the
+ * seats of kind `pi`, and it becomes the default of that kind.
  */
-export function piExecution(options: PiExecutionOptions = {}): Execution {
-	return {
-		connector: (host) => {
-			const services = createExecutionServices({
-				clock: host.clock,
-				call: host.limits.call,
-				trace: host.limits.trace,
-				...(options.stream === undefined ? {} : { stream: options.stream }),
-				...(options.sessions === undefined ? {} : { sessions: options.sessions }),
-				...(options.sessionDir === undefined ? {} : { sessionDir: options.sessionDir }),
+export function piExecution(options: PiExecutionOptions = {}): Execution<AgentRunner> {
+	return defineExecution('pi', (host) => {
+		const services = createExecutionServices({
+			clock: host.clock,
+			call: host.limits.call,
+			trace: host.limits.trace,
+			...(options.stream === undefined ? {} : { stream: options.stream }),
+			...(options.sessions === undefined ? {} : { sessions: options.sessions }),
+			...(options.sessionDir === undefined ? {} : { sessionDir: options.sessionDir }),
+		});
+		return (request) =>
+			createPiExecutor({
+				definition: request.definition,
+				model: services.model,
+				stream: services.stream,
+				now: () => host.clock.now(),
+				sessions: services.sessions,
 			});
-			return composeConnector({
-				host,
-				traceLimits: services.trace,
-				buildExecutor: (request) =>
-					createPiExecutor({
-						definition: request.definition,
-						model: services.model,
-						stream: services.stream,
-						now: () => host.clock.now(),
-						sessions: services.sessions,
-					}),
-			});
-		},
-	};
+	});
 }
 
 /**
- * A room with no `execution` runs each `pi` seat on this execution.
- * Loading the package registers it.
+ * A room with no execution for a `pi` seat runs it on the default of the
+ * kind. Loading the package defines that default.
  */
-registerDefaultExecution('pi', () => piExecution());
+piExecution();

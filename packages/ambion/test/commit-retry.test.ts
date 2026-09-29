@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
-import { tapped } from './support/core-failure.ts';
+import { type Tap, tapped } from './support/core-failure.ts';
 import { collect, messagesOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { quiet, scripted, speak, toolResultTexts } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
@@ -24,7 +24,7 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 		const opened = await openFor(storage);
 		let commits = 0;
 		// The room accepts every commit, and the reply to the first `lose` is lost.
-		const transport = tapped({
+		const tap: Tap = {
 			room: (room) => ({
 				commit: async (request) => {
 					commits += 1;
@@ -33,22 +33,25 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 					return result;
 				},
 			}),
-		});
+		};
 		const room = stopAtEnd(
 			await startRoom({
 				name: roomName(`commit-retry-${storage.name}`),
 				agents: [worker],
 				seats: { [worker.name]: 'named' },
-				runtime: createRuntime({ storage: opened.storage, transport }),
+				runtime: createRuntime({ storage: opened.storage }),
 				// The seat reads the tool results, so a lost reply makes it speak again.
-				execution: piExecution({
-					sessions: 'memory',
-					stream: scripted((context) =>
-						toolResultTexts(context).some((text) => text.startsWith('said #'))
-							? quiet()
-							: speak('answer'),
-					),
-				}),
+				execution: tapped(
+					piExecution({
+						sessions: 'memory',
+						stream: scripted((context) =>
+							toolResultTexts(context).some((text) => text.startsWith('said #'))
+								? quiet()
+								: speak('answer'),
+						),
+					}),
+					tap,
+				),
 			}),
 		);
 		const events = collect(room);

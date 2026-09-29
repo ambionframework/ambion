@@ -21,13 +21,13 @@ import { createAssistantMessageEventStream, fauxAssistantMessage } from '@earend
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { deferred } from '../../ambion/test/support/room.ts';
-import { noTrace } from '../../ambion/test/support/trace.ts';
 import { openHarness } from '../src/harness.ts';
 import { createPiExecutor, memorySessions, type PiSessions, pi, stubModel } from '../src/index.ts';
 import { streamModels } from '../src/models.ts';
 import { scriptContext } from '../src/script-context.ts';
 import { contextText, isClosing, quiet, type Script, scripted } from '../src/testing.ts';
 import { unusedRoom } from './support/activation.ts';
+import { noTrace } from './support/trace.ts';
 
 const said = (seq: number, text: string): Message => ({
 	kind: 'said',

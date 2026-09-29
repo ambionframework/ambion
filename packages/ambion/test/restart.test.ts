@@ -6,7 +6,7 @@
  */
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { hostingOf, inProcessTransport } from '../src/hosting.ts';
+import { type Execution, hostingOf } from '../src/hosting.ts';
 import {
 	type AgentDefinition,
 	type AmbionErrorCode,
@@ -21,6 +21,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
+import { around, type Fault, faulty } from './support/ports.ts';
 import {
 	assistant,
 	assistantEnded,
@@ -46,7 +47,6 @@ import {
 	summarise,
 } from './support/scripted.ts';
 import { memory, type OpenedStorage, storages } from './support/storage.ts';
-import { faultyTransport } from './support/transport.ts';
 
 const alpha = scriptedAgent('alpha', 'Alpha.');
 const beta = scriptedAgent('beta', 'Beta.');
@@ -74,7 +74,16 @@ interface World {
 	opened: OpenedStorage;
 	clock: FakeClock;
 	/** A runtime over the storage. Each call is a new host over the same journal. */
-	runtime(faults?: Parameters<typeof faultyTransport>[1]): Runtime;
+	runtime(faults?: Fault[]): Runtime;
+}
+
+/** The faults of each runtime that `world` built. The rooms of that runtime run through them. */
+const wraps = new WeakMap<Runtime, (execution: Execution) => Execution>();
+
+/** The execution of a room on `runtime`: the scripted Pi execution, through the faults of the runtime. */
+function executionOn(runtime: Runtime, script: Script): Execution {
+	const execution = piExecution({ sessions: 'memory', stream: scripted(script) });
+	return wraps.get(runtime)?.(execution) ?? execution;
 }
 
 /** The storage stays open until the test ends, after every room the test stops. */
@@ -85,12 +94,11 @@ async function world(storage: (typeof storages)[number]): Promise<World> {
 	return {
 		opened,
 		clock,
-		runtime: (faults = []) =>
-			createRuntime({
-				storage: opened.storage,
-				clock,
-				transport: faultyTransport(inProcessTransport(), faults, clock),
-			}),
+		runtime: (faults = []) => {
+			const runtime = createRuntime({ storage: opened.storage, clock });
+			wraps.set(runtime, (execution) => faulty(execution, faults, clock));
+			return runtime;
+		},
 	};
 }
 
@@ -110,7 +118,7 @@ function open(
 		},
 		agents,
 		runtime,
-		execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+		execution: executionOn(runtime, script),
 	});
 }
 
@@ -118,7 +126,7 @@ const resume = (name: string, runtime: Runtime, script: Script = byAgent({})) =>
 	resumeRoom(name, {
 		runtime,
 		agents,
-		execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+		execution: executionOn(runtime, script),
 	});
 
 const summaries = async (session: Room) => (await messagesOf(session)).filter(isSummary);
@@ -384,24 +392,19 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		// the resumed run inherits the live lease and never wakes alpha, so it
 		// holds no port for that seat when the abort revokes what it inherited
 		const cuts: string[] = [];
-		const inProcess = inProcessTransport();
-		const second = createRuntime({
-			storage: opened.storage,
-			clock,
-			transport: {
-				connect: (room, context) => {
-					const port = inProcess.connect(room, context);
-					return {
-						wake: (wake) => port.wake(wake),
-						steer: (steer) => port.steer(steer),
-						cut: (activation) => {
-							cuts.push(activation);
-							return port.cut(activation);
-						},
-					};
-				},
-			},
-		});
+		const second = createRuntime({ storage: opened.storage, clock });
+		wraps.set(second, (execution) =>
+			around(execution, {
+				port: (port) => ({
+					wake: (wake) => port.wake(wake),
+					steer: (steer) => port.steer(steer),
+					cut: (activation) => {
+						cuts.push(activation);
+						return port.cut(activation);
+					},
+				}),
+			}),
+		);
 		const resumed = await resume(name, second, script);
 		expect(await seat(resumed, 'alpha')).toMatchObject({ status: 'active' });
 		await resumed.abort();

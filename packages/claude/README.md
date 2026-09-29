@@ -97,8 +97,9 @@ try {
 **A room with no `execution` runs each Claude seat on the default Claude
 execution.** A host that sets `env` or a path to the executable passes
 `claudeExecution(options)` to a room or to `createRuntime`. A room whose
-seats run on more than one family needs no `composeExecutions` when each
-family package is loaded.
+seats run on more than one family passes a list, such as
+`[piExecution(), claudeExecution()]`, or passes none when each family
+package is loaded.
 
 ## Options
 

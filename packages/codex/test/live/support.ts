@@ -73,7 +73,10 @@ export function seat(
 type RoomOptions = Omit<StartRoomOptions, 'name' | 'runtime' | 'execution'>;
 
 /** A live room on fresh storage, with the events it emits and the steps it logs. */
-export async function open(prefix: string, options: RoomOptions & { execution?: Execution } = {}) {
+export async function open(
+	prefix: string,
+	options: RoomOptions & { execution?: Execution | readonly Execution[] } = {},
+) {
 	const { execution, ...rest } = options;
 	const records: TraceRecord[] = [];
 	const runtime = createRuntime({

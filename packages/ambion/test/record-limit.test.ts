@@ -5,7 +5,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { inProcessTransport, type Transport } from '../src/hosting.ts';
 import {
 	type AgentDefinition,
 	type CreateRuntimeOptions,
@@ -15,6 +14,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { priya, sam } from './support/cast.ts';
+import { around } from './support/ports.ts';
 import { andrei, messagesOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import {
 	answersEveryQuestion,
@@ -46,8 +46,8 @@ const limited = (name: string, activationTokenLimit?: number) =>
 	);
 
 /**
- * A room whose view responses and model contexts the test reads. The transport
- * wraps the in-process one and records every view response a seat reads.
+ * A room whose view responses and model contexts the test reads. The
+ * execution records every view response a seat reads.
  */
 async function watched(
 	agents: AgentDefinition[],
@@ -57,29 +57,24 @@ async function watched(
 	const { limits, ...room } = options;
 	const pages: Page[] = [];
 	const contexts: { seat: string; text: string }[] = [];
-	const local = inProcessTransport();
-	const transport: Transport = {
-		connect(protocol, context) {
-			const view: typeof protocol.view = async (id, range) => {
-				const response = await protocol.view(id, range);
-				if ('view' in response) {
-					const { earliest, omitted, messages } = response.view.context;
-					pages.push({ seat: context.seat, earliest, omitted, count: messages.length });
-				}
-				return response;
-			};
-			return local.connect({ ...protocol, view }, context);
-		},
-	};
 	const stream = scripted((context, name, call) => {
 		contexts.push({ seat: name, text: contextText(context) });
 		return script(context, name, call);
 	});
-	const runtime = createRuntime({
-		transport,
-		limits,
-		execution: piExecution({ sessions: 'memory', stream }),
+	const execution = around(piExecution({ sessions: 'memory', stream }), {
+		room(protocol, request) {
+			const view: typeof protocol.view = async (id, range) => {
+				const response = await protocol.view(id, range);
+				if ('view' in response) {
+					const { earliest, omitted, messages } = response.view.context;
+					pages.push({ seat: request.seat, earliest, omitted, count: messages.length });
+				}
+				return response;
+			};
+			return { ...protocol, view };
+		},
 	});
+	const runtime = createRuntime({ limits, execution });
 	const started = stopAtEnd(await startRoom({ name: roomName('limit'), runtime, agents, ...room }));
 	return { room: started, pages, contexts };
 }
