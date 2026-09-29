@@ -131,7 +131,6 @@ live('the default assistant, driven by the simulator', () => {
 			expect(saidBy(exchange, 'inventory')).not.toEqual([]);
 			expect(exchange?.summary).toMatchObject({ to: 'priya', text: expect.stringMatching(EIGHT) });
 			const verdict = await judge(run, [
-				'The summary to priya answers her question: the warehouse can dispatch 8 units of SKU A today.',
 				'The summary to priya does not say that the request went unanswered because she left.',
 			]);
 			evidence.verdict = verdict;

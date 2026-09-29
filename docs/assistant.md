@@ -263,8 +263,8 @@ participation unnecessary. Being idle alone is not a reason to remove an agent.
 **The presence of the person who asked does not change the work.** A
 person can ask and leave before the first activation of the assistant. The
 assistant seats and routes as it does for a person who stays. The room
-sends the closing summary to the `person` of the exchange, and the person
-reads it on return. The membership guidance of the package states this
+assigns the closing summary to the `person` of the exchange, the assistant
+writes it, and the person reads it on return. The membership guidance of the package states this
 rule.
 
 Unseating can interrupt active work and settle pending assignments. Do not
