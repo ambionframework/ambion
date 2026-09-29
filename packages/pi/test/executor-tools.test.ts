@@ -20,8 +20,8 @@ import { activationSpec } from '../../ambion/src/room/activation.ts';
 import { projectState, replay } from '../../ambion/src/room/projection.ts';
 import { viewOf } from '../../ambion/src/room/view.ts';
 import { pi } from '../src/index.ts';
-import { binding, type PiTool, toolsFor } from '../src/tools.ts';
-import { activationFor, roomThatCommits, unusedRoom, viewFor } from './support/activation.ts';
+import { type PiTool, toolsFor } from '../src/tools.ts';
+import { boundActivation, roomThatCommits, unusedRoom, viewFor } from './support/activation.ts';
 
 /** What the domain tool received, one context per call. */
 const seen: ToolContext[] = [];
@@ -80,16 +80,17 @@ const said = (seq: number, text: string): CommitResult => ({
  * The tools of one activation over a room that records each commit. The room
  * answers each commit with the next of `answers`, and the last one repeats.
  */
-function bound(id: string, purpose: Purpose, ...answers: CommitResult[]) {
+async function bound(id: string, purpose: Purpose, ...answers: CommitResult[]) {
 	const commits: CommitRequest[] = [];
-	const activation = activationFor(id, worker);
 	let next = 0;
 	const room = roomThatCommits(commits, () => {
 		const answer = answers[Math.min(next, answers.length - 1)] ?? said(5, 'x');
 		next += 1;
 		return answer;
 	});
-	const tools = toolsFor(viewFor(purpose), worker, binding(activation, room));
+	const view = viewFor(purpose);
+	const { state: activation, tools: bound } = await boundActivation(id, worker, room, view);
+	const tools = toolsFor(view, worker, bound);
 	const tool = (index: number): PiTool => {
 		const found = tools[index];
 		if (found === undefined) throw new Error(`The purpose has no tool at ${index}.`);
@@ -114,8 +115,8 @@ const call = (tool: PiTool | undefined, id: string, params: Record<string, unkno
 };
 
 describe('executor tool authority', () => {
-	it('binds only the tool named by each activation purpose', () => {
-		expect(names(bound('activation', respond).tools)).toEqual([
+	it('binds only the tool named by each activation purpose', async () => {
+		expect(names((await bound('activation', respond)).tools)).toEqual([
 			'say',
 			'schedule',
 			'seat',
@@ -124,11 +125,11 @@ describe('executor tool authority', () => {
 			'recall',
 			'record_decision',
 		]);
-		expect(names(bound('activation', summarize).tools)).toEqual(['say']);
+		expect(names((await bound('activation', summarize)).tools)).toEqual(['say']);
 	});
 
 	it('keeps a refused blank open, then accepts a corrected retry under the same key', async () => {
-		const { activation, commits, say } = bound(
+		const { activation, commits, say } = await bound(
 			'message:0:worker:1',
 			{ kind: 'respond', message: 0 },
 			{ refused: blank },
@@ -148,7 +149,7 @@ describe('executor tool authority', () => {
 	});
 
 	it('sends summary text only, lets the room stamp recipient and range, and terminates once it lands', async () => {
-		const { activation, commits, say } = bound(
+		const { activation, commits, say } = await bound(
 			'closed:4:worker:1',
 			summarize,
 			{ refused: blank },
@@ -177,7 +178,7 @@ describe('executor tool authority', () => {
 	] as const)(
 		'passes trimmed refs from the %s say tool into the intent',
 		async (_kind, id, purpose) => {
-			const { commits, say } = bound(id, purpose, said(5, 'x'));
+			const { commits, say } = await bound(id, purpose, said(5, 'x'));
 			await call(say, 'c1', { text: 'x', refs: [' https://x/a ', '', 'https://x/b'] });
 			await call(say, 'c2', { text: 'x', refs: [] });
 			await call(say, 'c3', { text: 'x', refs: ['  '] });
@@ -199,7 +200,7 @@ describe('executor tool authority', () => {
 			text: 'Check the build.',
 			after: 600,
 		});
-		const clean = bound('message:4:worker:1', respond, { committed: scheduled(5) });
+		const clean = await bound('message:4:worker:1', respond, { committed: scheduled(5) });
 		const result = await call(clean.tool(1), 'clean', { text: ' Check the build. ', after: 600 });
 		expect(result.content).toEqual([
 			{
@@ -218,7 +219,7 @@ describe('executor tool authority', () => {
 		expect(clean.activation.readThrough).toBe(5);
 
 		const unread: Message = { kind: 'said', seq: 5, at, from: 'priya', text: 'Also the tests.' };
-		const behind = bound('message:4:worker:1', respond, {
+		const behind = await bound('message:4:worker:1', respond, {
 			committed: scheduled(6),
 			unread: [unread],
 		});
@@ -252,10 +253,14 @@ describe('executor tool authority', () => {
 				return { view: { ...view, context: { ...view.context, messages: one } } };
 			},
 		};
-		const activation = activationFor('message:4:worker:1', worker);
-		const recall = toolsFor(viewFor(respond), worker, binding(activation, room)).find(
-			(tool) => tool.name === 'recall',
+		const view = viewFor(respond);
+		const { state: activation, tools } = await boundActivation(
+			'message:4:worker:1',
+			worker,
+			room,
+			view,
 		);
+		const recall = toolsFor(view, worker, tools).find((tool) => tool.name === 'recall');
 		const uri = (seq: number) => `ambion://room/room/message/${seq}`;
 		// Every ref finds its message: a success, one line for each distinct ref. A seq as the
 		// record shows it names a message of this room.
@@ -284,7 +289,7 @@ describe('executor tool authority', () => {
 	});
 
 	it('does not mark context consumed for membership or an unchanged membership result', async () => {
-		const { activation, commits, tool } = bound('message:4:worker:1', respond, {
+		const { activation, commits, tool } = await bound('message:4:worker:1', respond, {
 			unchanged: { kind: 'seated', name: 'surveyor' },
 		});
 		await expect(call(tool(2), 'seat-call', { name: 'surveyor' })).resolves.toMatchObject({
@@ -374,10 +379,9 @@ describe('executor tool authority', () => {
 			spec: { ...base.spec, id: 'message:4:worker:1' },
 			context: { ...base.context, exchange: { person: 'priya', from: 4 } },
 		};
-		const held = binding(activationFor('message:4:worker:1', worker), unusedRoom);
-		await call(toolsFor(open, worker, held).at(-1), 'call-1', {});
+		await call(toolsFor(open, worker, []).at(-1), 'call-1', {});
 		await call(
-			toolsFor({ ...open, context: { ...base.context } }, worker, held).at(-1),
+			toolsFor({ ...open, context: { ...base.context } }, worker, []).at(-1),
 			'call-2',
 			{},
 		);

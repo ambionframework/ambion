@@ -4,12 +4,13 @@ import type {
 	Executor,
 	ExecutorActivation,
 	ExecutorSession,
-	PassInput,
+	Pass,
 	PassResult,
 } from '../execution/executor.ts';
+import { answerOf } from '../execution/room-tools.ts';
 import type { Execution } from '../host/runtime.ts';
 import type { ActivationView, CommitResult } from '../protocol.ts';
-import type { AgentDefinition, FailureCause, Intent, Seq, Usage } from '../types.ts';
+import type { AgentDefinition, FailureCause, Usage } from '../types.ts';
 
 /** One tool call of a scripted turn. */
 export interface Call {
@@ -82,25 +83,8 @@ export const byAgent = (seats: Record<string, Script>): Script => {
 /** True when the view asks for the summary of a closed exchange. */
 export const isClosing = (view: ActivationView): boolean => view.spec.purpose.kind === 'summarize';
 
-const trimmed = (value: unknown): string | undefined =>
-	typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
-
-/** The room intent a call makes, or nothing when the call names an agent's own tool. */
-function intentOf(call: Call, seat: string): Intent | undefined {
-	if (call.tool === 'seat') return { kind: 'seated', name: trimmed(call.args.name) ?? '' };
-	if (call.tool === 'unseat') return { kind: 'unseated', name: trimmed(call.args.name) ?? '' };
-	if (call.tool === 'schedule')
-		return { kind: 'said', to: seat, ...spoken(call), after: Number(call.args.after) };
-	if (call.tool !== 'say') return undefined;
-	const to = trimmed(call.args.to);
-	return { kind: 'said', ...(to === undefined ? {} : { to }), ...spoken(call) };
-}
-
-/** The text and refs of a `say` or a `schedule` call. */
-function spoken(call: Call): { text: string; refs?: string[] } {
-	const refs = Array.isArray(call.args.refs) ? call.args.refs.map(String) : [];
-	return { text: trimmed(call.args.text) ?? '', ...(refs.length === 0 ? {} : { refs }) };
-}
+/** The room tools a script calls by name. Every other call names a tool of the agent. */
+const ROOM_CALLS: ReadonlySet<string> = new Set(['say', 'schedule', 'seat', 'unseat']);
 
 const textOf = (result: string | ToolResult): string =>
 	typeof result === 'string'
@@ -129,12 +113,18 @@ function answer(response: CommitResult): { text: string; over: boolean } {
 	return { text: `stale: ${response.stale}`, over: true };
 }
 
+/** What a script that throws ends the pass with: the cause a `ScriptedFailure` names, or transient. */
+function failureOf(thrown: unknown): PassResult {
+	const error = thrown instanceof Error ? thrown : new Error(String(thrown));
+	const cause = error instanceof ScriptedFailure ? error.failure : 'transient';
+	return { failed: true, cause, message: error.message, error };
+}
+
 /** One activation of the scripted executor. */
 class ScriptedSession implements ExecutorSession {
 	private readonly results: Result[] = [];
-	private through: Seq = 0;
-	private stopped = false;
-	private view: ActivationView | undefined;
+	/** Set when a closing say landed. The activation has nothing more to do. */
+	private done = false;
 
 	private readonly activation: ExecutorActivation;
 	private readonly definition: AgentDefinition;
@@ -153,49 +143,26 @@ class ScriptedSession implements ExecutorSession {
 		this.counts = counts;
 	}
 
-	get readThrough(): Seq {
-		return this.through;
+	/** Whether the activation ends: a closing say landed, or the activation was cut. */
+	private get over(): boolean {
+		return this.done || this.activation.signal.aborted;
 	}
 
-	get cancelled(): boolean {
-		return this.stopped;
-	}
-
-	abort(): void {
-		this.stopped = true;
-	}
-
-	shouldRefresh(lastSeq: Seq): boolean {
-		return !this.stopped && lastSeq > this.through;
-	}
-
-	async pass(input: PassInput): Promise<PassResult> {
-		if (this.stopped) return { failed: false };
-		this.view = input.view;
-		this.through = Math.max(this.through, input.view.through);
+	async pass(pass: Pass): Promise<PassResult> {
+		// The script reads the whole view, so the pass reads the record through it.
+		const after = pass.kind === 'delta' ? pass.since : 0;
+		this.activation.read({ after, through: pass.view.through });
 		try {
-			while (!this.stopped) {
-				const step: Step = { view: input.view, results: this.results };
+			while (!this.over) {
+				const step: Step = { view: pass.view, results: this.results };
 				const turn = await this.script(step, this.definition.name, this.next());
 				if (turn.length === 0) break;
-				for (const call of turn) await this.run(call);
+				for (const call of turn) await this.run(call, pass);
 			}
 			return { failed: false };
-		} catch (error) {
-			return this.broke(error instanceof Error ? error : new Error(String(error)));
+		} catch (thrown) {
+			return failureOf(thrown);
 		}
-	}
-
-	private broke(error: Error): PassResult {
-		const cause = error instanceof ScriptedFailure ? error.failure : 'transient';
-		this.activation.emit({
-			type: 'error',
-			agent: this.definition.name,
-			activation: this.activation.id,
-			error,
-			cause,
-		});
-		return { failed: true, cause, message: error.message };
 	}
 
 	/** The count of steps this seat has had in the room, across its activations. */
@@ -205,74 +172,72 @@ class ScriptedSession implements ExecutorSession {
 		return count;
 	}
 
-	private async run(call: Call): Promise<void> {
-		if (this.stopped) return;
+	private async run(call: Call, pass: Pass): Promise<void> {
+		if (this.over) return;
 		if (call.tool === 'usage') {
 			this.activation.trace.record({ type: 'usage', ...usageOf(call.args) });
 			this.results.push({ tool: call.tool, text: 'recorded' });
 			return;
 		}
-		const intent = intentOf(call, this.definition.name);
-		const text = intent === undefined ? await this.invoke(call) : await this.commit(intent);
+		const text = ROOM_CALLS.has(call.tool)
+			? await this.commit(call, pass)
+			: await this.invoke(call, pass.view);
 		this.results.push({ tool: call.tool, text });
 	}
 
-	private async commit(intent: Intent): Promise<string> {
-		const closing = this.view !== undefined && isClosing(this.view);
-		const response = await this.activation.room.commit({
-			activation: this.activation.id,
-			key: `${this.activation.id}/${this.results.length}`,
-			...(closing || intent.kind !== 'said' ? {} : { readThrough: this.through }),
-			intent,
-		});
-		this.acknowledge(response);
+	/** A call of a room tool, keyed on its place in the activation. */
+	private async commit(call: Call, pass: Pass): Promise<string> {
+		const tool = pass.tools.find((one) => one.name === call.tool);
+		if (tool === undefined) throw new Error(`The seat has no tool '${call.tool}'.`);
+		const id = this.callId();
+		const result = await tool.run(call.args, id);
+		// The script reads each result, so the result reached the model.
+		this.activation.delivered(id);
+		// Each room tool a script calls commits, so the room answered it. The
+		// result holds only the text a model reads, and a script reads the
+		// answer itself, so the answer comes from beside the result.
+		const response = answerOf(result) ?? { unknown: 'The room gave no answer.' };
 		const outcome = answer(response);
-		if (outcome.over || (closing && outcome.text === 'delivered')) this.stopped = true;
+		if (isClosing(pass.view) && outcome.text === 'delivered') this.done = true;
 		return outcome.text;
 	}
 
-	/** An accepted say, or the messages a refused say missed, move the position this seat has read to. */
-	private acknowledge(response: CommitResult): void {
-		if ('committed' in response && response.committed.kind === 'said') {
-			this.through = Math.max(this.through, response.committed.seq);
-		}
-		if ('missed' in response) {
-			this.through = Math.max(this.through, response.missed.at(-1)?.seq ?? this.through);
-		}
+	/** The id of the next call: the activation and the place of the call in it. */
+	private callId(): string {
+		return `${this.activation.id}/${this.results.length}`;
 	}
 
-	/** An agent's own tool: emit its events, and give it the context a model loop would. */
-	private async invoke(call: Call): Promise<string> {
+	/** An agent's own tool: record its steps, and give it the context a model loop would. */
+	private async invoke(call: Call, view: ActivationView): Promise<string> {
 		const tool = this.definition.executor.tools.find((candidate) => candidate.name === call.tool);
 		if (tool === undefined) throw new Error(`The seat has no tool '${call.tool}'.`);
-		const emit = (type: 'tool_execution_start' | 'tool_execution_end') =>
-			this.activation.emit({
-				type,
-				agent: this.definition.name,
-				activation: this.activation.id,
-				toolName: tool.name,
-			});
-		const exchange = this.view?.context.exchange;
+		const id = this.callId();
+		const exchange = view.context.exchange;
 		const context: ToolContext = Object.freeze({
 			agent: { name: this.definition.name, identity: this.definition.identity },
-			callId: `${this.activation.id}/${this.results.length}`,
-			room: this.view?.context.name ?? '',
+			callId: id,
+			room: view.context.name,
 			activation: this.activation.id,
 			...(exchange === undefined ? {} : { exchange: { ...exchange } }),
 		});
-		emit('tool_execution_start');
+		const { trace } = this.activation;
+		trace.record({ type: 'tool_call', call: id, name: tool.name, input: call.args });
 		try {
-			return textOf(await tool.invoke(call.args, context));
-		} finally {
-			emit('tool_execution_end');
+			const text = textOf(await tool.invoke(call.args, context));
+			trace.record({ type: 'tool_result', call: id, output: text });
+			return text;
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			trace.record({ type: 'tool_result', call: id, output: null, error: message });
+			throw error;
 		}
 	}
 }
 
 /**
  * A scripted executor for one seat. It implements the `Executor` contract
- * with no model: the script says what the seat does, and the session drives
- * the room's three calls the way a model loop does. The executor
+ * with no model: the script says what the seat does, and the session calls
+ * the room tools of the pass the way a model loop does. The executor
  * conformance suite runs it.
  */
 export function scriptedExecutor(script: Script, definition: AgentDefinition): Executor {

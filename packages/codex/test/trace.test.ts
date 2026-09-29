@@ -2,18 +2,21 @@
 import type { Step } from '@ambionframework/ambion';
 import type { ThreadEvent, ThreadItem } from '@openai/codex-sdk';
 import { describe, expect, it } from 'vitest';
-import { CodexSteps, changedPaths, isRoomTool, usageOf } from '../src/codex-trace.ts';
+import { CodexSteps, changedPaths, usageOf } from '../src/codex-trace.ts';
 import { causeOf, passResultOf } from '../src/services.ts';
 
 const started = (item: ThreadItem): ThreadEvent => ({ type: 'item.started', item });
 const updated = (item: ThreadItem): ThreadEvent => ({ type: 'item.updated', item });
 const completed = (item: ThreadItem): ThreadEvent => ({ type: 'item.completed', item });
 
-/** Every step of a list of events, in order. */
+/** Every step of a list of events of the activation `a`, in order. */
 function stepsOf(...events: ThreadEvent[]): Step[] {
-	const steps = new CodexSteps();
+	const steps = new CodexSteps('a');
 	return events.flatMap((event) => steps.steps(event));
 }
+
+/** The id of the steps of item `id` in turn `turn` of the activation `a`. */
+const idOf = (id: string, turn = 0) => `a:${turn}:${id}`;
 
 describe('text and thinking', () => {
 	it('sends the growth of a message as deltas, then a closing step, and a message that arrives whole as one closing step', () => {
@@ -63,8 +66,8 @@ describe('tools', () => {
 				completed({ ...command, aggregated_output: 'a.txt', exit_code: 0, status: 'completed' }),
 			),
 		).toEqual([
-			{ type: 'tool_call', call: 'c1', name: 'command', input: { command: 'ls' } },
-			{ type: 'tool_result', call: 'c1', output: { output: 'a.txt', exitCode: 0 } },
+			{ type: 'tool_call', call: idOf('c1'), name: 'command', input: { command: 'ls' } },
+			{ type: 'tool_result', call: idOf('c1'), output: { output: 'a.txt', exitCode: 0 } },
 		]);
 	});
 
@@ -80,8 +83,8 @@ describe('tools', () => {
 			}),
 		);
 		expect(steps).toMatchObject([
-			{ type: 'tool_call', call: 'c1' },
-			{ type: 'tool_result', call: 'c1', error: 'The command failed with exit code 1.' },
+			{ type: 'tool_call', call: idOf('c1') },
+			{ type: 'tool_result', call: idOf('c1'), error: 'The command failed with exit code 1.' },
 		]);
 	});
 
@@ -90,8 +93,8 @@ describe('tools', () => {
 		expect(
 			stepsOf(completed({ id: 'f1', type: 'file_change', changes, status: 'completed' })),
 		).toEqual([
-			{ type: 'tool_call', call: 'f1', name: 'file_change', input: { changes } },
-			{ type: 'tool_result', call: 'f1', output: changes },
+			{ type: 'tool_call', call: idOf('f1'), name: 'file_change', input: { changes } },
+			{ type: 'tool_result', call: idOf('f1'), output: changes },
 		]);
 	});
 
@@ -103,7 +106,7 @@ describe('tools', () => {
 			),
 		).toMatchObject([
 			{ type: 'tool_call', name: 'web_search', input: { query: 'pour schedule' } },
-			{ type: 'tool_result', call: 'w1' },
+			{ type: 'tool_result', call: idOf('w1') },
 		]);
 	});
 
@@ -126,8 +129,8 @@ describe('tools', () => {
 		]);
 	});
 
-	it('shows a room tool by its plain name and lets the executor claim its id', () => {
-		const steps = new CodexSteps();
+	it('shows a room tool by its plain name', () => {
+		const steps = new CodexSteps('a');
 		const call = {
 			id: 's1',
 			type: 'mcp_tool_call' as const,
@@ -138,11 +141,21 @@ describe('tools', () => {
 		expect(steps.steps(started({ ...call, status: 'in_progress' }))).toMatchObject([
 			{ type: 'tool_call', name: 'say' },
 		]);
-		expect(steps.claim('say')).toBe('s1');
-		expect(steps.claim('say')).toBeUndefined();
-		expect(['say', 'schedule', 'seat', 'unseat', 'dismiss'].every(isRoomTool)).toBe(true);
-		expect(isRoomTool('lookup') || isRoomTool('recall')).toBe(false);
 	});
+});
+
+it('gives each turn its own ids, though codex numbers the items of each turn again', () => {
+	const say = { id: 'item_1', type: 'mcp_tool_call' as const, server: 'ambion', tool: 'say' };
+	const turn = (text: string): ThreadEvent[] => [
+		{ type: 'turn.started' },
+		started({ ...say, arguments: { text }, status: 'in_progress' }),
+		completed({ ...say, arguments: { text }, status: 'completed' }),
+	];
+	const steps = stepsOf(...turn('One.'), ...turn('Two.'));
+	expect(steps.flatMap((step) => (step.type === 'tool_call' ? [step.call] : []))).toEqual([
+		idOf('item_1', 1),
+		idOf('item_1', 2),
+	]);
 });
 
 describe('usage and paths', () => {
@@ -172,16 +185,9 @@ describe('usage and paths', () => {
 });
 
 it.each([
-	['unexpected status 401 Unauthorized: invalid api key', undefined, 'permanent'],
-	['You exceeded your current quota, please check your plan.', undefined, 'permanent'],
-	['Not logged in. Run codex login.', undefined, 'permanent'],
-	['insufficient_quota', undefined, 'permanent'],
-	["You've hit your usage limit. Try again later.", undefined, 'permanent'],
-	['unexpected status 429: usage_limit_reached', undefined, 'permanent'],
-	['unexpected status 429: rate_limit_exceeded', undefined, 'transient'],
+	// The status comes from the text when the text names one.
+	['unexpected status 403 Forbidden', undefined, 'permanent'],
 	['stream error: 529 overloaded_error: try again later', undefined, 'transient'],
-	['connection reset by peer', undefined, 'transient'],
-	['something unknown went wrong', undefined, 'transient'],
 	// The caller can give a status.
 	['The request failed.', 403, 'permanent'],
 	['The request failed.', 500, 'transient'],

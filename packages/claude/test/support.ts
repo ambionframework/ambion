@@ -13,10 +13,10 @@ import type {
 	AgentDefinition,
 	CommitRequest,
 	ExecutionEvent,
-	ExecutorSession,
 	RoomProtocol,
-	TraceSink,
+	StepSink,
 } from '@ambionframework/ambion/hosting';
+import { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { type ClaudeOptions, claude, createClaudeExecutor } from '../src/index.ts';
 import type { FakeScenario } from '../src/testing.ts';
 
@@ -113,11 +113,8 @@ export function fakeRoom(
 			};
 		},
 	};
-	const trace: TraceSink = {
-		startPass: () => {},
+	const trace: StepSink = {
 		record: (step) => void steps.push(step),
-		usage: () => undefined,
-		close: async () => {},
 	};
 	const executor = createClaudeExecutor({
 		definition,
@@ -146,8 +143,15 @@ export function fakeRoom(
 		moveRecordTo: (seq: number) => {
 			lastSeq = seq;
 		},
-		activate: (id: string): ExecutorSession =>
-			executor.open({ id, room, emit: (event) => void events.push(event), trace }),
+		/** The core state of one activation, as the driver opens it. */
+		activate: (id: string): ActivationState =>
+			new ActivationState(executor, {
+				id,
+				room,
+				definition,
+				emit: (event) => void events.push(event),
+				trace,
+			}),
 	};
 }
 

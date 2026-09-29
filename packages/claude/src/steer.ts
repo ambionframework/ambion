@@ -4,10 +4,11 @@
  * The Claude Agent SDK takes a prompt as an async iterable of user
  * messages. The activation pushes the first view, each later delta, and
  * each steered line into it. The SDK sends every message back as a user
- * message with `isReplay` set. The activation advances `readThrough` on
- * that echo and on nothing earlier: the model has the message only then.
+ * message with `isReplay` set. The activation tells the core that the model
+ * read the range of the message on that echo and on nothing earlier: the
+ * model has the message only then.
  */
-import type { Seq } from '@ambionframework/ambion/hosting';
+import type { ReadRange } from '@ambionframework/ambion/hosting';
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 
 /** A queue the SDK reads as its prompt. `end` closes the input. */
@@ -53,11 +54,10 @@ export function userMessage(text: string, uuid: string): SDKUserMessage {
 	};
 }
 
-/** What an echo confirms: the record position the message carried, and whether a steer sent it. */
+/** What an echo confirms: the range of the record the message carried, and whether a steer sent it. */
 export interface Sent {
-	readonly through: Seq;
-	/** The steered line's position and what the room had before it. Absent for a prompt. */
-	readonly steer?: { readonly after: Seq };
+	readonly range: ReadRange;
+	readonly steer: boolean;
 }
 
 /** The messages sent and not yet echoed, by uuid. */

@@ -48,6 +48,9 @@ export interface TraceSink {
 	close(): Promise<void>;
 }
 
+/** The part of a sink an executor writes to: it records the steps it owns. */
+export type StepSink = Pick<TraceSink, 'record'>;
+
 /** Opens the sink of one activation. */
 export interface TraceOpener {
 	open(activation: string): TraceSink;

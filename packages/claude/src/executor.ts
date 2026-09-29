@@ -7,15 +7,16 @@
  * streaming input. A pass pushes one user message, the rendered view or the
  * delta, and resolves on the SDK `result` that answers it.
  *
- * - **Freshness.** `readThrough` advances when the SDK echoes a user
- *   message back, and on nothing earlier. A say never commits against
- *   record the model has not read. A tool result that carries missed
- *   messages advances it when the SDK reports that result.
+ * - **Freshness.** The core keeps `readThrough`. The activation tells it
+ *   that the model read a range when the SDK echoes the user message back,
+ *   and on nothing earlier. It tells the core that a tool result reached
+ *   the model when the SDK reports that result.
  * - **Steer.** A line that lands mid-pass joins the streaming input. The
  *   activation records it as consumed on its echo. A steer that finds no
  *   pass in flight waits for the record: the next delta carries it.
- * - **Cut.** `abort` interrupts the query. `close` ends the input and the
- *   process, and the driver calls it when the activation is over.
+ * - **Cut.** The signal of the activation interrupts the query. `close` ends
+ *   the input and the process, and the driver calls it when the activation
+ *   is over.
  * - **Exchange continuity.** The query persists its session on the local
  *   disk, and the release records the id the SDK reports. The activation
  *   resumes the session that `spec.resume` names, which the room hands back
@@ -24,31 +25,23 @@
  *   honor starts a fresh session, and the release records the new id.
  */
 import type {
-	ActivationView,
 	AgentDefinition,
 	Executor,
 	ExecutorActivation,
 	ExecutorSession,
-	HarnessSession,
-	PassInput,
+	Pass,
+	PassRecord,
 	PassResult,
-	RoomProtocol,
+	ReadRange,
 	Seq,
-	TraceSink,
-} from '@ambionframework/ambion/hosting';
-import {
-	renderActivation,
-	renderDelta,
-	resolveReminders,
-	sessionToResume,
 } from '@ambionframework/ambion/hosting';
 import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { ClaudeSteps, plainName } from './claude-trace.ts';
+import { ClaudeSteps } from './claude-trace.ts';
 import { approver, type ClaudeRuntime, claudeOf, queryOptions } from './options.ts';
 import { passResultOf, sessionOf, unresumableResult } from './services.ts';
 import { Echoes, Inbox, userMessage } from './steer.ts';
-import { type Binding, roomServer } from './tools.ts';
+import { roomServer } from './tools.ts';
 
 /** The head of the first message of a resumed query. The system prompt of the session is older. */
 export const RESUMED_NOTE =
@@ -67,14 +60,12 @@ export interface ClaudeExecutorOptions extends ClaudeRuntime {
 /** The Claude executor. One instance per seat, for as long as the room runs. */
 export function createClaudeExecutor(options: ClaudeExecutorOptions): Executor {
 	return {
+		harness: 'claude',
 		open(activation: ExecutorActivation): ExecutorSession {
 			return new Activation(activation, options);
 		},
 	};
 }
-
-/** Whether a tool speaks on the record: the room reports its own event for it. */
-const spoken = (name: string): boolean => name === 'say' || name === 'schedule';
 
 /** A steered line held until its pass starts. */
 interface Held {
@@ -85,22 +76,13 @@ interface Held {
 
 /** One activation, from the moment the room wakes a seat until it stops. */
 class Activation implements ExecutorSession {
-	readonly id: string;
-	private readonly room: RoomProtocol;
-	private readonly emit: ExecutorActivation['emit'];
-	private readonly trace: TraceSink;
+	private readonly activation: ExecutorActivation;
 	private readonly definition: AgentDefinition;
 	private readonly runtime: ClaudeRuntime;
 	private readonly open: NonNullable<ClaudeExecutorOptions['query']>;
 	private readonly steps = new ClaudeSteps();
 	private inbox = new Inbox();
 	private readonly echoes = new Echoes();
-	/** Aborts when the activation is cut. The tools read its signal. */
-	private readonly cut = new AbortController();
-	/** Tool results that carry record the model has not read yet, by call id. */
-	private readonly expected = new Map<string, Seq>();
-	/** The names of the tools in flight, by call id. */
-	private readonly named = new Map<string, string>();
 	/** The steers held before the query starts. */
 	private held: Held[] = [];
 	/** The messages sent and not yet echoed. A restart of the query sends them again. */
@@ -113,39 +95,28 @@ class Activation implements ExecutorSession {
 	private heard = false;
 	/** Opens the query. Set on the first pass. */
 	private begin: (() => Query) | undefined;
-	private through = 0;
 	private stream: Query | undefined;
 	/** Set while a pass waits for its result. It settles the pass. */
 	private settle: ((result: PassResult) => void) | undefined;
 	private grace: ReturnType<typeof setTimeout> | undefined;
-	private view: ActivationView | undefined;
-	private serial = 0;
 	private stopped = false;
 
 	constructor(activation: ExecutorActivation, options: ClaudeExecutorOptions) {
-		this.id = activation.id;
-		this.room = activation.room;
-		this.emit = activation.emit;
-		this.trace = activation.trace;
+		this.activation = activation;
 		this.definition = options.definition;
 		this.runtime = options;
 		this.open = options.query ?? query;
+		activation.signal.addEventListener('abort', () => this.abort(), { once: true });
 	}
 
-	/** The Claude session to record with the release. Absent until the SDK reports one. */
-	get session(): HarnessSession | undefined {
-		const id = this.reported;
-		return id === undefined ? undefined : { harness: 'claude', id };
+	/** The id of the Claude session to record with the release. Absent until the SDK reports one. */
+	get session(): string | undefined {
+		return this.reported;
 	}
 
-	/** The seq this activation may commit against: the freshness boundary `readThrough`. */
-	get readThrough(): Seq {
-		return this.through;
-	}
-
-	/** Whether `abort` was called. The driver checks this before another room round trip. */
-	get cancelled(): boolean {
-		return this.stopped;
+	/** The sink for the steps this executor owns. */
+	private get trace() {
+		return this.activation.trace;
 	}
 
 	/**
@@ -154,25 +125,18 @@ class Activation implements ExecutorSession {
 	 * waits. Between passes it waits for the record: the next delta has it.
 	 */
 	steer(after: Seq, seq: Seq, line: string): void {
-		if (this.stopped) return;
 		if (this.stream === undefined) {
 			this.held.push({ after, seq, line });
 		} else if (this.settle === undefined) {
 			this.trace.record({ type: 'steer', seq, consumed: false });
 		} else {
-			this.send(line, { through: seq, steer: { after } });
+			this.send(line, { range: { after, through: seq }, steer: true });
 		}
 	}
 
-	/** Whether the record moved past what the model read. */
-	shouldRefresh(lastSeq: Seq): boolean {
-		return !this.stopped && lastSeq > this.through;
-	}
-
-	/** Interrupt the query. The pass in flight ends, and the driver runs no other. */
-	abort(): void {
+	/** The activation was cut: interrupt the query. The pass in flight ends. */
+	private abort(): void {
 		this.stopped = true;
-		this.cut.abort();
 		this.stream?.interrupt().catch(() => {});
 		this.finish({ failed: false });
 	}
@@ -186,21 +150,16 @@ class Activation implements ExecutorSession {
 	}
 
 	/** One pass: read, act, and report where this session left off. */
-	async pass(input: PassInput): Promise<PassResult> {
+	async pass(pass: Pass): Promise<PassResult> {
 		try {
-			if (this.stopped) return { failed: false };
-			this.view = input.view;
-			const prompt = await this.promptFor(input);
-			if (prompt === undefined) {
-				this.through = Math.max(this.through, input.view.through);
-				return { failed: false };
-			}
+			const prompt = await this.promptFor(pass);
+			if (prompt === undefined) return { failed: false };
 			const done = new Promise<PassResult>((resolve) => {
 				this.settle = resolve;
 			});
-			this.start(input.view);
-			this.send(prompt, { through: input.view.through });
-			this.flush(input.view.through);
+			this.start(pass);
+			this.send(prompt.text, { range: prompt.range, steer: false });
+			this.flush(pass.view.through);
 			return await done;
 		} catch (error) {
 			return this.broke(error instanceof Error ? error : new Error(String(error)));
@@ -217,13 +176,13 @@ class Activation implements ExecutorSession {
 	 * seat's part for this activation. A closing activation gets its duties
 	 * and the reader's preferences this way.
 	 */
-	private async promptFor(input: PassInput): Promise<string | undefined> {
-		if (input.kind === 'delta') return renderDelta(input.view, input.since);
-		const reminders = await resolveReminders(input.view, this.definition);
-		const { agent, context } = renderActivation(input.view, this.definition, reminders);
-		const resumes =
-			this.stream === undefined && sessionToResume(input.view, 'claude') !== undefined;
-		return resumes ? `${RESUMED_NOTE}\n\n${agent}\n\n${context}` : context;
+	private async promptFor(pass: Pass): Promise<PassRecord | undefined> {
+		const record = await pass.record();
+		if (record === undefined || pass.kind === 'delta') return record;
+		const resumes = this.stream === undefined && pass.resume !== undefined;
+		return resumes
+			? { ...record, text: `${RESUMED_NOTE}\n\n${pass.agent}\n\n${record.text}` }
+			: record;
 	}
 
 	/**
@@ -235,14 +194,13 @@ class Activation implements ExecutorSession {
 			if (held.seq <= through) {
 				this.trace.record({ type: 'steer', seq: held.seq, consumed: true });
 			} else {
-				this.send(held.line, { through: held.seq, steer: { after: held.after } });
+				this.send(held.line, { range: { after: held.after, through: held.seq }, steer: true });
 			}
 		}
 	}
 
-	/** Push one user message into the input, and wait for its echo to advance `readThrough`. */
-	private send(text: string, sent: { through: Seq; steer?: { after: Seq } }): void {
-		this.serial += 1;
+	/** Push one user message into the input. Its echo tells the core that the model read its range. */
+	private send(text: string, sent: { range: ReadRange; steer: boolean }): void {
 		const uuid = crypto.randomUUID();
 		this.echoes.expect(uuid, sent);
 		const message = userMessage(text, uuid);
@@ -251,23 +209,19 @@ class Activation implements ExecutorSession {
 	}
 
 	/** Open the query on the first pass. Later passes keep it. */
-	private start(view: ActivationView): void {
+	private start(pass: Pass): void {
 		if (this.stream !== undefined) return;
-		if (view.spec.seat !== this.definition.name)
-			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
-		const { mechanism, agent } = renderActivation(view, this.definition);
 		const executor = claudeOf(this.definition.executor);
-		this.resuming = sessionToResume(view, 'claude');
+		const tools = [...pass.tools, ...pass.agentTools];
+		this.resuming = pass.resume;
 		this.begin = () => {
 			// Each query takes its own room server. A server serves one connection.
-			const { server, names } = roomServer(view, this.definition, this.binding(), () =>
-				this.currentView(view),
-			);
+			const { server, names } = roomServer(tools, (tool) => this.activation.callId(tool));
 			return this.open({
 				prompt: this.inbox,
 				options: queryOptions({
 					executor,
-					systemPrompt: `${mechanism}\n\n${agent}`,
+					systemPrompt: `${pass.mechanism}\n\n${pass.agent}`,
 					server,
 					names,
 					canUseTool: approver(executor, this.trace, names),
@@ -295,33 +249,6 @@ class Activation implements ExecutorSession {
 		const stream = begin();
 		this.stream = stream;
 		void this.consume(stream);
-	}
-
-	/** What the room tools reach. */
-	private binding(): Binding {
-		const read = () => this.through;
-		return {
-			id: this.id,
-			room: this.room,
-			get readThrough() {
-				return read();
-			},
-			signal: this.cut.signal,
-			acknowledgeThrough: (seq) => this.advance(seq),
-			resultExpected: (call, seq) => {
-				this.expected.set(call, seq);
-			},
-			callId: (tool) => this.steps.claim(tool) ?? `${this.id}:${tool}:${this.serial++}`,
-			abort: () => this.abort(),
-		};
-	}
-
-	private currentView(built: ActivationView): ActivationView {
-		return this.view ?? built;
-	}
-
-	private advance(seq: Seq): void {
-		this.through = Math.max(this.through, seq);
 	}
 
 	/** Read the query to its end. An end or an error before the pass settles is a failure of the pass. */
@@ -363,47 +290,20 @@ class Activation implements ExecutorSession {
 		if (session !== undefined) this.reported = session.id;
 		for (const step of this.steps.steps(message)) {
 			this.trace.record(step);
-			if (step.type === 'tool_call') this.started(step.call, step.name);
-			if (step.type === 'tool_result') this.finished(step.call);
+			// The SDK reports a tool result as the model reads it next.
+			if (step.type === 'tool_result') this.activation.delivered(step.call);
 		}
 		if (message.type === 'user') this.echoed(message);
 		if (message.type === 'result') this.answered(message);
 	}
 
-	private started(call: string, name: string): void {
-		this.named.set(call, name);
-		// A say or a schedule is the room's own event, not a tool's.
-		if (!spoken(name)) this.toolEvent('tool_execution_start', name);
-	}
-
-	private finished(call: string): void {
-		const name = this.named.get(call);
-		this.named.delete(call);
-		const seq = this.expected.get(call);
-		if (seq !== undefined) this.advance(seq);
-		this.expected.delete(call);
-		if (name !== undefined && !spoken(name)) this.toolEvent('tool_execution_end', name);
-	}
-
-	private toolEvent(type: 'tool_execution_start' | 'tool_execution_end', name: string): void {
-		this.emit({
-			type,
-			agent: this.definition.name,
-			activation: this.id,
-			toolName: plainName(name),
-		});
-	}
-
-	/** The SDK sent a user message back: the model has it, so the position advances. */
+	/** The SDK sent a user message back: the model has it, so the core counts its range read. */
 	private echoed(message: Extract<SDKMessage, { type: 'user' }>): void {
 		const sent = this.echoes.confirm(message.uuid);
 		if (sent === undefined) return;
 		if (message.uuid !== undefined) this.outbox.delete(message.uuid);
-		const contiguous = sent.steer === undefined || sent.steer.after <= this.through;
-		if (contiguous) this.advance(sent.through);
-		if (sent.steer !== undefined) {
-			this.trace.record({ type: 'steer', seq: sent.through, consumed: true });
-		}
+		this.activation.read(sent.range);
+		if (sent.steer) this.trace.record({ type: 'steer', seq: sent.range.through, consumed: true });
 	}
 
 	/**
@@ -426,35 +326,19 @@ class Activation implements ExecutorSession {
 		this.grace.unref();
 	}
 
-	/** Settle the pass in flight. A failure reaches the host as an `error` event first. */
+	/** Settle the pass in flight. The core reports a failure. */
 	private finish(result: PassResult): void {
 		const settle = this.settle;
 		if (settle === undefined) return;
 		this.settle = undefined;
-		if (result.failed && result.message !== undefined && !this.stopped) {
-			this.emit({
-				type: 'error',
-				agent: this.definition.name,
-				activation: this.id,
-				error: new Error(result.message),
-				...(result.cause === undefined ? {} : { cause: result.cause }),
-			});
-		}
 		settle(result);
 	}
 
 	/**
-	 * Record a fault of this executor, such as a lost process or a build
-	 * error. It is transient, so the room tries the activation again.
+	 * The result for a fault of this executor, such as a lost process or a
+	 * build error. It is transient, so the room tries the activation again.
 	 */
 	private broke(error: Error): PassResult {
-		this.emit({
-			type: 'error',
-			agent: this.definition.name,
-			activation: this.id,
-			error,
-			cause: 'transient',
-		});
-		return { failed: true, cause: 'transient', message: error.message };
+		return { failed: true, cause: 'transient', message: error.message, error };
 	}
 }

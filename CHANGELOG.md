@@ -97,16 +97,11 @@ names a snapshot ref, a commit ref, and a message URI. A workspace path and
 a table have no ref form, so the text no longer names them. `say` describes
 its `text`.
 
-### Fixes
-
-- **The default assistant works a request after the person who asked
-  leaves.** The membership guidance of `@ambionframework/assistant` states
-  that the presence of the person who asked does not change the work. The
-  assistant seats and routes as for a person who stays, and the closing
-  summary goes to the `person` of the exchange. Before this change, the
-  model decided, and a question followed by a departure sometimes closed
-  with no answer. See
-  [Default assistant](docs/assistant.md#membership-and-completion).
+**The executor suite reports each case.** `ExecutorHarness.close` takes an
+`ExecutorCaseReport`: the name of the case, every room call with its
+answer, and every step the logger received. The live Codex suite writes it
+to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
+[Executors](docs/executors.md).
 
 ### Simplification
 
@@ -204,8 +199,89 @@ its `text`.
   blocks of a summarised range move to `record.ts`, where the room and the
   renderer read them. See [History and limits](docs/room.md#history-and-limits).
 
+### Fixes
+
+- **The default assistant works a request after the person who asked
+  leaves.** The membership guidance of `@ambionframework/assistant` states
+  that the presence of the person who asked does not change the work. The
+  assistant seats and routes as for a person who stays, and the closing
+  summary goes to the `person` of the exchange. Before this change, the
+  model decided, and a question followed by a departure sometimes closed
+  with no answer. See
+  [Default assistant](docs/assistant.md#membership-and-completion).
+- **A Codex seat lands a say in each activation.** A real `codex` numbers
+  the items of each turn from `item_0`, and a room tool took the item id as
+  the key of its commit. The say of a later activation then had the key of
+  an earlier say. The room gave back the earlier message, or refused the
+  say as a key conflict. The id of a Codex step now holds the activation
+  id, the number of the turn, and the item id. A tool call in a later pass
+  of one activation also gets its own `tool_call` step and its tool events.
+
 ### Breaking changes
 
+- **One classifier names a permanent failure.** `classifyCause({ text,
+  status })` takes no `permanent` pattern. The core holds the text set of
+  every provider that a shipped family reaches. The set is the union of the
+  three copies that the Pi, Claude, and Codex executors held. The Pi executor
+  now also reads `not logged in`, `x-api-key`, `missing bearer`, and
+  `invalid-api-key` as permanent. The Claude executor also reads
+  `insufficient_quota`, `exceeded your current quota`, and `missing bearer`.
+  The Codex executor also reads `billing_error` and `x-api-key`. The Claude
+  package no longer has `causeOf`. See
+  [Executors](docs/executors.md#failure-classification).
+- **The core owns the state of an activation, and a pass receives what the
+  core decides.** The Pi, Claude, and Codex executors each kept the read
+  position, the cut, the refresh test, and the binding of the room tools.
+  Each also raised the `error` event, kept the freshness of a steer, and
+  assembled the prompt. The core now keeps each one, and an executor keeps
+  its harness alone. The driver opens the state of each activation, and the
+  hosting entry does not export it. See [Executors](docs/executors.md#the-pass-contract).
+  - **`ExecutorSession`** has no `readThrough`, `cancelled`,
+    `shouldRefresh`, or `abort`. `session` is the id of the harness session,
+    and the core adds the harness name. `pass` takes a `Pass`. The optional
+    `roomTools` adds to a say and a schedule, as `RoomToolOptions` did.
+  - **`ExecutorActivation`** has no `room` and no `emit`. It holds `id`,
+    `trace`, `signal`, `readThrough`, `read(range)`, `delivered(call)`, and
+    `callId(tool)`. The cut of the activation aborts `signal`. `trace` is a
+    `StepSink`, a new type that holds `record` alone. The driver keeps the
+    rest of the `TraceSink`.
+  - **`Pass`** is new: the `PassInput`, `mechanism`, `agent`,
+    `record(after?)`, `resume`, `tools`, and `agentTools`. `PassRecord` and
+    `ReadRange` are new types. `Executor.harness` names the harness whose
+    sessions the executor records. `PassResult.error` carries the error of
+    the `error` event.
+  - **The core raises the `error` event once.** An executor raises none, and
+    the driver raises none of its own for a lost room call. The event
+    carries `PassResult.error`, or an error built from the message. The
+    `end` step of a seat that no execution serves now names the reason.
+  - **The core raises the tool events from the steps.** It pairs the
+    `tool_call` and `tool_result` steps by call id. A harness that cannot
+    see the id of a call takes it with `callId`. A room tool that
+    commits an entry raises no tool event: `say`, `schedule`, `seat`,
+    `unseat`, and `dismiss`. The `message` event of the entry already
+    reports the call, so a tool event reported the same fact twice. Codex
+    held this rule. The Pi and Claude executors now raise no tool event for
+    `seat`, `unseat`, and `dismiss`. `recall` commits nothing, and it
+    raises tool events on every executor.
+  - **The core keeps the freshness of a steer.** The algorithm of the Pi
+    executor moves into the core with no Pi type. The Claude executor drops
+    its echo check. A steered line that lands out of order now counts once
+    the gap closes, as it did on Pi. Of two held ranges through one
+    position, the core keeps the range that starts lower. The order of the
+    ranges no longer changes the position read.
+  - **The hosting entry removes** `renderActivation`, `RenderedPrompt`,
+    `renderDelta`, `renderPending`, `resolveReminders`, `sessionToResume`,
+    `roomTools`, `agentTools`, and `RoomToolBinding`. The core renders the
+    prompt and binds the tools. It adds `Pass`, `PassRecord`, `ReadRange`,
+    and `StepSink`.
+  - **The executor suite checks the pass contract.** A failed activation
+    raises exactly one `error` event, and a `say` raises no tool event.
+    The Codex executor runs the suite in its live tier.
+  - **The scripted executor calls the room tools of the pass.** It records
+    a `tool_call` and a `tool_result` step for a tool of the agent, and the
+    core raises the tool events from them. It calls `delivered` for each
+    result of a room tool, as a model loop does. A closing activation of it
+    ends with the `stopped` end step.
 - **A returned say is a post.** The `returned` kind goes. The room writes a
   `posted` entry with `to` and `returns`, the seq of the scheduled say, and
   a journal read refuses a `returned` entry. `PostedMessage` and `isPosted`

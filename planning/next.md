@@ -260,6 +260,14 @@ states the new `pass` contract, `executorConformance` tests it on the
 three executors, the prompt snapshot holds, and one live file passes on
 each harness.
 
+**The code of C6 landed, and the live files pass on Pi and Codex.** On
+2026-09-29 `packages/ambion/test/live/control.test.ts` passed on Pi with
+`openai/gpt-5.6-luna`: a person steers a seat at work, and the seat answers
+the steer. On Codex, `packages/codex/test/live/steer.test.ts` passed, and the
+executor suite in `packages/codex/test/live/conformance.test.ts` passed all
+ten cases. The Claude run of `packages/claude/test/live/steer.test.ts` waits
+for the live run on `main`, and the step closes when it passes.
+
 **C10. `wait` takes `handles` alone.** The owner keeps `status`, `ps`,
 and `wait` as three tools: each answers one question. The change landed
 in #354: `wait` takes `{ handles, timeout? }`, with 1 to 16 handles, and

@@ -7,6 +7,7 @@
  */
 import type { PassInput } from '@ambionframework/ambion/hosting';
 import { expect, it } from 'vitest';
+import { ActivationState } from '../../../ambion/src/execution/activation.ts';
 import { createCodexExecutor } from '../../src/index.ts';
 import { lands, roomOf, viewOf } from '../support.ts';
 import { errorsIn, live, open, person, saidBy, seat, untilQuiet } from './support.ts';
@@ -48,15 +49,13 @@ live('exchange continuity', () => {
 				resume: { harness: 'codex', id: '00000000-0000-0000-0000-000000000000' },
 			},
 		};
-		const session = createCodexExecutor({ definition }).open({
+		const session = new ActivationState(createCodexExecutor({ definition }), {
 			id: view.spec.id,
 			room,
+			definition,
 			emit: () => {},
 			trace: {
-				startPass: () => {},
 				record: () => {},
-				usage: () => undefined,
-				close: async () => {},
 			},
 		});
 		try {

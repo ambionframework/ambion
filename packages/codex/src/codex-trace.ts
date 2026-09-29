@@ -8,24 +8,10 @@
  * item that Codex reports only at its end gives both steps at once.
  */
 import type { Step, Usage } from '@ambionframework/ambion';
-import { DISMISS, SAY, SCHEDULE, SEAT, UNSEAT } from '@ambionframework/ambion/hosting';
 import type { ThreadEvent, ThreadItem } from '@openai/codex-sdk';
 
 /** The name of the MCP server that holds the room tools. */
 export const ROOM_SERVER = 'ambion';
-
-const ROOM_TOOLS: readonly string[] = [
-	SAY.name,
-	SCHEDULE.name,
-	SEAT.name,
-	UNSEAT.name,
-	DISMISS.name,
-];
-
-/** Whether a step names a tool the room reports as its own event. */
-export function isRoomTool(name: string): boolean {
-	return ROOM_TOOLS.includes(name);
-}
 
 /** The name a step shows for an item. A tool of the room server shows without its server. */
 function nameOf(item: ThreadItem): string {
@@ -118,17 +104,39 @@ export function usageOf(usage: {
 	};
 }
 
-/** Turns thread events into the steps they stand for. One instance serves one activation. */
+/**
+ * Turns thread events into the steps they stand for. One instance serves one
+ * activation.
+ *
+ * A real `codex` numbers the items of each turn from `item_0`, so an item id
+ * is unique only inside one turn. The id of a step is the scope, the number
+ * of the turn, and the item id. A room tool takes that id as the key of its
+ * commit, and the room keeps one message for each key.
+ */
 export class CodexSteps {
-	/** How much of each text item the steps already hold, by item id. */
+	/** What makes an id unique in the room: the id of the activation. */
+	private readonly scope: string;
+	/** The number of the turn in flight. It moves on each `turn.started`. */
+	private turn = 0;
+	/** How much of each text item the steps already hold, by step id. */
 	private readonly sent = new Map<string, number>();
-	/** Tool calls seen, by id, so a completed item adds no second call step. */
+	/** Tool calls seen, by step id, so a completed item adds no second call step. */
 	private readonly seen = new Set<string>();
-	/** Room tool call ids that no handler has claimed yet. */
-	private readonly unclaimed: { id: string; name: string }[] = [];
+
+	constructor(scope: string) {
+		this.scope = scope;
+	}
+
+	/** The id of the steps of an item in the turn in flight. */
+	private idOf(item: ThreadItem): string {
+		return `${this.scope}:${this.turn}:${item.id}`;
+	}
 
 	steps(event: ThreadEvent): Step[] {
 		switch (event.type) {
+			case 'turn.started':
+				this.turn += 1;
+				return [];
 			case 'item.started':
 			case 'item.updated':
 				return this.item(event.item, false);
@@ -141,16 +149,9 @@ export class CodexSteps {
 		}
 	}
 
-	/** The id the model gave the next call of this room tool, or nothing when none is waiting. */
-	claim(tool: string): string | undefined {
-		const at = this.unclaimed.findIndex((call) => call.name === tool);
-		if (at < 0) return undefined;
-		return this.unclaimed.splice(at, 1)[0]?.id;
-	}
-
 	private item(item: ThreadItem, done: boolean): Step[] {
-		if (item.type === 'agent_message') return this.grown(item.id, 'text', item.text, done);
-		if (item.type === 'reasoning') return this.grown(item.id, 'thinking', item.text, done);
+		if (item.type === 'agent_message') return this.grown(this.idOf(item), 'text', item.text, done);
+		if (item.type === 'reasoning') return this.grown(this.idOf(item), 'thinking', item.text, done);
 		return isTool(item) ? this.tool(item, done) : [];
 	}
 
@@ -172,19 +173,16 @@ export class CodexSteps {
 
 	private tool(item: ThreadItem, done: boolean): Step[] {
 		const steps: Step[] = [];
-		if (!this.seen.has(item.id)) {
-			this.seen.add(item.id);
-			const name = nameOf(item);
-			if (item.type === 'mcp_tool_call' && item.server === ROOM_SERVER) {
-				this.unclaimed.push({ id: item.id, name });
-			}
-			steps.push({ type: 'tool_call', call: item.id, name, input: inputOf(item) });
+		const call = this.idOf(item);
+		if (!this.seen.has(call)) {
+			this.seen.add(call);
+			steps.push({ type: 'tool_call', call, name: nameOf(item), input: inputOf(item) });
 		}
 		if (done) {
 			const { output, error } = outcomeOf(item);
 			steps.push({
 				type: 'tool_result',
-				call: item.id,
+				call,
 				output,
 				...(error === undefined ? {} : { error }),
 			});

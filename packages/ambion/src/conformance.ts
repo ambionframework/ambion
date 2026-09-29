@@ -23,12 +23,7 @@ import {
 	released,
 	until,
 } from './conformance-support.ts';
-import type {
-	Executor,
-	ExecutorActivation,
-	ExecutorSession,
-	PassInput,
-} from './execution/executor.ts';
+import type { Executor, ExecutorActivation, ExecutorSession, Pass } from './execution/executor.ts';
 import type {
 	AgentPort,
 	CommitRequest,
@@ -36,10 +31,10 @@ import type {
 	LeaseRequest,
 	RoomProtocol,
 } from './protocol.ts';
-import type { Seq } from './types.ts';
 
 export {
 	type ExecutorCapabilities,
+	type ExecutorCaseReport,
 	type ExecutorHarness,
 	type ExecutorPlan,
 	executorConformance,
@@ -68,40 +63,23 @@ export interface PortHarness {
 const SAID = 'The pour is Saturday.';
 
 /**
- * An executor for an in-process harness. One pass commits one `said` under
- * the key `${activation}:say` with `readThrough: view.through`, acknowledges
- * the committed seq, then stops. `steer` records the line, `abort` sets
- * `cancelled`, and `shouldRefresh` answers false.
+ * An executor for an in-process harness. One pass reads the view, then calls
+ * `say` once under the key `${activation}:say`, and stops. `steer` records
+ * the line.
  */
 export function speakOnce(): Executor {
 	return {
 		open(activation: ExecutorActivation): ExecutorSession {
-			let readThrough: Seq = 0;
-			let cancelled = false;
 			const lines: string[] = [];
 			return {
-				get readThrough() {
-					return readThrough;
-				},
-				get cancelled() {
-					return cancelled;
-				},
-				async pass({ view }: PassInput) {
-					const response = await activation.room.commit({
-						activation: activation.id,
-						key: `${activation.id}:say`,
-						readThrough: view.through,
-						intent: { kind: 'said', text: SAID },
-					});
-					readThrough = 'committed' in response ? response.committed.seq : view.through;
+				async pass({ view, tools }: Pass) {
+					activation.read({ after: 0, through: view.through });
+					const say = tools.find((tool) => tool.name === 'say');
+					await say?.run({ text: SAID }, `${activation.id}:say`);
 					return { failed: false };
 				},
 				steer(_after, _seq, line) {
 					lines.push(line);
-				},
-				shouldRefresh: () => false,
-				abort() {
-					cancelled = true;
 				},
 			};
 		},
