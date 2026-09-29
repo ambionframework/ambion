@@ -81,7 +81,7 @@ import * as people from './people.ts';
 import * as waits from './waits.ts';
 
 export type { RoomRead } from '../types.ts';
-export type { Visit } from './people.ts';
+export type { PostInput, Visit } from './people.ts';
 export type { ExchangeHandle } from './waits.ts';
 
 /**
@@ -117,6 +117,12 @@ export interface Room {
 	/** Reacquire an exchange by the source sequence of its opening question. */
 	exchange(from: Seq): waits.ExchangeHandle | undefined;
 	visit(human: HumanDefinition): Promise<people.Visit>;
+	/**
+	 * Post a message as the system: to a seat, a person, or the room. The post
+	 * has no author, wakes and steers as the room routes it, and opens an
+	 * exchange when none is open. A repeated `key` lands once.
+	 */
+	post(input: people.PostInput): Promise<waits.ExchangeHandle>;
 	stop(): Promise<void>;
 	/** Cancel work at one durable journal boundary. The room keeps running. */
 	abort(): Promise<void>;
@@ -459,6 +465,10 @@ export class RoomHost implements Room, RunningRoom {
 	/** Puts a person in the room. A second visit while they are here is the same visit. */
 	visit(human: HumanDefinition): Promise<people.Visit> {
 		return people.visit(this, human);
+	}
+
+	post(input: people.PostInput): Promise<waits.ExchangeHandle> {
+		return people.post(this, input);
 	}
 
 	/** The host seats a registered agent. Executable definitions stay fixed for the run. */

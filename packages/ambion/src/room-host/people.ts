@@ -242,6 +242,40 @@ async function commitMessage(
 	return message;
 }
 
+/** What the host posts: a message of the system to a seat, a person, or the room. */
+export interface PostInput {
+	to?: string;
+	text: string;
+	refs?: string[];
+	/** The idempotency token of the post, in a key space of its own. */
+	key?: string;
+}
+
+/**
+ * The host posts as the system. The post has no author, and it opens an
+ * exchange when none is open. A repeated key lands once, and the post it
+ * landed carries it back.
+ */
+export async function post(host: PeopleHost, input: PostInput): Promise<ExchangeHandle> {
+	host.assertRunning();
+	const key = input.key ?? crypto.randomUUID();
+	const command: Extract<RoomCommand, { type: 'post' }> = {
+		type: 'post',
+		...(input.to === undefined ? {} : { to: input.to }),
+		text: input.text,
+		bytes: host.runtime.limits.message.bytes,
+		...(input.refs === undefined ? {} : { refs: input.refs }),
+	};
+	const appended = await decideAndAppend(host, 'message', command, { key: spaced('post', key) });
+	requireSubmission(appended);
+	if (!('entry' in appended)) throw new Error('The room command did not append a post.');
+	const message = placed(appended.entry);
+	const same = message.kind === 'posted' && message.returns === undefined;
+	if (!same || !saidContentMatches(message, command))
+		throw new AmbionError('refused', messageKeyConflict(key, message));
+	return host.handleForMessage(message);
+}
+
 /**
  * A presence change uses its caller's stable key, or a fresh key by default.
  * The decision where the message commits refuses what the room refuses.

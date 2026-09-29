@@ -185,10 +185,10 @@
 	{
 		"kind": "message",
 		"body": {
-			"kind": "returned",
+			"kind": "posted",
 			"at": "2026-01-01T09:10:00.000Z",
 			"to": "worker",
-			"message": 6,
+			"returns": 6,
 			"text": "Check the pour log.",
 			"wakes": ["worker"]
 		},

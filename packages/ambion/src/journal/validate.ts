@@ -53,15 +53,14 @@ const messageSchemas: Record<string, TSchema> = {
 		},
 		{ additionalProperties: false },
 	),
-	returned: Type.Object(
+	posted: Type.Object(
 		{
 			...commonMessage,
-			kind: Type.Literal('returned'),
-			to: Type.String(),
-			message: Type.Integer({ minimum: 1 }),
-			owner: removed,
+			kind: Type.Literal('posted'),
+			to: Type.Optional(Type.String()),
 			text: Type.String(),
 			refs,
+			returns: Type.Optional(Type.Integer({ minimum: 1 })),
 		},
 		extra,
 	),
@@ -199,15 +198,17 @@ export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 }
 
 /**
- * A scheduled say goes to its author. The room writes a returned say, so it
- * has no author.
+ * A scheduled say goes to its author. The system writes a post, so it has no
+ * author, and a returned say goes to the seat of the say.
  */
 function validateSchedule(kind: string, body: Record<string, unknown> | undefined): void {
 	if (kind !== 'message' || body === undefined) return;
 	const fail = (path: string, reason: string) => {
 		throw new Error(`Invalid room journal body for kind '${kind}' at ${path}: ${reason}.`);
 	};
-	if (body.kind === 'returned' && body.from !== undefined) fail('body.from', 'expected no author');
+	if (body.kind === 'posted' && body.from !== undefined) fail('body.from', 'expected no author');
+	if (body.kind === 'posted' && body.returns !== undefined && body.to === undefined)
+		fail('body.to', 'expected the seat of the returned say');
 	if (body.kind === 'said' && body.after !== undefined && body.to !== body.from)
 		fail('body.to', 'expected the author');
 }
@@ -234,7 +235,7 @@ function validateDismissal(kind: string, body: Record<string, unknown> | undefin
 /** The refs of a message with text follow the grammar the commit path applies. */
 function validateRefs(kind: string, body: Record<string, unknown> | undefined): void {
 	if (kind !== 'message' || body === undefined) return;
-	if (body.kind !== 'said' && body.kind !== 'summary' && body.kind !== 'returned') return;
+	if (body.kind !== 'said' && body.kind !== 'summary' && body.kind !== 'posted') return;
 	if (body.refs === undefined) return;
 	const reason = refsRefusal(body.refs);
 	if (reason === undefined) return;

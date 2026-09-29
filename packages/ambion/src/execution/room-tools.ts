@@ -26,7 +26,8 @@ import {
 } from '../protocol.ts';
 import { parseRoomUri, REF_LIMITS, roomUri } from '../refs.ts';
 import type { AgentDefinition, Message, Seq } from '../types.ts';
-import { refusal, renderLine, summaryToolDescription } from './render.ts';
+import { renderLine } from './line.ts';
+import { refusal, summaryToolDescription } from './render.ts';
 
 /** One part of what a tool hands back to the model. */
 export type RoomToolContent =

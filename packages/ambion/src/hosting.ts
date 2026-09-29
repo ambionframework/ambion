@@ -45,13 +45,13 @@ export type {
 	PassResult,
 } from './execution/executor.ts';
 export { classifyCause, PERMANENT_STATUS, providerMessage } from './execution/failure.ts';
+export { renderLine } from './execution/line.ts';
 export { REMINDER_TIMEOUT_MS, resolveReminders } from './execution/reminders.ts';
 export type { RenderedPrompt } from './execution/render.ts';
 export {
 	refusal,
 	renderActivation,
 	renderDelta,
-	renderLine,
 	renderPending,
 	summaryToolDescription,
 } from './execution/render.ts';

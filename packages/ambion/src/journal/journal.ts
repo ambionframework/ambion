@@ -64,9 +64,9 @@ export type Entry = Entries<Kind, Bodies>;
  * `placed` strips the tag back off, so `Message.key` still reads the token
  * exactly as the caller supplied it.
  */
-export type KeySpace = 'delivery' | 'commit';
+export type KeySpace = 'delivery' | 'commit' | 'post';
 export const spaced = (space: KeySpace, key: string): string => `${space}:${key}`;
-const unspaced = (key: string): string => key.replace(/^(?:delivery|commit):/, '');
+const unspaced = (key: string): string => key.replace(/^(?:delivery|commit|post):/, '');
 
 /** One record entry as the room reads it: the body, joined to its envelope. */
 export const placed = (entry: Envelope<Bodies['message']>): Message =>

@@ -71,6 +71,9 @@ function fakeRoom(
 		visit: (_human: HumanDefinition): Promise<Visit> => {
 			throw new Error('not implemented in this double');
 		},
+		post: (): Promise<ExchangeHandle> => {
+			throw new Error('not implemented in this double');
+		},
 		stop: async () => {},
 		abort: async () => {},
 		seat: async () => {},

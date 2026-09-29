@@ -31,7 +31,8 @@ import type {
 	Usage,
 } from '../types.ts';
 import type { ExecutorSession, PassInput, PassResult } from './executor.ts';
-import { renderLine, windowToLimit } from './render.ts';
+import { renderLine } from './line.ts';
+import { windowToLimit } from './render.ts';
 import type { TraceSink } from './trace.ts';
 
 type CallResult<T> =

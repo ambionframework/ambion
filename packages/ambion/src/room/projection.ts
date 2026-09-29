@@ -45,7 +45,7 @@ export interface RoomProjection {
 	readonly exchange: ExchangeRef | undefined;
 	/** The `through` of the last close. */
 	readonly boundary: Seq;
-	/** The spoken messages and returned says after the boundary: all that can open an exchange. */
+	/** The spoken messages and posts after the boundary: all that can open an exchange. */
 	readonly tail: Message[];
 	/** The summary and unseated messages, which the summary rules read. */
 	readonly record: Message[];
@@ -186,7 +186,7 @@ function exchangeOf(
 	message: Message,
 ): ExchangeRef | undefined {
 	const changes =
-		message.kind === 'said' || message.kind === 'returned' || message.kind === 'arrived';
+		message.kind === 'said' || message.kind === 'posted' || message.kind === 'arrived';
 	if (!changes) return known;
 	return exchangeAfter(projection.tail, [...projection.people.keys()], projection.boundary);
 }
@@ -197,7 +197,7 @@ function notedBy(
 	message: Message,
 	step: Step,
 ): { tail: Message[]; record: Message[] } {
-	const opens = message.kind === 'said' || message.kind === 'returned';
+	const opens = message.kind === 'said' || message.kind === 'posted';
 	const speaks = opens && message.seq > prev.boundary;
 	const keeps = message.kind === 'summary' || message.kind === 'unseated';
 	return {

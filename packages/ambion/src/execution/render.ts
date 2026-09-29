@@ -18,13 +18,13 @@ import type { ActivationView, ContextParticipant } from '../protocol.ts';
 import { messageUri, roomUri } from '../refs.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
 import {
-	isReturned,
-	isSpoken,
 	isSummary,
 	type Message,
+	type PostedMessage,
 	type Seq,
 	type SummaryMessage,
 } from '../types.ts';
+import { refsOf, renderLine } from './line.ts';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -43,47 +43,6 @@ function ago(at: string, now: number): string {
 
 function plural(n: number, unit: string): string {
 	return `${count(n, unit)} ago`;
-}
-
-/**
- * One line of the record. A presence message has no text, so it reads as an
- * aside; a summary reads like anything else addressed to one person, because
- * that is what it is.
- *
- * A presence line names the author only where it differs from the subject. A
- * person arrives by themselves, and reading "priya arrived by priya" tells a
- * reader nothing.
- *
- * Every line starts with the seq of its message, so a seat can cite any
- * line it reads with the message URI.
- */
-export function renderLine(message: Message): string {
-	return `#${message.seq} ${lineBody(message)}`;
-}
-
-function lineBody(message: Message): string {
-	if (message.kind === 'dismissed') {
-		return `· ${message.from ?? 'the host'} dismissed say #${message.message}`;
-	}
-	if (isReturned(message)) {
-		return `[returned → ${message.to}] ${message.text}${refsOf(message)}`;
-	}
-	if (isSpoken(message) || isSummary(message)) return spokenLine(message);
-	const by = message.from === undefined || message.from === message.subject;
-	return `· ${message.subject} ${message.kind}${by ? '' : ` by ${message.from}`}`;
-}
-
-/** A said or summary line. A scheduled say names the time it returns. */
-function spokenLine(message: Extract<Message, { kind: 'said' | 'summary' }>): string {
-	const returns =
-		message.kind === 'said' && message.after !== undefined
-			? ` (returns at ${new Date(Date.parse(message.at) + message.after * 1000).toISOString()})`
-			: '';
-	return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}${refsOf(message)}${returns}`;
-}
-
-function refsOf(message: { readonly refs?: readonly string[] }): string {
-	return message.refs === undefined ? '' : ` (refs: ${message.refs.join(' ')})`;
 }
 
 /** One block of the rendered record: a message on its own, or the run one summary stands for. */
@@ -471,17 +430,23 @@ function renderReserve(reserve: readonly { name: string; identity: string }[]): 
 	];
 }
 
-/** The open exchange, named by its opening message: a person's question, or a returned say. */
+/** The open exchange, named by its opening message: a person's question, or a post. */
 function openingLine({ context: { exchange, messages, name } }: ActivationView, seat: string) {
 	if (exchange === undefined) return '';
 	const uri = `The opening message's URI is ${messageUri(name, exchange.from)}. `;
 	const opening = messages.find((message) => message.seq === exchange.from);
+	if (opening?.kind === 'posted') return `${postOpening(opening, exchange.from, seat)}${uri}`;
 	const asker = opening?.from ?? exchange.person;
-	if (opening?.kind !== 'returned' && asker !== undefined)
-		return `${asker}'s exchange opened by message ${exchange.from} is active; the marked request is the current human direction. ${uri}`;
-	if (opening?.kind !== 'returned') return `Exchange ${exchange.from} is active. ${uri}`;
+	if (asker === undefined) return `Exchange ${exchange.from} is active. ${uri}`;
+	return `${asker}'s exchange opened by message ${exchange.from} is active; the marked request is the current human direction. ${uri}`;
+}
+
+/** A post of the host reports an event. A post that returns a say is the work of its seat. */
+function postOpening(opening: PostedMessage, from: Seq, seat: string): string {
+	if (opening.returns === undefined)
+		return `The host opened exchange ${from} with message ${opening.seq}. A post reports an event and gives no direction. `;
 	const whose = opening.to === seat ? 'you' : opening.to;
-	return `Exchange ${exchange.from} is active: message ${opening.seq} is a say ${whose} scheduled, and the room returned it. ${uri}`;
+	return `Exchange ${from} is active: message ${opening.seq} is a say ${whose} scheduled, and the room returned it. `;
 }
 
 /** What this activation is for, in the last line the model reads. */

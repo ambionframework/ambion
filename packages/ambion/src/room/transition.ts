@@ -49,6 +49,7 @@ type ProposedEvent<K extends Kind = Kind> = {
 type PresenceChange = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 type MessageCommand =
 	| { type: 'deliver'; from: string; to?: string; text: string; refs?: string[]; bytes?: number }
+	| { type: 'post'; to?: string; text: string; refs?: string[]; bytes?: number }
 	| { type: 'presence'; change: PresenceChange; route: boolean }
 	| { type: 'commit'; commit: CommitRequest; bytes?: number; schedule?: ScheduleLimits }
 	| { type: 'return'; message: Seq }
@@ -151,6 +152,7 @@ export function decide(
 ): RoomDecision<Kind> | ReconcileDecision {
 	switch (command.type) {
 		case 'deliver':
+		case 'post':
 			return deliver(state, command, now);
 		case 'presence':
 			return presence(state, command, now);
@@ -221,7 +223,7 @@ function message(
 
 /** The room takes at most `bytes` UTF-8 bytes of text in one message. Absent means no bound. */
 function oversizeRefusal(body: Body<Message>, bytes?: number): { refusal: Refusal } | undefined {
-	if (bytes === undefined || (body.kind !== 'said' && body.kind !== 'summary')) return undefined;
+	if (bytes === undefined || !('text' in body)) return undefined;
 	const size = new TextEncoder().encode(body.text).byteLength;
 	return size > bytes
 		? refused(
@@ -233,7 +235,7 @@ function oversizeRefusal(body: Body<Message>, bytes?: number): { refusal: Refusa
 
 /** The room refuses empty text first, then a ref the grammar refuses. */
 function contentRefusal(body: Body<Message>): { refusal: Refusal } | undefined {
-	if (body.kind !== 'said' && body.kind !== 'summary') return undefined;
+	if (!('text' in body)) return undefined;
 	if (body.text.trim() === '')
 		return refused('The message is empty. Say something, or end your turn instead.');
 	if (body.refs === undefined) return undefined;
@@ -245,36 +247,29 @@ function contentRefusal(body: Body<Message>): { refusal: Refusal } | undefined {
 const refsField = (refs: string[] | undefined): { refs?: string[] } =>
 	refs === undefined || refs.length === 0 ? {} : { refs };
 
+/**
+ * A person delivers through a visit, or the host posts as the system: to
+ * someone in the room who hears it, or to the room. A post has no author.
+ */
 function deliver(
 	state: RoomState,
-	command: Extract<MessageCommand, { type: 'deliver' }>,
+	command: Extract<MessageCommand, { type: 'deliver' | 'post' }>,
 	now: number,
 ): RoomDecision<'message'> {
-	const { from, to, text, refs } = command;
-	const author = state.people.get(from);
-	if (author?.presence !== 'present')
-		return refused(`'${from}' is not present in this room.`, 'not_present');
+	const { to, text, refs } = command;
+	const person = command.type === 'deliver' ? command.from : undefined;
+	if (person !== undefined && state.people.get(person)?.presence !== 'present')
+		return refused(`'${person}' is not present in this room.`, 'not_present');
+	const what = person === undefined ? 'a post' : 'a delivery';
 	const target = state.roster.find((seat) => seat.name === to);
-	if (to !== undefined && !state.people.has(to) && target === undefined) {
-		return refused(`Cannot direct a delivery to '${to}': not in this room.`, 'unknown_participant');
-	}
-	if (target?.attention === 'none') {
-		return refused(`Cannot direct a delivery to '${to}': it wakes for nothing said.`);
-	}
-	return message(
-		state,
-		{
-			kind: 'said',
-			at: iso(now),
-			from,
-			...(to === undefined ? {} : { to }),
-			text,
-			...refsField(refs),
-		},
-		now,
-		true,
-		command.bytes,
-	);
+	if (to !== undefined && !state.people.has(to) && target === undefined)
+		return refused(`Cannot direct ${what} to '${to}': not in this room.`, 'unknown_participant');
+	if (target?.attention === 'none')
+		return refused(`Cannot direct ${what} to '${to}': it wakes for nothing said.`);
+	const author =
+		person === undefined ? { kind: 'posted' as const } : { kind: 'said' as const, from: person };
+	const body = { ...author, at: iso(now), ...(to === undefined ? {} : { to }), text };
+	return message(state, { ...body, ...refsField(refs) }, now, true, command.bytes);
 }
 
 function presence(

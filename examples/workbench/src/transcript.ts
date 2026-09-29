@@ -1,4 +1,4 @@
-import type { Message } from '@ambionframework/ambion';
+import type { Message, PostedMessage } from '@ambionframework/ambion';
 import {
 	BoxRenderable,
 	bg,
@@ -63,7 +63,7 @@ const clock = (at: string | undefined): string => {
 };
 
 function bodyOf(message: Message): string {
-	if (message.kind === 'said' || message.kind === 'summary' || message.kind === 'returned')
+	if (message.kind === 'said' || message.kind === 'summary' || message.kind === 'posted')
 		return message.text ?? '';
 	return '';
 }
@@ -75,18 +75,23 @@ function returnsAt({ message, dismissed }: MessageBlock): string {
 	return `  returns ${clock(new Date(Date.parse(message.at) + message.after * 1000).toISOString())}`;
 }
 
+/** A post of the host reads `posted`, and a say that the room returned reads `returned`. */
+function postedHeader(message: PostedMessage, at: Chunk, fill?: string): Chunk[] {
+	const label = message.returns === undefined ? 'posted' : 'returned';
+	return [
+		paint(label, { color: palette.green, strong: true, fill }),
+		paint(` → ${message.to ?? 'the room'}`, { color: palette.muted, fill }),
+		at,
+	];
+}
+
 function headerOf(block: MessageBlock, fill?: string): Chunk[] {
 	const { message, role } = block;
 	const from = message.kind === 'said' || message.kind === 'summary' ? (message.from ?? '') : '';
 	const to = message.kind === 'said' || message.kind === 'summary' ? message.to : undefined;
 	const at = paint(`  ${clock(message.at)}`, { color: palette.dim, fill });
 	if (role === 'question') return [paint(from, { strong: true, fill }), at];
-	if (message.kind === 'returned')
-		return [
-			paint('returned', { color: palette.green, strong: true, fill }),
-			paint(` → ${message.to}`, { color: palette.muted, fill }),
-			at,
-		];
+	if (message.kind === 'posted') return postedHeader(message, at, fill);
 	const arrow = to ? paint(` → ${to}`, { color: palette.muted, fill }) : paint('', { fill });
 	if (role === 'summary')
 		return [
@@ -111,7 +116,7 @@ const railOf: Record<Role, string> = {
 	said: palette.line,
 	summary: palette.summary,
 	steer: palette.accent,
-	returned: palette.green,
+	posted: palette.green,
 };
 
 /** The conversation: the blocks of a room, with each discussion open or closed. */

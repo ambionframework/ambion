@@ -20,9 +20,9 @@ it("returns a scheduled say through the room object's alarm, into an exchange wi
 	expect(before.scheduled).toMatchObject([{ seat: 'checker' }]);
 	const find = (test: (message: Message) => boolean) => async () =>
 		(await stub.read()).messages.find(test);
-	const returned = await until(find((message) => message.kind === 'returned'));
-	expect(returned).toMatchObject({ to: 'checker', text: 'Check the pour log.' });
-	expect(returned).not.toHaveProperty('owner');
+	const returned = await until(find((message) => message.kind === 'posted'));
+	expect(returned).toMatchObject({ to: 'checker', returns: expect.any(Number) });
+	expect(returned).toMatchObject({ text: 'Check the pour log.' });
 	await until(
 		find((message) => message.kind === 'said' && message.text === 'The check came back.'),
 	);
@@ -49,4 +49,19 @@ it('lists the says that wait, and dismisses one through the room object', async 
 		kind: 'dismissed',
 		message: say?.seq,
 	});
+});
+
+it('posts through the room object into an exchange with no person, once for each key', async () => {
+	const name = `${NAME}-posted`;
+	const stub = roomOf(name);
+	await stub.start({ name, seats: { product: 'broadcast' }, agents: ['product'] });
+	const post = { to: 'product', text: 'lab: pour 7 is set.', key: 'pour-7' };
+	const posted = await stub.post(post);
+	expect(posted).not.toHaveProperty('person');
+	expect(await stub.post(post)).toEqual(posted);
+	const conversation = await stub.waitForClose(posted.from);
+	expect(conversation).toMatchObject([
+		{ kind: 'posted', to: 'product', text: 'lab: pour 7 is set.' },
+		{ kind: 'said', from: 'product' },
+	]);
 });

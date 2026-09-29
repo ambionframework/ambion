@@ -134,7 +134,7 @@ describe('exchange outcomes', () => {
 		const returned: Entry = {
 			kind: 'message',
 			seq: 4,
-			body: { kind: 'returned', at, to: 'worker', message: 3, text: 'Check the build.' },
+			body: { kind: 'posted', at, to: 'worker', returns: 3, text: 'Check the build.' },
 		};
 		const closeOf = (through: number, person?: string): Entry => ({
 			kind: 'close',
