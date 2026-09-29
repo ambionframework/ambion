@@ -1,8 +1,10 @@
 # Sensors
 
-> **Pending in 0.5.0.** The wire schemas and client types exist in
-> `@ambionframework/workspace`. The client, tools, and transport do not exist.
-> [The release plan](../planning/next.md) owns the implementation steps.
+> **Pending in 0.5.0.** SN1's wire schemas and client types exist in
+> `@ambionframework/workspace`. The current branch includes the implemented
+> and validated SN27 Workbench template. Workspace `connect` and `observe`,
+> port transport, and SN4's reusable conformance runner remain pending. See the
+> [release plan](../planning/next.md).
 
 **A forked Git repository defines a sensor server.** The agent customizes
 its acquisition and reduction code, validates it, and saves working
@@ -24,7 +26,7 @@ be stateful. The API prescribes no internal storage or checkpoint format.
 | -------------- | ------------------------------------------------------ | ---------------------------------------------------- |
 | Fork           | Use `repos` and `fork` on a sensor template            | An agent-owned repository and checkout               |
 | Customize      | Create a branch and edit acquisition or reduction code | A working implementation for the task                |
-| Validate       | Run the template tests and sensor conformance          | Evidence that the implementation works               |
+| Validate       | Run the template tests; SN4 conformance is pending     | Evidence from the template checks                    |
 | Save           | Commit and push the branch to the owned fork           | A saved version that can be run again                |
 | Start          | Run its launch command through `bash`; read `status`   | Acquisition runs under a process handle              |
 | Connect        | Call `connect` with that handle and port               | Qualified sensor names in the workspace              |
@@ -85,7 +87,8 @@ An agent needs no new sensor installation or configuration tool.
 
 - Runtime and dependency installation, with pinned dependencies where used.
 - The source files to customize and any required device permissions.
-- A validation command and how to run sensor API conformance.
+- A validation command. A reusable sensor API conformance runner is planned
+  as SN4 and is not available yet.
 - A foreground launch command, loopback binding, and readiness output.
 - The acquisition-data directory and its behavior on restart or rollback.
 - How to stop, save a branch, replace a process, and restore a prior version.
@@ -95,33 +98,49 @@ filtering, aggregation, and device integration in that code. Configuration
 that should travel with the version belongs in the repository. Secrets,
 acquired data, and mutable reducer state stay outside the checkout.
 
-The following example assumes `instruments` forked the template and
-cloned it at `~/sensor-server`. It edited, validated, committed, and pushed
-its working branch. Tool examples show proposed calls.
+The lifecycle begins by forking the template and making a branch. This
+example uses `instruments` as the agent name:
+
+```ts
+fork({ source: 'templates/sensor-server', name: 'bench-sensors', clone: '~/sensor-server' });
+bash({ command: 'cd ~/sensor-server && git switch -c sensing' });
+```
+
+After installing the exact package artifact described in the template
+README and customizing `server.mjs` or the fixtures, test and save the
+working branch:
 
 ```ts
 bash({
   command:
-    'cd ~/sensor-server && node server.mjs --host 127.0.0.1 --port 0 ' +
-    '--data-dir ~/sensor-data/bench --repository instruments/bench-sensors',
+    'cd ~/sensor-server && npm test && ' +
+    'git add -A && git commit -m "Customize sensor fixtures" && git push -u origin sensing',
+});
+
+bash({
+  command:
+    'cd ~/sensor-server && AMBION_SENSOR_REPOSITORY=instruments/bench-sensors ' +
+    'AMBION_SENSOR_DATA_DIR="$HOME/sensor-data/bench" PORT=0 node server.mjs',
   name: 'bench-sensors',
-  timeout: 86400,
   wait: 0,
+  timeout: 86400,
 });
 // Result: process bash-1a2b3c4d5e6f.
-
 status({ handle: 'bash-1a2b3c4d5e6f' });
-// Server output: Listening on 127.0.0.1:43127.
-
+// Suppose the output says READY http://127.0.0.1:43127.
 connect({ name: 'bench', process: 'bash-1a2b3c4d5e6f', port: 43127 });
-observe({ sensor: 'bench/dmm' });
+observe({ sensor: 'bench/room-temperature' });
 // Result: values, measurement times, export paths, and a snapshot ref.
 ```
 
-**Starting the process turns on acquisition.** `connect` discovers it;
-it does not start acquisition. A server can also acquire on an observe
-request when that suits its source. Cancelling the process stops its
-acquisition and children through the existing process group mechanism.
+The `fork` and process commands use existing workspace tools. `connect` and
+`observe` show the intended sensor workflow and remain pending in 0.5.0.
+
+**Starting this template starts fixture acquisition before readiness.** It
+stores its initial fixture data, then prints `READY` with the bound port.
+Each successful latest-read request appends an observation record. Its
+fixtures declare `spans: false`, so a span request returns 422. Cancelling
+the process stops the server through the existing process group mechanism.
 
 **Stop before editing the files used by a running version.** The template
 uses no hot reload. After a change, start a new process and reconnect.
@@ -144,9 +163,14 @@ later does not relabel an earlier observation as a clean run. Validate,
 commit, push, and restart to produce a saved working version.
 
 **Rollback selects code, not acquisition data.** Stop the current process,
-check out a previous commit, and run it again. The template states which
-versions can read its data directory. Use a separate directory when they
-cannot. Ambion performs no automatic state migration or data rollback.
+check out a previous commit, and run it again. This template writes its
+initial acquisition to `acquisition.json` once, appends successful requests
+to `observations.jsonl`, and stores frame bytes under `blobs/<sha256>`. The
+initial fixture remains preserved and the log is append-only; current code
+does not read old observation records as history. Git rollback leaves that
+directory intact. Use a separate directory or a backup if a later code
+version changes data that the older code reads. There is no library format
+migration or compatibility upgrade.
 
 **The server stays in the foreground of its workspace process.** Do not
 double-fork or start a second supervisor. `bash` already runs it in the
@@ -394,11 +418,11 @@ wire change raises `api`. The client refuses another version. Version 1
 describes this initial subset alone. Acquisition and reducer state are
 never fields of the protocol.
 
-**The client and schema live in `@ambionframework/workspace/sensors`.**
-The package also exports the generated `sensor-api.schema.json`.
-`sensorConformance` lives in `@ambionframework/workspace/conformance`.
-The client entry imports no test runner, device driver, or model library.
-Ambion adds no `@ambionframework/sensors` package in 0.5.0.
+**The wire schemas and client types live in
+`@ambionframework/workspace/sensors`.** The package also exports the
+generated `sensor-api.schema.json`. The SN4 `sensorConformance` runner is
+planned for `@ambionframework/workspace/conformance` and is not implemented
+yet. Ambion adds no `@ambionframework/sensors` package in 0.5.0.
 
 **The schema cannot compare span endpoints.** The JSON Schema checks request
 shape and timestamp form. `isValidObserveRequest` also requires `from < to`.
