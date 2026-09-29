@@ -132,6 +132,10 @@ it.each([
 	['@x', true],
 	[']', true],
 	['feature/pour', true],
+	['a\u2028/b', true],
+	['a\u2029/b', true],
+	['a.lock\u2028', true],
+	['a.lock\u2029', true],
 	['@', false],
 	['main/', false],
 	['/main', false],
@@ -139,6 +143,10 @@ it.each([
 	['main/.hidden', false],
 	['a.lock', false],
 	['a\n', false],
+	['a\u2028/b..c', false],
+	['a\u2029/b..c', false],
+	['a\u2028/.hidden', false],
+	['a\u2029/.hidden', false],
 ])('matches the Git ref-name rules for branch %j', (branch, valid) => {
 	const source = { ...index.source, branch };
 	expect(validRefName(branch)).toBe(valid);
