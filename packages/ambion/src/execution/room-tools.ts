@@ -73,7 +73,7 @@ export interface RoomToolOptions {
 	readonly spoke?: () => void;
 }
 
-/** A closing activation: its owner, everyone it addresses, and how many it has answered. */
+/** A closing activation: its person, everyone it addresses, and how many it has answered. */
 interface Closing {
 	readonly person: string;
 	readonly people: readonly string[];

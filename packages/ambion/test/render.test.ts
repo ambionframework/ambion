@@ -185,6 +185,13 @@ describe('the URIs a prompt states', () => {
 		expect(rendered.context).toContain(messageUri('site', 4));
 		expect(rendered.context).not.toContain('/exchange/');
 		expect(rendered.context).not.toContain('a say you scheduled');
+		// An exchange that names no person, with its opening out of the view, names only its start.
+		const bare = renderActivation(
+			{ ...view, context: { ...view.context, exchange: { from: 4 } } },
+			worker,
+		).context;
+		expect(bare).toContain('Exchange 4 is active.');
+		expect(bare).not.toContain('human direction');
 		// The kernel names no database: a seat with no database reads no database guidance.
 		expect(`${rendered.mechanism}${rendered.agent}`).not.toMatch(/database|sqlite/i);
 	});

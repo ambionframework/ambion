@@ -17,10 +17,11 @@
  * - **Quiescence closes it.** The room reconciles when nothing is live, and
  *   writes a close that names the range the exchange turned out to hold.
  * - **What lands while it is open steers it and changes nothing.** Not the
- *   owner, not the range, not who the answer belongs to.
+ *   opening message, and not the range. The first person who speaks becomes
+ *   the `person` of an exchange that had none.
  *
- * An exchange is a fold over the journal: the first person's question after the
- * last close is the open one. A room resumed mid-exchange continues it.
+ * An exchange is a fold over the journal: the first person's question or
+ * returned say after the last close is the open one. A room resumed mid-exchange continues it.
  *
  * The design contract is `docs/exchange.md`.
  */

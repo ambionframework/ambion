@@ -42,7 +42,9 @@ stored field.
    Work that reaches a terminal state is handled the same way.
 3. Ordinary messages landing while it is open steer eligible active seats and
    do not change its opening message or range. A later human question is
-   therefore part of the current work, not a second exchange.
+   therefore part of the current work, not a second exchange. The first
+   person who speaks becomes its `person` when it had none
+   ([§4](#4-who-directs-one-and-who-receives-its-result)).
 
 ```mermaid
 stateDiagram-v2
@@ -73,8 +75,9 @@ spoke owes no summary.
 
 **The room derives `person` from the record.** `exchangeAfter` reads the
 first spoken message of a person at or after `from`, and the close stamps
-it. A handle holds `person` as it was when the handle was made. The close
-and the exchange view hold the final value.
+it. A handle and the `exchange_opened` event hold `person` as it was when
+they were made, and no event follows when a person joins. The close and
+the exchange view hold the final value.
 
 ## 5. A fold over the journal
 

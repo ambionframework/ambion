@@ -476,8 +476,10 @@ function openingLine({ context: { exchange, messages, name } }: ActivationView, 
 	if (exchange === undefined) return '';
 	const uri = `The opening message's URI is ${messageUri(name, exchange.from)}. `;
 	const opening = messages.find((message) => message.seq === exchange.from);
-	if (opening?.kind !== 'returned')
-		return `${opening?.from ?? exchange.person}'s exchange opened by message ${exchange.from} is active; the marked request is the current human direction. ${uri}`;
+	const asker = opening?.from ?? exchange.person;
+	if (opening?.kind !== 'returned' && asker !== undefined)
+		return `${asker}'s exchange opened by message ${exchange.from} is active; the marked request is the current human direction. ${uri}`;
+	if (opening?.kind !== 'returned') return `Exchange ${exchange.from} is active. ${uri}`;
 	const whose = opening.to === seat ? 'you' : opening.to;
 	return `Exchange ${exchange.from} is active: message ${opening.seq} is a say ${whose} scheduled, and the room returned it. ${uri}`;
 }
