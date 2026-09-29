@@ -4,7 +4,6 @@ export default defineConfig({
 	entry: [
 		'src/index.ts',
 		'src/resource-entry.ts',
-		'src/sql-resource.ts',
 		'src/sqlite-entry.ts',
 		'src/git-entry.ts',
 		'src/s3-entry.ts',

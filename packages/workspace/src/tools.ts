@@ -2,7 +2,6 @@ import {
 	type AmbionTool,
 	defineTool,
 	loggedToolResult,
-	type ToolBundle,
 	type ToolContext,
 } from '@ambionframework/ambion';
 import type {
@@ -169,15 +168,11 @@ function bindTool(
 	});
 }
 
-/** Compose backend tools through the owner's whole-operation queue. */
+/** Bind Pi harness tools through the owner's whole-operation queue. */
 export function bindTools(
 	tools: readonly HarnessTool[],
 	use: WorkspaceResource<WorkspaceEnv>['use'],
-	guidance?: string,
 	audit?: AuditLog,
-): ToolBundle {
-	return Object.freeze({
-		tools: Object.freeze(tools.map((tool) => bindTool(tool, use, audit))),
-		...(guidance === undefined ? {} : { guidance }),
-	});
+): readonly AmbionTool[] {
+	return Object.freeze(tools.map((tool) => bindTool(tool, use, audit)));
 }

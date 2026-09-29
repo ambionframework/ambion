@@ -138,9 +138,9 @@ describe.skipIf(!hasGitTools)('the agent keys', () => {
 	it('refuses a key for a reserved name', async () => {
 		const { home, options } = await gitServer();
 		const backend = gitBackend(options);
-		for (const name of ['templates', 'template-sources']) {
-			await expect(backend.access.identityFor({ name })).rejects.toThrow(`'${name}' is reserved`);
-		}
+		await expect(backend.access.identityFor({ name: 'templates' })).rejects.toThrow(
+			`'templates' is reserved`,
+		);
 		await expect(stat(join(home, '.ssh', 'authorized_keys.ambion'))).rejects.toThrow();
 	});
 });

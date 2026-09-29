@@ -15,8 +15,7 @@ import { codexExecution } from '@ambionframework/codex';
 import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
 import { directoryBackend } from '@ambionframework/just-bash';
 import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
-import { openWorkspace, type RoomMirror } from '@ambionframework/workspace';
-import { openSqlResource } from '@ambionframework/workspace/sql';
+import { BACKGROUND_CONTEXT, openWorkspace, type RoomMirror } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { readApprovals } from './approvals.ts';
 import { team } from './definitions.ts';
@@ -30,7 +29,7 @@ import {
 import { openInstrument } from './instrument.ts';
 import { WORKSPACE } from './refs.ts';
 import { labRepositories } from './repositories.ts';
-import { instruments, labSchema, labWritable, scenarios, seedWorkspace } from './scenarios.ts';
+import { instruments, labAppendOnly, labSchema, scenarios, seedWorkspace } from './scenarios.ts';
 import { stepLog } from './steps.ts';
 import { unavailable } from './unavailable.ts';
 
@@ -155,31 +154,27 @@ export async function openRooms(
 		name: WORKSPACE,
 		backend: {
 			bash: directoryBackend(workspacePath),
-			sql: sqliteBackend(resolve(directory, 'shared.db')),
+			// The lab records live in their own file, apart from the journal database.
+			sql: sqliteBackend(resolve(directory, 'lab.db'), {
+				schema: labSchema,
+				appendOnly: labAppendOnly,
+				provenance: true,
+			}),
 			git: labRepositories(resolve(directory, 'git.db')),
 		},
 		audit: {},
 	});
+	const lab = workspace.sql;
+	if (lab === undefined) fail('The workspace has no lab database.');
 	try {
 		await seedWorkspace(workspacePath);
+		// The first call opens the lab database, runs its schema, and guards its tables.
+		await lab.use(workspace.host, (env) => env.run('SELECT 1', { maxRows: 0 }, BACKGROUND_CONTEXT));
 	} catch (error) {
 		await workspace.dispose().catch(() => {});
 		throw error;
 	}
-	// The lab records live in their own file, apart from the journal database.
-	let lab: ReturnType<typeof openSqlResource>;
-	try {
-		lab = openSqlResource({
-			name: 'lab',
-			location: resolve(directory, 'lab.db'),
-			schema: labSchema,
-			writable: labWritable,
-		});
-	} catch (error) {
-		await workspace.dispose().catch(() => {});
-		throw error;
-	}
-	const roomTeam = team(workspace, lab, openInstrument({ lab, instruments }));
+	const roomTeam = team(workspace, openInstrument({ lab, instruments }));
 	let workspaceTail = Promise.resolve();
 	function withWorkspace<T>(operation: () => Promise<T>): Promise<T> {
 		if (closing) fail('The host is stopping.');
@@ -331,7 +326,6 @@ export async function openRooms(
 		await closeEntries().catch(() => {});
 		await workspaceTail.catch(() => {});
 		await workspace.dispose().catch(() => {});
-		await lab.dispose().catch(() => {});
 		throw error;
 	}
 	return {
@@ -366,7 +360,6 @@ export async function openRooms(
 			await closeEntries();
 			await workspaceTail;
 			await workspace.dispose();
-			await lab.dispose();
 		},
 	};
 }

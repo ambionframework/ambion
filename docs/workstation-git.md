@@ -259,7 +259,7 @@ re="^(git-upload-pack|git-receive-pack) '/?([a-z][a-z0-9-]*)/([a-z0-9][a-z0-9._-
 [[ "${SSH_ORIGINAL_COMMAND:-}" =~ $re ]] || { echo 'ambion: refused' >&2; exit 1; }
 service="${BASH_REMATCH[1]}" namespace="${BASH_REMATCH[2]}" name="${BASH_REMATCH[3]}"
 repo="$HOME/repos/$namespace/$name.git"
-if [ "$namespace" = template-sources ] || ! [ -f "$repo/HEAD" ]; then
+if ! [ -f "$repo/HEAD" ]; then
   echo "ambion: $namespace/$name does not exist" >&2; exit 1
 fi
 if [ "$service" = git-receive-pack ] && [ "$namespace" != "$agent" ]; then
@@ -429,10 +429,10 @@ lock, the error holds the message of git.
 **An update does not change a fork.** A fork is a `git clone --bare` on
 the git account, so it holds its own objects and refs.
 
-**The backend keeps no `template-sources` repositories.** In
-`justGitBackend`, a template is a fork of its source so that a crash can
-resume. Here the rename gives the same property. The name
-`template-sources` stays reserved, and `serve` refuses it.
+**The backend keeps no repository of template sources.** In
+`justGitBackend`, a template is a fork of its source in
+`template-sources`, so that a crash can resume. Here the rename gives the
+same property, and the workstation does not know that namespace.
 
 ## The transport in the contract
 
@@ -643,18 +643,17 @@ removes the files of each agent's home.
 - The key generator: it generates again after a pair that `ssh2` cannot
   read, and it gives up after 64.
 
-**Four hooks of the harness answer the credential cases.** The suite
+**Three hooks of the harness answer the credential cases.** The suite
 calls each hook, and the package of each pair implements it.
-`issueCredentials` must reject for an agent with a reserved name, and it
+`issueCredentials` must reject for an agent named `templates`, and it
 runs in a loop beside forks. `writeCredential` then checks that the owner
 can write to its new fork.
 
-| Hook                | `in-process`, in just-bash      | `ssh`, in the workstation                                           |
-| ------------------- | ------------------------------- | ------------------------------------------------------------------- |
-| `sourcesCredential` | `credentialFor` gives none      | `git ls-remote` of `template-sources` fails in the shell            |
-| `issueCredentials`  | `credentialFor` of a template   | `identityFor`, then a `connect` that writes the key file            |
-| `writeCredential`   | `credentialFor` gives `write`   | A push to the new fork succeeds in the shell                        |
-| `probeCredential`   | A probe with the token gets 401 | `git ls-remote` with a copy of the old key gets `Permission denied` |
+| Hook               | `in-process`, in just-bash      | `ssh`, in the workstation                                           |
+| ------------------ | ------------------------------- | ------------------------------------------------------------------- |
+| `issueCredentials` | `credentialFor` of a template   | `identityFor`, then a `connect` that writes the key file            |
+| `writeCredential`  | `credentialFor` gives `write`   | A push to the new fork succeeds in the shell                        |
+| `probeCredential`  | A probe with the token gets 401 | `git ls-remote` with a copy of the old key gets `Permission denied` |
 
 **The expiry case needs a longer credential life on the workstation.**
 The suite runs the case at `shortestCredentialTtl`, and it skips the case
@@ -718,8 +717,8 @@ is about fifteen lines of `bash`.
 **A stand-in for `sshd` checked the repository mechanics before the
 code.** The tiers of [Tests](#tests) now hold each fact. With `git` 2.43,
 a script that sets `SSH_ORIGINAL_COMMAND` and runs `serve` served
-a clone and a push. It refused a peer's push, a push to a template,
-`template-sources`, a path with `..`, `git-upload-archive`, and a shell
+a clone and a push. It refused a peer's push, a push to a template, a
+path with `..`, `git-upload-archive`, and a shell
 command after a `;`. A bare clone hard-linked the object files, `mv -T`
 onto an existing fork failed with "Directory not empty", and the reflog
 named the pushing agent while the commit named another author.

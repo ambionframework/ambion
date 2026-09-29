@@ -4,8 +4,9 @@
  * `sshd` as root, and this tier runs only when `AMBION_WORKSTATION_SSHD`
  * names the file that `setup.sh` writes. It proves what only a real server
  * can: the rename and the group kill on OpenSSH, its status codes, the
- * channel limit, the spill file, the permissions between accounts, and the
- * adoption of a process that outlives the run of the host that started it.
+ * channel limit, the bounded output view, the permissions between
+ * accounts, and the adoption of a process that outlives the run of the host
+ * that started it.
  */
 
 import { parseSnapshotUri, type ToolContext } from '@ambionframework/ambion';
@@ -138,27 +139,17 @@ describe.skipIf(configPath === undefined)('integration tier', () => {
 		});
 	});
 
-	it('spills a large output to a file that only its account reads', async () => {
-		const spilled = await withEnv(backend, 'surveyor', async (env) => {
+	it('bounds a large output to the view, and names no spill file', async () => {
+		await withEnv(backend, 'surveyor', async (env) => {
 			const result = await env.exec(
 				'seq 1 200000',
-				{ capture: { limits: { maxBytes: 2_000, maxLines: 50 }, spill: true } },
+				{ capture: { limits: { maxBytes: 2_000, maxLines: 50 } } },
 				ctx,
 			);
 			if (!result.ok) throw result.error;
 			expect(result.value.truncation).toMatchObject({ truncated: true, totalLines: 200_000 });
-			const path = result.value.spillPath ?? '';
-			const whole = await env.readTextFile(path, ctx);
-			expect(whole.ok && whole.value.split('\n').length).toBe(200_001);
-			return path;
+			expect(result.value.spillPath).toBeUndefined();
 		});
-		await withEnv(backend, 'planner', async (env) => {
-			expect(await env.readTextFile(spilled, ctx)).toMatchObject({
-				ok: false,
-				error: { code: 'permission_denied' },
-			});
-		});
-		await withEnv(backend, 'surveyor', (env) => env.remove(spilled, undefined, ctx));
 	});
 
 	it('keeps each new file in the audit folder writable for every agent', async () => {

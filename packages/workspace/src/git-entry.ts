@@ -13,7 +13,6 @@ export {
 	namespaceOf,
 	readOnly,
 	revisionOf,
-	SOURCES,
 	TEMPLATES,
 	validName,
 	validRefName,

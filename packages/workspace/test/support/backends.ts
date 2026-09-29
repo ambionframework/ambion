@@ -1,6 +1,6 @@
 /**
  * The helpers the tests in this package share. `sqlBackends` are the two
- * SQLite harnesses, the harness type `sqlConformance` takes.
+ * SQLite harnesses that the SQL cases take (`sql-cases.ts`).
  *
  * The bash backends are the just-bash backends. This package's tests reach
  * their source and their test support by relative path, the way the core's
@@ -16,11 +16,11 @@ import { type MemoryBashBackend, memoryBackend } from '../../../just-bash/src/in
 import { tempDir } from '../../../just-bash/test/support/backends.ts';
 import { DEFAULT_AUDIT_LOG } from '../../src/audit.ts';
 import type { BashBackend } from '../../src/backend.ts';
-import type { SqlConformanceBackend } from '../../src/conformance.ts';
 import type { Workspace } from '../../src/index.ts';
 import { sqliteBackend } from '../../src/sqlite-entry.ts';
+import type { SqlHarness } from './sql-cases.ts';
 
-export const sqlBackends: readonly SqlConformanceBackend[] = [
+export const sqlBackends: readonly SqlHarness[] = [
 	{
 		name: 'sqlite in memory',
 		open: async () => ({ backend: sqliteBackend(':memory:'), dispose: async () => {} }),

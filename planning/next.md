@@ -205,8 +205,6 @@ Each step states the change to
 page it changes in the same commit.
 
 - [ ] **5.** The core owns the activation state. (C6)
-- [ ] **6.** The workspace keeps one SQL path and the ports that a
-      backend uses. (C8)
 - [ ] **7.** Cloudflare reuses the core, and one scripted room serves the
       conformance suites. (C9)
 - [ ] **8.** `wait` takes `handles` alone, beside `status` and `ps`. (C10)
@@ -260,32 +258,6 @@ each member that changes. **Evidence:** [Executors](../docs/executors.md)
 states the new `pass` contract, `executorConformance` tests it on the
 three executors, the prompt snapshot holds, and one live file passes on
 each harness.
-
-**C8. The workspace keeps one SQL path and the ports that a backend
-uses.**
-
-- **One SQL path.** `sql-resource.ts`, the `./sql` export, opens
-  `node:sqlite` beside `sqliteBackend`, with a second copy of the preview
-  and the table render. The workbench and
-  [Resources](../docs/resources.md) use it. Append-only and provenance
-  become options of `sqliteBackend`, the workbench moves to them, and
-  `sqlConformance` moves into the SQLite tests until a second SQL backend
-  exists.
-- **The spill file goes.** Only tests and conformance ask for
-  `capture.spill`, since every `bash` call writes its output to a
-  process file. One `runScript` helper replaces six copies of the
-  collect-and-check code, and one shell quote replaces three.
-- **`BashBackend.tools` goes.** No backend sets it.
-- **`openWorkspace` alone checks a git transport.** The second check in
-  `justGitAccess` and `sshAccess` goes. The G theme holds the
-  `openWorkspace` check.
-- **`template-sources` stays inside just-bash.** It is a storage detail
-  of `justGitBackend`, and today the shared name rules, the workstation,
-  and a `gitConformance` hook each know it.
-
-**Evidence:** `workspaceConformance` and `gitConformance` on each
-backend, the workbench tests on the new SQL options, and the export
-snapshot of `@ambionframework/workspace`.
 
 **C9. The host keeps one mechanism for each concern.**
 

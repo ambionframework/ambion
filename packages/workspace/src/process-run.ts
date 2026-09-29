@@ -9,15 +9,14 @@
  */
 
 import {
-	applyShellOutputUpdate,
 	BACKGROUND_CONTEXT,
 	type ExecutionError,
 	type Result,
 	type ShellExecResult,
-	type ShellOutputView,
 	withAbortSignal,
 } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
+import { runScript } from './execution-env.ts';
 import {
 	type ProcessSpec,
 	type ProcessStatus,
@@ -85,21 +84,18 @@ export async function runBash(
 	dir: string,
 	signal: AbortSignal,
 ): Promise<Run> {
-	let view: ShellOutputView | undefined;
 	try {
-		const result = await env.exec(
+		const result = await runScript(
+			env,
 			wrapped(spec.command, dir),
 			{
 				timeout: Math.min(spec.timeout + BACKEND_SLACK_SECONDS, MAX_TIMER_SECONDS),
 				capture: { limits: SHELL_OUTPUT },
-				onUpdate: (update) => {
-					view = applyShellOutputUpdate(view, update);
-				},
 			},
 			withAbortSignal(signal, BACKGROUND_CONTEXT),
 		);
-		if (view !== undefined && view.text !== '') {
-			await env.appendFile(`${dir}/out`, view.text, BACKGROUND_CONTEXT);
+		if (result.ok && result.value.output !== '') {
+			await env.appendFile(`${dir}/out`, result.value.output, BACKGROUND_CONTEXT);
 		}
 		return result;
 	} catch (thrown) {

@@ -58,10 +58,10 @@ export async function resolvesBranchTagAndHash({
 		const got = await git(workspace, REVIEWER, (env) => env.resolve('analyst/report', at));
 		check(got === expected, `resolve ${JSON.stringify(at)} gave ${got}, not ${expected}`);
 	}
-	for (const id of ['analyst/none', 'template-sources/weekly-report']) {
-		const got = await git(workspace, REVIEWER, (env) => env.resolve(id, { branch: 'main' }));
-		check(got === undefined, `resolve reached ${id}`);
-	}
+	const none = await git(workspace, REVIEWER, (env) =>
+		env.resolve('analyst/none', { branch: 'main' }),
+	);
+	check(none === undefined, 'resolve reached analyst/none');
 	const refused = await git(workspace, REVIEWER, (env) =>
 		env.resolve('analyst/report', { branch: 'main~1' }),
 	).then(
@@ -107,13 +107,8 @@ async function showsTheCommit(workspace: Workspace, head: string): Promise<void>
 			added.every((entry) => entry.change === 'added'),
 		`show of a root commit gave the changes ${JSON.stringify(root?.changes)}`,
 	);
-	for (const [id, hash] of [
-		['analyst/report', '0'.repeat(40)],
-		['template-sources/weekly-report', head],
-	] as const) {
-		const none = await git(workspace, REVIEWER, (env) => env.show(id, hash));
-		check(none === undefined, `show reached ${id} ${hash}`);
-	}
+	const none = await git(workspace, REVIEWER, (env) => env.show('analyst/report', '0'.repeat(40)));
+	check(none === undefined, 'show reached a commit that the server does not hold');
 	const read = await workspace.readCommit(commitUri(workspace.name, 'analyst/report', head));
 	check(read.hash === head, 'readCommit did not give the commit of its ref');
 }

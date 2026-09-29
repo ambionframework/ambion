@@ -202,7 +202,8 @@ interface BashBackend {
 `transport`, `openWorkspace` throws. Neither backend has a name, so the
 error names the `transport` and the `server` of the git backend, and the
 transports that the bash backend carries. A bash backend with no
-`gitTransports` carries none.
+`gitTransports` carries none. This check is the only check: a bash
+backend reads the access at `connect` with no check of its own.
 
 **`Workspace.git` is the owner of the git backend, for host code.** It is
 the same as `Workspace.sql`.
@@ -228,22 +229,24 @@ the same as `Workspace.sql`.
 **A repository ID has two parts: a namespace and a name.** Agents and the
 host use IDs. Each implementation maps an ID to a URL of its own.
 
-| Namespace          | Holds                       | Who can push         |
-| ------------------ | --------------------------- | -------------------- |
-| `templates`        | The read-only templates     | Nobody               |
-| `<agent>`          | The forks of that agent     | That agent           |
-| `template-sources` | The source of each template | The backend, in code |
+| Namespace   | Holds                   | Who can push |
+| ----------- | ----------------------- | ------------ |
+| `templates` | The read-only templates | Nobody       |
+| `<agent>`   | The forks of that agent | That agent   |
 
 **A name has 1 to 64 characters.** It starts with a lowercase letter or a
 digit, and the rest are lowercase letters, digits, `.`, `_`, and `-`. An
 agent name matches `^[a-z][a-z0-9-]*$`, so it holds no `.`.
 
-**`templates` and `template-sources` are reserved names.** The backend
-refuses an agent with either name, in `connect` and in each credential
-call.
+**`templates` is a reserved name.** Every git backend refuses an agent
+with that name, in `connect` and in each credential call. A backend can
+reserve more names for its own storage.
 
-**No agent reaches `template-sources`.** `repos` does not list it, and no
-agent holds a credential for it. An agent forks a template.
+**`justGitBackend` keeps the source of each template in
+`template-sources`.** The name is a storage detail of that backend. It
+refuses an agent named `template-sources`, `repos` does not list the
+namespace, and no agent holds a credential for it. An agent forks a
+template.
 
 ## Templates
 
@@ -543,7 +546,7 @@ the backend its secret. An agent holds this set:
 
 **An agent holds one credential for each repository.** Its own fork gets
 the `write` credential alone, which also reads. No agent holds a
-credential for `template-sources`.
+credential for `template-sources` of `justGitBackend`.
 
 **The one-pusher rule rests on the set.** No agent holds a write
 credential for a repository outside its namespace. `justGitBackend` also
@@ -802,36 +805,33 @@ the agent's name.
 ## Tests
 
 **`gitConformance(harness)` holds the cases of a `GitBackend`.** It lives
-in `@ambionframework/workspace/conformance`, beside `sqlConformance`. A
-harness opens a store: one bash backend, and a factory that opens a git
-backend over the same repositories each time it is called. The suite
-knows no transport. Four cases ask a hook of the harness for a
-credential fact, and each hook takes the backend and the workspace that
-the case opened.
+in `@ambionframework/workspace/conformance`. A harness opens a store: one
+bash backend, and a factory that opens a git backend over the same
+repositories each time it is called. The suite knows no transport. Three
+cases ask a hook of the harness for a credential fact, and each hook takes
+the backend and the workspace that the case opened.
 
 - `list` shows each template with its description, and each fork with its
   source, its default branch, and its URL. `list` with a namespace shows
   that namespace alone.
-- `list` does not show `template-sources`, and no agent holds a credential
-  for it (the hook `sourcesCredential`).
 - A clone of a fork has the fork as `origin`.
 - A second `fork` with a taken name is `name_taken`, and it creates
   nothing. A `fork` of a missing source is `no_source`.
 - A fork of a fork names its direct source.
-- An agent named `templates` or `template-sources` is refused, and it gets
-  no credential (the hook `issueCredentials`).
+- An agent named `templates` is refused, and it gets no credential (the
+  hook `issueCredentials`).
 - The owner pushes a branch, and a peer reads it.
 - `resolve` gives the full hash for a branch, an annotated tag, a
   lightweight tag, a short hash, and a full hash. A short hash gives its
   commit when a branch has the same name. It gives nothing for a missing
-  name, a prefix of two blobs, a missing repository, and
-  `template-sources`, and it refuses `main~1` as a branch. `commitRef`
+  name, a prefix of two blobs, and a missing repository, and it refuses
+  `main~1` as a branch. `commitRef`
   gives the ref of a tag.
 - `show` gives the message as git stores it, the author, the parent, and
   the changed files of a pushed commit. The root commit of `templates/weekly-report` lists
   every file as added. A merge commit names both parents, and lists its
-  changes against the first. `show` gives nothing for a missing commit and
-  for `template-sources`. `readCommit` gives the same commit from its ref.
+  changes against the first. `show` gives nothing for a missing commit.
+  `readCommit` gives the same commit from its ref.
 - A push to a template and a push to another agent's fork are refused,
   and the owner's push is accepted. The case checks the exit status of
   `git push`. The text of a refusal differs from one backend to the
@@ -854,7 +854,9 @@ the case opened.
 backends.** Its own tests add:
 
 - the tokens, and a `tokenTtl` that is not finite;
-- an access of another transport at `connect`;
+- `template-sources`: no agent lists, gets, resolves, shows, or forks a
+  repository in it, no agent holds a credential for it, and an agent with
+  that name is refused;
 - a registration that stopped after the commit to `template-sources`;
 - an update that stopped after the commit to `template-sources`;
 - a restart over one git file;

@@ -41,7 +41,7 @@ function serveScript(root: string): string {
 		`[[ "\${SSH_ORIGINAL_COMMAND:-}" =~ $re ]] || { echo 'ambion: refused' >&2; exit 1; }`,
 		`service="\${BASH_REMATCH[1]}" namespace="\${BASH_REMATCH[2]}" name="\${BASH_REMATCH[3]}"`,
 		`repo="$HOME/${root}/$namespace/$name.git"`,
-		'if [ "$namespace" = template-sources ] || ! [ -f "$repo/HEAD" ]; then',
+		'if ! [ -f "$repo/HEAD" ]; then',
 		'  echo "ambion: $namespace/$name does not exist" >&2; exit 1',
 		'fi',
 		'if [ "$service" = git-receive-pack ] && [ "$namespace" != "$agent" ]; then',

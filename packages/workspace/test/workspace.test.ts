@@ -29,7 +29,7 @@ import { openWorkspace } from '../src/index.ts';
 import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
 import { processToolGuidance } from '../src/process-tools.ts';
 import { snapshotGuidance } from '../src/snapshots.ts';
-import { callAs, toolOf, wrapped } from './support/backends.ts';
+import { wrapped } from './support/backends.ts';
 import { agent, run, toolResults } from './support/room.ts';
 
 const ROOM_MIRROR_GUIDANCE = roomMirrorGuidance('/rooms');
@@ -156,10 +156,10 @@ describe('the built-in tools', () => {
 });
 
 describe('the workspace bundle', () => {
-	it('gives a backend with no tools of its own the three file tools and the five process tools, and the /rooms guidance', async () => {
+	it('gives the file tools, the process tools, and the snapshot tools, and the /rooms guidance', async () => {
 		const workspace = openWorkspace({
 			name: name('empty-tools'),
-			backend: { bash: wrapped(() => ({ tools: [] })) },
+			backend: { bash: wrapped() },
 		});
 		expect(workspace.tools()).toBe(workspace.tools());
 		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual([
@@ -181,45 +181,14 @@ describe('the workspace bundle', () => {
 		await workspace.dispose();
 	});
 
-	it('preserves backend-owned tools and guidance through the ordinary bundle', async () => {
-		const inspect = {
-			name: 'inspect',
-			label: 'Inspect',
-			description: 'Inspect the custom backend.',
-			parameters: Type.Object({}),
-			execute: async (
-				_toolCallId: string,
-				_params: unknown,
-				_onUpdate: unknown,
-				toolContext: { env: ExecutionEnv },
-			) => ({ content: [{ type: 'text' as const, text: toolContext.env.cwd }], details: {} }),
-		};
+	it('adds the guidance of the bash backend to the bundle', async () => {
 		const workspace = openWorkspace({
-			name: name('custom-tools'),
-			backend: {
-				bash: wrapped(() => ({ tools: [inspect], guidance: 'Custom backend guidance.' })),
-			},
+			name: name('custom-guidance'),
+			backend: { bash: wrapped(() => ({ guidance: 'Custom backend guidance.' })) },
 		});
-		const bundle = workspace.tools();
-		expect(bundle.guidance).toBe(
+		expect(workspace.tools().guidance).toBe(
 			`${defaultToolGuidance()}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}\n\nCustom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`,
 		);
-		expect(bundle.tools.map((tool) => tool.name)).toEqual([
-			'read',
-			'write',
-			'edit',
-			'bash',
-			'ps',
-			'status',
-			'wait',
-			'cancel',
-			'snapshot',
-			'restore',
-			'inspect',
-		]);
-		const result = await toolOf(workspace, 'inspect').invoke({}, callAs('alpha'));
-		if (typeof result === 'string') throw new Error('The backend must return a structured result.');
-		expect(result.content[0]).toMatchObject({ type: 'text', text: '/home/alpha' });
 		await workspace.dispose();
 	});
 });

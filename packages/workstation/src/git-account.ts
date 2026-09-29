@@ -14,11 +14,8 @@
  * `idleTimeout` with no operation. The next operation opens a new one.
  */
 
-import {
-	BACKGROUND_CONTEXT,
-	type ShellOutputUpdate,
-	withAbortSignal,
-} from '@earendil-works/pi-agent-core';
+import { runScript } from '@ambionframework/workspace';
+import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import { type ServerAddress, Session, type WorkstationCredential } from './session.ts';
 import { SshEnv } from './ssh-env.ts';
 
@@ -112,18 +109,16 @@ export async function runIn(
 	signal?: AbortSignal,
 	label = 'A script of the git account',
 ): Promise<string> {
-	let text = '';
-	const onUpdate = (update: ShellOutputUpdate) => {
-		if (update.kind === 'replace') text = update.output.text;
-	};
 	const context =
 		signal === undefined ? BACKGROUND_CONTEXT : withAbortSignal(signal, BACKGROUND_CONTEXT);
-	const ran = await env.exec(
+	const ran = await runScript(
+		env,
 		script,
-		{ env: variables, timeout: SCRIPT_TIMEOUT_SECONDS, onUpdate },
+		{ env: variables, timeout: SCRIPT_TIMEOUT_SECONDS },
 		context,
 	);
 	if (!ran.ok) throw ran.error;
+	const text = ran.value.output;
 	if (ran.value.truncation.truncated) {
 		throw new Error(`${label} gave an output that is too long.`);
 	}

@@ -203,8 +203,8 @@ function gitPart(
 
 /**
  * Bind the three file tools, the five process tools, `snapshot` and `restore`, `sql`
- * when the workspace has a SQL backend, `repos` and `fork` when it has a
- * git backend, and the bash backend's own tools. The guidance names the
+ * when the workspace has a SQL backend, and `repos` and `fork` when it has a
+ * git backend. The guidance names the
  * tools, then the process note, the snapshot note, the SQL notes, the git
  * note, the bash backend's note, the audit note when one is set, and the
  * rooms note, in that order.
@@ -216,14 +216,13 @@ function workspaceTools(
 	backends: { sql?: SqlBinding; git?: GitBinding; processes: ProcessTable; store: SnapshotStore },
 	audit: AuditLog | undefined,
 ): ToolBundle {
-	const { layout, tools: own = [], guidance } = bash;
-	const files = bindTools(createFileTools(), shell.use, undefined, audit).tools;
+	const { layout, guidance } = bash;
+	const files = bindTools(createFileTools(), shell.use, audit);
 	const processes = createProcessTools({ shell: shell.use, processes: backends.processes, audit });
 	const snapshots = [
 		createSnapshotTool(backends.store, audit),
 		createRestoreTool(backends.store, audit),
 	];
-	const extra = bindTools(own, shell.use, undefined, audit).tools;
 	const sql = sqlPart(backends.sql, shell, audit);
 	const git = gitPart(backends.git, shell, audit);
 	const notes = [
@@ -237,14 +236,7 @@ function workspaceTools(
 		roomMirrorGuidance(layout.rooms),
 	];
 	return Object.freeze({
-		tools: Object.freeze([
-			...files,
-			...processes,
-			...snapshots,
-			...sql.tools,
-			...git.tools,
-			...extra,
-		]),
+		tools: Object.freeze([...files, ...processes, ...snapshots, ...sql.tools, ...git.tools]),
 		guidance: joinNotes(notes),
 		remind: (seat: ReminderSeat, signal: AbortSignal) => backends.processes.remind(seat, signal),
 	});

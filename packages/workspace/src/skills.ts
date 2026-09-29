@@ -15,6 +15,7 @@ import {
 	formatSkillsForSystemPrompt,
 } from '@earendil-works/pi-agent-core';
 import { parse } from 'yaml';
+import { shellQuote } from './execution-env.ts';
 import { hashesOf, readSource, type SourceFiles, type SourceInput } from './sources.ts';
 
 /** The folder in each agent's home that holds the copy of its skills. */
@@ -200,9 +201,6 @@ function must<T>(result: { ok: true; value: T } | { ok: false; error: Error }): 
 	return result.value;
 }
 
-/** A path in single quotes for the shell. */
-const quoted = (path: string) => `'${path.replaceAll("'", `'\\''`)}'`;
-
 /** Make each script of `set` executable. The paths are absolute, so none starts with a hyphen. */
 async function markScripts(
 	env: ExecutionEnv,
@@ -211,7 +209,7 @@ async function markScripts(
 	context: Context,
 ): Promise<void> {
 	if (set.scripts.length === 0) return;
-	const paths = set.scripts.map((path) => quoted(`${root}/${path}`)).join(' ');
+	const paths = set.scripts.map((path) => shellQuote(`${root}/${path}`)).join(' ');
 	const ran = must(await env.exec(`chmod +x ${paths}`, undefined, context));
 	if (ran.exitCode !== 0)
 		throw new Error(`chmod of the skill scripts exited with code ${ran.exitCode}.`);
