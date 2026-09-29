@@ -23,9 +23,10 @@ and its acceptance. [The backlog](backlog.md) holds everything else.
 
 ## Status
 
-**0.4.0 shipped. SN1, SN27, and SN32 are implemented and validated on this
-branch.** The wire schemas, client types, validated template, and workstation
-port transport exist. SN3, SN4, and the remaining 0.5.0 steps are pending.
+**0.4.0 shipped. SN1, SN3, SN27, and SN32 are implemented and validated on
+this branch.** The wire schemas, HTTP client, validated template, and
+workstation port transport exist. SN4 and the remaining 0.5.0 steps are
+pending.
 This scope incorporates the owner's response to the review of `origin/main`
 `0f9ef1e27eed0f27c3ec47aef09071d54b044ff8` on 2026-09-29.
 [The review disposition](review-0.5.0.md) records the changed decisions.
@@ -175,14 +176,16 @@ Bad names, source metadata, digests, times, sample periods, and part
 shapes fail. The generated schema matches the published file. Deferred features add no
 required type, endpoint, or fixture.
 
-**SN3. The client.** Implement index, observe, and file reads. Resolve
-paths against the supplied private transport root. Verify `api` and file
-digests. Propagate cancellation and failures. Do not replay an observe
-automatically. The entry imports no device or model implementation.
+**SN3. The client.** `createSensorClient(root)` implements index, observe,
+and file reads. It preserves transport-root path prefixes, validates version
+1 request and response bodies, verifies file digests, propagates cancellation
+and transport failures, and does not follow redirects or retry requests. The
+entry imports no device or model implementation.
 
-**Evidence:** the three operations work over real HTTP. Wrong versions,
-invalid bodies, missing files, digest mismatch, disconnects, and aborts
-produce explicit failures. The client preserves timestamps exactly.
+**Evidence:** focused real HTTP tests exercise the three operations, the
+SN27 server template, wrong versions and malformed bodies, missing files,
+digest mismatch, disconnects, aborts, prefix resolution, and no observe
+replay. Measurement timestamps and returned bytes are checked exactly.
 
 **SN4. Conformance.** Export `sensorConformance` from the existing
 conformance entry. Supply a small fixture contract for numeric, text,
