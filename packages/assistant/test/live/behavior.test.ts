@@ -99,6 +99,46 @@ live('the default assistant, driven by the simulator', () => {
 	);
 
 	it.each([1, 2, 3])(
+		'works a request after the person who asked leaves (sample %i)',
+		async (sample) => {
+			const name = `leaves-${sample}`;
+			const evidence = track(name);
+			// The first wake of the assistant waits until priya leaves.
+			const room = await openRoom({
+				attention: 'named',
+				leaves: priya,
+				specialist: answers(() => STOCK),
+			});
+			const run = await simulate(room, {
+				person: priya,
+				actor: scriptedActor([
+					'How many units of SKU A can the warehouse dispatch today? Use current stock evidence.',
+				]),
+				exchanges: 1,
+				exchangeMs: EXCHANGE_MS,
+			});
+			evidence.run = run;
+			expectGradable(run);
+			const [exchange] = run.exchanges;
+			// priya left before the first activation, and the assistant routes as for a person who stays.
+			expect(exchange?.discussion.map((message) => message.kind).slice(0, 2)).toEqual([
+				'said',
+				'left',
+			]);
+			const speech = saidBy(exchange, 'assistant');
+			expect(speech, JSON.stringify(exchange?.discussion)).toHaveLength(1);
+			expect(speech[0]).toMatchObject({ to: 'inventory' });
+			expect(saidBy(exchange, 'inventory')).not.toEqual([]);
+			expect(exchange?.summary).toMatchObject({ to: 'priya', text: expect.stringMatching(EIGHT) });
+			const verdict = await judge(run, [
+				'The summary to priya does not say that the request went unanswered because she left.',
+			]);
+			evidence.verdict = verdict;
+			expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
+		},
+	);
+
+	it.each([1, 2, 3])(
 		'leaves a superseded constraint at broadcast to the summary (sample %i)',
 		async (sample) => {
 			const name = `corrects-${sample}`;
