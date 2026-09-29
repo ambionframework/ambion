@@ -4,7 +4,13 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 const root = join(import.meta.dirname, '..');
-const pages = ['CLAUDE.md'];
+const pages = [
+	'CLAUDE.md',
+	'docs/sensors.md',
+	'planning/next.md',
+	'planning/backlog.md',
+	'planning/review-0.5.0.md',
+];
 
 const slug = (heading) =>
 	heading
@@ -83,7 +89,7 @@ const phasesOf = (scope) => {
 };
 
 const unknownItems = (body, itemIds) =>
-	[...body.matchAll(/\b([A-Z]\d+)\b(?=[,)])/g)]
+	[...body.matchAll(/\b([A-Z]+\d+)\b(?=[,)])/g)]
 		.filter(([, id]) => !itemIds.has(id))
 		.map(([, id]) => `item ${id} is not in the items`);
 
@@ -112,7 +118,7 @@ test('a plan step names only open steps and items that the plan holds', () => {
 	const text = readFileSync(join(root, 'planning/next.md'), 'utf8');
 	const [scope, items = ''] = text.split('## The items');
 	const phases = phasesOf(scope);
-	const itemIds = new Set([...items.matchAll(/^\*\*([A-Z]\d+)\./gm)].map((m) => m[1]));
+	const itemIds = new Set([...items.matchAll(/^\*\*([A-Z]+\d+)\./gm)].map((m) => m[1]));
 	const problems = [...phases].flatMap(([phase, steps]) =>
 		[...steps.keys()].flatMap((n) => problemsOfStep(phases, phase, n, itemIds)),
 	);
@@ -122,12 +128,12 @@ test('a plan step names only open steps and items that the plan holds', () => {
 test('the plan checks report a bad item, a bad Needs, and a bad step reference', () => {
 	const steps = new Map([
 		['1', 'Done (C1). Needs 1.'],
-		['2', 'See phase 9 step 9 and Z9, more.'],
+		['2', 'See phase 9 step 9 and SN99, more.'],
 	]);
 	const phases = new Map([['1', steps]]);
 	const found = problemsOfStep(phases, '1', '2', new Set(['C1']));
 	assert.deepEqual(found, [
-		'phase 1 step 2: item Z9 is not in the items',
+		'phase 1 step 2: item SN99 is not in the items',
 		'phase 1 step 2: phase 9 has no step 9',
 	]);
 	assert.deepEqual(problemsOfStep(phases, '1', '1', new Set(['C1'])), [
@@ -142,7 +148,7 @@ test('room.md documents the room-level context cap', () => {
 });
 
 const badNextCites = (text, itemIds) =>
-	[...text.replace(/\s+/g, ' ').matchAll(/\b([A-Z]\d+)(?:'s)? in `next\.md`/g)]
+	[...text.replace(/\s+/g, ' ').matchAll(/\b([A-Z]+\d+)(?:'s)? in `next\.md`/g)]
 		.filter(([, id]) => !itemIds.has(id))
 		.map(([, id]) => id);
 
@@ -154,7 +160,7 @@ test('the next.md citation check finds a pruned item, also in the possessive', (
 
 test('a page that cites an item "in `next.md`" cites an item that the plan holds', () => {
 	const plan = readFileSync(join(root, 'planning/next.md'), 'utf8');
-	const itemIds = new Set([...plan.matchAll(/^\*\*([A-Z]\d+)\./gm)].map((m) => m[1]));
+	const itemIds = new Set([...plan.matchAll(/^\*\*([A-Z]+\d+)\./gm)].map((m) => m[1]));
 	for (const dir of ['docs', 'planning']) {
 		for (const name of readdirSync(join(root, dir)).filter((n) => n.endsWith('.md'))) {
 			const text = readFileSync(join(root, dir, name), 'utf8');

@@ -1,5 +1,10 @@
 # Trust
 
+> **Pending in 0.5.0:** [Sensors](sensors.md) lets agents run supplied
+> server code and connect its workstation port through SSH. The initial
+> deployment trusts that workstation and code. Its device access follows
+> the process account; a read-only HTTP API does not restrict its shell.
+
 The kernel is a record with rules. It governs who may write what to the
 journal. It does not sandbox model behavior or external effects. Two tables
 state the boundary: what one seat cannot do to the record, and what the

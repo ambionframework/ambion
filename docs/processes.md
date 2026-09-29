@@ -1,5 +1,9 @@
 # Processes
 
+> **Pending in 0.5.0:** [Sensor servers](sensors.md#run-a-server-from-git)
+> use these existing process tools. The proposed `connect` tool attaches
+> a server port and changes no process timeout or disposal rule.
+
 **Background processes are part of 0.3.0.** In 0.2.0, `bash` holds the
 call until its command ends, and a workspace has four tools.
 
