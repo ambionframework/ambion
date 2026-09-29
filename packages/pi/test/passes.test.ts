@@ -6,20 +6,16 @@
  * request waits for the record.
  */
 import type { Message, Step } from '@ambionframework/ambion';
-import type {
-	ActivationView,
-	CommitRequest,
-	CommitResult,
-	ExecutorSession,
-} from '@ambionframework/ambion/hosting';
+import type { ActivationView, CommitRequest, CommitResult } from '@ambionframework/ambion/hosting';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { type Context, fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
+import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { createPiExecutor, stubModel } from '../src/index.ts';
 import { scriptContext } from '../src/script-context.ts';
 import { callTool, contextText, quiet, type Script, scripted } from '../src/testing.ts';
-import { roomThatCommits, unusedRoom } from './support/activation.ts';
+import { roomThatCommits, stateOf, unusedRoom } from './support/activation.ts';
 
 const said = (seq: number, text: string): Message => ({
 	kind: 'said',
@@ -61,25 +57,16 @@ function activation(
 		});
 		return base(model, context, options);
 	};
-	const executor = createPiExecutor({
-		definition: scriptedAgent('worker'),
-		model: stubModel,
-		stream,
-		now: () => 0,
-	});
+	const definition = scriptedAgent('worker');
+	const executor = createPiExecutor({ definition, model: stubModel, stream, now: () => 0 });
 	const commits: CommitRequest[] = [];
-	const session: ExecutorSession = executor.open({
-		id: 'message:1:worker:1',
+	const session = stateOf(executor, definition, {
 		room: answer === undefined ? unusedRoom : roomThatCommits(commits, answer),
-		emit: () => {},
 		trace: {
-			startPass: () => {},
 			record: (step) => {
 				steps.push(step);
 				watch(step);
 			},
-			usage: () => undefined,
-			close: async () => {},
 		},
 	});
 	const steers = () => steps.filter((step) => step.type === 'steer');
@@ -158,8 +145,9 @@ describe('the Pi executor across the passes of one activation', () => {
 	it('takes a line that lands before the lane runs into the prompt, and a line the view holds as read', async () => {
 		const ready = deferred();
 		const resolving = deferred();
+		const definition = scriptedAgent('worker');
 		const executor = createPiExecutor({
-			definition: scriptedAgent('worker'),
+			definition,
 			model: async (id, agent) => {
 				resolving.resolve();
 				await ready.promise;
@@ -169,15 +157,9 @@ describe('the Pi executor across the passes of one activation', () => {
 			now: () => 0,
 		});
 		const steps: Step[] = [];
-		const session = executor.open({
-			id: 'message:1:worker:1',
-			room: unusedRoom,
-			emit: () => {},
+		const session = stateOf(executor, definition, {
 			trace: {
-				startPass: () => {},
 				record: (step) => void steps.push(step),
-				usage: () => undefined,
-				close: async () => {},
 			},
 		});
 		const running = session.pass({ kind: 'view', view: viewOf(both, 2) });
@@ -195,7 +177,7 @@ describe('the Pi executor across the passes of one activation', () => {
 
 	it('takes a line that lands as the last answer ends into one more request', async () => {
 		let landed = false;
-		let session: ExecutorSession | undefined;
+		let session: ActivationState | undefined;
 		const run = activation(
 			() => quiet('Done.'),
 			undefined,
@@ -224,7 +206,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		const running = session.pass({ kind: 'view', view: viewOf(first, 1) });
 		await started.promise;
 		session.steer?.(1, 2, '[priya] And the pump?');
-		session.abort();
+		session.cancel();
 		expect(await running).toEqual({ failed: false });
 		expect(steers()).toEqual([{ type: 'steer', seq: 2, consumed: false }]);
 		session.steer?.(2, 3, '[priya] Late.');
@@ -236,8 +218,9 @@ describe('the Pi executor across the passes of one activation', () => {
 		const ready = deferred();
 		const resolving = deferred();
 		const steps: Step[] = [];
-		const session = createPiExecutor({
-			definition: scriptedAgent('worker'),
+		const definition = scriptedAgent('worker');
+		const executor = createPiExecutor({
+			definition,
 			model: async (id, agent) => {
 				resolving.resolve();
 				await ready.promise;
@@ -245,21 +228,16 @@ describe('the Pi executor across the passes of one activation', () => {
 			},
 			stream: scripted(() => quiet()),
 			now: () => 0,
-		}).open({
-			id: 'message:1:worker:1',
-			room: unusedRoom,
-			emit: () => {},
+		});
+		const session = stateOf(executor, definition, {
 			trace: {
-				startPass: () => {},
 				record: (step) => void steps.push(step),
-				usage: () => undefined,
-				close: async () => {},
 			},
 		});
 		const running = session.pass({ kind: 'view', view: viewOf(first, 1) });
 		await resolving.promise;
 		session.steer?.(1, 2, '[priya] And the pump?');
-		session.abort();
+		session.cancel();
 		ready.resolve();
 		expect(await running).toEqual({ failed: false });
 		expect(steps).toEqual([{ type: 'steer', seq: 2, consumed: false }]);

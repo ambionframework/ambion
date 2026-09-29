@@ -42,8 +42,8 @@ import {
 	privateDirectory,
 } from '../src/sessions.ts';
 import { contextText, quiet, type Script, scripted, speak } from '../src/testing.ts';
+import { stateOf } from './support/activation.ts';
 import { tempDir } from './support/temp.ts';
-import { noTrace } from './support/trace.ts';
 
 const said = (seq: number, text: string): Message => ({
 	kind: 'said',
@@ -146,13 +146,12 @@ function seatOn(
 	) => {
 		const answer = await room.view(id);
 		if (!('view' in answer)) throw new Error('The room answered stale.');
-		const session = executor.open({
+		const session = stateOf(executor, definition, {
 			id,
 			room,
 			emit: (event) => {
 				if (event.type === 'error') errors.push(event.error.message);
 			},
-			trace: noTrace,
 		});
 		const view = {
 			...answer.view,
@@ -164,7 +163,7 @@ function seatOn(
 		session.close?.();
 		return recorded;
 	};
-	return { seen, errors, run, executor };
+	return { seen, errors, run, executor, definition };
 }
 
 const stores: [string, () => Promise<PiSessions>][] = [
@@ -259,14 +258,12 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 	});
 
 	it('records no session for an activation that ran no pass', async () => {
-		const { executor } = seatOn(new TwoQuestions(), await store());
-		const cut = executor.open({
+		const { executor, definition } = seatOn(new TwoQuestions(), await store());
+		const cut = stateOf(executor, definition, {
 			id: 'message:2:product:1',
 			room: new TwoQuestions(),
-			emit: () => {},
-			trace: noTrace,
 		});
-		cut.abort();
+		cut.cancel();
 		expect(await cut.pass({ kind: 'view', view: await viewOf('message:2:product:1') })).toEqual({
 			failed: false,
 		});
@@ -274,27 +271,26 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		cut.close?.();
 	});
 
-	it('resolves a pass with no failure when it is cut during the model request', async () => {
+	it('resolves a pass with no failure when it is cut and closed during the model request', async () => {
 		const requested = deferred();
-		const { executor } = seatOn(new TwoQuestions(), await store(), async () => {
+		const { executor, definition } = seatOn(new TwoQuestions(), await store(), async () => {
 			requested.resolve();
 			await new Promise(() => {});
 			return quiet();
 		});
-		const session = executor.open({
+		const session = stateOf(executor, definition, {
 			id: 'message:1:product:1',
 			room: new TwoQuestions(),
-			emit: () => {},
-			trace: noTrace,
 		});
 		const running = session.pass({ kind: 'view', view: await viewOf('message:1:product:1') });
 		await requested.promise;
-		session.abort();
+		session.cancel();
+		// The driver closes the harness while the abort of the run is still active.
+		session.close();
 		expect(await running).toEqual({ failed: false });
 		expect(session.cancelled).toBe(true);
 		expect(session.shouldRefresh(Number.MAX_SAFE_INTEGER)).toBe(false);
 		expect(session.session).toEqual(began(1));
-		session.close?.();
 	});
 
 	it('fails on a provider refusal, and records the session it continued', async () => {
@@ -314,6 +310,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 			failed: true,
 			cause: 'permanent',
 			message: 'Your credit balance is too low',
+			error: new Error('Your credit balance is too low'),
 		});
 		expect(errors).toEqual(['Your credit balance is too low']);
 		expect(failed.session).toEqual(began(1));
@@ -396,18 +393,17 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 	it('closes the session, records none, and fails as transient when the harness refuses the settings', async () => {
 		const sessions = await store();
 		await seatOn(new TwoQuestions(), sessions).run('message:1:product:1');
+		const definition = withCompaction({ enabled: true, reserveTokens: -1, keepRecentTokens: 1 });
 		const executor = createPiExecutor({
-			definition: withCompaction({ enabled: true, reserveTokens: -1, keepRecentTokens: 1 }),
+			definition,
 			model: stubModel,
 			stream: scripted(() => quiet()),
 			now: () => 0,
 			sessions,
 		});
-		const session = executor.open({
+		const session = stateOf(executor, definition, {
 			id: 'message:2:product:1',
 			room: new TwoQuestions(),
-			emit: () => {},
-			trace: noTrace,
 		});
 		const view = await viewOf('message:2:product:1');
 		const result = await session.pass({

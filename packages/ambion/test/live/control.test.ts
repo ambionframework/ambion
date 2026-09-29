@@ -1,12 +1,16 @@
 /**
  * Cancellation records one durable cut. Provider and tool termination remains
- * best effort, and the room stays available for a later exchange.
+ * best effort, and the room stays available for a later exchange. A message
+ * that lands while a seat works reaches the seat, and its answer covers it.
  */
+import { Type } from 'typebox';
 import { expect, it } from 'vitest';
+import { defineTool } from '../../src/index.ts';
 import { enter, messagesOf } from '../support/room.ts';
 import {
 	agent,
 	errorsIn,
+	HARNESS,
 	invariants,
 	live,
 	open,
@@ -17,6 +21,17 @@ import {
 	untilQuiet,
 	within,
 } from './support.ts';
+
+/** A tool that keeps the activation busy long enough for a second message to land. */
+const calendar = defineTool({
+	name: 'check_calendar',
+	description: 'Look the date up in the site calendar. Takes a few seconds.',
+	parameters: Type.Object({ topic: Type.String() }),
+	execute: async () => {
+		await new Promise((resolve) => setTimeout(resolve, 8_000));
+		return 'The calendar is free on Saturday.';
+	},
+});
 
 const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -68,6 +83,47 @@ live('control', () => {
 		expect(said[0]?.text.length).toBeLessThan(120);
 		await invariants(session, events);
 		report('abort', await spent(session));
+		await session.stop();
+	});
+
+	it('a message sent while the seat works reaches it, and its answer covers both messages', async () => {
+		const clerk = agent('clerk', {
+			identity: 'Site clerk. Answers scheduling questions.',
+			instructions: `
+				When somebody asks a question, call check_calendar first. After it
+				returns, answer with one say that covers everything the person has
+				asked or told you, in one or two sentences.
+			`,
+			tools: [calendar],
+		});
+		const { session, events, records } = await open('steer', { agents: [clerk] });
+		const visit = await enter(session, person);
+		const started = new Promise<string>((resolve) => {
+			session.subscribe((e) => {
+				if (e.type === 'tool_execution_start' && e.toolName === 'check_calendar')
+					resolve(e.activation);
+			});
+		});
+		await visit.send({ text: 'When can we pour the slab?' });
+		const activation = await within(started, 60_000, 'the tool starting');
+		await visit.send({ text: 'Also: the inspector visits on Friday. Name that day too.' });
+		await untilQuiet(session);
+
+		const messages = await messagesOf(session);
+		const second = saidBy(messages, person.name)[1];
+		const answer = saidBy(messages, 'clerk').at(-1);
+		expect(answer?.seq ?? 0).toBeGreaterThan(second?.seq ?? Number.POSITIVE_INFINITY);
+		expect(answer?.text).toMatch(/friday/i);
+		// Codex takes no line into a live pass: its next pass reads the record.
+		if (HARNESS !== 'codex') {
+			const steps = records.flatMap((r) => (r.step.activation === activation ? [r.step] : []));
+			expect(steps).toContainEqual(
+				expect.objectContaining({ type: 'steer', seq: second?.seq, consumed: true }),
+			);
+		}
+		expect(errorsIn(events)).toEqual([]);
+		await invariants(session, events);
+		report('steer', await spent(session));
 		await session.stop();
 	});
 });

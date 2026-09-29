@@ -203,11 +203,15 @@ export function renderActivation(
 	def: AgentDefinition,
 	reminders?: string,
 ): RenderedPrompt {
-	return {
-		mechanism: MECHANISM,
-		agent: renderAgent(view, def),
-		context: renderTurnContext(view, def, reminders),
-	};
+	return { ...renderSystem(view, def), context: renderTurnContext(view, def, reminders) };
+}
+
+/** The two parts of the prompt that do not read the record: `mechanism` and `agent`. */
+export function renderSystem(
+	view: ActivationView,
+	def: AgentDefinition,
+): Omit<RenderedPrompt, 'context'> {
+	return { mechanism: MECHANISM, agent: renderAgent(view, def) };
 }
 
 /**

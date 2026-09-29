@@ -1,40 +1,23 @@
 /**
- * The room tools bound to one activation, and the agent's own tools, as Pi
+ * The room tools of one activation, and the agent's own tools, as Pi
  * harness tools.
  *
- * The core's `roomTools` holds what each room tool commits and what the
- * model reads. The harness reads a thrown error as an error result, so a
- * room tool's error result becomes a thrown error here. A result that ends
- * the activation sets `terminate`. The agent's own tools keep their Pi
- * fields: the harness prepares and checks the arguments, and passes the
- * signal of the run and the updates.
+ * The core binds the room tools to the activation: what each one commits
+ * and what the model reads. The harness reads a thrown error as an error
+ * result, so a room tool's error result becomes a thrown error here. A
+ * result that ends the activation sets `terminate`. The agent's own tools
+ * keep their Pi fields: the harness prepares and checks the arguments, and
+ * passes the signal of the run and the updates.
  */
 import type { AmbionTool, ToolContext, ToolUpdate } from '@ambionframework/ambion';
 import type {
 	ActivationView,
 	AgentDefinition,
-	RoomProtocol,
 	RoomTool,
-	RoomToolBinding,
 	RoomToolContent,
 } from '@ambionframework/ambion/hosting';
-import { roomTools, toolContext } from '@ambionframework/ambion/hosting';
+import { toolContext } from '@ambionframework/ambion/hosting';
 import type { AgentHarnessTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import type { Activation } from './executor.ts';
-
-/** What every room tool reaches: the activation and the room. */
-export function binding(activation: Activation, room: RoomProtocol): RoomToolBinding {
-	return {
-		id: activation.id,
-		room,
-		get readThrough() {
-			return activation.readThrough;
-		},
-		acknowledgeThrough: (seq) => activation.acknowledgeThrough(seq),
-		resultExpected: (call, seq) => activation.toolResultExpected(call, seq),
-		abort: () => activation.abort(),
-	};
-}
 
 /** A harness tool: the tools of one activation take no tool context. */
 export type PiTool = AgentHarnessTool<undefined>;
@@ -97,16 +80,32 @@ function toPiTool(tool: AmbionTool, agent: AgentDefinition, current: () => Activ
 }
 
 /**
- * What an activation holds from its purpose. `current` names the view of the
- * running pass, and defaults to the view the tools are built from.
+ * What an activation holds from its purpose: the room tools the core bound,
+ * and the tools of the definition. `current` names the view of the running
+ * pass, and defaults to the view the tools are built from.
+ *
+ * Pi hosts `pass.tools`, the room tools as the core bound them. It does not
+ * host `pass.agentTools`. It builds each tool of the definition from its
+ * `AmbionTool`, because a `RoomTool` does not carry what the Pi harness
+ * does with the tool:
+ *
+ * - The harness applies `prepareArguments` before it checks the arguments
+ *   against the schema. A `RoomTool` applies it after the check.
+ * - The harness runs a batch in turn when a tool sets `executionMode` to
+ *   `sequential`.
+ * - The harness gives the tool `onUpdate`, and the abort signal of the run.
+ * - The harness keeps `details` and `terminate` of the result. A `RoomTool`
+ *   gives the content alone.
+ *
+ * The context of each call comes from `toolContext`, as it does in the core.
  */
 export function toolsFor(
 	view: ActivationView,
 	def: AgentDefinition,
-	held: RoomToolBinding,
+	tools: readonly RoomTool[],
 	current: () => ActivationView = () => view,
 ): PiTool[] {
-	const room = roomTools(view, held).map(fromRoomTool);
+	const room = tools.map(fromRoomTool);
 	if (view.spec.purpose.kind === 'summarize') return room;
 	return [...room, ...def.executor.tools.map((tool) => toPiTool(tool, def, current))];
 }

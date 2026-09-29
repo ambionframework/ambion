@@ -5,11 +5,7 @@
  * `CLAUDE.md` or settings file on disk reaches the model. The tools are the
  * room tools, the agent's own tools, and the built-in tools the policy names.
  */
-import {
-	type AgentExecutor,
-	executorOfKind,
-	type TraceSink,
-} from '@ambionframework/ambion/hosting';
+import { type AgentExecutor, executorOfKind, type StepSink } from '@ambionframework/ambion/hosting';
 import type { CanUseTool, Options, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import { plainName, ROOM_SERVER } from './claude-trace.ts';
 import type { ClaudeExecutor } from './define.ts';
@@ -88,7 +84,7 @@ function builtinNames(allowed: readonly string[]): string[] {
  */
 export function approver(
 	executor: ClaudeExecutor,
-	trace: TraceSink,
+	trace: StepSink,
 	roomTools: readonly string[],
 ): CanUseTool {
 	return async (name, input, options): Promise<PermissionResult> => {
