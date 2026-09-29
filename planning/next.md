@@ -35,17 +35,18 @@ concept that had two paths and has one.
 [Technical facts](../docs/technical-facts.md) holds the key facts and what
 is new.
 
-**0.4.0 is a release of simplification.** It adds four capabilities: the
-`import` of the `sql` tool, the fixed skills of each agent, the refs to
-workspace files and commits, and the post of the host. It removes each
-second path to a fact of the room.
+**0.4.0 is a release of simplification.** It adds four capabilities. They
+are the `import` of the `sql` tool, the fixed skills of each agent, the
+refs to workspace files and commits, and the post of the host. It removes
+each second path to a fact of the room.
 
 ## The scope
 
-**The journal holds five facts, and one fold reads them.** The facts are
-messages, lease changes, closes, cancellations, and compositions. One pure
-`decide` admits one entry for each command inside the journal queue, and
-the reconcile runs `decide` until nothing changes.
+**The journal holds five facts, and one projection reads them.** The facts
+are messages, lease changes, closes, cancellations, and compositions. A
+`run` entry fences each run. One pure `decide` admits one entry for each
+command inside the journal queue, and the reconcile runs `decide` until
+nothing changes.
 
 **Acceptance.** Each fact of the room has one derivation, each rule one
 home, and each seat one boundary. `pnpm check` passes, the coverage of
@@ -53,9 +54,10 @@ each changed package holds, and the changelog names each second path that
 the release removes.
 
 **Journal bodies.** A cancel entry carries no close, and the room derives
-a cancelled close from it (C3). A composition carries no `version` (C9).
-The body schemas refuse the old shapes, and the journal carries no format
-number (C12). Ambion supports no downgrade.
+a cancelled close from it. A composition carries no `version`. A body
+schema refuses each field that an earlier release wrote and that this
+runtime would misread. The journal carries no format number. Ambion
+supports no downgrade.
 
 **Deployment models.** The same rules serve four placements.
 

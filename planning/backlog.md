@@ -33,11 +33,11 @@ that the owner does not trust, or a second bypass in use.
 
 **K3. The assistant speaks where its live suite expects silence on
 `openai/gpt-5.6-luna`.** On 2026-09-29 the live suite of
-`packages/assistant` passed 17 of 23 cases on that model, and `main`
-without A1 failed the same five. They are the three samples of the
-superseded constraint at broadcast, the application override, and the case
-with no specialist. The case of the material fact passes one or two
-samples of three. The suite holds its default model,
+`packages/assistant` passed 17 of 23 cases on that model. Five cases
+fail there, and they fail the same way on `main` without A1: the three
+samples of the superseded constraint at broadcast, the application
+override, and the case with no specialist. The case of the material fact
+passes one or two samples of three, so it fails on the others. The suite holds its default model,
 `anthropic/claude-sonnet-5`. **Condition:** an application that runs the
 assistant on an OpenAI model.
 
@@ -99,13 +99,13 @@ it. It lives in `packages/ambion/src/room/scheduled.ts`, outside
 check witness the two measures today. **Condition:** a fault that one of
 them would have caught.
 
-| Item | Proof                 | What it states                                                                                  |
-| ---- | --------------------- | ----------------------------------------------------------------------------------------------- |
-| P2   | The stop-loop measure | A measure that the stop loop decreases                                                          |
-| P3   | The pass measure      | A measure that each reconciliation pass decreases, so the `PASSES` bound is a proof             |
-| P4   | Unique roster names   | `reseat` and `rosterAfter` keep one seat per name                                               |
-| P5   | `seatLive`            | The seats that are live now, as a rule beside `exchangeLive`                                    |
-| P6   | `storedIdAccepted`    | The kinds on which `validate.ts` reads an activation id; a refusal on others is a schema change |
+| Item | Proof                 | What it states                                                                                    |
+| ---- | --------------------- | ------------------------------------------------------------------------------------------------- |
+| P2   | The stop-loop measure | A measure that the stop loop decreases                                                            |
+| P3   | The pass measure      | A measure that each reconciliation pass decreases, so the `PASSES_PER_RECONCILE` bound is a proof |
+| P4   | Unique roster names   | `reseat` and `rosterAfter` keep one seat per name                                                 |
+| P5   | `seatLive`            | The seats that are live now, as a rule beside `exchangeLive`                                      |
+| P6   | `storedIdAccepted`    | The kinds on which `validate.ts` reads an activation id; a refusal on others is a schema change   |
 
 ## Designs with a shape
 
@@ -200,9 +200,9 @@ tool.
 **D10. A git server on a second machine.** `workstationGitBackend` keeps
 the git account on the workstation, and each agent key works only from the
 loopback address ([Workstation git](../docs/workstation-git.md)). A lab
-with a git server apart from the workstation needs the address that an
-agent's `ssh` uses, the source addresses that `from` names, and an
-OpenSSH tier with two machines. **Condition:** a lab with two or more
+with a git server apart from the workstation needs three things: the
+address that an agent's `ssh` uses, the source addresses that `from`
+names, and an OpenSSH tier with two machines. **Condition:** a lab with two or more
 workstations that share one set of repositories.
 
 **D11. A durable subscription service across processes.** Subscriptions

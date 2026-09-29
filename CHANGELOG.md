@@ -4,9 +4,9 @@
 
 **0.4.0 is a release of simplification.** Each fact of the room has one
 derivation, each rule one home, and each seat one boundary. The release
-also adds four capabilities: the post of the host, the `import` of the
-`sql` tool, the fixed skills of each agent, and stable refs to workspace
-files and commits.
+adds four capabilities. They are the post of the host, the `import` of
+the `sql` tool, the fixed skills of each agent, and stable refs to
+workspace files and commits.
 
 **No journal of 0.3.0 opens on 0.4.0.** The journal carries no format
 number, and the `run` entry of 0.3.0 carries one. The section
@@ -29,10 +29,11 @@ hold the detail of each.
   advances is the only reader. The fold over the whole journal is a test
   oracle.
 - **The journal holds five facts.** They are messages, lease changes,
-  closes, cancellations, and compositions. A returned say is a post, and a
-  cancel entry carries no close.
-- **One writer builds every entry.** `decide` builds each entry that the
-  room writes, and one `decideAndAppend` serves the host.
+  closes, cancellations, and compositions. A `run` entry fences each run.
+  A returned say is a post, and a cancel entry carries no close.
+- **One `decide` builds the entries of a command.** A pass of the reconcile
+  asks for its writes as commands, and one `decideAndAppend` serves the
+  host.
 - **The core owns the state of an activation.** The Pi, Claude, and Codex
   executors keep their harness alone: the step mapping, the resume, and how
   they host the tools.
@@ -40,14 +41,18 @@ hold the detail of each.
   transport and its composers.
 - **The rules read one lease shape.** `RuleLease` replaces four types and
   their converters.
-- **One classifier names a permanent failure.** It holds the union of the
-  three sets that the executors held.
+- **One classifier reads the provider text of a permanent failure.** It
+  holds the union of the three sets that the executors held.
 - **One rule windows the view.** The room applies the message cap and the
   token limit, and the runner pages nothing.
-- **One SQL path serves the workspace.** `sqliteBackend` is the only code
-  that opens the database.
-- **The journal carries no format number, and an exchange has no owner.**
-  A body schema refuses each shape that an earlier release wrote.
+- **One SQL path serves the workspace.** `sqliteBackend` is the only
+  workspace code that opens the database.
+- **The journal carries no format number.** A `run` entry carries `at`
+  alone.
+- **An exchange has no owner.** The opening message names who directs the
+  work, and `person` names who receives the result.
+- **A body schema names each field that an earlier release wrote.** It
+  refuses a field that this runtime would misread.
 
 ### New
 
@@ -187,7 +192,7 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
   again. A grant keeps its filter, since it reads an id against the whole
   record.
 - **A seat of an unknown executor kind fails at once on every router.**
-  Under `composeExecutions`, its activation fails with a permanent
+  Under a list of executions, its activation fails with a permanent
   `no_execution` error, as it does in a room with no execution. Before,
   the room sent the wake again after each resend window, with no end.
 - **The process table keeps one record for each live process.** A
@@ -273,16 +278,16 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
 | `run`               | Carries `at` alone, and refuses `format`. Each run of 0.3.0 wrote `format: 1`, so a read refuses a journal of 0.3.0 at its first entry. See [Journal format](docs/durability.md#journal-format).                             |
 | `posted`            | New. The host and the room's clock write it with no author. A returned say is a `posted` entry with `to` and `returns`, the seq of the scheduled say. Its record line reads `[posted → <seat>, returns #<n>]`.            |
 | `returned`          | Goes. A read refuses it.                                                                                                                                                                                                    |
-| `said` with `after` | Refuses `owner`. A scheduled say carries no owner.                                                                                                                                                                          |
+| `said`              | Refuses `owner`. An exchange has no owner, so a scheduled say names none.                                                                                                                                                                          |
 | `close`             | Carries `person` and refuses `owner`. It refuses `summary` with no `person`. It refuses `cancelled`: only the close that the room derives from a `cancel` entry is cancelled.                                               |
 | `cancel`            | Carries no close, and refuses `close`. The room derives the close: it closes the open exchange at the last message before the entry, with `cancelled: true`, and a closed exchange reads `cancelled` from it.              |
 | `composition`       | Carries no `version`. The room reads a composition by its fields alone, and the refusal of the legacy `assistant` field goes.                                                                                              |
 | `lease`             | Stores the read position that its command states. A claim stores 0, and a renewal with no `readThrough` stores 0. The fold keeps the highest position of the lease.                                                        |
 
-**A refusal names the field.** A body with an extra property fails with
-`at body.<name>: schema is false`. A body with a field that an earlier
-release wrote fails with `at body.<name>: expected no such field; an
-earlier release wrote it`.
+**A refusal names the field.** A `dismissed` body with an extra property
+fails with `at body.<name>: schema is false`. Every other body accepts an
+extra field, and a field that an earlier release wrote fails with
+`at body.<name>: expected no such field; an earlier release wrote it`.
 
 #### Exports
 
@@ -317,7 +322,7 @@ earlier release wrote it`.
   the type `S3ObjectBackendOptions`.
 - **`@ambionframework/workspace/sql`.** Goes, with `openSqlResource`,
   `PROVENANCE_COLUMNS`, and the types `SqlResource`, `SqlResourceEnv`, and
-  `SqlResourceOptions`.
+  `SqlResourceOptions`. The type `SqlProvenance` moves to the root entry.
 - **`@ambionframework/workspace/conformance`.** Adds `objectConformance` and
   the types `ObjectConformanceBackend` and `ObjectConformanceStore`. Removes
   `sqlConformance` and the type `SqlConformanceBackend`.
@@ -481,8 +486,8 @@ option, member, and type that changed inside an export.
   carry `person?` in place of `owner`. A `close` entry carries `person`,
   refuses `owner`, and refuses `summary` with no `person`. The close
   command carries no owner, and `admitsClose` compares `from` alone.
-- **A scheduled say carries no owner.** The `said` entry with `after` and
-  the `returned` entry refuse `owner`, and `PendingSay` has none. A
+- **A scheduled say carries no owner.** The `said` entry refuses `owner`,
+  and `PendingSay` has none. A
   returned say opens an exchange with no `person`, and an exchange where
   no person spoke owes no summary, so a seat that schedules again no
   longer owes a person a summary for each return. A seat schedules from
