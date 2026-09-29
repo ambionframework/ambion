@@ -19,7 +19,8 @@
  * `hostingOf(runtime)` is the other half: the journal namespace, wake and
  * retry policy, and the room lifecycle registry, none of which the main
  * entry exposes. An executor package, such as `@ambionframework/pi`, builds
- * on the executor contract and the rendering helpers this entry exports.
+ * on the executor contract this entry exports: the core hands each pass its
+ * prompt, its room tools, and the session to resume.
  *
  * The main entry is what an application needs to build a room, and it names
  * no part of this. The execution boundary section of `docs/executors.md` is the
@@ -42,27 +43,22 @@ export type {
 	Executor,
 	ExecutorActivation,
 	ExecutorSession,
+	Pass,
 	PassInput,
+	PassRecord,
 	PassResult,
+	ReadRange,
 } from './execution/executor.ts';
 export { classifyCause, PERMANENT_STATUS, providerMessage } from './execution/failure.ts';
-export { REMINDER_TIMEOUT_MS, resolveReminders } from './execution/reminders.ts';
-export type { RenderedPrompt } from './execution/render.ts';
-export {
-	refusal,
-	renderActivation,
-	renderDelta,
-	renderPending,
-	summaryToolDescription,
-} from './execution/render.ts';
+export { REMINDER_TIMEOUT_MS } from './execution/reminders.ts';
+export { refusal, summaryToolDescription } from './execution/render.ts';
 export type {
 	RoomTool,
-	RoomToolBinding,
 	RoomToolContent,
 	RoomToolOptions,
 	RoomToolResult,
 } from './execution/room-tools.ts';
-export { agentTools, roomTools, toolContext } from './execution/room-tools.ts';
+export { toolContext } from './execution/room-tools.ts';
 export { defineExecution, localExecution } from './execution/route.ts';
 export { AgentRunner } from './execution/runner.ts';
 export type { TraceOpener, TraceSink } from './execution/trace.ts';
@@ -95,7 +91,7 @@ export type {
 	ViewResponse,
 	Wake,
 } from './protocol.ts';
-export { assertWire, classifyCommit, roundTrip, sessionToResume } from './protocol.ts';
+export { assertWire, classifyCommit, roundTrip } from './protocol.ts';
 export { renderLine } from './record.ts';
 export { visitOf } from './room.ts';
 export type {

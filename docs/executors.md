@@ -1,12 +1,12 @@
 # Executors
 
 An executor runs one agent's model loop for one activation. The room and the
-driver own the record, the lease, and the rules. An executor owns the model
-call, the tools it exposes, and the steps it reports. [The
-README](../README.md) holds the positioning. This page holds the contract
-between the driver and an executor: the activation flow, the room tools,
-exchange continuity, failure classification, the step vocabulary, and the way to
-write an adapter. [The Pi guide](pi.md), [the Claude guide](claude.md), and
+core own the record, the lease, the rules, and the state of each activation.
+An executor owns one harness: the model call, where the tools run, and the
+steps it reports. [The README](../README.md) holds the positioning. This
+page holds the contract between the core and an executor: the pass, the
+room tools, exchange continuity, failure classification, the step
+vocabulary, and the way to write an adapter. [The Pi guide](pi.md), [the Claude guide](claude.md), and
 [the Codex guide](codex.md) hold what is specific to one adapter.
 
 ## The executor contract
@@ -74,24 +74,74 @@ execution once, and awaits `AgentRunner.run` inside its alarm.
 
 **`AgentRunner` is the driver.** It owns the lease, its renewal, and the
 wake queue. It knows no model and no provider. For each activation it opens
-one `ExecutorSession` and passes it the view that the room windowed. A
-session renders a prompt, runs its own model loop for one pass, and reports
-where it left off.
+one `ActivationState` over the executor of the seat, and the state opens one
+`ExecutorSession`. The driver asks the room for the windowed view and runs
+one pass after another until the activation stops.
 
-| Member                             | What it does                                                           |
-| ---------------------------------- | ---------------------------------------------------------------------- |
-| `Executor.open(activation)`        | Opens one session. The activation holds `id`, `room`, `emit`, `trace`. |
-| `session.pass(input)`              | Runs one pass. Returns `failed`, and on failure a `cause`.             |
-| `session.readThrough`              | The highest position the session has consumed.                         |
-| `session.steer?(after, seq, line)` | Takes a line into a live pass. Absent when the family cannot.          |
-| `session.shouldRefresh(lastSeq)`   | Says whether the session has work for another pass.                    |
-| `session.abort()`                  | Cuts a pass in flight. `cancelled` then stops further passes.          |
-| `session.close?()`                 | Frees a held process. The driver calls it once, after the release.     |
+## The pass contract
+
+**The core owns the state of an activation.** It causes or observes each
+fact of it, so no executor keeps a copy.
+
+| The core keeps                   | How                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------ |
+| `readThrough`                    | It joins the ranges that the executor reports read, and the positions that a say confirms. |
+| The cut                          | It aborts the `signal` of the activation. A cut activation runs no other pass.             |
+| The refresh test                 | It runs another pass when the record stands past `readThrough`.                            |
+| The room tools and their binding | It binds them to the activation, and hands them over as values.                            |
+| The prompt                       | It renders `mechanism`, `agent`, and the record of each pass.                              |
+| The tool events                  | It raises them from the `tool_call` and `tool_result` steps.                               |
+| The `error` event                | It raises one event for each failed pass.                                                  |
+| The resume token                 | It reads `spec.resume` when it names the harness of the executor.                          |
+
+**An executor keeps its harness alone.** It maps the harness events to
+steps, resumes a harness session, hosts the tools, and reports the signal
+that the model consumed input.
+
+**`open` receives what serves the whole activation.** `ExecutorActivation`
+holds these members:
+
+| Member            | What it is                                                                              |
+| ----------------- | --------------------------------------------------------------------------------------- |
+| `id`              | The activation id.                                                                      |
+| `trace`           | The `TraceSink` for the steps that the executor owns.                                   |
+| `signal`          | The `AbortSignal` of the activation: the room, the driver, or a room tool cuts it.      |
+| `readThrough`     | The position the core holds as read. A harness that keeps a session writes it there.    |
+| `read(range)`     | The model consumed `range`, `{ after, through }`: a prompt, a delta, or a steered line. |
+| `delivered(call)` | The result of the tool call `call` reached the model.                                   |
+| `callId(tool)`    | The id of the next call of `tool`, for a harness that cannot see the id of a call.      |
+
+**`pass` receives what the core decides for one pass.** `Pass` holds
+`kind`, `view`, and `since` for a delta, as `PassInput` does, and these
+members:
+
+| Member          | What it is                                                                                     |
+| --------------- | ---------------------------------------------------------------------------------------------- |
+| `mechanism`     | How a room works. It depends on the kernel version alone.                                      |
+| `agent`         | The seat's part: the name, the speaking policy, the identity, and the instructions.            |
+| `record(after)` | The record the pass reads, rendered, with the range it holds. `undefined` when nothing is new. |
+| `resume`        | The id of the harness session to resume, when `spec.resume` names the harness.                 |
+| `tools`         | The room tools that the purpose grants, bound to the activation.                               |
+| `agentTools`    | The tools of the definition in the same form. A closing activation gets none.                  |
+
+**The session reports back.** `ExecutorSession` has these members:
+
+| Member                     | What it does                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| `pass(pass)`               | Runs one pass. Returns `failed`, and on failure a `cause` and a `message`.          |
+| `session`                  | The id of the harness session, for the release. Absent when the harness keeps none. |
+| `roomTools`                | What the executor adds to a say and a schedule, as `RoomToolOptions`.               |
+| `steer?(after, seq, line)` | Takes a line into a live pass. Absent when the family cannot.                       |
+| `close?()`                 | Frees a held process. The driver calls it once, after the release.                  |
+
+`Executor.harness` names the harness whose sessions the executor records,
+such as `pi`. The release records `{ harness, id }`.
 
 **The first pass receives the view. A later pass receives a delta.** The
 `view` is the whole windowed record. A `delta` holds the fresh view and
-`since`, the position the session had read through. A `PassResult` that sets
-`stop: 'length'` reports that the model reached a length limit.
+`since`, the position the activation had read through. A `PassResult` that
+sets `stop: 'length'` reports that the model reached a length limit. A pass
+that throws is a transient failure.
 
 **Freshness bounds correctness. Steering is a capability.** The driver
 reads `readThrough` to renew the lease and to release it. A commit that
@@ -120,6 +170,7 @@ internal. Participant views omit `sessionId`.
 | `hostingOf`          | The journal namespace, the limits, the executions, and the room registry of a runtime                                                                          |
 | `visitOf`            | The visit of a person whom the record of a running room holds present. It writes nothing                                                                       |
 | `describeExecutor`   | The neutral half of an executor definition, which an executor family extends with its fields                                                                   |
+| `Executor`           | The executor contract: `ExecutorActivation`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `ExecutorSession`                                            |
 
 **`RoomProtocol.view(activation, message?)` takes no range.** The room
 serves the record windowed to its cap and to the token limit of the seat,
@@ -128,64 +179,65 @@ message when the purpose may read it; `recall` reads a message below the
 window this way. The hosting entry exports no `ViewRange`, and
 `CollaborationContext` holds `omitted` and no `earliest`.
 
-## The prompt the driver renders
+## The prompt the core renders
 
-**The renderer returns three prompt parts.** `renderActivation` returns
-`mechanism`, `agent`, and `context`. Each part depends on one thing, so an
-adapter places it where it caches best.
+**The core renders three prompt parts.** Each part depends on one thing, so
+an adapter places it where it caches best.
 
 - `mechanism` depends on the kernel version only. It states how a room
   works.
 - `agent` depends on the definition and the purpose. It holds the name, the
   speaking policy, the identity, and the instructions. A closing seat reads
   its summary duties here.
-- `context` depends on the activation. It holds the clock, the room, the
-  roster, the record, the reminders of the tool bundles, and the ask line.
-  A summarize activation gets no reminder.
+- `record()` depends on the activation. On the first pass it holds the
+  clock, the room, the roster, the record, the reminders of the tool
+  bundles, and the ask line. A summarize activation gets no reminder.
 
-`renderDelta(view, since)` renders the later passes. It marks each message
-beyond `since` with the `[new]` prefix, and returns `undefined` when nothing
-is new. `renderLine` renders one steered line. `refusal` renders a room
-refusal for the model.
+**A later pass reads the delta.** `record()` marks each message beyond
+`since` with the `[new]` prefix, and gives `undefined` when nothing is new.
+The core then counts the view read. `renderLine` renders one steered line.
+`refusal` renders a room refusal for the model.
+
+**A resumed session reads the delta on its first pass.** `record(after)`
+takes the position that the harness session read through. The first pass
+of a respond activation then reads the reminders, the pending says, and
+the messages beyond `after`. Pi passes it; Claude and Codex read the whole
+view.
 
 **A definition can replace the speaking policy.** The main entry exports
 `DEFAULT_GUIDANCE`. An executor takes a `speaking` option that replaces it.
-Tool bundle guidance stays in the `guidance` field and follows the policy. The
-rendering helpers stay pure and stateless. The executor resolves the
-`reminders` of the bundles once for each respond activation, with
-`resolveReminders(view, def)`, and passes the text to `renderActivation(view,
-def, reminders)`. Each reminder has `REMINDER_TIMEOUT_MS`, 5 seconds, to
-answer, and at that bound the executor aborts the signal that it passed to the
-reminder. A reminder that throws, rejects, gives blank text, or answers late
-gives no text. The core does not cut a reminder, so the bundle bounds the
-length of its own text. An adapter that sends a continued session the delta
-alone sends the reminder text before the delta, on the first pass of an
-activation.
+Tool bundle guidance stays in the `guidance` field and follows the policy.
+The core resolves the `reminders` of the bundles once for each respond
+activation, when `record()` has something to send. Each reminder has
+`REMINDER_TIMEOUT_MS`, 5 seconds, to answer, and at that bound the core
+aborts the signal that it passed to the reminder. A reminder that throws,
+rejects, gives blank text, or answers late gives no text. The core does not
+cut a reminder, so the bundle bounds the length of its own text.
 
 ## How an activation runs
 
-[The prompt the driver renders](#the-prompt-the-driver-renders) states
-where `mechanism`, `agent`, and `context` land. The adapter page names the
-placement for its family.
+[The prompt the core renders](#the-prompt-the-core-renders) states the
+parts. The adapter page names the placement for its family.
 
 **`readThrough` advances only when the model has consumed a message.** The
-table below holds for every family. An adapter page names the signal it
-reads for the first event.
+core keeps it. The table below holds for every family. An adapter page
+names the signal it reads for the first and the last events.
 
-| Event                                                 | What moves                                                          |
-| ----------------------------------------------------- | ------------------------------------------------------------------- |
-| The model reads a prompt, a delta, or a steered line  | `readThrough` moves to the position of that message.                |
-| The room accepts an ordinary `say`                    | `readThrough` moves to the position the say confirms.               |
-| The room accepts a `schedule` with no `unread`        | `readThrough` moves to the position of the scheduled say.           |
-| The harness reports the tool result of a `missed` say | `readThrough` moves to the last of the messages the result carries. |
-| The harness reports the tool result of a `schedule`   | `readThrough` moves to the scheduled say, past its `unread`.        |
+| Event                                                | Who tells the core        | What moves                                                          |
+| ---------------------------------------------------- | ------------------------- | ------------------------------------------------------------------- |
+| The model reads a prompt, a delta, or a steered line | The executor: `read`      | `readThrough` moves to the position of that message.                |
+| The room accepts an ordinary `say`                   | The say tool              | `readThrough` moves to the position the say confirms.               |
+| The room accepts a `schedule` with no `unread`       | The schedule tool         | `readThrough` moves to the position of the scheduled say.           |
+| The tool result of a `missed` say reaches the model  | The executor: `delivered` | `readThrough` moves to the last of the messages the result carries. |
+| The tool result of a `schedule` reaches the model    | The executor: `delivered` | `readThrough` moves to the scheduled say, past its `unread`.        |
 
 **A steered line moves the position only when the record before it is
 already read.** A message that lands out of order does not advance
-`readThrough` until the gap closes.
+`readThrough` until the gap closes. The core holds the range, and it joins
+the range once the gap closes.
 
-**`shouldRefresh` decides on another pass.** It answers yes when the record
-stands past `readThrough`.
+**The core decides on another pass.** It runs one when the record stands
+past `readThrough` and the activation was not cut.
 
 **Every family stamps a `steer` step with `consumed`.** `consumed: true`
 marks a line the pass will deliver. `consumed: false` marks a line that the
@@ -209,22 +261,23 @@ activation receives and which tools a closing activation receives. The hosting
 entry exports `SAY`, `SCHEDULE`, `SEAT`, `UNSEAT`, `DISMISS`, `RECALL`, and
 `summaryToolDescription`.
 
-**The hosting entry holds the room tools once, in a form that names no
-harness.** Each family adapts them to its own tool shape.
+**The core binds the room tools once, in a form that names no harness.**
+Each family adapts them to its own tool shape.
 
-- **`roomTools(view, binding, options?)`** returns the room tools that the
-  purpose of the activation grants. Each `RoomTool` has a `name`, a
-  `description`, TypeBox `parameters`, and `run(args, call)`. `call` is the
-  id of the tool call, and the commit takes it as its key.
-- **`RoomToolBinding`** is what the tools reach: the activation id, the
-  room, `readThrough`, `acknowledgeThrough`, `resultExpected`, and `abort`.
-- **`RoomToolOptions`** adds to a say and to a schedule: `refs` changes
-  the refs it cites, and `spoke` runs when the room takes an ordinary say
-  or a scheduled say.
-- **`agentTools(view, agent, signal, current)`** returns the tools of the
-  definition in the same form. A closing activation gets none.
+- **`pass.tools`** holds the room tools that the purpose of the activation
+  grants. Each `RoomTool` has a `name`, a `description`, TypeBox
+  `parameters`, and `run(args, call)`. `call` is the id of the tool call,
+  and the commit takes it as its key. The core binds each tool to the
+  read position and the cut of the activation.
+- **`pass.agentTools`** holds the tools of the definition in the same form.
+  A closing activation gets none. Each call reads the view of the pass
+  that runs it.
+- **`session.roomTools`** is a `RoomToolOptions` value that adds to a say
+  and to a schedule: `refs` changes the refs it cites, and `spoke` runs
+  when the room takes an ordinary say or a scheduled say.
 - **`toolContext(agent, view, call, signal, onUpdate?)`** builds the
-  `ToolContext` of one call of a definition tool. It carries the view's
+  `ToolContext` of one call of a definition tool, for an executor that
+  hosts the tools of the definition itself. It carries the view's
   `deadline`: when the room ends the activation, on the wall clock.
 
 **A `RoomToolResult` holds the content that the model reads.** `isError`
@@ -270,13 +323,22 @@ activation id. The grant holds only for a seat on the roster. `view`,
 names the reason: `the lease ended` or `the activation has no room grant`.
 A claim or a renewal that the room refuses answers `the lease ended`.
 
-**`say` and `schedule` are the room's own events.** They raise no
-`tool_execution_start` and no `tool_execution_end` event. The adapter
-reports each one as a room event.
-[Codex](codex.md#step-mapping) reports `seat` and `unseat` the same way.
+**A room tool that commits an entry raises no tool event.** `say`,
+`schedule`, `seat`, `unseat`, and `dismiss` raise no `tool_execution_start`
+and no `tool_execution_end` event. The entry that each one commits reaches
+the host as a `message` event, and a tool event would report the same
+fact a second time. `recall` commits nothing, so it raises tool events, as
+every tool of the definition does.
 
-**The tools run in the host process.** Each adapter page names the
-transport that carries a call from the harness to the host.
+**The core raises the tool events from the steps.** It pairs each
+`tool_call` step with the `tool_result` step of the same call id. An
+executor records the steps, and raises no tool event.
+
+**The executor hosts the tools.** Pi runs them in its harness, Claude in an
+MCP server in the process, and Codex in the stdio server that it spawns,
+over a local socket to the host. A harness that cannot see the id of a call
+takes it with `callId(tool)`: the oldest `tool_call` step of that tool that
+no call took yet. Each adapter page names the transport.
 
 ## The step vocabulary
 
@@ -363,11 +425,11 @@ session as `spec.resume`. A closing activation gets the session of the
 exchange it summarizes. The room never reads the id. There is no option:
 every executor works this way.
 
-**An executor resumes only the session that `spec.resume` names.** It
-uses the session only when the harness name is its own. With no
-`spec.resume` it starts a fresh session. [Pi](pi.md#exchange-continuity)
-keeps each session of a seat apart, so the open exchange runs beside the
-summary of the exchange before it.
+**An executor resumes only the session that `pass.resume` names.** The core
+sets `pass.resume` only when `spec.resume` names the harness of the
+executor. With no `pass.resume` the executor starts a fresh session.
+[Pi](pi.md#exchange-continuity) keeps each session of a seat apart, so the
+open exchange runs beside the summary of the exchange before it.
 
 **The session is a cache, and its persistence is best effort.** The
 harness keeps the session where it keeps it. On Node, Pi, Claude and Codex
@@ -419,6 +481,11 @@ from the original text.
 
 **A length stop is no failure.** The pass reports `stop: 'length'`.
 
+**The core raises the `error` event once.** A failed pass, or a room call
+that the driver cannot recover from, raises one `error` event with its
+cause. The event carries the `error` of the pass result, or an error built
+from its `message`. No executor raises one.
+
 **Each family brings its own source of a status.**
 [Pi](pi.md#failure-classification), [Claude](claude.md#failure-classification),
 and [Codex](codex.md#failures) name the status source of each family.
@@ -450,25 +517,28 @@ family. `@ambionframework/claude` is the worked example, and
 
 1. **Implement `Executor` and `ExecutorSession`.** `open` takes the
    activation and returns a session. Keep the model loop for one activation
-   inside the session.
-2. **Render with the shared helpers.** Call `renderActivation` on the first
-   pass and `renderDelta` on later passes. [The prompt the driver
-   renders](#the-prompt-the-driver-renders) states where each part goes.
-3. **Expose the room tools.** Call `roomTools` and `agentTools` for
-   one activation, and adapt each result to the form the harness needs.
+   inside the session. Name the harness in `Executor.harness`.
+2. **Place the prompt.** Put `pass.mechanism` and `pass.agent` where the
+   harness caches them, and send the text of `pass.record()`.
+   [The prompt the core renders](#the-prompt-the-core-renders) states the
+   parts.
+3. **Host the tools.** Adapt `pass.tools` and `pass.agentTools` to the
+   form the harness needs, and run them where the harness reaches them.
    [The room tools](#the-room-tools) states the commit key and the room
    answers.
 4. **Record the steps you own.** Call the `TraceSink` of the activation for
    `thinking`, `text`, `tool_call`, `tool_result`, `steer`, `approval`, and
-   `usage`. The driver records `pass`, `room`, and `end`.
-5. **Declare steering and rest correctness on freshness.** Advance
-   `readThrough` when the model has consumed a message, and on nothing
-   earlier. [How an activation runs](#how-an-activation-runs) states the
-   events that move it.
+   `usage`. The driver records `pass`, `room`, and `end`, and the core
+   raises the tool events from the steps.
+5. **Report what the model consumed.** Call `read(range)` when the model
+   consumes a range, and `delivered(call)` when a tool result reaches it,
+   and on nothing earlier. [How an activation runs](#how-an-activation-runs)
+   states the events. Declare `steer` only when the harness takes a line
+   into a live pass.
 6. **Classify every failure.** Sort it into `permanent` and `transient`
    with `classifyCause`. [Failure classification](#failure-classification)
    states the shared rule; bring the family's own source of a status.
-7. **Record a session, and resume only the one the view names.**
+7. **Record a session, and resume only the one the pass names.**
    [Exchange continuity](#exchange-continuity) states the recorded session
    and the fresh start. A harness with no session records none.
 8. **Wrap the executor in an `Execution`.** Export a function that defines
@@ -523,8 +593,14 @@ executor runs it against a fake Claude Code executable in
 `claudeExecutorHarness` from `@ambionframework/claude/testing`. No run
 needs a key or a network.
 
-The Codex executor does not run the suite. A real model cannot follow a
-scripted plan, and a fake `codex` proves only that the adapter agrees with
-its own guess about the SDK. The Codex package tests its mapping on events
-that a real `codex` recorded, and it runs its executor claims in a live
-tier. See [Codex](codex.md).
+The Codex executor runs the suite in its live tier, on a real `codex` and a
+real model, in `packages/codex/test/live/conformance.test.ts`, through
+`codexExecutorHarness` in its live support. The model follows each plan
+from its instructions. It declares no steer and no usage, because Codex
+takes no steer and a real model spends no planned usage. The run needs
+`CODEX_API_KEY` and skips without it. A fake `codex` proves only that the
+adapter agrees with its own guess about the SDK, so the package tests its
+mapping on events that a real `codex` recorded. See [Codex](codex.md).
+
+**The suite checks the pass contract.** A failed activation raises exactly
+one `error` event, and a `say` raises no tool event.

@@ -7,18 +7,18 @@
  * first pass of an activation opens one harness over the seat's session,
  * and each pass prompts its lane once and resolves when the run ends.
  *
- * - **Freshness.** `readThrough` is the highest contiguous position that a
- *   provider request held. Each range of the record goes into the session
- *   as a custom message that carries its positions. The harness hook that
- *   builds the provider input reads them from the exact messages of each
- *   request. An accepted ordinary say also advances it. Freshness refuses a
- *   draft against a newer record.
+ * - **Freshness.** The core keeps `readThrough`. Each range of the record
+ *   goes into the session as a custom message that carries its positions.
+ *   The harness hook that builds the provider input reads them from the
+ *   exact messages of each request, and tells the core each range and each
+ *   tool result that the request holds.
  * - **Steer.** A line that lands during a run goes to the lane as a steer.
  *   It counts as consumed when a provider request holds it. A line that
  *   lands before the run starts joins the prompt. A line that finds no pass
  *   waits for the record: the next delta carries it.
- * - **Cut.** `abort` aborts the run. `close` closes the harness and the
- *   session, and the driver calls it when the activation is over.
+ * - **Cut.** The signal of the activation aborts the run. `close` closes the
+ *   harness and the session, and the driver calls it when the activation is
+ *   over.
  * - **Exchange continuity.** A session carries the id of the activation
  *   that began it, and the release records that id. The activation reopens
  *   the session that `spec.resume` names, which the room hands back inside
@@ -38,36 +38,25 @@
 import type {
 	ActivationView,
 	AgentDefinition,
-	ExecutionEvent,
 	Executor,
 	ExecutorActivation,
 	ExecutorSession,
-	HarnessSession,
-	PassInput,
+	Pass,
 	PassResult,
-	RoomProtocol,
 	Seq,
-	TraceSink,
-} from '@ambionframework/ambion/hosting';
-import {
-	renderActivation,
-	renderDelta,
-	renderPending,
-	resolveReminders,
-	sessionToResume,
 } from '@ambionframework/ambion/hosting';
 import type { AgentMessage, HarnessEvent, Session, StreamFn } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, getOrUndefined } from '@earendil-works/pi-agent-core';
 import type { Api, AssistantMessage, Message, Model } from '@earendil-works/pi-ai';
 import { compactionOf, modelOf, thinkingOf } from './define.ts';
 import { passOutcome, UnknownModel } from './failure.ts';
-import { Freshness, providerMessages, READ, recordMessage } from './freshness.ts';
+import { provided, providerMessages, READ, recordMessage } from './freshness.ts';
 import { type OpenHarness, openHarness } from './harness.ts';
 import { streamModels } from './models.ts';
 import { PiSteps } from './pi-trace.ts';
 import type { ModelResolver } from './services.ts';
 import { memorySessions, type PiSessions, type SessionScope } from './sessions.ts';
-import { binding, toolsFor } from './tools.ts';
+import { toolsFor } from './tools.ts';
 
 const CONTEXT = BACKGROUND_CONTEXT;
 
@@ -83,7 +72,7 @@ export interface PiExecutorOptions {
 }
 
 /** What the activations of one seat share. */
-export interface Seat {
+interface Seat {
 	readonly sessions: PiSessions;
 	/** The close of each session an ended activation still holds, by id. */
 	readonly closing: Map<string, Promise<void>>;
@@ -93,6 +82,7 @@ export interface Seat {
 export function createPiExecutor(options: PiExecutorOptions): Executor {
 	const seat: Seat = { sessions: options.sessions ?? memorySessions(), closing: new Map() };
 	return {
+		harness: 'pi',
 		open(activation: ExecutorActivation): ExecutorSession {
 			return new Activation(activation, options, seat);
 		},
@@ -114,17 +104,12 @@ interface Opened extends OpenHarness {
 const noop = () => {};
 
 /** One activation, from the moment the room wakes a seat until it stops. */
-export class Activation implements ExecutorSession {
-	readonly id: string;
-	private readonly room: RoomProtocol;
-	private readonly emit: (event: ExecutionEvent) => void;
+class Activation implements ExecutorSession {
+	private readonly activation: ExecutorActivation;
 	private readonly definition: AgentDefinition;
 	private readonly options: PiExecutorOptions;
 	private readonly seat: Seat;
-	/** The sink for the steps this executor owns. The driver closes it. */
-	private readonly trace: TraceSink;
 	private readonly steps = new PiSteps();
-	private readonly freshness = new Freshness();
 	/** The harness of this activation. The first pass opens it, and `close` closes it. */
 	private opened: Opened | undefined;
 	/** The id of the session this activation opened. */
@@ -156,42 +141,24 @@ export class Activation implements ExecutorSession {
 	private cutNow: () => void = noop;
 
 	constructor(activation: ExecutorActivation, options: PiExecutorOptions, seat: Seat) {
-		this.id = activation.id;
-		this.room = activation.room;
-		this.emit = activation.emit;
-		this.trace = activation.trace;
+		this.activation = activation;
 		this.definition = options.definition;
 		this.options = options;
 		this.seat = seat;
 		this.cut = new Promise((resolve) => {
 			this.cutNow = resolve;
 		});
+		activation.signal.addEventListener('abort', () => this.abort(), { once: true });
 	}
 
-	/** The session to record with the release. Absent until a pass opens one. */
-	get session(): HarnessSession | undefined {
-		const id = this.sessionId;
-		return id === undefined ? undefined : { harness: 'pi', id };
+	/** The id of the session to record with the release. Absent until a pass opens one. */
+	get session(): string | undefined {
+		return this.sessionId;
 	}
 
-	/** The seq this activation may commit against: the freshness boundary `readThrough`. */
-	get readThrough(): Seq {
-		return this.freshness.readThrough;
-	}
-
-	/** Whether `abort` was called. The driver checks this before another room round trip. */
-	get cancelled(): boolean {
-		return this.stopped;
-	}
-
-	/** An accepted ordinary say confirms this activation consumed the record through here. */
-	acknowledgeThrough(seq: Seq): void {
-		this.freshness.acknowledgeThrough(seq);
-	}
-
-	/** A rejected commit placed this record in the next tool result the model reads. */
-	toolResultExpected(toolCallId: string, seq: Seq): void {
-		this.freshness.toolResultExpected(toolCallId, seq);
+	/** The sink for the steps this executor owns. */
+	private get trace() {
+		return this.activation.trace;
 	}
 
 	/**
@@ -200,7 +167,6 @@ export class Activation implements ExecutorSession {
 	 * waits for the record: the next delta has it.
 	 */
 	steer(after: Seq, seq: Seq, line: string): void {
-		if (this.stopped) return;
 		if (this.phase === 'idle' && this.passes === 0) {
 			// The first pass reads the record as it stands then.
 			this.early.push(seq);
@@ -213,13 +179,8 @@ export class Activation implements ExecutorSession {
 		}
 	}
 
-	/** Whether the record moved past what the model read. */
-	shouldRefresh(lastSeq: Seq): boolean {
-		return !this.stopped && lastSeq > this.readThrough;
-	}
-
-	/** Abort the run. The pass in flight ends, and the driver runs no other. */
-	abort(): void {
+	/** The activation was cut: abort the run. The pass in flight ends. */
+	private abort(): void {
 		this.stopped = true;
 		this.cutNow();
 		this.opened?.lane.abort(CONTEXT).catch(noop);
@@ -234,18 +195,18 @@ export class Activation implements ExecutorSession {
 	}
 
 	/** One pass: read, act, and report where this session left off. */
-	async pass(input: PassInput): Promise<PassResult> {
-		if (this.stopped) return { failed: false };
+	async pass(pass: Pass): Promise<PassResult> {
 		this.passes += 1;
 		this.drop(this.early.splice(0));
 		this.phase = 'starting';
-		this.view = input.view;
+		this.view = pass.view;
+		this.systemPrompt = `${pass.mechanism}\n\n${pass.agent}`;
 		try {
-			return await this.runPass(input);
+			return await this.runPass(pass);
 		} catch (error) {
 			// A cut closes the harness under the run. What it throws then is no failure.
 			if (this.stopped) return { failed: false };
-			await this.renew(input.view);
+			await this.renew(pass.view);
 			return this.broke(error instanceof Error ? error : new Error(String(error)));
 		} finally {
 			this.phase = 'idle';
@@ -253,12 +214,20 @@ export class Activation implements ExecutorSession {
 		}
 	}
 
-	/** Open the harness, and prompt it with what the pass has to read. */
-	private async runPass(input: PassInput): Promise<PassResult> {
-		const opened = await this.prepare(input.view);
+	/**
+	 * Open the harness, and prompt it with what the pass has to read. A pass
+	 * with nothing new starts no run.
+	 */
+	private async runPass(pass: Pass): Promise<PassResult> {
+		const opened = await this.prepare(pass);
 		if (opened === undefined || this.stopped) return { failed: false };
-		const prompt = [...(await this.promptFor(input)), ...this.flush(input.view.through)];
-		if (prompt.length === 0) return this.nothingNew(opened, input.view);
+		const record = await pass.record(this.base);
+		const now = this.options.now();
+		const prompt = [
+			...(record === undefined ? [] : [recordMessage(record.range, record.text, now)]),
+			...this.flush(pass.view.through),
+		];
+		if (prompt.length === 0) return this.nothingNew(opened);
 		return this.run(opened, prompt);
 	}
 
@@ -268,29 +237,24 @@ export class Activation implements ExecutorSession {
 	}
 
 	/**
-	 * The harness of this activation. The first pass renders the system
-	 * prompt, resolves the definition's model, opens the session, and binds
-	 * the permitted tools. Later passes keep it, and give it the system prompt
-	 * of the view now in hand.
+	 * The harness of this activation. The first pass resolves the definition's
+	 * model, opens the session, and holds the tools of the pass. Later passes
+	 * keep it.
 	 */
-	private async prepare(view: ActivationView): Promise<Opened | undefined> {
-		const def = this.definition;
-		if (view.spec.seat !== def.name)
-			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
-		const { mechanism, agent } = renderActivation(view, def);
-		this.systemPrompt = `${mechanism}\n\n${agent}`;
+	private async prepare(pass: Pass): Promise<Opened | undefined> {
 		if (this.opened !== undefined) return this.opened;
+		const def = this.definition;
 		const model = await this.options.model(modelOf(def.executor), def.name);
 		if (this.stopped) return undefined;
-		const opened = this.hold(await this.openSession(view, model));
+		const opened = this.hold(await this.openSession(pass, model));
 		if (opened === undefined) return undefined;
 		try {
-			await this.readBase(opened, view);
+			await this.readBase(opened, pass);
 			return opened;
 		} catch {
 			// The session is a cache: a session that fails here gives way to a fresh one.
 			this.release();
-			return this.hold(await this.attach(await this.fresh(view), view, model));
+			return this.hold(await this.attach(await this.fresh(pass.view), pass, model));
 		}
 	}
 
@@ -305,7 +269,7 @@ export class Activation implements ExecutorSession {
 
 	/** A fresh session under this activation's id. */
 	private fresh(view: ActivationView): Promise<Session> {
-		return this.seat.sessions.create(scopeOf(view, this.definition), this.id, CONTEXT);
+		return this.seat.sessions.create(scopeOf(view, this.definition), this.activation.id, CONTEXT);
 	}
 
 	/**
@@ -313,18 +277,20 @@ export class Activation implements ExecutorSession {
 	 * under this activation's id. A session that does not open, or that the
 	 * harness cannot attach to, closes, and a fresh session takes its place.
 	 */
-	private async openSession(view: ActivationView, model: Model<Api>): Promise<Opened> {
-		const resumed = await this.resumed(scopeOf(view, this.definition), view);
+	private async openSession(pass: Pass, model: Model<Api>): Promise<Opened> {
+		const resumed = await this.resumed(scopeOf(pass.view, this.definition), pass.resume);
 		if (resumed !== undefined) {
-			const opened = await this.attach(resumed, view, model).catch(() => undefined);
+			const opened = await this.attach(resumed, pass, model).catch(() => undefined);
 			if (opened !== undefined) return opened;
 		}
-		return this.attach(await this.fresh(view), view, model);
+		return this.attach(await this.fresh(pass.view), pass, model);
 	}
 
 	/** The session `spec.resume` names, once the activation that held it closed it. */
-	private async resumed(scope: SessionScope, view: ActivationView): Promise<Session | undefined> {
-		const resume = sessionToResume(view, 'pi');
+	private async resumed(
+		scope: SessionScope,
+		resume: string | undefined,
+	): Promise<Session | undefined> {
 		if (resume === undefined) return undefined;
 		// An ended activation may still close the session, and a session opens once.
 		// A cut ends the wait.
@@ -333,9 +299,10 @@ export class Activation implements ExecutorSession {
 	}
 
 	/** A harness over the session, with the tools of this activation. A failed attach closes the session. */
-	private async attach(session: Session, view: ActivationView, model: Model<Api>): Promise<Opened> {
+	private async attach(session: Session, pass: Pass, model: Model<Api>): Promise<Opened> {
 		const def = this.definition;
-		const tools = toolsFor(view, def, binding(this, this.room), () => this.view ?? view);
+		const { view } = pass;
+		const tools = toolsFor(view, def, pass.tools, () => this.view ?? view);
 		try {
 			const opened = await openHarness({
 				session,
@@ -362,8 +329,8 @@ export class Activation implements ExecutorSession {
 	 * held comes again in the delta. With no such entry, the lane goes back
 	 * to the root, and the activation reads the whole view once.
 	 */
-	private async readBase(opened: Opened, view: ActivationView): Promise<void> {
-		if (sessionToResume(view, 'pi') === undefined) return;
+	private async readBase(opened: Opened, pass: Pass): Promise<void> {
+		if (pass.resume === undefined) return;
 		const entry = await opened.lane.findEntry(
 			{ type: 'custom', customType: READ, order: 'newestFirst' },
 			CONTEXT,
@@ -375,33 +342,7 @@ export class Activation implements ExecutorSession {
 		}
 		await rewind(opened, entry.id);
 		this.base = through;
-		this.freshness.acknowledgeThrough(through);
-	}
-
-	/**
-	 * The ranges of the record that start a run. The first pass hands the
-	 * model the whole view. A later pass, and a response in a continued
-	 * session, hand it the delta, and none when nothing is new. The first
-	 * pass of a response in a continued session also hands it the reminders
-	 * of the tool bundles and the seat's pending says, which the whole view
-	 * holds. A closing activation reads the whole view.
-	 */
-	private async promptFor(input: PassInput): Promise<AgentMessage[]> {
-		const { view } = input;
-		const after = input.kind === 'delta' ? input.since : this.base;
-		if (after !== undefined && (input.kind === 'delta' || view.spec.purpose.kind === 'respond')) {
-			const delta = renderDelta(view, after);
-			if (delta === undefined) return [];
-			// The bundle reminders resolve only when the pass has something to send.
-			const first = input.kind !== 'delta';
-			const reminders = first ? await resolveReminders(view, this.definition) : undefined;
-			const pending = first ? renderPending(view) : undefined;
-			const text = [reminders, pending, delta].filter((part) => part !== undefined).join('\n\n');
-			return [recordMessage({ after, through: view.through }, text, this.options.now())];
-		}
-		const reminders = await resolveReminders(view, this.definition);
-		const text = renderActivation(view, this.definition, reminders).context;
-		return [recordMessage({ after: 0, through: view.through }, text, this.options.now())];
+		this.activation.read({ after: 0, through });
 	}
 
 	/**
@@ -440,14 +381,8 @@ export class Activation implements ExecutorSession {
 		if (this.stopped) return { failed: false };
 		const outcome = passOutcome(result, this.last);
 		if (outcome.failed) {
-			this.emit({
-				type: 'error',
-				agent: this.definition.name,
-				activation: this.id,
-				error: outcome.error,
-				cause: outcome.cause,
-			});
-			return { failed: true, cause: outcome.cause, message: outcome.error.message };
+			const { cause, error } = outcome;
+			return { failed: true, cause, message: error.message, error };
 		}
 		await this.remember(opened);
 		return outcome.stop === undefined ? { failed: false } : { failed: false, stop: outcome.stop };
@@ -469,10 +404,9 @@ export class Activation implements ExecutorSession {
 
 	/**
 	 * The record moved, but not in a way a model reads: a delta with no
-	 * message in it. The session takes the view as read, and no run starts.
+	 * message in it. The core takes the view as read, and no run starts.
 	 */
-	private async nothingNew(opened: Opened, view: ActivationView): Promise<PassResult> {
-		this.freshness.acknowledgeThrough(view.through);
+	private async nothingNew(opened: Opened): Promise<PassResult> {
 		await this.remember(opened);
 		return { failed: false };
 	}
@@ -483,32 +417,24 @@ export class Activation implements ExecutorSession {
 	 * activation reads the whole view, and this one runs on.
 	 */
 	private async remember(opened: Opened): Promise<void> {
-		await opened.lane.appendCustomEntry(READ, { through: this.readThrough }, CONTEXT).catch(noop);
+		const through = this.activation.readThrough;
+		await opened.lane.appendCustomEntry(READ, { through }, CONTEXT).catch(noop);
 	}
 
 	/** The provider messages of one request, and what they hold of the record. */
 	private provide(messages: AgentMessage[]): Message[] {
-		for (const seq of this.freshness.provided(messages)) {
+		for (const seq of provided(messages, this.activation)) {
 			if (this.steered.delete(seq)) this.trace.record({ type: 'steer', seq, consumed: true });
 		}
 		return providerMessages(messages);
 	}
 
-	/** One harness event: its steps, and the room-visible tool events. */
+	/** One harness event: its steps. The core raises the tool events from them. */
 	private note(event: HarnessEvent): void {
 		for (const step of this.steps.steps(event)) this.trace.record(step);
 		if (event.type === 'message_end' && event.message.role === 'assistant') {
 			this.last = event.message;
 		}
-		if (event.type !== 'tool_start' && event.type !== 'tool_end') return;
-		// A say or a schedule is the room's own event, not a tool's.
-		if (event.toolName === 'say' || event.toolName === 'schedule') return;
-		this.emit({
-			type: event.type === 'tool_start' ? 'tool_execution_start' : 'tool_execution_end',
-			agent: this.definition.name,
-			activation: this.id,
-			toolName: event.toolName,
-		});
 	}
 
 	/** Close the harness and its session, and let the seat's next activation wait for it. */
@@ -546,15 +472,14 @@ export class Activation implements ExecutorSession {
 	}
 
 	/**
-	 * Record an execution failure and notify the host. A broken pass is a local
-	 * fault, such as a lost room call or a build error, so its cause is
-	 * transient and the room tries the activation again. A model id the
-	 * registry does not hold is permanent, because a retry reads the same id.
+	 * The result of a broken pass. A broken pass is a local fault, such as a
+	 * lost room call or a build error, so its cause is transient and the room
+	 * tries the activation again. A model id the registry does not hold is
+	 * permanent, because a retry reads the same id.
 	 */
 	private broke(error: Error): PassResult {
 		const cause = error instanceof UnknownModel ? 'permanent' : 'transient';
-		this.emit({ type: 'error', agent: this.definition.name, activation: this.id, error, cause });
-		return { failed: true, cause, message: error.message };
+		return { failed: true, cause, message: error.message, error };
 	}
 }
 

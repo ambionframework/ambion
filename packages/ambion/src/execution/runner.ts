@@ -3,10 +3,10 @@
  *
  * AgentRunner owns the lease, its renewal, the cut, the wake queue, the
  * record a seat reads, and the decision to run another pass. It knows
- * nothing about a model, a provider, or a transcript: an activation's
- * executor renders the prompt, runs its own loop, and reports where it left
- * off. The runner is the port of its seat: the room calls its wake, steer,
- * and cut.
+ * nothing about a model, a provider, or a transcript. The `ActivationState`
+ * of each activation keeps the read position, the tools, and the prompt,
+ * and the executor runs its own loop over them. The runner is the port of
+ * its seat: the room calls its wake, steer, and cut.
  */
 
 import type { AgentExecutionContext } from '../host/runtime.ts';
@@ -30,7 +30,8 @@ import type {
 	Step,
 	Usage,
 } from '../types.ts';
-import type { ExecutorSession, PassInput, PassResult } from './executor.ts';
+import { ActivationState } from './activation.ts';
+import type { PassInput, PassResult } from './executor.ts';
 import type { TraceSink } from './trace.ts';
 
 type CallResult<T> =
@@ -41,7 +42,7 @@ type CallResult<T> =
 /** One activation the actor holds while it runs. */
 interface Current {
 	id: string;
-	session: ExecutorSession;
+	state: ActivationState;
 	/** The steps of this activation. The driver closes it when the activation ends. */
 	trace: TraceSink;
 	/** The activation ran to its end, and its release is in flight. It takes no steer. */
@@ -87,7 +88,7 @@ export class AgentRunner implements AgentPort {
 	async steer(steer: Steer): Promise<void> {
 		const current = this.current;
 		if (current === undefined || current.over || current.id !== steer.activation) return;
-		current.session.steer?.(steer.after, steer.message.seq, renderLine(steer.message));
+		current.state.steer(steer.after, steer.message.seq, renderLine(steer.message));
 	}
 
 	/**
@@ -135,7 +136,7 @@ export class AgentRunner implements AgentPort {
 	private cutCurrent(): void {
 		const current = this.current;
 		if (current === undefined) return;
-		current.session.abort();
+		current.state.cancel();
 		current.cut();
 	}
 
@@ -147,13 +148,14 @@ export class AgentRunner implements AgentPort {
 			cut = resolve;
 		});
 		const trace = this.context.trace.open(id);
-		const session = this.context.executor.open({
+		const state = new ActivationState(this.context.executor, {
 			id,
 			room: this.boundedRoom(cutOff, trace),
+			definition: this.context.definition,
 			emit: (event) => this.emit(event),
 			trace,
 		});
-		const current: Current = { id, session, trace, over: false, cut, cutOff, expired: false };
+		const current: Current = { id, state, trace, over: false, cut, cutOff, expired: false };
 		this.current = current;
 		try {
 			const claimed = await this.claim(id);
@@ -163,7 +165,7 @@ export class AgentRunner implements AgentPort {
 			// The activation holds the seat until its sink closes, so a wake that
 			// lands during the close queues behind it.
 			await trace.close();
-			closeQuietly(session);
+			state.close();
 			if (this.current === current) this.current = undefined;
 			await this.next();
 		}
@@ -184,7 +186,7 @@ export class AgentRunner implements AgentPort {
 				// The cut ends the wait, and never the run: a run that ignores the
 				// abort finishes on its own, past a seat that took its next wake.
 				last = await Promise.race([
-					this.runPasses(id, current.session, current.trace, current.cutOff),
+					this.runPasses(id, current.state, current.trace, current.cutOff),
 					current.cutOff.then(() => undefined),
 				]);
 			}
@@ -198,28 +200,27 @@ export class AgentRunner implements AgentPort {
 			await this.release(
 				id,
 				failed ? 'failed' : 'released',
-				current.session.readThrough,
+				current.state.readThrough,
 				last?.cause,
 				current.trace.usage(),
-				current.session.session,
+				current.state.session,
 			);
 		}
 	}
 
 	/**
 	 * Pass over the record until the activation stops: an executor failure, a
-	 * closing purpose (which never rebuilds), a cancelled session, or nothing
-	 * left the executor or the room needs it to see again. A cancelled
-	 * session earns no further room call on its behalf: an abort mid-pass is
-	 * not a provider failure, but it still ends the loop here, before the
-	 * freshness check would otherwise renew a lease this activation no
-	 * longer holds. A room call this loop cannot recover from (a lost view
-	 * or renewal) ends the activation as a transient failure, the same as a
-	 * broken pass.
+	 * closing purpose (which never rebuilds), a cut activation, or nothing
+	 * left the executor or the room needs it to see again. A cut activation
+	 * earns no further room call on its behalf: an abort mid-pass is not a
+	 * provider failure, but it still ends the loop here, before the freshness
+	 * check would otherwise renew a lease this activation no longer holds. A
+	 * room call this loop cannot recover from (a lost view or renewal) ends
+	 * the activation as a transient failure, the same as a broken pass.
 	 */
 	private async runPasses(
 		id: string,
-		session: ExecutorSession,
+		state: ActivationState,
 		trace: TraceSink,
 		cancelled: Promise<void>,
 	): Promise<PassResult | undefined> {
@@ -230,27 +231,14 @@ export class AgentRunner implements AgentPort {
 				const opened = await this.viewFor(id, cancelled);
 				if ('stale' in opened) return last;
 				const view = opened.view;
-				last = await passOver(session, trace, passInput(view, since));
-				since = session.readThrough;
-				if (last.failed || session.cancelled || view.spec.purpose.kind !== 'respond') return last;
-				if (!(await this.needsRefresh(id, session, cancelled))) return last;
+				last = await passOver(state, trace, passInput(view, since));
+				since = state.readThrough;
+				if (last.failed || state.cancelled || view.spec.purpose.kind !== 'respond') return last;
+				if (!(await this.needsRefresh(id, state, cancelled))) return last;
 			}
 		} catch (error) {
-			return this.broke(id, error);
+			return broke(state, error);
 		}
-	}
-
-	/** Record and report a room call this loop cannot recover from, as a transient failure. */
-	private broke(id: string, error: unknown): PassResult {
-		const broken = error instanceof Error ? error : new Error(String(error));
-		this.emit({
-			type: 'error',
-			agent: this.context.seat,
-			activation: id,
-			error: broken,
-			cause: 'transient',
-		});
-		return { failed: true, cause: 'transient', message: broken.message };
 	}
 
 	/**
@@ -409,7 +397,7 @@ export class AgentRunner implements AgentPort {
 			cancelExpiry = clock.alarm(expiry, expire);
 		};
 		const again = async (held: number) => {
-			const renewed = await this.renew(current.id, current.session.readThrough);
+			const renewed = await this.renew(current.id, current.state.readThrough);
 			if (stopped) return;
 			if (renewed === 'stale') cut();
 			else if (renewed === 'lost') {
@@ -437,12 +425,11 @@ export class AgentRunner implements AgentPort {
 	 */
 	private async needsRefresh(
 		id: string,
-		session: ExecutorSession,
+		state: ActivationState,
 		cancelled: Promise<void>,
 	): Promise<boolean> {
 		const renewed = await this.call(
-			() =>
-				this.room.lease({ activation: id, operation: 'renew', readThrough: session.readThrough }),
+			() => this.room.lease({ activation: id, operation: 'renew', readThrough: state.readThrough }),
 			cancelled,
 		);
 		if (renewed.kind === 'cancelled') return false;
@@ -451,7 +438,7 @@ export class AgentRunner implements AgentPort {
 			throw renewed.error;
 		}
 		if ('stale' in renewed.value) return false;
-		return session.shouldRefresh(renewed.value.ok.lastSeq);
+		return state.shouldRefresh(renewed.value.ok.lastSeq);
 	}
 
 	/** The record a pass reads, as the room windows it for this seat. */
@@ -511,23 +498,16 @@ export class AgentRunner implements AgentPort {
 
 // -- the trace ----------------------------------------------------------------
 
-/** One pass, opened in the trace. The first pass reads the view; a later one follows the record. */
-function passOver(
-	session: ExecutorSession,
-	trace: TraceSink,
-	input: PassInput,
-): Promise<PassResult> {
-	trace.startPass(input.kind, input.view.through);
-	return session.pass(input);
+/** A room call the pass loop cannot recover from fails the activation as transient. */
+function broke(state: ActivationState, thrown: unknown): PassResult {
+	const error = thrown instanceof Error ? thrown : new Error(String(thrown));
+	return state.report({ failed: true, cause: 'transient', message: error.message, error });
 }
 
-/** Close a session. A close that throws leaves the activation as it ended. */
-function closeQuietly(session: ExecutorSession): void {
-	try {
-		session.close?.();
-	} catch {
-		// The activation is over. A failed close changes no outcome.
-	}
+/** One pass, opened in the trace. The first pass reads the view; a later one follows the record. */
+function passOver(state: ActivationState, trace: TraceSink, input: PassInput): Promise<PassResult> {
+	trace.startPass(input.kind, input.view.through);
+	return state.pass(input);
 }
 
 /** What the room answered to a commit, as a `room` step. */
@@ -543,7 +523,7 @@ function roomStep(request: CommitRequest, response: CommitResult): Step {
 
 /** How the activation stopped. A cut or an expired lease is `aborted`. */
 function endStep(current: Current, last: PassResult | undefined): Step {
-	const aborted = current.expired || current.session.cancelled;
+	const aborted = current.expired || current.state.cancelled;
 	const stop = aborted ? 'aborted' : (last?.stop ?? 'stopped');
 	if (last?.failed === true) {
 		const failure = {

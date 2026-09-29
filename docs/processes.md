@@ -425,13 +425,11 @@ Call status or cancel with a handle, and wait with a list of handles. Call ps to
 follows it. A process from another room names that room. A seat with no
 process to name gets no reminder, and a summarize activation calls none.
 
-**The executor resolves the reminders once, at the start of an
-activation.** `ToolBundle.remind` returns the text, or a promise of it.
+**The core resolves the reminders once, at the start of an activation.** `ToolBundle.remind` returns the text, or a promise of it.
 `describeExecutor` collects the reminders of the bundles into
-`AgentExecutor.reminders`. `resolveReminders` from
-`@ambionframework/ambion/hosting` runs them together and gives the text,
-and `renderActivation` takes it as its third argument. The text goes in
-the turn context, before the ask line.
+`AgentExecutor.reminders`. The core runs them together when it renders
+the record of the first pass of a respond activation. The text goes in the
+turn context, before the ask line.
 
 ```ts
 export interface ToolBundle {
@@ -454,17 +452,18 @@ export interface ReminderSeat {
 
 **A reminder has 5 seconds.** A reminder that throws, rejects, gives
 blank text, or takes longer gives no text, and the activation goes on.
-At the bound the executor aborts `signal`. The workspace reminder then
+At the bound the core aborts `signal`. The workspace reminder then
 writes no `seen`, and a read that waits on a busy bash owner does not
 start. The core does not cut a long reminder, so the bundle bounds its own
 text.
 
-**Each executor resolves on the first pass of the activation.**
+**The core resolves on the first pass of the activation.** It resolves
+when the pass has something to send.
 
-- **Pi** resolves when the pass has something to send. A continued
-  session with no new message calls no reminder. A continued session
-  reads the reminder before the delta.
-- **Claude** and **Codex** resolve for the whole view of the first pass.
+- **Pi** reads the record after the position that a continued session read
+  through. A continued session with no new message calls no reminder, and
+  it reads the reminder before the delta.
+- **Claude** and **Codex** read the whole view on the first pass.
 
 **The workspace reminder costs one read of the agent's table.** It runs
 on the bash owner. A bundle with skills first queues the copy of the

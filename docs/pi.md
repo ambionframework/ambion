@@ -164,9 +164,9 @@ harness once, and resolves when the run ends. The harness runs with
 `thinkingLevel: 'off'`, and no option changes it.
 
 **The system prompt is the mechanism and the agent part.** The executor
-gives the harness `mechanism` and `agent` from `renderActivation` as the
-system prompt. The `context` part is the first prompt. Each later pass
-replaces the system prompt with the one of the view in hand.
+gives the harness `pass.mechanism` and `pass.agent` as the system prompt.
+The text of `pass.record()` is the first prompt. Each later pass replaces
+the system prompt with the one of the view in hand.
 
 **Each range of the record goes into the session as a custom message.** A
 view, a delta, and a steered line each become a Pi `CustomMessage` of type
@@ -177,8 +177,9 @@ a user message.
 
 **`readThrough` follows the exact provider input.** The harness calls the
 `toProviderMessages` hook of the executor with the messages of each
-provider request. The executor reads the ranges from those messages, and
-the position is the highest contiguous position they reach. A user message
+provider request. The executor reads the ranges and the tool results from
+those messages, and calls `read` and `delivered` for each. The core joins
+the ranges into the highest contiguous position they reach. A user message
 with the same text never counts. The room tool answers also move the
 position; see [Executors](executors.md#how-an-activation-runs).
 
@@ -191,10 +192,9 @@ by the end of the run leaves the queue, and the trace records
 `consumed: false`.
 
 **A line that lands between passes waits for the record.** The trace
-records `consumed: false`. `shouldRefresh` answers yes when the last
-position of the room is past `readThrough`, and the driver runs a pass with
-the delta. A delta with no message in it starts no run. The session takes
-the view as read.
+records `consumed: false`. The core runs a pass with the delta when the
+last position of the room is past `readThrough`. A delta with no message
+in it starts no run, and the core takes the view as read.
 
 **The harness does not retry a failed request.** The executor sets the
 retry policy of the harness to `{ enabled: false }` and the stream option
@@ -292,11 +292,11 @@ session, and the fresh start.
 
 **A session carries the id of the activation that began it.** The release
 records `{ harness: 'pi', id }`. An activation reopens the session only
-when `spec.resume` names that id. Its first prompt is the delta: the record
-beyond the position the session read through, after the reminders of the
-tool bundles ([Processes](processes.md#reminders)). A delta with no message
-starts no run. A closing activation reads the whole view. `readThrough`
-starts at the position the session read through.
+when `pass.resume` names that id. Its first prompt is `pass.record(after)`,
+with `after` the position the session read through: the delta, after the
+reminders of the tool bundles ([Processes](processes.md#reminders)). A
+delta with no message starts no run. A closing activation reads the whole
+view. `readThrough` starts at the position the session read through.
 
 **A custom entry holds the position the session read through.** After each
 pass that did not fail, the executor appends an `ambion.read` entry with

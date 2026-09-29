@@ -3,8 +3,9 @@
  * prompt, exchange continuity, and the recipe that turns native tools off.
  */
 import { existsSync, readdirSync } from 'node:fs';
-import type { ExecutorSession, HarnessSession, PassInput } from '@ambionframework/ambion/hosting';
+import type { HarnessSession, PassInput } from '@ambionframework/ambion/hosting';
 import { describe, expect, it } from 'vitest';
+import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { HARNESS_NOTE } from '../src/executor.ts';
 import { recorded } from './fixtures.ts';
 import { open, seat, viewOf } from './support.ts';
@@ -19,7 +20,7 @@ function input(resume?: HarnessSession): PassInput {
 }
 
 /** Run one pass of a session and read the session it reports. */
-async function run(session: ExecutorSession, resume?: HarnessSession) {
+async function run(session: ActivationState, resume?: HarnessSession) {
 	const result = await session.pass(input(resume));
 	session.close?.();
 	return { result, session: session.session };

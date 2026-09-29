@@ -127,7 +127,7 @@ const stepsOf = <T extends TraceStep['type']>(steps: readonly TraceStep[], type:
 
 const TEXT = 'The pour is Saturday.';
 
-/** A failed activation: an event, a failed release, and an `end` step with the same cause. */
+/** A failed activation: one error event, a failed release, and an `end` step with the same cause. */
 async function failure(run: Run, cause: FailureCause): Promise<void> {
 	await run.wake();
 	await run.waitFor(() => released(run.room), 'the release');
@@ -136,8 +136,8 @@ async function failure(run: Run, cause: FailureCause): Promise<void> {
 	check(release.cause === cause, `the release cause is ${release.cause}`);
 	const errors = run.events.filter((event) => event.type === 'error');
 	check(
-		errors.length > 0 && errors.every((event) => event.cause === cause),
-		'no error event, or one with another cause',
+		errors.length === 1 && errors[0]?.cause === cause,
+		`${errors.length} error events, or one with another cause`,
 	);
 	const end = stepsOf(await run.trace(), 'end');
 	check(end.length === 1 && end[0]?.failure?.cause === cause, 'the end step has another cause');
@@ -169,6 +169,10 @@ const baseCases: readonly ExecutorCase[] = [
 			check(stepsOf(steps, 'pass')[0]?.input === 'view', 'the first pass does not read the view');
 			check(room.length === 1 && room[0]?.result === 'committed', 'no committed room step');
 			check(stepsOf(steps, 'end')[0]?.stop === 'stopped', 'the activation did not stop');
+			check(
+				!run.events.some((event) => event.type === 'tool_execution_start'),
+				'a say raised a tool event',
+			);
 		},
 	},
 	{

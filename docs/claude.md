@@ -160,9 +160,9 @@ logger. `createClaudeExecutor` builds one executor for a seat, and its
 [How an activation runs](executors.md#how-an-activation-runs) states the
 read position and the record window. The Claude executor adds these facts.
 
-**One SDK query serves one activation.** The system prompt is `mechanism`
-and `agent` from `renderActivation`, sent as a plain string. The `context`
-part opens the streaming input as the first user message. The query keeps
+**One SDK query serves one activation.** The system prompt is
+`pass.mechanism` and `pass.agent`, sent as a plain string. The text of
+`pass.record()` opens the streaming input as the first user message. The query keeps
 its transcript for the activation. Partial messages are on, so text and
 thinking arrive as deltas.
 
@@ -173,15 +173,18 @@ echo, or while `queued_turn_count` stands above zero, does not end the pass. The
 waits for the next `result`, and it ends with the earlier one after a grace
 period of 5 seconds.
 
-**`readThrough` advances on the SDK echo.** The SDK sends each user message
-back with `isReplay` set. The executor asks the SDK for that echo with the
-`replay-user-messages` argument. `readThrough` moves to the position of the
-message when its echo arrives, and on nothing earlier. An accepted `say`,
-a missed `say`, and an accepted `schedule` also move the position; see
+**The SDK echo is the signal that the model read a message.** The SDK
+sends each user message back with `isReplay` set. The executor asks the
+SDK for that echo with the `replay-user-messages` argument. When the echo
+arrives, the executor calls `read` with the range of the message, and it
+calls it on nothing earlier. A `tool_result` block in a user message calls
+`delivered`. An accepted `say`, a missed `say`, and an accepted `schedule`
+also move the position; see
 [Executors](executors.md#how-an-activation-runs).
 
 **A steered line moves `readThrough` only when the record before it is
-already read.** An echo that leaves a gap does not advance the position.
+already read.** The core holds the range of an echo that leaves a gap, and
+joins it when the gap closes.
 
 **A steer joins the streaming input.** A line that lands during a pass is
 pushed into the input as a user message. The trace records `steer` with
@@ -189,8 +192,8 @@ pushed into the input as a user message. The trace records `steer` with
 for the first pass. The executor sends it after the view unless the view
 already holds it.
 
-**`abort` interrupts the query and ends the pass.** `close` ends the input
-and the process.
+**The cut interrupts the query and ends the pass.** The executor listens
+to the signal of the activation. `close` ends the input and the process.
 
 **The room applies the activation token limit.**
 [Executors](executors.md#how-an-activation-runs) states the rule. It does
@@ -204,7 +207,9 @@ key, and the room answers.
 **The executor builds an in-process SDK MCP server named `ambion` for each
 activation.** It holds `say`, `schedule`, `seat`, `unseat`, `dismiss`,
 `recall`, and the tools of the definition. The model sees them as
-`mcp__ambion__say` and so on. Steps and events show the plain name.
+`mcp__ambion__say` and so on. Steps and events show the plain name. The
+handler of a call takes the id of the call with `callId`, from the
+`tool_use` block that the stream named.
 
 - The executable calls them over the SDK transport. The tool code never
   runs in the child process.
@@ -305,7 +310,8 @@ activation to its store, and the executor removes none.
 **The first pass of a resumed activation sends the whole view.** The Claude
 executor sends no delta on resume. The resumed session holds the earlier
 record and the view again. `readThrough` starts at zero in each activation,
-and a say against newer record gets a `missed` answer.
+and a say against newer record gets a `missed` answer. The executor resumes
+the session that `pass.resume` names.
 
 **The first message of a resumed query restates the seat's part.** A
 resumed session keeps the system prompt it began with, and the SDK ignores

@@ -12,6 +12,7 @@ import type {
 	CommitRequest,
 	CommitResult,
 	ExecutionEvent,
+	Executor,
 	RoomProtocol,
 	TraceSink,
 } from '@ambionframework/ambion/hosting';
@@ -22,10 +23,11 @@ import type {
 	ThreadEvent,
 	ThreadOptions,
 } from '@openai/codex-sdk';
+import { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { type Bridge, startBridge } from '../src/bridge.ts';
 import type { CatalogEntry, CatalogSource } from '../src/catalog.ts';
 import { type CodexOptions, codex, createCodexExecutor } from '../src/index.ts';
-import type { Binding } from '../src/tools.ts';
+import { citing, type RoomTool, servedTools } from '../src/tools.ts';
 
 /** The catalog entries that a real `codex` 0.155.1 printed, for `gpt-5.6-luna` and `gpt-5.5`. */
 export const catalogFixture = JSON.parse(
@@ -181,8 +183,15 @@ export function open(
 		close: async () => {},
 	};
 	const executor = createCodexExecutor({ definition, client, catalog });
+	/** The core state of one activation, as the driver opens it. */
 	const activate = (id = 'message:1:gpt:1') =>
-		executor.open({ id, room, emit: (event) => void events.push(event), trace });
+		new ActivationState(executor, {
+			id,
+			room,
+			definition,
+			emit: (event) => void events.push(event),
+			trace,
+		});
 	return { executor, steps, commits, events, activate, seen };
 }
 
@@ -190,9 +199,57 @@ export function open(
 export interface Connected {
 	readonly client: Client;
 	readonly bridge: Bridge;
-	readonly acknowledged: number[];
+	/** The position the core holds as read. */
+	readonly readThrough: () => number;
+	/** Whether the activation was cut. */
 	readonly aborted: () => boolean;
+	/** Paths the agent changed, as Codex reports them. The next ordinary say cites them. */
+	note(paths: readonly string[]): void;
 	close(): Promise<void>;
+}
+
+const noTrace: TraceSink = {
+	startPass: () => {},
+	record: () => {},
+	usage: () => undefined,
+	close: async () => {},
+};
+
+/**
+ * The tools that the core binds on a first pass over `view`, served as the
+ * Codex executor serves them. The pass reads the view and runs no model.
+ */
+async function bindTools(room: RoomProtocol, view: ActivationView, definition: AgentDefinition) {
+	const changed = new Set<string>();
+	const ordinary = view.spec.purpose.kind !== 'summarize';
+	let served: RoomTool[] = [];
+	let signal = new AbortController().signal;
+	let serial = 0;
+	const executor: Executor = {
+		open: (activation) => {
+			signal = activation.signal;
+			return {
+				roomTools: citing(changed, () => ordinary),
+				pass: async (pass) => {
+					activation.read({ after: 0, through: pass.view.through });
+					served = servedTools([...pass.tools, ...pass.agentTools], {
+						callId: (tool) => `${tool}:${serial++}`,
+						delivered: (call) => activation.delivered(call),
+					});
+					return { failed: false };
+				},
+			};
+		},
+	};
+	const state = new ActivationState(executor, {
+		id: view.spec.id,
+		room,
+		definition,
+		emit: () => {},
+		trace: noTrace,
+	});
+	await state.pass({ kind: 'view', view });
+	return { state, served, signal, changed };
 }
 
 /** Start the bridge for one activation, and connect an MCP client to the server it spawns. */
@@ -201,19 +258,8 @@ export async function connect(
 	view: ActivationView = viewOf(),
 	definition: AgentDefinition = seat(),
 ): Promise<Connected> {
-	const acknowledged: number[] = [];
-	const cut = new AbortController();
-	let serial = 0;
-	const binding: Binding = {
-		id: view.spec.id,
-		room,
-		readThrough: view.through,
-		signal: cut.signal,
-		acknowledgeThrough: (seq) => void acknowledged.push(seq),
-		callId: (tool) => `${tool}:${serial++}`,
-		abort: () => cut.abort(),
-	};
-	const bridge = await startBridge(view, definition, binding);
+	const { state, served, signal, changed } = await bindTools(room, view, definition);
+	const bridge = await startBridge(served, signal);
 	const client = new Client({ name: 'test', version: '0.0.0' });
 	await client.connect(
 		new StdioClientTransport({
@@ -225,8 +271,11 @@ export async function connect(
 	return {
 		client,
 		bridge,
-		acknowledged,
-		aborted: () => cut.signal.aborted,
+		readThrough: () => state.readThrough,
+		aborted: () => state.cancelled,
+		note: (paths) => {
+			for (const path of paths) changed.add(path);
+		},
 		close: async () => {
 			await client.close();
 			bridge.close();

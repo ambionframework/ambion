@@ -8,24 +8,10 @@
  * item that Codex reports only at its end gives both steps at once.
  */
 import type { Step, Usage } from '@ambionframework/ambion';
-import { DISMISS, SAY, SCHEDULE, SEAT, UNSEAT } from '@ambionframework/ambion/hosting';
 import type { ThreadEvent, ThreadItem } from '@openai/codex-sdk';
 
 /** The name of the MCP server that holds the room tools. */
 export const ROOM_SERVER = 'ambion';
-
-const ROOM_TOOLS: readonly string[] = [
-	SAY.name,
-	SCHEDULE.name,
-	SEAT.name,
-	UNSEAT.name,
-	DISMISS.name,
-];
-
-/** Whether a step names a tool the room reports as its own event. */
-export function isRoomTool(name: string): boolean {
-	return ROOM_TOOLS.includes(name);
-}
 
 /** The name a step shows for an item. A tool of the room server shows without its server. */
 function nameOf(item: ThreadItem): string {
@@ -124,8 +110,6 @@ export class CodexSteps {
 	private readonly sent = new Map<string, number>();
 	/** Tool calls seen, by id, so a completed item adds no second call step. */
 	private readonly seen = new Set<string>();
-	/** Room tool call ids that no handler has claimed yet. */
-	private readonly unclaimed: { id: string; name: string }[] = [];
 
 	steps(event: ThreadEvent): Step[] {
 		switch (event.type) {
@@ -139,13 +123,6 @@ export class CodexSteps {
 			default:
 				return [];
 		}
-	}
-
-	/** The id the model gave the next call of this room tool, or nothing when none is waiting. */
-	claim(tool: string): string | undefined {
-		const at = this.unclaimed.findIndex((call) => call.name === tool);
-		if (at < 0) return undefined;
-		return this.unclaimed.splice(at, 1)[0]?.id;
 	}
 
 	private item(item: ThreadItem, done: boolean): Step[] {
@@ -174,11 +151,7 @@ export class CodexSteps {
 		const steps: Step[] = [];
 		if (!this.seen.has(item.id)) {
 			this.seen.add(item.id);
-			const name = nameOf(item);
-			if (item.type === 'mcp_tool_call' && item.server === ROOM_SERVER) {
-				this.unclaimed.push({ id: item.id, name });
-			}
-			steps.push({ type: 'tool_call', call: item.id, name, input: inputOf(item) });
+			steps.push({ type: 'tool_call', call: item.id, name: nameOf(item), input: inputOf(item) });
 		}
 		if (done) {
 			const { output, error } = outcomeOf(item);

@@ -2,7 +2,7 @@
 import type { Step } from '@ambionframework/ambion';
 import type { ThreadEvent, ThreadItem } from '@openai/codex-sdk';
 import { describe, expect, it } from 'vitest';
-import { CodexSteps, changedPaths, isRoomTool, usageOf } from '../src/codex-trace.ts';
+import { CodexSteps, changedPaths, usageOf } from '../src/codex-trace.ts';
 import { causeOf, passResultOf } from '../src/services.ts';
 
 const started = (item: ThreadItem): ThreadEvent => ({ type: 'item.started', item });
@@ -126,7 +126,7 @@ describe('tools', () => {
 		]);
 	});
 
-	it('shows a room tool by its plain name and lets the executor claim its id', () => {
+	it('shows a room tool by its plain name', () => {
 		const steps = new CodexSteps();
 		const call = {
 			id: 's1',
@@ -138,10 +138,6 @@ describe('tools', () => {
 		expect(steps.steps(started({ ...call, status: 'in_progress' }))).toMatchObject([
 			{ type: 'tool_call', name: 'say' },
 		]);
-		expect(steps.claim('say')).toBe('s1');
-		expect(steps.claim('say')).toBeUndefined();
-		expect(['say', 'schedule', 'seat', 'unseat', 'dismiss'].every(isRoomTool)).toBe(true);
-		expect(isRoomTool('lookup') || isRoomTool('recall')).toBe(false);
 	});
 });
 

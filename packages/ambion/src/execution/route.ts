@@ -106,23 +106,10 @@ function missingExecutor(request: ConnectorRequest, known: string): Executor {
 	const seat = request.seat;
 	const reason = `No execution serves seat '${seat}' of kind '${request.definition.executor.kind}'. Load the executor package of the kind, or pass an \`execution\` of the kind, such as \`piExecution()\` from @ambionframework/pi, to startRoom or createRuntime. Known kinds: ${known}.`;
 	return {
-		open(activation) {
+		open() {
 			const error = new AmbionError('no_execution', reason);
 			return {
-				readThrough: 0,
-				cancelled: false,
-				async pass() {
-					activation.emit({
-						type: 'error',
-						agent: seat,
-						activation: activation.id,
-						error,
-						cause: 'permanent',
-					});
-					return { failed: true, cause: 'permanent' };
-				},
-				shouldRefresh: () => false,
-				abort() {},
+				pass: async () => ({ failed: true, cause: 'permanent', message: reason, error }),
 			};
 		},
 	};

@@ -111,14 +111,14 @@ describe('the tool list and domain tools', () => {
 
 describe('say, seat and unseat', () => {
 	it('delivers a say, confirms the read position, and cites the paths that Codex changed, once', async () => {
-		const { client, commits, acknowledged, bridge } = await on(lands);
-		bridge.note(['/work/plan.md', '/work/plan.md']);
+		const { client, commits, readThrough, note } = await on(lands);
+		note(['/work/plan.md', '/work/plan.md']);
 		const result = await client.callTool({
 			name: 'say',
 			arguments: { text: 'Done.', refs: ['room://lab', '/work/plan.md'] },
 		});
 		expect(textOf(result)).toBe('said #2');
-		expect(acknowledged).toEqual([2]);
+		expect(readThrough()).toBe(2);
 		await client.callTool(say('Again.'));
 		expect(commits).toMatchObject([
 			{ activation: 'message:1:gpt:1', readThrough: 1, intent: { kind: 'said' } },
@@ -137,8 +137,8 @@ describe('say, seat and unseat', () => {
 	});
 
 	it('gives the model a refusal as an error result, and keeps the changed paths for the next say', async () => {
-		const { client, commits, bridge } = await on(() => ({ refused: 'You may not say that.' }));
-		bridge.note(['/work/plan.md']);
+		const { client, commits, note } = await on(() => ({ refused: 'You may not say that.' }));
+		note(['/work/plan.md']);
 		for (const result of [await client.callTool(say()), await client.callTool(say())]) {
 			expect(result.isError).toBe(true);
 			expect(textOf(result)).toBe('You may not say that.');
@@ -181,14 +181,14 @@ describe('say, seat and unseat', () => {
 			from: 'priya',
 			text,
 		});
-		const { client, acknowledged } = await on(() => ({
+		const { client, readThrough } = await on(() => ({
 			missed: [line(2, 'Bring forms.'), line(3, 'And six.')],
 		}));
 		const result = await client.callTool(say());
 		expect(result.isError).toBe(true);
 		expect(textOf(result)).toContain('Bring forms.');
 		expect(textOf(result)).toContain('And six.');
-		expect(acknowledged).toEqual([3]);
+		expect(readThrough()).toBe(3);
 	});
 });
 

@@ -3,8 +3,8 @@
  * system prompt, one attempt for each provider request, and compaction.
  */
 import { defineAgent, defineTool, type Message } from '@ambionframework/ambion';
-import type { ActivationView, ExecutorSession } from '@ambionframework/ambion/hosting';
-import { describeExecutor, renderActivation } from '@ambionframework/ambion/hosting';
+import type { ActivationView } from '@ambionframework/ambion/hosting';
+import { describeExecutor } from '@ambionframework/ambion/hosting';
 import {
 	type AgentMessage,
 	BACKGROUND_CONTEXT,
@@ -20,14 +20,15 @@ import type { Context, SimpleStreamOptions } from '@earendil-works/pi-ai';
 import { createAssistantMessageEventStream, fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import type { ActivationState } from '../../ambion/src/execution/activation.ts';
+import { renderActivation } from '../../ambion/src/execution/render.ts';
 import { deferred } from '../../ambion/test/support/room.ts';
 import { openHarness } from '../src/harness.ts';
 import { createPiExecutor, memorySessions, type PiSessions, pi, stubModel } from '../src/index.ts';
 import { streamModels } from '../src/models.ts';
 import { scriptContext } from '../src/script-context.ts';
 import { contextText, isClosing, quiet, type Script, scripted } from '../src/testing.ts';
-import { unusedRoom } from './support/activation.ts';
-import { noTrace } from './support/trace.ts';
+import { stateOf } from './support/activation.ts';
 
 const said = (seq: number, text: string): Message => ({
 	kind: 'said',
@@ -100,8 +101,7 @@ function recording(script: Script) {
 function seat(stream: StreamFn, compaction?: CompactionSettings, thinking?: ThinkingLevel) {
 	const definition = workerWith(compaction, thinking);
 	const executor = createPiExecutor({ definition, model: stubModel, stream, now: () => 0 });
-	const open = (id: string): ExecutorSession =>
-		executor.open({ id, room: unusedRoom, emit: () => {}, trace: noTrace });
+	const open = (id: string): ActivationState => stateOf(executor, definition, { id });
 	return { definition, open };
 }
 
@@ -117,6 +117,7 @@ describe('the harness of an activation', () => {
 			failed: true,
 			cause: 'transient',
 			message: 'Error: overloaded 529',
+			error: new Error('Error: overloaded 529'),
 		});
 		expect(requests).toHaveLength(1);
 		expect(requests[0]?.options?.maxRetries).toBe(0);
@@ -305,14 +306,9 @@ describe('the harness of an activation', () => {
 			stream: scripted(() => quiet()),
 			now: () => 0,
 		});
-		const session = executor.open({
-			id: 'message:1:worker:1',
-			room: unusedRoom,
-			emit: () => {},
-			trace: noTrace,
-		});
+		const session = stateOf(executor, definition);
 		const view = { ...respond([said(1, 'Go.')], 1), spec };
-		expect(await session.pass({ kind: 'view', view })).toEqual({
+		expect(await session.pass({ kind: 'view', view })).toMatchObject({
 			failed: true,
 			cause: 'transient',
 			message,
@@ -322,18 +318,21 @@ describe('the harness of an activation', () => {
 	it('runs a continued session on the model of the activation that continues it', async () => {
 		const { requests, stream } = recording(() => quiet());
 		const sessions = memorySessions();
-		const on = (model: string) =>
-			createPiExecutor({
-				definition: defineAgent({
-					name: 'worker',
-					identity: 'Works.',
-					executor: pi({ instructions: 'Work.', model }),
-				}),
+		const on = (model: string) => {
+			const definition = defineAgent({
+				name: 'worker',
+				identity: 'Works.',
+				executor: pi({ instructions: 'Work.', model }),
+			});
+			const executor = createPiExecutor({
+				definition,
 				model: stubModel,
 				stream,
 				now: () => 0,
 				sessions,
-			}).open({ id: 'message:1:worker:1', room: unusedRoom, emit: () => {}, trace: noTrace });
+			});
+			return stateOf(executor, definition);
+		};
 		const first = on('scripted/first');
 		await first.pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
 		first.close?.();
@@ -363,19 +362,15 @@ describe('the harness of an activation', () => {
 			},
 			open: (scope, id, context) => store.open(scope, id, context),
 		};
+		const definition = workerWith();
 		const executor = createPiExecutor({
-			definition: workerWith(),
+			definition,
 			model: stubModel,
 			stream,
 			now: () => 0,
 			sessions,
 		});
-		const session = executor.open({
-			id: 'message:1:worker:1',
-			room: unusedRoom,
-			emit: () => {},
-			trace: noTrace,
-		});
+		const session = stateOf(executor, definition);
 		const running = session.pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
 		await created.promise;
 		session.close?.();
@@ -383,12 +378,7 @@ describe('the harness of an activation', () => {
 		expect(await running).toEqual({ failed: false });
 		expect(requests).toHaveLength(0);
 		// The next activation of the seat waits for the close, then continues the session.
-		const next = executor.open({
-			id: 'message:2:worker:1',
-			room: unusedRoom,
-			emit: () => {},
-			trace: noTrace,
-		});
+		const next = stateOf(executor, definition, { id: 'message:2:worker:1' });
 		const view = respond([said(1, 'Go.')], 1);
 		await next.pass({
 			kind: 'view',

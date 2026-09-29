@@ -59,7 +59,7 @@ it('ends the pass in flight on abort, commits nothing, and still counts the usag
 	});
 	const pass = run.session.pass({ kind: 'view', view: viewOf(1) });
 	await until(() => run.session.readThrough === 1, 'the echo of the view');
-	run.session.abort();
+	run.session.cancel();
 	expect(await pass).toEqual({ failed: false });
 	// The fake ends the interrupted turn with a result, and the stopped session only traces it.
 	await until(() => run.steps.some((step) => step.type === 'usage'), 'the interrupted result');

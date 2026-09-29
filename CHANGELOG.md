@@ -205,6 +205,54 @@ its `text`.
   The Codex executor also reads `billing_error` and `x-api-key`. The Claude
   package no longer has `causeOf`. See
   [Executors](docs/executors.md#failure-classification).
+- **The core owns the state of an activation, and a pass receives what the
+  core decides.** The Pi, Claude, and Codex executors each kept the read
+  position, the cut, the refresh test, the binding of the room tools, the
+  `error` event, the freshness of a steer, and the assembly of the prompt.
+  The core now keeps each one, and an executor keeps its harness alone. The
+  driver opens the state of each activation, and the hosting entry does not
+  export it. See [Executors](docs/executors.md#the-pass-contract).
+  - **`ExecutorSession`** has no `readThrough`, `cancelled`,
+    `shouldRefresh`, or `abort`. `session` is the id of the harness session,
+    and the core adds the harness name. `pass` takes a `Pass`. The optional
+    `roomTools` adds to a say and a schedule, as `RoomToolOptions` did.
+  - **`ExecutorActivation`** has no `room` and no `emit`. It holds `id`,
+    `trace`, `signal`, `readThrough`, `read(range)`, `delivered(call)`, and
+    `callId(tool)`. The cut of the activation aborts `signal`.
+  - **`Pass`** is new: the `PassInput`, `mechanism`, `agent`,
+    `record(after?)`, `resume`, `tools`, and `agentTools`. `PassRecord` and
+    `ReadRange` are new types. `Executor.harness` names the harness whose
+    sessions the executor records. `PassResult.error` carries the error of
+    the `error` event.
+  - **The core raises the `error` event once.** An executor raises none, and
+    the driver raises none of its own for a lost room call. The event
+    carries `PassResult.error`, or an error built from the message. The
+    `end` step of a seat that no execution serves now names the reason.
+  - **The core raises the tool events from the steps.** It pairs the
+    `tool_call` and `tool_result` steps by call id, and hands a harness that
+    cannot see the id of a call the id with `callId`. A room tool that
+    commits an entry raises no tool event: `say`, `schedule`, `seat`,
+    `unseat`, and `dismiss`. The `message` event of the entry already
+    reports the call, so a tool event reported the same fact twice. Codex
+    held this rule. The Pi and Claude executors now raise no tool event for
+    `seat`, `unseat`, and `dismiss`. `recall` commits nothing, and it
+    raises tool events on every executor.
+  - **The core keeps the freshness of a steer.** The algorithm of the Pi
+    executor moves into the core with no Pi type. The Claude executor drops
+    its echo check: a steered line that lands out of order now counts once
+    the gap closes, as it did on Pi.
+  - **The hosting entry removes** `renderActivation`, `RenderedPrompt`,
+    `renderDelta`, `renderPending`, `resolveReminders`, `sessionToResume`,
+    `roomTools`, `agentTools`, and `RoomToolBinding`. The core renders the
+    prompt and binds the tools. It adds `Pass`, `PassRecord`, and
+    `ReadRange`.
+  - **The executor suite checks the pass contract.** A failed activation
+    raises exactly one `error` event, and a `say` raises no tool event.
+    The Codex executor runs the suite in its live tier.
+  - **The scripted executor calls the room tools of the pass.** It records
+    a `tool_call` and a `tool_result` step for a tool of the agent, and the
+    core raises the tool events from them. A closing activation of it ends
+    with the `stopped` end step.
 - **A returned say is a post.** The `returned` kind goes. The room writes a
   `posted` entry with `to` and `returns`, the seq of the scheduled say, and
   a journal read refuses a `returned` entry. `PostedMessage` and `isPosted`

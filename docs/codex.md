@@ -178,7 +178,8 @@ flowchart LR
 3. The server connects to the socket and asks for the manifest: each tool
    with its description and its JSON Schema.
 4. The server lists those tools to Codex and sends each call over the
-   socket. The bridge runs the call against the room and returns the result.
+   socket. The bridge runs the call on the tool that the core bound, takes
+   the id of the call with `callId`, and returns the result.
 5. `close` stops the socket. The server exits when the socket closes.
 
 **Codex spawns the built server.** The package ships
@@ -215,17 +216,21 @@ thread. The `turn.*` events of Codex mark each run.
 events for trouble that it survives, such as a reconnect. An `error` event
 ends the run only when nothing else does.
 
-**`turn.started` moves `readThrough` to the position of the view or the
-delta.** The model reads the prompt when a run starts. A missed say moves
-the position to the last of the messages it carries, and a `schedule` moves
-it to the scheduled say; see [Executors](executors.md#how-an-activation-runs).
+**`turn.started` is the signal that the model read the prompt.** The model
+reads the prompt when a run starts, so the executor calls `read` with the
+range of the view or the delta then. A tool result reaches the model when
+the tool returns, so the executor calls `delivered` at once. A missed say
+moves the position to the last of the messages it carries, and a
+`schedule` moves it to the scheduled say; see
+[Executors](executors.md#how-an-activation-runs).
 
 **Codex takes no steer.** [The harness matrix](executors.md#the-harness-matrix)
 states what a family without steering does. The Codex session has no
 `steer` member, and the seat reads a line on the next delta pass.
 
-**A cut signals the run.** `abort` signals the run in flight. `close` stops
-the socket and the server. A late cut signals no dead process.
+**A cut signals the run.** The signal of the activation signals the run in
+flight. `close` stops the socket and the server. A late cut signals no dead
+process.
 
 ## Step mapping
 
@@ -254,12 +259,13 @@ A failed MCP call gives the message that Codex reported.
 
 **A tool of another server shows with its server.** The step name is
 `server__tool`. A room tool shows with its plain name, such as `say` or
-`schedule`, and the executor reports no room tool as a tool event; see
-[Executors](executors.md#the-room-tools).
+`schedule`. The core raises no tool event for a room tool that commits an
+entry; see [Executors](executors.md#the-room-tools).
 
 **A completed patch feeds `refs`.** The executor collects the paths of each
-completed `file_change`. The next ordinary `say` cites them in `refs`, and
-the bridge holds each path once. A ref is an absolute URI with a scheme, so
+completed `file_change`. The next ordinary `say` cites them in `refs`,
+through the `roomTools` options of the session, and the executor holds each
+path once. A ref is an absolute URI with a scheme, so
 the executor writes each path as a `file:` URI. The room refuses a bare path.
 
 **The package writes no `approval` step.** Codex answers its own approvals by
@@ -417,7 +423,12 @@ checks each call.
 Claude have a fake model or a fake executable that plays a plan from
 `@ambionframework/ambion/conformance`. A fake `codex` proves only that the
 adapter agrees with its own guess about the SDK, so the package has none.
-The package has no `./testing` entry for that reason.
+The package has no `./testing` entry for that reason. The live file
+`test/live/conformance.test.ts` runs the suite through
+`codexExecutorHarness` in `test/live/support.ts`: the model follows each
+plan from its instructions. A key that the provider refuses gives the
+permanent failure, and a `codex` binary that does not exist gives the
+transient one.
 
 **The unit tests run on recorded events.** `test/fixtures/` holds event
 streams that a real `codex` 0.155.1 produced through the SDK 0.155.1, on the
@@ -429,14 +440,15 @@ runs the executor on the recorded events to test exchange continuity.
 **The live tier proves the claims that recorded events cannot.** Each file
 holds the smallest room that proves one claim.
 
-| File                          | Claim                                                                                                               |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `test/live/loop.test.ts`      | A seat speaks through `say`; no approval error; usage above zero                                                    |
-| `test/live/tools.test.ts`     | A command and a file change become steps; the next say cites the path                                               |
-| `test/live/exclusive.test.ts` | The default seat has exactly the room tools and its own; it reads no host file; `'codex'` restores the native tools |
-| `test/live/steer.test.ts`     | A line sent during a run is held, and the next pass reads it                                                        |
-| `test/live/memory.test.ts`    | Each exchange starts a fresh thread and records it; a bogus id falls back                                           |
-| `test/live/mixed.test.ts`     | A Pi seat and a Codex seat both speak                                                                               |
+| File                            | Claim                                                                                                               |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `test/live/loop.test.ts`        | A seat speaks through `say`; no approval error; usage above zero                                                    |
+| `test/live/tools.test.ts`       | A command and a file change become steps; the next say cites the path                                               |
+| `test/live/exclusive.test.ts`   | The default seat has exactly the room tools and its own; it reads no host file; `'codex'` restores the native tools |
+| `test/live/steer.test.ts`       | A line sent during a run is held, and the next pass reads it                                                        |
+| `test/live/memory.test.ts`      | Each exchange starts a fresh thread and records it; a bogus id falls back                                           |
+| `test/live/mixed.test.ts`       | A Pi seat and a Codex seat both speak                                                                               |
+| `test/live/conformance.test.ts` | The executor suite of `@ambionframework/ambion/conformance`, with no steer and no usage plan                        |
 
 **Run the live tier with a key.** Every definition sets the model
 `gpt-5.6-luna` and `modelReasoningEffort: 'medium'`. A file skips when

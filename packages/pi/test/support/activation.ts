@@ -1,20 +1,16 @@
-/** One Pi activation built by hand, with no runner and no room around it. */
+/** One activation built by hand over the core state, with no runner and no room around it. */
 import type { AgentDefinition, RoomNotification } from '@ambionframework/ambion';
 import type {
 	ActivationView,
 	CommitRequest,
 	CommitResult,
+	Executor,
 	RoomProtocol,
+	RoomTool,
+	TraceSink,
 } from '@ambionframework/ambion/hosting';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
-import { Activation } from '../../src/executor.ts';
-import { stubModel } from '../../src/services.ts';
-import { memorySessions } from '../../src/sessions.ts';
+import { ActivationState } from '../../../ambion/src/execution/activation.ts';
 import { noTrace } from './trace.ts';
-
-const unused = () => {
-	throw new Error('unused');
-};
 
 /** A room that answers every call stale. */
 export const unusedRoom: RoomProtocol = {
@@ -37,24 +33,54 @@ export function roomThatCommits(
 	};
 }
 
-export function activationFor(
-	id: string,
+/** The core state of one activation over `executor`, as the driver opens it. */
+export function stateOf(
+	executor: Executor,
 	definition: AgentDefinition,
 	options: {
-		stream?: StreamFn;
+		id?: string;
+		room?: RoomProtocol;
 		emit?: (event: RoomNotification) => void;
+		trace?: TraceSink;
 	} = {},
-): Activation {
-	return new Activation(
-		{ id, room: unusedRoom, emit: options.emit ?? (() => {}), trace: noTrace },
-		{
-			definition,
-			model: stubModel,
-			stream: options.stream ?? unused,
-			now: () => 0,
-		},
-		{ sessions: memorySessions(), closing: new Map() },
-	);
+): ActivationState {
+	return new ActivationState(executor, {
+		id: options.id ?? 'message:1:worker:1',
+		room: options.room ?? unusedRoom,
+		definition,
+		emit: options.emit ?? (() => {}),
+		trace: options.trace ?? noTrace,
+	});
+}
+
+/**
+ * The core state of one activation over `room`, and the room tools that it
+ * binds on a first pass over `view`. The pass runs no model.
+ */
+export async function boundActivation(
+	id: string,
+	definition: AgentDefinition,
+	room: RoomProtocol,
+	view: ActivationView,
+): Promise<{ state: ActivationState; tools: readonly RoomTool[] }> {
+	let tools: readonly RoomTool[] = [];
+	const executor = {
+		open: () => ({
+			pass: async (pass: { readonly tools: readonly RoomTool[] }) => {
+				tools = pass.tools;
+				return { failed: false };
+			},
+		}),
+	};
+	const state = new ActivationState(executor, {
+		id,
+		room,
+		definition,
+		emit: () => {},
+		trace: noTrace,
+	});
+	await state.pass({ kind: 'view', view });
+	return { state, tools };
 }
 
 /** The view of one activation purpose over an empty room. */

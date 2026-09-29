@@ -7,13 +7,14 @@
  * later pass sends the delta. A turn ends on `turn.completed` or
  * `turn.failed`.
  *
- * - **Room tools.** The room tools live in a stdio MCP server that Codex
- *   spawns. The server reaches the room through a local socket that the
- *   activation opens (`bridge.ts`).
- * - **Freshness.** Codex sends no echo. The model reads the prompt when a
- *   turn starts, so `readThrough` moves to the view's position on
- *   `turn.started`. A say that the room answers `missed` moves it to the
- *   last missed line, which the model reads in the same tool result.
+ * - **Room tools.** The core binds the tools. They live in a stdio MCP
+ *   server that Codex spawns. The server reaches them through a local
+ *   socket that the activation opens (`bridge.ts`).
+ * - **Freshness.** The core keeps `readThrough`. Codex sends no echo. The
+ *   model reads the prompt when a turn starts, so the activation tells the
+ *   core that the model read the range of the prompt on `turn.started`. A
+ *   tool result reaches the model when the tool returns, so the activation
+ *   tells the core at once: a `missed` answer carries the missed lines.
  * - **Exchange continuity.** Codex keeps its threads on the local disk, and
  *   the release records the id that `thread.started` reports. The
  *   activation resumes the thread that `spec.resume` names, which the room
@@ -21,27 +22,19 @@
  *   before `thread.started`, and the activation starts a fresh thread.
  * - **Steer.** The session has no `steer`. Codex takes no message into a
  *   turn that runs. The driver holds the line, and the next pass reads it.
- * - **Cut.** `abort` signals the turn. `close` stops the socket and the
- *   room tools server.
+ * - **Cut.** The signal of the activation signals the turn. `close` stops
+ *   the socket and the room tools server.
  */
 import type {
-	ActivationView,
 	AgentDefinition,
 	Executor,
 	ExecutorActivation,
 	ExecutorSession,
-	HarnessSession,
-	PassInput,
+	Pass,
+	PassRecord,
 	PassResult,
-	RoomProtocol,
-	Seq,
-	TraceSink,
-} from '@ambionframework/ambion/hosting';
-import {
-	renderActivation,
-	renderDelta,
-	resolveReminders,
-	sessionToResume,
+	ReadRange,
+	RoomToolOptions,
 } from '@ambionframework/ambion/hosting';
 import {
 	Codex,
@@ -58,10 +51,10 @@ import {
 	type Scratch,
 	scratchFor,
 } from './catalog.ts';
-import { CodexSteps, changedPaths, isRoomTool } from './codex-trace.ts';
+import { CodexSteps, changedPaths } from './codex-trace.ts';
 import { type CodexRuntime, clientOptions, codexOf, threadOptions } from './options.ts';
 import { passResultOf } from './services.ts';
-import type { Binding } from './tools.ts';
+import { citing, servedTools } from './tools.ts';
 
 /** The part of a Codex thread that a pass uses. */
 interface CodexThreadLike {
@@ -98,6 +91,7 @@ export const HARNESS_NOTE =
 /** The Codex executor. One instance per seat, for as long as the room runs. */
 export function createCodexExecutor(options: CodexExecutorOptions): Executor {
 	return {
+		harness: 'codex',
 		open(activation: ExecutorActivation): ExecutorSession {
 			return new Activation(activation, options);
 		},
@@ -131,10 +125,7 @@ class Ending {
 
 /** One activation, from the moment the room wakes a seat until it stops. */
 class Activation implements ExecutorSession {
-	readonly id: string;
-	private readonly room: RoomProtocol;
-	private readonly emit: ExecutorActivation['emit'];
-	private readonly trace: TraceSink;
+	private readonly activation: ExecutorActivation;
 	private readonly definition: AgentDefinition;
 	private readonly options: CodexExecutorOptions;
 	/** The thread Codex reported last. */
@@ -145,57 +136,37 @@ class Activation implements ExecutorSession {
 	private heard = false;
 	private client: CodexClientLike | undefined;
 	private readonly steps = new CodexSteps();
-	/** Aborts when the activation is cut. The tools read its signal. */
-	private readonly cut = new AbortController();
 	/** Aborts the turn in flight. A turn that ended holds none, so a late cut never signals a dead process. */
 	private turn: AbortController | undefined;
-	/** The names of the tools in flight, by call id. */
-	private readonly named = new Map<string, string>();
-	private through = 0;
-	/** Where the turn in flight reads through. It takes effect when the turn starts. */
-	private reading = 0;
+	/** The range of the record the turn in flight reads. The core counts it read when the turn starts. */
+	private reading: ReadRange | undefined;
+	/** The workspace paths the agent changed since its last say. The next ordinary say cites them. */
+	private readonly changed = new Set<string>();
+	/** Whether the activation responds. A closing say cites no changed path. */
+	private ordinary = true;
+	/** What a say and a schedule add: the changed paths, as refs. */
+	readonly roomTools: RoomToolOptions = citing(this.changed, () => this.ordinary);
 	private bridge: Bridge | undefined;
 	/** The patched catalog and the empty directory. Absent when nativeTools is 'codex'. */
 	private scratch: Scratch | undefined;
 	private thread: CodexThreadLike | undefined;
-	private view: ActivationView | undefined;
-	private serial = 0;
 	private stopped = false;
 
 	constructor(activation: ExecutorActivation, options: CodexExecutorOptions) {
-		this.id = activation.id;
-		this.room = activation.room;
-		this.emit = activation.emit;
-		this.trace = activation.trace;
+		this.activation = activation;
 		this.definition = options.definition;
 		this.options = options;
+		activation.signal.addEventListener('abort', () => this.abort(), { once: true });
 	}
 
-	/** The Codex thread to record with the release. Absent until Codex reports one. */
-	get session(): HarnessSession | undefined {
-		const id = this.reported;
-		return id === undefined ? undefined : { harness: 'codex', id };
+	/** The id of the Codex thread to record with the release. Absent until Codex reports one. */
+	get session(): string | undefined {
+		return this.reported;
 	}
 
-	/** The seq this activation may commit against: the freshness boundary `readThrough`. */
-	get readThrough(): Seq {
-		return this.through;
-	}
-
-	/** Whether `abort` was called. The driver checks this before another room round trip. */
-	get cancelled(): boolean {
-		return this.stopped;
-	}
-
-	/** Whether the record moved past what the model read. */
-	shouldRefresh(lastSeq: Seq): boolean {
-		return !this.stopped && lastSeq > this.through;
-	}
-
-	/** Signal the turn in flight. The pass ends, and the driver runs no other. */
-	abort(): void {
+	/** The activation was cut: signal the turn in flight. The pass ends. */
+	private abort(): void {
 		this.stopped = true;
-		this.cut.abort();
 		this.turn?.abort();
 	}
 
@@ -207,21 +178,17 @@ class Activation implements ExecutorSession {
 	}
 
 	/** One pass: read, act, and report where this session left off. */
-	async pass(input: PassInput): Promise<PassResult> {
+	async pass(pass: Pass): Promise<PassResult> {
 		try {
+			this.ordinary = pass.view.spec.purpose.kind !== 'summarize';
+			const prompt = await this.promptFor(pass);
+			if (prompt === undefined) return { failed: false };
+			const thread = await this.start(pass);
 			if (this.stopped) return { failed: false };
-			this.view = input.view;
-			const prompt = await this.promptFor(input);
-			if (prompt === undefined) {
-				this.advance(input.view.through);
-				return { failed: false };
-			}
-			const thread = await this.start(input.view);
-			if (this.stopped) return { failed: false };
-			this.reading = input.view.through;
-			return this.finish(await this.attempt(thread, prompt));
+			this.reading = prompt.range;
+			return await this.attempt(thread, prompt.text);
 		} catch (error) {
-			return this.finish(this.broke(error));
+			return this.broke(error);
 		}
 	}
 
@@ -249,29 +216,23 @@ class Activation implements ExecutorSession {
 	}
 
 	/** The prompt of a pass: the mechanism, the agent and the whole view first, then the delta, or none when nothing is new. */
-	private async promptFor(input: PassInput): Promise<string | undefined> {
-		if (input.kind === 'delta') return renderDelta(input.view, input.since);
-		const reminders = await resolveReminders(input.view, this.definition);
-		if (this.thread !== undefined) {
-			return renderActivation(input.view, this.definition, reminders).context;
-		}
+	private async promptFor(pass: Pass): Promise<PassRecord | undefined> {
+		const record = await pass.record();
+		if (record === undefined || pass.kind === 'delta' || this.thread !== undefined) return record;
 		// The thread has no system prompt of its own, so the first prompt carries it.
-		const { mechanism, agent, context } = renderActivation(input.view, this.definition, reminders);
-		return `${HARNESS_NOTE}\n\n${mechanism}\n\n${agent}\n\n${context}`;
+		const text = `${HARNESS_NOTE}\n\n${pass.mechanism}\n\n${pass.agent}\n\n${record.text}`;
+		return { ...record, text };
 	}
 
 	/** Open the socket and the thread on the first pass. Later passes keep them. */
-	private async start(view: ActivationView): Promise<CodexThreadLike> {
+	private async start(pass: Pass): Promise<CodexThreadLike> {
 		if (this.thread !== undefined) return this.thread;
-		if (view.spec.seat !== this.definition.name)
-			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
 		// The catalog comes first. A model with no entry fails before anything opens.
 		const scratch = await this.seal();
 		// Keep the scratch before the bridge opens, so a failed bridge still removes it on close.
 		this.scratch = scratch;
-		const bridge = await startBridge(view, this.definition, this.binding(), () =>
-			this.currentView(view),
-		);
+		const tools = servedTools([...pass.tools, ...pass.agentTools], this.activation);
+		const bridge = await startBridge(tools, this.activation.signal);
 		this.bridge = bridge;
 		if (this.stopped) {
 			bridge.close();
@@ -279,7 +240,7 @@ class Activation implements ExecutorSession {
 		}
 		const make = this.options.client ?? ((options: CodexOptions) => new Codex(options));
 		this.client = make(clientOptions(this.options, bridge.socketPath, scratch));
-		this.resuming = sessionToResume(view, 'codex');
+		this.resuming = pass.resume;
 		this.thread = this.begin(this.resuming);
 		return this.thread;
 	}
@@ -301,30 +262,6 @@ class Activation implements ExecutorSession {
 		return resume === undefined
 			? this.client.startThread(options)
 			: this.client.resumeThread(resume, options);
-	}
-
-	/** What the room tools reach. */
-	private binding(): Binding {
-		const read = () => this.through;
-		return {
-			id: this.id,
-			room: this.room,
-			get readThrough() {
-				return read();
-			},
-			signal: this.cut.signal,
-			acknowledgeThrough: (seq) => this.advance(seq),
-			callId: (tool) => this.steps.claim(tool) ?? `${this.id}:${tool}:${this.serial++}`,
-			abort: () => this.abort(),
-		};
-	}
-
-	private currentView(built: ActivationView): ActivationView {
-		return this.view ?? built;
-	}
-
-	private advance(seq: Seq): void {
-		this.through = Math.max(this.through, seq);
 	}
 
 	/** Run one turn to its end, and report how it ended. */
@@ -354,49 +291,17 @@ class Activation implements ExecutorSession {
 		return passResultOf(ending.failure());
 	}
 
-	/** One thread event: its steps, its changed paths, and the position the turn read. */
+	/** One thread event: its steps, its changed paths, and the range the turn read. */
 	private handle(event: ThreadEvent): void {
 		if (event.type === 'thread.started') {
 			this.heard = true;
 			this.reported = event.thread_id;
 		}
-		if (event.type === 'turn.started') this.advance(this.reading);
-		this.bridge?.note(changedPaths(event));
-		for (const step of this.steps.steps(event)) {
-			this.trace.record(step);
-			if (step.type === 'tool_call') this.started(step.call, step.name);
-			if (step.type === 'tool_result') this.finished(step.call);
+		if (event.type === 'turn.started' && this.reading !== undefined) {
+			this.activation.read(this.reading);
 		}
-	}
-
-	private started(call: string, name: string): void {
-		this.named.set(call, name);
-		// A room tool is the room's own event, not a tool's.
-		if (!isRoomTool(name)) this.toolEvent('tool_execution_start', name);
-	}
-
-	private finished(call: string): void {
-		const name = this.named.get(call);
-		this.named.delete(call);
-		if (name !== undefined && !isRoomTool(name)) this.toolEvent('tool_execution_end', name);
-	}
-
-	private toolEvent(type: 'tool_execution_start' | 'tool_execution_end', toolName: string): void {
-		this.emit({ type, agent: this.definition.name, activation: this.id, toolName });
-	}
-
-	/** A failure reaches the host as an `error` event before the driver sees the result. */
-	private finish(result: PassResult): PassResult {
-		if (result.failed && result.message !== undefined) {
-			this.emit({
-				type: 'error',
-				agent: this.definition.name,
-				activation: this.id,
-				error: new Error(result.message),
-				...(result.cause === undefined ? {} : { cause: result.cause }),
-			});
-		}
-		return result;
+		for (const path of changedPaths(event)) this.changed.add(path);
+		for (const step of this.steps.steps(event)) this.activation.trace.record(step);
 	}
 
 	/**
@@ -408,6 +313,6 @@ class Activation implements ExecutorSession {
 		if (this.stopped) return { failed: false };
 		const message = error instanceof Error ? error.message : String(error);
 		const cause = error instanceof PermanentError ? 'permanent' : 'transient';
-		return { failed: true, cause, message };
+		return { failed: true, cause, message, ...(error instanceof Error ? { error } : {}) };
 	}
 }
