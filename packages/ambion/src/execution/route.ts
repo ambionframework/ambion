@@ -1,12 +1,12 @@
 /**
  * The router: how a room picks the execution for a seat by executor kind.
  *
- * `defineExecution` builds the execution of one executor kind and makes it
- * the default of that kind. `route` serves every seat of a room: the first
- * execution of the room or its runtime that serves the kind of the seat,
- * else the default of the kind. On a miss, the activation fails at once
- * with a permanent `no_execution` error, and the room does not send the
- * wake again.
+ * `localExecution` builds the execution of one executor kind.
+ * `defineExecution` builds it the same way and makes it the default of that
+ * kind. `route` serves every seat of a room: the first execution of the
+ * room or its runtime that serves the kind of the seat, else the default of
+ * the kind. On a miss, the activation fails at once with a permanent
+ * `no_execution` error, and the room does not send the wake again.
  */
 
 import { AmbionError } from '../errors.ts';
@@ -27,18 +27,26 @@ const defaults = new Map<string, Execution>();
  * The execution of one executor kind. `build` runs once for each connector,
  * over the host of the runtime, and returns what builds the executor of one
  * seat. Each seat runs as an `AgentRunner` in this process, with the trace
- * limits of the host. The execution becomes the default of `kind`: a room
- * with no execution for a seat of that kind runs it. A later definition of
- * the same kind replaces it as the default.
+ * limits of the host. The execution does not change the default of `kind`.
+ */
+export function localExecution(
+	kind: string,
+	build: (host: ExecutionHost) => (request: ConnectorRequest) => Executor,
+): Execution<AgentRunner> {
+	return { kind, connector: (host) => localConnector(host, build(host)) };
+}
+
+/**
+ * The execution of one executor kind, as `localExecution` builds it, and the
+ * default of `kind`: a room with no execution for a seat of that kind runs
+ * it. A later definition of the same kind replaces it as the default. An
+ * executor package defines its default once, when the package loads.
  */
 export function defineExecution(
 	kind: string,
 	build: (host: ExecutionHost) => (request: ConnectorRequest) => Executor,
 ): Execution<AgentRunner> {
-	const execution: Execution<AgentRunner> = {
-		kind,
-		connector: (host) => localConnector(host, build(host)),
-	};
+	const execution = localExecution(kind, build);
 	defaults.set(kind, execution);
 	return execution;
 }

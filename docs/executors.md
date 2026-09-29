@@ -29,23 +29,33 @@ seat that no execution serves fails at once with a `no_execution` error,
 and the failure is permanent. A room with no execution still runs its
 people and its record.
 
-**`defineExecution(kind, build)` makes the execution of one kind.** It
-returns an `Execution` of that kind, and the execution becomes the default
-of the kind. A later definition of the same kind replaces the default. The
+**`localExecution(kind, build)` makes the execution of one kind.** It
+returns an `Execution` of that kind and changes no default. Each executor
+package builds its execution with it, such as `piExecution(options)`. An
+execution with options serves only the rooms and the runtimes that it is
+passed to.
+
+**`defineExecution(kind, build)` also makes the execution the default of
+the kind.** A later definition of the same kind replaces the default. The
 registry holds functions and stays outside the journal, the captured
 definition, and the JSON protocol. The kernel imports no executor package.
-Each executor package defines its default when the host loads it. The
-runtime builds the default of a kind once, on the first seat of that kind,
-over its own storage, clock, limits, and logger.
+Each executor package defines its default once, with no options, when the
+host loads it. The runtime builds the default of a kind once, on the first
+seat of that kind, over its own storage, clock, limits, and logger.
 
 ```ts
+export function localExecution(
+  kind: string,
+  build: (host: ExecutionHost) => (request: ConnectorRequest) => Executor,
+): Execution<AgentRunner>;
+
 export function defineExecution(
   kind: string,
   build: (host: ExecutionHost) => (request: ConnectorRequest) => Executor,
 ): Execution<AgentRunner>;
 ```
 
-**The port of a defined execution is an `AgentRunner` in this process.**
+**The port of a local execution is an `AgentRunner` in this process.**
 `build` runs once for each connector. The function that it returns builds
 the executor of one seat. Every seat keeps the trace limits and the logger
 of the host. The runner receives a plain `RoomProtocol` facade with
@@ -103,7 +113,8 @@ internal. Participant views omit `sessionId`.
 | `AgentPort`          | The side that the room calls: `wake`, `steer`, and `cut`                                     |
 | `RoomProtocol`       | The side that a seat calls: `view`, `commit`, and `lease`                                    |
 | `AgentRunner`        | The driver, and the port of a seat in this process. `run(activation)` resolves when it ends  |
-| `defineExecution`    | Builds the execution of one kind, whose port is an `AgentRunner`, and makes it the default   |
+| `localExecution`     | Builds the execution of one kind, whose port is an `AgentRunner` in this process             |
+| `defineExecution`    | Builds the execution of one kind as `localExecution` does, and makes it the default          |
 | `hostingOf`          | The journal namespace, the limits, the executions, and the room registry of a runtime        |
 | `describeExecutor`   | The neutral half of an executor definition, which an executor family extends with its fields |
 
@@ -312,7 +323,7 @@ a `thinking` or `text` block into one step. `limits.trace.stepsPerPass`
 caps the steps of one pass, and an `end` step is always kept.
 `limits.trace.toolOutputBytes` cuts a tool output that is larger, and the
 step keeps the start of it with a note of the size. Every execution that
-`defineExecution` builds applies the limits of the host.
+`localExecution` or `defineExecution` builds applies the limits of the host.
 
 **A definition sets its trace policy.** `defineAgent({ trace })` takes
 `thinking` (`omit`, `summary`, or `full`) and `toolOutput` (`omit` or
@@ -444,9 +455,9 @@ family. `@ambionframework/claude` is the worked example, and
 8. **Wrap the executor in an `Execution`.** Export a function that defines
    the executor of an agent and a function that gives the host its
    execution. Claude offers `claude()` and `claudeExecution()`. Build the
-   execution with `defineExecution` and the kind, and define it once when
-   the package loads, so a room with no `execution` serves the seats of
-   the family.
+   execution with `localExecution` and the kind. Define the default once
+   with `defineExecution` when the package loads, so a room with no
+   `execution` serves the seats of the family.
 
 ```ts
 import { defineAgent, startRoom } from '@ambionframework/ambion';

@@ -1,7 +1,7 @@
 import {
-	defineExecution,
 	type Execution,
 	type ExecutorSession,
+	localExecution,
 } from '@ambionframework/ambion/hosting';
 
 /** A session that fails each pass with the reason. It calls no model. */
@@ -28,7 +28,7 @@ function failing(message: string, report: (error: Error) => void): ExecutorSessi
  * `kind` fails at once and gives the reason. The other seats keep running.
  */
 export function unavailable(kind: string, reason: string): Execution {
-	return defineExecution(kind, () => (request) => ({
+	return localExecution(kind, () => (request) => ({
 		open: (activation) =>
 			failing(`Seat '${request.seat}' cannot run: ${reason}`, (error) =>
 				activation.emit({

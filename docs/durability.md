@@ -34,7 +34,7 @@ conditional append; the SQLite backend supplies this comparison.
 After a confirmed append, the room folds and captures the resulting facts
 before handing them to a host-local ordered publication tail. That tail sends
 notifications, steering, and cuts for both newly written and recovered
-entries. Listener or transport failure cannot turn a confirmed journal write
+entries. Listener or port failure cannot turn a confirmed journal write
 into a rejected submission; publication has no durable backlog.
 
 Memory storage lasts for the process. SQLite persists the record. A storage
@@ -153,7 +153,7 @@ transient cause is a rate limit, a server error, or a lost connection.
 
 Section 5 states which ends carry usage.
 
-### Transport calls and unclaimed work
+### Executor calls and unclaimed work
 
 **A local timeout leaves the remote result unknown.** Executor calls to the room
 use `hostingOf(runtime).limits.call.timeout`, in milliseconds, with a default
@@ -181,7 +181,7 @@ An unresolved delivery does not prevent a later resend.
 Work can remain pending through a shutdown or a deliberate executor hold.
 Abort and unseating record the boundaries that make delayed claims stale.
 
-Hosts receive `delivery_error` diagnostics for failed or uncertain transport
+Hosts receive `delivery_error` diagnostics for failed or uncertain delivery
 calls. Each diagnostic identifies the agent, activation, and operation.
 These are live diagnostics; they do not change the accepted message or establish
 a durable exchange outcome. A successful delivery call does not prove that

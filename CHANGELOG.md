@@ -170,10 +170,11 @@ its `text`.
 ### Breaking changes
 
 - **The remote call is an `Execution`, and one router serves every kind.**
-  The hosting entry exports `defineExecution(kind, build)`. It returns an
-  `Execution` of that kind, whose port is an `AgentRunner` in this process,
-  and it makes the execution the default of its kind. `Execution` has an
-  optional `kind`, and an execution with no kind serves every kind.
+  The hosting entry exports `localExecution(kind, build)`. It returns an
+  `Execution` of that kind, whose port is an `AgentRunner` in this process.
+  `defineExecution(kind, build)` returns the same execution and makes it
+  the default of its kind. `Execution` has an optional `kind`, and an
+  execution with no kind serves every kind.
   `execution` of `createRuntime`, `startRoom`, and `resumeRoom` takes one
   execution or a list. A seat runs on the first execution of the room for
   its kind, then on the first of the runtime, then on the default of its
@@ -185,9 +186,10 @@ its `text`.
     `composeExecutions`, `registerDefaultExecution`, `composeConnector`,
     `ConnectorComposition`, `seatContext`, and `SeatContextInput`.
     `createRuntime` has no `transport` option. A list in `execution`
-    replaces `composeExecutions`, and `defineExecution` replaces
-    `registerDefaultExecution` and `composeConnector`. A test wraps the
-    ports of an execution where it wrapped a transport.
+    replaces `composeExecutions`. `defineExecution` replaces
+    `registerDefaultExecution`, and `localExecution` replaces
+    `composeConnector`. A test wraps the ports of an execution where it
+    wrapped a transport.
   - **The conformance entry renames** `transportConformance` to
     `portConformance`, and `TransportHarness` to `PortHarness`. The cases
     and their names stay.
@@ -195,8 +197,8 @@ its `text`.
     `claudeExecution()` and `codexExecution()` read `limits.trace` of the
     runtime. Before, they applied `DEFAULT_TRACE_LIMITS`.
   - **`piExecution()`, `claudeExecution()`, and `codexExecution()` return
-    `Execution<AgentRunner>`,** and each call makes its execution the
-    default of its kind. Loading the package defines the default.
+    `Execution<AgentRunner>`.** A call changes no default. Loading the
+    package defines the default of its kind once, with no options.
   - **The Cloudflare seat object builds its executor once.** It connects
     the Pi execution of the worker once, and it keeps the runner and the
     executor on the object instance. The room object reaches each seat

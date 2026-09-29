@@ -55,7 +55,7 @@ export interface ExecutionHost {
 
 /**
  * The execution side of a room, as a value. An executor package builds one
- * with `defineExecution`, such as `piExecution()`. A remote host builds one
+ * with `localExecution`, such as `piExecution()`. A remote host builds one
  * whose ports cross to the host that runs the seat. `startRoom` and
  * `createRuntime` take it. The kernel reads its `kind` and calls its
  * connector.

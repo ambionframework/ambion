@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
 import { type PortHarness, portConformance, speakOnce } from '../src/conformance.ts';
 import { executionHostOf } from '../src/host/runtime.ts';
-import { defineExecution, type Execution } from '../src/hosting.ts';
+import { type Execution, localExecution } from '../src/hosting.ts';
 import { createRuntime, defineAgent } from '../src/index.ts';
 import { serializing } from './support/ports.ts';
 
@@ -27,13 +27,13 @@ const harnessOver = (execution: Execution): PortHarness => ({
 });
 
 /** The execution of the suite: each seat speaks once, in this process. */
-const speaking = () => defineExecution('port-conformance', () => () => speakOnce());
+const speaking = () => localExecution('port-conformance', () => () => speakOnce());
 
-describe('defineExecution', () => {
+describe('localExecution', () => {
 	for (const c of portConformance(harnessOver(speaking()))) it(c.name, c.run);
 });
 
-describe('serializing(defineExecution())', () => {
+describe('serializing(localExecution())', () => {
 	const execution = serializing(speaking());
 	for (const c of portConformance(harnessOver(execution))) it(c.name, c.run);
 	it('sends nothing that would not survive the wire', () => {

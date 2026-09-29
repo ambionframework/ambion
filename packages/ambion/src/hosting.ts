@@ -5,10 +5,11 @@
  * A seat makes three calls — `view`, `commit` and `lease` — and the room
  * answers them. `RoomProtocol` names the three, and `AgentPort` names the
  * side the room calls back. An `Execution` connects one to the other: its
- * connector returns the port of each seat. `defineExecution` builds the
+ * connector returns the port of each seat. `localExecution` builds the
  * execution of one executor kind, whose port is an `AgentRunner` in this
- * process. A host that puts the seats somewhere else writes an execution
- * whose port crosses the boundary, and runs an `AgentRunner` there.
+ * process, and `defineExecution` also makes it the default of the kind. A
+ * host that puts the seats somewhere else writes an execution whose port
+ * crosses the boundary, and runs an `AgentRunner` there.
  * `@ambionframework/cloudflare` is one such host.
  *
  * Every shape a call carries is here, because a remote port serialises
@@ -63,7 +64,7 @@ export type {
 	RoomToolResult,
 } from './execution/room-tools.ts';
 export { agentTools, roomTools, toolContext } from './execution/room-tools.ts';
-export { defineExecution } from './execution/route.ts';
+export { defineExecution, localExecution } from './execution/route.ts';
 export { AgentRunner } from './execution/runner.ts';
 export type { TraceOpener, TraceSink } from './execution/trace.ts';
 export type {

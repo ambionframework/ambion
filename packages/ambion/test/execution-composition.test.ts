@@ -10,7 +10,13 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, vi } from 'vitest';
 import { pi, piExecution } from '../../pi/src/index.ts';
-import { defineExecution, type Execution, type Executor, hostingOf } from '../src/hosting.ts';
+import {
+	defineExecution,
+	type Execution,
+	type Executor,
+	hostingOf,
+	localExecution,
+} from '../src/hosting.ts';
 import {
 	type AgentExecutor,
 	createRuntime,
@@ -85,11 +91,18 @@ async function ask(options: Parameters<typeof startRoom>[0]) {
 describe('the execution a room chooses', () => {
 	it('runs the default of the kind when the host passes none, and builds it once per runtime', async () => {
 		const defaults = defaultOf('stub-once');
+		// An execution that localExecution builds does not change the default of its kind.
+		let local = 0;
+		localExecution('stub-once', () => {
+			local += 1;
+			return () => idle;
+		});
 		const runtime = createRuntime();
 		await ask({ name: roomName('once-a'), agents: [seat('stub-once')], runtime });
 		await ask({ name: roomName('once-b'), agents: [seat('stub-once')], runtime });
 		await vi.waitFor(() => expect(defaults.connected).toBeGreaterThan(1));
 		expect(defaults.built).toBe(1);
+		expect(local).toBe(0);
 	});
 
 	it.each(['room', 'runtime'] as const)(
