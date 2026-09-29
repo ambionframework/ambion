@@ -122,6 +122,8 @@ as an acceptance condition for this release.
 **Each phase has one observable result.** Existing SN identifiers retain
 their concern where it still applies. New concerns use SN32-SN35. All
 other old SN identifiers are deferred or superseded in D21.
+Complete each phase and its evidence before starting the next phase.
+Within a phase, items can proceed together when their dependencies allow.
 
 ### Phase 1. The template, wire, and workstation transport
 
@@ -167,8 +169,7 @@ entries, build configuration, and export snapshots together.
 
 **Evidence:** exact sample requests, responses, and errors validate.
 Bad names, source metadata, digests, times, sample periods, and part
-shapes fail. The
-generated schema matches the published file. Deferred features add no
+shapes fail. The generated schema matches the published file. Deferred features add no
 required type, endpoint, or fixture.
 
 **SN3. The client.** Implement index, observe, and file reads. Resolve
@@ -204,8 +205,7 @@ their existing probe when adding the transport types.
 **SN33. Connections.** Add `connect` only when the backend has ports.
 Implement ownership checks, readiness validation, qualified sensor names,
 idempotence, name conflicts, and captured launch source. Commit
-registration atomically after
-validation. Concurrent claims on one name have one winner. Dispose a
+registration atomically after validation. Concurrent claims on one name have one winner. Dispose a
 losing transport. Keep the registry in memory for the host run.
 
 **Evidence:** two agents can read one connection, but cannot register
@@ -228,8 +228,8 @@ reminders still work. Failed sensor work cannot discard their output.
 received bytes and an observation manifest. Include launch source metadata
 and preserve its dirty marker. Retain received bytes independently of the
 server owner's acquisition files and the observer's mutable exports. Add
-an internal buffer helper if needed; add no public snapshot variant. Keep object and bash owner
-operations separate. Generate local filenames and one directory per call.
+an internal buffer helper if needed; add no public snapshot variant.
+Keep object and bash owner operations separate. Generate local filenames and one directory per call.
 Return success only after retention and export finish.
 
 **Evidence:** `restore` retrieves the manifest and its referenced files

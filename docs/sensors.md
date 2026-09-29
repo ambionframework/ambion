@@ -77,8 +77,8 @@ the existing agent-name grammar, `^[a-z][a-z0-9-]*$`.
 
 **Templates are ordinary repositories in the existing Git backend.**
 The host supplies `templates/sensor-server` as it supplies other templates.
-The agent forks it, optionally clones through `fork`, and works in its
-own repository. [Git](git.md) owns naming, branches, and push authority.
+The agent forks it and works in its own repository. It creates a checkout
+through `fork` with `clone`, or uses `clone` on an existing fork. [Git](git.md) owns naming, branches, and push authority.
 An agent needs no new sensor installation or configuration tool.
 
 **Each template documents one complete lifecycle.** Its README states:

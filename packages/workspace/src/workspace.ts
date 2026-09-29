@@ -185,7 +185,7 @@ function sqlPart(
 	};
 }
 
-/** The `repos` and `fork` tools and the git note, when the workspace has a git backend. */
+/** The `repos`, `clone` and `fork` tools and the git note, when the workspace has a git backend. */
 function gitPart(
 	git: GitBinding | undefined,
 	shell: WorkspaceResource<WorkspaceEnv>,
@@ -203,7 +203,7 @@ function gitPart(
 
 /**
  * Bind the three file tools, the five process tools, `snapshot` and `restore`, `sql`
- * when the workspace has a SQL backend, and `repos` and `fork` when it has a
+ * when the workspace has a SQL backend, and `repos`, `clone` and `fork` when it has a
  * git backend. The guidance names the
  * tools, then the process note, the snapshot note, the SQL notes, the git
  * note, the bash backend's note, the audit note when one is set, and the
@@ -391,7 +391,7 @@ function openSqlOwner(
  * `git` the git owner. The
  * bash backend's `layout` names where the audit log and the room mirrors
  * live. A workspace with no SQL backend has no `sql` tool, and one with no
- * git backend has no `repos` and no `fork` tool. Set `audit.path`
+ * git backend has no `repos`, `clone` or `fork` tool. Set `audit.path`
  * to record every bound tool call at a path of your own; the default is
  * `layout.audit`. Tool guidance then tells every agent the log exists and
  * where to read it, and always names the room mirror convention at

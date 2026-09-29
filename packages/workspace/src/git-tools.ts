@@ -1,15 +1,16 @@
 /**
- * The `repos` and `fork` tools over a git backend.
+ * The `repos`, `clone` and `fork` tools over a git backend.
  *
- * A workspace with a git backend gives its agents these two tools. Each
+ * A workspace with a git backend gives its agents these tools. Each
  * tool does one thing. `repos` lists the repositories with their clone
- * URLs. `fork` forks a repository into the calling agent's namespace, and
- * with `clone` it puts a working copy of the fork in the agent's files.
+ * URLs. `clone` puts a working copy of any listed repository in the agent's
+ * files. `fork` forks a repository into the calling agent's namespace, and
+ * may also put a working copy of that fork in the agent's files.
  * An agent writes a commit ref itself, from `git rev-parse`; the git note
  * states the form.
  *
- * `fork` runs its fork as one operation on the git owner, and that
- * operation ends before the clone starts. The clone then runs as one
+ * `clone` resolves its source on the git owner, and that operation ends
+ * before the clone starts. The clone then runs as one
  * operation on the bash owner, as the calling agent. No git operation holds
  * a bash operation, so neither owner waits on the other.
  *
@@ -53,7 +54,7 @@ export interface GitToolOptions {
 }
 
 /** The tool names, in the order the tool line of the guidance lists them. */
-export const GIT_TOOL_NAMES = ['repos', 'fork'] as const;
+export const GIT_TOOL_NAMES = ['repos', 'clone', 'fork'] as const;
 
 /**
  * Guidance for the git tools over a server that the workspace names
@@ -61,11 +62,12 @@ export const GIT_TOOL_NAMES = ['repos', 'fork'] as const;
  */
 export function gitToolGuidance(server: string, workspace: string): string {
 	return [
-		`repos and fork reach the git server of this workspace, ${server}.`,
+		`repos, clone and fork reach the git server of this workspace, ${server}.`,
 		`templates/<name> is a read-only template. <agent>/<name> belongs to that agent.`,
 		`You push only to <your name>/<name>, and you can read every repository.`,
-		`To start from a template, fork it and set clone. Clone with the URL that repos or`,
-		`fork gives. In the clone, make a branch, commit, and push to origin with git in bash.`,
+		`Use clone to make a local checkout of any repository without creating a fork. Its`,
+		`origin is the source, with the source's push permissions. To make work you can push, fork a`,
+		`template and set clone. In that clone, make a branch, commit, and push to origin with git in bash.`,
 		`An edit persists only after you commit it and push it. Push before you finish.`,
 		`To cite a commit you pushed, put its full hash from git rev-parse in the refs of a say:`,
 		`ambion://workspace/${workspace}/repo/<repository>/branch/<branch>/commit/<hash>. Use`,
@@ -99,7 +101,14 @@ const forkSchema = Type.Object({
 type ReposParams = Static<typeof reposSchema>;
 type ForkParams = Static<typeof forkSchema>;
 
-/** Build the `repos` and `fork` tools that run on the git owner. */
+const cloneSchema = Type.Object({
+	source: Type.String({ description: 'The repository to clone, such as templates/weekly-report.' }),
+	path: Type.String({ description: 'A path for the working copy, such as ~/report.' }),
+});
+
+type CloneParams = Static<typeof cloneSchema>;
+
+/** Build the git tools. Repository operations run on the git owner. */
 export function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 	const repos = defineTool({
 		name: 'repos',
@@ -109,6 +118,16 @@ export function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 		parameters: reposSchema,
 		execute: recordedOnShell('repos', options.shell, options.audit, (params: ReposParams, ctx) =>
 			listed(options, params, ctx),
+		),
+	});
+	const clone = defineTool({
+		name: 'clone',
+		label: 'Clone',
+		description:
+			'Clone any repository into your workspace without creating a fork. The source remains origin.',
+		parameters: cloneSchema,
+		execute: recordedOnShell('clone', options.shell, options.audit, (params: CloneParams, ctx) =>
+			cloned(options, params, ctx),
 		),
 	});
 	const fork = defineTool({
@@ -121,7 +140,7 @@ export function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 			forked(options, params, ctx),
 		),
 	});
-	return Object.freeze([repos, fork]);
+	return Object.freeze([repos, clone, fork]);
 }
 
 // -- repos ---------------------------------------------------------------------
@@ -184,6 +203,35 @@ function cell(text: string): string {
 	return text.replace(/\|/g, '\\|').replace(/\n/g, ' ');
 }
 
+// -- clone ---------------------------------------------------------------------
+
+interface CloneDetails {
+	repository: string;
+	source: string;
+	url: string;
+	clone: string;
+}
+
+async function cloned(
+	options: GitToolOptions,
+	params: CloneParams,
+	ctx: ToolContext,
+): Promise<AgentToolResult<CloneDetails>> {
+	const repository = await options.git(
+		ctx.agent,
+		(env) => env.get(params.source, ctx.signal),
+		ctx.signal,
+	);
+	if (repository === undefined)
+		throw new Error(`${params.source} does not exist. Call repos to list the repositories.`);
+	const clone = await cloneInto(options, repository, params.path, false, ctx, 'source');
+	if (clone.failed) throw new Error(clone.text);
+	return report(
+		`Cloned ${params.source} into ${clone.path} on branch ${repository.defaultBranch}. origin is the source.`,
+		{ repository: repository.id, source: params.source, url: repository.url, clone: clone.path },
+	);
+}
+
 // -- fork ----------------------------------------------------------------------
 
 interface ForkDetails {
@@ -219,7 +267,7 @@ async function forked(
 		url: repository.url,
 	};
 	if (params.clone === undefined) return report(lead, details);
-	const clone = await cloneInto(options, repository, params.clone, !outcome.ok, ctx);
+	const clone = await cloneInto(options, repository, params.clone, !outcome.ok, ctx, 'fork');
 	// The fork stands, and a failed clone still fails the call: the agent asked for a working copy.
 	if (clone.failed) throw new Error(`${lead}\n${clone.text}`);
 	return report(`${lead}\n${clone.text}`, { ...details, clone: clone.path });
@@ -235,6 +283,7 @@ async function cloneInto(
 	path: string,
 	existing: boolean,
 	ctx: ToolContext,
+	origin: 'fork' | 'source',
 ): Promise<{ path: string; text: string; failed?: true }> {
 	const context =
 		ctx.signal === undefined ? BACKGROUND_CONTEXT : withAbortSignal(ctx.signal, BACKGROUND_CONTEXT);
@@ -252,12 +301,15 @@ async function cloneInto(
 			if (failure === undefined) {
 				return {
 					path: target,
-					text: `Cloned it into ${target} on branch ${repository.defaultBranch}. origin is the fork.`,
+					text: `Cloned it into ${target} on branch ${repository.defaultBranch}. origin is the ${origin}.`,
 				};
 			}
 			return {
 				path: target,
-				text: `The clone into ${target} failed: ${failure}. The fork stays; clone ${repository.url}.`,
+				text:
+					origin === 'fork'
+						? `The clone into ${target} failed: ${failure}. The fork stays; clone ${repository.url}.`
+						: `The clone into ${target} failed: ${failure}.`,
 				failed: true,
 			};
 		},

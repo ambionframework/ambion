@@ -30,16 +30,16 @@ ref that starts a job is a later design, and it builds on this one.
 
 ## What the backend gives an agent
 
-| Operation           | How the agent does it                                              |
-| ------------------- | ------------------------------------------------------------------ |
-| Find a template     | The `repos` tool: each template with its description and clone URL |
-| Fork a template     | The `fork` tool: a fork in the agent's own namespace               |
-| Clone into the home | `fork` with `clone`, or `git clone <URL from repos>` in `bash`     |
-| Edit                | The `read`, `write`, and `edit` tools, or `bash`                   |
-| Work on a branch    | Ordinary `git` in `bash`: `switch -c`, `add`, `commit`, `merge`    |
-| Persist the edits   | `git push origin <branch>`                                         |
-| Review a peer       | `git clone <URL from repos>` of the peer's fork                    |
-| Cite a commit       | A commit ref with the full hash from `git rev-parse`, in `refs`    |
+| Operation           | How the agent does it                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| Find a template     | The `repos` tool: each template with its description and clone URL                    |
+| Fork a template     | The `fork` tool: a fork in the agent's own namespace                                  |
+| Clone into the home | `clone` to check out any repository, or `fork` with `clone` to create a writable fork |
+| Edit                | The `read`, `write`, and `edit` tools, or `bash`                                      |
+| Work on a branch    | Ordinary `git` in `bash`: `switch -c`, `add`, `commit`, `merge`                       |
+| Persist the edits   | `git push origin <branch>`                                                            |
+| Review a peer       | `clone` the peer's fork                                                               |
+| Cite a commit       | A commit ref with the full hash from `git rev-parse`, in `refs`                       |
 
 ## Prompt an agent
 
@@ -320,7 +320,7 @@ host deletes a template with its own tools.
 
 ## The tools
 
-**The git backend adds two tools: `repos` and `fork`.** Each tool does one
+**The git backend adds three tools: `repos`, `clone` and `fork`.** Each tool does one
 thing, the same as `read`, `bash`, and `sql`. A single tool with an
 `action` field has parameters that apply to one action only, and a model
 can fill them in for the other action. The file is
@@ -331,12 +331,35 @@ can fill them in for the other action. The file is
 | Tool    | Description                                                                                                                 |
 | ------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `repos` | List the repositories on the workspace's git server: the read-only templates and every agent's forks, with clone URLs.      |
+| `clone` | Clone a repository into your workspace without creating a fork. The source is `origin`, with its push permissions.          |
 | `fork`  | Fork a repository into your own namespace on the git server. Set clone to put a working copy of the fork in your workspace. |
 
-**The audit log records each call.** `openWorkspace` binds both tools
+**The audit log records each call.** `openWorkspace` binds all three tools
 through the audit log, the same as `sql`. The clone of a `fork` call runs
 as one more operation on the bash owner, and the log records one entry
 for the `fork` call.
+
+### clone
+
+```ts
+const cloneSchema = Type.Object({
+  source: Type.String({
+    description: 'The repository to clone, such as templates/weekly-report.',
+  }),
+  path: Type.String({ description: 'A path for the working copy, such as ~/report.' }),
+});
+```
+
+**`clone` checks out a repository without making a fork.** It resolves
+`source` on the git owner, ends that operation, then runs `git clone <url>
+<path>` on the bash owner as the calling agent. `~` and relative paths
+resolve under the agent's home. The clone's `origin` is the source and
+keeps that repository's push permissions. Repeated calls follow ordinary
+`git clone` behavior; a non-empty destination fails.
+
+**A missing source and a failed clone fail the call.** A clone failure
+reports the git output without implying that a fork was made or retained.
+The details hold `repository`, `source`, `url`, and `clone` on success.
 
 ### repos
 
@@ -492,13 +515,13 @@ nothing. An annotated tag object gives the commit it points at.
 **The workspace gives one guidance text to every agent.** `tools()`
 returns one `ToolBundle` for every seat, so the guidance names no agent.
 It says `<your name>`. The text enters every activation of every seat that
-holds the bundle, so the git note stays at nine lines.
+holds the bundle, so the git note stays at ten lines.
 
 **`openWorkspace` joins the notes in this order.**
 
 1. The tool line, which counts the tools. With a git backend it names
-   twelve: read, write, edit, bash, ps, status, wait, cancel, snapshot,
-   restore, repos and fork. With a SQL backend as well, it names thirteen.
+   thirteen: read, write, edit, bash, ps, status, wait, cancel, snapshot,
+   restore, repos, clone and fork. With a SQL backend as well, it names fourteen.
 2. The process note ([Processes](processes.md#the-guidance)).
 3. The snapshot note ([Snapshot a file](workspace.md#snapshot-a-file)).
 4. The SQL note, when the workspace has a SQL backend.
@@ -512,11 +535,12 @@ edit.** The workspace writes the backend's `server` into the first line, and
 its own name into the form of a commit ref.
 
 ```text
-repos and fork reach the git server of this workspace, <server>.
+repos, clone and fork reach the git server of this workspace, <server>.
 templates/<name> is a read-only template. <agent>/<name> belongs to that agent.
 You push only to <your name>/<name>, and you can read every repository.
-To start from a template, fork it and set clone. Clone with the URL that repos or
-fork gives. In the clone, make a branch, commit, and push to origin with git in bash.
+Use clone to make a local checkout of any repository without creating a fork. Its
+origin is the source, with the source's push permissions. To make work you can push, fork a
+template and set clone. In that clone, make a branch, commit, and push to origin with git in bash.
 An edit persists only after you commit it and push it. Push before you finish.
 To cite a commit you pushed, put its full hash from git rev-parse in the refs of a say:
 ambion://workspace/<workspace>/repo/<repository>/branch/<branch>/commit/<hash>. Use
@@ -737,13 +761,14 @@ recovers each one on its own.
 
 ## Owners and order
 
-**The git backend has its own resource owner.** The `repos` and `fork`
-tools and host code reach it. A `fork` does not wait for a long `bash`
-command, and a long clone does not delay another agent's `fork`.
+**The git backend has its own resource owner.** The `repos`, `clone` and
+`fork` tools and host code reach it. A `fork` does not wait for a long
+`bash` command, and a long clone does not delay another agent's `fork`.
 
 **Neither owner waits on the other.** A git operation holds no bash
-operation: the `fork` tool ends its git operation before it runs the
-clone on the bash owner. A `git push` in `bash` calls the server
+operation: the `clone` tool ends its source lookup before it runs the
+clone on the bash owner, and the `fork` tool ends its fork operation first.
+A `git push` in `bash` calls the server
 directly, and `credentialFor` reads the registry and signs a token.
 Neither takes the git owner, and neither changes a row.
 
@@ -787,7 +812,7 @@ the agent's name.
 | Package                | File                                   | What it holds                                                                               |
 | ---------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `packages/workspace`   | `src/git-backend.ts`                   | The types of [The contract](#the-contract)                                                  |
-| `packages/workspace`   | `src/git-tools.ts`, `src/git-refs.ts`  | `repos`, `fork`, the git note, and the host's `commitRef` and `readCommit`                  |
+| `packages/workspace`   | `src/git-tools.ts`, `src/git-refs.ts`  | `repos`, `clone`, `fork`, the git note, and the host's `commitRef` and `readCommit`         |
 | `packages/workspace`   | `src/workspace.ts`                     | The git owner, the `connect` wrapper, the check of the transport, and the order of disposal |
 | `packages/workspace`   | `src/git-conformance*.ts`              | `gitConformance`, with its revision cases and helpers in two more files                     |
 | `packages/workspace`   | `src/git-entry.ts`                     | The `/git` entry                                                                            |
