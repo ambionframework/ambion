@@ -23,13 +23,10 @@ its priority.
 
 ## Status
 
-**The code of 0.4.0 is on `main`.** Every item of phases 1 and 2 merged by
-2026-09-29, from #347 to #372. The Unreleased section of the changelog
-names each change.
-
-**Three steps stay open before the tag.** They are the changelog entry, the
-live run on `main`, and the release. No step adds code, unless the live run
-fails.
+**0.4.0 is ready to release.** Every item of the plan merged by
+2026-09-29, from #347 to #372. The [changelog](../CHANGELOG.md#040-2026-09-29)
+holds the entry: each export and each journal body that changed, and the
+count of lines that the simplification removes.
 
 ## Positioning
 
@@ -69,29 +66,12 @@ number (C12). Ambion supports no downgrade.
 | Separate room and agent hosts | Calls cross the JSON protocol     | Each host chooses storage | Extension contract with a published conformance suite              |
 | Cloudflare Durable Objects    | One object per room, one per seat | Each object's SQLite      | Publishable adapter tested in workerd; deployment commands pending |
 
-## The open steps
+## The open step
 
-- [ ] **1. The changelog entry for 0.4.0.** It names each export and each
-      journal body that changed. It states the count of lines that the
-      release removes, measured from 2eb30a3 to the release commit.
-- [ ] **2. The live run on `main` passes for Pi, Claude, and Codex.** It
-      runs after the last merge. Needs 1.
-- [ ] **3. The owner releases 0.4.0 to npmjs.** Needs 2.
-
-**The live run on `main` closes three items.** Each item passed its live
-file here on OpenAI models and on Codex. The Claude leg and the default
-model of the assistant wait for the run on `main`.
-
-| Item | What it changed                                                 | Passed on 2026-09-29                                                                                                              | Waits for the run on `main`                                    |
-| ---- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| C6   | The core owns the activation state                              | Pi: `packages/ambion/test/live/control.test.ts`. Codex: `steer.test.ts`, and all ten cases of `conformance.test.ts`               | Claude: `packages/claude/test/live/steer.test.ts`              |
-| C10  | `wait` takes `handles` alone                                    | Pi and Codex: "waits for them with wait" in `packages/workspace/test/live/workspace.test.ts`, two `wait` calls each, none refused | Claude: the same case                                          |
-| A1   | The assistant works a request after the person who asked leaves | Pi on `openai/gpt-5.6-luna`: three samples of three of the case in `packages/assistant/test/live/behavior.test.ts`                | The live suite of the assistant on `anthropic/claude-sonnet-5` |
-
-**A failure in the run reopens its item.** Read the failure first. A
-provider refusal is not a defect of the item. The suite of the assistant
-does not pass on `openai/gpt-5.6-luna`, with or without A1, and the
-[backlog](backlog.md) holds that as K3.
+- [ ] **The owner releases 0.4.0 to npmjs.** The release commit sets each
+      package to 0.4.0 and moves the dev base to 0.5.0. The owner then runs
+      the sequence in
+      [Release and publishing](../docs/toolchain.md#9-release-and-publishing).
 
 ## Decisions taken
 
@@ -147,9 +127,6 @@ does not pass on `openai/gpt-5.6-luna`, with or without A1, and the
 - **The git backend on the workstation takes the defaults of its
   design.** [Workstation git](../docs/workstation-git.md#decisions-taken)
   lists them.
-- **The live tier stays off pull requests.** A step that changes a harness
-  path proves it with one live file on that harness before it merges. The
-  CI run on `main` confirms it.
 
 ## The model to preserve
 

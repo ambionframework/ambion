@@ -1,6 +1,43 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-09-29)
+
+**0.4.0 is a release of simplification.** Each fact of the room has one
+derivation, each rule one home, and each seat one boundary. The core owns
+the state of an activation, one router serves every executor kind, and
+`decide` builds every entry that the room writes. The release also adds
+four capabilities: the post of the host, the `import` of the `sql` tool,
+the fixed skills of each agent, and stable refs to workspace files and
+commits.
+
+**No journal of 0.3.0 opens on 0.4.0.** The journal carries no format
+number, and the `run` entry of 0.3.0 carries one. The section
+[Journal bodies](#journal-bodies) lists each body that changed. Ambion
+supports no downgrade before 1.0.0.
+
+### Packages
+
+**The eleven packages of 0.3.0 ship at 0.4.0.** No package joins or leaves.
+`@ambionframework/workspace` adds the `./s3` entry and removes the `./sql`
+entry. Every library package needs Node 22.19 or newer.
+
+### Lines of code
+
+**The simplification removes 719 lines of source.** The count covers the
+TypeScript under `packages/*/src` and `examples/*/src`. The four
+capabilities add more source than the simplification removes, so the
+source grows by 2,670 lines.
+
+| Work                                     | Added | Removed |    Net |
+| ---------------------------------------- | ----: | ------: | -----: |
+| The simplification items, C1 to C12      | 4,299 |   5,018 |   −719 |
+| The capabilities and the other changes   | 4,337 |     948 | +3,389 |
+| Source of the release, 0.3.0 to 0.4.0    | 8,125 |   5,455 | +2,670 |
+| Tests of the release, 0.3.0 to 0.4.0     | 7,477 |   2,720 | +4,757 |
+
+The first two rows sum the commits of each kind of work, so a line that
+two commits change counts in each commit. The last two rows compare the
+tag `v0.3.0` with 0.4.0.
 
 ### New
 
@@ -219,6 +256,69 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
 
 ### Breaking changes
 
+#### Journal bodies
+
+| Body                | The change                                                                                                                                                                                                                  |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `run`               | Carries `at` alone, and refuses `format`. Each run of 0.3.0 wrote `format: 1`, so a read refuses a journal of 0.3.0 at its first entry. See [Journal format](docs/durability.md#journal-format).                             |
+| `posted`            | New. The host and the room's clock write it with no author. A returned say is a `posted` entry with `to` and `returns`, the seq of the scheduled say. Its record line reads `[posted → <seat>, returns #<n>]`.            |
+| `returned`          | Goes. A read refuses it.                                                                                                                                                                                                    |
+| `said` with `after` | Refuses `owner`. A scheduled say carries no owner.                                                                                                                                                                          |
+| `close`             | Carries `person` and refuses `owner`. It refuses `summary` with no `person`. It refuses `cancelled`: only the close that the room derives from a `cancel` entry is cancelled.                                               |
+| `cancel`            | Carries no close, and refuses `close`. The room derives the close: it closes the open exchange at the last message before the entry, with `cancelled: true`, and a closed exchange reads `cancelled` from it.              |
+| `composition`       | Carries no `version`. The room reads a composition by its fields alone, and the refusal of the legacy `assistant` field goes.                                                                                              |
+| `lease`             | Stores the read position that its command states. A claim stores 0, and a renewal with no `readThrough` stores 0. The fold keeps the highest position of the lease.                                                        |
+
+**A refusal names the field.** A body with an extra property fails with
+`at body.<name>: schema is false`. A body with a field that an earlier
+release wrote fails with `at body.<name>: expected no such field; an
+earlier release wrote it`.
+
+#### Exports
+
+- **`@ambionframework/ambion`.** Adds `snapshotUri`, `parseSnapshotUri`,
+  `commitUri`, `parseCommitUri`, `REF_LIMITS`, `isPosted`, and the types
+  `PostInput`, `PostedMessage`, `SnapshotUri`, `CommitUri`, and `CommitVia`.
+  Removes `isReturned` and the type `ReturnedMessage`.
+- **`@ambionframework/ambion/hosting`.** Adds `defineExecution`,
+  `localExecution`, `visitOf`, `RECALL`, `SCHEDULE`, and the types `Pass`,
+  `PassRecord`, `ReadRange`, and `StepSink`. Removes `agentTools`,
+  `composeConnector`, `composeExecutions`, `inProcessTransport`,
+  `reconcileRoom`, `registerDefaultExecution`, `renderActivation`,
+  `renderDelta`, `renderPending`, `resolveReminders`, `roomTools`,
+  `seatContext`, `sessionToResume`, and the types `ConnectorComposition`,
+  `RenderedPrompt`, `RoomToolBinding`, `SeatContextInput`, `Transport`, and
+  `ViewRange`.
+- **`@ambionframework/ambion/conformance`.** Adds `portConformance` and the
+  types `PortHarness` and `ExecutorCaseReport`. Removes
+  `transportConformance` and the type `TransportHarness`.
+- **`@ambionframework/workspace`.** Adds `loadSkills`, `fromDirectory`,
+  `runScript`, `shellQuote`, `sqlImport`, `SNAPSHOT_LIMITS`, `ToolFailure`,
+  and the types `SkillSet`, `SkillInfo`, `SnapshotOptions`,
+  `SnapshotDetails`, `ScriptRun`, `WorkspaceToolsOptions`, `ObjectBackend`,
+  `ObjectEnv`, `ObjectDigest`, `FileSource`, `SourceFiles`, `SourceInput`,
+  `SqlProvenance`, `SqlImported`, `SqlImportTable`, `WorkspaceRead`,
+  `GitRevision`, `GitCommit`, and `GitChange`. Removes `spill`, `spillPath`,
+  and the type `MinimalWriter`.
+- **`@ambionframework/workspace/git`.** Adds `revisionOf`, `validRefName`,
+  `assertCommitHash`, and `byPath`. Removes `SOURCES`, `fromDirectory`, and
+  the types `TemplateSource` and `TemplateFiles`.
+- **`@ambionframework/workspace/s3`.** Is a new entry: `s3ObjectBackend` and
+  the type `S3ObjectBackendOptions`.
+- **`@ambionframework/workspace/sql`.** Goes, with `openSqlResource`,
+  `PROVENANCE_COLUMNS`, and the types `SqlResource`, `SqlResourceEnv`, and
+  `SqlResourceOptions`.
+- **`@ambionframework/workspace/conformance`.** Adds `objectConformance` and
+  the types `ObjectConformanceBackend` and `ObjectConformanceStore`. Removes
+  `sqlConformance` and the type `SqlConformanceBackend`.
+- **`@ambionframework/ambion/testing` and `@ambionframework/pi/testing`.**
+  Each adds `later`, a scripted call of `schedule`.
+
+**The other entries keep their exports.** The bullets below name each
+option, member, and type that changed inside an export.
+
+#### Definitions, executors, and hosting
+
 - **One classifier names a permanent failure.** `classifyCause({ text,
   status })` takes no `permanent` pattern. The core holds the text set of
   every provider that a shipped family reaches. The set is the union of the
@@ -282,11 +382,6 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
     core raises the tool events from them. It calls `delivered` for each
     result of a room tool, as a model loop does. A closing activation of it
     ends with the `stopped` end step.
-- **A returned say is a post.** The `returned` kind goes. The room writes a
-  `posted` entry with `to` and `returns`, the seq of the scheduled say, and
-  a journal read refuses a `returned` entry. `PostedMessage` and `isPosted`
-  replace `ReturnedMessage` and `isReturned`. The record line of a returned
-  say reads `[posted → <seat>, returns #<n>]`.
 - **The remote call is an `Execution`, and one router serves every kind.**
   The hosting entry exports `localExecution(kind, build)`. It returns an
   `Execution` of that kind, whose port is an `AgentRunner` in this process.
@@ -321,6 +416,52 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
     the Pi execution of the worker once, and it keeps the runner and the
     executor on the object instance. The room object reaches each seat
     through `rpcExecution`.
+- **`RoomProtocol.view` takes no range, and `ViewRange` goes.** The
+  second argument is `message`, a seq: the view then holds that one
+  message when the purpose may read it, and no window applies. `recall`
+  reads a message below the window this way. `CollaborationContext` has
+  no `earliest`, and `omitted` counts what the cap and the token limit
+  leave out. The hosting entry exports no `ViewRange`.
+- **`estimateTokens` is the name of an estimator.** The executor option of
+  `pi()`, `claude()`, and `codex()`, and `AgentExecutor.estimateTokens`,
+  take a string in place of a function. `createRuntime({ estimators })`
+  registers each estimator by name, and every runtime holds `length`,
+  `Math.ceil(text.length / 4)`, the default. A host cannot register
+  `length`. `startRoom` and `resumeRoom` fail with `missing_definition`
+  when a definition names an estimator that the runtime does not hold.
+  `configure` of `@ambionframework/cloudflare` takes `estimators` for the
+  runtime of the room object. The seat object runs no estimator, because
+  the room object windows the view.
+- **A rendered record line starts with `#<seq>`.** `renderLine` in
+  `@ambionframework/ambion/hosting` writes it, so a record line, a `[new]`
+  line, and a steer carry it.
+- **Pi is 0.87.** A `stream` that `piExecution` takes gets Pi's
+  `TranscriptContext`. System messages carry the prompt and the tools. A
+  `Script` from `@ambionframework/pi/testing` still gets `systemPrompt`
+  and `tools`.
+- **`callTool` takes a `JsonObject`.** Pi types tool arguments as JSON.
+- **One capture serves a definition.** `defineHuman` and the room apply
+  the same capture to a person, and `defineAgent` and the room apply the
+  same capture to an agent. A room trims the `preferences` of a person
+  that `defineHuman` did not make, and drops blank `preferences`.
+  `defineAgent` checks and copies the executor as the room does, so a
+  malformed executor fails at `defineAgent`. The `executor` of the
+  definition is a frozen copy of the executor that the caller gives.
+- **The Cloudflare objects call the core.** The hosting entry removes
+  `reconcileRoom`: a host calls `reconcile()` on the room. It exports
+  `visitOf(room, name)`, the visit of a person whom the record holds
+  present, and it writes nothing. `AgentRunner.recover(activation)`
+  releases as failed a run that the host lost. The room object keeps no
+  copy of the visits, and its alarm calls `reconcile()`. The seat object
+  releases a run that an eviction lost through `recover`. See
+  [Executors](docs/executors.md#the-hosting-entry-exports).
+- **One scripted room serves both conformance suites.** `portConformance`
+  and `executorConformance` play the same room, with one question, one
+  participants block, and one stale answer. The cases and their names
+  stay. The polling of a case takes an async predicate.
+
+#### The room and the exchange
+
 - **An exchange has no owner.** The opening message names who directs the
   work, and `awaiting` reads its author. `person`, the first person who
   spoke in the range, names who receives the result: the summary, its
@@ -345,16 +486,24 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
   message <n> is a say you scheduled, and the room returned it.`, and a
   colleague reads the name of the seat. The record line of a returned say
   drops `for <owner>`.
-- **The provenance column `exchange_owner` becomes `exchange_person`.**
-  The provenance columns that `sqliteBackend` fills, `SqlProvenance`, and
-  the `exchange` of an audit entry carry `person`. An exchange with no
-  person leaves `exchange_person` NULL.
 - **The kernel names no database.** The hand-off guidance of every seat said
   to put structured data in the shared database and named `sqlite_master`,
   even for a seat with no SQL backend. It now says to write an artifact once
   where the tools keep it, and to hand it off with a directed say. The
   guidance of `sql` names the table or view hand-off, and the SQLite backend
   names `sqlite_master`.
+- **The room takes a scheduled say at any read position.** A scheduled
+  say never gets a `missed` answer. A `committed` answer to it lists in
+  `unread` the messages after its `readThrough` and before the say. The
+  `schedule` tool result shows them.
+- **The kernel defines two more `ambion:` forms.** `snapshotUri`,
+  `parseSnapshotUri`, `commitUri`, `parseCommitUri`, the `SnapshotUri`,
+  `CommitUri`, and `CommitVia` types, and `REF_LIMITS` join the root entry.
+  The room accepts a canonical snapshot ref and commit ref, and refuses any
+  other `ambion://workspace/` string.
+
+#### Agent tools
+
 - **The audit entry of a failed process keeps its details.** A call that
   fails on a process that ended badly throws a `ToolFailure`, and its audit
   entry holds `error.details`: the `ProcessStatus` and the read range. The
@@ -372,22 +521,6 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
   `unseated <name> (#<seq>)`. A membership that the record already holds
   gives `<name> is already seated` or `<name> is not seated`. The result
   was `delivered` before.
-- **`RoomProtocol.view` takes no range, and `ViewRange` goes.** The
-  second argument is `message`, a seq: the view then holds that one
-  message when the purpose may read it, and no window applies. `recall`
-  reads a message below the window this way. `CollaborationContext` has
-  no `earliest`, and `omitted` counts what the cap and the token limit
-  leave out. The hosting entry exports no `ViewRange`.
-- **`estimateTokens` is the name of an estimator.** The executor option of
-  `pi()`, `claude()`, and `codex()`, and `AgentExecutor.estimateTokens`,
-  take a string in place of a function. `createRuntime({ estimators })`
-  registers each estimator by name, and every runtime holds `length`,
-  `Math.ceil(text.length / 4)`, the default. A host cannot register
-  `length`. `startRoom` and `resumeRoom` fail with `missing_definition`
-  when a definition names an estimator that the runtime does not hold.
-  `configure` of `@ambionframework/cloudflare` takes `estimators` for the
-  runtime of the room object. The seat object runs no estimator, because
-  the room object windows the view.
 - **A process that ended badly fails every call that reports it.** An
   exit code other than 0, a timeout, and a failed process make `bash`,
   `status`, and `wait` a tool error, so one state has one shape on every
@@ -422,15 +555,15 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
   the journal body does not change. An agent tool named `schedule` gets
   a refusal. The hosting entry exports `SCHEDULE`. The process note and
   the guidance of the process tools name `schedule`.
-- **The room takes a scheduled say at any read position.** A scheduled
-  say never gets a `missed` answer. A `committed` answer to it lists in
-  `unread` the messages after its `readThrough` and before the say. The
-  `schedule` tool result shows them.
-- **The kernel defines two more `ambion:` forms.** `snapshotUri`,
-  `parseSnapshotUri`, `commitUri`, `parseCommitUri`, the `SnapshotUri`,
-  `CommitUri`, and `CommitVia` types, and `REF_LIMITS` join the root entry.
-  The room accepts a canonical snapshot ref and commit ref, and refuses any
-  other `ambion://workspace/` string.
+- **Every workspace has ten tools.** `snapshot` and `restore` follow the
+  process tools, and their note follows the process note in the guidance.
+
+#### The workspace and its backends
+
+- **The provenance column `exchange_owner` becomes `exchange_person`.**
+  The provenance columns that `sqliteBackend` fills, `SqlProvenance`, and
+  the `exchange` of an audit entry carry `person`. An exchange with no
+  person leaves `exchange_person` NULL.
 - **`GitEnv` has `resolve(id, at)` and `show(id, hash)`.** A custom git
   backend gives the full hash that a branch, a tag, or a hash names, and
   the message, author, parents, and changed files of one commit.
@@ -441,24 +574,15 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
   `workstationBackend` layout name the folder of the default object store.
   The just-bash backends use `/snapshots`. On a workstation, the host account
   owns the folder with mode `2750`, the same as `layout.rooms`.
-- **Every workspace has ten tools.** `snapshot` and `restore` follow the
-  process tools, and their note follows the process note in the guidance.
 - **The root entry exports `ObjectBackend`, `ObjectEnv`, and `ObjectDigest`.**
   The `./conformance` entry exports `objectConformance`, and
   `@ambionframework/workspace` depends on `aws4fetch`.
-- **A rendered record line starts with `#<seq>`.** `renderLine` in
-  `@ambionframework/ambion/hosting` writes it, so a record line, a `[new]`
-  line, and a steer carry it.
-
 - **`fromDirectory` moves to the root entry of `@ambionframework/workspace`.**
   `@ambionframework/workspace/git` no longer exports it.
   `TemplateSource` and `TemplateFiles` become `FileSource` and
   `SourceFiles` in the root entry, beside the new `SourceInput`. The `/git`
   entry keeps `filesOf`, `hashesOf`, `sameFiles`, `changeTo`, and
   `TemplateRegistration`.
-- **A lease entry stores the read position that its command states.** A
-  claim stores 0, and a renewal with no `readThrough` stores 0. The fold
-  keeps the highest position of the lease.
 - **`WorkspaceFiles` has `readFile(path, maxBytes, context)`.** A custom
   `WorkspaceFiles` implements it.
 - **`SqlRunOptions` has `import`, and an `ok` `SqlOutcome` has `import`.**
@@ -468,56 +592,8 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
   `SqlImportTable`, and `WorkspaceRead`.**
 - **An export quotes the text `\N` as `"\N"`.** A bare `\N` is a NULL
   alone, so the text `\N` reads back as text.
-- **Pi is 0.87.** A `stream` that `piExecution` takes gets Pi's
-  `TranscriptContext`. System messages carry the prompt and the tools. A
-  `Script` from `@ambionframework/pi/testing` still gets `systemPrompt`
-  and `tools`.
 - **A workspace env has `openTextLineReader`.** `HomeEnv` supplies it
   from `readTextFile`. A backend without `HomeEnv` implements it.
-- **`callTool` takes a `JsonObject`.** Pi types tool arguments as JSON.
-- **A journal body with an extra property names the property.** The
-  error reads `at body.<name>: schema is false`.
-- **A `cancel` entry carries no close.** The room derives the close of a
-  cancellation from the `cancel` entry: it closes the open exchange at the
-  last message before the entry. That close carries `cancelled: true`, and
-  a closed exchange reads `cancelled` from it.
-- **A `composition` entry carries no `version`.** No other format exists.
-  The body schema has no `version`, and the room reads a composition by
-  its fields alone. The refusal of the legacy `assistant` field goes with
-  it.
-- **A `run` entry carries `at` alone.** The journal carries no format
-  number, and the refusal of an unknown format goes. Ambion supports no
-  downgrade before 1.0.0. See
-  [Journal format](docs/durability.md#journal-format).
-- **A `run` entry refuses `format`.** Each run of 0.3.0 wrote
-  `format: 1`, so the journal read refuses a journal of 0.3.0 at its
-  first entry.
-  A body schema refuses an old field that the runtime would misread, and
-  the error reads `at body.<name>: expected no such field; an earlier
-  release wrote it`.
-- **A `cancel` entry refuses `close`.** A `cancel` entry of 0.3.0 carries
-  the close of the open exchange.
-- **A `close` entry refuses `cancelled`.** Only the close that the room
-  derives from a `cancel` entry is cancelled.
-- **One capture serves a definition.** `defineHuman` and the room apply
-  the same capture to a person, and `defineAgent` and the room apply the
-  same capture to an agent. A room trims the `preferences` of a person
-  that `defineHuman` did not make, and drops blank `preferences`.
-  `defineAgent` checks and copies the executor as the room does, so a
-  malformed executor fails at `defineAgent`. The `executor` of the
-  definition is a frozen copy of the executor that the caller gives.
-- **The Cloudflare objects call the core.** The hosting entry removes
-  `reconcileRoom`: a host calls `reconcile()` on the room. It exports
-  `visitOf(room, name)`, the visit of a person whom the record holds
-  present, and it writes nothing. `AgentRunner.recover(activation)`
-  releases as failed a run that the host lost. The room object keeps no
-  copy of the visits, and its alarm calls `reconcile()`. The seat object
-  releases a run that an eviction lost through `recover`. See
-  [Executors](docs/executors.md#the-hosting-entry-exports).
-- **One scripted room serves both conformance suites.** `portConformance`
-  and `executorConformance` play the same room, with one question, one
-  participants block, and one stale answer. The cases and their names
-  stay. The polling of a case takes an async predicate.
 - **The `./sql` entry of `@ambionframework/workspace` goes.**
   `openSqlResource`, `PROVENANCE_COLUMNS`, and the types `SqlResource`,
   `SqlResourceEnv`, and `SqlResourceOptions` go, with the `query` and

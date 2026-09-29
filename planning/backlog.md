@@ -5,17 +5,17 @@ condition that brings it into a release. Nothing here blocks the 0.4.0
 tag.
 
 **The sections come in the order of their priority.** Known defects come
-first, then the evidence and the release, then the rules and proofs, then
+first, then the release and CI, then the rules and proofs, then
 the designs. Inside a section, the first item comes first. An item whose
 condition holds moves to the top of its section.
 
-| Section                                       | Items      | First item                                   |
-| --------------------------------------------- | ---------- | -------------------------------------------- |
-| [Known defects](#known-defects)               | K1–K5      | K2, the allow-list of the SQL guard          |
-| [Evidence and release](#evidence-and-release) | E1, L3, R1 | E1, a live case for a person who leaves late |
-| [Rules and proofs](#rules-and-proofs)         | P1–P6      | P1, `returnable` into the verified rules     |
-| [Designs with a shape](#designs-with-a-shape) | D1–D20     | D1, a hard bound on an exchange              |
-| [Deferred by decision](#deferred-by-decision) | None       | None                                         |
+| Section                                       | Items  | First item                               |
+| --------------------------------------------- | ------ | ---------------------------------------- |
+| [Known defects](#known-defects)               | K1–K5  | K2, the allow-list of the SQL guard      |
+| [Release and CI](#release-and-ci)             | L3, R1 | L3, a billing failure reads as one       |
+| [Rules and proofs](#rules-and-proofs)         | P1–P6  | P1, `returnable` into the verified rules |
+| [Designs with a shape](#designs-with-a-shape) | D1–D20 | D1, a hard bound on an exchange          |
+| [Deferred by decision](#deferred-by-decision) | None   | None                                     |
 
 ## Known defects
 
@@ -67,13 +67,7 @@ rate and whether Linux fails too, and report the smallest failing command
 to `just-bash`. **Condition:** a user report, a CI Node version at 26.9 or
 later, or a failed release gate on the owner's machine.
 
-## Evidence and release
-
-**E1. A live case for a person who leaves while a specialist works.** The
-A1 case covers a person who leaves before the first activation. A person
-who leaves after the assistant seats a specialist reaches the room while
-the specialist holds the work, and no live case holds that path.
-**Condition:** the next change to the guidance of `packages/assistant`.
+## Release and CI
 
 **L3. A billing failure reads as a billing failure.** Twenty-three red
 live runs in a row had one cause, and each run read as a set of test
