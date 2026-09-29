@@ -94,7 +94,7 @@ at least one of them.
 | ---------- | --------- | ---------------------- | ---------------------------------------- | ------------------------ | ------------------------- |
 | Process    | `bash`    | A handle, `bash-3f9a…` | `bash`, `ps`, `status`, `wait`, `cancel` | `~/.processes/<handle>/` | The processes of the seat |
 | Table      | `sql`     | A table name           | `sql`                                    | None; the database       | None                      |
-| Repository | `git`     | A repository name      | `repos`, `fork`                          | The clones in each home  | None                      |
+| Repository | `git`     | A repository name      | `repos`, `clone`, `fork`                 | The clones in each home  | None                      |
 | Sensor     | `sensors` | A sensor name, `dmm`   | `observe`                                | `~/sensors/<name>/`      | One line for each sensor  |
 
 **A sensor has two rates, and three outputs: the observations, the media,
