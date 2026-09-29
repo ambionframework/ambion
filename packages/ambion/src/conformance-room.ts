@@ -1,6 +1,6 @@
 /**
  * The scripted room that both conformance suites play. It holds one person,
- * one question, and one seat. It serves each activation of the seat, and it
+ * one question, and one seat. It serves each activation of the seat. It
  * hands each activation the session that the last release recorded, as the
  * room does inside one exchange. It records every call the seat makes, and
  * every request and answer that would not survive the wire.

@@ -34,7 +34,10 @@ What is built:
   whatever queued behind it to their end, and releases the lease. A second
   `alarm()` while a run is live in the object returns at once. An `alarm()`
   that finds a run that an eviction lost calls `AgentRunner.recover`, which
-  releases the activation as failed. `steer`
+  releases the activation as failed. The recovery needs the definition of the
+  seat. For a seat that the worker no longer configures, the recovery fails,
+  and the room ends the lease of the lost run only when the lease expires.
+  `steer`
   delivers a recorded message to its exact running activation. It writes no
   activation metadata and sets no alarm. Unread messages remain recoverable
   from the room journal. `cut` stops the activation the room ended. The seat

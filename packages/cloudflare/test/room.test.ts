@@ -24,6 +24,7 @@ interface Room {
 		key?: string;
 	}): Promise<{ person?: string }>;
 	leave(name: string): Promise<void>;
+	presentVisit(name: string): { leave(): Promise<void> } | undefined;
 	metadata: {
 		read(): Promise<Record<string, unknown>>;
 		change(change: () => { patch: Record<string, unknown> }): Promise<unknown>;
@@ -250,10 +251,33 @@ it('keeps a departed human absent after restart', async () => {
 it('keeps a visit that reenters while an older leave is in flight', async () => {
 	const stub = await visited('room-leave-reentry-fence');
 	await inside<Room, void>(stub, async (object) => {
+		// Hold the older leave after its departure lands, until the reentry lands.
+		const presentVisit = object.presentVisit.bind(object);
+		const departure = Promise.withResolvers<void>();
+		const gate = Promise.withResolvers<void>();
+		object.presentVisit = (name) => {
+			const visit = presentVisit(name);
+			if (visit === undefined) return undefined;
+			object.presentVisit = presentVisit;
+			return {
+				async leave() {
+					await visit.leave();
+					departure.resolve();
+					await gate.promise;
+				},
+			};
+		};
 		const leaving = object.leave('priya');
+		await departure.promise;
 		await object.visit(priya);
+		gate.resolve();
 		await leaving;
-		await object.send({ from: 'priya', text: 'The new visit remains.', key: 'q1' });
+		const exchange = await object.send({
+			from: 'priya',
+			text: 'The new visit remains.',
+			key: 'q1',
+		});
+		expect(exchange.person).toBe('priya');
 	});
 	expect(await count(stub, 'arrived')).toBe(2);
 	expect(await count(stub, 'left')).toBe(1);
