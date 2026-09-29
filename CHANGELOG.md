@@ -315,7 +315,13 @@ its `text`.
 - **`wait` takes `{ handles, timeout? }`.** `handle` goes, and `handles`
   holds 1 to 16 handles. One handle gives the result of `status`. Several
   give the output of each process that ended and the state of each one
-  that still runs.
+  that still runs. The schema states the bounds. A call with `handle` fails
+  with `Invalid arguments for tool 'wait': must have required properties
+  handles.`
+- **A tool of `defineTool` names the rules that its arguments break.** The
+  error was `Invalid arguments for tool '<name>'.` It is now `Invalid
+  arguments for tool '<name>': <rules>.`, with each property path and its
+  rule, so the model can correct the call.
 - **The preview size of `sql` is `rows`.** The tool parameter
   `maxRows` becomes `rows`, the one camelCase name that a model wrote. The
   host option and `SqlRunOptions` keep `maxRows`.

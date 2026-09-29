@@ -27,6 +27,7 @@ import {
 	startRoom,
 } from '../../src/index.ts';
 import { collect, roomName, waitForRoom } from '../support/room.ts';
+import { collectSteps } from '../support/trace.ts';
 import {
 	executionFor,
 	executorFor,
@@ -77,15 +78,24 @@ export const person = defineHuman({
 
 type RoomOptions = Omit<StartRoomOptions, 'name' | 'stream' | 'runtime'>;
 
-/** A live room with explicit participants and fresh storage for its record and traces. */
+/**
+ * A live room with explicit participants and fresh storage for its record
+ * and traces. `records` holds every trace step of every seat. A tool call
+ * that the harness refuses before the tool runs is a step there too.
+ */
 export async function open(prefix: string, options: RoomOptions) {
-	const runtime = createRuntime({ storage: memoryJournals(), execution: executionFor() });
+	const log = collectSteps();
+	const runtime = createRuntime({
+		storage: memoryJournals(),
+		execution: executionFor(),
+		logger: log.logger,
+	});
 	const session = await startRoom({
 		...options,
 		name: roomName(prefix),
 		runtime,
 	});
-	return { session, runtime, events: collect(session) };
+	return { session, runtime, events: collect(session), records: log.records };
 }
 
 /** A promise that fails after `ms`, naming what did not happen. */

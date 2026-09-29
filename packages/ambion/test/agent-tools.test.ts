@@ -219,6 +219,26 @@ describe('the definition of agent tools', () => {
 		expect(() => Reflect.apply(defineTool, undefined, [options])).toThrow();
 	});
 
+	it.each([
+		[{}, 'must have required properties name'],
+		[{ name: 'crate', where: { limit: 0 } }, 'where.limit must be >= 1'],
+		[{ name: 3, where: {} }, 'name must be string; where must have required properties limit'],
+	])('refuses the arguments %j, and names each rule that they break', (params, rules) => {
+		const lookup = defineTool({
+			name: 'lookup',
+			description: 'Look up a name.',
+			parameters: Type.Object({
+				name: Type.String(),
+				where: Type.Optional(Type.Object({ limit: Type.Number({ minimum: 1 }) })),
+			}),
+			execute: ({ name }) => name,
+		});
+		const context = { agent: { name: 'worker', identity: 'Worker.' }, callId: 'call-1' };
+		expect(() => lookup.invoke(params, context)).toThrow(
+			`Invalid arguments for tool 'lookup': ${rules}.`,
+		);
+	});
+
 	it('rejects malformed structural tools before a room writes its journal', async () => {
 		const opened = await memory.open();
 		const name = roomName('invalid-structural-tool');

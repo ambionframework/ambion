@@ -8,7 +8,7 @@
  * takes — a name the room can address, and a composition of ordinary tools.
  */
 import { IsSchema, type Static, type TSchema, Type } from 'typebox';
-import { Check } from 'typebox/value';
+import { Check, Errors } from 'typebox/value';
 import type {
 	AmbionTool,
 	Reminder,
@@ -234,11 +234,25 @@ export function defineTool<TParameters extends TSchema>(
 		...(options.executionMode === undefined ? {} : { executionMode: options.executionMode }),
 		invoke: (params: unknown, context: ToolContext) => {
 			if (!Check(parameters, params)) {
-				throw new Error(`Invalid arguments for tool '${name}'.`);
+				throw new Error(`Invalid arguments for tool '${name}': ${mismatchOf(parameters, params)}.`);
 			}
 			return execute(params, context);
 		},
 	});
+}
+
+/**
+ * What the arguments of a call break in the schema of the tool, as the
+ * model reads it: each property path and its rule, such as `handles must
+ * not have fewer than 1 items`. A rule on the whole object has no path.
+ */
+function mismatchOf(parameters: TSchema, params: unknown): string {
+	return Errors(parameters, params)
+		.map((error) => {
+			const path = error.instancePath.slice(1).replaceAll('/', '.');
+			return path === '' ? error.message : `${path} ${error.message}`;
+		})
+		.join('; ');
 }
 
 /** Copies authoring data while keeping executable and resource values by identity. */
