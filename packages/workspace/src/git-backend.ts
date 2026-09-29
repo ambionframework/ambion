@@ -3,8 +3,9 @@
  * backend.
  *
  * Every workspace has a bash backend. A git backend is optional. When a
- * workspace has one, the `repos` and `fork` tools run on it, under an owner
- * of its own, and the bash backend receives `GitAccess` when it connects,
+ * workspace has one, the `repos`, `clone` and `fork` tools use it under an
+ * owner of its own. `clone` looks up its source there, then checks it out on
+ * the shell owner. The bash backend receives `GitAccess` when it connects,
  * so the `git` of each agent reaches the backend's repositories. A bash
  * backend lists the transports it carries in `gitTransports`, and
  * `openWorkspace` refuses a pair whose transport the bash backend does not

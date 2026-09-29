@@ -6,8 +6,8 @@
  * (`./process-tools.ts`: bash, ps, status, wait and cancel), and `snapshot`
  * and `restore` (`./snapshots.ts`) before any tool its bash backend adds of
  * its own. A workspace with a SQL backend also gets
- * `sql` (`./sql-tool.ts`), and one with a git backend gets `repos` and
- * `fork` (`./git-tools.ts`). The file tools run over Pi's `ExecutionEnv`
+ * `sql` (`./sql-tool.ts`), and one with a git backend gets `repos`, `clone`
+ * and `fork` (`./git-tools.ts`). The file tools run over Pi's `ExecutionEnv`
  * alone, so this module names no just-bash type.
  */
 
@@ -20,7 +20,7 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { PROCESS_TOOL_NAMES } from './process-tools.ts';
 
-const COUNTS = ['ten', 'eleven', 'twelve', 'thirteen'];
+const COUNTS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen'];
 
 /** The tools every workspace has, in the order the tool line names them. */
 const BASE_TOOLS = ['read', 'write', 'edit', ...PROCESS_TOOL_NAMES, 'snapshot', 'restore'];
@@ -32,7 +32,7 @@ function listOf(names: readonly string[]): string {
 
 /**
  * The tool line of the guidance. `extra` names the tools that the other
- * backends add, in order: `sql`, then `repos` and `fork`. Absent, the
+ * backends add, in order: `sql`, then `repos`, `clone` and `fork`. Absent, the
  * workspace has ten tools.
  */
 export function defaultToolGuidance(extra: readonly string[] = []): string {

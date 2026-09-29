@@ -65,7 +65,7 @@ export interface WorkspaceBackends {
 	readonly bash: BashBackend;
 	/** A shared database. Absent, the workspace has no `sql` tool. */
 	readonly sql?: SqlBackend;
-	/** The repositories. Absent, the workspace has no `repos` and no `fork` tool. */
+	/** The repositories. Absent, the workspace has no `repos`, `clone` or `fork` tool. */
 	readonly git?: GitBackend;
 	/**
 	 * Where the bytes of each snapshot live. Absent, the workspace opens a

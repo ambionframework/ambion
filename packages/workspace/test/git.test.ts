@@ -1,5 +1,5 @@
 /**
- * A workspace with a git backend: the `repos` and `fork` tools and their
+ * A workspace with a git backend: the `repos`, `clone` and `fork` tools and their
  * texts, the host's `commitRef`, the tool line and the order of the notes, the refusal of a bash
  * backend that does not carry the transport, the audit entry of a call,
  * and a room in which a seat forks a template, clones it, edits,
@@ -62,7 +62,7 @@ const text = (
 ) => invokeText(toolOf(workspace, tool), params, callAs(who));
 
 describe('the tools and the guidance', () => {
-	it('adds repos and fork after sql, counts the tools, and places the git note after the SQL notes', async () => {
+	it('adds repos, clone and fork after sql, counts the tools, and places the git note after the SQL notes', async () => {
 		const { workspace } = await lab({ sql: true });
 		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual([
 			'read',
@@ -77,12 +77,13 @@ describe('the tools and the guidance', () => {
 			'restore',
 			'sql',
 			'repos',
+			'clone',
 			'fork',
 		]);
 		const guidance = workspace.tools().guidance ?? '';
-		expect(guidance.startsWith(defaultToolGuidance(['sql', 'repos', 'fork']))).toBe(true);
+		expect(guidance.startsWith(defaultToolGuidance(['sql', 'repos', 'clone', 'fork']))).toBe(true);
 		expect(guidance).toContain(
-			'thirteen tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, restore, sql, repos and fork.',
+			'fourteen tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, restore, sql, repos, clone and fork.',
 		);
 		const git = guidance.indexOf(gitToolGuidance(SERVER, 'lab'));
 		expect(git).toBeGreaterThan(-1);
@@ -91,17 +92,19 @@ describe('the tools and the guidance', () => {
 		expect(guidance.endsWith(roomMirrorGuidance('/rooms'))).toBe(true);
 	});
 
-	it('counts twelve tools with no SQL backend, states the form of a commit ref, and states the shell sentence that holds with a git backend', async () => {
+	it('counts thirteen tools with no SQL backend, states the form of a commit ref, and states the shell sentence that holds with a git backend', async () => {
 		const { workspace } = await lab();
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance).toContain(
-			'twelve tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, restore, repos and fork.',
+			'thirteen tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, restore, repos, clone and fork.',
 		);
 		expect(guidance).toContain(
 			'ambion://workspace/lab/repo/<repository>/branch/<branch>/commit/<hash>',
 		);
 		expect(guidance).toContain('or a URL\nthat this guidance names. git reaches no other host.');
-		expect(guidance).toContain(`repos and fork reach the git server of this workspace, ${SERVER}.`);
+		expect(guidance).toContain(
+			`repos, clone and fork reach the git server of this workspace, ${SERVER}.`,
+		);
 		const plain = openWorkspace({ name: 'plain', backend: { bash: memoryBackend() } });
 		expect(plain.tools().guidance).toContain('git reaches no other host.');
 		expect(plain.tools().tools.map((tool) => tool.name)).not.toContain('fork');
@@ -252,6 +255,124 @@ describe('fork', () => {
 				arguments: { source: 'templates/weekly-report', name: 'report' },
 			},
 		]);
+	});
+});
+
+describe('clone', () => {
+	it('checks out a repository without making a fork and keeps the source as origin', async () => {
+		const { workspace } = await lab({ audit: true });
+		const before = await text(workspace, 'repos', {});
+		const result = await toolOf(workspace, 'clone').invoke(
+			{ source: 'templates/weekly-report', path: '~/weekly report' },
+			callAs('analyst'),
+		);
+		if (typeof result === 'string')
+			throw new Error('The clone tool must return a structured result.');
+		const cloned = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+		expect(result.details).toMatchObject({
+			repository: 'templates/weekly-report',
+			source: 'templates/weekly-report',
+			url: `${SERVER}/templates/weekly-report`,
+			clone: '/home/analyst/weekly report',
+		});
+		expect(cloned).toBe(
+			'Cloned templates/weekly-report into /home/analyst/weekly report on branch main. origin is the source.',
+		);
+		expect(await text(workspace, 'repos', {})).toBe(before);
+		const checkout = await text(workspace, 'bash', {
+			command: `cd '/home/analyst/weekly report' && git remote get-url origin && git branch --show-current && cat report.md`,
+		});
+		expect(checkout).toContain(`${SERVER}/templates/weekly-report`);
+		expect(checkout).toContain('main');
+		expect(checkout).toContain('# Week');
+		const log = await workspace.use({ name: 'analyst' }, (env) =>
+			env.readTextFile('/workspace/audit.jsonl', BACKGROUND_CONTEXT),
+		);
+		const entry = (log.ok ? log.value : '')
+			.trim()
+			.split('\n')
+			.map((line) => JSON.parse(line))
+			.find((candidate) => candidate.tool === 'clone');
+		expect(entry).toMatchObject({
+			tool: 'clone',
+			result: {
+				details: {
+					repository: 'templates/weekly-report',
+					source: 'templates/weekly-report',
+					url: `${SERVER}/templates/weekly-report`,
+					clone: '/home/analyst/weekly report',
+				},
+			},
+		});
+	});
+
+	it('can clone an existing agent repository and push with its inherited permissions', async () => {
+		const { workspace } = await lab();
+		await text(workspace, 'fork', { source: 'templates/weekly-report', name: 'report' });
+		await text(workspace, 'clone', { source: 'analyst/report', path: '~/copy' });
+		const pushed = await workspace.use({ name: 'analyst' }, (env) =>
+			env.exec(
+				'cd ~/copy && git switch -c cloned-work && git commit --allow-empty -m copied && git push origin cloned-work',
+				undefined,
+				BACKGROUND_CONTEXT,
+			),
+		);
+		expect(pushed.ok && pushed.value.exitCode).toBe(0);
+		const repository = await workspace.git?.use({ name: 'analyst' }, (env) =>
+			env.get('analyst/report'),
+		);
+		expect(repository?.branches['cloned-work']).toMatch(/^[0-9a-f]{40}$/);
+	});
+
+	it('fails for a missing source or busy path and audits standalone clone calls', async () => {
+		const { workspace } = await lab({ audit: true });
+		await expect(
+			text(workspace, 'clone', { source: 'templates/none', path: '~/missing' }),
+		).rejects.toThrow('templates/none does not exist. Call repos to list the repositories.');
+		await workspace.use({ name: 'analyst' }, (env) =>
+			env.writeFile('/home/analyst/busy/file.txt', 'in the way', BACKGROUND_CONTEXT),
+		);
+		await expect(
+			text(workspace, 'clone', { source: 'templates/weekly-report', path: '~/busy' }),
+		).rejects.toThrow(/^The clone into \/home\/analyst\/busy failed: .+\.$/s);
+		const log = await workspace.use({ name: 'analyst' }, (env) =>
+			env.readTextFile('/workspace/audit.jsonl', BACKGROUND_CONTEXT),
+		);
+		const entries = (log.ok ? log.value : '')
+			.trim()
+			.split('\n')
+			.map((line) => JSON.parse(line));
+		expect(entries).toMatchObject([
+			{
+				tool: 'clone',
+				arguments: { source: 'templates/none', path: '~/missing' },
+				error: { message: expect.any(String) },
+			},
+			{
+				tool: 'clone',
+				arguments: { source: 'templates/weekly-report', path: '~/busy' },
+				error: { message: expect.any(String) },
+			},
+		]);
+		expect(await text(workspace, 'repos', {})).toContain('1 repository.');
+	});
+
+	it('rejects an aborted clone without creating a destination or changing repositories', async () => {
+		const { workspace } = await lab();
+		const before = await text(workspace, 'repos', {});
+		const controller = new AbortController();
+		controller.abort(new Error('cut'));
+		await expect(
+			toolOf(workspace, 'clone').invoke(
+				{ source: 'templates/weekly-report', path: '~/aborted' },
+				callAs('analyst', { signal: controller.signal }),
+			),
+		).rejects.toThrow();
+		const destination = await workspace.use({ name: 'analyst' }, (env) =>
+			env.exists('/home/analyst/aborted', BACKGROUND_CONTEXT),
+		);
+		expect(destination.ok && destination.value).toBe(false);
+		expect(await text(workspace, 'repos', {})).toBe(before);
 	});
 });
 
