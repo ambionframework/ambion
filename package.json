@@ -32,12 +32,13 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.14",
-		"@types/node": "^26.6.2",
+		"@types/node": "^26.6.3",
 		"@vitest/coverage-v8": "^4.1.11",
 		"knip": "^6.38.0",
 		"lemmascript": "0.6.4",
 		"prettier": "^3.9.9",
-		"turbo": "^2.11.4",
-		"typescript": "^7.0.2"
+		"turbo": "^2.11.5",
+		"typescript": "^7.0.2",
+		"vitest": "^4.1.11"
 	}
 }
