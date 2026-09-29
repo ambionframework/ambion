@@ -72,12 +72,12 @@ export function serializing(execution: Execution): SerializingExecution {
 	};
 	const wrapped = around(execution, {
 		room: (room) => ({
-			view: async (id, range) =>
+			view: async (id, message) =>
 				check(
 					'view response',
 					await room.view(
 						check('view', id),
-						range === undefined ? undefined : check('view range', range),
+						message === undefined ? undefined : check('view message', message),
 					),
 				),
 			commit: async (commit) =>
@@ -142,7 +142,7 @@ export function faulty(execution: Execution, faults: Fault[], clock: Clock): Exe
 	};
 	return around(execution, {
 		room: (room) => ({
-			view: (id, range) => through('view', id, () => room.view(id, range)),
+			view: (id, message) => through('view', id, () => room.view(id, message)),
 			commit: (commit) => through('commit', commit, () => room.commit(commit)),
 			lease: (lease) => through('lease', lease, () => room.lease(lease)),
 		}),

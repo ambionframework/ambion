@@ -162,28 +162,35 @@ activation consumed.
 A seat keeps its harness session for one exchange.
 [Exchange continuity](executors.md#exchange-continuity) states the rule.
 
-The journal retains complete history. An agent that sets
-`activationTokenLimit` reads a bounded record. The seat pages the record from
-the tail through the call `view(activation, range)`. It keeps the newest part
-that fits the limit, plus the open exchange whole. An older exchange falls out
-of context, and its summary stands for it when one exists. An agent with no
-limit reads the whole record. The record keeps every message for human review
-in both cases.
+The journal retains complete history. The room windows the record of each
+view by one rule: it keeps the newest messages, never splits a summarised
+range, and keeps the open exchange whole. A summary activation keeps its own
+closed exchange whole the same way. The record keeps every message for human
+review.
 
-`limits.context.messages` caps the record at the room, for every seat and
-for every executor. The room serves the newest `messages` entries of the
+**`limits.context.messages` caps the record at the room**, for every seat
+and for every executor. The room serves the newest `messages` entries of the
 record an activation may read. The floor moves past a summarised range it
 would split. The open exchange stays whole, so a cap smaller than the open
 exchange serves the exchange in full. The view holds up to `messages`
 entries plus the open exchange. The cap counts messages and does not count
-bytes. The default is unbounded. A seat with `activationTokenLimit` windows
-further, inside what the room serves.
+bytes. The default is unbounded.
 
-**The cap bounds a view, and a page reads below it.** A view with a range
-cuts its page from every message that the purpose may read, so `recall`
-reaches a message below the cap. The page still reports the cap floor as
-`earliest`. A seat that pages its context window stops at `earliest`, so
-its window stays inside the cap.
+**`activationTokenLimit` windows further, inside the cap.** The room keeps
+the newest blocks of the record whose estimated tokens fit the limit, and
+at least the newest block. A summarised range counts once, as the line of
+its summary. An older exchange falls out of context, and its summary stands
+for it when one exists. An agent with no limit reads what the cap serves.
+
+**The room runs the estimator that the seat names.** `estimateTokens` names
+an estimator in the registry of the runtime. `length`, the default, counts
+`Math.ceil(text.length / 4)`, and `createRuntime({ estimators })` adds other
+names. A host cannot replace `length`. A name that the registry does not
+hold fails `startRoom` and `resumeRoom`.
+
+**`recall` reads below the window.** `view(activation, message)` returns
+the view of that one message when the purpose may read it. No cap and no
+token limit apply to it.
 
 When a view holds less than the whole record, `context.omitted` counts the
 messages below the first one served. The rendered record then opens with one

@@ -241,15 +241,15 @@ describe('executor tool authority', () => {
 			{ kind: 'said', seq: 2, at, from: 'priya', text: 'Is the pour on?' },
 			{ kind: 'said', seq: 5, at, from: 'worker', to: 'priya', text: 'Yes, at nine.' },
 		];
-		const pages: (number | undefined)[] = [];
+		const reads: (number | undefined)[] = [];
 		const room: RoomProtocol = {
 			...unusedRoom,
-			// A page of one message before the cursor, as the room serves it.
-			view: async (_id, range) => {
-				pages.push(range?.before);
-				const below = record.filter((message) => message.seq < (range?.before ?? Infinity));
+			// The view of one message, as the room serves it.
+			view: async (_id, seq) => {
+				reads.push(seq);
+				const one = record.filter((message) => message.seq === seq);
 				const view = viewFor(respond);
-				return { view: { ...view, context: { ...view.context, messages: below.slice(-1) } } };
+				return { view: { ...view, context: { ...view.context, messages: one } } };
 			},
 		};
 		const activation = activationFor('message:4:worker:1', worker);
@@ -277,8 +277,8 @@ describe('executor tool authority', () => {
 				'file:///x: not a message ref. Give the seq as #12, or the URI ambion://room/room/message/<seq>.',
 			].join('\n'),
 		);
-		// Each distinct seq is one page, and a recalled message is old: nothing moves the position.
-		expect(pages).toEqual([6, 3, 3, 5]);
+		// Each distinct seq is one view, and a recalled message is old: nothing moves the position.
+		expect(reads).toEqual([5, 2, 2, 4]);
 		expect(activation.readThrough).toBe(0);
 		await expect(call(recall, 'none', { refs: [] })).rejects.toThrow(/refs must be 1 to 16/);
 	});

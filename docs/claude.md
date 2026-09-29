@@ -127,7 +127,7 @@ unchanged.
 | `bundles`               | No       | None                              | Tool bundles. Their guidance joins the prompt after the speaking policy.         |
 | `speaking`              | No       | `DEFAULT_GUIDANCE`                | The speaking policy. It replaces the default.                                    |
 | `activationTokenLimit`  | No       | The whole record                  | The token limit of the record one activation reads. A positive integer.          |
-| `estimateTokens`        | No       | `Math.ceil(text.length / 4)`      | Counts tokens against the limit. It needs `activationTokenLimit`.                |
+| `estimateTokens`        | No       | `'length'`                        | The name of the estimator in the runtime that counts tokens. It needs the limit. |
 | `permissionMode`        | No       | The SDK default, `default`        | The SDK permission mode. The executor passes it unchanged.                       |
 | `allowedTools`          | No       | None                              | Tools that run with no request. It also names the built-in tools the model sees. |
 | `disallowedTools`       | No       | None                              | Tools the model never sees.                                                      |
@@ -136,6 +136,12 @@ unchanged.
 | `effort`                | No       | The SDK default                   | `low`, `medium`, `high`, `xhigh`, or `max`.                                      |
 | `cwd`                   | No       | The working directory of the host | The working directory of the executable.                                         |
 | `additionalDirectories` | No       | None                              | Directories that the tools may reach beyond `cwd`.                               |
+
+**`estimateTokens` names an estimator in the runtime.** The room runs it
+and windows the record, so the definition carries the name alone. `length`,
+the default, counts `Math.ceil(text.length / 4)`. `createRuntime({ estimators })`
+registers other names, and a room start fails on a name the runtime does not
+hold. [History and limits](room.md#history-and-limits) states the rule.
 
 **`claudeExecution(options)` takes two options.** Both are optional.
 
@@ -186,7 +192,7 @@ already holds it.
 **`abort` interrupts the query and ends the pass.** `close` ends the input
 and the process.
 
-**The activation token limit windows the record.**
+**The room applies the activation token limit.**
 [Executors](executors.md#how-an-activation-runs) states the rule. It does
 not bound what a resumed session holds.
 
