@@ -233,9 +233,12 @@ function oversizeRefusal(body: Body<Message>, bytes?: number): { refusal: Refusa
 		: undefined;
 }
 
-/** The room refuses empty text first, then a ref the grammar refuses. */
+/**
+ * The room refuses empty text first, then a ref the grammar refuses. A
+ * returned say copies a say that passed both, so a refusal cannot strand it.
+ */
 function contentRefusal(body: Body<Message>): { refusal: Refusal } | undefined {
-	if (!('text' in body)) return undefined;
+	if (!('text' in body) || ('returns' in body && body.returns !== undefined)) return undefined;
 	if (body.text.trim() === '')
 		return refused('The message is empty. Say something, or end your turn instead.');
 	if (body.refs === undefined) return undefined;

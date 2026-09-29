@@ -184,21 +184,23 @@ describe('exchange completion handles', () => {
 		const { runtime } = await memoryRuntime();
 		const room = await summaryRoom(runtime, script);
 		// A post opens an exchange with no person, and the exchange owes no summary.
-		const posted = await room.post({
+		const post = {
 			to: alpha.name,
 			text: 'ci: build 412 failed.',
+			refs: ['https://ci.example/412'],
 			key: 'ci-412',
-		});
+		};
+		const posted = await room.post(post);
 		expect(posted).toMatchObject({ opened: true });
 		expect(posted).not.toHaveProperty('person');
 		await expect(posted.waitForClose()).resolves.toMatchObject([
-			{ kind: 'posted', to: alpha.name, text: 'ci: build 412 failed.', key: 'ci-412' },
+			{ kind: 'posted', to: alpha.name, text: post.text, refs: post.refs, key: 'ci-412' },
 			{ kind: 'said', from: alpha.name, text: 'Seen: ci: build 412' },
 		]);
 		await expect(posted.waitForSummary()).resolves.toBeUndefined();
 		expect(closedExchange(room, posted.from)).not.toHaveProperty('person');
 		// The key lands once, refuses another post, and names nothing in the key space of a visit.
-		const again = await room.post({ to: alpha.name, text: 'ci: build 412 failed.', key: 'ci-412' });
+		const again = await room.post(post);
 		expect(again.from).toBe(posted.from);
 		await expect(room.post({ text: 'ci: other.', key: 'ci-412' })).rejects.toThrow(
 			/already names a different room operation/,
