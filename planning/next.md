@@ -202,8 +202,6 @@ page it changes in the same commit.
 - [ ] **4.** The room applies the token limit, and the paging of a view
       goes. (C7)
 - [ ] **5.** The core owns the activation state. Needs 3 and 4. (C6)
-- [ ] **6.** The workspace keeps one SQL path and the ports that a
-      backend uses. (C8)
 - [ ] **7.** Cloudflare reuses the core, and one scripted room serves the
       conformance suites. Needs 3. (C9)
 - [ ] **8.** `wait` takes `handles` alone, beside `status` and `ps`. (C10)
@@ -300,32 +298,6 @@ for it. On Cloudflare each page is an RPC round trip.
 **Evidence:** the window tests of the room and the runner merge, the
 rendered record of each case stays the same, and the export snapshot
 names the changed option.
-
-**C8. The workspace keeps one SQL path and the ports that a backend
-uses.**
-
-- **One SQL path.** `sql-resource.ts`, the `./sql` export, opens
-  `node:sqlite` beside `sqliteBackend`, with a second copy of the preview
-  and the table render. The workbench and
-  [Resources](../docs/resources.md) use it. Append-only and provenance
-  become options of `sqliteBackend`, the workbench moves to them, and
-  `sqlConformance` moves into the SQLite tests until a second SQL backend
-  exists.
-- **The spill file goes.** Only tests and conformance ask for
-  `capture.spill`, since every `bash` call writes its output to a
-  process file. One `runScript` helper replaces six copies of the
-  collect-and-check code, and one shell quote replaces three.
-- **`BashBackend.tools` goes.** No backend sets it.
-- **`openWorkspace` alone checks a git transport.** The second check in
-  `justGitAccess` and `sshAccess` goes. The G theme holds the
-  `openWorkspace` check.
-- **`template-sources` stays inside just-bash.** It is a storage detail
-  of `justGitBackend`, and today the shared name rules, the workstation,
-  and a `gitConformance` hook each know it.
-
-**Evidence:** `workspaceConformance` and `gitConformance` on each
-backend, the workbench tests on the new SQL options, and the export
-snapshot of `@ambionframework/workspace`.
 
 **C9. The host keeps one mechanism for each concern.**
 

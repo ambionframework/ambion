@@ -82,9 +82,9 @@ bytes of a cited snapshot in the agent's files
 A workspace
 with a SQL backend adds `sql`
 ([Query the shared database](#query-the-shared-database)). A workspace with
-no SQL backend has no `sql` tool. The bash backend then adds its own tools,
-and its own guidance about its own shell, if it has any. The bundle binds every tool through the resource owner and
-keeps one stable identity. Pass the bundle in an agent's `bundles` field.
+no SQL backend has no `sql` tool. The bash backend adds its own guidance
+about its own shell, if it has any. The bundle binds every tool through the
+resource owner and keeps one stable identity. Pass the bundle in an agent's `bundles` field.
 
 **A failure is an error, and every result tells the agent what to do.**
 The workspace tools share these rules:
@@ -739,6 +739,56 @@ import: sweep/results.csv
   early. For example, an aggregate over an unbounded recursive query does
   not return.
 
+### Records: append-only tables with provenance
+
+**Three options make the database hold records.** A record is a row that
+no agent changes after it lands, with the agent, the room, the
+activation, and the exchange that wrote it.
+
+```ts
+const sql = sqliteBackend('./data/lab.db', {
+  schema:
+    'CREATE TABLE IF NOT EXISTS runs (id INTEGER PRIMARY KEY, label TEXT, agent TEXT, activation TEXT, at TEXT)',
+  appendOnly: ['runs'],
+  provenance: true,
+});
+```
+
+| Option       | Meaning                                                               |
+| ------------ | --------------------------------------------------------------------- |
+| `schema`     | Statements that run at each open: tables, views, and seed rows        |
+| `appendOnly` | The tables that accept INSERT alone. Each must exist after the schema |
+| `provenance` | Fill the provenance columns of each append-only table from the call   |
+
+- **The schema runs at each open.** Write it to run again, with
+  `CREATE TABLE IF NOT EXISTS` and `INSERT OR IGNORE`. A failure of the
+  schema, or an append-only table that does not exist, rejects the call
+  that opens the database, and the next call opens it again.
+- **An append-only table accepts INSERT alone.** An UPDATE, a DELETE, a
+  REPLACE, and an upsert that changes a row fail. Temporary triggers on
+  the one connection hold the rule, and `recursive_triggers` is on, so a
+  REPLACE fires the delete trigger.
+- **No statement lifts the guard.** The backend refuses a DROP or an
+  ALTER of an append-only table, a DROP of its triggers, and a PRAGMA of
+  `recursive_triggers` or `writable_schema`. It refuses a DROP, an ALTER,
+  or a PRAGMA whose target it cannot read, for example one with a comment
+  inside it. The call stops at that statement.
+- **Provenance fills the columns that a table declares.** The columns are
+  `agent`, `room`, `activation`, `exchange_owner`, `exchange_from`, and
+  `at`. The `sql` tool passes the provenance of each tool call in
+  `SqlRunOptions.provenance`, and a trigger after each INSERT writes it.
+  An INSERT that sets one of these columns fails. A host call with no
+  provenance leaves them NULL.
+- **The backend does not deduplicate.** A retried activation that inserts
+  again inserts again. Give the table a UNIQUE constraint when a row must
+  appear once.
+- **The records share no journal transaction.** A crash between an INSERT
+  and the journal write of the activation can leave a row for an
+  activation that the journal never committed. The journal stays the
+  record of the room.
+- **The guidance names the append-only tables and the provenance
+  columns,** so an agent leaves those columns out of an INSERT.
+
 ### The SqlBackend interface
 
 **`SqlBackend` holds four members, and `SqlEnv` holds two.** A new SQL
@@ -767,8 +817,9 @@ agent, and each resolves `~` and a relative path under the agent's home.
   path that is not a file, a file that the agent cannot read, and a file
   over `maxBytes` give `{ ok: false, message }`. An abort rejects.
 
-**`run` takes `maxRows`, an optional `export` path, and an optional
-`import` path.** An `ok` outcome holds the last statement's `columns`, its
+**`run` takes `maxRows`, an optional `export` path, an optional `import`
+path, and an optional `provenance`.** A backend with provenance writes
+`provenance` on each row that the run inserts into an append-only table. An `ok` outcome holds the last statement's `columns`, its
 first `maxRows` rows, its `rowCount`, the absolute `export` path when the
 options named one, and the `import` path and row count when the options
 named one. A
@@ -816,8 +867,10 @@ over its own unconditional context, so a cut call still leaves its entry.
 Another operation on the bash owner can run between the call and its
 entry.
 
-**A new SQL backend passes `sqlConformance`** (see
-[The conformance suite](#the-conformance-suite)).
+**The SQL cases run on `sqliteBackend` alone.** They live in the SQLite
+tests (`packages/workspace/test/support/sql-cases.ts`) until a second SQL
+backend exists. That backend moves them back to the conformance entry
+(see [The conformance suite](#the-conformance-suite)).
 
 ## The resource contract
 
@@ -827,11 +880,11 @@ The memory and directory backends are the Pi binding. They export from the
 package `@ambionframework/just-bash`, which depends on the workspace. The root
 entry names `WorkspaceEnv`, the Pi `ExecutionEnv` that has a zero-argument
 `cleanup()`. `BashBackend` extends `ResourceBackend<WorkspaceEnv>` and adds
-optional Pi harness tools beyond the ten tools every workspace has, optional
-guidance about the backend's own shell, and a required `layout` (see [The
-layout and the host identity](#the-layout-and-the-host-identity)).
+optional guidance about the backend's own shell and a required `layout` (see
+[The layout and the host identity](#the-layout-and-the-host-identity)). A
+backend adds no tool: the workspace binds the same tools over every backend.
 `openWorkspace` creates the resource owner, builds the three file tools, and
-binds them, and any tool the backend adds, to its `use` method. It also opens
+binds them to its `use` method. It also opens
 the process table and builds the five process tools over it
 ([Processes](processes.md)). `workspace.processes` gives the host the
 processes of this run ([The host's view](processes.md#the-hosts-view)).
@@ -847,15 +900,20 @@ and the guidance beyond the ten tools every workspace has, passes
 backend needs.** The just-bash backends and the workstation both build on
 them.
 
-| Helper                                                          | What it does                                                                   |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `resolvePath`                                                   | Holds the `~` and relative path rule                                           |
-| `HomeEnv`                                                       | A base class: `cwd`, `absolutePath`, `joinPath`, and `readTextLines`           |
-| `Deadline`, `withDeadline`                                      | Tell an abort apart from a timeout; turn a thrown error into `unknown`         |
-| `DEFAULT_TIMEOUT_SECONDS`                                       | The 30 seconds a command gets when its caller names no timeout                 |
-| `boundedView`, `deliverView`                                    | Build the bounded output view, and hand it to `onUpdate` with the result       |
-| `spill`                                                         | Writes the spill file over a minimal writer of one `mkdir` and one `writeFile` |
-| `TMP`, `randomName`, `tempDirPath`, `tempFilePath`, `spillPath` | Name the temporary paths under `/tmp`                                          |
+| Helper                                             | What it does                                                             |
+| -------------------------------------------------- | ------------------------------------------------------------------------ |
+| `resolvePath`                                      | Holds the `~` and relative path rule                                     |
+| `HomeEnv`                                          | A base class: `cwd`, `absolutePath`, `joinPath`, and `readTextLines`     |
+| `Deadline`, `withDeadline`                         | Tell an abort apart from a timeout; turn a thrown error into `unknown`   |
+| `DEFAULT_TIMEOUT_SECONDS`                          | The 30 seconds a command gets when its caller names no timeout           |
+| `boundedView`, `deliverView`                       | Build the bounded output view, and hand it to `onUpdate` with the result |
+| `TMP`, `randomName`, `tempDirPath`, `tempFilePath` | Name the temporary paths under `/tmp`                                    |
+| `runScript`                                        | Runs one script, and gives its exit code and its output as text          |
+| `shellQuote`                                       | Puts one word in single quotes for `bash`                                |
+
+**A backend writes no spill file.** Every `bash` call writes its whole
+output to a process file ([Processes](processes.md)), so a backend ignores
+`capture.spill`.
 
 These helpers import no just-bash, so a backend over any filesystem builds
 an `ExecutionEnv` on them.
@@ -865,9 +923,8 @@ an `ExecutionEnv` on them.
 `@ambionframework/workspace/conformance` holds the `ExecutionEnv` rules the
 built-in tools need: a rename that replaces an existing target, a recursive
 `createDir`, a forced and a recursive `remove`, the file error codes, `~`
-expansion, an abort apart from a timeout, the bounded output view with its
-spill file, and a distinct name under `/tmp` for each temporary file or
-directory.
+expansion, an abort apart from a timeout, the bounded output view, and a
+distinct name under `/tmp` for each temporary file or directory.
 
 A case is a `ConformanceCase`: a name and a `run` that throws on failure.
 The entry loads no test framework and no just-bash, so any backend runs it.
@@ -889,13 +946,13 @@ before it takes on tool-specific tests of its own. The workspace package
 runs the suite on the memory backend to test the suite itself
 (`packages/workspace/test/conformance.test.ts`).
 
-**`sqlConformance(harness)` holds the cases of a `SqlBackend`.** The
-harness has the same shape, with an `open()` that returns a fresh
-`SqlBackend`. The cases check the rows of the last statement, NULL as
-`null`, a last statement with no result, a refused statement as an
-outcome that stops the run, one database for every agent, and an abort
-before the first statement. A test backend over `node:sqlite` runs them
-(`packages/workspace/test/conformance.test.ts`).
+**The SQL cases of a `SqlBackend` run in the SQLite tests.** A harness
+has the same shape, with an `open()` that returns a fresh `SqlBackend`.
+The cases check the rows of the last statement, NULL as `null`, a last
+statement with no result, a refused statement as an outcome that stops
+the run, one database for every agent, and an abort before the first
+statement. `sqliteBackend` in memory and on a file runs them
+(`packages/workspace/test/sqlite.test.ts`).
 
 ## Dispose of a resource
 

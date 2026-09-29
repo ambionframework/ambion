@@ -75,7 +75,7 @@ workspace supplies everything that holds on every backend
 | Audit log, room mirror, snapshot copies   | The workspace, at the paths that `layout` names                 |
 
 **The workstation adds no tools.** The file tools and the process tools cover
-every file and shell operation on a server, so `tools` stays unset.
+every file and shell operation on a server.
 
 ## The SSH client
 
@@ -214,8 +214,7 @@ reaches no other account.
 
 **A temporary file is private to its account.** Every account shares
 `/tmp`. `SshEnv` creates a temporary file with an exclusive create and
-mode `0600`, and a temporary directory with mode `0700`. A spill file
-holds a command's full output, so no other agent reads it.
+mode `0600`, and a temporary directory with mode `0700`.
 
 ## The environment
 
@@ -225,8 +224,8 @@ entry's helpers supply the rest:
 
 - `resolvePath` for `~` and a relative path
 - `Deadline`, which tells an abort apart from a timeout
-- `boundedView` and `spill` for the output view and its spill file
-- `tempDirPath`, `tempFilePath`, and `spillPath` for the names under `/tmp`
+- `boundedView` for the output view
+- `tempDirPath` and `tempFilePath` for the names under `/tmp`
 
 Pi's `NodeExecutionEnv` implements the same methods on a local machine,
 and `SshEnv` follows its behavior.
@@ -293,12 +292,9 @@ The channel's stderr carries only the script's own lines. `SshEnv` reads
 the `AMBION_PGID=` line from it and keeps that line out of the view. It
 also removes the line that `setsid` writes after a group kill.
 
-**The spill file is written on the server.** When the caller asks for a
-spill, the script creates `/tmp/shell-<random>.out` with an exclusive
-create and mode `0600`. The output then goes through `tee` into that file.
-`SshEnv` names the file when the view cuts the output, and removes it
-otherwise. A named spill file stays in `/tmp` until the server clears it,
-the same as in `NodeExecutionEnv`.
+**`SshEnv` writes no spill file.** The view holds the output within the
+caller's limits. The `bash` tool keeps the whole output in a process file
+on the server ([Processes](processes.md)).
 
 **No value reaches a command line.** `ps` on the server shows no variable
 of one agent to another account.
@@ -498,8 +494,7 @@ them through the group. A snapshot reads each file as the agent that asks,
 so the host account never reads a home.
 
 **No agent reads another agent's temporary files.** Each temporary file
-and spill file has mode `0600`, and each temporary directory has mode
-`0700`.
+has mode `0600`, and each temporary directory has mode `0700`.
 
 ## Tests
 
@@ -561,8 +556,8 @@ the script writes. It proves what only OpenSSH can:
 - the conformance cases, with the replacing rename and the group kill
 - the error classification against the status codes of OpenSSH
 - the channel count under `MaxSessions` over many commands and timeouts
-- that one account cannot read another account's home, temporary files,
-  or spill files
+- that one account cannot read another account's home or temporary files
+- that a large output stays within the view, with no spill file
 - that a file one agent creates in the audit folder stays writable for
   the other agent, across a rotation
 - that an agent cannot write under `layout.rooms` or `layout.snapshots`

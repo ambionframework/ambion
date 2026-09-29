@@ -21,7 +21,6 @@ import {
 	DEFAULT_TIMEOUT_SECONDS,
 	deliverView,
 	HomeEnv,
-	spill,
 	TMP,
 	tempDirPath,
 	tempFilePath,
@@ -205,10 +204,9 @@ export class BashEnv extends HomeEnv implements ExecutionEnv {
 	 * just-bash has no streaming callback and no per-call deadline. The
 	 * adapter awaits the command, bounds the combined output to the caller's
 	 * limits, hands one final view to `onUpdate`, and returns the metadata:
-	 * Pi's `bash` tool reads the output through that update. When the caller
-	 * asks for a spill and the limits cut the output, the adapter writes the
-	 * whole output to a file under `/tmp` and names it as `spillPath`, so the
-	 * caller can point a reader at the part the view dropped. The deadline is a
+	 * Pi's `bash` tool reads the output through that update. The adapter
+	 * writes no spill file: the `bash` tool keeps the whole output in a
+	 * process file. The deadline is a
 	 * timer on an abort controller of the adapter's own, so exit 124 from the
 	 * context's signal and exit 124 from the timer come back as different
 	 * errors. A call that names no timeout gets the adapter's default, so a
@@ -228,11 +226,7 @@ export class BashEnv extends HomeEnv implements ExecutionEnv {
 			});
 			const stopped = deadline.error();
 			if (stopped) return err(stopped);
-			const combined = result.stdout + result.stderr;
-			const view = boundedView(combined, options?.capture?.limits);
-			if (view.truncation.truncated && options?.capture?.spill === true) {
-				view.spillPath = await spill(this.bash.fs, combined);
-			}
+			const view = boundedView(result.stdout + result.stderr, options?.capture?.limits);
 			return ok(deliverView(view, result.exitCode, options, context));
 		});
 	}

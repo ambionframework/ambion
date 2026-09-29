@@ -62,22 +62,6 @@ const JUST_BASH_LAYOUT: WorkspaceLayout = {
 const JUST_BASH_TRANSPORTS: readonly string[] = Object.freeze(['in-process']);
 
 /**
- * The access of `justGitBackend`, narrowed by its transport. `openWorkspace`
- * refuses a transport outside `JUST_BASH_TRANSPORTS` first. This check
- * holds the rule for a caller that connects without a workspace.
- */
-function justGitAccess(services: BashServices | undefined): JustGitAccess | undefined {
-	const access = services?.git;
-	if (access === undefined) return undefined;
-	if (!JUST_BASH_TRANSPORTS.includes(access.transport)) {
-		throw new Error(
-			`The just-bash backends carry the git transport in-process, and the git access uses ${access.transport}.`,
-		);
-	}
-	return access as JustGitAccess;
-}
-
-/**
  * The `git` command of one agent. The identity is locked to the agent's
  * name, so every commit names the seat that made it. With no git backend,
  * `network: false` keeps git inside the same boundary as the shell: a
@@ -104,7 +88,7 @@ async function connectOver(
 	agent: WorkspaceAgent,
 	services?: BashServices,
 ): Promise<BashEnv> {
-	const git = gitFor(agent, justGitAccess(services));
+	const git = gitFor(agent, services?.git as JustGitAccess | undefined);
 	const home = `/home/${agent.name}`;
 	await fs.mkdir(home, { recursive: true });
 	return new BashEnv(

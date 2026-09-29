@@ -12,7 +12,8 @@ import { memoryBackend } from '../../just-bash/src/index.ts';
 import { DEFAULT_AUDIT_LOG, openAuditLog } from '../src/audit.ts';
 import type { BashBackend, WorkspaceEnv } from '../src/backend.ts';
 import { openWorkspace, type Workspace } from '../src/index.ts';
-import { callAs, invokeText, toolOf, wrapped } from './support/backends.ts';
+import { bindTools } from '../src/tools.ts';
+import { callAs, invokeText, toolOf } from './support/backends.ts';
 
 const ctx = BACKGROUND_CONTEXT;
 const scribe = { name: 'scribe' };
@@ -163,38 +164,40 @@ describe('the workspace audit log', () => {
 			parameters: Type.Object({}),
 			execute,
 		});
-		const site = audited(
-			wrapped(() => ({
-				tools: [
-					tool('explode', async () => {
-						throw new Error('kaboom');
-					}),
-					tool(
-						'slow',
-						async (
-							_id: string,
-							_params: unknown,
-							_onUpdate: unknown,
-							_toolContext: unknown,
-							_invocation: unknown,
-							context: { abortSignal?: AbortSignal },
-						) => {
-							started.resolve();
-							return new Promise<never>((_resolve, reject) => {
-								const cut = () => reject(new Error('cut mid-flight'));
-								if (context.abortSignal?.aborted) cut();
-								context.abortSignal?.addEventListener('abort', cut, { once: true });
-							});
-						},
-					),
-				],
-			})),
+		const site = audited();
+		const bound = bindTools(
+			[
+				tool('explode', async () => {
+					throw new Error('kaboom');
+				}),
+				tool(
+					'slow',
+					async (
+						_id: string,
+						_params: unknown,
+						_onUpdate: unknown,
+						_toolContext: unknown,
+						_invocation: unknown,
+						context: { abortSignal?: AbortSignal },
+					) => {
+						started.resolve();
+						return new Promise<never>((_resolve, reject) => {
+							const cut = () => reject(new Error('cut mid-flight'));
+							if (context.abortSignal?.aborted) cut();
+							context.abortSignal?.addEventListener('abort', cut, { once: true });
+						});
+					},
+				),
+			],
+			site.use,
+			openAuditLog(),
 		);
+		const tools = { tools: () => ({ tools: bound }) };
 		await expect(
-			toolOf(site, 'explode').invoke({}, callAs('scribe', { callId: 'call-2', room: 'lobby' })),
+			toolOf(tools, 'explode').invoke({}, callAs('scribe', { callId: 'call-2', room: 'lobby' })),
 		).rejects.toThrow('kaboom');
 		const controller = new AbortController();
-		const cut = toolOf(site, 'slow').invoke(
+		const cut = toolOf(tools, 'slow').invoke(
 			{},
 			callAs('scribe', { callId: 'call-cut', room: 'lobby', signal: controller.signal }),
 		);

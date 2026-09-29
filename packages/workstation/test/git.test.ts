@@ -6,17 +6,7 @@
  * `serve` and the key lines have files of their own.
  */
 
-import {
-	cp,
-	mkdir,
-	readdir,
-	readFile,
-	rm,
-	stat,
-	symlink,
-	utimes,
-	writeFile,
-} from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { type WorkstationGitOptions, workstationGitBackend } from '../src/index.ts';
@@ -214,30 +204,13 @@ describe.skipIf(!hasGitTools)('workstationGitBackend', () => {
 		expect(shown?.message).toBe('Link\n\nWhy.\n');
 	});
 
-	it('keeps template-sources hidden from list, get, and fork', async () => {
-		const { home, options } = await gitServer();
-		const env = await gitBackend(options).connect(ANALYST);
-		await mkdir(join(home, 'repos', 'template-sources'));
-		await cp(
-			join(home, 'repos', 'templates', 'blank.git'),
-			join(home, 'repos', 'template-sources', 'blank.git'),
-			{ recursive: true },
-		);
-		expect((await env.list()).map((repository) => repository.id)).toEqual([
-			'templates/blank',
-			'templates/weekly-report',
-		]);
-		expect(await env.get('template-sources/blank')).toBeUndefined();
-		expect(await env.fork('template-sources/blank', 'x')).toEqual({
-			ok: false,
-			reason: 'no_source',
-			source: 'template-sources/blank',
-		});
-	});
-
 	it('refuses a missing source, a bad name, and an aborted fork, and a repeated fork after an abort is safe', async () => {
 		const { options } = await gitServer();
 		const env = await gitBackend(options).connect(ANALYST);
+		// An ID that is not <namespace>/<name> names no repository.
+		expect(await env.get('no-namespace')).toBeUndefined();
+		expect(await env.resolve('a/b/c', { branch: 'main' })).toBeUndefined();
+		expect(await env.show('Bad/x', '0'.repeat(40))).toBeUndefined();
 		expect(await env.fork('templates/none', 'x')).toEqual({
 			ok: false,
 			reason: 'no_source',
@@ -297,7 +270,7 @@ describe.skipIf(!hasGitTools)('workstationGitBackend', () => {
 	it('refuses an agent with a reserved name, and every call after dispose', async () => {
 		const { options } = await gitServer();
 		const backend = gitBackend(options);
-		for (const name of ['templates', 'template-sources', 'Analyst']) {
+		for (const name of ['templates', 'Analyst']) {
 			await expect(backend.connect({ name })).rejects.toThrow(`'${name}'`);
 		}
 		await backend.dispose?.();

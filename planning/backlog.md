@@ -184,8 +184,9 @@ cannot work from the typed README examples and the export snapshot.
 `SqlBackend` ([Workspace](../docs/workspace.md#query-the-shared-database)),
 and the package ships `sqliteBackend`. A backend over a database server
 connects as each agent with its own credential, so the server enforces the
-grants. It passes `sqlConformance`. **Condition:** the lab setup, one workstation and
-one database server, is scheduled.
+grants. It passes the SQL cases, which then move from the SQLite tests
+back to the conformance entry. **Condition:** the lab setup, one
+workstation and one database server, is scheduled.
 
 **A git server on a second machine.** `workstationGitBackend` keeps the
 git account on the workstation, and each agent key works only from the

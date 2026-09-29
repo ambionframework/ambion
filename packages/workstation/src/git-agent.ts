@@ -14,30 +14,12 @@
  * no reader sees a half file and each rename stays on one filesystem.
  */
 
-import type { BashServices } from '@ambionframework/workspace';
 import { runIn, type ScriptVariables } from './git-account.ts';
-import type { WorkstationGitAccess, WorkstationGitIdentity } from './git-backend.ts';
+import type { WorkstationGitIdentity } from './git-backend.ts';
 import type { SshEnv } from './ssh-env.ts';
 
 /** The git transport that the shell of the workstation carries. */
 export const WORKSTATION_TRANSPORTS: readonly string[] = Object.freeze(['ssh']);
-
-/**
- * The access of `workstationGitBackend`, narrowed by its transport.
- * `openWorkspace` refuses a transport outside `WORKSTATION_TRANSPORTS`
- * first. This check holds the rule for a caller that connects without a
- * workspace.
- */
-export function sshAccess(services: BashServices | undefined): WorkstationGitAccess | undefined {
-	const access = services?.git;
-	if (access === undefined) return undefined;
-	if (!WORKSTATION_TRANSPORTS.includes(access.transport)) {
-		throw new Error(
-			`The workstation carries the git transport ssh, and the git access uses ${access.transport}.`,
-		);
-	}
-	return access as WorkstationGitAccess;
-}
 
 /** The ssh configuration of the alias. `ssh` expands `~` in each path. */
 function configOf(identity: WorkstationGitIdentity): string {

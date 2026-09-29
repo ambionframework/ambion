@@ -119,7 +119,6 @@ describe('workstationBackend options', () => {
 		const backend = workstationBackend(base);
 		expect(backend.guidance).toContain('real shell');
 		expect(backend.layout).toEqual(base.layout);
-		expect(backend.tools).toBeUndefined();
 	});
 });
 

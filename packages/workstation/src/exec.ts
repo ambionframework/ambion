@@ -26,7 +26,6 @@ import {
 	DEFAULT_TIMEOUT_SECONDS,
 	type Deadline,
 	deliverView,
-	spillPath,
 	withDeadline,
 } from '@ambionframework/workspace';
 import {
@@ -84,10 +83,6 @@ export interface CommandHost {
 	open(command: string): Promise<ClientChannel>;
 	/** Whether `path` is a directory. */
 	isDirectory(path: string): Promise<boolean>;
-	/** Whether a file exists at `path`. */
-	exists(path: string): Promise<boolean>;
-	/** Remove the file at `path`, and ignore a failure. */
-	discard(path: string): Promise<void>;
 }
 
 /**
@@ -299,7 +294,6 @@ async function run(
 	command: string,
 	cwd: string,
 	options: ShellExecOptions | undefined,
-	spill: string | undefined,
 	deadline: Deadline,
 ) {
 	const channel = await host.open('exec setsid --wait bash -s');
@@ -307,66 +301,27 @@ async function run(
 	const stderr = new ScriptStderr();
 	const done = finished(channel, output, stderr, deadline.signal);
 	stopWhenAborted(host, channel, stderr, deadline);
-	channel.end(commandScript(command, cwd, options?.env, spill));
+	channel.end(commandScript(command, cwd, options?.env));
 	const ending = await done;
 	output.pushText(stderr.lines());
 	if (ending.cut) output.pushText(DRAIN_NOTICE);
 	return { ending, output };
 }
 
-/** Hand the one view to `onUpdate`, with the spill file when the view cut the output. */
-async function result(
-	host: CommandHost,
-	output: Capture,
-	exitCode: number,
-	spill: string | undefined,
-	options: ShellExecOptions | undefined,
-	context: Context,
-): Promise<ShellExecResult> {
-	const view = output.view();
-	if (view.truncation.truncated && spill !== undefined && (await host.exists(spill))) {
-		view.spillPath = spill;
-	}
-	return deliverView(view, exitCode, options, context);
-}
-
-/** The result of a command that ran to its channel's close. */
-async function settled(
-	host: CommandHost,
+/** The result of a command that ran to its channel's close, with its one view handed to `onUpdate`. */
+function settled(
 	ran: Awaited<ReturnType<typeof run>>,
-	spill: string | undefined,
 	options: ShellExecOptions | undefined,
 	context: Context,
-): Promise<Result<ShellExecResult, ExecutionError>> {
+): Result<ShellExecResult, ExecutionError> {
 	if (!ran.ending.exited) {
 		return err(new ExecutionError('unknown', 'The channel closed before the command ended.'));
 	}
 	const exitCode = exitCodeOf(ran.ending.code, ran.ending.signal);
-	return ok(await result(host, ran.output, exitCode, spill, options, context));
+	return ok(deliverView(ran.output.view(), exitCode, options, context));
 }
 
-/** Run the command under its deadline, and turn what it throws into an `ExecutionError`. */
-async function attempt(
-	host: CommandHost,
-	command: string,
-	cwd: string,
-	options: ShellExecOptions | undefined,
-	spill: string | undefined,
-	context: Context,
-): Promise<Result<ShellExecResult, ExecutionError>> {
-	const timeout = options?.timeout ?? DEFAULT_TIMEOUT_SECONDS;
-	return withDeadline(context.abortSignal, timeout, async (deadline) => {
-		const early = deadline.error() ?? (await refusal(host, cwd, options));
-		if (early) return err(early);
-		const ran = await run(host, command, cwd, options, spill, deadline);
-		// A command that exited before its deadline keeps its exit status.
-		const stopped = ran.ending.exited && !ran.ending.late ? undefined : deadline.error();
-		if (stopped) return err(stopped);
-		return settled(host, ran, spill, options, context);
-	});
-}
-
-/** Run `command` in `cwd` on the workstation, and remove a spill file the result does not name. */
+/** Run `command` in `cwd` on the workstation under its deadline, and turn what it throws into an `ExecutionError`. */
 export async function runCommand(
 	host: CommandHost,
 	command: string,
@@ -376,9 +331,14 @@ export async function runCommand(
 ): Promise<Result<ShellExecResult, ExecutionError>> {
 	const invalid = invalidTimeout(options?.timeout);
 	if (invalid) return err(invalid);
-	const spill = options?.capture?.spill === true ? spillPath() : undefined;
-	const outcome = await attempt(host, command, cwd, options, spill, context);
-	const kept = outcome.ok && outcome.value.spillPath !== undefined;
-	if (spill !== undefined && !kept) await host.discard(spill);
-	return outcome;
+	const timeout = options?.timeout ?? DEFAULT_TIMEOUT_SECONDS;
+	return withDeadline(context.abortSignal, timeout, async (deadline) => {
+		const early = deadline.error() ?? (await refusal(host, cwd, options));
+		if (early) return err(early);
+		const ran = await run(host, command, cwd, options, deadline);
+		// A command that exited before its deadline keeps its exit status.
+		const stopped = ran.ending.exited && !ran.ending.late ? undefined : deadline.error();
+		if (stopped) return err(stopped);
+		return settled(ran, options, context);
+	});
 }

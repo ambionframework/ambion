@@ -1,8 +1,4 @@
-import type {
-	AgentHarnessTool,
-	ExecutionEnv,
-	ExecutionToolContext,
-} from '@earendil-works/pi-agent-core';
+import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import type { GitAccess, GitBackend } from './git-backend.ts';
 import type { ObjectBackend } from './object-backend.ts';
 import type { ResourceBackend, ResourceEnv, WorkspaceAgent } from './resource.ts';
@@ -39,7 +35,7 @@ export interface BashServices {
 
 /**
  * The bash backend: a shell over a persistent filesystem, with a home for
- * each agent. It also supplies the tools for the Ambion facade.
+ * each agent. The workspace binds its tools over this shell.
  */
 export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
 	/** One agent's environment. `services` names the other backends that its shell reaches. */
@@ -48,13 +44,6 @@ export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
 		signal?: AbortSignal,
 		services?: BashServices,
 	): Promise<WorkspaceEnv>;
-	/**
-	 * Tools the backend adds beyond the tools every workspace already has:
-	 * read, write, edit, bash, ps, status, wait, cancel and snapshot, and sql,
-	 * repos and fork when their backends are set. Omit it, or list an empty array,
-	 * when the backend adds none of its own.
-	 */
-	tools?: readonly AgentHarnessTool<ExecutionToolContext>[];
 	/**
 	 * The git transports that the shell of this backend carries, such as
 	 * `in-process` or `ssh`. `openWorkspace` refuses a git backend whose

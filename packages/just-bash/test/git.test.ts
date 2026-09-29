@@ -1,8 +1,8 @@
 /**
  * What `justGitBackend` holds beyond the conformance cases: the tokens, the
- * registration after a crash, a restart over one file, a shell variable that
- * tries to carry a token, an access of another transport, a token on a path
- * of another repository, and the templates from a directory.
+ * registration after a crash, a restart over one file, the hidden
+ * `template-sources`, a shell variable that tries to carry a token, a token
+ * on a path of another repository, and the templates from a directory.
  */
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,7 @@ import {
 	BACKGROUND_CONTEXT,
 	fromDirectory,
 	openWorkspace,
+	runScript,
 	type Workspace,
 } from '@ambionframework/workspace';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -48,21 +49,16 @@ function workspaceOver(file: string, options: Partial<Parameters<typeof justGitB
 }
 
 async function sh(workspace: Workspace, agent: { name: string }, command: string) {
-	let output = '';
 	const ran = await workspace.use(agent, (env) =>
-		env.exec(
+		runScript(
+			env,
 			command,
-			{
-				capture: { limits: { maxBytes: 100_000, maxLines: 1000 } },
-				onUpdate: (update) => {
-					if (update.kind === 'replace') output = update.output.text;
-				},
-			},
+			{ capture: { limits: { maxBytes: 100_000, maxLines: 1000 } } },
 			BACKGROUND_CONTEXT,
 		),
 	);
 	if (!ran.ok) throw ran.error;
-	return { code: ran.value.exitCode, output };
+	return { code: ran.value.exitCode, output: ran.value.output };
 }
 
 describe('tokens', () => {
@@ -163,6 +159,32 @@ describe('justGitBackend', () => {
 		expect(template?.branches.main).toBe(hash);
 	});
 
+	it('keeps template-sources to itself: no agent lists, reads, forks, or takes the name', async () => {
+		const { git, workspace } = workspaceOver(join(await tempDir(), 'git.db'));
+		const template = await workspace.git?.use(ANALYST, (env) => env.get('templates/blank'));
+		const head = template?.branches.main ?? '';
+		const hidden = await workspace.git?.use(ANALYST, async (env) => ({
+			list: (await env.list()).map((repository) => repository.id),
+			get: await env.get('template-sources/blank'),
+			resolve: await env.resolve('template-sources/blank', { branch: 'main' }),
+			show: await env.show('template-sources/blank', head),
+			fork: await env.fork('template-sources/blank', 'y'),
+		}));
+		expect(hidden).toEqual({
+			list: ['templates/blank'],
+			get: undefined,
+			resolve: undefined,
+			show: undefined,
+			fork: { ok: false, reason: 'no_source', source: 'template-sources/blank' },
+		});
+		const url = `${git.access.prefix}template-sources/blank`;
+		expect(await git.access.credentialFor(ANALYST, url)).toBeUndefined();
+		const reserved = { name: 'template-sources' };
+		const refusal = "The name 'template-sources' is reserved by the git backend.";
+		await expect(workspace.git?.use(reserved, (env) => env.list())).rejects.toThrow(refusal);
+		await expect(git.access.credentialFor(reserved, url)).rejects.toThrow(refusal);
+	});
+
 	it('gives no credential that a shell variable can replace', async () => {
 		const { workspace } = workspaceOver(join(await tempDir(), 'git.db'));
 		const forked = await workspace.git?.use(ANALYST, (env) => env.fork('templates/blank', 'mine'));
@@ -206,14 +228,6 @@ describe('justGitBackend', () => {
 				justGitBackend({ storage: sqliteGitStorage(':memory:'), secret: SECRET, tokenTtl }),
 			).toThrow('tokenTtl must be a finite number above 0.');
 		}
-	});
-
-	it('refuses the access of another transport at a connect outside a workspace', async () => {
-		await expect(
-			memoryBackend().connect(ANALYST, undefined, { git: { transport: 'ssh' } }),
-		).rejects.toThrow(
-			'The just-bash backends carry the git transport in-process, and the git access uses ssh.',
-		);
 	});
 
 	it('opens nothing after dispose', async () => {

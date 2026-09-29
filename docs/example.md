@@ -99,7 +99,7 @@ workspace resource.
 - `/rooms/<room name>/messages.jsonl`: one line per message, mirrored from
   each room's own journal.
 
-**The workspace's `sql` tool opens `shared.db`.** The SQLite backend keeps
+**The workspace's `sql` tool opens `lab.db`.** The SQLite backend keeps
 this file beside the workspace directory, and the shell does not reach it.
 
 **The workspace has a git backend, `justGitBackend` of
@@ -124,8 +124,11 @@ the manufacturer datasheets.
 
 **The lab records live in `lab.db`, apart from the journal.** The
 `projects`, `test_plans`, `runs`, `results`, and `operations` tables hold
-them. The SQL resource stamps provenance on every recorded row
-(see [Resources](resources.md)).
+them. The host opens `sqliteBackend` with the lab schema, these five
+tables as `appendOnly`, and `provenance`. Each table accepts INSERT alone,
+and the database fills the provenance columns of every new row (see
+[Resources](resources.md)). The host opens the database at its start, so
+the terminal shows the tables before the first question.
 
 **Two simulated instruments sit on the lab database.** `led-current` has a
 limit of 20 mA. `bench-supply` has a limit of 5 V. The Design specialist and
@@ -216,7 +219,7 @@ automated test yet.
 | A person adds a constraint while an agent works                             | Steering an open exchange                  | By hand: the thread shows the message in order                                                                                                                                                                                        |
 | The host stops, fails to stop, and resumes                                  | Resume keeps the question and the files    | Scripted: clean stop, failed stop with retry, and resume from the journal                                                                                                                                                             |
 | Two people work the kit through separate rooms                              | Visits, presence, and catch-up by position | Scripted                                                                                                                                                                                                                              |
-| One specialist records a run and another reads it back                      | A second resource, apart from the journal  | Scripted: `record` stamps provenance, `query` reads the row from `lab.db`                                                                                                                                                             |
+| One specialist records a run and another reads it back                      | A second resource, apart from the journal  | Scripted: an INSERT through `sql` gets its provenance, and a SELECT reads the row from `lab.db`                                                                                                                                       |
 | The Design specialist drives an instrument above its limit                  | An action that waits for a person          | Scripted: `operate` records a request, `approve_operation` records the answer                                                                                                                                                         |
 | The terminal shows the cost of an exchange                                  | Cost per exchange is real                  | Scripted: formatting from synthetic usage. Live: `usage.cost` is positive                                                                                                                                                             |
 | A message cites a snapshot, a commit, a file, a table, a room, or a message | Every ref kind opens where it belongs      | Scripted: refs resolve; a snapshot previews as text, a picture, tables, or a binary note; a commit previews its log entry, its changes, and where its branch points now; a room and a message open their room; a host path stays shut |

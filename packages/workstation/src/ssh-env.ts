@@ -27,7 +27,7 @@
 
 import { posix } from 'node:path';
 import type { WorkspaceEnv } from '@ambionframework/workspace';
-import { HomeEnv, tempDirPath, tempFilePath } from '@ambionframework/workspace';
+import { HomeEnv, shellQuote, tempDirPath, tempFilePath } from '@ambionframework/workspace';
 import {
 	type Context,
 	type ExecutionError,
@@ -41,7 +41,6 @@ import {
 } from '@earendil-works/pi-agent-core';
 import type { ClientChannel, Stats } from 'ssh2';
 import { type CommandHost, runCommand } from './exec.ts';
-import { quote } from './script.ts';
 import { ConnectionClosed, type Session } from './session.ts';
 import {
 	call,
@@ -58,7 +57,7 @@ type FileResult<T> = Promise<Result<T, FileError>>;
 
 /** The mode of an ordinary file. A default ACL can then give the group write. */
 const FILE_MODE = 0o664;
-/** The mode of a temporary file or a spill file, which no other account reads. */
+/** The mode of a temporary file, which no other account reads. */
 const PRIVATE_FILE_MODE = 0o600;
 /** The mode of a temporary directory. */
 const PRIVATE_DIR_MODE = 0o700;
@@ -86,11 +85,6 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 		this.host = {
 			open: (command) => this.open(command),
 			isDirectory: (path) => this.isDirectory(path),
-			exists: (path) => this.guarded(() => this.isPresent(path)),
-			discard: (path) =>
-				this.guarded(() => call<void>((done) => this.sftp.unlink(path, done))).catch(
-					() => undefined,
-				),
 		};
 	}
 
@@ -295,7 +289,7 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 	private async removeTree(path: string, context: Context): Promise<void> {
 		const result = await runCommand(
 			this.host,
-			`rm -rf -- ${quote(path)}`,
+			`rm -rf -- ${shellQuote(path)}`,
 			this.cwd,
 			undefined,
 			context,

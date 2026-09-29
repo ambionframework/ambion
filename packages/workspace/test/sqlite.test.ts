@@ -1,5 +1,6 @@
 /**
- * The SQLite backend's own rules: no statement opens a host file, with the
+ * The SQLite backend as a `SqlBackend` (`support/sql-cases.ts`), on a file
+ * and in memory, and its own rules: no statement opens a host file, with the
  * engine's authorizer and without it; a call commits its own transaction;
  * a result keeps one value per column name; a call stops on an abort and
  * past its time limit, an import among them; and an export lands on a
@@ -15,6 +16,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { openWorkspace, type SqlOutcome, type Workspace } from '../src/index.ts';
 import { sqliteBackend } from '../src/sqlite-entry.ts';
+import { callAs, invokeText, sqlBackends, toolOf } from './support/backends.ts';
+import { sqlCases } from './support/sql-cases.ts';
 
 const cleanups: (() => Promise<unknown>)[] = [];
 
@@ -87,6 +90,10 @@ const engines = [
 	},
 	{ name: 'with the text check alone', wrap: withoutAuthorizer },
 ];
+
+describe.each(sqlBackends)('$name', (harness) => {
+	for (const c of sqlCases(harness)) it(c.name, c.run);
+});
 
 describe.each(engines)('no statement opens a host file, $name', ({ wrap }) => {
 	it("refuses every ATTACH of a file and every VACUUM INTO, runs no later statement, and still attaches ':memory:'", () =>
@@ -268,5 +275,189 @@ describe('the SQLite backend', () => {
 			expect(() => sqliteBackend(':memory:', { timeout }), String(timeout)).toThrow(RangeError);
 		}
 		expect(() => sqliteBackend(':memory:', { timeout: 0.5 })).not.toThrow();
+	});
+});
+
+// -- append-only tables and provenance ----------------------------------------
+
+const RECORDS = `
+CREATE TABLE IF NOT EXISTS runs (
+	id INTEGER PRIMARY KEY,
+	label TEXT NOT NULL,
+	agent TEXT, room TEXT, activation TEXT, exchange_owner TEXT, exchange_from TEXT, at TEXT,
+	UNIQUE (label)
+);
+CREATE TABLE IF NOT EXISTS plain (id INTEGER PRIMARY KEY, body TEXT, agent TEXT);
+CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY, body TEXT);
+`;
+
+/** A workspace over a database of records: `runs` and `plain` take INSERT alone. */
+function records(location = ':memory:', provenance = true): Workspace {
+	const site = openWorkspace({
+		name: 'records',
+		backend: {
+			bash: memoryBackend(),
+			sql: sqliteBackend(location, {
+				schema: RECORDS,
+				appendOnly: ['runs', 'plain'],
+				provenance,
+			}),
+		},
+	});
+	cleanups.push(() => site.dispose());
+	return site;
+}
+
+const inRoom = callAs('design', {
+	room: 'bringup',
+	activation: 'act-7',
+	exchange: { owner: 'mira', from: 3 },
+});
+
+/** Call the `sql` tool of `site` as `context`, and give its text. */
+const sqlTool = (site: Workspace, sql: string, context = inRoom) =>
+	invokeText(toolOf(site, 'sql'), { sql }, context);
+
+describe('the append-only tables of the SQLite backend', () => {
+	it('stamps the provenance of each tool call on a new row, and refuses a provenance column in the INSERT', async () => {
+		const site = records();
+		await sqlTool(site, "INSERT INTO runs (label) VALUES ('first'), ('second')");
+		await sqlTool(site, "INSERT INTO runs (label) VALUES ('outside')", callAs('experiments'));
+		const rows = await run(site, 'SELECT * FROM runs ORDER BY id');
+		expect(rows.ok && rows.rows).toMatchObject([
+			{
+				label: 'first',
+				agent: 'design',
+				room: 'bringup',
+				activation: 'act-7',
+				exchange_owner: 'mira',
+				exchange_from: '3',
+			},
+			{ label: 'second', agent: 'design', activation: 'act-7' },
+			{ label: 'outside', agent: 'experiments', room: null, exchange_owner: null },
+		]);
+		expect(rows.ok && Date.parse(String(rows.rows[0]?.at))).not.toBeNaN();
+		await expect(
+			sqlTool(site, "INSERT INTO runs (label, agent) VALUES ('forged', 'mira')"),
+		).rejects.toThrow(/fills the provenance columns of 'runs': agent, room, activation/);
+		// A host call with no provenance leaves the columns NULL.
+		const host = await run(site, "INSERT INTO runs (label) VALUES ('host') RETURNING id");
+		expect(host.ok && host.rows).toEqual([{ id: 4 }]);
+		expect(messageOf(await run(site, "UPDATE runs SET agent = 'alpha' WHERE id = 4"))).toMatch(
+			/append-only/,
+		);
+	});
+
+	it('refuses an UPDATE, a DELETE, a REPLACE, and an upsert of an append-only table, and leaves other tables alone', async () => {
+		const site = records();
+		await sqlTool(
+			site,
+			"INSERT INTO runs (label) VALUES ('kept'); INSERT INTO plain (body) VALUES ('b')",
+		);
+		for (const sql of [
+			"UPDATE runs SET label = 'changed'",
+			"UPDATE runs SET agent = 'design'",
+			'DELETE FROM runs',
+			"INSERT OR REPLACE INTO runs (label) VALUES ('kept')",
+			"REPLACE INTO runs (id, label) VALUES (1, 'other')",
+			"INSERT INTO runs (id, label) VALUES (1, 'x') ON CONFLICT (id) DO UPDATE SET label = 'x'",
+			"UPDATE plain SET body = 'c'",
+			'DELETE FROM plain',
+		]) {
+			await expect(sqlTool(site, sql), sql).rejects.toThrow(
+				/is append-only: it accepts INSERT alone/,
+			);
+		}
+		await sqlTool(
+			site,
+			"INSERT INTO notes (body) VALUES ('a'); UPDATE notes SET body = 'b'; DELETE FROM notes",
+		);
+		const kept = await run(site, 'SELECT label, agent FROM runs');
+		expect(kept.ok && kept.rows).toEqual([{ label: 'kept', agent: 'design' }]);
+	});
+
+	it.each([
+		'DROP TABLE runs',
+		'drop table if exists main."RUNS";',
+		'DROP TABLE [plain]',
+		'DROP TABLE `runs`',
+		'ALTER TABLE runs RENAME TO old_runs',
+		'ALTER TABLE main.runs ADD COLUMN extra TEXT',
+		'DROP TRIGGER ambion_runs_delete',
+		'DROP TRIGGER temp.ambion_runs_update',
+		'PRAGMA recursive_triggers = OFF',
+		'PRAGMA main.writable_schema = ON',
+		'DROP /* a comment */ TABLE notes',
+		'PRAGMA/**/recursive_triggers = OFF',
+	])('refuses %s, which would lift the guard, and runs no later statement', async (statement) => {
+		const site = records();
+		await run(site, "INSERT INTO runs (label) VALUES ('kept')");
+		const outcome = await run(site, `${statement}; INSERT INTO notes (body) VALUES ('after')`);
+		expect(messageOf(outcome)).toMatch(/is refused|plain form/);
+		const notes = await run(site, 'SELECT count(*) AS n FROM notes');
+		expect(notes.ok && notes.rows).toEqual([{ n: 0 }]);
+		expect(messageOf(await run(site, 'DELETE FROM runs'))).toMatch(/append-only/);
+	});
+
+	it('runs a DROP, an ALTER, and a PRAGMA that leave the guard in place', async () => {
+		const site = records();
+		const outcome = await run(
+			site,
+			'CREATE TABLE scratch (a); ALTER TABLE scratch ADD COLUMN b; DROP TABLE IF EXISTS scratch; PRAGMA table_info(runs)',
+		);
+		expect(outcome.ok && outcome.rows.map((row) => row.name)).toContain('exchange_owner');
+	});
+
+	it('takes an agent value in a provenance column when provenance is off, and still refuses an UPDATE', async () => {
+		const site = records(':memory:', false);
+		await sqlTool(site, "INSERT INTO runs (label, agent) VALUES ('given', 'someone')");
+		const rows = await run(site, 'SELECT label, agent, room FROM runs');
+		expect(rows.ok && rows.rows).toEqual([{ label: 'given', agent: 'someone', room: null }]);
+		expect(messageOf(await run(site, "UPDATE runs SET agent = 'design'"))).toMatch(/append-only/);
+		expect(site.tools().guidance).toContain('The tables runs, plain accept INSERT alone');
+		expect(site.tools().guidance).not.toContain('provenance columns');
+	});
+
+	it('names the tables and the provenance columns in the guidance', () => {
+		const guidance = records().tools().guidance ?? '';
+		expect(guidance).toContain('The tables runs, plain accept INSERT alone');
+		expect(guidance).toContain(
+			'provenance columns (agent, room, activation, exchange_owner, exchange_from, at)',
+		);
+	});
+
+	it('runs the schema at each open, keeps the records across a restart, and guards them again', async () => {
+		const location = join(await tempDir(), 'records.db');
+		const first = records(location);
+		await sqlTool(first, "INSERT INTO runs (label) VALUES ('kept')");
+		await first.dispose();
+		const second = records(location);
+		await sqlTool(second, "INSERT INTO runs (label) VALUES ('again')");
+		const rows = await run(second, 'SELECT label, agent FROM runs ORDER BY id');
+		expect(rows.ok && rows.rows).toEqual([
+			{ label: 'kept', agent: 'design' },
+			{ label: 'again', agent: 'design' },
+		]);
+		expect(messageOf(await run(second, 'DELETE FROM runs'))).toMatch(/append-only/);
+	});
+
+	it('rejects a call when an append-only table does not exist, and opens again at the next call', async () => {
+		const location = join(await tempDir(), 'missing.db');
+		const site = openWorkspace({
+			name: 'missing',
+			backend: {
+				bash: memoryBackend(),
+				sql: sqliteBackend(location, { appendOnly: ['absent'] }),
+			},
+		});
+		cleanups.push(() => site.dispose());
+		await expect(run(site, 'SELECT 1')).rejects.toThrow(
+			"sqliteBackend: the append-only table 'absent' does not exist.",
+		);
+		const created = new DatabaseSync(location);
+		created.exec('CREATE TABLE absent (a)');
+		created.close();
+		const deleted = await run(site, 'INSERT INTO absent VALUES (1); DELETE FROM absent');
+		expect(messageOf(deleted)).toMatch(/append-only/);
 	});
 });

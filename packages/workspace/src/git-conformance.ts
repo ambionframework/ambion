@@ -9,7 +9,7 @@
  * is checked by the exit status of `git push`: the text of a refusal
  * differs from one backend to the other.
  *
- * The suite knows no transport. Four cases touch a credential, and each
+ * The suite knows no transport. Three cases touch a credential, and each
  * asks a hook of the harness for the fact it checks. The package that
  * pairs the git backend with its bash backend implements the hooks.
  *
@@ -64,7 +64,7 @@ export interface GitConformanceProbe {
 }
 
 /**
- * A git backend under test. `open` runs inside every case. The four hooks
+ * A git backend under test. `open` runs inside every case. The three hooks
  * answer the credential facts of the pair, each over the backend and the
  * workspace that the case opened.
  */
@@ -73,8 +73,6 @@ export interface GitConformanceBackend<B extends GitBackend = GitBackend> {
 	/** The shortest `credentialTtl`, in seconds, that the backend takes. */
 	readonly shortestCredentialTtl: number;
 	open(): Promise<GitConformanceStore<B>>;
-	/** Resolves `true` when `agent` holds a credential for `template-sources/blank`. */
-	sourcesCredential(pair: GitConformancePair<B>, agent: WorkspaceAgent): Promise<boolean>;
 	/** Issue the credentials of `agent`, the way its bash backend asks for them. Rejects for a reserved name. */
 	issueCredentials(pair: GitConformancePair<B>, agent: WorkspaceAgent): Promise<void>;
 	/** Resolves `true` when `agent` holds a write credential for the repository at `url`. */
@@ -144,21 +142,6 @@ const listsTemplatesAndForks: Body = async ({ workspace }) => {
 	check(templates.length === 2, 'list with a namespace did not keep that namespace alone');
 };
 
-const sourcesStayHidden: Body = async (pair, harness) => {
-	const { workspace } = pair;
-	const all = await git(workspace, ANALYST, (env) => env.list());
-	check(
-		all.every((repository) => !repository.id.startsWith('template-sources/')),
-		'list shows template-sources',
-	);
-	const hidden = await git(workspace, ANALYST, (env) => env.get('template-sources/blank'));
-	check(hidden === undefined, 'get reaches template-sources');
-	check(
-		!(await harness.sourcesCredential(pair, ANALYST)),
-		'an agent holds a credential for template-sources',
-	);
-};
-
 const cloneSetsOrigin: Body = async ({ workspace }) => {
 	const url = await forkAs(workspace, ANALYST, 'templates/weekly-report', 'report');
 	const clone = await sh(workspace, ANALYST, `git clone ${url} ~/report`);
@@ -184,8 +167,6 @@ const takenNameCreatesNothing: Body = async ({ workspace }) => {
 const missingSourceIsRefused: Body = async ({ workspace }) => {
 	const missing = await git(workspace, ANALYST, (env) => env.fork('templates/none', 'x'));
 	check(!missing.ok && missing.reason === 'no_source', 'a missing source was not no_source');
-	const hidden = await git(workspace, ANALYST, (env) => env.fork('template-sources/blank', 'y'));
-	check(!hidden.ok && hidden.reason === 'no_source', 'template-sources was forkable');
 };
 
 const forkOfForkNamesItsSource: Body = async ({ workspace }) => {
@@ -195,20 +176,19 @@ const forkOfForkNamesItsSource: Body = async ({ workspace }) => {
 	check(review?.source === 'analyst/report', 'a fork of a fork does not name its direct source');
 };
 
-const reservedNamesAreRefused: Body = async (pair, harness) => {
+const templatesNameIsRefused: Body = async (pair, harness) => {
 	const { workspace } = pair;
-	for (const name of ['templates', 'template-sources']) {
-		const refused = await git(workspace, { name }, (env) => env.list()).then(
-			() => false,
-			() => true,
-		);
-		check(refused, `an agent named ${name} was not refused`);
-		const credential = await harness.issueCredentials(pair, { name }).then(
-			() => false,
-			() => true,
-		);
-		check(credential, `an agent named ${name} got a credential`);
-	}
+	const name = 'templates';
+	const refused = await git(workspace, { name }, (env) => env.list()).then(
+		() => false,
+		() => true,
+	);
+	check(refused, `an agent named ${name} was not refused`);
+	const credential = await harness.issueCredentials(pair, { name }).then(
+		() => false,
+		() => true,
+	);
+	check(credential, `an agent named ${name} got a credential`);
 };
 
 const ownerPushesPeerReads: Body = async ({ workspace }) => {
@@ -426,12 +406,11 @@ const CASES: readonly [string, Body][] = [
 		'repos lists each template with its description, and each fork with its source',
 		listsTemplatesAndForks,
 	],
-	['template-sources stays hidden, and no agent holds a credential for it', sourcesStayHidden],
 	['a clone of a fork has the fork as origin', cloneSetsOrigin],
 	['a second fork with a taken name is name_taken and creates nothing', takenNameCreatesNothing],
 	['a fork of a missing source is no_source', missingSourceIsRefused],
 	['a fork of a fork names its direct source', forkOfForkNamesItsSource],
-	['an agent with a reserved name is refused', reservedNamesAreRefused],
+	['an agent named templates is refused', templatesNameIsRefused],
 	['the owner pushes a branch, and a peer reads it', ownerPushesPeerReads],
 	[
 		'resolve gives the commit of a branch, a tag, or a hash, and show gives what the commit holds',

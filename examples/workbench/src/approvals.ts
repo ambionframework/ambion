@@ -1,4 +1,5 @@
-import type { SqlResource } from '@ambionframework/workspace/sql';
+import { BACKGROUND_CONTEXT, type SqlEnv } from '@ambionframework/workspace';
+import type { WorkspaceResource } from '@ambionframework/workspace/resource';
 import { instruments } from './scenarios.ts';
 
 /** An operation the instrument refused to run until the owner of the exchange answers. */
@@ -24,15 +25,21 @@ AND NOT EXISTS (SELECT 1 FROM operations AS answer WHERE answer.request_id = req
 ORDER BY id`;
 
 /** The requested operations of one room that have no answer. The lab records them apart from the journal. */
-export function readApprovals(lab: SqlResource, room: string): Promise<Approval[]> {
-	return lab.use(reader, (env) =>
-		env.query(pending(room)).map((row) => ({
+export function readApprovals(lab: WorkspaceResource<SqlEnv>, room: string): Promise<Approval[]> {
+	return lab.use(reader, async (env) => {
+		const outcome = await env.run(
+			pending(room),
+			{ maxRows: Number.MAX_SAFE_INTEGER },
+			BACKGROUND_CONTEXT,
+		);
+		if (!outcome.ok) throw new Error(outcome.message);
+		return outcome.rows.map((row) => ({
 			id: Number(row.id),
 			instrument: String(row.instrument),
 			setpoint: Number(row.setpoint),
 			unit: instruments.find((spec) => spec.name === row.instrument)?.unit ?? '',
 			owner: String(row.exchange_owner ?? ''),
 			at: String(row.at ?? ''),
-		})),
-	);
+		}));
+	});
 }

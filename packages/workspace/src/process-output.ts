@@ -16,16 +16,14 @@
  */
 
 import {
-	applyShellOutputUpdate,
 	BACKGROUND_CONTEXT,
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
 	type ShellOutputTruncation,
-	type ShellOutputView,
 	truncateTail,
 } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
-import { quoted } from './process-files.ts';
+import { runScript, shellQuote } from './execution-env.ts';
 
 /** The most bytes one read takes from the file. Pi's view then keeps at most 50 KB of them. */
 const READ_BYTES = 4 * DEFAULT_MAX_BYTES;
@@ -98,18 +96,15 @@ async function bytesOf(
 	size: number,
 	count: number,
 ): Promise<string> {
-	let view: ShellOutputView | undefined;
-	await env.exec(
-		`head -c ${size} ${quoted(path)} 2>/dev/null | tail -c ${count}`,
+	const ran = await runScript(
+		env,
+		`head -c ${size} ${shellQuote(path)} 2>/dev/null | tail -c ${count}`,
 		{
 			capture: {
 				limits: { maxBytes: READ_BYTES, maxLines: Number.MAX_SAFE_INTEGER, retain: 'tail' },
 			},
-			onUpdate: (update) => {
-				view = applyShellOutputUpdate(view, update);
-			},
 		},
 		BACKGROUND_CONTEXT,
 	);
-	return view?.text ?? '';
+	return ran.ok ? ran.value.output : '';
 }

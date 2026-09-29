@@ -80,12 +80,9 @@ describe.skipIf(!hasGitTools)('the git files of an agent', () => {
 		expect(await modeOf(join(ssh, 'ambion-git.key'))).toBe(0o600);
 	});
 
-	it('refuses a git access of another transport, and fails a connect with no key', async () => {
+	it('carries the ssh transport, and fails a connect with no key', async () => {
 		const { bash, git } = await pair();
 		expect(bash.gitTransports).toEqual(['ssh']);
-		await expect(
-			bash.connect(ANALYST, undefined, { git: { transport: 'in-process' } }),
-		).rejects.toThrow(/carries the git transport ssh, and the git access uses in-process/);
 		await git.dispose?.();
 		await expect(bash.connect(ANALYST, undefined, { git: git.access })).rejects.toThrow(/disposed/);
 		const env = await bash.connect(ANALYST);

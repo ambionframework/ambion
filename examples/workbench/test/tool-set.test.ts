@@ -11,35 +11,31 @@ import {
 } from '@ambionframework/ambion/testing';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { openWorkspace } from '@ambionframework/workspace';
-import { openSqlResource } from '@ambionframework/workspace/sql';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { people, team } from '../src/definitions.ts';
 import { openInstrument } from '../src/instrument.ts';
 import { labRepositories } from '../src/repositories.ts';
-import { instruments, labSchema, labWritable } from '../src/scenarios.ts';
+import { instruments, labAppendOnly, labSchema } from '../src/scenarios.ts';
 
-/** The Workbench team over an in-memory workspace and lab. The test disposes them. */
+/** The Workbench team over an in-memory workspace and lab database. The test disposes them. */
 function build() {
 	const workspace = openWorkspace({
 		name: 'workbench',
 		backend: {
 			bash: memoryBackend(),
-			sql: sqliteBackend(':memory:'),
+			sql: sqliteBackend(':memory:', {
+				schema: labSchema,
+				appendOnly: labAppendOnly,
+				provenance: true,
+			}),
 			git: labRepositories(':memory:'),
 		},
 	});
-	const lab = openSqlResource({
-		name: 'lab',
-		location: ':memory:',
-		schema: labSchema,
-		writable: labWritable,
-	});
-	onTestFinished(async () => {
-		await workspace.dispose();
-		await lab.dispose();
-	});
-	return team(workspace, lab, openInstrument({ lab, instruments }));
+	onTestFinished(() => workspace.dispose());
+	const lab = workspace.sql;
+	if (lab === undefined) throw new Error('The workspace has no lab database.');
+	return team(workspace, openInstrument({ lab, instruments }));
 }
 
 /** The name and the schema of each tool an executor carries, in order. */
@@ -53,18 +49,7 @@ describe('the Workbench tool set', () => {
 		const [first, ...rest] = built.agents;
 		const expected = shapeOf(first?.executor.tools ?? []);
 		expect(expected.map((tool) => tool.name)).toEqual(
-			expect.arrayContaining([
-				'read',
-				'write',
-				'edit',
-				'bash',
-				'sql',
-				'repos',
-				'fork',
-				'query',
-				'record',
-				'operate',
-			]),
+			expect.arrayContaining(['read', 'write', 'edit', 'bash', 'sql', 'repos', 'fork', 'operate']),
 		);
 		for (const agent of rest) expect(shapeOf(agent.executor.tools), agent.name).toEqual(expected);
 		const [firstSpecialist, ...otherSpecialists] = built.specialists;

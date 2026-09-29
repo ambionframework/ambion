@@ -29,7 +29,6 @@ import {
 	byPath,
 	namespaceOf,
 	revisionOf,
-	SOURCES,
 	type TemplateRegistration,
 	validName,
 } from '@ambionframework/workspace/git';
@@ -44,10 +43,18 @@ import {
 } from 'just-git/repo';
 import type { GitServer } from 'just-git/server';
 import type { GitCredential, GitFetch, JustGitAccess } from './access.ts';
-import { DEFAULT_BRANCH, registerTemplates, settleAll } from './registration.ts';
+import { DEFAULT_BRANCH, registerTemplates, SOURCES, settleAll } from './registration.ts';
 import { openServer, repositoryOfPath } from './server.ts';
 import type { GitStorage, OpenGitStorage, RegistryRow } from './storage.ts';
 import { signToken, type TokenClaims } from './tokens.ts';
+
+/** Refuse an agent that takes a reserved name: `templates`, or `template-sources` of this backend. */
+function assertJustGitAgent(agent: WorkspaceAgent): void {
+	if (agent.name === SOURCES) {
+		throw new Error(`The name '${agent.name}' is reserved by the git backend.`);
+	}
+	assertAgent(agent);
+}
 
 /** The base of every clone URL. `.invalid` never resolves. */
 const BASE = 'http://git.ambion.invalid';
@@ -151,7 +158,7 @@ export function justGitBackend(options: JustGitBackendOptions): JustGitBackend {
 		prefix: `${BASE}/`,
 		fetch: (input, init) => open().fetch(input, init),
 		credentialFor: async (agent, url) => {
-			assertAgent(agent);
+			assertJustGitAgent(agent);
 			const id = url.startsWith(`${BASE}/`) ? repositoryOfPath(new URL(url).pathname) : undefined;
 			const row = id === undefined ? undefined : await repositories.row(id);
 			return row === undefined ? undefined : credential(agent, row);
@@ -162,7 +169,7 @@ export function justGitBackend(options: JustGitBackendOptions): JustGitBackend {
 		access,
 		server: BASE,
 		connect: async (agent: WorkspaceAgent): Promise<GitEnv> => {
-			assertAgent(agent);
+			assertJustGitAgent(agent);
 			await ready();
 			return repositories.envFor(agent);
 		},

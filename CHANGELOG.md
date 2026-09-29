@@ -166,6 +166,14 @@ its `text`.
   more. A wait that the stop or the eviction ends rejects with
   `room_stopped` and the message of the wait, `Exchange '<seq>' was
   stopped or interrupted.`
+- **The workspace keeps one SQL path and the ports that a backend uses.**
+  The SQL resource opened `node:sqlite` beside `sqliteBackend`, with a
+  second copy of the preview and the table render, and it goes. One
+  `runScript` replaces six copies of the code that collects the output of
+  a script and checks the result, and one `shellQuote` replaces four
+  copies of the shell quote. The spill file, `BashBackend.tools`, the
+  second check of a git transport, and the knowledge of
+  `template-sources` outside `justGitBackend` go.
 
 ### Breaking changes
 
@@ -303,6 +311,39 @@ its `text`.
   `defineAgent` checks and copies the executor as the room does, so a
   malformed executor fails at `defineAgent`. The `executor` of the
   definition is a frozen copy of the executor that the caller gives.
+- **The `./sql` entry of `@ambionframework/workspace` goes.**
+  `openSqlResource`, `PROVENANCE_COLUMNS`, and the types `SqlResource`,
+  `SqlResourceEnv`, and `SqlResourceOptions` go, with the `query` and
+  `record` tools. The SQL backend of a workspace holds records:
+  `sqliteBackend(location, { schema, appendOnly, provenance })` runs the
+  schema at each open, keeps each `appendOnly` table to INSERT alone, and
+  fills the provenance columns of a new row. `SqlRunOptions` has
+  `provenance`, the root entry exports the type `SqlProvenance`, and the
+  `sql` tool passes the provenance of each call. The Workbench keeps its lab
+  records in the database of the `sql` tool, `lab.db`, and `shared.db`
+  goes. See [Records](docs/workspace.md#records-append-only-tables-with-provenance).
+- **`sqlConformance` and `SqlConformanceBackend` leave `./conformance`.**
+  The SQL cases run in the SQLite tests until a second SQL backend exists.
+- **A backend writes no spill file.** The root entry no longer exports
+  `spill`, `spillPath`, and `MinimalWriter`. The just-bash backends and
+  the workstation ignore `capture.spill`, and a result has no
+  `spillPath`. Every `bash` call keeps its whole output in a process file.
+  The conformance case of the bounded view checks no spill file.
+- **The root entry exports `runScript` and `shellQuote`.** `runScript`
+  runs one script and gives its exit code and its output as text.
+  `shellQuote` puts one word in single quotes for `bash`.
+- **`BashBackend.tools` goes.** No backend set it. The workspace binds
+  the same tools over every bash backend.
+- **`openWorkspace` alone checks a git transport.** The just-bash
+  backends and the workstation read `BashServices.git` at `connect` with
+  no check of their own.
+- **`template-sources` belongs to `justGitBackend`.**
+  `@ambionframework/workspace/git` no longer exports `SOURCES`.
+  `assertAgent` and `readOnly` know `templates` alone. `justGitBackend`
+  refuses an agent named `template-sources` and hides the namespace. The
+  workstation no longer knows the name. `GitConformanceBackend` has no
+  `sourcesCredential`, and the git cases no longer check
+  `template-sources`.
 
 ## 0.3.0 (2026-09-25)
 

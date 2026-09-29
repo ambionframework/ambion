@@ -2,10 +2,10 @@
 
 **A resource is application data that an agent's tools reach.** One
 contract describes every resource. Two bindings implement it: a filesystem
-binding over just-bash and Pi, and a SQL binding over `node:sqlite`. Every
-tool call that reaches a resource carries provenance. The README states the
-positioning. This page states the contract, the SQL binding, and the rules
-for references and provenance.
+binding over just-bash and Pi, and a SQL binding over the SQL backend of a
+workspace. Every tool call that reaches a resource carries provenance. The
+README states the positioning. This page states the contract, the records
+of the SQL binding, and the rules for references and provenance.
 
 The [workspace page](workspace.md) covers the filesystem binding.
 
@@ -58,51 +58,57 @@ lifecycle.
 
 **A binding picks its own `Env`.** The environment extends `ResourceEnv`.
 The filesystem binding uses `WorkspaceEnv`, a Pi `ExecutionEnv`. The SQL
-binding uses `SqlResourceEnv`. A binding also adds `tools()`, which returns
-the tool bundle an agent definition lists.
+binding uses `SqlEnv`, and `workspace.sql` is its owner. `workspace.tools()`
+returns the tool bundle of both, which an agent definition lists.
 
 **The contract has no freshness guarantee.** The room's freshness check
 governs what an agent says. It does not govern what a tool reads from a
 resource. A tool that needs the current state of the room reads the room.
 
-## Query a SQL resource
+## Keep records in the shared database
 
-**A SQL resource is the second binding of the resource contract.**
-`openSqlResource` from `@ambionframework/workspace/sql` opens one SQLite
-database through `node:sqlite`. It needs no model library. The database is a
-file of its own. It shares no connection and no transaction with the
-journal. The `sql` tool on the workspace page is a different database: the
-workspace's SQL backend.
+**The SQL binding is the SQL backend of a workspace.** `sqliteBackend` from
+`@ambionframework/workspace/sqlite` opens one SQLite database through
+`node:sqlite`. It needs no model library. The database is a file of its
+own. It shares no connection and no transaction with the journal. Agents
+reach it through the `sql` tool, and host code through `workspace.sql`
+([Query the shared database](workspace.md#query-the-shared-database)).
 
 ```ts
-import { openSqlResource } from '@ambionframework/workspace/sql';
+import { directoryBackend } from '@ambionframework/just-bash';
+import { openWorkspace } from '@ambionframework/workspace';
+import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 
-const lab = openSqlResource({
+const lab = openWorkspace({
   name: 'lab',
-  location: './lab.db',
-  schema: 'CREATE TABLE IF NOT EXISTS runs (id INTEGER PRIMARY KEY, label TEXT, agent TEXT)',
-  writable: ['runs'],
+  backend: {
+    bash: directoryBackend('./data/lab'),
+    sql: sqliteBackend('./data/lab.db', {
+      schema: 'CREATE TABLE IF NOT EXISTS runs (id INTEGER PRIMARY KEY, label TEXT, agent TEXT)',
+      appendOnly: ['runs'],
+      provenance: true,
+    }),
+  },
 });
 const agent = defineAgent({ ..., bundles: [lab.tools()] });
 ```
 
-**`query` reads and never writes.** It runs one statement on a read-only
-handle, and it sets `query_only` before each run. An INSERT, an UPDATE, or a
-statement that changes the schema fails. The preview shows 50 rows unless the
-caller sets `rows`.
+**An append-only table accepts INSERT alone.** An UPDATE, a DELETE, and a
+REPLACE of a row fail, and so do a DROP and an ALTER of the table. Other
+tables stay open to every statement.
 
-**`record` is the only write.** It inserts one row into a table that the host
-lists in `writable`. It refuses any other table and any unknown column. It
-also refuses a provenance column that the caller sets.
+**Provenance fills the columns that a table declares.** With `provenance`,
+each INSERT into an append-only table gets the provenance of the call. An
+INSERT that sets a provenance column fails.
 
-**The resource does not deduplicate.** A retried activation that calls `record`
-again inserts again. Give the table a UNIQUE constraint when a row must appear
-once. The `schema` runs at every open, so write it to run again.
+**The backend does not deduplicate.** A retried activation that inserts
+again inserts again. Give the table a UNIQUE constraint when a row must
+appear once. The `schema` runs at each open, so write it to run again.
 
-**The resource shares no journal transaction.** A crash between a `record`
-call and the journal write of the activation can leave a row for an
-activation that the journal never committed. The journal stays the record of
-the room.
+**The records share no journal transaction.** A crash between an INSERT
+and the journal write of the activation can leave a row for an activation
+that the journal never committed. The journal stays the record of the
+room.
 
 ## References and provenance
 
@@ -126,14 +132,16 @@ that was open when the activation read the record, and it is absent when no
 exchange was open. All three are absent outside a room. A binding stamps
 them where its data allows.
 
-| Binding    | Where provenance lands                                              |
-| ---------- | ------------------------------------------------------------------- |
-| SQL        | The `PROVENANCE_COLUMNS` on a recorded row, when the table has them |
-| Filesystem | The audit log                                                       |
+| Binding    | Where provenance lands                                      |
+| ---------- | ----------------------------------------------------------- |
+| SQL        | The provenance columns of a new row in an append-only table |
+| Filesystem | The audit log                                               |
 
-The `PROVENANCE_COLUMNS` are `agent`, `room`, `activation`, `exchange_owner`,
-`exchange_from`, and `at`. `record` fills each column that the table has and
-that the context supplies.
+The provenance columns are `agent`, `room`, `activation`, `exchange_owner`,
+`exchange_from`, and `at`. The `sql` tool passes them in
+`SqlRunOptions.provenance`. The backend fills each column that the table
+has and that the call supplies. Host code passes its own `provenance`
+through `workspace.sql`.
 
 **Provenance grants no authority.** A tool does not check it to allow or
 refuse a call. A tool that needs current state reads the room.

@@ -30,13 +30,12 @@ import { memoryJournals } from '@ambionframework/journal';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { piExecution } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
-import { openSqlResource } from '@ambionframework/workspace/sql';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { describe, expect, it } from 'vitest';
 import { people, team } from '../../src/definitions.ts';
 import { type Family, hasKey, seatFamilies } from '../../src/families.ts';
 import { openInstrument } from '../../src/instrument.ts';
-import { instruments, labSchema, labWritable } from '../../src/scenarios.ts';
+import { instruments, labAppendOnly, labSchema } from '../../src/scenarios.ts';
 
 const QUIET_MS = 150_000;
 
@@ -90,15 +89,18 @@ async function openRoom(seats: readonly string[]) {
 	const directory = await mkdtemp(join(tmpdir(), 'ambion-workbench-toolset-live-'));
 	const workspace = openWorkspace({
 		name: 'workbench',
-		backend: { bash: memoryBackend(), sql: sqliteBackend(':memory:') },
+		backend: {
+			bash: memoryBackend(),
+			sql: sqliteBackend(join(directory, 'lab.db'), {
+				schema: labSchema,
+				appendOnly: labAppendOnly,
+				provenance: true,
+			}),
+		},
 	});
-	const lab = openSqlResource({
-		name: 'lab',
-		location: join(directory, 'lab.db'),
-		schema: labSchema,
-		writable: labWritable,
-	});
-	const built = team(workspace, lab, openInstrument({ lab, instruments }));
+	const lab = workspace.sql;
+	if (lab === undefined) throw new Error('The workspace has no lab database.');
+	const built = team(workspace, openInstrument({ lab, instruments }));
 	const records: TraceRecord[] = [];
 	const runtime = createRuntime({
 		storage: memoryJournals(),
@@ -122,7 +124,6 @@ async function openRoom(seats: readonly string[]) {
 	const close = async () => {
 		await room.stop().catch(() => undefined);
 		await workspace.dispose().catch(() => undefined);
-		await lab.dispose().catch(() => undefined);
 		await rm(directory, { recursive: true, force: true });
 	};
 	return { room, name, runtime, events, records, close };

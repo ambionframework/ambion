@@ -135,9 +135,6 @@ const pushTo = (url: string) =>
 const harness: GitConformanceBackend<GitBackend> = {
 	name: 'workstation git on OpenSSH',
 	shortestCredentialTtl: KEY_TTL,
-	sourcesCredential: async ({ workspace }, agent) =>
-		(await shell(workspace, agent, 'git ls-remote ssh://ambion-git/template-sources/blank'))
-			.code === 0,
 	issueCredentials: async ({ backend, workspace }, agent) => {
 		await backend.access.identityFor(agent);
 		await workspace.use(agent, async () => undefined);

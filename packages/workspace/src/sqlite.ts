@@ -33,6 +33,12 @@
  * Node whose `node:sqlite` has `setAuthorizer`, the engine refuses the same
  * operations a second time. `node:sqlite` loads no extension unless its
  * caller allows it, and this backend does not.
+ *
+ * The options `schema`, `appendOnly`, and `provenance` shape the database
+ * at each open. The schema runs first. Each append-only table then accepts
+ * INSERT alone, and with provenance the database fills the provenance
+ * columns of a new row from the call (`sqlite-guard.ts`). The `sql` tool
+ * passes the provenance of each tool call.
  */
 
 import { mkdirSync } from 'node:fs';
@@ -51,6 +57,13 @@ import type {
 } from './sql-backend.ts';
 import { IMPORT_TABLE, sqlImport } from './sql-import.ts';
 import { sqlResult } from './sql-result.ts';
+import {
+	type Guard,
+	guardRefusal,
+	guardTables,
+	PROVENANCE_COLUMNS,
+	quoteName,
+} from './sqlite-guard.ts';
 
 /** The in-memory location. Every agent shares it while the backend lives. */
 const MEMORY = ':memory:';
@@ -85,6 +98,27 @@ class Refusal extends Error {}
 export interface SqliteBackendOptions {
 	/** Seconds one call may run before the backend stops it: more than 0, at most 2147483. The default is 30. */
 	timeout?: number;
+	/** Statements that run at each open, before the first call: tables, views, and seed rows. Write them to run again. */
+	schema?: string;
+	/**
+	 * The tables that accept INSERT alone. An UPDATE, a DELETE, a REPLACE, a
+	 * DROP, and an ALTER of each one fail. Each table must exist after the
+	 * schema runs.
+	 */
+	appendOnly?: readonly string[];
+	/**
+	 * Fill the provenance columns of each append-only table on INSERT, from
+	 * the provenance of the call: `agent`, `room`, `activation`,
+	 * `exchange_owner`, `exchange_from`, and `at`, each one that the table
+	 * declares. An INSERT that sets one of them fails. The default is false.
+	 */
+	provenance?: boolean;
+}
+
+/** One open database, and the guard of its append-only tables. */
+interface Handle {
+	readonly db: DatabaseSync;
+	readonly guard: Guard;
 }
 
 /** `text` without what SQLite skips before its first keyword. */
@@ -98,7 +132,7 @@ function blank(text: string): boolean {
 }
 
 /** Why the backend refuses `statement`, or undefined when it may run. */
-function refusal(statement: string): string | undefined {
+function refusal(statement: string, guard: Guard): string | undefined {
 	const text = statementText(statement);
 	if (/^attach\b/i.test(text) && ATTACH_LITERAL.exec(text)?.[1] !== `'${MEMORY}'`) {
 		return "ATTACH opens ':memory:' alone. This database cannot open another file.";
@@ -106,7 +140,7 @@ function refusal(statement: string): string | undefined {
 	if (/^vacuum\b/i.test(text) && /\binto\b/i.test(text)) {
 		return 'VACUUM INTO writes a file, and this database cannot write another file.';
 	}
-	return undefined;
+	return guardRefusal(text, guard);
 }
 
 type Authorizer = (action: number, first: string | null) => number;
@@ -119,11 +153,14 @@ function authorize(db: DatabaseSync): void {
 	);
 }
 
-/** Compile the statement at the front of `text`, refuse it if it opens a host file, and give the rest. */
-function prepare(db: DatabaseSync, text: string): { statement: StatementSync; rest: string } {
-	const statement = db.prepare(text);
+/**
+ * Compile the statement at the front of `text`, refuse it if it opens a
+ * host file or lifts the guard, and give the rest.
+ */
+function prepare(handle: Handle, text: string): { statement: StatementSync; rest: string } {
+	const statement = handle.db.prepare(text);
 	const source = statement.sourceSQL;
-	const refused = refusal(source);
+	const refused = refusal(source, handle.guard);
 	if (refused !== undefined) throw new Refusal(refused);
 	return { statement, rest: text.slice(source.length) };
 }
@@ -155,7 +192,7 @@ function lastResult(
 
 /** Run every statement of `sql` in order, and give the outcome of the last one. */
 async function runStatements(
-	db: DatabaseSync,
+	handle: Handle,
 	sql: string,
 	options: SqlRunOptions,
 	files: WorkspaceFiles,
@@ -165,17 +202,12 @@ async function runStatements(
 	while (!blank(rest)) {
 		const signal = context.abortSignal;
 		if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted.');
-		const next = prepare(db, rest);
+		const next = prepare(handle, rest);
 		rest = next.rest;
 		if (blank(rest)) return lastResult(next.statement, options, files, context);
 		next.statement.run();
 	}
 	return sqlResult([], [], options, files, context);
-}
-
-/** `name` as a quoted SQL identifier. */
-function quoteName(name: string): string {
-	return `"${name.replace(/"/g, '""')}"`;
 }
 
 /** Run `body` in one transaction, and roll it back when `body` throws. */
@@ -216,7 +248,7 @@ function importTable(db: DatabaseSync): SqlImportTable {
 
 /** Refuse SQL with a NUL, stage the import of `options` if it names one, and then run the statements. */
 async function runWithImport(
-	db: DatabaseSync,
+	handle: Handle,
 	sql: string,
 	options: SqlRunOptions,
 	files: WorkspaceFiles,
@@ -224,10 +256,10 @@ async function runWithImport(
 ): Promise<SqlOutcome> {
 	// SQLite stops reading at a NUL, so the statements after one would not run.
 	if (sql.includes('\0')) throw new Refusal('The SQL holds a NUL character. Remove it.');
-	if (options.import === undefined) return runStatements(db, sql, options, files, context);
-	const staged = await sqlImport(options.import, files, importTable(db), context);
+	if (options.import === undefined) return runStatements(handle, sql, options, files, context);
+	const staged = await sqlImport(options.import, files, importTable(handle.db), context);
 	if (!staged.ok) return staged;
-	const outcome = await runStatements(db, sql, options, files, context);
+	const outcome = await runStatements(handle, sql, options, files, context);
 	if (!outcome.ok) return outcome;
 	return { ...outcome, import: { path: staged.path, rows: staged.rows } };
 }
@@ -249,8 +281,7 @@ function rollBackOpen(db: DatabaseSync): string | undefined {
 function detachAll(db: DatabaseSync): void {
 	const attached = db.prepare('PRAGMA database_list').all() as { name: string }[];
 	for (const { name } of attached) {
-		if (name !== 'main' && name !== 'temp')
-			db.exec(`DETACH DATABASE "${name.replace(/"/g, '""')}"`);
+		if (name !== 'main' && name !== 'temp') db.exec(`DETACH DATABASE ${quoteName(name)}`);
 	}
 }
 
@@ -265,23 +296,26 @@ function resetHandle(db: DatabaseSync): string | undefined {
 }
 
 /**
- * Run one call under its time limit. A statement error and a timeout are
- * `ok: false` outcomes. An abort by the caller, and a fault of the files,
- * reject. A transaction the call left open is rolled back.
+ * Run one call under its time limit, with the provenance of its options. A
+ * statement error and a timeout are `ok: false` outcomes. An abort by the
+ * caller, and a fault of the files, reject. A transaction the call left
+ * open is rolled back.
  */
 async function runCall(
-	db: DatabaseSync,
+	handle: Handle,
 	sql: string,
 	options: SqlRunOptions,
 	files: WorkspaceFiles,
 	context: Context,
 	timeout: number,
 ): Promise<SqlOutcome> {
+	const { db, guard } = handle;
 	const deadline = new Deadline(context.abortSignal, timeout);
+	guard.current = options.provenance;
 	let outcome: SqlOutcome;
 	try {
 		outcome = await runWithImport(
-			db,
+			handle,
 			sql,
 			options,
 			files,
@@ -299,34 +333,64 @@ async function runCall(
 		}
 	} finally {
 		deadline.clear();
+		guard.current = undefined;
 	}
 	const rolledBack = resetHandle(db);
 	if (rolledBack === undefined) return outcome;
 	return { ok: false, message: outcome.ok ? rolledBack : `${outcome.message}\n${rolledBack}` };
 }
 
-/** Open the database, and create the parent directory of a file first. */
-function open(location: string): DatabaseSync {
+/**
+ * Open the database, and create the parent directory of a file first. The
+ * schema runs, and the guard then covers the append-only tables. A failure
+ * closes the database.
+ */
+function open(location: string, options: SqliteBackendOptions): Handle {
 	if (location !== MEMORY) mkdirSync(dirname(location), { recursive: true });
 	const db = new DatabaseSync(location);
-	authorize(db);
-	return db;
+	try {
+		authorize(db);
+		if (options.schema !== undefined) db.exec(options.schema);
+		return { db, guard: guardTables(db, options.appendOnly ?? [], options.provenance === true) };
+	} catch (error) {
+		db.close();
+		throw error;
+	}
+}
+
+/** The guidance lines of the append-only tables, or none. */
+function appendOnlyGuidance(options: SqliteBackendOptions): string[] {
+	const tables = options.appendOnly ?? [];
+	if (tables.length === 0) return [];
+	const lines = [
+		`The tables ${tables.join(', ')} accept INSERT alone: an UPDATE, a DELETE, a REPLACE, a DROP,`,
+		`and an ALTER of them fail.`,
+	];
+	if (options.provenance !== true) return lines;
+	return [
+		...lines,
+		`The database fills their provenance columns (${PROVENANCE_COLUMNS.join(', ')})`,
+		`with your name, the room, the activation, the exchange, and the time. Leave those columns`,
+		`out of an INSERT.`,
+	];
 }
 
 /** Guidance for the SQLite dialect and the limits of this backend. */
-function guidance(timeout: number): string {
+function guidance(timeout: number, options: SqliteBackendOptions): string {
 	return [
 		`The database is SQLite: dates are functions, || joins text, and a column type is an`,
 		`affinity. Attach a private scratch database with ATTACH ':memory:' inside one call;`,
 		`ATTACH opens no file, and VACUUM INTO is refused. Commit a transaction within the call`,
 		`that begins it. A call stops after ${timeout} seconds.`,
+		...appendOnlyGuidance(options),
 	].join('\n');
 }
 
 /**
  * A SQL backend over one SQLite database at `location`, a host path, or
- * `:memory:`. The first `run` opens the database, and `dispose` closes it
- * and keeps the file. A host deletes the data that it owns.
+ * `:memory:`. The first `run` opens the database, runs the schema, and
+ * guards the append-only tables. `dispose` closes it and keeps the file. A
+ * host deletes the data that it owns.
  */
 export function sqliteBackend(location: string, options: SqliteBackendOptions = {}): SqlBackend {
 	const timeout = options.timeout ?? DEFAULT_TIMEOUT_SECONDS;
@@ -335,23 +399,23 @@ export function sqliteBackend(location: string, options: SqliteBackendOptions = 
 			`sqliteBackend: timeout must be more than 0 and at most ${MAX_TIMEOUT_SECONDS} seconds.`,
 		);
 	}
-	let db: DatabaseSync | undefined;
+	let handle: Handle | undefined;
 	const envFor = (files: WorkspaceFiles): SqlEnv => ({
 		run: async (sql, runOptions, context) => {
 			const signal = context.abortSignal;
 			if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted.');
-			db ??= open(location);
-			return runCall(db, sql, runOptions, files, context, timeout);
+			handle ??= open(location, options);
+			return runCall(handle, sql, runOptions, files, context, timeout);
 		},
 		cleanup: async () => undefined,
 	});
 	return {
 		database: location,
-		guidance: guidance(timeout),
+		guidance: guidance(timeout, options),
 		connect: async (_agent, files) => envFor(files),
 		dispose: async () => {
-			db?.close();
-			db = undefined;
+			handle?.db.close();
+			handle = undefined;
 		},
 	};
 }

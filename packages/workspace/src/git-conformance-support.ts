@@ -3,7 +3,8 @@
  * helpers that run the git owner and the shell as one agent.
  */
 
-import { BACKGROUND_CONTEXT, type ShellOutputUpdate } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
+import { runScript } from './execution-env.ts';
 import type { GitEnv } from './git-backend.ts';
 import type { WorkspaceAgent } from './resource.ts';
 import type { Workspace } from './workspace.ts';
@@ -39,24 +40,20 @@ export async function sh(
 	agent: WorkspaceAgent,
 	command: string,
 ): Promise<{ code: number; output: string }> {
-	let output = '';
-	const onUpdate = (update: ShellOutputUpdate): void => {
-		if (update.kind === 'replace') output = update.output.text;
-	};
 	const ran = await workspace.use(agent, (env) =>
-		env.exec(
+		runScript(
+			env,
 			command,
 			{
 				timeout: 120,
 				env: authorOf(agent),
 				capture: { limits: { maxBytes: 100_000, maxLines: 1000 } },
-				onUpdate,
 			},
 			ctx,
 		),
 	);
 	if (!ran.ok) throw ran.error;
-	return { code: ran.value.exitCode, output };
+	return { code: ran.value.exitCode, output: ran.value.output };
 }
 
 /** The author and committer variables of `agent`. */

@@ -64,6 +64,24 @@ export interface WorkspaceFiles {
 	): Promise<string>;
 }
 
+/**
+ * Who made one call, and when: the fields that a backend with provenance
+ * writes into the columns of the same names. An absent field leaves its
+ * column NULL.
+ */
+export interface SqlProvenance {
+	/** The name of the agent. */
+	readonly agent?: string;
+	readonly room?: string;
+	readonly activation?: string;
+	/** The owner of the exchange that was open when the activation read the record. */
+	readonly exchange_owner?: string;
+	/** The seq that opened that exchange, as text. */
+	readonly exchange_from?: string;
+	/** The time of the call, as an ISO 8601 string. */
+	readonly at?: string;
+}
+
 /** What one `run` gives back, and where it writes the full result. */
 export interface SqlRunOptions {
 	/** How many rows of the last statement the outcome holds. It rounds down; below 0 is 0. */
@@ -75,6 +93,12 @@ export interface SqlRunOptions {
 	 * for this run alone, before the first statement runs.
 	 */
 	readonly import?: string;
+	/**
+	 * Who makes this run. A backend with provenance writes it on each row
+	 * that the run inserts into an append-only table. The `sql` tool sets
+	 * it from the tool call.
+	 */
+	readonly provenance?: SqlProvenance;
 }
 
 /** What one import staged: the absolute path of the file, and its row count. */
