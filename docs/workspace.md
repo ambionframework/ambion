@@ -721,6 +721,9 @@ import: sweep/results.csv
 - **A call commits its own transaction.** Every agent shares one handle. A
   call that leaves a transaction open gets it rolled back and an `ok: false`
   outcome, so no write from a later call lands inside it.
+- **The backend runs one call at a time.** A call waits for the call
+  before it, also when two workspaces share one backend. So a call keeps
+  its transaction and its provenance to itself.
 - **A result keeps one value per column name.** A last statement with two
   columns of one name gives an `ok: false` outcome that asks for `AS`.
 - **A call stops between statements and between rows.** `sqlResult` yields
@@ -773,12 +776,25 @@ const sql = sqliteBackend('./data/lab.db', {
   `recursive_triggers` or `writable_schema`. It refuses a DROP, an ALTER,
   or a PRAGMA whose target it cannot read, for example one with a comment
   inside it. The call stops at that statement.
+- **The backend also checks the engine.** SQLite changes a flag PRAGMA
+  when it compiles the statement, also under `EXPLAIN`. So after each
+  compile the backend reads `recursive_triggers` and `writable_schema`,
+  sets back a flag that changed, and refuses the statement.
+- **No temporary table hides an append-only table.** SQLite reads an
+  unqualified name in `temp` first. After each statement the backend
+  drops a temporary table or view with the name of an append-only table,
+  and refuses the statement.
 - **Provenance fills the columns that a table declares.** The columns are
   `agent`, `room`, `activation`, `exchange_owner`, `exchange_from`, and
   `at`. The `sql` tool passes the provenance of each tool call in
   `SqlRunOptions.provenance`, and a trigger after each INSERT writes it.
   An INSERT that sets one of these columns fails. A host call with no
   provenance leaves them NULL.
+- **A row with NULL provenance can take the provenance of a later call.**
+  The guard lets the UPDATE of the stamp through: it sets each provenance
+  column from NULL to the value of the running call. An agent can run the
+  same UPDATE on a row from the schema or from a host call. No UPDATE
+  changes a data column or a provenance column that holds a value.
 - **The backend does not deduplicate.** A retried activation that inserts
   again inserts again. Give the table a UNIQUE constraint when a row must
   appear once.
@@ -819,10 +835,10 @@ agent, and each resolves `~` and a relative path under the agent's home.
 
 **`run` takes `maxRows`, an optional `export` path, an optional `import`
 path, and an optional `provenance`.** A backend with provenance writes
-`provenance` on each row that the run inserts into an append-only table. An `ok` outcome holds the last statement's `columns`, its
-first `maxRows` rows, its `rowCount`, the absolute `export` path when the
-options named one, and the `import` path and row count when the options
-named one. A
+`provenance` on each row that the run inserts into an append-only table.
+An `ok` outcome holds the last statement's `columns`, its first `maxRows`
+rows, its `rowCount`, the absolute `export` path when the options named
+one, and the `import` path and row count when the options named one. A
 statement that the database or the backend refuses gives
 `{ ok: false, message }`, and the run stops there. A call past the
 backend's time limit gives the same. A fault of the connection or of

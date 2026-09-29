@@ -389,6 +389,8 @@ describe('the append-only tables of the SQLite backend', () => {
 		'PRAGMA main.writable_schema = ON',
 		'DROP /* a comment */ TABLE notes',
 		'PRAGMA/**/recursive_triggers = OFF',
+		'EXPLAIN PRAGMA recursive_triggers = OFF',
+		'EXPLAIN QUERY PLAN PRAGMA recursive_triggers = 0',
 	])('refuses %s, which would lift the guard, and runs no later statement', async (statement) => {
 		const site = records();
 		await run(site, "INSERT INTO runs (label) VALUES ('kept')");
@@ -396,7 +398,65 @@ describe('the append-only tables of the SQLite backend', () => {
 		expect(messageOf(outcome)).toMatch(/is refused|plain form/);
 		const notes = await run(site, 'SELECT count(*) AS n FROM notes');
 		expect(notes.ok && notes.rows).toEqual([{ n: 0 }]);
+		// SQLite applies a flag PRAGMA when it compiles one, so the refusal sets the flag back.
+		const flags = await run(
+			site,
+			'SELECT r.recursive_triggers, w.writable_schema FROM pragma_recursive_triggers AS r, pragma_writable_schema AS w',
+		);
+		expect(flags.ok && flags.rows).toEqual([{ recursive_triggers: 1, writable_schema: 0 }]);
 		expect(messageOf(await run(site, 'DELETE FROM runs'))).toMatch(/append-only/);
+		expect(messageOf(await run(site, "REPLACE INTO runs (id, label) VALUES (1, 'other')"))).toMatch(
+			/append-only/,
+		);
+		const kept = await run(site, 'SELECT id, label FROM runs');
+		expect(kept.ok && kept.rows).toEqual([{ id: 1, label: 'kept' }]);
+	});
+
+	it('drops a temporary table or view that would hide an append-only table, and refuses its statement', async () => {
+		const site = records();
+		for (const sql of [
+			'CREATE TEMP TABLE runs (id INTEGER PRIMARY KEY, label TEXT, agent TEXT)',
+			'CREATE TEMPORARY VIEW "Plain" AS SELECT 1 AS id',
+			'CREATE TEMP TABLE scratch (a); ALTER TABLE temp.scratch RENAME TO RUNS',
+			'BEGIN; CREATE TABLE temp.runs (label); COMMIT',
+		]) {
+			await expect(sqlTool(site, sql), sql).rejects.toThrow(/would hide the append-only table/);
+		}
+		await sqlTool(site, "CREATE TEMP TABLE mine (a); INSERT INTO runs (label) VALUES ('after')");
+		const temp = await run(site, "SELECT name FROM temp.sqlite_master WHERE type = 'table'");
+		expect(temp.ok && temp.rows).toEqual([{ name: 'mine' }]);
+		const rows = await run(site, 'SELECT label, agent, room FROM main.runs');
+		expect(rows.ok && rows.rows).toEqual([{ label: 'after', agent: 'design', room: 'bringup' }]);
+	});
+
+	it('runs one call at a time when two workspaces share one backend, so each keeps its provenance', async () => {
+		const sql = sqliteBackend(':memory:', {
+			schema: RECORDS,
+			appendOnly: ['runs'],
+			provenance: true,
+		});
+		const [one, two] = ['one', 'two'].map((name) => {
+			const site = openWorkspace({ name, backend: { bash: memoryBackend(), sql } });
+			cleanups.push(() => site.dispose());
+			return site;
+		});
+		if (one === undefined || two === undefined) throw new Error('Two workspaces open.');
+		await one.use({ name: 'design' }, (env) =>
+			env.writeFile('/home/design/in.csv', 'label\nimported\n', BACKGROUND_CONTEXT),
+		);
+		await Promise.all([
+			invokeText(
+				toolOf(one, 'sql'),
+				{ sql: 'INSERT INTO runs (label) SELECT label FROM import.rows', import: 'in.csv' },
+				inRoom,
+			),
+			sqlTool(two, "INSERT INTO runs (label) VALUES ('other')", callAs('experiments')),
+		]);
+		const rows = await run(two, 'SELECT label, agent, room FROM runs ORDER BY label');
+		expect(rows.ok && rows.rows).toEqual([
+			{ label: 'imported', agent: 'design', room: 'bringup' },
+			{ label: 'other', agent: 'experiments', room: null },
+		]);
 	});
 
 	it('runs a DROP, an ALTER, and a PRAGMA that leave the guard in place', async () => {

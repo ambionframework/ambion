@@ -16,6 +16,14 @@
  * a DROP or an ALTER of an append-only table, a DROP of a guard trigger,
  * and a PRAGMA of `recursive_triggers` or `writable_schema`. It refuses a
  * DROP, an ALTER, or a PRAGMA whose target it cannot read.
+ *
+ * Two checks of the engine state hold the guard where the text check
+ * cannot. SQLite applies a flag PRAGMA when it compiles the statement, also
+ * under EXPLAIN, so `flagRefusal` reads the flags after each compile and
+ * sets back a flag that changed. SQLite reads an unqualified name in `temp`
+ * first, and a trigger on Node 22 cannot qualify the table of its UPDATE.
+ * So `shadowRefusal` runs after each statement, and drops a temporary table
+ * or view with the name of an append-only table.
  */
 
 import type { DatabaseSync } from 'node:sqlite';
@@ -34,12 +42,14 @@ export const PROVENANCE_COLUMNS = [
 /** The function that the stamp trigger calls for the value of one column. */
 const PROVENANCE_FUNCTION = 'ambion_provenance';
 
-/** The PRAGMAs that would lift the guard. */
-const GUARD_PRAGMAS = new Set(['recursive_triggers', 'writable_schema']);
+/** The flag PRAGMAs that would lift the guard. */
+const GUARD_FLAGS = ['recursive_triggers', 'writable_schema'] as const;
+
+/** The PRAGMAs that the text check refuses. */
+const GUARD_PRAGMAS: ReadonlySet<string> = new Set(GUARD_FLAGS);
 
 /** One identifier: in double quotes, in brackets, in backticks, or bare. */
-const IDENTIFIER =
-	String.raw`(?:"(?:[^"]|"")+"|\[[^\]]+\]|` + '`(?:[^`]|``)+`' + String.raw`|[A-Za-z_][\w$]*)`;
+const IDENTIFIER = String.raw`(?:"(?:[^"]|"")+"|\[[^\]]+\]|\`(?:[^\`]|\`\`)+\`|[A-Za-z_][\w$]*)`;
 
 /** An identifier with an optional schema in front. The group holds the identifier. */
 const QUALIFIED = String.raw`(?:${IDENTIFIER}\s*\.\s*)?(${IDENTIFIER})`;
@@ -57,6 +67,10 @@ const TARGETS: Readonly<Record<string, RegExp>> = {
 export interface Guard {
 	/** The lower-case names that no statement drops or alters: the tables and their triggers. */
 	readonly names: ReadonlySet<string>;
+	/** The lower-case names of the append-only tables. */
+	readonly tables: ReadonlySet<string>;
+	/** The value of each flag PRAGMA after the guard began. */
+	readonly flags: Readonly<Record<string, number>>;
 	/** The provenance of the call that runs now. */
 	current: SqlProvenance | undefined;
 }
@@ -152,17 +166,60 @@ export function guardTables(
 	provenance: boolean,
 ): Guard {
 	const names = new Set<string>();
-	const guard: Guard = { names, current: undefined };
-	if (appendOnly.length === 0) return guard;
+	const tables = new Set(appendOnly.map((table) => table.toLowerCase()));
+	if (appendOnly.length === 0) return { names, tables, flags: {}, current: undefined };
+	db.exec('PRAGMA recursive_triggers = ON');
+	const guard: Guard = { names, tables, flags: readFlags(db), current: undefined };
 	db.function(PROVENANCE_FUNCTION, (column) => {
 		const value = guard.current?.[String(column) as keyof SqlProvenance];
 		return value ?? null;
 	});
-	db.exec('PRAGMA recursive_triggers = ON');
 	for (const table of appendOnly) {
 		for (const name of [table, ...guardTable(db, table, provenance)]) names.add(name.toLowerCase());
 	}
 	return guard;
+}
+
+/** The value of each flag PRAGMA of the guard, as SQLite reads it now. */
+function readFlags(db: DatabaseSync): Record<string, number> {
+	return Object.fromEntries(
+		GUARD_FLAGS.map((name) => [name, Number(db.prepare(`PRAGMA ${name}`).get()?.[name])]),
+	);
+}
+
+/**
+ * Why the statement that SQLite just compiled lifts the guard, or undefined.
+ * A flag that changed gets its value back before this returns.
+ */
+export function flagRefusal(db: DatabaseSync, guard: Guard): string | undefined {
+	if (guard.tables.size === 0) return undefined;
+	const now = readFlags(db);
+	const changed = GUARD_FLAGS.filter((name) => now[name] !== guard.flags[name]);
+	for (const name of changed) db.exec(`PRAGMA ${name} = ${guard.flags[name]}`);
+	const first = changed[0];
+	return first === undefined
+		? undefined
+		: `PRAGMA ${first} is refused: it would lift the guard of the append-only tables.`;
+}
+
+/**
+ * Why the statement that just ran hides an append-only table, or undefined.
+ * A temporary table or view with the name of an append-only table is dropped
+ * before this returns.
+ */
+export function shadowRefusal(db: DatabaseSync, guard: Guard): string | undefined {
+	if (guard.tables.size === 0) return undefined;
+	const shadows = db
+		.prepare("SELECT type, name FROM temp.sqlite_master WHERE type IN ('table', 'view')")
+		.all()
+		.filter((row) => guard.tables.has(String(row.name).toLowerCase()));
+	for (const { type, name } of shadows) {
+		db.exec(`DROP ${type === 'view' ? 'VIEW' : 'TABLE'} temp.${quoteName(String(name))}`);
+	}
+	const first = shadows[0];
+	return first === undefined
+		? undefined
+		: `A temporary ${String(first.type)} named '${String(first.name)}' is refused: it would hide the append-only table.`;
 }
 
 /** Why the guard refuses `text`, one statement without its leading comments, or undefined. */

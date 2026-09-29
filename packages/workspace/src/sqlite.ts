@@ -13,9 +13,10 @@
  * stream through `sqlResult`: a preview comes back, and an export goes to
  * the agent's files on the bash backend.
  *
- * One call is one unit of work on the shared handle. A call that leaves a
- * transaction open gets it rolled back and an `ok: false` outcome, so no
- * later call from another agent runs inside it. After each call the backend
+ * One call is one unit of work on the shared handle, and the backend runs
+ * one call at a time, also for two workspaces over one backend. A call
+ * that leaves a transaction open gets it rolled back and an `ok: false`
+ * outcome, so no later call from another agent runs inside it. After each call the backend
  * detaches every database the call attached, so a scratch database lives
  * for one call and no other agent reads it. An import is one such scratch
  * database: `sqlImport` reads the CSV file into `import.rows` before the
@@ -58,11 +59,13 @@ import type {
 import { IMPORT_TABLE, sqlImport } from './sql-import.ts';
 import { sqlResult } from './sql-result.ts';
 import {
+	flagRefusal,
 	type Guard,
 	guardRefusal,
 	guardTables,
 	PROVENANCE_COLUMNS,
 	quoteName,
+	shadowRefusal,
 } from './sqlite-guard.ts';
 
 /** The in-memory location. Every agent shares it while the backend lives. */
@@ -110,7 +113,9 @@ export interface SqliteBackendOptions {
 	 * Fill the provenance columns of each append-only table on INSERT, from
 	 * the provenance of the call: `agent`, `room`, `activation`,
 	 * `exchange_owner`, `exchange_from`, and `at`, each one that the table
-	 * declares. An INSERT that sets one of them fails. The default is false.
+	 * declares. An INSERT that sets one of them fails. The guard lets one
+	 * UPDATE through: it sets each of these columns from NULL to the value
+	 * of the running call. The default is false.
 	 */
 	provenance?: boolean;
 }
@@ -155,14 +160,22 @@ function authorize(db: DatabaseSync): void {
 
 /**
  * Compile the statement at the front of `text`, refuse it if it opens a
- * host file or lifts the guard, and give the rest.
+ * host file or lifts the guard, and give the rest. The flag check comes
+ * first, so a refused flag PRAGMA gets its value back.
  */
 function prepare(handle: Handle, text: string): { statement: StatementSync; rest: string } {
 	const statement = handle.db.prepare(text);
 	const source = statement.sourceSQL;
-	const refused = refusal(source, handle.guard);
+	const refused = flagRefusal(handle.db, handle.guard) ?? refusal(source, handle.guard);
 	if (refused !== undefined) throw new Refusal(refused);
 	return { statement, rest: text.slice(source.length) };
+}
+
+/** Run `statement` to its end, and refuse it if it hides an append-only table. */
+function runOne(handle: Handle, statement: StatementSync): void {
+	statement.run();
+	const refused = shadowRefusal(handle.db, handle.guard);
+	if (refused !== undefined) throw new Refusal(refused);
 }
 
 /** The column names of `statement`, refused when two share a name: a row keeps one value per name. */
@@ -179,13 +192,14 @@ function columnsOf(statement: StatementSync): string[] {
 
 /** The outcome of the last statement: its preview, its count, and its export. */
 function lastResult(
+	handle: Handle,
 	statement: StatementSync,
 	options: SqlRunOptions,
 	files: WorkspaceFiles,
 	context: Context,
 ): Promise<SqlOutcome> {
 	const columns = columnsOf(statement);
-	if (columns.length === 0) statement.run();
+	if (columns.length === 0) runOne(handle, statement);
 	const rows = columns.length === 0 ? [] : (statement.iterate() as Iterable<SqlRow>);
 	return sqlResult(columns, rows, options, files, context);
 }
@@ -204,8 +218,8 @@ async function runStatements(
 		if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted.');
 		const next = prepare(handle, rest);
 		rest = next.rest;
-		if (blank(rest)) return lastResult(next.statement, options, files, context);
-		next.statement.run();
+		if (blank(rest)) return lastResult(handle, next.statement, options, files, context);
+		runOne(handle, next.statement);
 	}
 	return sqlResult([], [], options, files, context);
 }
@@ -400,13 +414,22 @@ export function sqliteBackend(location: string, options: SqliteBackendOptions = 
 		);
 	}
 	let handle: Handle | undefined;
+	// The handle runs one call at a time, also for two workspaces over one
+	// backend: a call holds the transaction and the provenance of the guard.
+	let queue: Promise<unknown> = Promise.resolve();
+	const serial = <T>(body: () => Promise<T>): Promise<T> => {
+		const next = queue.then(body);
+		queue = next.catch(() => undefined);
+		return next;
+	};
 	const envFor = (files: WorkspaceFiles): SqlEnv => ({
-		run: async (sql, runOptions, context) => {
-			const signal = context.abortSignal;
-			if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted.');
-			handle ??= open(location, options);
-			return runCall(handle, sql, runOptions, files, context, timeout);
-		},
+		run: (sql, runOptions, context) =>
+			serial(async () => {
+				const signal = context.abortSignal;
+				if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted.');
+				handle ??= open(location, options);
+				return runCall(handle, sql, runOptions, files, context, timeout);
+			}),
 		cleanup: async () => undefined,
 	});
 	return {
