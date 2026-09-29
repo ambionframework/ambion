@@ -766,20 +766,23 @@ const sql = sqliteBackend('./data/lab.db', {
 - **The schema runs at each open.** Write it to run again, with
   `CREATE TABLE IF NOT EXISTS` and `INSERT OR IGNORE`. A failure of the
   schema, or an append-only table that does not exist, rejects the call
-  that opens the database, and the next call opens it again.
+  that opens the database, and the next call opens it again. The backend
+  finds an append-only table by its name in any case, as SQLite does.
 - **An append-only table accepts INSERT alone.** An UPDATE, a DELETE, a
   REPLACE, and an upsert that changes a row fail. Temporary triggers on
   the one connection hold the rule, and `recursive_triggers` is on, so a
   REPLACE fires the delete trigger.
 - **No statement lifts the guard.** The backend refuses a DROP or an
   ALTER of an append-only table, a DROP of its triggers, and a PRAGMA of
-  `recursive_triggers` or `writable_schema`. It refuses a DROP, an ALTER,
-  or a PRAGMA whose target it cannot read, for example one with a comment
-  inside it. The call stops at that statement.
+  `recursive_triggers`, `writable_schema`, or `query_only`. The flag
+  `query_only` would stop the writes of every agent on the database. The
+  backend reads a name as the SQLite tokenizer does. It refuses a DROP, an
+  ALTER, or a PRAGMA whose target it cannot read, for example one with a
+  comment inside it. The call stops at that statement.
 - **The backend also checks the engine.** SQLite changes a flag PRAGMA
   when it compiles the statement, also under `EXPLAIN`. So after each
-  compile the backend reads `recursive_triggers` and `writable_schema`,
-  sets back a flag that changed, and refuses the statement.
+  compile the backend reads `recursive_triggers`, `writable_schema`, and
+  `query_only`, sets back a flag that changed, and refuses the statement.
 - **No temporary table hides an append-only table.** SQLite reads an
   unqualified name in `temp` first. After each statement the backend
   drops a temporary table or view with the name of an append-only table,
@@ -789,7 +792,13 @@ const sql = sqliteBackend('./data/lab.db', {
   `at`. The `sql` tool passes the provenance of each tool call in
   `SqlRunOptions.provenance`, and a trigger after each INSERT writes it.
   An INSERT that sets one of these columns fails. A host call with no
-  provenance leaves them NULL.
+  provenance leaves them NULL. A RETURNING clause gives the row before the
+  stamp fills it, so a caller reads the provenance with a SELECT.
+- **Provenance needs a table that the stamp can fill.** The stamp finds
+  the new row by its rowid, so the backend refuses a table WITHOUT ROWID
+  when it opens the database. SQLite writes a DEFAULT before the guard
+  reads the new row, so the backend also refuses a provenance column with
+  a DEFAULT other than NULL. The message names the table or the column.
 - **A row with NULL provenance can take the provenance of a later call.**
   The guard lets the UPDATE of the stamp through: it sets each provenance
   column from NULL to the value of the running call. An agent can run the

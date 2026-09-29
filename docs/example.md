@@ -127,7 +127,8 @@ the manufacturer datasheets.
 them. The host opens `sqliteBackend` with the lab schema, these five
 tables as `appendOnly`, and `provenance`. Each table accepts INSERT alone,
 and the database fills the provenance columns of every new row (see
-[Resources](resources.md)). The host opens the database at its start, so
+[Resources](resources.md)). So an agent can add a project, and no agent
+can change or delete one. The host opens the database at its start, so
 the terminal shows the tables before the first question.
 
 **Two simulated instruments sit on the lab database.** `led-current` has a

@@ -11,10 +11,18 @@
  * column, it sets each provenance column from NULL to the value of the call,
  * and it touches the row that the connection inserted last.
  *
+ * `guardTables` finds each table by its name in any case, as SQLite does,
+ * and uses the stored name. With provenance, it refuses a table that the
+ * stamp cannot fill: a table WITHOUT ROWID, because the stamp finds the new
+ * row by its rowid, and a provenance column with a DEFAULT, because SQLite
+ * writes the DEFAULT before the insert trigger reads the row.
+ *
  * `recursive_triggers` is on, so a REPLACE that deletes a row fires the
  * delete trigger. `guardRefusal` refuses a statement that lifts the guard:
  * a DROP or an ALTER of an append-only table, a DROP of a guard trigger,
- * and a PRAGMA of `recursive_triggers` or `writable_schema`. It refuses a
+ * and a PRAGMA of a guard flag. The flag `query_only` is a guard flag
+ * because it stops the writes of every agent on the shared connection.
+ * `guardRefusal` reads names as the SQLite tokenizer does, and refuses a
  * DROP, an ALTER, or a PRAGMA whose target it cannot read.
  *
  * Two checks of the engine state hold the guard where the text check
@@ -42,25 +50,38 @@ export const PROVENANCE_COLUMNS = [
 /** The function that the stamp trigger calls for the value of one column. */
 const PROVENANCE_FUNCTION = 'ambion_provenance';
 
-/** The flag PRAGMAs that would lift the guard. */
-const GUARD_FLAGS = ['recursive_triggers', 'writable_schema'] as const;
+const LIFTS_GUARD = 'it would lift the guard of the append-only tables';
 
-/** The PRAGMAs that the text check refuses. */
-const GUARD_PRAGMAS: ReadonlySet<string> = new Set(GUARD_FLAGS);
+/** The flag PRAGMAs that the guard holds, and why it refuses a change of each one. */
+const GUARD_FLAGS: ReadonlyMap<string, string> = new Map([
+	['recursive_triggers', LIFTS_GUARD],
+	['writable_schema', LIFTS_GUARD],
+	['query_only', 'it would stop the writes of every agent on this database'],
+]);
 
-/** One identifier: in double quotes, in brackets, in backticks, or bare. */
-const IDENTIFIER = String.raw`(?:"(?:[^"]|"")+"|\[[^\]]+\]|\`(?:[^\`]|\`\`)+\`|[A-Za-z_][\w$]*)`;
+/**
+ * One identifier as the SQLite tokenizer reads it: in double quotes, in
+ * brackets, in backticks, or bare. A bare name takes each character from
+ * U+0080 up as a letter.
+ */
+const IDENTIFIER = String.raw`(?:"(?:[^"]|"")+"|\[[^\]]+\]|\`(?:[^\`]|\`\`)+\`|[A-Za-z_\u0080-\uffff][\w$\u0080-\uffff]*)`;
+
+/** The space before an identifier: white space, or none before a quote. */
+const BEFORE = String.raw`(?:\s+|(?=["\[\`]))`;
+
+/** The space after an identifier: white space, or none after a quote. */
+const AFTER = String.raw`(?:\s|(?<=["\]\`]))`;
 
 /** An identifier with an optional schema in front. The group holds the identifier. */
 const QUALIFIED = String.raw`(?:${IDENTIFIER}\s*\.\s*)?(${IDENTIFIER})`;
 
 const TARGETS: Readonly<Record<string, RegExp>> = {
 	drop: new RegExp(
-		String.raw`^drop\s+(?:table|trigger|view|index)\s+(?:if\s+exists\s+)?${QUALIFIED}\s*;?\s*$`,
+		String.raw`^drop\s+(?:table|trigger|view|index)${BEFORE}(?:if\s+exists${BEFORE})?${QUALIFIED}\s*;?\s*$`,
 		'i',
 	),
-	alter: new RegExp(String.raw`^alter\s+table\s+${QUALIFIED}\s`, 'i'),
-	pragma: new RegExp(String.raw`^pragma\s+${QUALIFIED}`, 'i'),
+	alter: new RegExp(String.raw`^alter\s+table${BEFORE}${QUALIFIED}${AFTER}`, 'i'),
+	pragma: new RegExp(`^pragma${BEFORE}${QUALIFIED}`, 'i'),
 };
 
 /** The append-only tables of one connection, and the provenance of the running call. */
@@ -95,18 +116,55 @@ function unquoted(identifier: string): string {
 	return identifier.toLowerCase();
 }
 
-/** The columns of the table `table` in `main`. Throws when no such table exists. */
-function columnsOf(db: DatabaseSync, table: string): string[] {
+/** One table in `main`, as SQLite stores it. */
+interface Table {
+	/** The stored name. */
+	readonly name: string;
+	/** True when the table is WITHOUT ROWID. */
+	readonly withoutRowid: boolean;
+	/** The names of the columns. */
+	readonly columns: readonly string[];
+	/** The names of the columns with a DEFAULT other than NULL. */
+	readonly defaulted: readonly string[];
+}
+
+/** The table `table` in `main`, by its name in any case. Throws when no such table exists. */
+function tableOf(db: DatabaseSync, table: string): Table {
 	const found = db
-		.prepare("SELECT 1 FROM main.sqlite_master WHERE type = 'table' AND name = ?")
+		.prepare(
+			"SELECT name, wr FROM pragma_table_list WHERE schema = 'main' AND type = 'table' AND name = ? COLLATE NOCASE",
+		)
 		.get(table);
 	if (found === undefined) {
 		throw new Error(`sqliteBackend: the append-only table '${table}' does not exist.`);
 	}
-	return db
-		.prepare(`PRAGMA main.table_info(${quoteName(table)})`)
-		.all()
-		.map((column) => String(column.name));
+	const name = String(found.name);
+	const columns = db.prepare(`PRAGMA main.table_info(${quoteName(name)})`).all();
+	const defaulted = columns.filter(
+		(column) => column.dflt_value !== null && String(column.dflt_value).toUpperCase() !== 'NULL',
+	);
+	return {
+		name,
+		withoutRowid: Number(found.wr) === 1,
+		columns: columns.map((column) => String(column.name)),
+		defaulted: defaulted.map((column) => String(column.name)),
+	};
+}
+
+/** Throw when the stamp cannot fill the provenance columns `stamped` of `table`. */
+function checkStamp(table: Table, stamped: readonly string[]): void {
+	if (stamped.length === 0) return;
+	if (table.withoutRowid) {
+		throw new Error(
+			`sqliteBackend: the append-only table '${table.name}' is WITHOUT ROWID, and the provenance stamp finds a new row by its rowid. Give the table a rowid, or turn provenance off.`,
+		);
+	}
+	const defaulted = stamped.find((column) => table.defaulted.includes(column));
+	if (defaulted !== undefined) {
+		throw new Error(
+			`sqliteBackend: the provenance column '${defaulted}' of '${table.name}' has a DEFAULT. SQLite writes the DEFAULT before the guard reads the new row, so the guard would refuse every INSERT. Remove the DEFAULT: the database fills the column.`,
+		);
+	}
 }
 
 /** The condition of the one UPDATE that the guard lets through: the stamp of the row just inserted. */
@@ -123,10 +181,16 @@ function stampOnly(columns: readonly string[], stamped: readonly string[]): stri
 	);
 }
 
-/** Create the triggers of one append-only table, and give their names. */
-function guardTable(db: DatabaseSync, table: string, provenance: boolean): string[] {
-	const columns = columnsOf(db, table);
+/** Create the triggers of one append-only table. Give its stored name and the names of its triggers. */
+function guardTable(
+	db: DatabaseSync,
+	wanted: string,
+	provenance: boolean,
+): { table: string; triggers: string[] } {
+	const found = tableOf(db, wanted);
+	const { name: table, columns } = found;
 	const stamped = provenance ? PROVENANCE_COLUMNS.filter((name) => columns.includes(name)) : [];
+	checkStamp(found, stamped);
 	const target = `main.${quoteName(table)}`;
 	const name = (kind: string) => `ambion_${table}_${kind}`;
 	const refuse = (why: string) => `SELECT RAISE(ABORT, ${literal(why)});`;
@@ -138,7 +202,7 @@ function guardTable(db: DatabaseSync, table: string, provenance: boolean): strin
 	db.exec(
 		`CREATE TEMP TRIGGER ${quoteName(name('update'))} BEFORE UPDATE ON ${target}${when} BEGIN ${appendOnly} END`,
 	);
-	if (stamped.length === 0) return [name('delete'), name('update')];
+	if (stamped.length === 0) return { table, triggers: [name('delete'), name('update')] };
 	const set = stamped.map((column) => `NEW.${quoteName(column)} IS NOT NULL`).join(' OR ');
 	const reserved = refuse(
 		`The database fills the provenance columns of '${table}': ${stamped.join(', ')}. Leave them out of the INSERT.`,
@@ -152,7 +216,7 @@ function guardTable(db: DatabaseSync, table: string, provenance: boolean): strin
 	db.exec(
 		`CREATE TEMP TRIGGER ${quoteName(name('stamp'))} AFTER INSERT ON ${target} BEGIN UPDATE ${quoteName(table)} SET ${values} WHERE rowid = NEW.rowid; END`,
 	);
-	return [name('delete'), name('update'), name('insert'), name('stamp')];
+	return { table, triggers: [name('delete'), name('update'), name('insert'), name('stamp')] };
 }
 
 /**
@@ -166,7 +230,7 @@ export function guardTables(
 	provenance: boolean,
 ): Guard {
 	const names = new Set<string>();
-	const tables = new Set(appendOnly.map((table) => table.toLowerCase()));
+	const tables = new Set<string>();
 	if (appendOnly.length === 0) return { names, tables, flags: {}, current: undefined };
 	db.exec('PRAGMA recursive_triggers = ON');
 	const guard: Guard = { names, tables, flags: readFlags(db), current: undefined };
@@ -174,8 +238,10 @@ export function guardTables(
 		const value = guard.current?.[String(column) as keyof SqlProvenance];
 		return value ?? null;
 	});
-	for (const table of appendOnly) {
-		for (const name of [table, ...guardTable(db, table, provenance)]) names.add(name.toLowerCase());
+	for (const wanted of appendOnly) {
+		const { table, triggers } = guardTable(db, wanted, provenance);
+		tables.add(table.toLowerCase());
+		for (const name of [table, ...triggers]) names.add(name.toLowerCase());
 	}
 	return guard;
 }
@@ -183,7 +249,10 @@ export function guardTables(
 /** The value of each flag PRAGMA of the guard, as SQLite reads it now. */
 function readFlags(db: DatabaseSync): Record<string, number> {
 	return Object.fromEntries(
-		GUARD_FLAGS.map((name) => [name, Number(db.prepare(`PRAGMA ${name}`).get()?.[name])]),
+		[...GUARD_FLAGS.keys()].map((name) => [
+			name,
+			Number(db.prepare(`PRAGMA ${name}`).get()?.[name]),
+		]),
 	);
 }
 
@@ -194,12 +263,16 @@ function readFlags(db: DatabaseSync): Record<string, number> {
 export function flagRefusal(db: DatabaseSync, guard: Guard): string | undefined {
 	if (guard.tables.size === 0) return undefined;
 	const now = readFlags(db);
-	const changed = GUARD_FLAGS.filter((name) => now[name] !== guard.flags[name]);
+	const changed = [...GUARD_FLAGS.keys()].filter((name) => now[name] !== guard.flags[name]);
 	for (const name of changed) db.exec(`PRAGMA ${name} = ${guard.flags[name]}`);
 	const first = changed[0];
-	return first === undefined
-		? undefined
-		: `PRAGMA ${first} is refused: it would lift the guard of the append-only tables.`;
+	return first === undefined ? undefined : flagMessage(first);
+}
+
+/** Why the guard refuses a PRAGMA of `name`, or undefined when `name` is not a guard flag. */
+function flagMessage(name: string): string | undefined {
+	const why = GUARD_FLAGS.get(name);
+	return why === undefined ? undefined : `PRAGMA ${name} is refused: ${why}.`;
 }
 
 /**
@@ -231,14 +304,10 @@ export function guardRefusal(text: string, guard: Guard): string | undefined {
 	const target = pattern.exec(text)?.[1];
 	const verb = kind.toUpperCase();
 	if (target === undefined) {
-		return `Write ${verb} in its plain form, with no comment inside it: the backend reads its target first.`;
+		return `The backend cannot read the target of this ${verb}. Write the ${verb} in its plain form, with no comment inside it.`;
 	}
 	const name = unquoted(target);
-	if (kind === 'pragma') {
-		return GUARD_PRAGMAS.has(name)
-			? `PRAGMA ${name} is refused: it would lift the guard of the append-only tables.`
-			: undefined;
-	}
+	if (kind === 'pragma') return flagMessage(name);
 	return guard.names.has(name)
 		? `${verb} of '${name}' is refused: it would lift the guard of an append-only table.`
 		: undefined;

@@ -79,7 +79,7 @@ const textOf = (result: unknown): string =>
 				.join('');
 
 describe('the lab database', () => {
-	it('lets one agent record a run with sql and another agent read it back, and keeps the projects fixed', async () => {
+	it('lets one agent record a run with sql and another agent read it back, and refuses an UPDATE and a DELETE of a record', async () => {
 		const { workspace } = openLab(join(await freshDirectory(), 'lab.db'));
 		const call = caller(workspace.tools().tools);
 		const at = (agent: string, activation: string) => ({

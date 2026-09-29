@@ -387,30 +387,39 @@ describe('the append-only tables of the SQLite backend', () => {
 		'DROP TRIGGER temp.ambion_runs_update',
 		'PRAGMA recursive_triggers = OFF',
 		'PRAGMA main.writable_schema = ON',
+		'PRAGMA query_only = ON',
+		'DROP TABLE"runs"',
+		'ALTER TABLE "runs"RENAME TO old_runs',
 		'DROP /* a comment */ TABLE notes',
 		'PRAGMA/**/recursive_triggers = OFF',
 		'EXPLAIN PRAGMA recursive_triggers = OFF',
 		'EXPLAIN QUERY PLAN PRAGMA recursive_triggers = 0',
-	])('refuses %s, which would lift the guard, and runs no later statement', async (statement) => {
-		const site = records();
-		await run(site, "INSERT INTO runs (label) VALUES ('kept')");
-		const outcome = await run(site, `${statement}; INSERT INTO notes (body) VALUES ('after')`);
-		expect(messageOf(outcome)).toMatch(/is refused|plain form/);
-		const notes = await run(site, 'SELECT count(*) AS n FROM notes');
-		expect(notes.ok && notes.rows).toEqual([{ n: 0 }]);
-		// SQLite applies a flag PRAGMA when it compiles one, so the refusal sets the flag back.
-		const flags = await run(
-			site,
-			'SELECT r.recursive_triggers, w.writable_schema FROM pragma_recursive_triggers AS r, pragma_writable_schema AS w',
-		);
-		expect(flags.ok && flags.rows).toEqual([{ recursive_triggers: 1, writable_schema: 0 }]);
-		expect(messageOf(await run(site, 'DELETE FROM runs'))).toMatch(/append-only/);
-		expect(messageOf(await run(site, "REPLACE INTO runs (id, label) VALUES (1, 'other')"))).toMatch(
-			/append-only/,
-		);
-		const kept = await run(site, 'SELECT id, label FROM runs');
-		expect(kept.ok && kept.rows).toEqual([{ id: 1, label: 'kept' }]);
-	});
+		'EXPLAIN PRAGMA query_only = 1',
+	])(
+		'refuses %s, which would weaken the guard, runs no later statement, and keeps the guard',
+		async (statement) => {
+			const site = records();
+			await run(site, "INSERT INTO runs (label) VALUES ('kept')");
+			const outcome = await run(site, `${statement}; INSERT INTO notes (body) VALUES ('after')`);
+			expect(messageOf(outcome)).toMatch(/is refused|cannot read the target/);
+			const notes = await run(site, 'SELECT count(*) AS n FROM notes');
+			expect(notes.ok && notes.rows).toEqual([{ n: 0 }]);
+			// SQLite applies a flag PRAGMA when it compiles one, so the refusal sets the flag back.
+			const flags = await run(
+				site,
+				'SELECT r.recursive_triggers, w.writable_schema, q.query_only FROM pragma_recursive_triggers AS r, pragma_writable_schema AS w, pragma_query_only AS q',
+			);
+			expect(flags.ok && flags.rows).toEqual([
+				{ recursive_triggers: 1, writable_schema: 0, query_only: 0 },
+			]);
+			expect(messageOf(await run(site, 'DELETE FROM runs'))).toMatch(/append-only/);
+			expect(
+				messageOf(await run(site, "REPLACE INTO runs (id, label) VALUES (1, 'other')")),
+			).toMatch(/append-only/);
+			const kept = await run(site, 'SELECT id, label FROM runs');
+			expect(kept.ok && kept.rows).toEqual([{ id: 1, label: 'kept' }]);
+		},
+	);
 
 	it('drops a temporary table or view that would hide an append-only table, and refuses its statement', async () => {
 		const site = records();
@@ -459,14 +468,80 @@ describe('the append-only tables of the SQLite backend', () => {
 		]);
 	});
 
-	it('runs a DROP, an ALTER, and a PRAGMA that leave the guard in place', async () => {
+	it('runs a DROP, an ALTER, and a PRAGMA that leave the guard in place, as SQLite reads their names', async () => {
 		const site = records();
 		const outcome = await run(
 			site,
-			'CREATE TABLE scratch (a); ALTER TABLE scratch ADD COLUMN b; DROP TABLE IF EXISTS scratch; PRAGMA table_info(runs)',
+			[
+				'CREATE TABLE scratch (a); ALTER TABLE scratch ADD COLUMN b; DROP TABLE IF EXISTS scratch',
+				'CREATE TABLE t2 (a); ALTER TABLE "t2"RENAME TO données; DROP TABLE données',
+				'DROP TABLE IF EXISTS"gone"; PRAGMA table_info(runs)',
+			].join('; '),
 		);
 		expect(outcome.ok && outcome.rows.map((row) => row.name)).toContain('exchange_owner');
 	});
+
+	it('finds an append-only table by its name in any case, as SQLite does', async () => {
+		const site = openWorkspace({
+			name: 'upper',
+			backend: {
+				bash: memoryBackend(),
+				sql: sqliteBackend(':memory:', { schema: RECORDS, appendOnly: ['RUNS'], provenance: true }),
+			},
+		});
+		cleanups.push(() => site.dispose());
+		await sqlTool(site, "INSERT INTO runs (label) VALUES ('kept')");
+		const rows = await run(site, 'SELECT label, agent FROM runs');
+		expect(rows.ok && rows.rows).toEqual([{ label: 'kept', agent: 'design' }]);
+		expect(messageOf(await run(site, 'DELETE FROM Runs'))).toMatch(/'runs' is append-only/);
+		expect(messageOf(await run(site, 'DROP TRIGGER ambion_runs_stamp'))).toMatch(/is refused/);
+	});
+
+	it.each([
+		[
+			'a table WITHOUT ROWID',
+			'CREATE TABLE runs (label TEXT PRIMARY KEY, agent TEXT) WITHOUT ROWID',
+			"sqliteBackend: the append-only table 'runs' is WITHOUT ROWID",
+		],
+		[
+			'a DEFAULT on a provenance column',
+			'CREATE TABLE runs (id INTEGER PRIMARY KEY, label TEXT, agent TEXT, at TEXT DEFAULT CURRENT_TIMESTAMP)',
+			"sqliteBackend: the provenance column 'at' of 'runs' has a DEFAULT",
+		],
+		[
+			'no DEFAULT but NULL on a provenance column',
+			'CREATE TABLE runs (id INTEGER PRIMARY KEY, label TEXT, agent TEXT DEFAULT NULL)',
+			undefined,
+		],
+	])(
+		'refuses at open, with provenance, %s that the stamp cannot fill',
+		async (_name, schema, refused) => {
+			const open = (provenance: boolean) => {
+				const site = openWorkspace({
+					name: 'shape',
+					backend: {
+						bash: memoryBackend(),
+						sql: sqliteBackend(':memory:', { schema, appendOnly: ['runs'], provenance }),
+					},
+				});
+				cleanups.push(() => site.dispose());
+				return site;
+			};
+			const insert = "INSERT INTO runs (label) VALUES ('kept')";
+			if (refused === undefined) {
+				const site = open(true);
+				await sqlTool(site, insert);
+				const rows = await run(site, 'SELECT label, agent FROM runs');
+				expect(rows.ok && rows.rows).toEqual([{ label: 'kept', agent: 'design' }]);
+			} else {
+				await expect(run(open(true), insert)).rejects.toThrow(refused);
+			}
+			// Without provenance the table opens, and still accepts INSERT alone.
+			const plain = open(false);
+			expect((await run(plain, insert)).ok).toBe(true);
+			expect(messageOf(await run(plain, 'DELETE FROM runs'))).toMatch(/append-only/);
+		},
+	);
 
 	it('takes an agent value in a provenance column when provenance is off, and still refuses an UPDATE', async () => {
 		const site = records(':memory:', false);

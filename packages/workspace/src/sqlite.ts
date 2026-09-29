@@ -115,7 +115,9 @@ export interface SqliteBackendOptions {
 	 * `exchange_owner`, `exchange_from`, and `at`, each one that the table
 	 * declares. An INSERT that sets one of them fails. The guard lets one
 	 * UPDATE through: it sets each of these columns from NULL to the value
-	 * of the running call. The default is false.
+	 * of the running call. Each append-only table with a provenance column
+	 * must have a rowid, and no provenance column may have a DEFAULT other
+	 * than NULL. The default is false.
 	 */
 	provenance?: boolean;
 }

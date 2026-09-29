@@ -321,7 +321,8 @@ its `text`.
   `provenance`, the root entry exports the type `SqlProvenance`, and the
   `sql` tool passes the provenance of each call. The Workbench keeps its lab
   records in the database of the `sql` tool, `lab.db`, and `shared.db`
-  goes. See [Records](docs/workspace.md#records-append-only-tables-with-provenance).
+  goes. An agent can now add a project to the Workbench lab. See
+  [Records](docs/workspace.md#records-append-only-tables-with-provenance).
 - **`sqlConformance` and `SqlConformanceBackend` leave `./conformance`.**
   The SQL cases run in the SQLite tests until a second SQL backend exists.
 - **A backend writes no spill file.** The root entry no longer exports
