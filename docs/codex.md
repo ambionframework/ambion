@@ -253,6 +253,12 @@ then a closing step.
 | `turn.completed`     | `usage`                                                                    |
 | `todo_list`, `error` | No step                                                                    |
 
+**The id of a step is unique in the room.** A real `codex` numbers the items
+of each turn from `item_0`. The id of a step holds the activation id, the
+number of the turn, and the item id, as in `message:3:gpt:1:1:item_1`. A room
+tool takes that id as the key of its commit, so the say of each activation
+lands under its own key.
+
 **A failed item marks its result.** A failed command gives the error "The
 command failed with exit code N". A failed patch gives "The patch failed".
 A failed MCP call gives the message that Codex reported.
@@ -435,7 +441,9 @@ streams that a real `codex` 0.155.1 produced through the SDK 0.155.1, on the
 model `gpt-5.6-luna`. The tests map them to steps, count usage, and report
 the changed paths. Pure parts have their own tests: the wire framing, the
 room tools, the options, and the failure classification. A replay client
-runs the executor on the recorded events to test exchange continuity.
+runs the executor on the recorded events to test exchange continuity. A
+turn of the replay client can also call `say` through the socket of the
+bridge, as the room tools server does.
 
 **The live tier proves the claims that recorded events cannot.** Each file
 holds the smallest room that proves one claim.
