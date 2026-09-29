@@ -75,13 +75,7 @@ export type {
 	Hosting,
 	Limits,
 } from './host/runtime.ts';
-export {
-	callLimits,
-	DEFAULT_TRACE_LIMITS,
-	hostingOf,
-	reconcileRoom,
-	runningRoom,
-} from './host/runtime.ts';
+export { callLimits, DEFAULT_TRACE_LIMITS, hostingOf, runningRoom } from './host/runtime.ts';
 export type {
 	ActivationPurpose,
 	ActivationSpec,
@@ -103,6 +97,7 @@ export type {
 } from './protocol.ts';
 export { assertWire, classifyCommit, roundTrip, sessionToResume } from './protocol.ts';
 export { renderLine } from './record.ts';
+export { visitOf } from './room.ts';
 export type {
 	AgentDefinition,
 	AgentExecutor,

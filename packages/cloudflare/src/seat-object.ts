@@ -15,11 +15,10 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
-import type { Clock, ExecutionEvent } from '@ambionframework/ambion';
+import type { ExecutionEvent } from '@ambionframework/ambion';
 import type {
 	AgentRunner,
 	ExecutionHost,
-	Limits,
 	RoomProtocol,
 	Steer,
 	Wake,
@@ -28,8 +27,6 @@ import type { SeatEvent } from './configure.ts';
 import { definitionOf, seatEvent, seatExecution, seatHost } from './configure.ts';
 import type { Env } from './room-object.ts';
 import { seatMetadata } from './storage.ts';
-
-type RecoveryCall<T> = { kind: 'value'; value: T } | { kind: 'lost'; error: Error };
 
 /**
  * What a seat did, flattened for whoever the worker gave the events to.
@@ -154,18 +151,11 @@ export class SeatObject extends DurableObject<Env> {
 		const state = this.metadata.read();
 		const { activation, room, seat } = state;
 		if (activation === undefined || room === undefined || seat === undefined) return;
-		const host = this.hostOf();
 		if (state.phase === 'running') {
 			// A run that never came back: the object was evicted mid-activation.
+			// The runner of the seat releases it as failed.
 			try {
-				await this.releaseRecovered(
-					this.roomFor(room),
-					host.limits.call,
-					host.clock,
-					room,
-					seat,
-					activation,
-				);
+				await this.portOf(room, seat).recover(activation);
 			} finally {
 				await this.clear(activation);
 			}
@@ -212,67 +202,6 @@ export class SeatObject extends DurableObject<Env> {
 		return runner;
 	}
 
-	/** Release a recovered activation within the configured call budget. */
-	private async releaseRecovered(
-		protocol: RoomProtocol,
-		call: Limits['call'],
-		clock: Clock,
-		room: string,
-		seat: string,
-		activation: string,
-	): Promise<void> {
-		let failure: Error | undefined;
-		for (let attempt = 0; attempt < call.attempts; attempt += 1) {
-			const result = await this.recoveryCall(
-				() =>
-					protocol.lease({ activation, operation: 'release', reason: 'failed', readThrough: 0 }),
-				clock,
-				call.timeout,
-			);
-			if (result.kind === 'value') return;
-			failure = result.error;
-		}
-		if (failure === undefined) return;
-		try {
-			seatEvent(
-				seatLine(room, seat, {
-					type: 'delivery_error',
-					agent: seat,
-					activation,
-					operation: 'release',
-					error: failure,
-				}),
-			);
-		} catch {
-			// A recovery diagnostic cannot keep the seat occupied.
-		}
-	}
-
-	/** Wait for one recovered release or its local deadline. */
-	private async recoveryCall<T>(
-		send: () => Promise<T>,
-		clock: Clock,
-		timeout: number,
-	): Promise<RecoveryCall<T>> {
-		let stopAlarm = () => {};
-		let resolveDeadline: () => void = () => {};
-		const deadline = new Promise<void>((resolve) => {
-			resolveDeadline = resolve;
-		});
-		stopAlarm = clock.alarm(clock.now() + timeout, resolveDeadline);
-		const result = await Promise.race([
-			Promise.resolve()
-				.then(send)
-				.then(
-					(value) => ({ kind: 'value' as const, value }),
-					(error: unknown) => ({ kind: 'lost' as const, error: asError(error) }),
-				),
-			deadline.then(() => ({ kind: 'lost' as const, error: new Error('Room call timed out.') })),
-		]);
-		stopAlarm();
-		return result;
-	}
-
 	/** The three calls this seat makes on its room, each over a stub of its own. */
 	private roomFor(room: string): RoomProtocol {
 		return {
@@ -298,8 +227,4 @@ export class SeatObject extends DurableObject<Env> {
 			current.activation === activation ? { remove: ['activation', 'phase'] } : undefined,
 		);
 	}
-}
-
-function asError(error: unknown): Error {
-	return error instanceof Error ? error : new Error(String(error));
 }

@@ -24,7 +24,7 @@ import { discussionMessages } from './room/exchange.ts';
 import { projectState, replay } from './room/projection.ts';
 import type { MessageSelection } from './room/read.ts';
 import { captureMessageSelection, readView } from './room/read.ts';
-import { type CompositionDraft, type Room, RoomHost } from './room-host/room.ts';
+import { type CompositionDraft, type Room, RoomHost, type Visit } from './room-host/room.ts';
 import type {
 	AgentDefinition,
 	Attention,
@@ -127,6 +127,17 @@ export async function resumeRoom(name: string, options: ResumeRoomOptions): Prom
 		throw error;
 	}
 	return room;
+}
+
+/**
+ * The visit of a person whom the record of a running room holds present, or
+ * undefined. It writes nothing, so a host that resumed a room reaches the
+ * people who stayed without a second arrival.
+ */
+export function visitOf(room: Room, name: string): Visit | undefined {
+	if (!(room instanceof RoomHost))
+		throw new TypeError('The room must come from startRoom or resumeRoom.');
+	return room.presentVisit(name);
 }
 
 /** Observe a room's recorded state without requiring a running handle. */

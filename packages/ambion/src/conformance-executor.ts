@@ -6,7 +6,7 @@
  * it asks for.
  */
 import type { ConformanceCase } from '@ambionframework/journal/conformance';
-import { type ExecutorRoom, executorRoom, type RoomScript } from './conformance-executor-room.ts';
+import { type RoomScript, type ScriptedRoom, scriptedRoom } from './conformance-room.ts';
 import {
 	check,
 	claims,
@@ -85,14 +85,14 @@ export interface ExecutorHarness {
 
 interface Run {
 	readonly port: AgentPort;
-	readonly room: ExecutorRoom;
+	readonly room: ScriptedRoom;
 	readonly events: ExecutionEvent[];
 	readonly names: { room: string; seat: string };
 	readonly activation: string;
 	readonly patience: number;
 	/** Wake the seat for the first activation, or for the one that `activation` names. */
 	wake(activation?: string): Promise<void>;
-	waitFor(read: () => boolean, what: string): Promise<void>;
+	waitFor(read: () => boolean | Promise<boolean>, what: string): Promise<void>;
 	/** The steps the logger received, once the `end` step landed. */
 	trace(): Promise<TraceStep[]>;
 }
@@ -104,7 +104,7 @@ interface ExecutorCase {
 	readonly body: (run: Run) => Promise<void>;
 }
 
-const commitsOf = (room: ExecutorRoom) =>
+const commitsOf = (room: ScriptedRoom) =>
 	operations(room, 'commit').filter(
 		(c) => c.response !== undefined && 'committed' in (c.response as CommitResult),
 	);
@@ -211,7 +211,7 @@ const baseCases: readonly ExecutorCase[] = [
 	{
 		name: 'cuts a pass in flight, and nothing lands under its lease',
 		plan: { kind: 'holdSay', text: TEXT },
-		room: { hold: true },
+		room: { hold: 'commit' },
 		body: async (run) => {
 			await run.wake();
 			await run.waitFor(() => operations(run.room, 'commit').length > 0, 'the held commit');
@@ -238,7 +238,7 @@ const baseCases: readonly ExecutorCase[] = [
 const heldSteer: ExecutorCase = {
 	name: 'holds a steer for the record when the executor cannot steer',
 	plan: { kind: 'holdSay', text: TEXT },
-	room: { hold: true },
+	room: { hold: 'commit' },
 	body: async (run) => {
 		await run.wake();
 		await run.waitFor(() => operations(run.room, 'commit').length > 0, 'the held commit');
@@ -425,7 +425,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 	const run = async (one: ExecutorCase): Promise<void> => {
 		count += 1;
 		const names = { room: `executor-${suite}-${count}`, seat: 'product' };
-		const room = executorRoom(names.room, names.seat, one.room);
+		const room = scriptedRoom(names.room, names.seat, one.room);
 		const activation = `message:1:${names.seat}:1`;
 		const events: ExecutionEvent[] = [];
 		const records: TraceRecord[] = [];

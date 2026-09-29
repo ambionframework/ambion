@@ -5,6 +5,7 @@
  */
 import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { visitOf } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineHuman,
@@ -162,10 +163,16 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 			await resumeRoom(name, { agents: [], runtime: createRuntime({ storage: opened.storage }) }),
 		);
 		await expect(observed(first.visit(person))).rejects.toThrow(/stopped|evicted|gone|superseded/);
+		// The resumed room takes the visit from the record, and writes nothing.
+		expect(visitOf(first, person.name)).toBeUndefined();
+		expect(visitOf(resumed, person.name)?.human).toEqual(person);
+		expect(visitOf(resumed, 'nobody')).toBeUndefined();
+		expect(() => visitOf({} as Room, person.name)).toThrow(TypeError);
 		const [one, two] = await Promise.all([resumed.visit(person), resumed.visit(person)]);
 		expect(one.human).toEqual(person);
 		await one.leave();
 		await expect(two.send({ text: 'after the shared leave' })).rejects.toThrow(/ended|leaving/);
+		expect(visitOf(resumed, person.name)).toBeUndefined();
 		expect(await count(resumed, 'arrived')).toBe(1);
 	});
 

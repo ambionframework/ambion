@@ -23,14 +23,18 @@ What is built:
   `waitForClose` and `waitForSummary` over RPC, and the three calls a seat makes: `view`, `commit`
   and `lease`. Its runtime reaches each seat through `rpcExecution`, an
   execution with no kind whose port calls the seat object over RPC. Its
-  `alarm()` runs `reconcileRoom`.
-  Identity and presence come from the room journal. Restart restores handles
-  only for present humans; `send` never enters the room implicitly. Explicit
-  `visit` ensures presence, and repeated `leave` is harmless.
+  `alarm()` runs `Room.reconcile()`.
+  Identity and presence come from the room journal, and the object keeps no
+  copy. `send` and `leave` take the visit with `visitOf` from the hosting
+  entry, so a restart reaches only present humans. `send` never enters the
+  room implicitly. Explicit `visit` ensures presence, and repeated `leave` is
+  harmless.
 - **`SeatObject`** runs one seat. `wake` stores the activation id and sets an
   alarm; `alarm()` claims the lease, reads the view, runs the activation and
   whatever queued behind it to their end, and releases the lease. A second
-  `alarm()` while a run is live in the object returns at once. `steer`
+  `alarm()` while a run is live in the object returns at once. An `alarm()`
+  that finds a run that an eviction lost calls `AgentRunner.recover`, which
+  releases the activation as failed. `steer`
   delivers a recorded message to its exact running activation. It writes no
   activation metadata and sets no alarm. Unread messages remain recoverable
   from the room journal. `cut` stops the activation the room ended. The seat
@@ -60,8 +64,7 @@ tools, including `say`, `seat`, and `unseat`.
 
 `read()` returns the detached coherent room projection, including stopped
 records. Messages, participants, exchanges, and the watermark come from
-it. The alarm calls `reconcileRoom` from the hosting entry, which reaches
-the running room by name. The live `waitForClose()` and `waitForSummary()` conveniences retain their wait behavior
+it. The alarm calls `reconcile()` on the running room. The live `waitForClose()` and `waitForSummary()` conveniences retain their wait behavior
 and require a running room. Use `read()` to inspect a stopped open exchange or
 its recorded summary outcome.
 

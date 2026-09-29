@@ -1,12 +1,12 @@
 /**
  * The runtime is what a host owns. Two runtimes in one process are two
  * hosts: they share nothing, and a room on a durable storage is read by a
- * second runtime over the same storage. A host reconciles a room by name.
+ * second runtime over the same storage.
  */
 import { readdir } from 'node:fs/promises';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { hostingOf, reconcileRoom } from '../src/hosting.ts';
+import { hostingOf } from '../src/hosting.ts';
 import {
 	type CreateRuntimeOptions,
 	createRuntime,
@@ -126,7 +126,7 @@ describe('createRuntime', () => {
 		).not.toThrow();
 	});
 
-	it('keeps two runtimes apart, and reconciles a room by name only on its own runtime', async () => {
+	it('keeps two runtimes apart', async () => {
 		const name = roomName('runtime');
 		const [one, two] = await Promise.all([memory.open(), memory.open()]);
 		const first = createRuntime({ storage: one.storage, clock: fakeClock() });
@@ -141,12 +141,7 @@ describe('createRuntime', () => {
 		expect((await messagesOf(b)).filter(isSpoken).map((m) => m.text)).toEqual(['in the second']);
 		expect((await readRoom(name, { runtime: first })).name).toBe(a.name);
 		expect((await readRoom(name, { runtime: second })).name).toBe(b.name);
-
-		// reconcileRoom runs a room that runs, and ignores a name that no room runs
-		await expect(reconcileRoom(first, name)).resolves.toBeUndefined();
-		await expect(reconcileRoom(first, 'nobody')).resolves.toBeUndefined();
 		await Promise.all([a.stop(), b.stop()]);
-		await expect(reconcileRoom(first, name)).resolves.toBeUndefined();
 	});
 
 	it('writes a room durably, where a second runtime reads it', async () => {

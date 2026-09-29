@@ -117,6 +117,16 @@ export class AgentRunner implements AgentPort {
 		if (this.current?.id === activation) this.cutCurrent();
 	}
 
+	/**
+	 * Release, as failed, an activation whose run this process lost. A host
+	 * that dropped a run with its memory calls this when it comes back. The
+	 * release makes the attempts of one room call, and a release that none
+	 * of them confirms raises a `delivery_error`.
+	 */
+	async recover(activation: string): Promise<void> {
+		await this.release(activation, 'failed', 0, undefined, undefined, undefined);
+	}
+
 	/** Cut the activation in flight, whatever its id. The room hears how it ended. */
 	abort(): void {
 		this.cutCurrent();

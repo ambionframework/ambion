@@ -478,6 +478,11 @@ export class RoomHost implements Room, RunningRoom {
 		return people.visit(this, human);
 	}
 
+	/** The visit of a person whom the record holds present, or undefined. It writes nothing. */
+	presentVisit(name: string): people.Visit | undefined {
+		return people.presentVisit(this, name);
+	}
+
 	post(input: people.PostInput): Promise<waits.ExchangeHandle> {
 		return people.post(this, input);
 	}
