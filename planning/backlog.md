@@ -267,7 +267,6 @@ today. **Condition:** a fault that one of them would have caught.
 - Per-tab presence tokens and automatic departures; hosts reconcile.
 - Distributed workspace ownership; one owner per resource.
 - Automatic summary skipping by message count; manual summary retry.
-- Exchange budgets; deadlines and caps bound activations only.
 - Agent source retrieval and pagination under the shared summary policy.
 - Browser-only execution, a managed service, arbitrary edge platforms,
   turnkey deployment commands, multiple terminal clients.
