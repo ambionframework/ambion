@@ -63,13 +63,10 @@ function activation(
 	const session = stateOf(executor, definition, {
 		room: answer === undefined ? unusedRoom : roomThatCommits(commits, answer),
 		trace: {
-			startPass: () => {},
 			record: (step) => {
 				steps.push(step);
 				watch(step);
 			},
-			usage: () => undefined,
-			close: async () => {},
 		},
 	});
 	const steers = () => steps.filter((step) => step.type === 'steer');
@@ -162,10 +159,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		const steps: Step[] = [];
 		const session = stateOf(executor, definition, {
 			trace: {
-				startPass: () => {},
 				record: (step) => void steps.push(step),
-				usage: () => undefined,
-				close: async () => {},
 			},
 		});
 		const running = session.pass({ kind: 'view', view: viewOf(both, 2) });
@@ -237,10 +231,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		});
 		const session = stateOf(executor, definition, {
 			trace: {
-				startPass: () => {},
 				record: (step) => void steps.push(step),
-				usage: () => undefined,
-				close: async () => {},
 			},
 		});
 		const running = session.pass({ kind: 'view', view: viewOf(first, 1) });

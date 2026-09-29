@@ -1,8 +1,9 @@
 /**
  * The position one activation read through. The executor reports each range
  * the model consumed, and the core joins the ranges into the position read.
- * A range that lands out of order waits until the gap closes. A tool result
- * that carries record counts once it reaches the model.
+ * A range that lands out of order waits until the gap closes, and the order
+ * the ranges come in does not change the position. A tool result that
+ * carries record counts once it reaches the model.
  */
 import { expect, it } from 'vitest';
 import { Freshness } from '../src/execution/freshness.ts';
@@ -55,6 +56,69 @@ it.each([
 	const freshness = new Freshness();
 	for (const [after, to] of ranges) freshness.consumedRange({ after, through: to });
 	expect(freshness.readThrough).toBe(through);
+});
+
+/** Every order of `items`. */
+const orders = <T>(items: readonly T[]): T[][] =>
+	items.length <= 1
+		? [[...items]]
+		: items.flatMap((item, at) =>
+				orders([...items.slice(0, at), ...items.slice(at + 1)]).map((rest) => [item, ...rest]),
+			);
+
+it.each([
+	[
+		'a chain with a gap that the last range closes',
+		[
+			[0, 2],
+			[2, 4],
+			[4, 6],
+		],
+		6,
+	],
+	[
+		'two ranges through one position, when only the lower start joins',
+		[
+			[2, 5],
+			[3, 5],
+			[0, 2],
+		],
+		5,
+	],
+	[
+		'overlapping ranges and a range the others cover',
+		[
+			[0, 3],
+			[1, 2],
+			[2, 5],
+			[5, 6],
+		],
+		6,
+	],
+	[
+		'two ranges from one position, once the gap before them closes',
+		[
+			[1, 3],
+			[1, 5],
+			[0, 1],
+		],
+		5,
+	],
+	[
+		'ranges past a gap that nothing closes',
+		[
+			[0, 1],
+			[2, 3],
+			[3, 4],
+		],
+		1,
+	],
+] as const)('joins %s to the same position in every order', (_name, ranges, through) => {
+	for (const order of orders<readonly [number, number]>(ranges)) {
+		const freshness = new Freshness();
+		for (const [after, to] of order) freshness.consumedRange({ after, through: to });
+		expect(freshness.readThrough, JSON.stringify(order)).toBe(through);
+	}
 });
 
 it('never moves back, and a say does not join a range that waits', () => {

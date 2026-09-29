@@ -8,7 +8,7 @@
  */
 import { DISMISS, SAY, SCHEDULE, SEAT, UNSEAT } from '../define.ts';
 import type { Step } from '../types.ts';
-import type { TraceSink } from './trace.ts';
+import type { StepSink } from './trace.ts';
 
 /**
  * The room tools whose call commits an entry to the record. The `message`
@@ -30,7 +30,10 @@ export class ToolCalls {
 	private readonly raise: (type: ToolEvent, tool: string) => void;
 	/** The tool of each call in flight, by call id. */
 	private readonly named = new Map<string, string>();
-	/** The calls that no hosted tool took yet, in the order the steps named them. */
+	/**
+	 * The calls in flight that no hosted tool took yet, in the order the steps
+	 * named them. A result ends a call, so the result step drops its entry.
+	 */
 	private readonly unclaimed: { readonly call: string; readonly name: string }[] = [];
 	private serial = 0;
 
@@ -40,23 +43,27 @@ export class ToolCalls {
 	}
 
 	/** A sink that records into `trace` and reads each step for the tool calls. */
-	watching(trace: TraceSink): TraceSink {
+	watching(trace: StepSink): StepSink {
 		return {
-			startPass: (input, through) => trace.startPass(input, through),
 			record: (step) => {
 				trace.record(step);
 				this.note(step);
 			},
-			usage: () => trace.usage(),
-			close: () => trace.close(),
 		};
 	}
 
 	/** The id of the next call of `tool` that the steps named, or a fresh id. */
 	callId(tool: string): string {
-		const at = this.unclaimed.findIndex((call) => call.name === tool);
-		const claimed = at < 0 ? undefined : this.unclaimed.splice(at, 1)[0];
+		const claimed = this.take((call) => call.name === tool);
 		return claimed?.call ?? `${this.activation}:${tool}:${this.serial++}`;
+	}
+
+	/** Remove and give back the oldest unclaimed call that `matches` accepts. */
+	private take(
+		matches: (call: { readonly call: string; readonly name: string }) => boolean,
+	): { readonly call: string; readonly name: string } | undefined {
+		const at = this.unclaimed.findIndex(matches);
+		return at < 0 ? undefined : this.unclaimed.splice(at, 1)[0];
 	}
 
 	private note(step: Step): void {
@@ -67,6 +74,7 @@ export class ToolCalls {
 		} else if (step.type === 'tool_result') {
 			const name = this.named.get(step.call);
 			this.named.delete(step.call);
+			this.take((call) => call.call === step.call);
 			if (name !== undefined && !COMMITS.has(name)) this.raise('tool_execution_end', name);
 		}
 	}

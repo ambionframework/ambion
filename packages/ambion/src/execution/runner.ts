@@ -30,7 +30,7 @@ import type {
 	Step,
 	Usage,
 } from '../types.ts';
-import { ActivationState } from './activation.ts';
+import { type ActivationInput, ActivationState } from './activation.ts';
 import type { PassInput, PassResult } from './executor.ts';
 import type { TraceSink } from './trace.ts';
 
@@ -466,7 +466,11 @@ export class AgentRunner implements AgentPort {
 		}
 	}
 
-	private boundedRoom(cancelled: Promise<void>, trace: TraceSink): RoomProtocol {
+	/**
+	 * The room calls the room tools make. A commit ends when the activation is
+	 * cut, and its answer becomes a `room` step.
+	 */
+	private boundedRoom(cancelled: Promise<void>, trace: TraceSink): ActivationInput['room'] {
 		return {
 			view: (id, message) => this.room.view(id, message),
 			commit: async (request) => {
@@ -474,7 +478,6 @@ export class AgentRunner implements AgentPort {
 				trace.record(roomStep(request, response));
 				return response;
 			},
-			lease: (request) => this.room.lease(request),
 		};
 	}
 

@@ -12,7 +12,7 @@
 import type { ActivationView } from '../protocol.ts';
 import type { FailureCause, Seq } from '../types.ts';
 import type { RoomTool, RoomToolOptions } from './room-tools.ts';
-import type { TraceSink } from './trace.ts';
+import type { StepSink } from './trace.ts';
 
 /** A range of the record: the messages after `after`, through `through`. */
 export interface ReadRange {
@@ -30,9 +30,9 @@ export interface ExecutorActivation {
 	/**
 	 * Where the executor records the steps it owns. The core reads the
 	 * `tool_call` and `tool_result` steps for the tool events. The driver owns
-	 * the sink and closes it.
+	 * the sink: it opens each pass, sums the usage, and closes the sink.
 	 */
-	readonly trace: TraceSink;
+	readonly trace: StepSink;
 	/** Aborts when the activation is cut: by the room, by the driver, or by a room tool. */
 	readonly signal: AbortSignal;
 	/** The highest position of the record that the model consumed: the freshness boundary. */

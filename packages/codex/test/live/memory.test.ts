@@ -55,10 +55,7 @@ live('exchange continuity', () => {
 			definition,
 			emit: () => {},
 			trace: {
-				startPass: () => {},
 				record: () => {},
-				usage: () => undefined,
-				close: async () => {},
 			},
 		});
 		try {

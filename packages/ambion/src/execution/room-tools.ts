@@ -56,7 +56,8 @@ export interface RoomTool {
 /** What every room tool reaches: the activation and the room. */
 export interface RoomToolBinding {
 	readonly id: string;
-	readonly room: RoomProtocol;
+	/** The room calls the tools make: a commit, and the view of one message. */
+	readonly room: Pick<RoomProtocol, 'view' | 'commit'>;
 	/** The freshness boundary of an ordinary say. The tools read it at each call. */
 	readonly readThrough: Seq;
 	/** An accepted ordinary say confirms the activation read the record through here. */
@@ -94,7 +95,16 @@ interface ScheduleArgs {
 	refs?: string[];
 }
 
-/** The room's answer to the commit of each result, for the scripted executor of the core. */
+/**
+ * The room's answer to the commit of each result. Only the scripted executor
+ * of `@ambionframework/ambion/testing` reads it, through `answerOf`. A
+ * script branches on a short answer, such as `delivered`, `missed`, or
+ * `stale: <why>`. The result holds only the text that a model reads, and the
+ * scripted executor makes no call to the room, so it cannot read the answer
+ * through the executor contract. The hosting entry does not export
+ * `answerOf`. The map holds each result weakly, so it keeps no entry past
+ * its result.
+ */
 const answers = new WeakMap<RoomToolResult, CommitResult>();
 
 /** The result of a commit, with the room's answer kept beside it. */

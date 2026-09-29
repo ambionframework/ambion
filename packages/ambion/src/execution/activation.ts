@@ -8,7 +8,7 @@
  * failure once. The executor session runs its harness over what the state
  * hands it, and reports when the model consumed input.
  */
-import type { ActivationView, RoomProtocol } from '../protocol.ts';
+import type { ActivationView } from '../protocol.ts';
 import { sessionToResume } from '../protocol.ts';
 import type { AgentDefinition, ExecutionEvent, HarnessSession, Seq } from '../types.ts';
 import type {
@@ -24,17 +24,17 @@ import { resolveReminders } from './reminders.ts';
 import { renderActivation, renderDelta, renderPending, renderSystem } from './render.ts';
 import { agentTools, type RoomTool, type RoomToolBinding, roomTools } from './room-tools.ts';
 import { ToolCalls } from './tool-calls.ts';
-import type { TraceSink } from './trace.ts';
+import type { StepSink } from './trace.ts';
 
 /** What the driver gives the state of one activation. */
 export interface ActivationInput {
 	readonly id: string;
 	/** The room calls of the activation. The room tools commit and read through it. */
-	readonly room: RoomProtocol;
+	readonly room: RoomToolBinding['room'];
 	readonly definition: AgentDefinition;
 	readonly emit: (event: ExecutionEvent) => void;
 	/** The sink of the activation. The driver owns it and closes it. */
-	readonly trace: TraceSink;
+	readonly trace: StepSink;
 }
 
 /** The tools of one activation: the room tools and the tools of the definition. */

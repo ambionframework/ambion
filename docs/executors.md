@@ -104,7 +104,7 @@ holds these members:
 | Member            | What it is                                                                              |
 | ----------------- | --------------------------------------------------------------------------------------- |
 | `id`              | The activation id.                                                                      |
-| `trace`           | The `TraceSink` for the steps that the executor owns.                                   |
+| `trace`           | A `StepSink`: its `record(step)` takes the steps that the executor owns.                |
 | `signal`          | The `AbortSignal` of the activation: the room, the driver, or a room tool cuts it.      |
 | `readThrough`     | The position the core holds as read. A harness that keeps a session writes it there.    |
 | `read(range)`     | The model consumed `range`, `{ after, through }`: a prompt, a delta, or a steered line. |
@@ -128,7 +128,7 @@ members:
 
 | Member                     | What it does                                                                        |
 | -------------------------- | ----------------------------------------------------------------------------------- |
-| `pass(pass)`               | Runs one pass. Returns `failed`, and on failure a `cause` and a `message`.          |
+| `pass(pass)`               | Runs one pass, and returns a `PassResult`.                                          |
 | `session`                  | The id of the harness session, for the release. Absent when the harness keeps none. |
 | `roomTools`                | What the executor adds to a say and a schedule, as `RoomToolOptions`.               |
 | `steer?(after, seq, line)` | Takes a line into a live pass. Absent when the family cannot.                       |
@@ -137,11 +137,33 @@ members:
 `Executor.harness` names the harness whose sessions the executor records,
 such as `pi`. The release records `{ harness, id }`.
 
+**`pass` returns a `PassResult`.** It has these members:
+
+| Member    | What it is                                                                                        |
+| --------- | ------------------------------------------------------------------------------------------------- |
+| `failed`  | Whether the pass failed.                                                                          |
+| `cause`   | On failure: `permanent` or `transient`. It tells the room whether a retry can pass.               |
+| `message` | On failure: what went wrong, for the `error` event and the `end` step.                            |
+| `error`   | On failure: the error that the `error` event carries. Absent, the core builds one from `message`. |
+| `stop`    | `'length'` when the model reached a length limit. The pass did not fail.                          |
+
+**A session follows these rules.** The core reads the session at fixed
+points.
+
+- **A pass that the cut ends reports no failure.** The cut aborts `signal`,
+  and the pass returns `failed: false`.
+- **The core reads `roomTools` once, before the first pass.** Set it on the
+  session that `open` returns. A later change reaches no tool.
+- **The core reads `session` after the last pass.** Keep the id of the
+  harness session there until the driver calls `close`. The room hands it
+  to the next activation as `spec.resume`, and never reads it.
+- **Every pass holds the same tool values.** The core binds the tools on the
+  first pass, so an adapter can host them once for the activation.
+
 **The first pass receives the view. A later pass receives a delta.** The
 `view` is the whole windowed record. A `delta` holds the fresh view and
-`since`, the position the activation had read through. A `PassResult` that
-sets `stop: 'length'` reports that the model reached a length limit. A pass
-that throws is a transient failure.
+`since`, the position the activation had read through. A pass that throws
+is a transient failure.
 
 **Freshness bounds correctness. Steering is a capability.** The driver
 reads `readThrough` to renew the lease and to release it. A commit that
@@ -170,7 +192,7 @@ internal. Participant views omit `sessionId`.
 | `hostingOf`          | The journal namespace, the limits, the executions, and the room registry of a runtime                                                                          |
 | `visitOf`            | The visit of a person whom the record of a running room holds present. It writes nothing                                                                       |
 | `describeExecutor`   | The neutral half of an executor definition, which an executor family extends with its fields                                                                   |
-| `Executor`           | The executor contract: `ExecutorActivation`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `ExecutorSession`                                            |
+| `Executor`           | The executor contract: `ExecutorActivation`, `StepSink`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `ExecutorSession`                                |
 
 **`RoomProtocol.view(activation, message?)` takes no range.** The room
 serves the record windowed to its cap and to the token limit of the seat,
@@ -234,7 +256,9 @@ names the signal it reads for the first and the last events.
 **A steered line moves the position only when the record before it is
 already read.** A message that lands out of order does not advance
 `readThrough` until the gap closes. The core holds the range, and it joins
-the range once the gap closes.
+the range once the gap closes. Of two held ranges through one position,
+the core keeps the range that starts lower. The order in which the ranges
+arrive does not change the position.
 
 **The core decides on another pass.** It runs one when the record stands
 past `readThrough` and the activation was not cut.
@@ -284,6 +308,14 @@ Each family adapts them to its own tool shape.
 marks an error result. `terminate` marks an activation that has nothing more
 to do: an `unknown` or `stale` answer, or the last answer of a closing
 activation.
+
+**The scripted executor also reads the room answer of a commit.** A script
+of `@ambionframework/ambion/testing` branches on a short answer, such as
+`delivered`, `missed`, or `stale: <why>`. The result holds only the text
+that a model reads, and the scripted executor makes no call to the room.
+The core keeps the answer beside each result, for the scripted executor
+alone. The hosting entry does not export it, and no other executor reads
+it.
 
 **`say` commits a `said` intent.** It carries `readThrough` and takes the
 tool call id as its commit key. It accepts `text`, `to`, and `refs`. The
@@ -338,7 +370,24 @@ executor records the steps, and raises no tool event.
 MCP server in the process, and Codex in the stdio server that it spawns,
 over a local socket to the host. A harness that cannot see the id of a call
 takes it with `callId(tool)`: the oldest `tool_call` step of that tool that
-no call took yet. Each adapter page names the transport.
+no call took yet, or a fresh id when none waits. A `tool_result` step ends
+its call, so the core drops the id of that call. Each adapter page names
+the transport.
+
+**Pi hosts `pass.tools`, and builds the tools of the definition itself.**
+Claude and Codex host `pass.agentTools`. A `RoomTool` does not carry what
+the Pi harness does with a tool of the definition:
+
+- The harness applies `prepareArguments` before it checks the arguments
+  against the schema. A `RoomTool` applies it after the check.
+- The harness runs a batch in turn when a tool sets `executionMode` to
+  `sequential`.
+- The harness gives the tool `onUpdate`, and the abort signal of the run.
+- The harness keeps `details` and `terminate` of the result. A `RoomTool`
+  gives the content alone.
+
+Pi builds each tool from its `AmbionTool`, and `toolContext` gives each call
+the context that the core gives it.
 
 ## The step vocabulary
 
@@ -376,9 +425,10 @@ the cap applies. The sum holds when the host passes no logger.
 ## The trace log
 
 **The trace goes to the host's logger.** The driver opens a `TraceSink` for
-each activation and passes it to the executor at `open`. The sink gives each
-step to the `logger` that the host passes to `createRuntime`, as one
-`TraceRecord`: `room`, `seat`, and the stamped step. With no logger, the
+each activation, and passes the executor its `record` at `open`, as a
+`StepSink`. The driver keeps the passes, the usage, and the close. The sink
+gives each step to the `logger` that the host passes to `createRuntime`, as
+one `TraceRecord`: `room`, `seat`, and the stamped step. With no logger, the
 sink drops the steps. The record and the trace never share an entry.
 
 <picture>
@@ -524,9 +574,11 @@ family. `@ambionframework/claude` is the worked example, and
    parts.
 3. **Host the tools.** Adapt `pass.tools` and `pass.agentTools` to the
    form the harness needs, and run them where the harness reaches them.
+   A harness that does more with a tool of the definition can build it
+   from its `AmbionTool`, as Pi does.
    [The room tools](#the-room-tools) states the commit key and the room
    answers.
-4. **Record the steps you own.** Call the `TraceSink` of the activation for
+4. **Record the steps you own.** Call `trace.record` of the activation for
    `thinking`, `text`, `tool_call`, `tool_result`, `steer`, `approval`, and
    `usage`. The driver records `pass`, `room`, and `end`, and the core
    raises the tool events from the steps.

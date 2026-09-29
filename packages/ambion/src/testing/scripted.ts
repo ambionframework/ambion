@@ -189,10 +189,14 @@ class ScriptedSession implements ExecutorSession {
 	private async commit(call: Call, pass: Pass): Promise<string> {
 		const tool = pass.tools.find((one) => one.name === call.tool);
 		if (tool === undefined) throw new Error(`The seat has no tool '${call.tool}'.`);
-		const result = await tool.run(call.args, this.callId());
-		// Each room tool a script calls commits, so the room answered it.
+		const id = this.callId();
+		const result = await tool.run(call.args, id);
+		// The script reads each result, so the result reached the model.
+		this.activation.delivered(id);
+		// Each room tool a script calls commits, so the room answered it. The
+		// result holds only the text a model reads, and a script reads the
+		// answer itself, so the answer comes from beside the result.
 		const response = answerOf(result) ?? { unknown: 'The room gave no answer.' };
-		this.acknowledge(response);
 		const outcome = answer(response);
 		if (isClosing(pass.view) && outcome.text === 'delivered') this.done = true;
 		return outcome.text;
@@ -201,17 +205,6 @@ class ScriptedSession implements ExecutorSession {
 	/** The id of the next call: the activation and the place of the call in it. */
 	private callId(): string {
 		return `${this.activation.id}/${this.results.length}`;
-	}
-
-	/** An accepted say, or the messages a refused say missed, move the position this seat has read to. */
-	private acknowledge(response: CommitResult): void {
-		const after = this.activation.readThrough;
-		if ('committed' in response && response.committed.kind === 'said') {
-			this.activation.read({ after, through: response.committed.seq });
-		}
-		if ('missed' in response) {
-			this.activation.read({ after, through: response.missed.at(-1)?.seq ?? after });
-		}
 	}
 
 	/** An agent's own tool: record its steps, and give it the context a model loop would. */

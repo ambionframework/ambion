@@ -7,7 +7,7 @@ import type {
 	Executor,
 	RoomProtocol,
 	RoomTool,
-	TraceSink,
+	StepSink,
 } from '@ambionframework/ambion/hosting';
 import { ActivationState } from '../../../ambion/src/execution/activation.ts';
 import { noTrace } from './trace.ts';
@@ -41,7 +41,7 @@ export function stateOf(
 		id?: string;
 		room?: RoomProtocol;
 		emit?: (event: RoomNotification) => void;
-		trace?: TraceSink;
+		trace?: StepSink;
 	} = {},
 ): ActivationState {
 	return new ActivationState(executor, {

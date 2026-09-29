@@ -83,6 +83,21 @@ function toPiTool(tool: AmbionTool, agent: AgentDefinition, current: () => Activ
  * What an activation holds from its purpose: the room tools the core bound,
  * and the tools of the definition. `current` names the view of the running
  * pass, and defaults to the view the tools are built from.
+ *
+ * Pi hosts `pass.tools`, the room tools as the core bound them. It does not
+ * host `pass.agentTools`. It builds each tool of the definition from its
+ * `AmbionTool`, because a `RoomTool` does not carry what the Pi harness
+ * does with the tool:
+ *
+ * - The harness applies `prepareArguments` before it checks the arguments
+ *   against the schema. A `RoomTool` applies it after the check.
+ * - The harness runs a batch in turn when a tool sets `executionMode` to
+ *   `sequential`.
+ * - The harness gives the tool `onUpdate`, and the abort signal of the run.
+ * - The harness keeps `details` and `terminate` of the result. A `RoomTool`
+ *   gives the content alone.
+ *
+ * The context of each call comes from `toolContext`, as it does in the core.
  */
 export function toolsFor(
 	view: ActivationView,

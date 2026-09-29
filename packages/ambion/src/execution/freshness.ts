@@ -40,21 +40,34 @@ export class Freshness {
 		this.join();
 	}
 
-	/** The model consumed `range`. A range at or below the position read adds nothing. */
+	/**
+	 * The model consumed `range`. A range at or below the position read adds
+	 * nothing. Of two ranges through the same position, the one that starts
+	 * lower stays, because it joins first.
+	 */
 	consumedRange(range: ReadRange): void {
-		if (range.through > this.read) this.consumed.set(range.through, range);
+		const held = this.consumed.get(range.through);
+		if (range.through > this.read && (held === undefined || range.after < held.after)) {
+			this.consumed.set(range.through, range);
+		}
 		this.join();
 	}
 
-	/** Advance through every held range that joins the position read, lowest first. */
+	/**
+	 * Advance through every held range that joins the position read, lowest
+	 * first, and drop each range the position read covers. The order the
+	 * ranges came in does not change where the position ends.
+	 */
 	private join(): void {
 		for (;;) {
+			for (const through of this.consumed.keys()) {
+				if (through <= this.read) this.consumed.delete(through);
+			}
 			const next = [...this.consumed.values()]
-				.filter((range) => range.after <= this.read && range.through > this.read)
+				.filter((range) => range.after <= this.read)
 				.sort((left, right) => left.through - right.through)[0];
 			if (next === undefined) return;
 			this.read = next.through;
-			this.consumed.delete(next.through);
 		}
 	}
 }

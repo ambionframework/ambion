@@ -14,7 +14,7 @@ import type {
 	ExecutionEvent,
 	Executor,
 	RoomProtocol,
-	TraceSink,
+	StepSink,
 } from '@ambionframework/ambion/hosting';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -176,11 +176,8 @@ export function open(
 	const events: ExecutionEvent[] = [];
 	const { room, commits } = roomOf(answer);
 	const { client, seen } = replay(turns);
-	const trace: TraceSink = {
-		startPass: () => {},
+	const trace: StepSink = {
 		record: (step) => void steps.push(step),
-		usage: () => undefined,
-		close: async () => {},
 	};
 	const executor = createCodexExecutor({ definition, client, catalog });
 	/** The core state of one activation, as the driver opens it. */
@@ -208,11 +205,8 @@ export interface Connected {
 	close(): Promise<void>;
 }
 
-const noTrace: TraceSink = {
-	startPass: () => {},
+const noTrace: StepSink = {
 	record: () => {},
-	usage: () => undefined,
-	close: async () => {},
 };
 
 /**

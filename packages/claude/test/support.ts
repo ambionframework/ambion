@@ -14,7 +14,7 @@ import type {
 	CommitRequest,
 	ExecutionEvent,
 	RoomProtocol,
-	TraceSink,
+	StepSink,
 } from '@ambionframework/ambion/hosting';
 import { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { type ClaudeOptions, claude, createClaudeExecutor } from '../src/index.ts';
@@ -113,11 +113,8 @@ export function fakeRoom(
 			};
 		},
 	};
-	const trace: TraceSink = {
-		startPass: () => {},
+	const trace: StepSink = {
 		record: (step) => void steps.push(step),
-		usage: () => undefined,
-		close: async () => {},
 	};
 	const executor = createClaudeExecutor({
 		definition,

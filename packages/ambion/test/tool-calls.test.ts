@@ -3,7 +3,7 @@
  * `tool_call` step starts a call and a `tool_result` step with the same id
  * ends it. A room tool that commits an entry raises no tool event: the
  * `message` event of the entry reports it. A harness that cannot see the id
- * of a call takes it from the steps.
+ * of a call takes it from the steps, and a result drops the id it ends.
  */
 import { expect, it } from 'vitest';
 import { ToolCalls } from '../src/execution/tool-calls.ts';
@@ -13,12 +13,7 @@ const calls = () => {
 	const raised: string[] = [];
 	const recorded: Step[] = [];
 	const tools = new ToolCalls('act-1', (type, tool) => raised.push(`${type}:${tool}`));
-	const trace = tools.watching({
-		startPass: () => {},
-		record: (step) => void recorded.push(step),
-		usage: () => undefined,
-		close: async () => {},
-	});
+	const trace = tools.watching({ record: (step) => void recorded.push(step) });
 	return { tools, trace, raised, recorded };
 };
 
@@ -69,4 +64,15 @@ it('hands out the ids the steps named for a tool, in order, then fresh ids', () 
 	expect(tools.callId('say')).toBe('act-1:say:0');
 	expect(tools.callId('lookup')).toBe('t2');
 	expect(tools.callId('lookup')).toBe('act-1:lookup:1');
+});
+
+it('drops the id of a call its result ends, so a harness that never takes one holds none', () => {
+	const { tools, trace } = calls();
+	for (const id of ['t1', 't2', 't3']) {
+		trace.record(call(id, 'lookup'));
+		trace.record(result(id));
+	}
+	trace.record(call('t4', 'lookup'));
+	expect(tools.callId('lookup')).toBe('t4');
+	expect(tools.callId('lookup')).toBe('act-1:lookup:0');
 });

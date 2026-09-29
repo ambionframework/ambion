@@ -6,7 +6,13 @@
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 import { ActivationState } from '../src/execution/activation.ts';
-import type { Executor, PassInput } from '../src/execution/executor.ts';
+import type {
+	Executor,
+	ExecutorActivation,
+	ExecutorSession,
+	Pass,
+	PassInput,
+} from '../src/execution/executor.ts';
 import { createRuntime, defineAgent, defineTool, startRoom } from '../src/index.ts';
 import type { ActivationView, CommitRequest, CommitResult } from '../src/protocol.ts';
 import {
@@ -227,11 +233,10 @@ describe('scriptedExecutor', () => {
 						commits.push(request);
 						return commit(request);
 					},
-					lease: async () => ({ stale: 'unused' }),
 				},
 				definition: agent('a'),
 				emit: (event) => events.push(event),
-				trace: { startPass() {}, record() {}, usage: () => undefined, close: async () => {} },
+				trace: { record() {} },
 			});
 		return { open, commits, events };
 	}
@@ -339,5 +344,99 @@ describe('scriptedExecutor', () => {
 			error: new Error('broke'),
 		});
 		expect(events).toEqual([expect.objectContaining({ type: 'error', cause: 'transient' })]);
+	});
+
+	/** The core state of one activation over an executor whose sessions run `pass`. */
+	function around(pass: ExecutorSession['pass'], tools: AgentExecutor['tools'] = []) {
+		const opened: ExecutorActivation[] = [];
+		const passes: Pass[] = [];
+		const steered: number[] = [];
+		const events: ExecutionEvent[] = [];
+		const state = new ActivationState(
+			{
+				open: (activation) => {
+					opened.push(activation);
+					return {
+						pass: (one) => {
+							passes.push(one);
+							return pass(one);
+						},
+						steer: (_after, seq) => void steered.push(seq),
+					};
+				},
+			},
+			{
+				id: 'act-1',
+				room: { view: async () => ({ stale: 'unused' }), commit: async () => said(4) },
+				definition: agent('a', tools),
+				emit: (event) => events.push(event),
+				trace: { record() {} },
+			},
+		);
+		const activation = opened[0];
+		if (activation === undefined) throw new Error('The state opened no session.');
+		return { state, activation, passes, steered, events };
+	}
+
+	it.each([
+		['an error', new Error('lost'), new Error('lost')],
+		['a value that is no error', 'gone', new Error('gone')],
+	])('reports a pass that throws %s as one transient failure', async (_name, thrown, error) => {
+		const { state, events } = around(async () => {
+			throw thrown;
+		});
+		await expect(state.pass(input(respond))).resolves.toEqual({
+			failed: true,
+			cause: 'transient',
+			message: error.message,
+			error,
+		});
+		expect(events).toEqual([
+			{ type: 'error', agent: 'a', activation: 'act-1', error, cause: 'transient' },
+		]);
+	});
+
+	it('refuses a view of another seat, and runs no pass', async () => {
+		const { state, passes, events } = around(async () => ({ failed: false }));
+		const other = { ...respond, spec: { ...respond.spec, seat: 'b' } };
+		await expect(state.pass(input(other))).resolves.toMatchObject({
+			failed: true,
+			cause: 'transient',
+			message: "Activation names another seat: 'b'.",
+		});
+		expect(passes).toEqual([]);
+		expect(events).toHaveLength(1);
+	});
+
+	it('runs no pass and takes no steer once cut, and the session sees the cut', async () => {
+		const { state, activation, passes, steered } = around(async () => ({ failed: false }));
+		state.steer(3, 4, 'first');
+		state.cancel();
+		state.steer(4, 5, 'second');
+		await expect(state.pass(input(respond))).resolves.toEqual({ failed: false });
+		expect(activation.signal.aborted).toBe(true);
+		expect(passes).toEqual([]);
+		expect(steered).toEqual([4]);
+	});
+
+	it('raises the tool events from the steps, and hands an agent tool the view of its pass', async () => {
+		const { state, activation, events } = around(
+			async (pass) => {
+				activation.trace.record({ type: 'tool_call', call: 'c1', name: 'echo', input: {} });
+				const tool = pass.agentTools.find((one) => one.name === 'echo');
+				const call = activation.callId('echo');
+				const result = await tool?.run({}, call);
+				activation.trace.record({ type: 'tool_result', call, output: 'echoed' });
+				expect(call).toBe('c1');
+				expect(result).toEqual({ content: [{ type: 'text', text: 'echoed' }] });
+				return { failed: false };
+			},
+			[echo],
+		);
+		await expect(state.pass(input(respond))).resolves.toEqual({ failed: false });
+		expect(events).toEqual([
+			{ type: 'tool_execution_start', agent: 'a', activation: 'act-1', toolName: 'echo' },
+			{ type: 'tool_execution_end', agent: 'a', activation: 'act-1', toolName: 'echo' },
+		]);
 	});
 });
