@@ -772,13 +772,16 @@ const sql = sqliteBackend('./data/lab.db', {
   REPLACE, and an upsert that changes a row fail. Temporary triggers on
   the one connection hold the rule, and `recursive_triggers` is on, so a
   REPLACE fires the delete trigger.
-- **No statement lifts the guard.** The backend refuses a DROP or an
-  ALTER of an append-only table, a DROP of its triggers, and a PRAGMA of
-  `recursive_triggers`, `writable_schema`, or `query_only`. The flag
-  `query_only` would stop the writes of every agent on the database. The
-  backend reads a name as the SQLite tokenizer does. It refuses a DROP, an
-  ALTER, or a PRAGMA whose target it cannot read, for example one with a
-  comment inside it. The call stops at that statement.
+- **The backend refuses the statements that lift the guard.** It refuses
+  a DROP or an ALTER of an append-only table, a DROP of its triggers, and
+  a PRAGMA of `recursive_triggers`, `writable_schema`, or `query_only`.
+  The flag `query_only` would stop the writes of every agent on the
+  database. The backend reads a name as the SQLite tokenizer does. It
+  refuses a DROP, an ALTER, or a PRAGMA whose target it cannot read, for
+  example one with a comment inside it. The call stops at that statement.
+  A statement outside this list can still lift the guard, for example
+  `PRAGMA temp_store`. [Trust](trust.md) states the limit, and backlog
+  item K2 holds the allow-list that closes it.
 - **The backend also checks the engine.** SQLite changes a flag PRAGMA
   when it compiles the statement, also under `EXPLAIN`. So after each
   compile the backend reads `recursive_triggers`, `writable_schema`, and
