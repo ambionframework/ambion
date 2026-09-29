@@ -25,8 +25,8 @@ its priority.
 
 **0.4.0 is ready to release.** Every item of the plan merged by
 2026-09-29, from #347 to #372. The [changelog](../CHANGELOG.md#040-2026-09-29)
-holds the entry: each export and each journal body that changed, and the
-count of lines that the simplification removes.
+holds the entry: each export and each journal body that changed, and each
+concept that had two paths and has one.
 
 ## Positioning
 
@@ -49,8 +49,8 @@ the reconcile runs `decide` until nothing changes.
 
 **Acceptance.** Each fact of the room has one derivation, each rule one
 home, and each seat one boundary. `pnpm check` passes, the coverage of
-each changed package holds, and the changelog states the measured count
-of lines that the release removes.
+each changed package holds, and the changelog names each second path that
+the release removes.
 
 **Journal bodies.** A cancel entry carries no close, and the room derives
 a cancelled close from it (C3). A composition carries no `version` (C9).

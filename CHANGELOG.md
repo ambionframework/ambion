@@ -3,12 +3,10 @@
 ## 0.4.0 (2026-09-29)
 
 **0.4.0 is a release of simplification.** Each fact of the room has one
-derivation, each rule one home, and each seat one boundary. The core owns
-the state of an activation, one router serves every executor kind, and
-`decide` builds every entry that the room writes. The release also adds
-four capabilities: the post of the host, the `import` of the `sql` tool,
-the fixed skills of each agent, and stable refs to workspace files and
-commits.
+derivation, each rule one home, and each seat one boundary. The release
+also adds four capabilities: the post of the host, the `import` of the
+`sql` tool, the fixed skills of each agent, and stable refs to workspace
+files and commits.
 
 **No journal of 0.3.0 opens on 0.4.0.** The journal carries no format
 number, and the `run` entry of 0.3.0 carries one. The section
@@ -21,23 +19,35 @@ supports no downgrade before 1.0.0.
 `@ambionframework/workspace` adds the `./s3` entry and removes the `./sql`
 entry. Every library package needs Node 22.19 or newer.
 
-### Lines of code
+### What is simpler
 
-**The simplification removes 719 lines of source.** The count covers the
-TypeScript under `packages/*/src` and `examples/*/src`. The four
-capabilities add more source than the simplification removes, so the
-source grows by 2,670 lines.
+**A concept that had two paths has one.** The sections
+[Simplification](#simplification) and [Breaking changes](#breaking-changes)
+hold the detail of each.
 
-| Work                                     | Added | Removed |    Net |
-| ---------------------------------------- | ----: | ------: | -----: |
-| The simplification items, C1 to C12      | 4,299 |   5,018 |   −719 |
-| The capabilities and the other changes   | 4,337 |     948 | +3,389 |
-| Source of the release, 0.3.0 to 0.4.0    | 8,125 |   5,455 | +2,670 |
-| Tests of the release, 0.3.0 to 0.4.0     | 7,477 |   2,720 | +4,757 |
-
-The first two rows sum the commits of each kind of work, so a line that
-two commits change counts in each commit. The last two rows compare the
-tag `v0.3.0` with 0.4.0.
+- **The room state has one derivation.** The projection that a live room
+  advances is the only reader. The fold over the whole journal is a test
+  oracle.
+- **The journal holds five facts.** They are messages, lease changes,
+  closes, cancellations, and compositions. A returned say is a post, and a
+  cancel entry carries no close.
+- **One writer builds every entry.** `decide` builds each entry that the
+  room writes, and one `decideAndAppend` serves the host.
+- **The core owns the state of an activation.** The Pi, Claude, and Codex
+  executors keep their harness alone: the step mapping, the resume, and how
+  they host the tools.
+- **One router serves every executor kind.** An `Execution` replaces the
+  transport and its composers.
+- **The rules read one lease shape.** `RuleLease` replaces four types and
+  their converters.
+- **One classifier names a permanent failure.** It holds the union of the
+  three sets that the executors held.
+- **One rule windows the view.** The room applies the message cap and the
+  token limit, and the runner pages nothing.
+- **One SQL path serves the workspace.** `sqliteBackend` is the only code
+  that opens the database.
+- **The journal carries no format number, and an exchange has no owner.**
+  A body schema refuses each shape that an earlier release wrote.
 
 ### New
 
