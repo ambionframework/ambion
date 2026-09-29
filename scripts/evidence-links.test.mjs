@@ -110,7 +110,7 @@ const problemsOfStep = (phases, phase, n, itemIds) => {
 
 test('a plan step names only open steps and items that the plan holds', () => {
 	const text = readFileSync(join(root, 'planning/next.md'), 'utf8');
-	const [scope, items] = text.split('## The items');
+	const [scope, items = ''] = text.split('## The items');
 	const phases = phasesOf(scope);
 	const itemIds = new Set([...items.matchAll(/^\*\*([A-Z]\d+)\./gm)].map((m) => m[1]));
 	const problems = [...phases].flatMap(([phase, steps]) =>

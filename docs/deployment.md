@@ -2,8 +2,7 @@
 
 **The host supplies execution; Ambion supplies collaboration semantics.**
 Placement, journal persistence, and tool resources are separate decisions.
-[The plan](../planning/next.md#the-scope) defines support targets and
-tracks the evidence still required for release.
+[The plan](../planning/next.md#the-scope) defines the support targets.
 
 ## Deployment models
 
