@@ -196,6 +196,7 @@ function foldOwed(
 	return closes.flatMap((close) => {
 		const completion = summaryCompletion(close, messages, leases, cancelledAt);
 		if (completion.status !== 'pending' || completion.writer === undefined) return [];
+		if (close.summary === undefined) return [];
 		return [withAttempts(close, completion.writer, leases, options)];
 	});
 }

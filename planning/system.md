@@ -1,9 +1,10 @@
-# The system speaks: the design of steps 9 and 10
+# The system speaks: the design of step 10
 
-> **Status: accepted on 2026-09-29.** [next.md](next.md) holds the work
-> as phase 2 steps 9 and 10 (S1 and S2). This page holds the design until
-> step 10 lands, and step 10 removes it. The code references are to `main`
-> at 040bdf4.
+> **Status: accepted on 2026-09-29.** Phase 2 step 9 (S1, the exchange with
+> no owner) landed, and the [changelog](../CHANGELOG.md) records it.
+> [next.md](next.md) holds step 10 (S2, the post). This page holds the
+> design until step 10 lands, and step 10 removes it. The code references
+> are to `main` at 040bdf4.
 
 **The change in five points.**
 

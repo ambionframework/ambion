@@ -90,7 +90,7 @@ describe('the workspace audit log', () => {
 			callAs('scribe', {
 				room: 'lobby',
 				activation: 'message:4:scribe:1',
-				exchange: { owner: 'andrei', from: 4 },
+				exchange: { person: 'andrei', from: 4 },
 			}),
 		);
 		await write.invoke(
@@ -111,7 +111,7 @@ describe('the workspace audit log', () => {
 			tool: 'write',
 			callId: 'call-1',
 			activation: 'message:4:scribe:1',
-			exchange: { owner: 'andrei', from: 4 },
+			exchange: { person: 'andrei', from: 4 },
 			arguments: { path: 'notes.txt', content: 'hello\n' },
 		});
 		expect(full).toHaveProperty('result');

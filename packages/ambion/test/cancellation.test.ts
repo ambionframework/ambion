@@ -113,7 +113,10 @@ describe('durable cancellation', () => {
 		await room.abort();
 		await room.abort();
 		await waitForRoom(room);
-		expect(closedExchange(room, exchange.from)).toMatchObject({ cancelled: true });
+		expect(closedExchange(room, exchange.from)).toMatchObject({
+			cancelled: true,
+			person: person.name,
+		});
 		expect(
 			events.flatMap((event) => (event.type === 'exchange_closed' ? [event.exchange.from] : [])),
 		).toEqual([exchange.from]);

@@ -96,7 +96,7 @@ live('the exchange', () => {
 			expect(opened).toHaveLength(1);
 			expect(closed).toHaveLength(1);
 			expect(closed[0]).toMatchObject({
-				exchange: { owner: andrei.name, through: summary?.covers.through },
+				exchange: { person: andrei.name, through: summary?.covers.through },
 			});
 			// The room went quiet on judgment: three seats, and a bounded number of glances.
 			const glances = ['planner', 'logistics', 'finance'].reduce(

@@ -24,9 +24,9 @@ export interface Instrument {
 const GUIDANCE =
 	'The bench has simulated instruments. Drive one with `operate`. ' +
 	'An operation above the safe limit of an instrument does not run. The tool records a request.' +
-	'Ask the owner of the exchange to allow or deny that request. ' +
-	'When the owner answers, call `approve_operation` with the request id and the decision. ' +
-	'The instrument checks the numeric limit. It does not verify who approved, so relay only the answer of the owner. ' +
+	'Ask the person of the exchange to allow or deny that request. ' +
+	'When that person answers, call `approve_operation` with the request id and the decision. ' +
+	'The instrument checks the numeric limit. It does not verify who approved, so relay only the answer of that person. ' +
 	'Every operation lands in the operations table with its provenance.';
 
 function provenanceOf(ctx: ToolContext): SqlProvenance {
@@ -36,7 +36,10 @@ function provenanceOf(ctx: ToolContext): SqlProvenance {
 		...(ctx.activation === undefined ? {} : { activation: ctx.activation }),
 		...(ctx.exchange === undefined
 			? {}
-			: { exchange_owner: ctx.exchange.owner, exchange_from: String(ctx.exchange.from) }),
+			: {
+					...(ctx.exchange.person === undefined ? {} : { exchange_person: ctx.exchange.person }),
+					exchange_from: String(ctx.exchange.from),
+				}),
 		at: new Date().toISOString(),
 	};
 }
@@ -54,7 +57,7 @@ const operateSchema = Type.Object({
 const approveSchema = Type.Object({
 	id: Type.Number({ description: 'The operation id that `operate` returned.' }),
 	decision: Type.Union([Type.Literal('allow'), Type.Literal('deny')], {
-		description: 'The answer of the exchange owner.',
+		description: 'The answer of the person of the exchange.',
 	}),
 });
 
@@ -85,7 +88,7 @@ export function openInstrument(options: InstrumentOptions): Instrument {
 		name: 'approve_operation',
 		label: 'Approve operation',
 		description:
-			'Record the answer of the exchange owner to a requested operation. Allow runs the operation. Deny refuses it.',
+			'Record the answer of the person of the exchange to a requested operation. Allow runs the operation. Deny refuses it.',
 		parameters: approveSchema,
 		execute: (params, ctx) => {
 			if (!Number.isInteger(params.id) || params.id < 0) {
@@ -120,8 +123,9 @@ function runOperate(
 		);
 		return `Operation ${id} done. ${spec.name} at ${setpoint} ${spec.unit}, reading ${reading} ${spec.unit}.`;
 	}
-	if (!ctx.exchange) {
-		throw new Error('An operation above the limit needs an open exchange and its owner.');
+	const person = ctx.exchange?.person;
+	if (person === undefined) {
+		throw new Error('An operation above the limit needs an open exchange where a person spoke.');
 	}
 	const id = env.insert(
 		'operations',
@@ -131,7 +135,7 @@ function runOperate(
 	return (
 		`Operation ${id} did not run. The setpoint ${setpoint} ${spec.unit} is above the limit ${spec.limit} ${spec.unit} of ${spec.name}. ` +
 		`It exceeds it by ${setpoint - spec.limit} ${spec.unit}. ` +
-		`Ask ${ctx.exchange.owner}, the owner of the exchange, to allow or deny operation ${id}. ` +
+		`Ask ${person}, the person of the exchange, to allow or deny operation ${id}. ` +
 		`Then call approve_operation with id ${id} and the answer.`
 	);
 }

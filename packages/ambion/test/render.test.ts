@@ -102,7 +102,6 @@ describe('one line of the record', () => {
 			to: 'worker',
 			text: 'Check the build.',
 			after: 600,
-			owner: 'priya',
 		};
 		const returns = new Date(Date.parse(at) + 600_000).toISOString();
 		expect(renderLine(later)).toBe(`#3 [worker → worker] Check the build. (returns at ${returns})`);
@@ -112,12 +111,11 @@ describe('one line of the record', () => {
 			at,
 			to: 'worker',
 			message: 3,
-			owner: 'priya',
 			text: 'Check the build.',
 			refs: ['file:///out.log'],
 		};
 		expect(renderLine(returned)).toBe(
-			'#9 [returned → worker, for priya] Check the build. (refs: file:///out.log)',
+			'#9 [returned → worker] Check the build. (refs: file:///out.log)',
 		);
 	});
 
@@ -177,7 +175,7 @@ describe('the URIs a prompt states', () => {
 			through: 4,
 			context: {
 				...context,
-				exchange: { owner: 'priya', from: 4 },
+				exchange: { person: 'priya', from: 4 },
 			},
 		};
 		const rendered = renderActivation(view, worker);
@@ -198,21 +196,25 @@ describe('the URIs a prompt states', () => {
 			at,
 			to: 'worker',
 			message: 2,
-			owner: 'priya',
 			text: 'Check the build.',
 		};
 		const view: ActivationView = {
 			spec: { ...spec, purpose: { kind: 'respond', message: 4 } },
 			through: 4,
-			context: { ...context, messages: [returned], exchange: { owner: 'priya', from: 4 } },
+			context: { ...context, messages: [returned], exchange: { from: 4 } },
 		};
-		const later = { seq: 6, seat: 'worker', owner: 'priya', due: at, text: 'Check again.' };
+		const later = { seq: 6, seat: 'worker', due: at, text: 'Check again.' };
 		const rendered = renderActivation(
 			{ ...view, context: { ...view.context, scheduled: [later] } },
 			worker,
 		).context;
 		expect(rendered).toContain(
-			'Message 4 is a say you scheduled, and the room returned it: do its work for priya.',
+			'Exchange 4 is active: message 4 is a say you scheduled, and the room returned it.',
+		);
+		expect(rendered).not.toContain('human direction');
+		// Another seat in the exchange reads whose say it is.
+		expect(renderActivation(view, scriptedAgent('reviewer')).context).toContain(
+			'message 4 is a say worker scheduled',
 		);
 		expect(rendered).toContain(
 			`Your scheduled messages. The room wakes you with each one at its due time. Call \`dismiss\` with the seq of one that no longer fits:\n- #6, due ${at}: Check again.`,

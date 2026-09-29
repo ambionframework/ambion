@@ -9,7 +9,7 @@ export interface CallEnvelope {
 	readonly agent: string;
 	readonly room?: string;
 	readonly activation?: string;
-	readonly exchange?: { readonly owner: string; readonly from: number };
+	readonly exchange?: { readonly person?: string; readonly from: number };
 }
 
 /** The envelope of the call that `ctx` describes. */

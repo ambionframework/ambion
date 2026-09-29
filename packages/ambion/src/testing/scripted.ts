@@ -258,9 +258,7 @@ class ScriptedSession implements ExecutorSession {
 			callId: `${this.activation.id}/${this.results.length}`,
 			room: this.view?.context.name ?? '',
 			activation: this.activation.id,
-			...(exchange === undefined
-				? {}
-				: { exchange: { owner: exchange.owner, from: exchange.from } }),
+			...(exchange === undefined ? {} : { exchange: { ...exchange } }),
 		});
 		emit('tool_execution_start');
 		try {

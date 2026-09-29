@@ -28,18 +28,32 @@ export interface Fence {
 }
 
 /** The room went quiet with an exchange open, and closed it. */
-export interface Close {
-	owner: string;
+export type Close = CloseRange & (OwedSummary | NoSummary);
+
+/** What every close holds. */
+interface CloseRange {
 	from: Seq;
 	through: Seq;
 	at: string;
-	/** The configured seated agent that writes a summary, when one is owed. */
-	summary?: string;
 	/**
 	 * A cancellation closed the exchange. A close entry never carries it: the
 	 * room derives this close from the `cancel` entry. See `room/fold.ts`.
 	 */
 	cancelled?: true;
+}
+
+/** A close that owes a summary names its writer and the person it goes to. */
+interface OwedSummary {
+	/** The configured seated agent that writes the summary. */
+	summary: string;
+	/** The first person who spoke in the range. */
+	person: string;
+}
+
+/** A close that owes no summary. It names a person when one spoke in the range. */
+interface NoSummary {
+	summary?: undefined;
+	person?: string;
 }
 
 /** A room-wide cancellation marker. It closes the open exchange, when there is one. */

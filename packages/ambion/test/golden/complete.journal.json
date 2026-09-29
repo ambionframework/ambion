@@ -118,7 +118,7 @@
 	{
 		"kind": "close",
 		"body": {
-			"owner": "priya",
+			"person": "priya",
 			"from": 4,
 			"through": 6,
 			"at": "2026-01-01T09:00:00.000Z",

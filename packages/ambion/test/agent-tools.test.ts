@@ -153,7 +153,7 @@ describe('the definition of agent tools', () => {
 				expectTypeOf(context.callId).toEqualTypeOf<string>();
 				expectTypeOf(context.activation).toEqualTypeOf<string | undefined>();
 				expectTypeOf(context.exchange?.from).toEqualTypeOf<number | undefined>();
-				expectTypeOf(context.exchange?.owner).toEqualTypeOf<string | undefined>();
+				expectTypeOf(context.exchange?.person).toEqualTypeOf<string | undefined>();
 				return name;
 			},
 		});
@@ -301,7 +301,7 @@ describe('a running tool', () => {
 			expect(ctx).toMatchObject({
 				room: room.name,
 				activation,
-				exchange: { owner: 'andrei', from: question?.seq },
+				exchange: { person: 'andrei', from: question?.seq },
 				agent: { name: 'worker', identity: 'Worker.' },
 			});
 			expect(ctx.signal).toBeInstanceOf(AbortSignal);

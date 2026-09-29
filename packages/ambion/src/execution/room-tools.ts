@@ -164,9 +164,7 @@ export function toolContext(
 		...(onUpdate === undefined ? {} : { onUpdate }),
 		room: view.context.name,
 		activation: view.spec.id,
-		...(exchange === undefined
-			? {}
-			: { exchange: Object.freeze({ owner: exchange.owner, from: exchange.from }) }),
+		...(exchange === undefined ? {} : { exchange: Object.freeze({ ...exchange }) }),
 		...(view.deadline === undefined ? {} : { deadline: view.deadline }),
 	});
 }

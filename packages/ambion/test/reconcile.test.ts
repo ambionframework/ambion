@@ -46,7 +46,7 @@ const lease = (body: LeaseChange, seq = sourcePosition(body.id)): Entry => ({
 });
 const close = (body: Omit<Close, 'at'>, seq = body.through): Entry => ({
 	kind: 'close',
-	body: { ...body, at },
+	body: { ...body, at } as Close,
 	seq,
 });
 const released = (id: string, readThrough = 3) =>
@@ -64,7 +64,7 @@ const answered = () => [
 	arrived(),
 	said(),
 	released('message:3:product:1'),
-	close({ owner: 'priya', from: 3, through: 3, summary: 'writer' }),
+	close({ person: 'priya', from: 3, through: 3, summary: 'writer' }),
 ];
 const fold = (entries: Entry[]): RoomState => replayState(entries, retry);
 const options = (over: Partial<ReconcileOptions> = {}): ReconcileOptions => ({
@@ -88,22 +88,18 @@ describe('room reconciliation', () => {
 		expect(result.close).toBeUndefined();
 	});
 
-	it('closes a quiet human exchange and assigns its seated writer, unless the owner is absent or the writer is unseated', () => {
+	it('closes a quiet human exchange and assigns its seated writer, unless the writer is unseated or no person spoke', () => {
 		/** The close the pass asks for, as the write decides it. */
 		const closed = (state: RoomState) => {
 			const close = planReconciliation(state, options()).close;
 			return close === undefined ? undefined : decide(state, { type: 'close', ...close }, T0);
 		};
 		const quiet = [composition(), arrived(), said(), released('message:3:product:1')];
-		expect(planReconciliation(fold(quiet), options()).close).toEqual({
-			owner: 'priya',
-			from: 3,
-			through: 3,
-		});
+		expect(planReconciliation(fold(quiet), options()).close).toEqual({ from: 3, through: 3 });
 		expect(closed(fold(quiet))).toEqual({
 			event: {
 				kind: 'close',
-				body: { owner: 'priya', from: 3, through: 3, at, summary: 'writer' },
+				body: { person: 'priya', from: 3, through: 3, at, summary: 'writer' },
 			},
 		});
 
@@ -116,8 +112,18 @@ describe('room reconciliation', () => {
 
 		const writerLeft = fold([...quiet.slice(0, 3), unseated(4), quiet[3] as Entry]);
 		expect(closed(writerLeft)).toEqual({
-			event: { kind: 'close', body: { owner: 'priya', from: 3, through: 4, at } },
+			event: { kind: 'close', body: { person: 'priya', from: 3, through: 4, at } },
 		});
+
+		// A returned say that no person answers closes with no person and owes no summary.
+		const returned: Entry = {
+			kind: 'message',
+			seq: 3,
+			body: { kind: 'returned', at, to: 'product', message: 2, text: 'Check the build.' },
+		};
+		const tick = fold([composition(), arrived(), returned, released('message:3:product:1')]);
+		expect(tick.exchange).toEqual({ from: 3, at });
+		expect(closed(tick)).toEqual({ event: { kind: 'close', body: { from: 3, through: 3, at } } });
 	});
 
 	it('holds an exchange while an ordinary wake or lease is live, but not for summary work', () => {

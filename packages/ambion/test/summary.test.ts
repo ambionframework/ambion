@@ -748,7 +748,7 @@ describe('an exchange', () => {
 		// a second message into an open exchange steers it and changes nothing
 		await visit.send({ text: 'first' });
 		const owner = await currentExchange(session);
-		expect(owner?.owner).toBe('priya');
+		expect(owner?.person).toBe('priya');
 		await visit.send({ text: 'second' });
 		expect(await currentExchange(session)).toEqual(owner);
 		await waitForRoom(session);
@@ -757,10 +757,10 @@ describe('an exchange', () => {
 		const record = await messagesOf(session);
 		const question = record.find((m) => isSpoken(m) && m.from === 'priya');
 		expect(of('exchange_opened')).toMatchObject([
-			{ exchange: { owner: 'priya', from: question?.seq } },
+			{ exchange: { person: 'priya', from: question?.seq } },
 		]);
 		expect(of('exchange_closed')).toMatchObject([
-			{ exchange: { owner: 'priya', from: question?.seq, through: record.at(-1)?.seq } },
+			{ exchange: { person: 'priya', from: question?.seq, through: record.at(-1)?.seq } },
 		]);
 		// the assistant is not scripted here, so it reads and stays quiet
 		expect(summaries(record)).toHaveLength(0);
@@ -867,7 +867,7 @@ describe('an exchange', () => {
 		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
 		const conversation = await exchange.waitForClose();
 		expect(closedExchange(session, exchange.from)).toMatchObject({
-			owner: priya.name,
+			person: priya.name,
 			from: exchange.from,
 		});
 		expect(conversation.every((message) => message.kind !== 'summary')).toBe(true);
@@ -1147,6 +1147,9 @@ describe('a summary for each person who spoke', () => {
 		if (exchange?.status !== 'closed') throw new Error('Expected a closed exchange.');
 		expect(exchange.summary).toMatchObject({ status: 'published', summary: { to: 'priya' } });
 		expect(exchange.summaries?.map((s) => s.to)).toEqual(['priya', 'sam']);
+		// The first recipient is the person of the close: the first person who spoke.
+		expect(exchange.person).toBe('priya');
+		expect(exchange.summaries?.[0]?.to).toBe(exchange.person);
 		// A live read shares no value with the room, so a change to one read reaches no later read.
 		const [changed] = (await session.read()).exchanges;
 		if (changed?.status === 'closed' && changed.summary.status === 'published')

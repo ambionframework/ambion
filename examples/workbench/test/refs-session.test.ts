@@ -16,7 +16,7 @@ const exchange = {
 	from: 1,
 	through: 3,
 	status: 'closed',
-	owner: 'mira',
+	person: 'mira',
 	at: AT,
 	outcome: { kind: 'complete' },
 	summary: { status: 'silent' },

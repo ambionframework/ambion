@@ -10,7 +10,7 @@
 
 import type { Close } from '../journal/events.ts';
 import type { Message, Seq } from '../types.ts';
-import { draftsOf, summaryCompletion } from './exchange.ts';
+import { draftsOf, type SummaryClose, summaryCompletion } from './exchange.ts';
 import {
 	type LeaseHold,
 	type PendingActivation,
@@ -40,10 +40,10 @@ export interface OwedFacts {
 }
 
 /** The close that an owed summary answers, as `summaryCompletion` reads it. */
-type OwedClose = Pick<Close, 'owner' | 'from' | 'through' | 'summary'>;
+type OwedClose = SummaryClose;
 
 const closeOf = (owed: Owed): OwedClose => ({
-	owner: owed.person,
+	person: owed.person,
 	from: owed.from,
 	through: owed.position,
 	summary: owed.seat,
@@ -58,6 +58,8 @@ export function judgeOwed(
 	const leases = facts.closedLeases.get(close.through) ?? new Map<string, LeaseHold>();
 	const completion = summaryCompletion(close, facts.record, leases, facts.cancelledAt);
 	if (completion.status !== 'pending' || completion.writer === undefined) return undefined;
+	// A writer owes a draft only over a close that names its person.
+	if (close.summary === undefined) return undefined;
 	return withAttempts(close, completion.writer, leases, options);
 }
 
@@ -82,7 +84,7 @@ export function rejudgeOwed(
  * down, so an ended draft failed or expired.
  */
 export function withAttempts(
-	close: Pick<Close, 'owner' | 'from' | 'through'>,
+	close: Pick<Close, 'from' | 'through'> & { readonly person: string },
 	writer: string,
 	leases: ReadonlyMap<string, LeaseHold>,
 	options: PendingActivationOptions,
@@ -91,7 +93,7 @@ export function withAttempts(
 		countsAgainst(lease, close.through),
 	);
 	return {
-		person: close.owner,
+		person: close.person,
 		from: close.from,
 		...pendingActivation('closed', close.through, writer, failed, options),
 	};

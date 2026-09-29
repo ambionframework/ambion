@@ -35,7 +35,7 @@ export const PROVENANCE_COLUMNS = [
 	'agent',
 	'room',
 	'activation',
-	'exchange_owner',
+	'exchange_person',
 	'exchange_from',
 	'at',
 ] as const;
@@ -221,7 +221,10 @@ function provenanceOf(ctx: ToolContext): SqlProvenance {
 		...placed,
 		...(exchange === undefined
 			? {}
-			: { exchange_owner: exchange.owner, exchange_from: String(exchange.from) }),
+			: {
+					...(exchange.person === undefined ? {} : { exchange_person: exchange.person }),
+					exchange_from: String(exchange.from),
+				}),
 		at: new Date().toISOString(),
 	};
 }

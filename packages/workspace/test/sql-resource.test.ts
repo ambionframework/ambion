@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS runs (
 	agent TEXT,
 	room TEXT,
 	activation TEXT,
-	exchange_owner TEXT,
+	exchange_person TEXT,
 	exchange_from TEXT,
 	at TEXT
 );
@@ -27,7 +27,7 @@ const context: ToolContext = {
 	callId: 'call-1',
 	room: 'bringup',
 	activation: 'act-7',
-	exchange: { owner: 'mira', from: 3 },
+	exchange: { person: 'mira', from: 3 },
 };
 
 const directories: string[] = [];
@@ -81,7 +81,7 @@ describe('the SQL resource', () => {
 			agent: 'design',
 			room: 'bringup',
 			activation: 'act-7',
-			exchange_owner: 'mira',
+			exchange_person: 'mira',
 			exchange_from: '3',
 		});
 		expect(Date.parse(String(rows[0]?.at))).not.toBeNaN();

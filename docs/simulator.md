@@ -314,8 +314,8 @@ passes. The room records no tool call of the person, so a check reads
 `run.moves[].calls`.
 
 **A question to the person is in the discussion, and the brief decides
-the answer.** The person owns every exchange that the actor opens. A
-message to the owner answers the owner's question, so the exchange closes
+the answer.** The actor opens every exchange with its question. A message
+to the author of the opening message answers the question, so the exchange closes
 as `complete` ([Exchange](exchange.md#7-the-edges-a-host-sees)). The
 outcome `awaiting` never names the actor. The actor reads the question in
 the discussion, and its next move answers it or stops.
