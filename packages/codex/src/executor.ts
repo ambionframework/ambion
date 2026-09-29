@@ -135,7 +135,7 @@ class Activation implements ExecutorSession {
 	/** Whether Codex reported `thread.started` for the thread in use. */
 	private heard = false;
 	private client: CodexClientLike | undefined;
-	private readonly steps = new CodexSteps();
+	private readonly steps: CodexSteps;
 	/** Aborts the turn in flight. A turn that ended holds none, so a late cut never signals a dead process. */
 	private turn: AbortController | undefined;
 	/** The range of the record the turn in flight reads. The core counts it read when the turn starts. */
@@ -154,6 +154,7 @@ class Activation implements ExecutorSession {
 
 	constructor(activation: ExecutorActivation, options: CodexExecutorOptions) {
 		this.activation = activation;
+		this.steps = new CodexSteps(activation.id);
 		this.definition = options.definition;
 		this.options = options;
 		activation.signal.addEventListener('abort', () => this.abort(), { once: true });

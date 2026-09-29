@@ -193,6 +193,16 @@ its `text`.
   blocks of a summarised range move to `record.ts`, where the room and the
   renderer read them. See [History and limits](docs/room.md#history-and-limits).
 
+### Fixes
+
+- **A Codex seat lands a say in each activation.** A real `codex` numbers
+  the items of each turn from `item_0`, and a room tool took the item id as
+  the key of its commit. The say of a later activation then had the key of
+  an earlier say. The room gave back the earlier message, or refused the
+  say as a key conflict. The id of a Codex step now holds the activation
+  id, the number of the turn, and the item id. A tool call in a later pass
+  of one activation also gets its own `tool_call` step and its tool events.
+
 ### Breaking changes
 
 - **One classifier names a permanent failure.** `classifyCause({ text,

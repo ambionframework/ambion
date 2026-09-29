@@ -104,15 +104,39 @@ export function usageOf(usage: {
 	};
 }
 
-/** Turns thread events into the steps they stand for. One instance serves one activation. */
+/**
+ * Turns thread events into the steps they stand for. One instance serves one
+ * activation.
+ *
+ * A real `codex` numbers the items of each turn from `item_0`, so an item id
+ * is unique only inside one turn. The id of a step is the scope, the number
+ * of the turn, and the item id. A room tool takes that id as the key of its
+ * commit, and the room keeps one message for each key.
+ */
 export class CodexSteps {
-	/** How much of each text item the steps already hold, by item id. */
+	/** What makes an id unique in the room: the id of the activation. */
+	private readonly scope: string;
+	/** The number of the turn in flight. It moves on each `turn.started`. */
+	private turn = 0;
+	/** How much of each text item the steps already hold, by step id. */
 	private readonly sent = new Map<string, number>();
-	/** Tool calls seen, by id, so a completed item adds no second call step. */
+	/** Tool calls seen, by step id, so a completed item adds no second call step. */
 	private readonly seen = new Set<string>();
+
+	constructor(scope: string) {
+		this.scope = scope;
+	}
+
+	/** The id of the steps of an item in the turn in flight. */
+	private idOf(item: ThreadItem): string {
+		return `${this.scope}:${this.turn}:${item.id}`;
+	}
 
 	steps(event: ThreadEvent): Step[] {
 		switch (event.type) {
+			case 'turn.started':
+				this.turn += 1;
+				return [];
 			case 'item.started':
 			case 'item.updated':
 				return this.item(event.item, false);
@@ -126,8 +150,8 @@ export class CodexSteps {
 	}
 
 	private item(item: ThreadItem, done: boolean): Step[] {
-		if (item.type === 'agent_message') return this.grown(item.id, 'text', item.text, done);
-		if (item.type === 'reasoning') return this.grown(item.id, 'thinking', item.text, done);
+		if (item.type === 'agent_message') return this.grown(this.idOf(item), 'text', item.text, done);
+		if (item.type === 'reasoning') return this.grown(this.idOf(item), 'thinking', item.text, done);
 		return isTool(item) ? this.tool(item, done) : [];
 	}
 
@@ -149,15 +173,16 @@ export class CodexSteps {
 
 	private tool(item: ThreadItem, done: boolean): Step[] {
 		const steps: Step[] = [];
-		if (!this.seen.has(item.id)) {
-			this.seen.add(item.id);
-			steps.push({ type: 'tool_call', call: item.id, name: nameOf(item), input: inputOf(item) });
+		const call = this.idOf(item);
+		if (!this.seen.has(call)) {
+			this.seen.add(call);
+			steps.push({ type: 'tool_call', call, name: nameOf(item), input: inputOf(item) });
 		}
 		if (done) {
 			const { output, error } = outcomeOf(item);
 			steps.push({
 				type: 'tool_result',
-				call: item.id,
+				call,
 				output,
 				...(error === undefined ? {} : { error }),
 			});

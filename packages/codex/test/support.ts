@@ -4,6 +4,7 @@
  * a client of the room tools server.
  */
 import { readFileSync } from 'node:fs';
+import { connect as connectSocket } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { defineAgent, type Step } from '@ambionframework/ambion';
 import type {
@@ -26,8 +27,10 @@ import type {
 import { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { type Bridge, startBridge } from '../src/bridge.ts';
 import type { CatalogEntry, CatalogSource } from '../src/catalog.ts';
+import { ROOM_SERVER } from '../src/codex-trace.ts';
 import { type CodexOptions, codex, createCodexExecutor } from '../src/index.ts';
 import { citing, type RoomTool, servedTools } from '../src/tools.ts';
+import { frame, type Reply, receive } from '../src/wire.ts';
 
 /** The catalog entries that a real `codex` 0.155.1 printed, for `gpt-5.6-luna` and `gpt-5.5`. */
 export const catalogFixture = JSON.parse(
@@ -126,20 +129,86 @@ interface Replayed {
 	readonly threads: ThreadOptions[];
 }
 
+/** A turn that plays live: it reaches the room tools through the socket of the client that runs it. */
+export type LiveTurn = (socketPath: string) => AsyncIterable<ThreadEvent>;
+
+/** One turn of a replay: recorded events, a failure before any event, or a live turn. */
+export type Turn = readonly ThreadEvent[] | Error | LiveTurn;
+
+/** The socket path that the options of a client hand the room tools server. */
+function socketOf(options: SdkClientOptions): string {
+	const config = options.config as { mcp_servers: Record<string, { args: string[] }> };
+	const path = config.mcp_servers[ROOM_SERVER]?.args[1];
+	if (path === undefined) throw new Error('The client has no room tools server.');
+	return path;
+}
+
+/** Call one room tool over the socket, as the room tools server does, and give back the reply. */
+export async function callOver(socketPath: string, tool: string, args: unknown): Promise<Reply> {
+	const socket = connectSocket(socketPath);
+	try {
+		return await new Promise<Reply>((resolve, reject) => {
+			socket.once('error', reject);
+			receive(socket, (message) => resolve(message as Reply));
+			socket.write(frame({ id: 1, kind: 'call', tool, args }));
+		});
+	} finally {
+		socket.destroy();
+	}
+}
+
+/**
+ * A live turn that says `text` through the room tools, as a real `codex`
+ * reports it: the call item starts, the tool runs, and the item completes.
+ * A real `codex` numbers the items of each turn from `item_0`, so every
+ * turn of this kind names its say `item_1`.
+ */
+export function sayingTurn(text: string, thread = 'thread-1'): LiveTurn {
+	return async function* (socketPath): AsyncGenerator<ThreadEvent> {
+		const item = {
+			id: 'item_1',
+			type: 'mcp_tool_call' as const,
+			server: ROOM_SERVER,
+			tool: 'say',
+			arguments: { text },
+		};
+		yield { type: 'thread.started', thread_id: thread };
+		yield { type: 'turn.started' };
+		yield { type: 'item.started', item: { ...item, status: 'in_progress' } };
+		const reply = await callOver(socketPath, 'say', { text });
+		const result = 'result' in reply ? reply.result : { content: [] };
+		yield {
+			type: 'item.completed',
+			item: { ...item, status: 'completed', result: { ...result, structured_content: null } },
+		};
+		yield {
+			type: 'turn.completed',
+			usage: {
+				input_tokens: 1,
+				cached_input_tokens: 0,
+				cache_write_input_tokens: 0,
+				output_tokens: 1,
+				reasoning_output_tokens: 0,
+			},
+		};
+	};
+}
+
 /**
  * A client whose threads replay recorded events. Turn `n` of the run plays
  * `turns[n]`. A turn that is an `Error` makes the run reject, as the SDK does
  * when the `codex` process exits before it says anything.
  */
-function replay(turns: readonly (readonly ThreadEvent[] | Error)[]) {
+function replay(turns: readonly Turn[]) {
 	const seen: Replayed = { opened: [], prompts: [], clients: [], threads: [] };
 	let next = 0;
-	const thread = () => ({
+	const thread = (options: SdkClientOptions) => ({
 		runStreamed: async (prompt: string) => {
 			seen.prompts.push(prompt);
 			const turn = turns[next++];
 			if (turn === undefined) throw new Error('The replay has no turn left.');
 			if (turn instanceof Error) throw turn;
+			if (typeof turn === 'function') return { events: turn(socketOf(options)) };
 			return {
 				events: (async function* () {
 					yield* turn;
@@ -153,12 +222,12 @@ function replay(turns: readonly (readonly ThreadEvent[] | Error)[]) {
 			startThread: (threadOptions?: ThreadOptions) => {
 				seen.opened.push({ resume: undefined });
 				if (threadOptions) seen.threads.push(threadOptions);
-				return thread();
+				return thread(options);
 			},
 			resumeThread: (id: string, threadOptions?: ThreadOptions) => {
 				seen.opened.push({ resume: id });
 				if (threadOptions) seen.threads.push(threadOptions);
-				return thread();
+				return thread(options);
 			},
 		};
 	};
@@ -167,7 +236,7 @@ function replay(turns: readonly (readonly ThreadEvent[] | Error)[]) {
 
 /** An executor of `definition` over a replay client, and a way to open its activations. */
 export function open(
-	turns: readonly (readonly ThreadEvent[] | Error)[],
+	turns: readonly Turn[],
 	definition: AgentDefinition = seat(),
 	answer: (request: CommitRequest) => CommitResult = lands,
 	catalog: CatalogSource = recordedCatalog,

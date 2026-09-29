@@ -12,7 +12,7 @@ import { recorded } from './fixtures.ts';
 const RUNS = ['plain-answer', 'shell-command', 'file-change'] as const;
 
 function stepsOf(events: readonly ThreadEvent[]): Step[] {
-	const steps = new CodexSteps();
+	const steps = new CodexSteps('a');
 	return events.flatMap((event) => steps.steps(event));
 }
 
@@ -39,11 +39,15 @@ it('gives a call when a shell command starts, a result when it ends, and the usa
 	expect(stepsOf(recorded('shell-command'))).toEqual([
 		{
 			type: 'tool_call',
-			call: 'item_0',
+			call: 'a:1:item_0',
 			name: 'command',
 			input: { command: "/bin/zsh -lc 'echo hello-from-codex'" },
 		},
-		{ type: 'tool_result', call: 'item_0', output: { output: 'hello-from-codex\n', exitCode: 0 } },
+		{
+			type: 'tool_result',
+			call: 'a:1:item_0',
+			output: { output: 'hello-from-codex\n', exitCode: 0 },
+		},
 		{ type: 'text', text: 'It printed `hello-from-codex`.', final: true },
 		{ type: 'usage', input: 6, output: 80, cacheRead: 12399, cacheWrite: 12495 },
 	]);
@@ -58,8 +62,8 @@ describe('a file change', () => {
 		expect(
 			steps.filter((step) => step.type === 'tool_call' || step.type === 'tool_result'),
 		).toEqual([
-			{ type: 'tool_call', call: 'item_1', name: 'file_change', input: { changes } },
-			{ type: 'tool_result', call: 'item_1', output: changes },
+			{ type: 'tool_call', call: 'a:1:item_1', name: 'file_change', input: { changes } },
+			{ type: 'tool_result', call: 'a:1:item_1', output: changes },
 		]);
 	});
 

@@ -9,11 +9,14 @@ const started = (item: ThreadItem): ThreadEvent => ({ type: 'item.started', item
 const updated = (item: ThreadItem): ThreadEvent => ({ type: 'item.updated', item });
 const completed = (item: ThreadItem): ThreadEvent => ({ type: 'item.completed', item });
 
-/** Every step of a list of events, in order. */
+/** Every step of a list of events of the activation `a`, in order. */
 function stepsOf(...events: ThreadEvent[]): Step[] {
-	const steps = new CodexSteps();
+	const steps = new CodexSteps('a');
 	return events.flatMap((event) => steps.steps(event));
 }
+
+/** The id of the steps of item `id` in turn `turn` of the activation `a`. */
+const idOf = (id: string, turn = 0) => `a:${turn}:${id}`;
 
 describe('text and thinking', () => {
 	it('sends the growth of a message as deltas, then a closing step, and a message that arrives whole as one closing step', () => {
@@ -63,8 +66,8 @@ describe('tools', () => {
 				completed({ ...command, aggregated_output: 'a.txt', exit_code: 0, status: 'completed' }),
 			),
 		).toEqual([
-			{ type: 'tool_call', call: 'c1', name: 'command', input: { command: 'ls' } },
-			{ type: 'tool_result', call: 'c1', output: { output: 'a.txt', exitCode: 0 } },
+			{ type: 'tool_call', call: idOf('c1'), name: 'command', input: { command: 'ls' } },
+			{ type: 'tool_result', call: idOf('c1'), output: { output: 'a.txt', exitCode: 0 } },
 		]);
 	});
 
@@ -80,8 +83,8 @@ describe('tools', () => {
 			}),
 		);
 		expect(steps).toMatchObject([
-			{ type: 'tool_call', call: 'c1' },
-			{ type: 'tool_result', call: 'c1', error: 'The command failed with exit code 1.' },
+			{ type: 'tool_call', call: idOf('c1') },
+			{ type: 'tool_result', call: idOf('c1'), error: 'The command failed with exit code 1.' },
 		]);
 	});
 
@@ -90,8 +93,8 @@ describe('tools', () => {
 		expect(
 			stepsOf(completed({ id: 'f1', type: 'file_change', changes, status: 'completed' })),
 		).toEqual([
-			{ type: 'tool_call', call: 'f1', name: 'file_change', input: { changes } },
-			{ type: 'tool_result', call: 'f1', output: changes },
+			{ type: 'tool_call', call: idOf('f1'), name: 'file_change', input: { changes } },
+			{ type: 'tool_result', call: idOf('f1'), output: changes },
 		]);
 	});
 
@@ -103,7 +106,7 @@ describe('tools', () => {
 			),
 		).toMatchObject([
 			{ type: 'tool_call', name: 'web_search', input: { query: 'pour schedule' } },
-			{ type: 'tool_result', call: 'w1' },
+			{ type: 'tool_result', call: idOf('w1') },
 		]);
 	});
 
@@ -127,7 +130,7 @@ describe('tools', () => {
 	});
 
 	it('shows a room tool by its plain name', () => {
-		const steps = new CodexSteps();
+		const steps = new CodexSteps('a');
 		const call = {
 			id: 's1',
 			type: 'mcp_tool_call' as const,
@@ -139,6 +142,20 @@ describe('tools', () => {
 			{ type: 'tool_call', name: 'say' },
 		]);
 	});
+});
+
+it('gives each turn its own ids, though codex numbers the items of each turn again', () => {
+	const say = { id: 'item_1', type: 'mcp_tool_call' as const, server: 'ambion', tool: 'say' };
+	const turn = (text: string): ThreadEvent[] => [
+		{ type: 'turn.started' },
+		started({ ...say, arguments: { text }, status: 'in_progress' }),
+		completed({ ...say, arguments: { text }, status: 'completed' }),
+	];
+	const steps = stepsOf(...turn('One.'), ...turn('Two.'));
+	expect(steps.flatMap((step) => (step.type === 'tool_call' ? [step.call] : []))).toEqual([
+		idOf('item_1', 1),
+		idOf('item_1', 2),
+	]);
 });
 
 describe('usage and paths', () => {
