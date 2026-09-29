@@ -7,9 +7,11 @@
  * `wait` with their handles until both end.
  */
 
+import type { TraceRecord } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
 import {
 	agent,
+	HARNESS,
 	invariants,
 	live,
 	open,
@@ -20,16 +22,30 @@ import {
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
 import { memoryBackend } from '../../../just-bash/src/index.ts';
-import { type AuditEntry, BACKGROUND_CONTEXT, openWorkspace } from '../../src/index.ts';
+import { BACKGROUND_CONTEXT, openWorkspace } from '../../src/index.ts';
 import { sqliteBackend } from '../../src/sqlite-entry.ts';
 
-/** The entries of the audit log at its default path, oldest first. */
-async function auditOf(backend: ReturnType<typeof memoryBackend>): Promise<AuditEntry[]> {
-	const log = (await backend.readFiles()).find((file) => file.path === '/workspace/audit.jsonl');
-	return (log?.text ?? '')
-		.split('\n')
-		.filter((line) => line.trim() !== '')
-		.map((line) => JSON.parse(line) as AuditEntry);
+/** One call of a tool, as the trace holds it: the arguments the model sent, and the error it read. */
+interface TracedCall {
+	readonly input: unknown;
+	readonly error: string | undefined;
+}
+
+/**
+ * Every call of one tool by one seat, from the trace steps. The trace holds
+ * the calls that the harness refused before the tool ran: Pi and the Claude
+ * Agent SDK check the schema first, and each gives a `tool_call` step and a
+ * `tool_result` step with an error. On Codex every call reaches the room
+ * tools server, and `defineTool` refuses it with the same pair of steps.
+ */
+function callsOf(records: readonly TraceRecord[], seat: string, tool: string): TracedCall[] {
+	const steps = records.filter((record) => record.seat === seat).map((record) => record.step);
+	return steps.flatMap((step) => {
+		if (step.type !== 'tool_call' || step.name !== tool) return [];
+		const result = steps.find((other) => other.type === 'tool_result' && other.call === step.call);
+		const error = result?.type === 'tool_result' ? result.error : 'The call has no result.';
+		return [{ input: step.input, error }];
+	});
 }
 
 live('the workspace', () => {
@@ -122,11 +138,9 @@ live('the workspace', () => {
 	});
 
 	it('a seat starts two processes, waits for them with wait and their handles, and answers from their output', async () => {
-		const backend = memoryBackend();
 		const store = openWorkspace({
 			name: roomName('live-wait'),
-			backend: { bash: backend },
-			audit: {},
+			backend: { bash: memoryBackend() },
 		});
 		const runner = agent('runner', {
 			identity: 'Runs the two checks.',
@@ -140,24 +154,26 @@ live('the workspace', () => {
 			`,
 			bundles: [store.tools()],
 		});
-		const { session, events } = await open('workspace', { agents: [runner] });
+		const { session, events, records } = await open('workspace', { agents: [runner] });
 		const visit = await enter(session, person);
 		const exchange = await visit.send({ text: 'Run the two checks and tell me what they print.' });
 		await exchange.waitForSummary();
 
-		const waits = (await auditOf(backend)).filter((entry) => entry.tool === 'wait');
-		const started = events.filter(
-			(e) => e.type === 'tool_execution_start' && e.agent === 'runner' && e.toolName === 'wait',
-		);
+		// The trace holds every call of `wait`, and a call that the schema refused too.
+		const waits = callsOf(records, 'runner', 'wait');
+		const failed = waits.filter((call) => call.error !== undefined);
 		process.stdout.write(
-			`live · wait: ${started.length} calls started, ${waits.length} reached the tool: ${JSON.stringify(waits.map((entry) => entry.arguments))}\n`,
+			`live · wait on ${HARNESS}: ${waits.length} calls, ${failed.length} failed: ` +
+				`${JSON.stringify(waits)}\n`,
 		);
-		// Each call reached the tool with a list of handles, and none failed.
 		expect(waits.length).toBeGreaterThanOrEqual(1);
-		for (const entry of waits) {
-			expect(entry.arguments).toMatchObject({ handles: expect.any(Array) });
-			expect(entry.error).toBeUndefined();
+		for (const call of waits) {
+			expect(call.input).toMatchObject({ handles: expect.any(Array) });
+			const { handles } = call.input as { handles: unknown[] };
+			expect(handles.length).toBeGreaterThanOrEqual(1);
+			expect(handles.length).toBeLessThanOrEqual(16);
 		}
+		expect(failed).toEqual([]);
 		const running = await store.processes.list({ agent: 'runner', running: true });
 		expect(running).toEqual([]);
 		const answer = saidBy((await session.read()).messages, 'runner');

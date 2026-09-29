@@ -572,10 +572,19 @@ process that it shows.
 
 **The schema of `wait` states the bounds of `handles`.** It sets `minItems`
 to 1 and `maxItems` to 16, so the model reads them. A call outside them, or a
-call with `handle` in place of `handles`, fails. The tool gives `Invalid
-arguments for tool 'wait': must have required properties handles.` for the
-call with `handle`. Pi and the Claude Agent SDK check the schema before the
-tool runs, and give their own text.
+call with `handle` in place of `handles`, fails. The harness sets the text
+that the model reads:
+
+| Harness | Who refuses the call                   | What the model reads                                                        |
+| ------- | -------------------------------------- | --------------------------------------------------------------------------- |
+| Pi      | The harness, before the tool runs      | The validation text of Pi                                                   |
+| Claude  | The Agent SDK, before the tool runs    | The validation text of the SDK                                              |
+| Codex   | `defineTool`, in the room tools server | `Invalid arguments for tool 'wait': must have required properties handles.` |
+
+The Codex text above is for the call with `handle`. A call with no handles
+gives `handles must not have fewer than 1 items` after the colon. The trace
+holds each refused call as a `tool_call` step and a `tool_result` step with
+an `error`, on each harness.
 
 **A wait on several handles bounds its output.** It shows the processes that
 ended in the order of the handles, until its text holds 50 KB. One view holds
