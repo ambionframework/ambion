@@ -119,7 +119,7 @@ describe('room reconciliation', () => {
 		const returned: Entry = {
 			kind: 'message',
 			seq: 3,
-			body: { kind: 'returned', at, to: 'product', message: 2, text: 'Check the build.' },
+			body: { kind: 'posted', at, to: 'product', returns: 2, text: 'Check the build.' },
 		};
 		const tick = fold([composition(), arrived(), returned, released('message:3:product:1')]);
 		expect(tick.exchange).toEqual({ from: 3, at });

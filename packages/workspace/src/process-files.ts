@@ -15,12 +15,9 @@
  * `docs/processes.md` is the design contract.
  */
 
-import {
-	applyShellOutputUpdate,
-	BACKGROUND_CONTEXT,
-	type ShellOutputView,
-} from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
+import { runScript, shellQuote } from './execution-env.ts';
 
 /** The kinds of process. A handle starts with its kind. */
 export type ProcessKind = 'bash';
@@ -100,11 +97,6 @@ export function isHandle(handle: string): boolean {
 	return HANDLE.test(handle);
 }
 
-/** Quote one word for `bash`. */
-export function quoted(word: string): string {
-	return `'${word.replaceAll("'", `'\\''`)}'`;
-}
-
 /** The absolute directory of the agent's processes. */
 export async function processesDir(env: WorkspaceEnv): Promise<string> {
 	const dir = await env.absolutePath(PROCESSES_DIR, BACKGROUND_CONTEXT);
@@ -142,7 +134,7 @@ export async function writeSpec(
  * closing parenthesis.
  */
 export function wrapped(command: string, dir: string): string {
-	const at = quoted(dir);
+	const at = shellQuote(dir);
 	return [
 		`echo "$$" > ${at}/pid`,
 		`(`,
@@ -174,8 +166,8 @@ export function lostLine(): string {
  * the end as the command gave it.
  */
 export async function writeStop(env: WorkspaceEnv, dir: string, line: string): Promise<void> {
-	const at = quoted(dir);
-	const script = `[ -f ${at}/exit ] || printf '%s' ${quoted(line)} > ${at}/stop`;
+	const at = shellQuote(dir);
+	const script = `[ -f ${at}/exit ] || printf '%s' ${shellQuote(line)} > ${at}/stop`;
 	const result = await env.exec(script, undefined, BACKGROUND_CONTEXT);
 	if (!result.ok) throw result.error;
 }
@@ -211,16 +203,16 @@ export async function writeSeen(env: WorkspaceEnv, dir: string): Promise<void> {
  * alone skips the process.
  */
 function listingScript(root: string, handle?: string): string {
-	const from = handle === undefined ? '. -mindepth 2' : quoted(handle);
-	const names = handle === undefined ? '*' : quoted(handle);
+	const from = handle === undefined ? '. -mindepth 2' : shellQuote(handle);
+	const names = handle === undefined ? '*' : shellQuote(handle);
 	return [
-		`cd ${quoted(root)} 2>/dev/null || exit 0`,
+		`cd ${shellQuote(root)} 2>/dev/null || exit 0`,
 		`find ${from} -maxdepth ${handle === undefined ? 2 : 1} -type f \\( -name spec -o -name exit -o -name stop -o -name seen -o -name pid \\) -exec grep '' /dev/null {} + 2>/dev/null`,
 		`command -v ps >/dev/null 2>&1 || exit 0`,
 		`for f in ${names}/pid; do`,
 		`  h="\${f%/pid}"`,
 		`  [ -f "$f" ] && [ ! -f "$h/exit" ] || continue`,
-		`  [ -f "$h/stop" ] && read -r c t m 2>/dev/null < "$h/stop" && [ "$c $m" = ${quoted(`failed ${LOST}`)} ] && read -r p 2>/dev/null < "$f" && [ ! -d "/proc/$p" ] && continue`,
+		`  [ -f "$h/stop" ] && read -r c t m 2>/dev/null < "$h/stop" && [ "$c $m" = ${shellQuote(`failed ${LOST}`)} ] && read -r p 2>/dev/null < "$f" && [ ! -d "/proc/$p" ] && continue`,
 		`  ps -ww -o args= -p "$(cat "$f")" 2>/dev/null | grep -q -- "$h" && echo "$h/alive:"`,
 		`done`,
 		`exit 0`,
@@ -232,19 +224,14 @@ const LISTING_BYTES = 8 * 1024 * 1024;
 
 /** Run a script on `env`, and return what it printed. */
 async function printed(env: WorkspaceEnv, script: string, bytes: number): Promise<string> {
-	let view: ShellOutputView | undefined;
-	const result = await env.exec(
+	const result = await runScript(
+		env,
 		script,
-		{
-			capture: { limits: { maxBytes: bytes, maxLines: Number.MAX_SAFE_INTEGER, retain: 'head' } },
-			onUpdate: (update) => {
-				view = applyShellOutputUpdate(view, update);
-			},
-		},
+		{ capture: { limits: { maxBytes: bytes, maxLines: Number.MAX_SAFE_INTEGER, retain: 'head' } } },
 		BACKGROUND_CONTEXT,
 	);
 	if (!result.ok) throw result.error;
-	return view?.text ?? '';
+	return result.value.output;
 }
 
 /** A spec, or undefined for text that does not parse as one. */
@@ -406,8 +393,8 @@ export function statusOf(files: ProcessFiles, owned: boolean): ProcessStatus {
  */
 function killScript(dir: string, handle: string): string {
 	return [
-		`pid=$(cat ${quoted(`${dir}/pid`)} 2>/dev/null) || exit 0`,
-		`ps -ww -o args= -p "$pid" 2>/dev/null | grep -q -- ${quoted(handle)} || exit 0`,
+		`pid=$(cat ${shellQuote(`${dir}/pid`)} 2>/dev/null) || exit 0`,
+		`ps -ww -o args= -p "$pid" 2>/dev/null | grep -q -- ${shellQuote(handle)} || exit 0`,
 		`group=$(ps -o pgid= -p "$pid" | tr -d ' ')`,
 		`own=$(ps -o pgid= -p "$$" | tr -d ' ')`,
 		`if [ -n "$group" ] && [ "$group" != "$own" ]; then kill -KILL -- "-$group"; else kill -KILL "$pid"; fi`,

@@ -33,7 +33,7 @@ export interface Tap {
 export function tapped(execution: Execution, tap: Tap): Execution {
 	return around(execution, {
 		room: (room, request) => ({
-			view: (id, range) => room.view(id, range),
+			view: (id, message) => room.view(id, message),
 			commit: (commit) => room.commit(commit),
 			lease: (lease) => room.lease(lease),
 			...tap.room?.(room, request),

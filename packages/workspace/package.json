@@ -26,10 +26,6 @@
 			"types": "./dist/resource-entry.d.mts",
 			"import": "./dist/resource-entry.mjs"
 		},
-		"./sql": {
-			"types": "./dist/sql-resource.d.mts",
-			"import": "./dist/sql-resource.mjs"
-		},
 		"./sqlite": {
 			"types": "./dist/sqlite-entry.d.mts",
 			"import": "./dist/sqlite-entry.mjs"

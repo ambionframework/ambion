@@ -70,8 +70,6 @@ function harness(
 	return {
 		name,
 		shortestCredentialTtl: 1,
-		sourcesCredential: async (pair, agent) =>
-			(await credentialOf(pair, agent, 'template-sources/blank')) !== undefined,
 		issueCredentials: async (pair, agent) => {
 			await credentialOf(pair, agent, 'templates/blank');
 		},

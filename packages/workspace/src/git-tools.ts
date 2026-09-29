@@ -23,12 +23,12 @@ import {
 	type AgentToolResult,
 	BACKGROUND_CONTEXT,
 	type Context,
-	type ShellOutputUpdate,
 	withAbortSignal,
 } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
+import { runScript, shellQuote } from './execution-env.ts';
 import type { GitEnv, GitRepository } from './git-backend.ts';
 import { NAME_PATTERN } from './git-names.ts';
 import { unwrap } from './object-files.ts';
@@ -272,13 +272,10 @@ async function gitClone(
 	target: string,
 	context: Context,
 ): Promise<string | undefined> {
-	let output = '';
-	const onUpdate = (update: ShellOutputUpdate): void => {
-		if (update.kind === 'replace') output = update.output.text;
-	};
-	const ran = await env.exec(
-		`git clone ${quote(url)} ${quote(target)}`,
-		{ timeout: CLONE_TIMEOUT_SECONDS, capture: { limits: CLONE_OUTPUT }, onUpdate },
+	const ran = await runScript(
+		env,
+		`git clone ${shellQuote(url)} ${shellQuote(target)}`,
+		{ timeout: CLONE_TIMEOUT_SECONDS, capture: { limits: CLONE_OUTPUT } },
 		context,
 	);
 	if (!ran.ok) {
@@ -287,13 +284,8 @@ async function gitClone(
 		return ran.error.message;
 	}
 	if (ran.value.exitCode === 0) return undefined;
-	const text = output.trim();
+	const text = ran.value.output.trim();
 	return text === '' ? `git exited with status ${ran.value.exitCode}` : text;
-}
-
-/** One shell word, in single quotes. */
-function quote(word: string): string {
-	return `'${word.replace(/'/g, `'\\''`)}'`;
 }
 
 function report<T>(text: string, details: T): AgentToolResult<T> {

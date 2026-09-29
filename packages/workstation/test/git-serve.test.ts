@@ -63,13 +63,6 @@ describe.skipIf(!hasGitTools)('serve', () => {
 			1,
 			'analyst/new does not exist',
 		],
-		[
-			'a read of template-sources',
-			'analyst',
-			"git-upload-pack '/template-sources/blank'",
-			1,
-			'template-sources/blank does not exist',
-		],
 		['an archive request', 'analyst', "git-upload-archive '/analyst/report'", 1, 'refused'],
 		['a path with ..', 'analyst', "git-upload-pack '/analyst/../templates/blank'", 1, 'refused'],
 		['a path into .staging', 'analyst', "git-upload-pack '/.staging/x'", 1, 'refused'],

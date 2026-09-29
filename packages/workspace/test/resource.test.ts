@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { openWorkspace } from '../src/index.ts';
 import { openResource, type ResourceBackend, type ResourceEnv } from '../src/resource.ts';
+import { bindTools } from '../src/tools.ts';
 import { wrapped } from './support/backends.ts';
 
 const alpha = { name: 'alpha' };
@@ -89,31 +90,27 @@ describe('workspace lifecycle', () => {
 		const started = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();
 		let toolCalls = 0;
-		const workspace = openWorkspace({
-			name: 'shared-owner',
-			backend: {
-				bash: wrapped(() => ({
-					tools: [
-						{
-							name: 'inspect',
-							label: 'Inspect',
-							description: 'Inspect the workspace.',
-							parameters: Type.Object({}),
-							execute: async () => {
-								toolCalls += 1;
-								return { content: [{ type: 'text' as const, text: 'called' }], details: {} };
-							},
-						},
-					],
-				})),
-			},
-		});
+		const workspace = openWorkspace({ name: 'shared-owner', backend: { bash: wrapped() } });
+		const [bound] = bindTools(
+			[
+				{
+					name: 'inspect',
+					label: 'Inspect',
+					description: 'Inspect the workspace.',
+					parameters: Type.Object({}),
+					execute: async () => {
+						toolCalls += 1;
+						return { content: [{ type: 'text' as const, text: 'called' }], details: {} };
+					},
+				},
+			],
+			workspace.use,
+		);
 		const active = workspace.use(alpha, async () => {
 			started.resolve();
 			await release.promise;
 		});
 		await started.promise;
-		const bound = workspace.tools().tools.find((tool) => tool.name === 'inspect');
 		if (bound === undefined) throw new Error('The bound tool is missing.');
 		const queued = bound.invoke(
 			{},

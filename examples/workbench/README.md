@@ -276,8 +276,7 @@ the team's artifacts.
 ```text
 .data/
   rooms.db          Room journals, Pi audits, and the host room catalog
-  shared.db         The workspace's shared database, for the sql tool
-  lab.db            The lab records: projects, plans, runs, and results
+  lab.db            The shared database of the sql tool: the lab records
   git.db            The repositories: the firmware-sketch template and every fork
   workspace/
     library/        The datasheets, copied from examples/workbench/library

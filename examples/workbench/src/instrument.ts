@@ -1,5 +1,11 @@
 import { defineTool, type ToolBundle, type ToolContext } from '@ambionframework/ambion';
-import type { SqlProvenance, SqlResource, SqlResourceEnv } from '@ambionframework/workspace/sql';
+import {
+	BACKGROUND_CONTEXT,
+	type SqlEnv,
+	type SqlProvenance,
+	type SqlRow,
+} from '@ambionframework/workspace';
+import type { WorkspaceResource } from '@ambionframework/workspace/resource';
 import { Type } from 'typebox';
 
 /** One simulated instrument. An operation above `limit` needs the approval of a person. */
@@ -11,8 +17,8 @@ interface InstrumentSpec {
 }
 
 export interface InstrumentOptions {
-	/** The lab resource. The instrument appends to its `operations` table. */
-	readonly lab: SqlResource;
+	/** The owner of the lab database. The instrument appends to its `operations` table. */
+	readonly lab: WorkspaceResource<SqlEnv>;
 	readonly instruments: readonly InstrumentSpec[];
 }
 
@@ -44,6 +50,41 @@ function provenanceOf(ctx: ToolContext): SqlProvenance {
 	};
 }
 
+/**
+ * A SQL literal for `value`. The instrument passes its own names, and
+ * numbers that the tool schema or the database gave, so each one is finite.
+ */
+function literal(value: string | number): string {
+	return typeof value === 'number' ? String(value) : `'${value.replace(/'/g, "''")}'`;
+}
+
+/** Run one statement on the lab database with the provenance of `ctx`, and give its rows. */
+async function labRun(env: SqlEnv, sql: string, ctx: ToolContext): Promise<readonly SqlRow[]> {
+	const outcome = await env.run(
+		sql,
+		{ maxRows: Number.MAX_SAFE_INTEGER, provenance: provenanceOf(ctx) },
+		BACKGROUND_CONTEXT,
+	);
+	if (!outcome.ok) throw new Error(outcome.message);
+	return outcome.rows;
+}
+
+/** Append one row to `operations`, and give its id. The database fills the provenance. */
+async function recordOperation(
+	env: SqlEnv,
+	values: Readonly<Record<string, string | number>>,
+	ctx: ToolContext,
+): Promise<number> {
+	const names = Object.keys(values).join(', ');
+	const literals = Object.values(values).map(literal).join(', ');
+	const [row] = await labRun(
+		env,
+		`INSERT INTO operations (${names}) VALUES (${literals}) RETURNING id`,
+		ctx,
+	);
+	return Number(row?.id);
+}
+
 /** The simulated reading is a pure function of the setpoint. */
 function readingOf(setpoint: number): number {
 	return setpoint;
@@ -61,7 +102,7 @@ const approveSchema = Type.Object({
 	}),
 });
 
-/** Open the instrument over the lab resource. It owns no handle of its own. */
+/** Open the instrument over the lab database. It owns no handle of its own. */
 export function openInstrument(options: InstrumentOptions): Instrument {
 	const specs = new Map(options.instruments.map((spec) => [spec.name, spec]));
 	const known = () => [...specs.keys()].join(', ');
@@ -107,19 +148,18 @@ export function openInstrument(options: InstrumentOptions): Instrument {
 	};
 }
 
-function runOperate(
-	env: SqlResourceEnv,
+async function runOperate(
+	env: SqlEnv,
 	spec: InstrumentSpec,
 	setpoint: number,
 	ctx: ToolContext,
-): string {
-	const provenance = provenanceOf(ctx);
+): Promise<string> {
 	if (setpoint <= spec.limit) {
 		const reading = readingOf(setpoint);
-		const id = env.insert(
-			'operations',
+		const id = await recordOperation(
+			env,
 			{ instrument: spec.name, setpoint, outcome: 'done', reading },
-			provenance,
+			ctx,
 		);
 		return `Operation ${id} done. ${spec.name} at ${setpoint} ${spec.unit}, reading ${reading} ${spec.unit}.`;
 	}
@@ -127,10 +167,10 @@ function runOperate(
 	if (person === undefined) {
 		throw new Error('An operation above the limit needs an open exchange where a person spoke.');
 	}
-	const id = env.insert(
-		'operations',
+	const id = await recordOperation(
+		env,
 		{ instrument: spec.name, setpoint, outcome: 'requested' },
-		provenance,
+		ctx,
 	);
 	return (
 		`Operation ${id} did not run. The setpoint ${setpoint} ${spec.unit} is above the limit ${spec.limit} ${spec.unit} of ${spec.name}. ` +
@@ -140,35 +180,36 @@ function runOperate(
 	);
 }
 
-function runApprove(
-	env: SqlResourceEnv,
+async function runApprove(
+	env: SqlEnv,
 	specs: ReadonlyMap<string, InstrumentSpec>,
 	id: number,
 	decision: 'allow' | 'deny',
 	ctx: ToolContext,
-): string {
+): Promise<string> {
 	// The id passed the integer check, so the statement holds no free text.
-	const [request] = env.query(
+	const [request] = await labRun(
+		env,
 		`SELECT instrument, setpoint FROM operations WHERE id = ${id} AND outcome = 'requested'`,
+		ctx,
 	);
 	if (!request) throw new Error(`No requested operation ${id}.`);
 	const name = String(request.instrument);
 	const setpoint = Number(request.setpoint);
 	const unit = specs.get(name)?.unit ?? '';
-	const provenance = provenanceOf(ctx);
 	if (decision === 'deny') {
-		env.insert(
-			'operations',
+		await recordOperation(
+			env,
 			{ instrument: name, setpoint, outcome: 'denied', request_id: id },
-			provenance,
+			ctx,
 		);
 		return `Operation ${id} denied. ${name} stays where it is.`;
 	}
 	const reading = readingOf(setpoint);
-	env.insert(
-		'operations',
+	await recordOperation(
+		env,
 		{ instrument: name, setpoint, outcome: 'approved', request_id: id, reading },
-		provenance,
+		ctx,
 	);
 	return `Operation ${id} approved. ${name} at ${setpoint} ${unit}, reading ${reading} ${unit}.`;
 }

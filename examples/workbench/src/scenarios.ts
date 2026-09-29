@@ -105,7 +105,7 @@ export async function seedWorkspace(path: string): Promise<void> {
 
 /**
  * The lab records: projects, test plans, runs, and results. Every table that
- * agents write has the provenance columns, and the resource fills them. The
+ * agents write has the provenance columns, and the database fills them. The
  * UNIQUE constraint on a run makes a retried activation fail instead of
  * recording the run twice.
  */
@@ -154,8 +154,8 @@ ${scenarios
 	.join('\n')}
 `;
 
-/** The lab tables an agent may append to. Projects stay fixed. */
-export const labWritable = ['test_plans', 'runs', 'results', 'operations'] as const;
+/** The lab tables that accept INSERT alone. No agent changes a row once it lands. */
+export const labAppendOnly = ['projects', 'test_plans', 'runs', 'results', 'operations'] as const;
 
 /** The simulated instruments. An operation above the limit needs the approval of a person. */
 export const instruments = [

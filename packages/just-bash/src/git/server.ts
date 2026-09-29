@@ -13,8 +13,9 @@
  * a read token.
  */
 
-import { readOnly } from '@ambionframework/workspace/git';
+import { namespaceOf, readOnly } from '@ambionframework/workspace/git';
 import { createServer, type GitServer, type Storage } from 'just-git/server';
+import { SOURCES } from './registration.ts';
 import { type TokenClaims, tokenOf, verifyToken } from './tokens.ts';
 
 /** The path suffixes of the git smart HTTP protocol. */
@@ -70,7 +71,9 @@ export function openServer(options: {
 					? undefined
 					: { reject: true, message: 'The token does not grant this repository.' },
 			preReceive: ({ repoId, auth }) => {
-				if (readOnly(repoId)) return { reject: true, message: `${repoId} is read-only` };
+				if (readOnly(repoId) || namespaceOf(repoId) === SOURCES) {
+					return { reject: true, message: `${repoId} is read-only` };
+				}
 				if (auth.repository !== repoId || auth.scope !== 'write') {
 					return { reject: true, message: `${auth.agent} cannot push to ${repoId}` };
 				}

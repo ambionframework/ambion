@@ -215,11 +215,11 @@ describe('agentJudge', () => {
 	it('writes a returned say in the record as the room giving the say back', async () => {
 		const run = await injectedRun();
 		const returned: Message = {
-			kind: 'returned',
+			kind: 'posted',
 			seq: 20,
 			at: '2026-01-01T09:10:00.000Z',
 			to: 'desk',
-			message: 3,
+			returns: 3,
 			text: 'Check the forecast.',
 		};
 		if (!run.room.initialized) throw new Error('The run read no room.');

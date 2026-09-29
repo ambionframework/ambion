@@ -195,7 +195,8 @@ const exhausted = (): Promise<readonly JournalEntry[]> =>
  */
 const checksLater: Script = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
-	if (contextText(context).includes('[returned → worker')) return speak('The slab is poured.');
+	if (contextText(context).includes('[posted → worker, returns'))
+		return speak('The slab is poured.');
 	return later('Check the pour log.', 600);
 };
 

@@ -1,9 +1,13 @@
 import { join } from 'node:path';
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
-import { openSqlResource, type SqlResource } from '@ambionframework/workspace/sql';
+import { memoryBackend } from '@ambionframework/just-bash';
+import { BACKGROUND_CONTEXT, openWorkspace, type SqlEnv } from '@ambionframework/workspace';
+import type { WorkspaceResource } from '@ambionframework/workspace/resource';
+import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { describe, expect, it, onTestFinished } from 'vitest';
+import { readApprovals } from '../src/approvals.ts';
 import { openInstrument } from '../src/instrument.ts';
-import { instruments, labSchema, labWritable } from '../src/scenarios.ts';
+import { instruments, labAppendOnly, labSchema } from '../src/scenarios.ts';
 import { freshDirectory, openHost } from './hosting.ts';
 
 function contextOf(agent: string, activation: string, person = 'mira'): ToolContext {
@@ -16,11 +20,23 @@ function contextOf(agent: string, activation: string, person = 'mira'): ToolCont
 	};
 }
 
-/** Open the lab database. The test disposes it when it finishes. */
-function openLab(location = ':memory:'): SqlResource {
-	const lab = openSqlResource({ name: 'lab', location, schema: labSchema, writable: labWritable });
-	onTestFinished(() => lab.dispose());
-	return lab;
+/** A workspace over the lab database, with the options of the host. The test disposes it. */
+function openLab(location = ':memory:') {
+	const workspace = openWorkspace({
+		name: 'lab',
+		backend: {
+			bash: memoryBackend(),
+			sql: sqliteBackend(location, {
+				schema: labSchema,
+				appendOnly: labAppendOnly,
+				provenance: true,
+			}),
+		},
+	});
+	onTestFinished(() => workspace.dispose());
+	const lab = workspace.sql;
+	if (lab === undefined) throw new Error('The workspace has no lab database.');
+	return { workspace, lab };
 }
 
 /** Call a tool so that a synchronous throw becomes a rejection. */
@@ -32,12 +48,19 @@ function caller(tools: readonly AmbionTool[]) {
 	};
 }
 
-const query = (lab: SqlResource, sql: string) => lab.use({ name: 'test' }, (env) => env.query(sql));
-const operations = (lab: SqlResource) => query(lab, 'SELECT * FROM operations ORDER BY id');
+/** The rows of `sql` on the lab database, read as host code does. */
+const query = (lab: WorkspaceResource<SqlEnv>, sql: string) =>
+	lab.use({ name: 'test' }, async (env) => {
+		const outcome = await env.run(sql, { maxRows: 1000 }, BACKGROUND_CONTEXT);
+		if (!outcome.ok) throw new Error(outcome.message);
+		return outcome.rows;
+	});
+const operations = (lab: WorkspaceResource<SqlEnv>) =>
+	query(lab, 'SELECT * FROM operations ORDER BY id');
 
 /** A lab with its instrument, and the calls of the instrument tools. */
 function bench() {
-	const lab = openLab();
+	const { lab } = openLab();
 	const bundle = openInstrument({ lab, instruments }).tools();
 	const call = caller(bundle.tools);
 	const operate = (instrument: string, setpoint: number, ctx = contextOf('design', 'act-1')) =>
@@ -47,38 +70,50 @@ function bench() {
 	return { lab, bundle, operate, answer };
 }
 
-describe('the lab SQL resource', () => {
-	it('lets one agent record a run and another agent query it back', async () => {
-		const lab = openLab(join(await freshDirectory(), 'lab.db'));
-		const call = caller(lab.tools().tools);
+/** The text of a tool result. */
+const textOf = (result: unknown): string =>
+	typeof result === 'string'
+		? result
+		: ((result as { content?: { text?: string }[] }).content ?? [])
+				.map((part) => part.text ?? '')
+				.join('');
+
+describe('the lab database', () => {
+	it('lets one agent record a run with sql and another agent read it back, and refuses an UPDATE and a DELETE of a record', async () => {
+		const { workspace } = openLab(join(await freshDirectory(), 'lab.db'));
+		const call = caller(workspace.tools().tools);
 		const at = (agent: string, activation: string) => ({
 			...contextOf(agent, activation, 'theo'),
 			room: 'sensing',
 		});
 		await call(
-			'insert',
-			{ table: 'runs', values: { project: 'sensing', label: 'range at 50 cm' } },
+			'sql',
+			{ sql: "INSERT INTO runs (project, label) VALUES ('sensing', 'range at 50 cm')" },
 			at('experiments', 'act-1'),
 		);
 		const shown = await call(
-			'query',
+			'sql',
 			{ sql: 'SELECT project, label, agent, room, activation FROM runs' },
 			at('design', 'act-2'),
 		);
-		expect(shown).toContain('| sensing | range at 50 cm | experiments | sensing | act-1 |');
+		expect(textOf(shown)).toContain('| sensing | range at 50 cm | experiments | sensing | act-1 |');
 		await expect(
-			call('insert', { table: 'projects', values: { name: 'x', goal: 'y' } }, at('design', 'a')),
-		).rejects.toThrow(/does not accept inserts/);
+			call('sql', { sql: "UPDATE projects SET goal = 'y'" }, at('design', 'a')),
+		).rejects.toThrow(/append-only/);
+		await expect(
+			call('sql', { sql: "DELETE FROM runs WHERE label = 'range at 50 cm'" }, at('design', 'a')),
+		).rejects.toThrow(/append-only/);
+		expect(workspace.tools().guidance).toContain(
+			'The tables projects, test_plans, runs, results, operations accept INSERT alone',
+		);
 	});
 
 	it('opens the lab database beside the journal database and seeds the projects', async () => {
 		const directory = await freshDirectory();
 		// The host runs on the environment of the process. It sends no message, so no model runs.
 		await (await openHost({ directory, stream: undefined, executions: undefined })).close();
-		const rows = await query(
-			openLab(join(directory, 'lab.db')),
-			'SELECT name FROM projects ORDER BY name',
-		);
+		const { lab } = openLab(join(directory, 'lab.db'));
+		const rows = await query(lab, 'SELECT name FROM projects ORDER BY name');
 		expect(rows.map((row) => row.name)).toEqual(['bringup', 'firmware', 'power', 'sensing']);
 	});
 });
@@ -91,7 +126,7 @@ describe('the instrument resource', () => {
 			'approve_operation',
 		]);
 		expect(bundle.guidance).toContain('approve_operation');
-		expect(labWritable).toContain('operations');
+		expect(labAppendOnly).toContain('operations');
 	});
 
 	it('performs an operation at or below the limit and records provenance', async () => {
@@ -148,12 +183,34 @@ describe('the instrument resource', () => {
 	});
 
 	it('rejects a bad id, an unknown request, an unknown instrument, and a request with no open exchange', async () => {
-		const { operate, answer } = bench();
+		const { lab, operate, answer } = bench();
 		await expect(answer(-1, 'allow')).rejects.toThrow(/non-negative integer/);
 		await expect(answer(1.5, 'allow')).rejects.toThrow(/non-negative integer/);
 		await expect(answer(7, 'allow')).rejects.toThrow(/No requested operation 7/);
 		await expect(operate('laser', 1)).rejects.toThrow(/Unknown instrument/);
 		const { exchange: _exchange, ...bare } = contextOf('design', 'act-1');
 		await expect(operate('led-current', 30, bare)).rejects.toThrow(/open exchange/);
+		// Within the limit, an operation runs with no exchange, and its exchange columns stay NULL.
+		expect(await operate('led-current', 5, bare)).toContain('reading 5');
+		expect(await operations(lab)).toEqual([
+			expect.objectContaining({ agent: 'design', exchange_person: null, exchange_from: null }),
+		]);
+	});
+
+	it('rejects an operation when the lab database refuses the statement', async () => {
+		const workspace = openWorkspace({
+			name: 'empty',
+			backend: { bash: memoryBackend(), sql: sqliteBackend(':memory:') },
+		});
+		onTestFinished(() => workspace.dispose());
+		const lab = workspace.sql;
+		if (lab === undefined) throw new Error('The workspace has no lab database.');
+		const [operate] = openInstrument({ lab, instruments }).tools().tools;
+		await expect(
+			Promise.resolve().then(() =>
+				operate?.invoke({ instrument: 'led-current', setpoint: 1 }, contextOf('design', 'a')),
+			),
+		).rejects.toThrow(/no such table: operations/);
+		await expect(readApprovals(lab, 'bringup')).rejects.toThrow(/no such table: operations/);
 	});
 });

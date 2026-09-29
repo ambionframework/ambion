@@ -31,7 +31,7 @@ function check(context: Context) {
 		context.messages.some(
 			(message) => message.role === 'user' && JSON.stringify(message.content).includes(text),
 		);
-	const call = has('[returned → checker')
+	const call = has('[posted → checker, returns')
 		? fauxToolCall('say', { to: 'priya', text: 'The check came back.' })
 		: fauxToolCall('schedule', { text: 'Check the pour log.', after: has('tomorrow') ? 3600 : 1 });
 	return fauxAssistantMessage([call], { stopReason: 'toolUse' });

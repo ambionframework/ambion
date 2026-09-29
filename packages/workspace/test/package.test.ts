@@ -1,9 +1,10 @@
 /**
  * The package's six entries, and what each one names. `index.ts` opens a
- * resource and its logs, over no backend. `./resource`, `./sql`, and
- * `./sqlite` each hold one binding. `./git` holds the name rules and the
- * template helpers that every git backend shares. `./conformance` holds
- * the cases every `BashBackend`, `SqlBackend`, and `GitBackend` must pass.
+ * resource and its logs, over no backend. `./resource` holds the neutral
+ * contract, and `./sqlite` the SQLite backend. `./git` holds the name
+ * rules and the template helpers that every git backend shares. `./s3`
+ * holds the S3 object backend. `./conformance` holds the cases every
+ * `BashBackend`, `GitBackend`, and `ObjectBackend` must pass.
  * No entry loads just-bash: the just-bash backends are the package
  * `@ambionframework/just-bash`.
  */
@@ -16,7 +17,6 @@ import * as main from '../src/index.ts';
 import { PACKAGE_NAME } from '../src/index.ts';
 import * as resource from '../src/resource-entry.ts';
 import * as s3 from '../src/s3-entry.ts';
-import * as sql from '../src/sql-resource.ts';
 import * as sqlite from '../src/sqlite-entry.ts';
 
 const read = async (name: string) =>
@@ -32,14 +32,13 @@ const manifest = async () =>
 const STEMS: Record<string, string> = {
 	'.': 'index',
 	'./resource': 'resource-entry',
-	'./sql': 'sql-resource',
 	'./sqlite': 'sqlite-entry',
 	'./git': 'git-entry',
 	'./s3': 's3-entry',
 	'./conformance': 'conformance',
 };
 
-it('holds exactly seven entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
+it('holds exactly six entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
 	const { name, exports } = await manifest();
 	expect(PACKAGE_NAME).toBe(name);
 	expect(Object.keys(exports).sort()).toEqual([
@@ -49,7 +48,6 @@ it('holds exactly seven entries, builds each under the name the manifest gives i
 		'./package.json',
 		'./resource',
 		'./s3',
-		'./sql',
 		'./sqlite',
 	]);
 	const config = await read('tsdown.config.ts');
@@ -57,7 +55,6 @@ it('holds exactly seven entries, builds each under the name the manifest gives i
 	expect(built).toEqual([
 		'src/index.ts',
 		'src/resource-entry.ts',
-		'src/sql-resource.ts',
 		'src/sqlite-entry.ts',
 		'src/git-entry.ts',
 		'src/s3-entry.ts',
@@ -72,7 +69,7 @@ it('holds exactly seven entries, builds each under the name the manifest gives i
 	}
 });
 
-it('exports one resource, its two logs, the environment helpers, sqlImport, sqlResult, fromDirectory, and loadSkills from the root, and no backend', () => {
+it('exports one resource, its two logs, the environment helpers, runScript, shellQuote, sqlImport, sqlResult, fromDirectory, and loadSkills from the root, and no backend', () => {
 	expect(Object.keys(main).sort()).toEqual([
 		'BACKGROUND_CONTEXT',
 		'DEFAULT_AUDIT_LOG',
@@ -92,8 +89,8 @@ it('exports one resource, its two logs, the environment helpers, sqlImport, sqlR
 		'openWorkspace',
 		'randomName',
 		'resolvePath',
-		'spill',
-		'spillPath',
+		'runScript',
+		'shellQuote',
 		'sqlImport',
 		'sqlResult',
 		'tempDirPath',
@@ -104,19 +101,13 @@ it('exports one resource, its two logs, the environment helpers, sqlImport, sqlR
 
 it.each([
 	['./resource', resource, ['openResource']],
-	['./sql', sql, ['PROVENANCE_COLUMNS', 'openSqlResource']],
 	['./sqlite', sqlite, ['sqliteBackend']],
 	['./s3', s3, ['s3ObjectBackend']],
-	[
-		'./conformance',
-		conformance,
-		['gitConformance', 'objectConformance', 'sqlConformance', 'workspaceConformance'],
-	],
+	['./conformance', conformance, ['gitConformance', 'objectConformance', 'workspaceConformance']],
 	[
 		'./git',
 		git,
 		[
-			'SOURCES',
 			'TEMPLATES',
 			'assertAgent',
 			'assertCommitHash',
@@ -136,10 +127,9 @@ it.each([
 	expect(Object.keys(entry).sort()).toEqual(names);
 });
 
-it('loads no backend at the root: no export from the resource or SQL files', async () => {
+it('loads no backend at the root: no export from the resource or SQLite files', async () => {
 	const index = await read('src/index.ts');
 	expect(index).not.toMatch(/from '\.\/resource\.ts'/);
-	expect(index).not.toMatch(/from '\.\/sql-resource\.ts'/);
 	expect(index).not.toMatch(/from '\.\/sqlite(-entry)?\.ts'/);
 	expect(index).not.toMatch(/ROOM_MIRROR_GUIDANCE|roomMirrorPath|DEFAULT_ROTATE_BYTES/);
 });
@@ -186,7 +176,6 @@ async function chunksOf(distDir: URL, entry: string): Promise<Map<string, string
 it.each([
 	['root', 'index.mjs', ['just-bash', 'node:sqlite']],
 	['resource', 'resource-entry.mjs', ['just-bash']],
-	['sql', 'sql-resource.mjs', ['just-bash']],
 	['sqlite', 'sqlite-entry.mjs', ['just-bash']],
 	[
 		'git',

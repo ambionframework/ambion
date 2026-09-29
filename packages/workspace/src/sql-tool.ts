@@ -8,7 +8,8 @@
  * agent's files on the bash backend (`WorkspaceFiles`), and the tool shows
  * the head of the file. With `import`, the backend reads a CSV file from the
  * agent's files into the table `import.rows` for the one call, and the
- * statements copy the rows into the shared tables.
+ * statements copy the rows into the shared tables. Each call passes its
+ * provenance, so a backend with append-only tables writes it on each row.
  *
  * The audit entry of a call runs as one more operation on the bash owner,
  * after the call ends, over `BACKGROUND_CONTEXT`. A cut call still leaves
@@ -24,9 +25,10 @@ import {
 import { type Static, Type } from 'typebox';
 import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
+import { callEnvelope } from './call-envelope.ts';
 import { markdownTable } from './markdown-table.ts';
 import type { WorkspaceResource } from './resource.ts';
-import type { SqlEnv, SqlOutcome, SqlRunOptions } from './sql-backend.ts';
+import type { SqlEnv, SqlOutcome, SqlProvenance, SqlRunOptions } from './sql-backend.ts';
 import { IMPORT_TABLE, MAX_IMPORT_BYTES } from './sql-import.ts';
 import { csvHeader, csvRecord, NULL_SENTINEL } from './sql-result.ts';
 import { recordedOnShell } from './tools.ts';
@@ -124,6 +126,7 @@ async function run(
 		ctx.signal === undefined ? BACKGROUND_CONTEXT : withAbortSignal(ctx.signal, BACKGROUND_CONTEXT);
 	const runOptions: SqlRunOptions = {
 		maxRows: params.rows ?? PREVIEW_ROWS,
+		provenance: provenanceOf(ctx),
 		...(params.export === undefined ? {} : { export: params.export }),
 		...(params.import === undefined ? {} : { import: params.import }),
 	};
@@ -138,6 +141,21 @@ async function run(
 			? previewed(options.database, outcome)
 			: exported(options.database, outcome, outcome.export);
 	return outcome.import === undefined ? result : withImport(result, outcome.import);
+}
+
+/** The provenance of one tool call: its envelope, and the time. */
+function provenanceOf(ctx: ToolContext): SqlProvenance {
+	const { exchange, ...placed } = callEnvelope(ctx);
+	return {
+		...placed,
+		...(exchange === undefined
+			? {}
+			: {
+					...(exchange.person === undefined ? {} : { exchange_person: exchange.person }),
+					exchange_from: String(exchange.from),
+				}),
+		at: new Date().toISOString(),
+	};
 }
 
 /** `result` with a first line that names the imported file and counts its rows. */

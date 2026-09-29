@@ -4,6 +4,16 @@
 
 ### New
 
+**The host posts a message as the system.**
+`room.post({ to?, text, refs?, key? })` writes a `posted` entry with no
+author and returns the handle of the exchange that holds it. A post opens an
+exchange when none is open, so the host reads `waitForClose`, the usage, and
+the outcome of the work it starts. A post routes as a say does, a post with
+`to` steers its target alone, and its key has a key space of its own. The
+prompt names a post of the host as an event with no direction. The
+Cloudflare room object takes `post`. A host no longer defines a person to
+wake a seat. See [Exchange](docs/exchange.md#7-the-edges-a-host-sees).
+
 **`sql` imports a CSV file.** The `import` parameter names a CSV file in
 the workspace. Its rows are the table `import.rows` for that call alone,
 and the statements copy them into the shared tables with
@@ -166,9 +176,30 @@ its `text`.
   more. A wait that the stop or the eviction ends rejects with
   `room_stopped` and the message of the wait, `Exchange '<seq>' was
   stopped or interrupted.`
+- **The workspace keeps one SQL path and the ports that a backend uses.**
+  The SQL resource opened `node:sqlite` beside `sqliteBackend`, with a
+  second copy of the preview and the table render, and it goes. One
+  `runScript` replaces six copies of the code that collects the output of
+  a script and checks the result, and one `shellQuote` replaces four
+  copies of the shell quote. The spill file, `BashBackend.tools`, the
+  second check of a git transport, and the knowledge of
+  `template-sources` outside `justGitBackend` go.
+- **The room applies one windowing rule.** `room/view.ts` keeps the
+  newest messages under the cap of `limits.context.messages`, then under
+  the `activationTokenLimit` of the seat, never splits a summarised range,
+  and keeps the open exchange whole. The runner reads one view and pages
+  nothing: `windowedView`, `windowToLimit`, and the page size of 64 go,
+  and on Cloudflare a view is one call. The line of one message and the
+  blocks of a summarised range move to `record.ts`, where the room and the
+  renderer read them. See [History and limits](docs/room.md#history-and-limits).
 
 ### Breaking changes
 
+- **A returned say is a post.** The `returned` kind goes. The room writes a
+  `posted` entry with `to` and `returns`, the seq of the scheduled say, and
+  a journal read refuses a `returned` entry. `PostedMessage` and `isPosted`
+  replace `ReturnedMessage` and `isReturned`. The record line of a returned
+  say reads `[posted → <seat>, returns #<n>]`.
 - **The remote call is an `Execution`, and one router serves every kind.**
   The hosting entry exports `localExecution(kind, build)`. It returns an
   `Execution` of that kind, whose port is an `AgentRunner` in this process.
@@ -228,20 +259,15 @@ its `text`.
   colleague reads the name of the seat. The record line of a returned say
   drops `for <owner>`.
 - **The provenance column `exchange_owner` becomes `exchange_person`.**
-  `PROVENANCE_COLUMNS` of the SQL resource and the `exchange` of an audit
-  entry carry `person`.
+  The provenance columns that `sqliteBackend` fills, `SqlProvenance`, and
+  the `exchange` of an audit entry carry `person`. An exchange with no
+  person leaves `exchange_person` NULL.
 - **The kernel names no database.** The hand-off guidance of every seat said
   to put structured data in the shared database and named `sqlite_master`,
   even for a seat with no SQL backend. It now says to write an artifact once
   where the tools keep it, and to hand it off with a directed say. The
   guidance of `sql` names the table or view hand-off, and the SQLite backend
   names `sqlite_master`.
-- **The SQL resource inserts with `insert`.** The tool `record` becomes
-  `insert`, and `SqlResourceEnv.record` becomes `SqlResourceEnv.insert`.
-  The record is the journal of a room, so the tool no longer shares its
-  word. The result reads `Inserted row <id> into <table>.` The `rows` of
-  `query` is a whole number from 0 to 1000, as for `sql`, and its
-  description states the default.
 - **The audit entry of a failed process keeps its details.** A call that
   fails on a process that ended badly throws a `ToolFailure`, and its audit
   entry holds `error.details`: the `ProcessStatus` and the read range. The
@@ -259,11 +285,22 @@ its `text`.
   `unseated <name> (#<seq>)`. A membership that the record already holds
   gives `<name> is already seated` or `<name> is not seated`. The result
   was `delivered` before.
-- **A view with a range cuts its page from every message the purpose may
-  read.** The cap of `limits.context.messages` bounds a view with no range
-  alone. A page still reports the cap floor as `earliest`, and a seat with
-  `activationTokenLimit` stops its window there. A host that pages a view
-  reads below the cap.
+- **`RoomProtocol.view` takes no range, and `ViewRange` goes.** The
+  second argument is `message`, a seq: the view then holds that one
+  message when the purpose may read it, and no window applies. `recall`
+  reads a message below the window this way. `CollaborationContext` has
+  no `earliest`, and `omitted` counts what the cap and the token limit
+  leave out. The hosting entry exports no `ViewRange`.
+- **`estimateTokens` is the name of an estimator.** The executor option of
+  `pi()`, `claude()`, and `codex()`, and `AgentExecutor.estimateTokens`,
+  take a string in place of a function. `createRuntime({ estimators })`
+  registers each estimator by name, and every runtime holds `length`,
+  `Math.ceil(text.length / 4)`, the default. A host cannot register
+  `length`. `startRoom` and `resumeRoom` fail with `missing_definition`
+  when a definition names an estimator that the runtime does not hold.
+  `configure` of `@ambionframework/cloudflare` takes `estimators` for the
+  runtime of the room object. The seat object runs no estimator, because
+  the room object windows the view.
 - **A process that ended badly fails every call that reports it.** An
   exit code other than 0, a timeout, and a failed process make `bash`,
   `status`, and `wait` a tool error, so one state has one shape on every
@@ -279,7 +316,7 @@ its `text`.
   holds 1 to 16 handles. One handle gives the result of `status`. Several
   give the output of each process that ended and the state of each one
   that still runs.
-- **The preview size of `sql` and `query` is `rows`.** The tool parameter
+- **The preview size of `sql` is `rows`.** The tool parameter
   `maxRows` becomes `rows`, the one camelCase name that a model wrote. The
   host option and `SqlRunOptions` keep `maxRows`.
 - **`dismiss` takes `{ message }`, the seq of a scheduled say.** The word
@@ -376,6 +413,44 @@ its `text`.
   `defineAgent` checks and copies the executor as the room does, so a
   malformed executor fails at `defineAgent`. The `executor` of the
   definition is a frozen copy of the executor that the caller gives.
+- **The `./sql` entry of `@ambionframework/workspace` goes.**
+  `openSqlResource`, `PROVENANCE_COLUMNS`, and the types `SqlResource`,
+  `SqlResourceEnv`, and `SqlResourceOptions` go, with the `query` and
+  `record` tools. An agent adds a row with an INSERT through `sql`, so no
+  tool shares the word record with the journal of a room. The SQL backend
+  of a workspace holds records:
+  `sqliteBackend(location, { schema, appendOnly, provenance })` runs the
+  schema at each open, keeps each `appendOnly` table to INSERT alone, and
+  fills the provenance columns of a new row. With `appendOnly`, a call
+  cannot create a trigger, and only the guard triggers call the guard
+  functions. `SqlRunOptions` has
+  `provenance`, the root entry exports the type `SqlProvenance`, and the
+  `sql` tool passes the provenance of each call. The Workbench keeps its lab
+  records in the database of the `sql` tool, `lab.db`, and `shared.db`
+  goes. An agent can now add a project to the Workbench lab. See
+  [Records](docs/workspace.md#records-append-only-tables-with-provenance).
+- **`sqlConformance` and `SqlConformanceBackend` leave `./conformance`.**
+  The SQL cases run in the SQLite tests until a second SQL backend exists.
+- **A backend writes no spill file.** The root entry no longer exports
+  `spill`, `spillPath`, and `MinimalWriter`. The just-bash backends and
+  the workstation ignore `capture.spill`, and a result has no
+  `spillPath`. Every `bash` call keeps its whole output in a process file.
+  The conformance case of the bounded view checks no spill file.
+- **The root entry exports `runScript` and `shellQuote`.** `runScript`
+  runs one script and gives its exit code and its output as text.
+  `shellQuote` puts one word in single quotes for `bash`.
+- **`BashBackend.tools` goes.** No backend set it. The workspace binds
+  the same tools over every bash backend.
+- **`openWorkspace` alone checks a git transport.** The just-bash
+  backends and the workstation read `BashServices.git` at `connect` with
+  no check of their own.
+- **`template-sources` belongs to `justGitBackend`.**
+  `@ambionframework/workspace/git` no longer exports `SOURCES`.
+  `assertAgent` and `readOnly` know `templates` alone. `justGitBackend`
+  refuses an agent named `template-sources` and hides the namespace. The
+  workstation no longer knows the name. `GitConformanceBackend` has no
+  `sourcesCredential`, and the git cases no longer check
+  `template-sources`.
 
 ## 0.3.0 (2026-09-25)
 

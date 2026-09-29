@@ -23,6 +23,18 @@ how often it fails, and whether Linux on Node 26.9 fails too. Report it to
 report, a CI Node version at 26.9 or later, or the next release gate on
 the owner's machine.
 
+**K2. An agent that runs SQL can lift the append-only guard.** The guard
+of `sqliteBackend` refuses the statements that it names: `CREATE
+TRIGGER`, a DROP or ALTER of a guarded table, `ATTACH`, and the PRAGMAs
+`recursive_triggers`, `writable_schema`, and `query_only`. A statement
+that it does not name can still lift it. On 2026-09-29 a review lifted it
+on Node 22 and Node 26 with `PRAGMA temp_store`, which drops the TEMP
+triggers of the guard at compile time. An allow-list closes the class: an
+agent call runs only a fixed set of statement kinds, and only the PRAGMAs
+that read. Node 22 has no `setAuthorizer`, so the allow-list reads the
+text there. **Condition:** a room that gives the `sql` tool to an agent
+that the owner does not trust, or a second bypass in use.
+
 ## Carried from 0.2.0
 
 **L3. A billing failure reads as a billing failure.** Twenty-three red
@@ -184,8 +196,9 @@ cannot work from the typed README examples and the export snapshot.
 `SqlBackend` ([Workspace](../docs/workspace.md#query-the-shared-database)),
 and the package ships `sqliteBackend`. A backend over a database server
 connects as each agent with its own credential, so the server enforces the
-grants. It passes `sqlConformance`. **Condition:** the lab setup, one workstation and
-one database server, is scheduled.
+grants. It passes the SQL cases, which then move from the SQLite tests
+back to the conformance entry. **Condition:** the lab setup, one
+workstation and one database server, is scheduled.
 
 **A git server on a second machine.** `workstationGitBackend` keeps the
 git account on the workstation, and each agent key works only from the

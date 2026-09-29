@@ -39,6 +39,7 @@ export { pendingFor } from './room/read.ts';
 export type {
 	ExchangeHandle,
 	ExchangeRead,
+	PostInput,
 	ReadRoomOptions,
 	ResumeRoomOptions,
 	Room,
@@ -68,10 +69,10 @@ export type {
 	HumanParticipantInfo,
 	Message,
 	ParticipantInfo,
+	PostedMessage,
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,
-	ReturnedMessage,
 	RoomEvent,
 	RoomNotification,
 	SeatOptions,
@@ -87,7 +88,7 @@ export type {
 	TraceStep,
 	Usage,
 } from './types.ts';
-export { isPresence, isReturned, isSpoken, isSummary } from './types.ts';
+export { isPosted, isPresence, isSpoken, isSummary } from './types.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/ambion';

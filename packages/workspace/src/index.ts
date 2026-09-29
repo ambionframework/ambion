@@ -5,12 +5,11 @@
  * `openWorkspace` opens a workspace over its backends by kind:
  * `backend: { bash, sql?, git? }`. `workspace.tools()` returns the tools and
  * guidance the workspace exposes to an agent. The root entry loads no
- * backend: `./sqlite` holds the SQLite SQL backend, `./resource` holds the
- * neutral resource contract, and `./sql` holds the SQL resource. The bash
- * backends are separate packages: `@ambionframework/just-bash` and
- * `@ambionframework/workstation`. The root entry exports the environment
- * helpers from `./execution-env.ts`, so a new `ExecutionEnv` backend can
- * build on them.
+ * backend: `./sqlite` holds the SQLite SQL backend, and `./resource` holds
+ * the neutral resource contract. The bash backends are separate packages:
+ * `@ambionframework/just-bash` and `@ambionframework/workstation`. The root
+ * entry exports the environment helpers from `./execution-env.ts`, so a new
+ * `ExecutionEnv` backend can build on them.
  *
  * ```ts
  * import { defineAgent } from '@ambionframework/ambion';
@@ -42,7 +41,7 @@ export type {
 	WorkspaceEnv,
 	WorkspaceLayout,
 } from './backend.ts';
-export type { MinimalWriter } from './execution-env.ts';
+export type { ScriptRun } from './execution-env.ts';
 export {
 	boundedView,
 	DEFAULT_TIMEOUT_SECONDS,
@@ -51,8 +50,8 @@ export {
 	HomeEnv,
 	randomName,
 	resolvePath,
-	spill,
-	spillPath,
+	runScript,
+	shellQuote,
 	TMP,
 	tempDirPath,
 	tempFilePath,
@@ -87,6 +86,7 @@ export type {
 	SqlImported,
 	SqlImportTable,
 	SqlOutcome,
+	SqlProvenance,
 	SqlRow,
 	SqlRunOptions,
 	SqlValue,

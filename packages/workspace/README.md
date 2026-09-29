@@ -54,19 +54,19 @@ const surveyor = defineAgent({
 
 The root entry loads no backend. `./resource` holds only the neutral
 contract: `openResource` and its types. It loads neither the Ambion runtime
-nor a model library. `./sqlite` holds `sqliteBackend`,
-the SQL backend over one SQLite database. `./sql` holds `openSqlResource`, a
-resource over its own SQLite database, with its `SqlProvenance` and
-`SqlResourceEnv` types. `./s3` holds `s3ObjectBackend`, the object backend
-over an S3 API, and it loads `aws4fetch`. `./conformance` holds
-`workspaceConformance`, the scenario matrix a new backend runs to prove it
-meets the resource contract, and `sqlConformance`, `gitConformance`, and
-`objectConformance`, the cases a `SqlBackend`, a `GitBackend`, and an
-`ObjectBackend` run.
+nor a model library. `./sqlite` holds `sqliteBackend`, the SQL backend
+over one SQLite database. Its options `schema`, `appendOnly`, and
+`provenance` give a database of records: tables that accept INSERT alone,
+with the agent, the room, the activation, and the exchange of each new
+row. `./s3` holds `s3ObjectBackend`, the object backend over an S3 API,
+and it loads `aws4fetch`. `./conformance` holds `workspaceConformance`,
+the scenario matrix a new backend runs to prove it meets the resource
+contract, and `gitConformance` and `objectConformance`, the cases a
+`GitBackend` and an `ObjectBackend` run.
 
 `./git` holds what every git backend shares, and it loads no git library.
 The name rules of a repository ID are `validName`, `namespaceOf`,
-`assertAgent`, `readOnly`, `TEMPLATES`, and `SOURCES`, and `revisionOf` and
+`assertAgent`, `readOnly`, and `TEMPLATES`, and `revisionOf` and
 `validRefName` read a branch, a tag, or a hash as a name alone. The template helpers
 are `filesOf`, `hashesOf`, `sameFiles`, and `changeTo`, with the
 `TemplateRegistration` type. `@ambionframework/just-bash/git` holds a git

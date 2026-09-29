@@ -28,7 +28,8 @@ import type {
 	WorkspaceLayout,
 } from '@ambionframework/workspace';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
-import { sshAccess, WORKSTATION_TRANSPORTS, writeGitFiles } from './git-agent.ts';
+import { WORKSTATION_TRANSPORTS, writeGitFiles } from './git-agent.ts';
+import type { WorkstationGitAccess } from './git-backend.ts';
 import { Session, type WorkstationCredential } from './session.ts';
 import { SshEnv } from './ssh-env.ts';
 
@@ -161,7 +162,8 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 			signal?: AbortSignal,
 			services?: BashServices,
 		): Promise<WorkspaceEnv> {
-			const git = sshAccess(services);
+			// `openWorkspace` checks the transport, so a set access is the access of the git account.
+			const git = services?.git as WorkstationGitAccess | undefined;
 			const env = await envFor(agent, signal);
 			if (git === undefined) return env;
 			try {

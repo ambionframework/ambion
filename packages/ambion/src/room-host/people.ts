@@ -61,11 +61,17 @@ export interface PeopleHost extends RoomBase {
 /** A presence change before the room stamps when it happened. */
 type PresenceDraft = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 
-/** Compare a delivery with the body returned by a same-key journal retry. */
+/** Compare a delivery or a post with the body returned by a same-key journal retry. */
 function deliveryMatches(
-	command: Extract<RoomCommand, { type: 'deliver' }>,
+	command: Extract<RoomCommand, { type: 'deliver' | 'post' }>,
 	message: Message,
 ): boolean {
+	if (command.type === 'post')
+		return (
+			message.kind === 'posted' &&
+			message.returns === undefined &&
+			saidContentMatches(message, command)
+		);
 	return (
 		message.kind === 'said' &&
 		message.activationId === undefined &&
@@ -229,17 +235,43 @@ async function deliverFrom(
 async function commitMessage(
 	host: PeopleHost,
 	key: string,
-	command: Extract<RoomCommand, { type: 'deliver' }>,
+	command: Extract<RoomCommand, { type: 'deliver' | 'post' }>,
 ): Promise<Message> {
-	const appended = await decideAndAppend(host, 'message', command, {
-		key: spaced('delivery', key),
-	});
+	const space = command.type === 'deliver' ? 'delivery' : 'post';
+	const appended = await decideAndAppend(host, 'message', command, { key: spaced(space, key) });
 	requireSubmission(appended);
 	if (!('entry' in appended)) throw new Error('The room command did not append a message.');
 	const message = placed(appended.entry);
 	if (!deliveryMatches(command, message))
 		throw new AmbionError('refused', messageKeyConflict(key, message));
 	return message;
+}
+
+/** What the host posts: a message of the system to a seat, a person, or the room. */
+export interface PostInput {
+	to?: string;
+	text: string;
+	refs?: string[];
+	/** The idempotency token of the post, in a key space of its own. */
+	key?: string;
+}
+
+/**
+ * The host posts as the system. The post has no author, and it opens an
+ * exchange when none is open. A repeated key lands once, and the post it
+ * landed carries it back.
+ */
+export async function post(host: PeopleHost, input: PostInput): Promise<ExchangeHandle> {
+	host.assertRunning();
+	const key = input.key ?? crypto.randomUUID();
+	const committed = await commitMessage(host, key, {
+		type: 'post',
+		...(input.to === undefined ? {} : { to: input.to }),
+		text: input.text,
+		bytes: host.runtime.limits.message.bytes,
+		...(input.refs === undefined ? {} : { refs: input.refs }),
+	});
+	return host.handleForMessage(committed);
 }
 
 /**

@@ -5,7 +5,6 @@
  * credential resolver that fails.
  */
 
-import { readFile, stat } from 'node:fs/promises';
 import type { WorkspaceEnv } from '@ambionframework/workspace';
 import { BACKGROUND_CONTEXT, type ShellOutputUpdate } from '@earendil-works/pi-agent-core';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -86,7 +85,7 @@ describe.skipIf(!hasSetsid)('a dropped connection', () => {
 });
 
 describe.skipIf(!hasSetsid)('a large output', () => {
-	it('keeps the view within its limits, and spills the whole output to a private file', async () => {
+	it('keeps the view within its limits', async () => {
 		const started = await server();
 		const backend = backendFor(started);
 		const env: WorkspaceEnv = await backend.connect({ name: 'ada' });
@@ -94,7 +93,7 @@ describe.skipIf(!hasSetsid)('a large output', () => {
 		const result = await env.exec(
 			'seq 1 300000',
 			{
-				capture: { limits: { maxBytes: 2_000, maxLines: 50 }, spill: true },
+				capture: { limits: { maxBytes: 2_000, maxLines: 50 } },
 				onUpdate: (update) => updates.push(update),
 			},
 			ctx,
@@ -105,28 +104,6 @@ describe.skipIf(!hasSetsid)('a large output', () => {
 		const view = updates[0];
 		if (view?.kind !== 'replace') throw new Error('no view');
 		expect(view.output.text.split('\n').at(-1)).toBe('300000');
-		const spilled = result.value.spillPath ?? '';
-		expect((await stat(spilled)).mode & 0o777).toBe(0o600);
-		const whole = await readFile(spilled, 'utf8');
-		expect(whole.split('\n').length).toBe(300_001);
-	});
-
-	it('removes the spill file when the view keeps the whole output', async () => {
-		const started = await server();
-		const backend = backendFor(started);
-		const env = await backend.connect({ name: 'ada' });
-		const token = `short-${Date.now()}-${Math.random()}`;
-		const result = await env.exec(
-			`echo ${token}`,
-			{ capture: { limits: { maxBytes: 2_000, maxLines: 50 }, spill: true } },
-			ctx,
-		);
-		const leftover = await env.exec(`grep -l -- ${token} /tmp/shell-*.out`, undefined, ctx);
-		await env.cleanup();
-		expect(result).toMatchObject({ ok: true, value: { truncation: { truncated: false } } });
-		expect(result.ok ? result.value.spillPath : 'failed').toBeUndefined();
-		// grep answers 1 when no file holds the token.
-		expect(leftover).toMatchObject({ ok: true, value: { exitCode: 1 } });
 	});
 });
 

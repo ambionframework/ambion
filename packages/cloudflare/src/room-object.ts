@@ -27,7 +27,6 @@ import type {
 	LeaseRequest,
 	LeaseResponse,
 	RoomProtocol,
-	ViewRange,
 	ViewResponse,
 } from '@ambionframework/ambion/hosting';
 import { reconcileRoom, runningRoom } from '@ambionframework/ambion/hosting';
@@ -229,6 +228,16 @@ export class RoomObject extends DurableObject<Env> {
 		return await this.running().dismiss(seq);
 	}
 
+	/** Post a message as the system, as `Room.post` does. */
+	async post(input: {
+		to?: string;
+		text: string;
+		refs?: string[];
+		key?: string;
+	}): Promise<ExchangeRef> {
+		return exchangeRef(await this.running().post(input));
+	}
+
 	/**
 	 * The scheduled says that wait to return, including those of a stopped
 	 * record. Workers keep the name `scheduled` for the cron handler, and RPC
@@ -275,8 +284,8 @@ export class RoomObject extends DurableObject<Env> {
 
 	// -- what a seat asks, in wire types --------------------------------------
 
-	async view(activation: string, range?: ViewRange): Promise<ViewResponse> {
-		return this.protocol().view(activation, range);
+	async view(activation: string, message?: Seq): Promise<ViewResponse> {
+		return this.protocol().view(activation, message);
 	}
 
 	async commit(commit: CommitRequest): Promise<CommitResult> {

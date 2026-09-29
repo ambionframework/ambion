@@ -27,7 +27,6 @@ import {
 	byPath,
 	namespaceOf,
 	revisionOf,
-	SOURCES,
 	validName,
 } from '@ambionframework/workspace/git';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
@@ -43,8 +42,7 @@ const UNNAMED = "Unnamed repository; edit this file 'description' to name the re
  * Print one record for each repository: its ID, `HEAD`, each branch with
  * its commit, the source, and the description in base64. `AMBION_ID`
  * names one repository, and `AMBION_NAMESPACE` limits the list to one
- * namespace. The glob skips `.staging`, and the script skips
- * `template-sources`.
+ * namespace. The glob skips `.staging`.
  */
 const LIST_SCRIPT = [
 	'set -euo pipefail',
@@ -62,7 +60,6 @@ const LIST_SCRIPT = [
 	'shopt -s nullglob',
 	'for dir in "$root"/*/; do',
 	'  namespace=$(basename "$dir")',
-	'  [ "$namespace" != template-sources ] || continue',
 	'  [ -z "$AMBION_NAMESPACE" ] || [ "$namespace" = "$AMBION_NAMESPACE" ] || continue',
 	'  for repo in "$dir"*.git; do describe "$namespace/$(basename "$repo" .git)"; done',
 	'done',
@@ -243,7 +240,7 @@ function parseRepositories(output: string, alias: string): GitRepository[] {
 		if (current !== undefined) apply(current, tag, value);
 	}
 	return drafts
-		.filter((draft) => namespaceOf(draft.id) !== undefined && namespaceOf(draft.id) !== SOURCES)
+		.filter((draft) => namespaceOf(draft.id) !== undefined)
 		.map((draft) => repositoryOf(draft, alias))
 		.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
@@ -275,8 +272,7 @@ export class Repositories {
 
 	/** One repository, or `undefined` when no agent reaches it. */
 	async get(id: string, signal?: AbortSignal): Promise<GitRepository | undefined> {
-		const namespace = namespaceOf(id);
-		if (namespace === undefined || namespace === SOURCES) return undefined;
+		if (namespaceOf(id) === undefined) return undefined;
 		return (await this.read(id, '', signal)).find((repository) => repository.id === id);
 	}
 
@@ -286,8 +282,7 @@ export class Repositories {
 		at: GitRevision,
 		signal?: AbortSignal,
 	): Promise<string | undefined> {
-		const namespace = namespaceOf(id);
-		if (namespace === undefined || namespace === SOURCES) return undefined;
+		if (namespaceOf(id) === undefined) return undefined;
 		const output = await this.account.run(
 			RESOLVE_SCRIPT,
 			{
@@ -308,8 +303,7 @@ export class Repositories {
 		hash: string,
 		signal?: AbortSignal,
 	): Promise<GitCommit | undefined> {
-		const namespace = namespaceOf(id);
-		if (namespace === undefined || namespace === SOURCES) return undefined;
+		if (namespaceOf(id) === undefined) return undefined;
 		const output = await this.account.run(
 			SHOW_SCRIPT,
 			{ AMBION_ROOT: this.root, AMBION_ID: id, AMBION_HASH: hash },

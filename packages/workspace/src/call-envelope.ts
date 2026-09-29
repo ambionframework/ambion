@@ -1,6 +1,6 @@
 /**
- * Where one tool call ran, as the audit log and the SQL resource stamp it.
- * The module imports types alone, so the SQL entry stays small.
+ * Where one tool call ran, as the audit log and the `sql` tool stamp it.
+ * The module imports types alone.
  */
 import type { ToolContext } from '@ambionframework/ambion';
 

@@ -33,10 +33,11 @@ stored field.
 
 ## 3. Three rules
 
-1. A person's question or a returned say opens an exchange only when none
-   is open. Agent speech, arrivals, and departures do not open one. A
-   question or a returned say that lands while one is open belongs to that
-   exchange's work.
+1. A person's question or a post opens an exchange only when none is open.
+   A post is a message of the system: the host posts it with `room.post`,
+   and the room's clock posts a returned say. Agent speech, arrivals, and
+   departures do not open one. A question or a post that lands while one is
+   open belongs to that exchange's work.
 2. Quiescence closes the current exchange. The room derives “live” from leases
    and pending wakes, then appends a close with the observed `through` boundary.
    Work that reaches a terminal state is handled the same way.
@@ -49,7 +50,7 @@ stored field.
 ```mermaid
 stateDiagram-v2
     quiet --> open : person's question
-    quiet --> open : returned say
+    quiet --> open : post
     open --> open : message steers work
     open --> quiet : no live work
 ```
@@ -68,7 +69,7 @@ the `person` after leaving the room, and the summary remains addressed to
 them. A second person may speak into the open exchange; their next question
 opens a later exchange once the room is quiet.
 
-**A returned say opens an exchange with no author.** Its exchange has no
+**A post opens an exchange with no author.** Its exchange has no
 `person` until a person speaks in the range. The first person who speaks
 becomes its `person` and receives its summary. An exchange where no person
 spoke owes no summary.
@@ -82,7 +83,7 @@ the exchange view hold the final value.
 ## 5. A fold over the journal
 
 `exchangeAfter` finds the first spoken message from a known person, or the
-first returned say for one, after the last close. Closes, leases, messages,
+first post, after the last close. Closes, leases, messages,
 and pending work are all reconstructed from the journal, so a resumed room continues an exchange interrupted by a
 process or host failure. Unexpired leases may continue; unclaimed or expired
 work follows the retry policy. A configured summary writer is scheduled only
@@ -106,18 +107,18 @@ sequenceDiagram
     W->>R: schedule, after 600 (seq 6, to worker)
     R-->>R: close [4, 6], person priya
     Note over R: 600 seconds later, the alarm
-    R->>R: returned (seq 9, message 6) opens exchange 9, no person
+    R->>R: posted (seq 9, returns 6) opens exchange 9, no person
     R->>W: activation
     W->>R: say to priya
     R-->>R: close [9, 10], awaiting priya
 ```
 
 **The room returns the say when it is due.** The reconcile writes a
-`returned` entry `{ to, message, text, refs }`: the returned say. It
-copies the text and the refs of the say, so the agent reads them when the
-record window or a summary no longer shows the say. The room wrote it, so it
-has no `from`. It wakes one seat, the one that `to` names, and steers no
-other.
+`posted` entry `{ to, returns, text, refs }`: the returned say. `returns`
+holds the seq of the say. The post copies the text and the refs of the say,
+so the agent reads them when the record window or a summary no longer shows
+the say. The system wrote it, so it has no `from`. It wakes one seat, the
+one that `to` names, and steers no other.
 
 **The due time comes from the record.** A say is due at its `at` plus
 `after` seconds. `nextAlarm` takes the earliest due time beside the lease
@@ -193,6 +194,42 @@ summary, returning `undefined` when no writer is configured or the writer
 deliberately stays silent. A revoked or abandoned required assignment rejects
 the response. The exchange handle is the completion API; there is no room-wide
 quiet wait.
+
+**The host posts with `room.post`.** A post is a message of the system:
+the `posted` entry `{ to?, text, refs? }` has no author, and a seat cannot
+write one. It opens an exchange when none is open, and the call returns the
+handle of the exchange that holds it.
+
+```ts
+workspace.processes.subscribe((event) => {
+  if (event.type !== 'ended' || event.process.room !== room.name) return;
+  const { handle, name, agent, state } = event.process;
+  room
+    .post({
+      to: agent,
+      text: `lab: process ${name ?? handle} is ${state}. Call status with ${handle}.`,
+      key: `process-ended:${handle}`,
+    })
+    .catch((error: unknown) => log.error(error));
+});
+```
+
+- **A post routes as a say does.** A post to a seat wakes that seat, a post
+  to a person wakes no seat, and a post with no `to` wakes each idle seat at
+  `broadcast` or wider. The room refuses a post to a `none` seat and to a
+  name it does not know.
+- **A post with `to` steers its target alone.** A post with no `to` steers
+  each seat at work. The record shows every post to each seat at its next
+  activation.
+- **A post key has a key space of its own.** A repeated `key` lands once and
+  returns the same handle. The same key names a different operation for a
+  visit send and for a post, so the two never collide.
+- **The limits of a message apply.** `limits.message.bytes` bounds its text,
+  and its refs follow the ref rules.
+- **A post carries no human direction.** The prompt of an exchange that a
+  post opened reads `The host opened exchange <n> with message <n>. A post
+reports an event and gives no direction.` Put a label, such as `ci:`, in
+  the text, so a seat reads where the event comes from.
 
 Summary completion is folded from the recorded close, messages, and lease
 history (`summaryCompletion`). A covering summary wins over lease state; a

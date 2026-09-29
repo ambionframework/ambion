@@ -24,7 +24,6 @@ import {
 	changeTo,
 	filesOf,
 	hashesOf,
-	SOURCES,
 	sameFiles,
 	TEMPLATES,
 	type TemplateRegistration,
@@ -34,6 +33,13 @@ import { flattenTree, type GitRepo, readCommit, readHead } from 'just-git/repo';
 import type { GitServer } from 'just-git/server';
 import type { OpenGitStorage, RegistryRow } from './storage.ts';
 import type { TokenClaims } from './tokens.ts';
+
+/**
+ * The namespace of the source of each template. It is a storage detail of
+ * this backend: no agent takes the name, and no agent reaches a repository
+ * in it.
+ */
+export const SOURCES = 'template-sources';
 
 /** The author of every commit that the backend writes. */
 const BACKEND_AUTHOR = { name: 'ambion', email: 'ambion@ambion.invalid' };
