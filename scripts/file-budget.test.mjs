@@ -12,8 +12,6 @@ const BUDGET = 600;
 const GRANDFATHERED = {
 	// The pure decision table for the room. One switch per command.
 	'packages/ambion/src/room/transition.ts': 740,
-	// The seat runner. One activation from claim to end.
-	'packages/ambion/src/execution/runner.ts': 680,
 };
 
 /** Generated files carry no budget. */

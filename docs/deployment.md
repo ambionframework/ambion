@@ -281,7 +281,7 @@ provide independent cancellation.
 Subscriptions belong to one host. Ambion includes no durable subscription
 service across processes.
 
-**Transport deadlines and execution limits have different scopes.**
+**Call deadlines and execution limits have different scopes.**
 `limits.call.timeout` bounds each executor call to the room.
 `limits.call.attempts` bounds claim and release retries. A lost answer can
 follow a successful remote write; the journal still decides which
@@ -291,7 +291,7 @@ Monitor `delivery_error` for failed or uncertain delivery. Unclaimed work stays
 pending and retries while eligible, including after a long shutdown. Execution
 retry limits apply after a claim. Use `abort()` or unseat the affected agent when
 the application must end pending work. See the
-[transport contract](durability.md#transport-calls-and-unclaimed-work).
+[call contract](durability.md#executor-calls-and-unclaimed-work).
 
 **History and work can grow.** Full history remains in storage and replay.
 Activation deadlines and retry limits do not bound the total exchange duration.

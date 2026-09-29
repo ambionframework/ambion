@@ -15,7 +15,7 @@ import {
 	manualClock,
 	person,
 	protocolOf,
-	recordingTransport,
+	recordingExecution,
 	turn,
 	worker,
 } from './support/core-exchange.ts';
@@ -168,12 +168,9 @@ describe.each(storages)('stop on $name storage', (storage) => {
 		const opened = await openFor(storage);
 		const lost = losing(opened.storage, 'lease');
 		const wakes: Wake[] = [];
-		const runtime = createRuntime({
-			storage: lost.journals,
-			transport: recordingTransport(wakes),
-		});
+		const runtime = createRuntime({ storage: lost.journals });
 		const quietly = scripted(() => quiet());
-		const room = await workerRoom(runtime, quietly);
+		const room = await workerRoom(runtime, quietly, { execution: recordingExecution(wakes) });
 		await (await room.visit(person)).send({ to: worker.name, text: 'claim this work' });
 		await turn();
 		const activation = wakes[0]?.activation ?? '';
@@ -266,13 +263,13 @@ describe.each(storages)('stop on $name storage', (storage) => {
 		// This runtime only wakes the seat and never claims, so the question is
 		// due but no lease covers it when the room stops.
 		const wakes: Wake[] = [];
-		const runtime = createRuntime({
-			storage: opened.storage,
-			transport: recordingTransport(wakes),
-		});
+		const runtime = createRuntime({ storage: opened.storage });
 		const room = await workerRoom(
 			runtime,
 			scripted(() => quiet()),
+			{
+				execution: recordingExecution(wakes),
+			},
 		);
 		await (await room.visit(person)).send({ to: worker.name, text: 'answer me after the restart' });
 		await turn();

@@ -7,12 +7,11 @@
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import type {
-	AgentExecutionContext,
 	CommitRequest,
+	ConnectorRequest,
 	LeaseRequest,
 	RoomProtocol,
 	Steer,
-	Transport,
 } from '../src/hosting.ts';
 import {
 	createRuntime,
@@ -24,6 +23,7 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
+import { portExecution } from './support/ports.ts';
 import { andrei, messagesOf, participantsOf, roomName, scriptedAgent } from './support/room.ts';
 import { isClosing, quiet, scripted, speak } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
@@ -156,32 +156,28 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 	});
 });
 
-/** A room whose seats the test answers itself, through the protocol the transport hands it. */
+/** A room whose seats the test answers itself, through the protocol the execution hands it. */
 async function controlled(storage: Storage, mutateSteering = false) {
 	const opened = await openFor(storage);
 	const connections = new Map<
 		string,
-		{ calls: RoomProtocol; context: AgentExecutionContext; activation: string }
+		{ calls: RoomProtocol; context: ConnectorRequest; activation: string }
 	>();
 	const steered: Steer[] = [];
-	const transport: Transport = {
-		connect(calls, context) {
-			return {
-				async wake(wake) {
-					connections.set(context.seat, { calls, context, activation: wake.activation });
-				},
-				async steer(steer) {
-					steered.push(structuredClone(steer));
-					if (mutateSteering) {
-						Reflect.set(steer.message, 'text', 'Transport mutation.');
-						steer.message.wakes?.push('intruder');
-					}
-				},
-				async cut() {},
-			};
+	const execution = portExecution((calls, context) => ({
+		async wake(wake) {
+			connections.set(context.seat, { calls, context, activation: wake.activation });
 		},
-	};
-	const runtime = createRuntime({ storage: opened.storage, transport });
+		async steer(steer) {
+			steered.push(structuredClone(steer));
+			if (mutateSteering) {
+				Reflect.set(steer.message, 'text', 'Port mutation.');
+				steer.message.wakes?.push('intruder');
+			}
+		},
+		async cut() {},
+	}));
+	const runtime = createRuntime({ storage: opened.storage, execution });
 	const agents = [scriptedAgent('alpha'), scriptedAgent('beta')];
 	const room = stopAtEnd(await startRoom({ name: roomName('protocol'), agents, runtime }));
 	const visit = await room.visit(andrei);

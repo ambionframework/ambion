@@ -560,16 +560,17 @@ export interface AgentExecutor {
 	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
 	readonly speaking?: string;
 	/**
-	 * The token limit for the record one activation reads. When set, the seat
-	 * pages the record and keeps the newest part that fits the limit, plus the
-	 * open exchange whole. Absent reads the whole record.
+	 * The token limit for the record one activation reads. When set, the room
+	 * keeps the newest part of the record that fits the limit, plus the open
+	 * exchange whole. Absent reads the whole record.
 	 */
 	readonly activationTokenLimit?: number;
 	/**
-	 * How the agent counts tokens against its limit. Absent uses a length
-	 * estimate. The seat runs it, so it never crosses the wire.
+	 * The name of the estimator that counts tokens against the limit. The room
+	 * runs the estimator from the registry of its runtime, so the definition
+	 * carries the name alone. Absent names `length`.
 	 */
-	readonly estimateTokens?: (text: string) => number;
+	readonly estimateTokens?: string;
 }
 
 export interface AgentDefinition {

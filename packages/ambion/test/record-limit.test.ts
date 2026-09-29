@@ -1,20 +1,22 @@
 /**
  * A seat with a token limit reads a windowed record. The record keeps every
- * message; the seat pages the tail and reads the part that fits, plus the open
- * exchange whole. An older closed exchange with no summary falls out of context.
+ * message; the room serves the tail that fits, plus the open exchange whole,
+ * in one view. An older closed exchange with no summary falls out of context.
  */
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { inProcessTransport, type Transport } from '../src/hosting.ts';
 import {
 	type AgentDefinition,
 	type CreateRuntimeOptions,
 	createRuntime,
 	type Room,
+	resumeRoom,
 	type StartRoomOptions,
 	startRoom,
 } from '../src/index.ts';
+import { RoomHost } from '../src/room-host/room.ts';
 import { priya, sam } from './support/cast.ts';
+import { around } from './support/ports.ts';
 import { andrei, messagesOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import {
 	answersEveryQuestion,
@@ -27,27 +29,27 @@ import {
 } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 
-/** A page one seat read: the record floor it reported, the count it omitted, and its size. */
+/** A view one seat read: the count it omitted, and its size. */
 interface Page {
 	seat: string;
-	earliest: number | undefined;
 	omitted?: number;
 	count: number;
 }
+
+/** The estimators of the test runtime: `chars` counts one token per character. */
+const estimators = { chars: (text: string) => text.length };
 
 /** A Pi seat that counts one token per character, with this limit when one is given. */
 const limited = (name: string, activationTokenLimit?: number) =>
 	scriptedAgent(
 		name,
 		`${name}.`,
-		activationTokenLimit === undefined
-			? {}
-			: { activationTokenLimit, estimateTokens: (text: string) => text.length },
+		activationTokenLimit === undefined ? {} : { activationTokenLimit, estimateTokens: 'chars' },
 	);
 
 /**
- * A room whose view responses and model contexts the test reads. The transport
- * wraps the in-process one and records every view response a seat reads.
+ * A room whose view responses and model contexts the test reads. The
+ * execution records every view response a seat reads.
  */
 async function watched(
 	agents: AgentDefinition[],
@@ -57,29 +59,28 @@ async function watched(
 	const { limits, ...room } = options;
 	const pages: Page[] = [];
 	const contexts: { seat: string; text: string }[] = [];
-	const local = inProcessTransport();
-	const transport: Transport = {
-		connect(protocol, context) {
-			const view: typeof protocol.view = async (id, range) => {
-				const response = await protocol.view(id, range);
-				if ('view' in response) {
-					const { earliest, omitted, messages } = response.view.context;
-					pages.push({ seat: context.seat, earliest, omitted, count: messages.length });
-				}
-				return response;
-			};
-			return local.connect({ ...protocol, view }, context);
-		},
-	};
 	const stream = scripted((context, name, call) => {
 		contexts.push({ seat: name, text: contextText(context) });
 		return script(context, name, call);
 	});
-	const runtime = createRuntime({
-		transport,
-		limits,
-		execution: piExecution({ sessions: 'memory', stream }),
+	const execution = around(piExecution({ sessions: 'memory', stream }), {
+		room(protocol, request) {
+			const view: typeof protocol.view = async (id, message) => {
+				const response = await protocol.view(id, message);
+				if ('view' in response) {
+					const { omitted, messages } = response.view.context;
+					pages.push({
+						seat: request.seat,
+						...(omitted === undefined ? {} : { omitted }),
+						count: messages.length,
+					});
+				}
+				return response;
+			};
+			return { ...protocol, view };
+		},
 	});
+	const runtime = createRuntime({ limits, estimators, execution });
 	const started = stopAtEnd(await startRoom({ name: roomName('limit'), runtime, agents, ...room }));
 	return { room: started, pages, contexts };
 }
@@ -111,7 +112,7 @@ const scribeSeats = {
 } as const;
 
 describe('a limit windows the record', () => {
-	it('drops an older unsummarised exchange, keeps the open one, and pages the room over the wire', async () => {
+	it('drops an older unsummarised exchange, keeps the open one, and windows at the room', async () => {
 		const { room, pages, contexts } = await watched(
 			[limited('worker', 40)],
 			answersEveryQuestion(['andrei']),
@@ -125,9 +126,9 @@ describe('a limit windows the record', () => {
 		expect(answering.every(({ text }) => text.includes('earlier message'))).toBe(true);
 		// The record still holds the dropped exchange for human review.
 		expect(await recorded(room, 'alpha marker')).toBe(true);
-		// The room served a bounded page: a paged response carries the record
-		// floor. Without the range reaching the room, none would.
-		expect(pages.some((page) => page.earliest !== undefined)).toBe(true);
+		// The room windowed the view it served: the response over the wire counts
+		// what it left out.
+		expect(pages.some((page) => page.omitted !== undefined)).toBe(true);
 	});
 
 	it('caps the record at the room for a seat with no token limit, and a token-limited seat stops at the room floor', async () => {
@@ -146,7 +147,7 @@ describe('a limit windows the record', () => {
 		expect(answering.every(({ text }) => !text.includes('alpha marker'))).toBe(true);
 		expect(answering.every(({ text }) => /\d+ earlier messages? not shown/.test(text))).toBe(true);
 		expect(await recorded(room, 'alpha marker')).toBe(true);
-		// A page reads below the cap, and the token-limited seat stops its window at the cap.
+		// The token limit windows inside the cap, so each view counts what the cap left out.
 		const read = pages.filter((page) => page.seat === 'reader');
 		expect(read.length).toBeGreaterThan(0);
 		expect(read.every((page) => page.omitted !== undefined)).toBe(true);
@@ -194,36 +195,19 @@ describe('a limit windows the record', () => {
 		expect(closings.every((text) => !text.includes('sam question'))).toBe(true);
 	});
 
-	it('pages the record across more than one page', async () => {
-		// A limit that wants the whole record, so the seat pages to the floor.
-		// The reader starts in the reserve, so the record grows without any read.
-		const { room, pages } = await watched(
-			[
-				scriptedAgent('reader', 'reader.', {
-					activationTokenLimit: 100_000,
-					estimateTokens: () => 1,
-				}),
-			],
-			() => quiet(),
-			{ seats: {} },
-		);
-
-		// More messages than one page holds (RECORD_PAGE is 64).
-		const visit = await room.visit(andrei);
-		for (let index = 0; index < 80; index += 1) await visit.send({ text: `message ${index}` });
-		await waitForRoom(room);
-		expect(pages).toHaveLength(0);
-
-		// Seat the reader and wake it once: it reads the whole record over pages.
-		await room.seat('reader');
-		await visit.send({ text: 'wake the reader' });
-		await waitForRoom(room);
-
-		expect((await messagesOf(room)).length).toBeGreaterThan(64);
-		// No response carried more than one page, and at least one page was full,
-		// so the seat assembled the record over several bounded reads.
-		expect(pages.length).toBeGreaterThan(0);
-		expect(pages.every((page) => page.count <= 64)).toBe(true);
-		expect(pages.some((page) => page.count === 64)).toBe(true);
-	}, 60_000);
+	it('fails the start and the resume of a room whose agent names an estimator the runtime lacks', async () => {
+		const reader = scriptedAgent('reader', 'reader.', {
+			activationTokenLimit: 10,
+			estimateTokens: 'words',
+		});
+		const runtime = createRuntime({ estimators });
+		const name = roomName('estimator');
+		const refused = { code: 'missing_definition', message: /names estimator 'words'/ };
+		await expect(startRoom({ name, runtime, agents: [reader] })).rejects.toMatchObject(refused);
+		const room = await startRoom({ name, runtime, agents: [limited('reader', 10)] });
+		// A name the room defines no seat for sets no token limit.
+		expect(room instanceof RoomHost && room.tokenWindow('nobody')).toBeUndefined();
+		await room.stop();
+		await expect(resumeRoom(name, { runtime, agents: [reader] })).rejects.toMatchObject(refused);
+	});
 });

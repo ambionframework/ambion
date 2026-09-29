@@ -98,7 +98,7 @@ The executor passes each policy field to the Codex SDK unchanged.
 | `bundles`               | None               | Tool bundles with guidance                                   |
 | `speaking`              | `DEFAULT_GUIDANCE` | The speaking policy that replaces the default                |
 | `activationTokenLimit`  | The whole record   | The token limit for the record one activation reads          |
-| `estimateTokens`        | Length estimate    | How the agent counts tokens against its limit                |
+| `estimateTokens`        | `'length'`         | The name of the estimator in the runtime that counts tokens  |
 | `nativeTools`           | `'none'`           | `'none'` turns off every native tool; `'codex'` keeps them   |
 | `sandboxMode`           | No sandbox         | `read-only`, `workspace-write`, or `danger-full-access`      |
 | `approvalPolicy`        | Codex default      | `never`, `on-request`, `on-failure`, or `untrusted`          |
@@ -106,6 +106,12 @@ The executor passes each policy field to the Codex SDK unchanged.
 | `networkAccessEnabled`  | Codex default      | The network of a command, under `workspace-write` only       |
 | `workingDirectory`      | Process directory  | The directory where Codex works                              |
 | `additionalDirectories` | None               | More writable directories, under `workspace-write` only      |
+
+**`estimateTokens` names an estimator in the runtime.** The room runs it
+and windows the record, so the definition carries the name alone. `length`,
+the default, counts `Math.ceil(text.length / 4)`. `createRuntime({ estimators })`
+registers other names, and a room start fails on a name the runtime does not
+hold. [History and limits](room.md#history-and-limits) states the rule.
 
 **`nativeTools: 'none'` fixes the policy.** The executor then sets
 `sandboxMode` to `read-only`, `approvalPolicy` to `never`,
@@ -480,7 +486,8 @@ different account than the one that started the thread.
 does not retry. Set `CODEX_API_KEY`, or run `codex login`.
 
 **`Cannot run an executor of kind '...': this seat needs 'codex'.`** A Pi or
-Claude seat ran under `codexExecution()`. Route with `composeExecutions`.
+Claude seat reached a Codex executor through an execution with no kind.
+Pass the execution of each family.
 
 **A native tool shows up after a Codex upgrade.** The seat lists or calls a
 tool that is not a room tool and not one of yours. A newer `codex` added a

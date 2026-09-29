@@ -4,8 +4,8 @@
  * An application holds a `Runtime` as an opaque token: a clock, and a place
  * to store the record. `startRoom` and `readRoom` take one and pass it on;
  * neither reads anything else off it. Everything else a host or the
- * kernel's own internals need — the journal namespace, the transport, the
- * limits, and the room lifecycle registry — lives behind `hostingOf`.
+ * kernel's own internals need — the journal namespace, the limits, and the
+ * room lifecycle registry — lives behind `hostingOf`.
  *
  * `Runtime`'s brand blocks a hand-written literal at compile time: nothing
  * outside this file can name the key it carries, so a value assembled from
@@ -23,13 +23,28 @@
  */
 
 import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework/journal';
+import { AmbionError } from '../errors.ts';
 import type { Executor } from '../execution/executor.ts';
 import type { TraceOpener } from '../execution/trace.ts';
 import type { AgentPort, RoomProtocol } from '../protocol.ts';
 import type { ScheduleLimits } from '../scheduling.ts';
 import type { AgentDefinition, Clock, ExecutionEvent, TraceLogger } from '../types.ts';
 import { systemClock } from './clock.ts';
-import { defaultExecutionFactory } from './defaults.ts';
+
+/** Counts the tokens of one text. A host registers one by name in `createRuntime`. */
+type TokenEstimator = (text: string) => number;
+
+/**
+ * The estimator that every runtime holds, and that an agent with a token
+ * limit reads with when it names none: a length estimate of four characters
+ * to one token.
+ */
+const DEFAULT_ESTIMATOR = 'length';
+
+/** The built-in estimators. A host cannot register another under these names. */
+const BUILT_IN: ReadonlyMap<string, TokenEstimator> = new Map([
+	[DEFAULT_ESTIMATOR, (text: string) => Math.ceil(text.length / 4)],
+]);
 
 /** A key nobody outside this file can name. `createRuntime` is the one place that casts past it. */
 declare const RUNTIME: unique symbol;
@@ -43,8 +58,8 @@ export interface Runtime {
 }
 
 /**
- * What the runtime hands an execution composition: the clock, the host's
- * native storage, the limits, the logger, and the transport.
+ * What the runtime hands an execution: the clock, the host's native
+ * storage, the limits, and the logger.
  */
 export interface ExecutionHost {
 	readonly clock: Clock;
@@ -52,17 +67,19 @@ export interface ExecutionHost {
 	readonly limits: Limits;
 	/** Where the steps of each activation go. Absent, the trace drops them. */
 	readonly logger?: TraceLogger;
-	/** Absent, every seat is an actor in this process. */
-	readonly transport?: Transport;
 }
 
 /**
- * The execution side of a room, as a value. An executor package builds one,
- * such as `piExecution()`. `startRoom` and `createRuntime` take it; the
- * kernel never reads what is inside.
+ * The execution side of a room, as a value. An executor package builds one
+ * with `localExecution`, such as `piExecution()`. A remote host builds one
+ * whose ports cross to the host that runs the seat. `startRoom` and
+ * `createRuntime` take it. The kernel reads its `kind` and calls its
+ * connector.
  */
-export interface Execution {
-	connector(host: ExecutionHost): ExecutionConnector;
+export interface Execution<Port extends AgentPort = AgentPort> {
+	/** The executor kind of the seats that it serves. Absent, it serves a seat of every kind. */
+	readonly kind?: string;
+	connector(host: ExecutionHost): ExecutionConnector<Port>;
 }
 
 /** Every bound the runtime sets, by what it bounds. One value for every room in the runtime. */
@@ -113,16 +130,14 @@ export const DEFAULT_TRACE_LIMITS: Limits['trace'] = Object.freeze({
 
 /**
  * What a host, or the kernel's own internals, need beyond the application
- * view: the journal namespace, the transport, the limits, the default
- * execution, and the room lifecycle registry. `hostingOf` is the one way to
- * reach it from a `Runtime` value.
+ * view: the journal namespace, the limits, the executions of the runtime,
+ * and the room lifecycle registry. `hostingOf` is the one way to reach it
+ * from a `Runtime` value.
  */
 export interface Hosting {
 	readonly journals: JournalOpener;
-	/** How the room reaches a seat. Absent, every seat is an actor in this process. */
-	readonly transport?: Transport;
-	/** The execution every room in this runtime uses, unless a room names its own. */
-	readonly execution?: Execution;
+	/** The executions that every room in this runtime uses before a default, after its own. */
+	readonly executions: readonly Execution[];
 	readonly limits: Limits;
 	/** Drop a running room from memory and write nothing. The record keeps everything. */
 	evict(name: string): void;
@@ -130,11 +145,13 @@ export interface Hosting {
 
 interface RuntimeState extends Hosting {
 	running: Map<string, RunningRoom>;
-	/** One connector per executor kind, built on first use from the registered default. */
-	readonly defaults: Map<string, ExecutionConnector | undefined>;
+	/** One connector per executor kind, built on first use from the default of the kind. */
+	readonly defaults: Map<string, ExecutionConnector>;
 	readonly clock: Clock;
 	readonly storage: JournalOpener;
 	readonly logger?: TraceLogger;
+	/** The token estimators of the runtime, by name, with the built-in ones. */
+	readonly estimators: ReadonlyMap<string, TokenEstimator>;
 }
 
 const stateFor = new WeakMap<Runtime, RuntimeState>();
@@ -150,8 +167,7 @@ export function hostingOf(runtime: Runtime): Hosting {
 	const found = state(runtime);
 	return {
 		journals: found.journals,
-		...(found.transport === undefined ? {} : { transport: found.transport }),
-		...(found.execution === undefined ? {} : { execution: found.execution }),
+		executions: found.executions,
 		limits: found.limits,
 		evict: found.evict,
 	};
@@ -177,7 +193,7 @@ export function releaseRoom(runtime: Runtime, name: string, room: RunningRoom): 
 	if (running.get(name) === room) running.delete(name);
 }
 
-/** What an execution composition reads from a runtime. */
+/** What an execution reads from a runtime. */
 export function executionHostOf(runtime: Runtime): ExecutionHost {
 	const found = state(runtime);
 	return {
@@ -185,21 +201,12 @@ export function executionHostOf(runtime: Runtime): ExecutionHost {
 		storage: found.storage,
 		limits: found.limits,
 		...(found.logger === undefined ? {} : { logger: found.logger }),
-		...(found.transport === undefined ? {} : { transport: found.transport }),
 	};
 }
 
-/**
- * The connector of the default execution for `kind`, built once per runtime.
- * Nothing when no executor package registered a default for the kind.
- */
-export function defaultConnectorOf(runtime: Runtime, kind: string): ExecutionConnector | undefined {
-	const found = state(runtime);
-	if (!found.defaults.has(kind)) {
-		const factory = defaultExecutionFactory(kind);
-		found.defaults.set(kind, factory?.().connector(executionHostOf(runtime)));
-	}
-	return found.defaults.get(kind);
+/** The connectors of the defaults that the runtime built, by kind. Each kind builds once per runtime. */
+export function defaultConnectors(runtime: Runtime): Map<string, ExecutionConnector> {
+	return state(runtime).defaults;
 }
 
 /** The dependencies that one in-process seat needs for one captured definition. */
@@ -226,16 +233,6 @@ export interface RunningRoom {
 	reconcile(): Promise<void>;
 }
 
-/**
- * How a room reaches a seat. In process, a port is the seat's own actor over
- * a direct handle on the room (`inProcessTransport` in `execution/runner.ts`);
- * across a boundary, a port carries the wake over, and the seat reaches
- * back through the same boundary.
- */
-export interface Transport {
-	connect(room: RoomProtocol, context: AgentExecutionContext): AgentPort;
-}
-
 /** The collaboration host's narrow request for one configured seat port. */
 export interface ConnectorRequest {
 	readonly room: string;
@@ -244,8 +241,14 @@ export interface ConnectorRequest {
 	readonly emit: (event: ExecutionEvent) => void;
 }
 
-export interface ExecutionConnector {
-	connect(room: RoomProtocol, request: ConnectorRequest): AgentPort;
+/**
+ * How a room reaches a seat. In process, a port is the seat's own
+ * `AgentRunner` over a direct handle on the room. Across a boundary, a port
+ * carries the wake over, and the seat reaches back through the same
+ * boundary.
+ */
+export interface ExecutionConnector<Port extends AgentPort = AgentPort> {
+	connect(room: RoomProtocol, request: ConnectorRequest): Port;
 }
 
 /** Collaboration services that a room host may use. */
@@ -253,6 +256,7 @@ export interface RoomRuntime {
 	readonly clock: Clock;
 	readonly journals: JournalOpener;
 	readonly limits: Limits;
+	readonly estimators: ReadonlyMap<string, TokenEstimator>;
 	release(room: RunningRoom): void;
 }
 
@@ -262,23 +266,23 @@ export function roomRuntime(runtime: Runtime, name: string): RoomRuntime {
 		clock: runtime.clock,
 		journals: hosting.journals,
 		limits: hosting.limits,
+		estimators: hosting.estimators,
 		release: (room) => releaseRoom(runtime, name, room),
 	};
 }
 
 export interface CreateRuntimeOptions {
 	clock?: Clock;
-	transport?: Transport;
 	/** Where the runtime opens room journals. */
 	storage?: JournalOpener;
 	/**
 	 * The execution every room in this runtime uses, such as `piExecution()`
-	 * from `@ambionframework/pi`. A room may name its own. Absent, each seat
-	 * runs on the default execution of its executor kind, when the executor
-	 * package supplies one. A seat of a kind with no default fails with an
-	 * error event.
+	 * from `@ambionframework/pi`, or one execution for each executor kind. A
+	 * room may name its own, and the room's serve first. A seat of a kind that
+	 * no execution here serves runs on the default of its kind. A seat of a
+	 * kind with no default fails with an error event.
 	 */
-	execution?: Execution;
+	execution?: Execution | readonly Execution[];
 	/**
 	 * Where the steps of each activation go, such as the host's log. Absent,
 	 * the trace drops them. The kernel writes nothing to stdout.
@@ -286,6 +290,12 @@ export interface CreateRuntimeOptions {
 	logger?: TraceLogger;
 	/** Any field of any group. An omitted field keeps its default. */
 	limits?: { readonly [Group in keyof Limits]?: Partial<Limits[Group]> };
+	/**
+	 * The token estimators an agent may name in `estimateTokens`, by name.
+	 * The room runs the estimator, so a definition carries the name alone.
+	 * Every runtime also holds `length`, which a host cannot replace.
+	 */
+	estimators?: Readonly<Record<string, TokenEstimator>>;
 }
 
 export { systemClock } from './clock.ts';
@@ -363,12 +373,10 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		journals,
 		clock,
 		storage,
-		...optional({
-			transport: options.transport,
-			execution: options.execution,
-			logger: options.logger,
-		}),
+		executions: executionsOf(options.execution),
+		...(options.logger === undefined ? {} : { logger: options.logger }),
 		limits,
+		estimators: estimatorsOf(options.estimators),
 		evict(name) {
 			const room = running.get(name);
 			running.delete(name);
@@ -378,11 +386,54 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	return runtime;
 }
 
-/** The fields of an object that hold a value. */
-function optional<T extends object>(fields: T): Partial<T> {
-	return Object.fromEntries(
-		Object.entries(fields).filter(([, value]) => value !== undefined),
-	) as Partial<T>;
+/**
+ * The token window of one definition: its limit, and the estimator it names
+ * from the registry of the runtime. Absent when the definition sets no limit.
+ * A name the registry does not hold throws, so the room checks each
+ * definition with it when a run starts.
+ */
+export function tokenWindowOf(
+	agent: AgentDefinition,
+	runtime: { readonly estimators: ReadonlyMap<string, TokenEstimator> },
+): { readonly limit: number; readonly estimate: TokenEstimator } | undefined {
+	const { activationTokenLimit: limit, estimateTokens: name = DEFAULT_ESTIMATOR } = agent.executor;
+	if (limit === undefined) return undefined;
+	const estimate = runtime.estimators.get(name);
+	if (estimate === undefined)
+		throw new AmbionError(
+			'missing_definition',
+			`Agent '${agent.name}' names estimator '${name}', and the runtime holds none by that name.`,
+		);
+	return { limit, estimate };
+}
+
+/** The built-in estimators and the ones the host registers, checked once. */
+function estimatorsOf(
+	given: Readonly<Record<string, TokenEstimator>> | undefined,
+): ReadonlyMap<string, TokenEstimator> {
+	const estimators = new Map(BUILT_IN);
+	for (const [name, estimate] of Object.entries(given ?? {})) {
+		if (BUILT_IN.has(name))
+			throw new Error(
+				`Runtime estimators.${name} is built in: register the estimator under another name.`,
+			);
+		if (typeof estimate !== 'function')
+			throw new Error(`Runtime estimators.${name} must be a function.`);
+		estimators.set(name, estimate);
+	}
+	return estimators;
+}
+
+/** The executions that an option names, in order. */
+export function executionsOf(
+	execution: Execution | readonly Execution[] | undefined,
+): readonly Execution[] {
+	if (execution === undefined) return [];
+	return Object.freeze(isList(execution) ? [...execution] : [execution]);
+}
+
+function isList(execution: Execution | readonly Execution[]): execution is readonly Execution[] {
+	return Array.isArray(execution);
 }
 
 /** The executor call bounds, checked once for every room in the runtime. */

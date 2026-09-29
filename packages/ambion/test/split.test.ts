@@ -17,7 +17,6 @@ import type { JournalEntry } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/host/runtime.ts';
-import { inProcessTransport } from '../src/hosting.ts';
 import { createRuntime, resumeRoom, startRoom } from '../src/index.ts';
 import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { fakeClock } from '../src/testing.ts';
@@ -35,6 +34,7 @@ import {
 import { childWrites, quietNow } from './support/core-failure.ts';
 import { replayState } from './support/fold.ts';
 import { History, standing, violations } from './support/history.ts';
+import { serializing } from './support/ports.ts';
 import { collect, messagesOf, roomName, storedOf, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
@@ -46,7 +46,6 @@ import {
 	type Storage,
 	sqlite,
 } from './support/storage.ts';
-import { serializing } from './support/transport.ts';
 
 const node = process.env.AMBION_NODE ?? process.execPath;
 
@@ -76,8 +75,10 @@ function entriesOf(stored: readonly JournalEntry[]): RoomEntry[] {
 async function splitRoom(storage: Storage, gate?: () => Promise<void> | undefined) {
 	const opened = await openFor(storage);
 	const clock = fakeClock();
-	const host = (journals = opened.storage) =>
-		createRuntime({ storage: journals, clock, transport: serializing(inProcessTransport()) });
+	const host = (journals = opened.storage) => createRuntime({ storage: journals, clock });
+	// Every request and response between a seat and the room crosses as JSON.
+	const execution = () =>
+		serializing(piExecution({ sessions: 'memory', stream: scripted(script) }));
 	const first = host(gate === undefined ? undefined : gatedJournals(opened.storage, gate));
 	const name = roomName('split');
 	const room = await startRoom({
@@ -90,14 +91,10 @@ async function splitRoom(storage: Storage, gate?: () => Promise<void> | undefine
 			[assistant.name]: 'none',
 		},
 		agents: [product, colleague, assistant],
-		execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+		execution: execution(),
 	});
 	const resume = (runtime = host()) =>
-		resumeRoom(name, {
-			runtime,
-			agents,
-			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
-		});
+		resumeRoom(name, { runtime, agents, execution: execution() });
 	return { opened, clock, first, name, room, events: collect(room), host, resume };
 }
 

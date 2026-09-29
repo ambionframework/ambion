@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineHuman,
@@ -74,7 +73,6 @@ async function runtimeOn(storage: Storage): Promise<Runtime> {
 	return createRuntime({
 		storage: opened.storage,
 		clock: fakeClock(),
-		transport: inProcessTransport(),
 	});
 }
 

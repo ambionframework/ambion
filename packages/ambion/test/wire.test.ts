@@ -181,7 +181,7 @@ describe('the wire', () => {
 		const opened = await openFor(sqlite);
 		const runtime = createRuntime({ storage: opened.storage, clock: fakeClock() });
 		const name = roomName('wire-sqlite');
-		await oneExchange.run({ runtime, name });
+		await oneExchange.run({ runtime, name, wire: (execution) => execution });
 		const written = await storedOf(opened.journals, name);
 		expect(written.map((entry) => entry.kind)).toEqual(
 			expect.arrayContaining(['close', 'composition', 'lease']),

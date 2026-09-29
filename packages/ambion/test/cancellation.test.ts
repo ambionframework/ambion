@@ -1,14 +1,7 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { pi, piExecution } from '../../pi/src/index.ts';
-import {
-	type AgentExecutionContext,
-	type AgentPort,
-	hostingOf,
-	inProcessTransport,
-	type RoomProtocol,
-	type Wake,
-} from '../src/hosting.ts';
+import { type AgentPort, hostingOf, type Wake } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -22,11 +15,12 @@ import {
 	manualClock,
 	person,
 	protocolOf,
-	recordingTransport,
+	recordingExecution,
 	settledFlag,
 	turn,
 	worker,
 } from './support/core-exchange.ts';
+import { around } from './support/ports.ts';
 import {
 	closedExchange,
 	collect,
@@ -72,8 +66,8 @@ const cancels = async (journals: JournalOpener, room: Room) =>
 describe('durable cancellation', () => {
 	it('fences every old room call while admitting a new activation', async () => {
 		const wakes: Wake[] = [];
-		const runtime = createRuntime({ transport: recordingTransport(wakes) });
-		const room = await workerRoom(runtime);
+		const runtime = createRuntime();
+		const room = await workerRoom(runtime, { execution: recordingExecution(wakes) });
 		const visit = await room.visit(person);
 		const first = await visit.send({ text: 'old question' });
 		while (wakes.length < 1) await turn();
@@ -128,30 +122,28 @@ describe('durable cancellation', () => {
 			let cuts = 0;
 			const started = deferred();
 			const cutStarted = deferred();
-			const transport = {
-				connect(room: RoomProtocol, context: AgentExecutionContext) {
-					const port = inProcessTransport().connect(room, context);
-					return {
-						wake: (wake: Wake) => port.wake(wake),
-						steer: (steer: Parameters<AgentPort['steer']>[0]) => port.steer(steer),
-						cut: async () => {
-							cuts += 1;
-							cutStarted.resolve();
-							if (failure === 'throws') throw new Error('Cut transport failed.');
-							await new Promise<void>(() => {});
-						},
-					};
-				},
-			};
-			const room = await workerRoom(createRuntime({ transport }), {
-				execution: piExecution({
+			const execution = around(
+				piExecution({
 					sessions: 'memory',
 					stream: scripted(() => {
 						started.resolve();
 						return new Promise<never>(() => {});
 					}),
 				}),
-			});
+				{
+					port: (port) => ({
+						wake: (wake: Wake) => port.wake(wake),
+						steer: (steer: Parameters<AgentPort['steer']>[0]) => port.steer(steer),
+						cut: async () => {
+							cuts += 1;
+							cutStarted.resolve();
+							if (failure === 'throws') throw new Error('Cut port failed.');
+							await new Promise<void>(() => {});
+						},
+					}),
+				},
+			);
+			const room = await workerRoom(createRuntime(), { execution });
 			await (await room.visit(person)).send({ text: 'cut the worker' });
 			await started.promise;
 			await room.abort();

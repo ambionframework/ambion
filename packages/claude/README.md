@@ -97,27 +97,28 @@ try {
 **A room with no `execution` runs each Claude seat on the default Claude
 execution.** A host that sets `env` or a path to the executable passes
 `claudeExecution(options)` to a room or to `createRuntime`. A room whose
-seats run on more than one family needs no `composeExecutions` when each
-family package is loaded.
+seats run on more than one family passes a list, such as
+`[piExecution(), claudeExecution()]`, or passes none when each family
+package is loaded.
 
 ## Options
 
-| Option                  | Default                           | Meaning                                                      |
-| ----------------------- | --------------------------------- | ------------------------------------------------------------ |
-| `instructions`          | Required                          | The private guidance of the agent.                           |
-| `model`                 | Required                          | A Claude model id.                                           |
-| `tools`, `bundles`      | None                              | The tools of the agent and the bundles that add tools.       |
-| `speaking`              | `DEFAULT_GUIDANCE`                | The speaking policy. It replaces the default.                |
-| `activationTokenLimit`  | The whole record                  | The token limit of the record one activation reads.          |
-| `estimateTokens`        | `Math.ceil(text.length / 4)`      | Counts tokens against the limit. It needs the limit.         |
-| `permissionMode`        | The SDK default, `default`        | The SDK permission mode.                                     |
-| `allowedTools`          | None                              | Tools that run with no request. It names the built-in tools. |
-| `disallowedTools`       | None                              | Tools the model never sees.                                  |
-| `canUseTool`            | Deny every request                | Answers a permission request.                                |
-| `maxBudgetUsd`          | None                              | The most one activation may spend, in US dollars.            |
-| `effort`                | The SDK default                   | `low`, `medium`, `high`, `xhigh`, or `max`.                  |
-| `cwd`                   | The working directory of the host | The working directory of the executable.                     |
-| `additionalDirectories` | None                              | Directories that the tools may reach beyond `cwd`.           |
+| Option                  | Default                           | Meaning                                                       |
+| ----------------------- | --------------------------------- | ------------------------------------------------------------- |
+| `instructions`          | Required                          | The private guidance of the agent.                            |
+| `model`                 | Required                          | A Claude model id.                                            |
+| `tools`, `bundles`      | None                              | The tools of the agent and the bundles that add tools.        |
+| `speaking`              | `DEFAULT_GUIDANCE`                | The speaking policy. It replaces the default.                 |
+| `activationTokenLimit`  | The whole record                  | The token limit of the record one activation reads.           |
+| `estimateTokens`        | `'length'`                        | The name of the estimator in the runtime. It needs the limit. |
+| `permissionMode`        | The SDK default, `default`        | The SDK permission mode.                                      |
+| `allowedTools`          | None                              | Tools that run with no request. It names the built-in tools.  |
+| `disallowedTools`       | None                              | Tools the model never sees.                                   |
+| `canUseTool`            | Deny every request                | Answers a permission request.                                 |
+| `maxBudgetUsd`          | None                              | The most one activation may spend, in US dollars.             |
+| `effort`                | The SDK default                   | `low`, `medium`, `high`, `xhigh`, or `max`.                   |
+| `cwd`                   | The working directory of the host | The working directory of the executable.                      |
+| `additionalDirectories` | None                              | Directories that the tools may reach beyond `cwd`.            |
 
 `claudeExecution({ pathToClaudeCodeExecutable, env })` takes two options. The
 first selects the executable. The second sets its environment.

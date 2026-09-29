@@ -5,7 +5,9 @@
  * name, a log line — and those live where the mechanism lives. And it says
  * them to a *participant*: the system prompt a seat is given, the roster and
  * the record it reads at each activation, and the one line that tells it what
- * this activation is for. All of that is here.
+ * this activation is for. All of that is here, except the line of one
+ * message: `record.ts` holds it, because the room windows the record by the
+ * tokens of the same line.
  *
  * Every function is pure. It takes an activation view, not the room, and
  * returns text, so what a participant reads can be built,
@@ -15,16 +17,10 @@
  */
 
 import type { ActivationView, ContextParticipant } from '../protocol.ts';
+import { type Block, blocks, refsOf, renderLine } from '../record.ts';
 import { messageUri, roomUri } from '../refs.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
-import {
-	isSummary,
-	type Message,
-	type PostedMessage,
-	type Seq,
-	type SummaryMessage,
-} from '../types.ts';
-import { refsOf, renderLine } from './line.ts';
+import { isSummary, type Message, type PostedMessage, type Seq } from '../types.ts';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -43,90 +39,6 @@ function ago(at: string, now: number): string {
 
 function plural(n: number, unit: string): string {
 	return `${count(n, unit)} ago`;
-}
-
-/** One block of the rendered record: a message on its own, or the run one summary stands for. */
-type Block = { line: Message } | { fold: Message[]; by: SummaryMessage };
-
-/**
- * The summary that stands for each seq one covers. A summary is never folded
- * into another one: the message that stands for a range must survive whatever
- * covers it.
- *
- * A summary keeps the fixed range of its closed exchange. A message takes
- * the summary that covers it. Messages between two ranges stay visible.
- */
-function foldedBy(record: readonly Message[]): Map<Seq, SummaryMessage> {
-	const summaries = record.filter(isSummary);
-	const by = new Map<Seq, SummaryMessage>();
-	if (summaries.length === 0) return by;
-	for (const message of record) {
-		if (isSummary(message)) continue;
-		const stands = summaries.find(
-			({ covers }) => message.seq >= covers.from && message.seq <= covers.through,
-		);
-		if (stands) by.set(message.seq, stands);
-	}
-	return by;
-}
-
-/** The record as blocks, with each summarised run collapsed into one. */
-function blocks(record: readonly Message[]): Block[] {
-	const by = foldedBy(record);
-	const out: Block[] = [];
-	for (const message of record) {
-		const stands = by.get(message.seq);
-		if (!stands) {
-			out.push({ line: message });
-			continue;
-		}
-		const last = out.at(-1);
-		if (last && 'fold' in last && last.by === stands) last.fold.push(message);
-		else out.push({ fold: [message], by: stands });
-	}
-	return out;
-}
-
-/** The seqs one block stands for, and the text a token estimate reads. */
-function blockSeqs(block: Block): Seq[] {
-	return 'fold' in block ? block.fold.map((message) => message.seq) : [block.line.seq];
-}
-
-function blockText(block: Block): string {
-	return renderLine('fold' in block ? block.by : block.line);
-}
-
-/**
- * The record trimmed to a token limit: the newest blocks whose estimated
- * tokens stay within `limit`, and never fewer than one block, so an
- * activation always reads the latest exchange. The walk runs over blocks, so a
- * summarised range counts once and is never split. `pin` keeps every message at
- * or after it, which holds the open exchange whole even past the limit.
- *
- * `from` is the lowest position the window keeps. The caller pages the record
- * until `from` sits above the record it holds, or the record reaches its floor.
- */
-export function windowToLimit(
-	record: readonly Message[],
-	estimate: (text: string) => number,
-	limit: number,
-	pin?: Seq,
-): { from: Seq; kept: Message[] } {
-	const bs = blocks(record);
-	const newest = bs.at(-1);
-	if (newest === undefined) return { from: 0, kept: [] };
-	let cost = 0;
-	let cut = newest;
-	for (let index = bs.length - 1; index >= 0; index -= 1) {
-		const block = bs[index];
-		if (block === undefined) break;
-		cost += estimate(blockText(block));
-		if (cost > limit) break;
-		cut = block;
-	}
-	let from = Math.min(...blockSeqs(cut));
-	if (pin !== undefined && pin < from) from = pin;
-	return { from, kept: record.filter((message) => message.seq >= from) };
 }
 
 /**

@@ -4,7 +4,6 @@
  * `anthropic/claude-sonnet-5` when unset.
  */
 import { defineAgent } from '@ambionframework/ambion';
-import { composeExecutions } from '@ambionframework/ambion/hosting';
 import { pi, piExecution } from '@ambionframework/pi';
 import { describe, expect, it } from 'vitest';
 import { codexExecution } from '../../src/index.ts';
@@ -22,7 +21,7 @@ describe.skipIf(!process.env[KEY_VAR] || !process.env[PI_KEY])('a mixed room', (
 		});
 		const { room, events } = await open('mixed', {
 			agents: [pilot, seat('gpt', { identity: 'Answers on Codex.' })],
-			execution: composeExecutions({ pi: piExecution(), codex: codexExecution() }),
+			execution: [piExecution(), codexExecution()],
 		});
 		try {
 			const visit = await room.visit(person);

@@ -90,16 +90,14 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'callLimits',
 		'classifyCause',
 		'classifyCommit',
-		'composeConnector',
-		'composeExecutions',
+		'defineExecution',
 		'describeExecutor',
 		'executorOfKind',
 		'hostingOf',
-		'inProcessTransport',
+		'localExecution',
 		'providerMessage',
 		'reconcileRoom',
 		'refusal',
-		'registerDefaultExecution',
 		'renderActivation',
 		'renderDelta',
 		'renderLine',
@@ -108,7 +106,6 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'roomTools',
 		'roundTrip',
 		'runningRoom',
-		'seatContext',
 		'sessionToResume',
 		'summaryToolDescription',
 		'toolContext',
@@ -121,8 +118,8 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 it('exports exactly the conformance suite and its in-process executor', () => {
 	expect(Object.keys(conformance).sort()).toEqual([
 		'executorConformance',
+		'portConformance',
 		'speakOnce',
-		'transportConformance',
 	]);
 });
 
@@ -145,6 +142,13 @@ it('names the ports, the reads, and the visit by their final names', () => {
 	expectTypeOf<hosting.ExecutorSession['session']>().toEqualTypeOf<
 		main.HarnessSession | undefined
 	>();
+	// The room windows the record: a view names one message at most, and a seat names its estimator.
+	expectTypeOf<Parameters<hosting.RoomProtocol['view']>>().toEqualTypeOf<
+		[activation: string, message?: Seq]
+	>();
+	expectTypeOf<hosting.CollaborationContext>().not.toHaveProperty('earliest');
+	expectTypeOf<main.AgentExecutor['estimateTokens']>().toEqualTypeOf<string | undefined>();
+	expectTypeOf<main.CreateRuntimeOptions>().toHaveProperty('estimators');
 });
 
 /** The specifiers one built file imports, whatever the quote or the form. */

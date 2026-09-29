@@ -1,7 +1,6 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineHuman,
@@ -164,7 +163,6 @@ describe('exchange completion handles', () => {
 			runtime: createRuntime({
 				clock: fakeClock(),
 				storage: opened.storage,
-				transport: inProcessTransport(),
 				...options,
 			}),
 		};
@@ -240,7 +238,6 @@ describe('exchange completion handles', () => {
 				runtime: createRuntime({
 					clock: fakeClock(),
 					storage: faulty.journals,
-					transport: inProcessTransport(),
 				}),
 				execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
 			}),

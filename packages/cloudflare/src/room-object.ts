@@ -21,14 +21,12 @@ import type {
 } from '@ambionframework/ambion';
 import { defineHuman, readRoom, resumeRoom, startRoom } from '@ambionframework/ambion';
 import type {
-	AgentExecutionContext,
 	CommitRequest,
 	CommitResult,
+	Execution,
 	LeaseRequest,
 	LeaseResponse,
 	RoomProtocol,
-	Transport,
-	ViewRange,
 	ViewResponse,
 } from '@ambionframework/ambion/hosting';
 import { reconcileRoom, runningRoom } from '@ambionframework/ambion/hosting';
@@ -73,20 +71,25 @@ function alarmClock(state: DurableObjectState): Clock {
 	};
 }
 
-/** The room reaches a seat over RPC to the seat object named for it. */
-export function rpcTransport(env: Env): Transport {
+/**
+ * The room reaches a seat over RPC to the seat object named for it. The
+ * execution has no kind, so it serves every seat. The seat object runs the
+ * execution of its own host, and calls the room back over RPC.
+ */
+export function rpcExecution(env: Env): Execution {
 	return {
-		connect(_room, context: AgentExecutionContext) {
-			const { room: roomName, seat } = context;
-			const stub = env.SEAT.get(
-				env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', roomName, seat])),
-			);
-			return {
-				wake: (wake) => stub.wake(wake),
-				steer: (steer) => stub.steer(steer),
-				cut: (activation) => stub.cut(activation),
-			};
-		},
+		connector: () => ({
+			connect(_room, request) {
+				const stub = env.SEAT.get(
+					env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', request.room, request.seat])),
+				);
+				return {
+					wake: (wake) => stub.wake(wake),
+					steer: (steer) => stub.steer(steer),
+					cut: (activation) => stub.cut(activation),
+				};
+			},
+		}),
 	};
 }
 
@@ -104,7 +107,7 @@ export class RoomObject extends DurableObject<Env> {
 		this.runtime = runtimeFor({
 			storage: this.storage,
 			clock: alarmClock(ctx),
-			transport: rpcTransport(env),
+			execution: rpcExecution(env),
 		});
 		this.metadata = roomMetadata(ctx);
 		ctx.blockConcurrencyWhile(async () => {
@@ -281,8 +284,8 @@ export class RoomObject extends DurableObject<Env> {
 
 	// -- what a seat asks, in wire types --------------------------------------
 
-	async view(activation: string, range?: ViewRange): Promise<ViewResponse> {
-		return this.protocol().view(activation, range);
+	async view(activation: string, message?: Seq): Promise<ViewResponse> {
+		return this.protocol().view(activation, message);
 	}
 
 	async commit(commit: CommitRequest): Promise<CommitResult> {

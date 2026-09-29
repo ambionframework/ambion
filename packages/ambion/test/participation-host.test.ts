@@ -3,6 +3,7 @@ import { type Runtime, runningRoom } from '../src/host/runtime.ts';
 import { createRuntime, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
 import type { Intent } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
+import { portExecution } from './support/ports.ts';
 import { crash, messagesOf, roomName, scriptedAgent, stateOf } from './support/room.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
@@ -18,15 +19,14 @@ function protocol(runtime: Runtime, name: string) {
 	return peer;
 }
 
-const transport = (cuts: string[]) => ({
-	connect: () => ({
+const recording = (cuts: string[]) =>
+	portExecution(() => ({
 		wake: async () => {},
 		steer: async () => {},
 		cut: async (id: string) => {
 			cuts.push(id);
 		},
-	}),
-});
+	}));
 
 describe.each(storages)('ordinary membership on $name', (storage) => {
 	it('commits membership once, preserves acknowledgement, and fences a removed activation after reseating', async () => {
@@ -35,7 +35,7 @@ describe.each(storages)('ordinary membership on $name', (storage) => {
 		const runtime = createRuntime({
 			storage: opened.storage,
 			clock: fakeClock(),
-			transport: transport(cuts),
+			execution: recording(cuts),
 		});
 		const room = stopAtEnd(
 			await startRoom({
@@ -76,7 +76,7 @@ describe.each(storages)('ordinary membership on $name', (storage) => {
 	it('settles an unclaimed closing assignment when the host removes its writer, across replay', async () => {
 		const opened = await openFor(storage);
 		const clock = fakeClock();
-		const runtime = createRuntime({ storage: opened.storage, clock, transport: transport([]) });
+		const runtime = createRuntime({ storage: opened.storage, clock, execution: recording([]) });
 		const room = stopAtEnd(
 			await startRoom({
 				name: roomName('removed-summary'),
@@ -115,7 +115,7 @@ describe.each(storages)('ordinary membership on $name', (storage) => {
 		const resumed = stopAtEnd(
 			await resumeRoom(room.name, {
 				agents: [alpha, beta],
-				runtime: createRuntime({ storage: opened.storage, clock, transport: transport([]) }),
+				runtime: createRuntime({ storage: opened.storage, clock, execution: recording([]) }),
 			}),
 		);
 		await expect(resumed.exchange(first.from)?.waitForSummary()).rejects.toThrow(/interrupted/);

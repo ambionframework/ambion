@@ -24,9 +24,9 @@ import {
 	type RoomProtocol,
 	type Unchanged,
 } from '../protocol.ts';
+import { renderLine } from '../record.ts';
 import { parseRoomUri, REF_LIMITS, roomUri } from '../refs.ts';
 import type { AgentDefinition, Message, Seq } from '../types.ts';
-import { renderLine } from './line.ts';
 import { refusal, summaryToolDescription } from './render.ts';
 
 /** One part of what a tool hands back to the model. */
@@ -472,12 +472,12 @@ function shortRef(room: string, ref: string): { room: string; message: Seq } | u
 }
 
 /**
- * The message at `seq`, from a page of one message before `seq + 1`. A
- * summary sits after the range it covers, so the page never folds `seq`
- * away. A page that holds a lower message, or none, means no message.
+ * The message at `seq`, from the view of that one message. The room reads it
+ * under the purpose alone, so a message below the window of the activation
+ * still answers. A view that holds none means no message.
  */
 async function messageAt(binding: RoomToolBinding, seq: Seq): Promise<Message | undefined> {
-	const response = await binding.room.view(binding.id, { before: seq + 1, limit: 1 });
+	const response = await binding.room.view(binding.id, seq);
 	if (!('view' in response)) return undefined;
 	return response.view.context.messages.find((message) => message.seq === seq);
 }

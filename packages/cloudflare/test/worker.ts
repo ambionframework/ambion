@@ -31,10 +31,23 @@ export const checker = defineAgent({
 	executor: pi({ instructions: 'Check later.', model: 'scripted/checker' }),
 });
 
+/** A seat with a token limit that names the estimator the worker registers. */
+export const reader = defineAgent({
+	name: 'reader',
+	identity: 'Reads the recent record.',
+	executor: pi({
+		instructions: 'Read.',
+		model: 'scripted/reader',
+		activationTokenLimit: 40,
+		estimateTokens: 'chars',
+	}),
+});
+
 /** The configuration of the tier. A test that configures its own restores this one. */
 export const configuration = {
-	agents: [assistant, product, slow, checker],
+	agents: [assistant, product, slow, checker, reader],
 	stream: scripted,
+	estimators: { chars: (text: string) => text.length },
 	// Alarms fire on their own in workerd: a wake nobody takes is sent again this often,
 	// and a scheduled say may return one second after it lands.
 	limits: { delivery: { resend: 50 }, schedule: { minAfter: 1 } },

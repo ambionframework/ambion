@@ -176,6 +176,14 @@ its `text`.
   more. A wait that the stop or the eviction ends rejects with
   `room_stopped` and the message of the wait, `Exchange '<seq>' was
   stopped or interrupted.`
+- **The room applies one windowing rule.** `room/view.ts` keeps the
+  newest messages under the cap of `limits.context.messages`, then under
+  the `activationTokenLimit` of the seat, never splits a summarised range,
+  and keeps the open exchange whole. The runner reads one view and pages
+  nothing: `windowedView`, `windowToLimit`, and the page size of 64 go,
+  and on Cloudflare a view is one call. The line of one message and the
+  blocks of a summarised range move to `record.ts`, where the room and the
+  renderer read them. See [History and limits](docs/room.md#history-and-limits).
 
 ### Breaking changes
 
@@ -184,6 +192,40 @@ its `text`.
   a journal read refuses a `returned` entry. `PostedMessage` and `isPosted`
   replace `ReturnedMessage` and `isReturned`. The record line of a returned
   say reads `[posted → <seat>, returns #<n>]`.
+- **The remote call is an `Execution`, and one router serves every kind.**
+  The hosting entry exports `localExecution(kind, build)`. It returns an
+  `Execution` of that kind, whose port is an `AgentRunner` in this process.
+  `defineExecution(kind, build)` returns the same execution and makes it
+  the default of its kind. `Execution` has an optional `kind`, and an
+  execution with no kind serves every kind.
+  `execution` of `createRuntime`, `startRoom`, and `resumeRoom` takes one
+  execution or a list. A seat runs on the first execution of the room for
+  its kind, then on the first of the runtime, then on the default of its
+  kind. A miss fails at once with a permanent `no_execution` error whose
+  message names the seat and the kind. `Hosting.execution` is
+  `Hosting.executions`, and `ExecutionHost` has no `transport`. See
+  [Executors](docs/executors.md#the-hosting-entry-exports).
+  - **The hosting entry removes** `Transport`, `inProcessTransport`,
+    `composeExecutions`, `registerDefaultExecution`, `composeConnector`,
+    `ConnectorComposition`, `seatContext`, and `SeatContextInput`.
+    `createRuntime` has no `transport` option. A list in `execution`
+    replaces `composeExecutions`. `defineExecution` replaces
+    `registerDefaultExecution`, and `localExecution` replaces
+    `composeConnector`. A test wraps the ports of an execution where it
+    wrapped a transport.
+  - **The conformance entry renames** `transportConformance` to
+    `portConformance`, and `TransportHarness` to `PortHarness`. The cases
+    and their names stay.
+  - **Every execution keeps the trace limits of the host.**
+    `claudeExecution()` and `codexExecution()` read `limits.trace` of the
+    runtime. Before, they applied `DEFAULT_TRACE_LIMITS`.
+  - **`piExecution()`, `claudeExecution()`, and `codexExecution()` return
+    `Execution<AgentRunner>`.** A call changes no default. Loading the
+    package defines the default of its kind once, with no options.
+  - **The Cloudflare seat object builds its executor once.** It connects
+    the Pi execution of the worker once, and it keeps the runner and the
+    executor on the object instance. The room object reaches each seat
+    through `rpcExecution`.
 - **An exchange has no owner.** The opening message names who directs the
   work, and `awaiting` reads its author. `person`, the first person who
   spoke in the range, names who receives the result: the summary, its
@@ -240,11 +282,22 @@ its `text`.
   `unseated <name> (#<seq>)`. A membership that the record already holds
   gives `<name> is already seated` or `<name> is not seated`. The result
   was `delivered` before.
-- **A view with a range cuts its page from every message the purpose may
-  read.** The cap of `limits.context.messages` bounds a view with no range
-  alone. A page still reports the cap floor as `earliest`, and a seat with
-  `activationTokenLimit` stops its window there. A host that pages a view
-  reads below the cap.
+- **`RoomProtocol.view` takes no range, and `ViewRange` goes.** The
+  second argument is `message`, a seq: the view then holds that one
+  message when the purpose may read it, and no window applies. `recall`
+  reads a message below the window this way. `CollaborationContext` has
+  no `earliest`, and `omitted` counts what the cap and the token limit
+  leave out. The hosting entry exports no `ViewRange`.
+- **`estimateTokens` is the name of an estimator.** The executor option of
+  `pi()`, `claude()`, and `codex()`, and `AgentExecutor.estimateTokens`,
+  take a string in place of a function. `createRuntime({ estimators })`
+  registers each estimator by name, and every runtime holds `length`,
+  `Math.ceil(text.length / 4)`, the default. A host cannot register
+  `length`. `startRoom` and `resumeRoom` fail with `missing_definition`
+  when a definition names an estimator that the runtime does not hold.
+  `configure` of `@ambionframework/cloudflare` takes `estimators` for the
+  runtime of the room object. The seat object runs no estimator, because
+  the room object windows the view.
 - **A process that ended badly fails every call that reports it.** An
   exit code other than 0, a timeout, and a failed process make `bash`,
   `status`, and `wait` a tool error, so one state has one shape on every

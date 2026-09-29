@@ -127,7 +127,7 @@ unchanged.
 | `bundles`               | No       | None                              | Tool bundles. Their guidance joins the prompt after the speaking policy.         |
 | `speaking`              | No       | `DEFAULT_GUIDANCE`                | The speaking policy. It replaces the default.                                    |
 | `activationTokenLimit`  | No       | The whole record                  | The token limit of the record one activation reads. A positive integer.          |
-| `estimateTokens`        | No       | `Math.ceil(text.length / 4)`      | Counts tokens against the limit. It needs `activationTokenLimit`.                |
+| `estimateTokens`        | No       | `'length'`                        | The name of the estimator in the runtime that counts tokens. It needs the limit. |
 | `permissionMode`        | No       | The SDK default, `default`        | The SDK permission mode. The executor passes it unchanged.                       |
 | `allowedTools`          | No       | None                              | Tools that run with no request. It also names the built-in tools the model sees. |
 | `disallowedTools`       | No       | None                              | Tools the model never sees.                                                      |
@@ -137,6 +137,12 @@ unchanged.
 | `cwd`                   | No       | The working directory of the host | The working directory of the executable.                                         |
 | `additionalDirectories` | No       | None                              | Directories that the tools may reach beyond `cwd`.                               |
 
+**`estimateTokens` names an estimator in the runtime.** The room runs it
+and windows the record, so the definition carries the name alone. `length`,
+the default, counts `Math.ceil(text.length / 4)`. `createRuntime({ estimators })`
+registers other names, and a room start fails on a name the runtime does not
+hold. [History and limits](room.md#history-and-limits) states the rule.
+
 **`claudeExecution(options)` takes two options.** Both are optional.
 
 | Option                       | Default                             | Meaning                                                                                         |
@@ -144,11 +150,9 @@ unchanged.
 | `pathToClaudeCodeExecutable` | The executable of the SDK           | The Claude Code executable to spawn.                                                            |
 | `env`                        | The environment of the host process | The environment of the executable. A value **replaces** the environment. See the trust section. |
 
-The runtime supplies the clock, the call limits, the logger, and the
-transport. The Claude execution does not read `limits.trace` from the host.
-It applies the default trace limits, 65,536 bytes of tool output and 1,000
-steps for each pass. `createClaudeExecutor` builds one executor for a seat,
-and its `query` option replaces the SDK entry.
+The runtime supplies the clock, the call limits, the trace limits, and the
+logger. `createClaudeExecutor` builds one executor for a seat, and its
+`query` option replaces the SDK entry.
 
 ## How an activation runs
 
@@ -188,7 +192,7 @@ already holds it.
 **`abort` interrupts the query and ends the pass.** `close` ends the input
 and the process.
 
-**The activation token limit windows the record.**
+**The room applies the activation token limit.**
 [Executors](executors.md#how-an-activation-runs) states the rule. It does
 not bound what a resumed session holds.
 
@@ -428,7 +432,7 @@ for its tool list and for `/etc/hosts`. See [Example](example.md).
 | Symptom                                                             | Cause                                                                                                                      |
 | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `claudeExecution()`.                   |
-| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat ran under `claudeExecution()`. Route with `composeExecutions`.                                                   |
+| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each family.                  |
 | The model cannot see `Bash` or `Read`                               | `allowedTools` does not name it. The list gives the built-in tools, and an empty list gives none.                          |
 | Every request is denied                                             | `canUseTool` is absent, or it throws. The executor denies both. Read the `approval` steps.                                 |
 | The model ignores `CLAUDE.md` and project settings                  | `settingSources` is empty by design. Put the guidance in `instructions`.                                                   |

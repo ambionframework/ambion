@@ -5,10 +5,11 @@
  * record a seat reads, and the decision to run another pass. It knows
  * nothing about a model, a provider, or a transcript: an activation's
  * executor renders the prompt, runs its own loop, and reports where it left
- * off. Wake, steer, and cut reach this driver through the transport.
+ * off. The runner is the port of its seat: the room calls its wake, steer,
+ * and cut.
  */
 
-import type { AgentExecutionContext, Transport } from '../host/runtime.ts';
+import type { AgentExecutionContext } from '../host/runtime.ts';
 import type {
 	ActivationView,
 	AgentPort,
@@ -16,23 +17,20 @@ import type {
 	CommitResult,
 	RoomProtocol,
 	Steer,
-	ViewRange,
 	ViewResponse,
 	Wake,
 } from '../protocol.ts';
+import { renderLine } from '../record.ts';
 import type {
 	EndReason,
 	ExecutionEvent,
 	FailureCause,
 	HarnessSession,
-	Message,
 	Seq,
 	Step,
 	Usage,
 } from '../types.ts';
 import type { ExecutorSession, PassInput, PassResult } from './executor.ts';
-import { renderLine } from './line.ts';
-import { windowToLimit } from './render.ts';
 import type { TraceSink } from './trace.ts';
 
 type CallResult<T> =
@@ -446,72 +444,13 @@ export class AgentRunner implements AgentPort {
 		return session.shouldRefresh(renewed.value.ok.lastSeq);
 	}
 
-	/**
-	 * The record windowed to the agent's token limit. The seat pages the record
-	 * from the tail, keeps the newest blocks that fit, and stops when the window
-	 * starts above the record it holds or the record reaches its floor. The open
-	 * exchange stays whole even past the limit; a summary activation pins its own
-	 * exchange whole the same way and windows the background before it.
-	 *
-	 * The first page fixes the frame — its purpose, exchange, participants, and
-	 * `through`. Later pages add only older messages, so the acknowledged
-	 * position stays what the tail page held.
-	 */
-	private async windowedView(
-		id: string,
-		limit: number,
-		cancelled: Promise<void>,
-	): Promise<ViewResponse> {
-		const estimate = this.context.definition.executor.estimateTokens ?? defaultEstimate;
-		let before: number | undefined;
-		let held: Message[] = [];
-		let omitted = 0;
-		let frame: ActivationView | undefined;
-		for (;;) {
-			const page = await this.pageView(id, before, cancelled);
-			if ('stop' in page) return page.stop;
-			if (frame === undefined) frame = page.view;
-			// A page reads below the cap of the room. The window stops at the cap, at
-			// `earliest`, and counts what it drops there. The last page is the oldest.
-			const floor = frame.context.earliest ?? 0;
-			const served = page.view.context.messages;
-			const older = served.filter((message) => message.seq >= floor);
-			omitted = (page.view.context.omitted ?? 0) + served.length - older.length;
-			held = [...older, ...held];
-			const window = windowToLimit(held, estimate, limit, pinOf(frame));
-			before = held[0]?.seq;
-			if (pagingDone(window.from, held, frame.context.earliest, older.length))
-				return { view: withWindow(frame, window.kept, omitted + held.length - window.kept.length) };
-		}
-	}
-
-	/** The record a pass reads: windowed to the agent's limit, or the room's whole answer. */
+	/** The record a pass reads, as the room windows it for this seat. */
 	private async viewFor(id: string, cancelled: Promise<void>): Promise<ViewResponse> {
-		const limit = this.context.definition.executor.activationTokenLimit;
-		if (limit !== undefined) return this.windowedView(id, limit, cancelled);
 		const opened = await this.call(() => this.room.view(id), cancelled);
 		if (opened.kind === 'value') return opened.value;
 		if (opened.kind === 'cancelled') return { stale: 'the activation was cut' };
 		this.reportCallFailure(id, 'view', opened.error);
 		throw opened.error;
-	}
-
-	/** One bounded page of the record, or the response that stops the paging. */
-	private async pageView(
-		id: string,
-		before: number | undefined,
-		cancelled: Promise<void>,
-	): Promise<{ stop: ViewResponse } | { view: ActivationView }> {
-		const range: ViewRange =
-			before === undefined ? { limit: RECORD_PAGE } : { before, limit: RECORD_PAGE };
-		const opened = await this.call(() => this.room.view(id, range), cancelled);
-		if (opened.kind === 'cancelled') return { stop: { stale: 'the activation was cut' } };
-		if (opened.kind !== 'value') {
-			this.reportCallFailure(id, 'view', opened.error);
-			throw opened.error;
-		}
-		const response = opened.value;
-		return 'stale' in response ? { stop: response } : { view: response.view };
 	}
 
 	private reportCallFailure(
@@ -532,7 +471,7 @@ export class AgentRunner implements AgentPort {
 
 	private boundedRoom(cancelled: Promise<void>, trace: TraceSink): RoomProtocol {
 		return {
-			view: (id, range) => this.room.view(id, range),
+			view: (id, message) => this.room.view(id, message),
 			commit: async (request) => {
 				const response = await this.commitOnce(request, cancelled);
 				trace.record(roomStep(request, response));
@@ -609,68 +548,7 @@ function endStep(current: Current, last: PassResult | undefined): Step {
 	return { type: 'end', stop };
 }
 
-// -- record windowing ---------------------------------------------------------
-
-/** How many messages one bounded page reads back from the record cursor. */
-const RECORD_PAGE = 64;
-
-/** The token estimate when an agent declares a budget but no estimator. */
-function defaultEstimate(text: string): number {
-	return Math.ceil(text.length / 4);
-}
-
 /** The first pass reads the whole view. A later pass reads what came after `since`. */
 function passInput(view: ActivationView, since: Seq | undefined): PassInput {
 	return since === undefined ? { kind: 'view', view } : { kind: 'delta', since, view };
-}
-
-/**
- * The open exchange is pinned whole for an ordinary response; a summary
- * activation pins its own closed exchange the same way, so the window never
- * trims the range it is writing about.
- */
-function pinOf(view: ActivationView): Seq | undefined {
-	const { purpose } = view.spec;
-	return purpose.kind === 'respond' ? view.context.exchange?.from : purpose.exchange;
-}
-
-/**
- * Paging is done when the last page added nothing, the window starts above the
- * held record, or the record has no earlier entry. Otherwise the window still
- * reaches the oldest held message, so an earlier page may hold more of it.
- */
-function pagingDone(
-	from: Seq,
-	held: readonly Message[],
-	earliest: Seq | undefined,
-	older: number,
-): boolean {
-	const lowest = held[0]?.seq;
-	if (older === 0 || lowest === undefined) return true;
-	if (from > lowest) return true;
-	return earliest === undefined || lowest <= earliest;
-}
-
-/** The view with its messages replaced by the windowed record the seat assembled. */
-function withWindow(
-	view: ActivationView,
-	kept: readonly Message[],
-	omitted: number,
-): ActivationView {
-	const { omitted: _first, ...context } = view.context;
-	return {
-		...view,
-		context: { ...context, messages: [...kept], ...(omitted > 0 ? { omitted } : {}) },
-	};
-}
-
-// -- the transport ------------------------------------------------------------
-
-/** Run each seat locally through the room-call facade and its executor context. */
-export function inProcessTransport(): Transport {
-	return {
-		connect(room, context) {
-			return new AgentRunner(room, context);
-		},
-	};
 }

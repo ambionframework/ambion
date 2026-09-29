@@ -4,10 +4,10 @@
  * pure, so every test here hands them a value.
  */
 import { describe, expect, it } from 'vitest';
-import { renderLine } from '../src/execution/line.ts';
 import { renderActivation, renderDelta, renderRecord } from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
 import { messageUri, roomUri } from '../src/index.ts';
+import { renderLine } from '../src/record.ts';
 import type { Message } from '../src/types.ts';
 import { scriptedAgent } from './support/room.ts';
 
@@ -51,14 +51,9 @@ describe('the recall note', () => {
 	} as const;
 	const shown: Message[] = [{ kind: 'said', seq: 5, at, from: 'priya', text: 'Newer.' }];
 	it.each([
-		[
-			'a response whose window or cap left out a message',
-			respond,
-			{ earliest: 5, omitted: 3 },
-			true,
-		],
+		['a response whose window or cap left out a message', respond, { omitted: 3 }, true],
 		['a response that reads the whole record', respond, {}, false],
-		['a summary whose window left out a message', summarize, { earliest: 5, omitted: 3 }, false],
+		['a summary whose window left out a message', summarize, { omitted: 3 }, false],
 	] as const)('%s', (_case, purpose, reach, noted) => {
 		const view: ActivationView = {
 			spec: { ...spec, purpose },

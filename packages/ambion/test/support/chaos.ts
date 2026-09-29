@@ -18,7 +18,7 @@ import { messagesOf, participantsOf } from './room.ts';
 import type { JournalOpener } from '@ambionframework/journal';
 import { expect } from 'vitest';
 import { piExecution } from '../../../pi/src/index.ts';
-import { hostingOf, inProcessTransport } from '../../src/hosting.ts';
+import { type Execution, hostingOf } from '../../src/hosting.ts';
 import {
 	createRuntime,
 	type HumanDefinition,
@@ -49,10 +49,10 @@ import {
 	steady,
 } from './cast.ts';
 import { invariants } from './invariants.ts';
+import { serializing } from './ports.ts';
 import { currentExchange, runningLeases, stateOf, storedOf } from './room.ts';
 import { scripted } from './scripted.ts';
 import { type FailMode, type OpenedStorage, tappedJournals } from './storage.ts';
-import { serializing } from './transport.ts';
 
 /**
  * The record the scenario must come to, whatever happened on the way:
@@ -182,11 +182,12 @@ export class World {
 	}
 
 	private host(): Runtime {
-		return createRuntime({
-			storage: this.journals,
-			clock: this.clock,
-			transport: serializing(inProcessTransport()),
-		});
+		return createRuntime({ storage: this.journals, clock: this.clock });
+	}
+
+	/** The execution of each run: every request and response crosses as JSON. */
+	private execution(): Execution {
+		return serializing(piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }));
 	}
 
 	private watch(): void {
@@ -219,7 +220,7 @@ export class World {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			execution: piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }),
+			execution: this.execution(),
 		});
 		this.watch();
 	}
@@ -236,7 +237,7 @@ export class World {
 			this.session = await resumeRoom(this.name, {
 				runtime: this.runtime,
 				agents,
-				execution: piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }),
+				execution: this.execution(),
 			});
 		} catch (error) {
 			if (!/no composition/.test(String(error))) throw error;

@@ -3,15 +3,18 @@
  * beyond the application view that a host needs from a `Runtime`.
  *
  * A seat makes three calls — `view`, `commit` and `lease` — and the room
- * answers them. `RoomProtocol` names the three, `AgentPort` names the side the
- * room calls back, and `Transport` is what connects one to the other.
- * `inProcessTransport` is the default: it receives a room-call facade and
- * a separate executor context. Nothing crosses a process. A host that puts the seats
- * somewhere else writes its own, and `AgentRunner` is the seat side to run
- * there. `@ambionframework/cloudflare` is one such host.
+ * answers them. `RoomProtocol` names the three, and `AgentPort` names the
+ * side the room calls back. An `Execution` connects one to the other: its
+ * connector returns the port of each seat. `localExecution` builds the
+ * execution of one executor kind, whose port is an `AgentRunner` in this
+ * process, and `defineExecution` also makes it the default of the kind. A
+ * host that puts the seats somewhere else writes an execution whose port
+ * crosses the boundary, and runs an `AgentRunner` there.
+ * `@ambionframework/cloudflare` is one such host.
  *
- * Every shape a call carries is here, because a transport serialises them.
- * `assertWire` and `roundTrip` hold a value to what the wire can carry.
+ * Every shape a call carries is here, because a remote port serialises
+ * them. `assertWire` and `roundTrip` hold a value to what the wire can
+ * carry.
  *
  * `hostingOf(runtime)` is the other half: the journal namespace, wake and
  * retry policy, and the room lifecycle registry, none of which the main
@@ -35,8 +38,6 @@ export {
 	SEAT,
 	UNSEAT,
 } from './define.ts';
-export type { ConnectorComposition, SeatContextInput } from './execution/connector.ts';
-export { composeConnector, seatContext } from './execution/connector.ts';
 export type {
 	Executor,
 	ExecutorActivation,
@@ -45,7 +46,6 @@ export type {
 	PassResult,
 } from './execution/executor.ts';
 export { classifyCause, PERMANENT_STATUS, providerMessage } from './execution/failure.ts';
-export { renderLine } from './execution/line.ts';
 export { REMINDER_TIMEOUT_MS, resolveReminders } from './execution/reminders.ts';
 export type { RenderedPrompt } from './execution/render.ts';
 export {
@@ -63,10 +63,9 @@ export type {
 	RoomToolResult,
 } from './execution/room-tools.ts';
 export { agentTools, roomTools, toolContext } from './execution/room-tools.ts';
-export { composeExecutions } from './execution/route.ts';
-export { AgentRunner, inProcessTransport } from './execution/runner.ts';
+export { defineExecution, localExecution } from './execution/route.ts';
+export { AgentRunner } from './execution/runner.ts';
 export type { TraceOpener, TraceSink } from './execution/trace.ts';
-export { registerDefaultExecution } from './host/defaults.ts';
 export type {
 	AgentExecutionContext,
 	ConnectorRequest,
@@ -75,7 +74,6 @@ export type {
 	ExecutionHost,
 	Hosting,
 	Limits,
-	Transport,
 } from './host/runtime.ts';
 export {
 	callLimits,
@@ -100,11 +98,11 @@ export type {
 	RoomProtocol,
 	Stale,
 	Steer,
-	ViewRange,
 	ViewResponse,
 	Wake,
 } from './protocol.ts';
 export { assertWire, classifyCommit, roundTrip, sessionToResume } from './protocol.ts';
+export { renderLine } from './record.ts';
 export type {
 	AgentDefinition,
 	AgentExecutor,

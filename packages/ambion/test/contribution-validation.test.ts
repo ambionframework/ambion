@@ -14,7 +14,7 @@ import {
 	type StartRoomOptions,
 	startRoom,
 } from '../src/index.ts';
-import { person, protocolOf, recordingTransport } from './support/core-exchange.ts';
+import { person, protocolOf, recordingExecution } from './support/core-exchange.ts';
 import { refusal } from './support/errors.ts';
 import {
 	collect,
@@ -36,7 +36,7 @@ const reserveAgent = scriptedAgent('reserve');
 
 const differentOperation = { refused: expect.stringMatching(/different room operation/) };
 
-/** A room on a transport that runs nothing, so the test plays the seat process by hand. */
+/** A room on an execution that runs nothing, so the test plays the seat process by hand. */
 async function openWorld(
 	storage: Storage,
 	options: Omit<StartRoomOptions, 'name' | 'runtime'>,
@@ -45,7 +45,7 @@ async function openWorld(
 	const opened = await openFor(storage);
 	const runtime = createRuntime({
 		storage: opened.storage,
-		transport: recordingTransport(),
+		execution: recordingExecution(),
 		...runtimeOptions,
 	});
 	const room = stopAtEnd(
@@ -116,7 +116,7 @@ describe('the message byte limit', () => {
 	const long = 'a message that is far over sixteen bytes';
 
 	it('refuses a long delivery, reserves no key, and lets a short retry land', async () => {
-		const runtime = createRuntime({ ...limits, transport: recordingTransport() });
+		const runtime = createRuntime({ ...limits, execution: recordingExecution() });
 		const room = stopAtEnd(await startRoom({ name: roomName('byte-delivery'), runtime }));
 		const visit = await room.visit(person);
 		await expect(visit.send({ text: long, key: 'k' })).rejects.toEqual(
@@ -225,7 +225,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 	it('replays a delivery after its append acknowledgement is lost', async () => {
 		const opened = await openFor(storage);
 		const faulty = faultyJournals(opened.storage);
-		const runtime = createRuntime({ storage: faulty.journals, transport: recordingTransport() });
+		const runtime = createRuntime({ storage: faulty.journals, execution: recordingExecution() });
 		const room = stopAtEnd(await startRoom({ name: roomName('delivery-lost-ack'), runtime }));
 		const visit = await room.visit(person);
 		const input = { key: 'lost-delivery', text: 'Durable once.' };

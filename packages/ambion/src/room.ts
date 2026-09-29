@@ -2,19 +2,22 @@
 
 import { assertRoomName, captureAgent } from './define.ts';
 import { AmbionError } from './errors.ts';
-import { missingConnector } from './execution/route.ts';
+import { route } from './execution/route.ts';
 import {
-	defaultConnectorOf,
+	defaultConnectors,
 	defaultRuntime,
 	type Execution,
 	type ExecutionConnector,
 	executionHostOf,
+	executionsOf,
 	hostingOf,
+	type RoomRuntime,
 	type Runtime,
 	registeredRoom,
 	registerRoom,
 	releaseRoom,
 	roomRuntime,
+	tokenWindowOf,
 } from './host/runtime.ts';
 import { roomJournal } from './journal/journal.ts';
 import { discussionMessages } from './room/exchange.ts';
@@ -47,8 +50,12 @@ export interface StartRoomOptions {
 	summary?: string;
 	/** Public context that states what the room is for. */
 	goal?: string;
-	/** The execution for this room, such as `piExecution()`. Defaults to the runtime's. */
-	execution?: Execution;
+	/**
+	 * The execution for this room, such as `piExecution()`, or one for each
+	 * executor kind. A seat runs on the first that serves its kind, then on
+	 * the runtime's, then on the default of its kind.
+	 */
+	execution?: Execution | readonly Execution[];
 	/** The runtime that owns storage and lifecycle. Defaults to `defaultRuntime`. */
 	runtime?: Runtime;
 }
@@ -65,43 +72,35 @@ export interface ResumeRoomOptions {
 	agents: readonly AgentDefinition[];
 	/** The runtime that owns the room journal. */
 	runtime?: Runtime;
-	/** The execution for this room, such as `piExecution()`. Defaults to the runtime's. */
-	execution?: Execution;
+	/** The execution for this room, as `StartRoomOptions.execution` states. */
+	execution?: Execution | readonly Execution[];
 }
 
 /**
- * The connector for one room: its own execution, else the runtime's, else
- * the default of each seat's executor kind, else one whose seats fail when
- * the room wakes them. A room with no execution
- * still runs its people, its record, and any transport it was given.
+ * The connector for one room: the room's executions, then the runtime's,
+ * then the default of each seat's executor kind. A seat that none serves
+ * fails when the room wakes it. A room with no execution still runs its
+ * people and its record.
  */
-function connectorFor(runtime: Runtime, own: Execution | undefined): ExecutionConnector {
-	const host = executionHostOf(runtime);
-	const execution = own ?? hostingOf(runtime).execution;
-	if (execution !== undefined) return execution.connector(host);
-	const missing = missingConnector(host, noExecution);
-	return {
-		connect(room, request) {
-			const kind = request.definition.executor.kind;
-			return (defaultConnectorOf(runtime, kind) ?? missing).connect(room, request);
-		},
-	};
+function connectorFor(
+	runtime: Runtime,
+	own: Execution | readonly Execution[] | undefined,
+): ExecutionConnector {
+	return route({
+		executions: [...executionsOf(own), ...hostingOf(runtime).executions],
+		host: executionHostOf(runtime),
+		built: defaultConnectors(runtime),
+	});
 }
-
-/** Why a seat fails when no execution serves its kind and no package registered a default. */
-const noExecution = (): string =>
-	'The room has no execution. Load the executor package of the agent, or pass `execution`, such as `piExecution()` from @ambionframework/pi, to startRoom or createRuntime.';
 
 export async function startRoom(options: StartRoomOptions): Promise<Room> {
 	assertRoomName(options.name);
 	const runtime = options.runtime ?? defaultRuntime();
 	assertFree(runtime, options.name);
-	const room = RoomHost.start(
-		options.name,
-		roomRuntime(runtime, options.name),
-		composeFrom(options),
-		connectorFor(runtime, options.execution),
-	);
+	const hosted = roomRuntime(runtime, options.name);
+	const cast = composeFrom(options);
+	assertEstimators(cast.definitions, hosted);
+	const room = RoomHost.start(options.name, hosted, cast, connectorFor(runtime, options.execution));
 	registerRoom(runtime, room);
 	try {
 		await room.started();
@@ -116,12 +115,10 @@ export async function resumeRoom(name: string, options: ResumeRoomOptions): Prom
 	assertRoomName(name);
 	const runtime = options.runtime ?? defaultRuntime();
 	assertFree(runtime, name);
-	const room = RoomHost.resume(
-		name,
-		roomRuntime(runtime, name),
-		definitionsOf(options.agents),
-		connectorFor(runtime, options.execution),
-	);
+	const hosted = roomRuntime(runtime, name);
+	const bindings = definitionsOf(options.agents);
+	assertEstimators(bindings.values(), hosted);
+	const room = RoomHost.resume(name, hosted, bindings, connectorFor(runtime, options.execution));
 	registerRoom(runtime, room);
 	try {
 		await room.started();
@@ -187,6 +184,15 @@ function assertFree(runtime: Runtime, name: string): void {
 			'room_running',
 			`Room '${name}' is already running: stop it before starting it again.`,
 		);
+}
+
+/**
+ * Every estimator a definition names is in the registry of the runtime. The
+ * room checks when a run starts, the first point where the definition and the
+ * registry meet, so a wrong name fails the start and never an activation.
+ */
+function assertEstimators(definitions: Iterable<AgentDefinition>, runtime: RoomRuntime): void {
+	for (const agent of definitions) tokenWindowOf(agent, runtime);
 }
 
 function composeFrom(options: StartRoomOptions): CompositionDraft {

@@ -81,22 +81,22 @@ try {
 ```
 
 **A room with no `execution` runs each Pi seat on the default Pi
-execution.** Importing the package registers it. A host that needs a
-scripted stream, custom storage, a transport, or limits passes
-`piExecution(options)` to a room or to `createRuntime`.
+execution.** Importing the package defines it. A host that needs a
+scripted stream or its own session place passes `piExecution(options)` to a
+room or to `createRuntime`.
 
 ## Options
 
-| Option                 | Default                       | Meaning                                                |
-| ---------------------- | ----------------------------- | ------------------------------------------------------ |
-| `instructions`         | Required                      | The private guidance of the agent.                     |
-| `model`                | Required                      | A Pi model id, `provider/model-id`.                    |
-| `tools`, `bundles`     | None                          | The tools of the agent and the bundles that add tools. |
-| `speaking`             | `DEFAULT_GUIDANCE`            | The speaking policy. It replaces the default.          |
-| `activationTokenLimit` | The whole record              | The token limit of the record one activation reads.    |
-| `estimateTokens`       | `Math.ceil(text.length / 4)`  | Counts tokens against the limit. It needs the limit.   |
-| `compaction`           | `DEFAULT_COMPACTION_SETTINGS` | When the harness compacts the session.                 |
-| `thinking`             | `off`                         | How much the model reasons, a Pi `ThinkingLevel`.      |
+| Option                 | Default                       | Meaning                                                       |
+| ---------------------- | ----------------------------- | ------------------------------------------------------------- |
+| `instructions`         | Required                      | The private guidance of the agent.                            |
+| `model`                | Required                      | A Pi model id, `provider/model-id`.                           |
+| `tools`, `bundles`     | None                          | The tools of the agent and the bundles that add tools.        |
+| `speaking`             | `DEFAULT_GUIDANCE`            | The speaking policy. It replaces the default.                 |
+| `activationTokenLimit` | The whole record              | The token limit of the record one activation reads.           |
+| `estimateTokens`       | `'length'`                    | The name of the estimator in the runtime. It needs the limit. |
+| `compaction`           | `DEFAULT_COMPACTION_SETTINGS` | When the harness compacts the session.                        |
+| `thinking`             | `off`                         | How much the model reasons, a Pi `ThinkingLevel`.             |
 
 `piExecution({ stream, sessions, sessionDir })` takes three options.
 Without a `stream`, the Pi registry answers. A scripted `stream` makes a

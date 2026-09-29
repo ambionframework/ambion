@@ -1,5 +1,5 @@
 import type { ToolContext, ToolResult } from '../bundle.ts';
-import { composeConnector } from '../execution/connector.ts';
+import { localConnector } from '../execution/connector.ts';
 import type {
 	Executor,
 	ExecutorActivation,
@@ -7,7 +7,7 @@ import type {
 	PassInput,
 	PassResult,
 } from '../execution/executor.ts';
-import type { Execution, ExecutionConnector, ExecutionHost } from '../host/runtime.ts';
+import type { Execution } from '../host/runtime.ts';
 import type { ActivationView, CommitResult } from '../protocol.ts';
 import type { AgentDefinition, FailureCause, Intent, Seq, Usage } from '../types.ts';
 
@@ -272,8 +272,8 @@ class ScriptedSession implements ExecutorSession {
 /**
  * A scripted executor for one seat. It implements the `Executor` contract
  * with no model: the script says what the seat does, and the session drives
- * the room's three calls the way a model loop does. A conformance suite
- * passes it to any transport.
+ * the room's three calls the way a model loop does. The executor
+ * conformance suite runs it.
  */
 export function scriptedExecutor(script: Script, definition: AgentDefinition): Executor {
 	const counts = new Map<string, number>();
@@ -283,21 +283,17 @@ export function scriptedExecutor(script: Script, definition: AgentDefinition): E
 }
 
 /**
- * A room's execution over one script. Every seat runs a scripted executor,
- * and `byAgent` routes the script by seat. Pass it as `execution` to
+ * A room's execution over one script. It has no kind, so every seat runs a
+ * scripted executor, and `byAgent` routes the script by seat. Pass it as `execution` to
  * `startRoom` or `createRuntime`. It needs no model library.
  */
 export function scripted(script: Script): Execution {
-	return { connector: (host) => connectorFor(host, script) };
-}
-
-function connectorFor(host: ExecutionHost, script: Script): ExecutionConnector {
-	const counts = new Map<string, number>();
-	return composeConnector({
-		host,
-		traceLimits: host.limits.trace,
-		buildExecutor: (request) => ({
-			open: (activation) => new ScriptedSession(activation, request.definition, script, counts),
-		}),
-	});
+	return {
+		connector(host) {
+			const counts = new Map<string, number>();
+			return localConnector(host, (request) => ({
+				open: (activation) => new ScriptedSession(activation, request.definition, script, counts),
+			}));
+		},
+	};
 }

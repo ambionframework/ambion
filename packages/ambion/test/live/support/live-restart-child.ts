@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { sqliteJournals } from '@ambionframework/journal';
-import { inProcessTransport, type RoomProtocol, type Transport } from '../../../src/hosting.ts';
+import type { Execution, RoomProtocol } from '../../../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -15,6 +15,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../../../src/index.ts';
+import { around } from '../../support/ports.ts';
 import { messagesOf, participantsOf } from '../../support/room.ts';
 import { nodeSql } from '../../support/storage.ts';
 import { executionFor, executorFor } from './harness.ts';
@@ -54,13 +55,13 @@ const fastSeq = Promise.withResolvers<number>();
 const fastReleased = Promise.withResolvers<void>();
 const heldSlowLease = Promise.withResolvers<number>();
 
-function startTransport(): Transport {
-	const local = inProcessTransport();
-	return {
-		connect(room, context) {
-			if (phase !== 'start' || context.seat !== slow.name) return local.connect(room, context);
+/** The execution of the first run: the claim of the slow seat waits, and its answer never returns. */
+function startExecution(execution: Execution): Execution {
+	return around(execution, {
+		room(room, request) {
+			if (phase !== 'start' || request.seat !== slow.name) return room;
 			const gated: RoomProtocol = {
-				view: (activation, range) => room.view(activation, range),
+				view: (activation, message) => room.view(activation, message),
 				commit: (commit) => room.commit(commit),
 				lease: async (lease) => {
 					if (lease.operation === 'claim') await fastReleased.promise;
@@ -74,9 +75,9 @@ function startTransport(): Transport {
 					return response;
 				},
 			};
-			return local.connect(gated, context);
+			return gated;
 		},
-	};
+	});
 }
 
 function diagnostics(room: Room): void {
@@ -93,8 +94,7 @@ function diagnostics(room: Room): void {
 async function start(): Promise<void> {
 	const runtime = createRuntime({
 		storage,
-		transport: startTransport(),
-		execution: executionFor(),
+		execution: startExecution(executionFor()),
 		limits: { lease: { ttl: 5_000, deadline: 120_000 }, activation: { backoff: () => 0 } },
 	});
 	const room = await startRoom({ name, agents: [fast, slow], runtime });
@@ -145,7 +145,6 @@ async function resume(): Promise<void> {
 	};
 	const runtime = createRuntime({
 		storage,
-		transport: inProcessTransport(),
 		execution: executionFor(),
 		limits: { lease: { ttl: 5_000, deadline: 120_000 }, activation: { backoff: () => 0 } },
 	});
