@@ -2,20 +2,23 @@
 
 > **Status: proposal.** This page is not in the 0.4.0 scope until the owner
 > accepts it. [next.md](next.md) holds the scope. On acceptance, the items
-> move into `next.md` and this page goes.
+> move into `next.md` and this page goes. The code references are to
+> `main` at 040bdf4.
 
-**The change in four points.**
+**The change in five points.**
 
-1. **The host posts a message.** `room.post` writes a `posted` entry with
-   no author. A host no longer defines a fake person to wake a seat.
-2. **A post and a returned say open an exchange.** The work that the system
-   starts gets a handle, a usage, an outcome, and a range, as a person's
-   question does.
+1. **The system writes one kind of message.** A `posted` entry has no
+   author. The host writes one with `room.post`, and the room's clock
+   writes one when a scheduled say is due. The `returned` kind goes.
+2. **A post opens an exchange.** The work that the system starts gets a
+   handle, a usage, an outcome, and a range, as a person's question does.
 3. **An exchange has no owner.** It has an opening message and a `person`:
    the first person who spoke in its range. The room derives `person`
    from the record. An exchange where no person spoke has none.
 4. **A scheduled say carries no owner.** A seat schedules from any response
    activation.
+5. **A say to oneself steers nobody.** Today a scheduled say steers each
+   colleague at work.
 
 ## The problem
 
@@ -26,19 +29,28 @@ host to call `defineHuman({ name: 'lab' })` and send through
 
 | Rule                                    | What `lab` causes                                                                                              | Code                         |
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| A stop records who was present          | Each stop writes `left`, and each run writes `arrived` again                                                   | `room-host/people.ts:309`    |
+| A stop records who was present          | Each stop writes `left`, and each run writes `arrived` again                                                   | `room-host/people.ts:301`    |
 | An arrival is a message                 | Each `arrived` entry wakes the seats at `presence` attention                                                   | `room/routing.ts:38`         |
 | Each activation lists the people        | Each seat reads `lab (present, has not seen the last N messages)`                                              | `execution/render.ts:258`    |
-| A person's message opens an exchange    | `lab` owns the exchange                                                                                        | `room/rules.verified.ts:710` |
-| The owner of an exchange gets a summary | When `summary` names a seated agent, a closing activation writes for `lab`, and the summary replaces the range | `room/reconcile.ts:246`      |
+| A person's message opens an exchange    | `lab` owns the exchange                                                                                        | `room/rules.verified.ts:708` |
+| The owner of an exchange gets a summary | When `summary` names a seated agent, a closing activation writes for `lab`, and the summary replaces the range | `room/transition.ts:681`     |
 | The opening message directs the work    | The prompt calls the notification "the current human direction"                                                | `execution/render.ts:495`    |
 
-**A scheduled say belongs to a person.** `ownerOf` stamps the owner of the
-open exchange on a scheduled say, and the returned say opens an exchange
-for that owner. A seat that schedules again keeps the owner. A monitor
-that returns each ten minutes opens an exchange for one person each ten
-minutes, and each close owes that person a summary. `state.people` keeps
-absent people, so the loop runs for weeks after the person leaves.
+**A scheduled say belongs to a person.** `ownerOf`
+(`room/scheduled.ts:103`) stamps the owner of the open exchange on a
+scheduled say, and the returned say opens an exchange for that owner. A
+seat that schedules again keeps the owner. A monitor that returns each ten
+minutes opens an exchange for one person each ten minutes, and each close
+owes that person a summary. `state.people` keeps absent people, so the
+loop runs for weeks after the person leaves.
+
+**A seat cannot schedule outside a person's exchange.** `scheduleRefusal`
+(`room/scheduled.ts:81`) refuses a scheduled say when no exchange is open.
+
+**A say to oneself steers colleagues.** A scheduled say is a `said`, and
+`messageDelivery` (`room/delivery.ts:31`) excludes only `returned` and
+`dismissed` from the steer. Each seat at work thus reads another seat's
+note to itself in the middle of its own work.
 
 **`owner` holds two facts.** Today the owner is the author of the opening
 message. The kernel reads it as the person who directs the work, in the
@@ -49,12 +61,26 @@ a person only when one speaks.
 
 ## The proposal
 
-### A posted message
+### A post
 
-**The host posts with `room.post`.** The call takes
-`{ to?, text, refs?, key? }` and returns an `ExchangeHandle`. The room
-applies `limits.message.bytes` and the ref rules. The host puts a label,
-such as `ci:`, in the text.
+**The system writes a `posted` entry.** Its body is
+`{ kind: 'posted', to?, text, refs?, returns? }`. The body schema refuses
+`from`, so a seat cannot write one. `returns` requires `to`.
+
+| Writer           | How                                     | `returns`          | `to`                       |
+| ---------------- | --------------------------------------- | ------------------ | -------------------------- |
+| The host         | `room.post({ to?, text, refs?, key? })` | Absent             | A seat, a person, or none  |
+| The room's clock | The reconcile, when a say is due        | The seq of the say | The seat that scheduled it |
+
+**A post with `returns` is a returned say.** The name stays in the
+vocabulary. It copies the text and the refs of the scheduled say, and
+`scheduleStep` (`room/scheduled.ts:41`) drops the say when it lands.
+`room.post` takes no `returns`, and `decide` alone builds one, so the host
+cannot return a say.
+
+**The host posts with `room.post`.** The call returns an `ExchangeHandle`.
+The room applies `limits.message.bytes` and the ref rules. The host puts a
+label, such as `ci:`, in the text.
 
 ```ts
 workspace.processes.subscribe((event) => {
@@ -70,69 +96,78 @@ workspace.processes.subscribe((event) => {
 });
 ```
 
-**The journal holds a `posted` entry.** Its body is
-`{ kind: 'posted', to?, text, refs? }`. The body schema refuses `from`, so
-a seat cannot write one.
-
-**A post key has its own space.** `KeySpace` becomes
+**A host post key has its own space.** `KeySpace` becomes
 `'delivery' | 'commit' | 'post'`, and a post has its own retry matcher. A
 visit send and a post under one key do not collide.
 
-**A post routes and steers as a `said` does.** `reachOf` and `targetOf` in
-`room/routing.ts` get a `posted` case: `named` reach and the target `to`
-when `to` is set, `broadcast` reach when it is absent. `messageDelivery`
-steers a post with no change.
+### Routing and steering
 
-| `to`                              | Wakes                                  | Steers                  |
-| --------------------------------- | -------------------------------------- | ----------------------- |
-| A seat                            | That seat                              | Each other seat at work |
-| A person                          | No seat                                | Each seat at work       |
-| Absent                            | Each idle seat at `broadcast` or wider | Each seat at work       |
-| A `none` seat, or an unknown name | Refused                                | Refused                 |
+**A post routes by its `to`.** `reachOf` and `targetOf`
+(`room/routing.ts:38`, `:68`) replace the `returned` case with a `posted`
+case: `named` reach and the target `to` when `to` is set, `broadcast`
+reach when it is absent.
+
+**One steer rule serves the system, and a say to oneself steers nobody.**
+`messageDelivery` (`room/delivery.ts:19`) reads three rules:
+
+| Message                 | Steers                                  |
+| ----------------------- | --------------------------------------- |
+| A `said` with `after`   | No seat                                 |
+| A `posted` with `to`    | Its target, when the target is at work  |
+| A `posted` with no `to` | Each seat at work                       |
+| Any other `said`        | Each seat at work other than its author |
+
+A post with `to` wakes its target when the target is idle, and it steers
+the target when the target is at work. The record shows the post to every
+seat at its next activation. A post to a `none` seat, or to an unknown
+name, gets a refusal.
 
 ### The exchange
 
-**Three messages open an exchange when none is open.** A person's `said`,
-a `posted` message, and a `returned` say open one. Agent speech, arrivals,
-and departures open none, as today. A message that lands in an open
-exchange steers work, as today.
+**Two messages open an exchange when none is open.** A person's `said`
+and a `posted` entry open one. Agent speech, arrivals, and departures open
+none, as today. A message that lands in an open exchange steers work, as
+today.
 
 **`from` identifies an exchange.** `ExchangeRef` is `{ from, at, person? }`.
-`admitsClose` compares `from` and loses its `owner` clause.
-`room.exchange(from)` and `handleForMessage` in `room-host/waits.ts`
-accept a `posted` opening. The `tail` of the projection holds `posted`
-entries, and `exchangeOf` in `room/projection.ts` recomputes the open
-exchange on one.
+`admitsClose` (`room/rules.verified.ts:177`) compares `from` and loses its
+`owner` clause. The close command carries no owner, and `closing()`
+(`room/transition.ts:677`) stamps `person` from the state.
+`room.exchange(from)` and `handleForMessage` (`room-host/waits.ts:37`,
+`:63`) accept a `posted` opening. The `tail` of the projection
+(`room/projection.ts:49`) holds `posted` entries, and `exchangeOf`
+(`:183`) recomputes the open exchange on one.
 
 **`person` is the first person who spoke in the range.** `exchangeAfter`
-derives it from the tail: the first `said` of a person at or after
-`from`. `closing()` copies it from the open exchange beside `through` and
-`summary`, and derives nothing. For a person's question, `person` is the
-author of the opening message, as the owner is today. For work that the
-system starts, `person` is absent until a person speaks in the range.
+(`room/exchange.ts:425`) derives it from the tail: the first `said` of a
+person at or after `from`. `closing()` copies it from the open exchange
+beside `through` and `summary`, and derives nothing. For a person's
+question, `person` is the author of the opening message, as the owner is
+today. For work that the system starts, `person` is absent until a person
+speaks in the range.
 
 **A handle holds `person` as it was when the handle was made.** `handleFor`
-copies its fields once, so a handle from `room.post` reads no `person`
-after priya joins. The close and the exchange view hold the final value,
-and `waitForSummary` reads the close.
+(`room-host/waits.ts:50`) copies its fields once, so a handle from
+`room.post` reads no `person` after priya joins. The close and the exchange
+view hold the final value, and `waitForSummary` reads the close.
 
 **Each fact of `owner` gets its own derivation.** The opening message
 names who directs the work. `person` names who receives the result.
 
-| Reader                 | Reads               | Rule                                                               | Code                           |
-| ---------------------- | ------------------- | ------------------------------------------------------------------ | ------------------------------ |
-| The prompt             | The opening message | The opening line states who or what opened the exchange            | `execution/render.ts:495`      |
-| `awaiting`             | The opening message | A message to the author of the opening message is the answer       | `awaitedPerson`, `exchange.ts` |
-| The summary assignment | `person`            | A close with a `person` and a seated writer owes a summary         | `room/reconcile.ts:246`        |
-| The summary recipients | `person`            | The people who spoke in the range, in order; `person` is the first | `recipientsOf`, `exchange.ts`  |
-| A tool's context       | `person`            | `ctx.exchange.person`, such as the approver of an instrument       | `execution/room-tools.ts`      |
-| `waitForSummary`       | `person`            | The summary for `person`, or `undefined` with no `person`          | `room-host/waits.ts`           |
+| Reader                 | Reads               | Rule                                                               | Code                          |
+| ---------------------- | ------------------- | ------------------------------------------------------------------ | ----------------------------- |
+| The prompt             | The opening message | The opening line states who or what opened the exchange            | `execution/render.ts:495`     |
+| `awaiting`             | The opening message | A message to the author of the opening message is the answer       | `room/exchange.ts:177`        |
+| The summary assignment | `person`            | A close with a `person` and a seated writer owes a summary         | `room/transition.ts:681`      |
+| The summary recipients | `person`            | The people who spoke in the range, in order; `person` is the first | `room/exchange.ts:157`        |
+| A tool's context       | `person`            | `ctx.exchange.person`, such as the approver of an instrument       | `execution/room-tools.ts:169` |
+| `waitForSummary`       | `person`            | The summary for `person`, or `undefined` with no `person`          | `room-host/waits.ts:110`      |
 
 For a person's question, the author of the opening message and `person`
 are the same person, so each rule reads as today. `awaiting` reads the
-opening message, and the opening message of a post or a returned say has
-no `from`. `awaitedPerson` thus keeps its body and finds no answer in
-work that the system starts, with no case for the system.
+opening message, and a post has no `from`. `awaitedPerson` thus keeps its
+body and finds no answer in work that the system starts, with no case for
+the system.
 
 **The summary rules keep their contracts.** `closeMatches` requires a
 writer, and a close with `summary` requires `person`, so `coversExchange`,
@@ -140,14 +175,14 @@ writer, and a close with `summary` requires `person`, so `coversExchange`,
 purpose in `protocol.ts` read a close with a person. `Close` becomes a
 union: `{ summary: string; person: string }` or
 `{ summary?: undefined; person?: string }`. A test of `summary` narrows
-`person`. `OwedClose` in `room/owed.ts` becomes the explicit shape
+`person`. `OwedClose` (`room/owed.ts:43`) becomes the explicit shape
 `{ summary: string; person: string; from; through }`, because a `Pick`
 over the union loses that narrowing.
 
 **A cancellation close carries the `person` of the open exchange.**
-`cancelledClose` in `room/fold.ts` copies it, so the closed view names the
-same person as its opening message. The close names no writer, so it owes
-no summary.
+`cancelledClose` (`room/fold.ts:107`) copies it, so the closed view names
+the same person as its opening message. The close names no writer, so it
+owes no summary.
 
 ### What the work of the system reads
 
@@ -156,17 +191,15 @@ no summary.
 view carries `usage`, the activations, and the `outcome`. Each seat starts
 a fresh harness session in it.
 
-**`awaiting` lists what the system started for a person.** A post or a
-returned say has no author, so an exchange of the system has no answer. A
-seat's last message to a person ends it as `awaiting` that person, until
-the person speaks. `pendingFor('priya')` lists each report and
-each approval request that waits on priya.
+**`awaiting` lists what the system started for a person.** A post has no
+author, so an exchange of the system has no answer. A seat's last message
+to a person ends it as `awaiting` that person, until the person speaks.
+`pendingFor('priya')` lists each report and each approval request that
+waits on priya.
 
 **A person who speaks in an exchange of the system becomes its `person`.**
 The person gets the summary. A seat's answer to the person ends the
-exchange as `awaiting` that person, until the person speaks again. An
-approver who asks a question back thus stays in `pendingFor` while the
-approval waits.
+exchange as `awaiting` that person, until the person speaks again.
 
 ```mermaid
 sequenceDiagram
@@ -174,11 +207,11 @@ sequenceDiagram
     participant W as monitor
     participant P as priya
     loop each 600 seconds
-        R->>W: returned say opens an exchange, no person
+        R->>W: posted (returns the say) opens an exchange, no person
         W->>R: schedule, after 600
         R-->>R: close, no summary
     end
-    R->>W: returned say opens an exchange, no person
+    R->>W: posted (returns the say) opens an exchange, no person
     W->>P: say: build 412 failed
     R-->>R: close, outcome awaiting priya
     P->>R: rerun it (a new exchange, person priya)
@@ -187,44 +220,45 @@ sequenceDiagram
 ### A scheduled say
 
 **A scheduled say carries `after` and no `owner`.** The `said` entry with
-`after`, the `returned` entry, and `PendingSay` lose `owner`, and `ownerOf`
-goes. `validateSchedule` checks that `after` comes with `to` equal to
-`from`.
+`after` and `PendingSay` lose `owner`, and `ownerOf` goes.
+`validateSchedule` (`journal/validate.ts:201`) checks that `after` comes
+with `to` equal to `from`.
 
 **A seat schedules from any response activation.** `scheduleRefusal` loses
 the refusal for no open exchange. The other rules stay: the say goes to
 its author, `after` stays in its bounds, and one seat holds at most
-`pending` says.
+`pending` says. `returning` (`room/scheduled.ts:123`) builds a `posted`
+body with `returns`.
 
 ### The prompt
 
-**The render states the kind of each entry of the system.** A post
-renders as `[posted → worker] lab: process build is ended.` A returned
-say renders as `[returned → worker] <text>`.
+**The render states the kind of each post.** A post of the host renders
+as `[posted → worker] lab: process build is ended.` A returned say renders
+as `[posted → worker, returns #6] <text>`.
 
 **The opening line reads the opening message.**
 
-| Opening message | Line                                                                                         |
-| --------------- | -------------------------------------------------------------------------------------------- |
-| A person's say  | `priya opened exchange 4 with message 4. The marked request is the current human direction.` |
-| A post          | `The host opened exchange 9 with message 9. A post reports an event and gives no direction.` |
-| A returned say  | `Message 9 is a say you scheduled, and the room returned it.`                                |
+| Opening message       | Line                                                                                         |
+| --------------------- | -------------------------------------------------------------------------------------------- |
+| A person's say        | `priya opened exchange 4 with message 4. The marked request is the current human direction.` |
+| A post of the host    | `The host opened exchange 9 with message 9. A post reports an event and gives no direction.` |
+| A post with `returns` | `Message 9 is a say you scheduled, and the room returned it.`                                |
 
 ## What changes on the surface
 
-| Surface                           | Today                                                | Proposed                                            |
-| --------------------------------- | ---------------------------------------------------- | --------------------------------------------------- |
-| Journal kinds                     | `said`, presence, `summary`, `returned`, `dismissed` | Adds `posted`                                       |
-| `said` with `after`               | Carries `after` and `owner`                          | Carries `after`                                     |
-| `returned`, `PendingSay`          | Carry `owner`                                        | No `owner`                                          |
-| Close                             | `owner: string`                                      | `person?: string`, required with `summary`          |
-| `ExchangeRef`, `ExchangeHandle`   | `owner: string`                                      | `person?: string`                                   |
-| `ctx.exchange`, the seat protocol | `owner: string`                                      | `person?: string`                                   |
-| Room handle                       | `visit`, `dismiss`, `seat`, `unseat`                 | Adds `post`, also on the Cloudflare room object     |
-| `KeySpace`                        | `delivery`, `commit`                                 | Adds `post`                                         |
-| `opensExchange`                   | A person's `said`, a `returned` for a person         | A person's `said`, every `posted`, every `returned` |
-| `admitsClose`                     | Compares `from` and `owner`                          | Compares `from`                                     |
-| `//@ declare-type Message`        | Holds `owner`                                        | No `owner`                                          |
+| Surface                           | Today                                                           | Proposed                                            |
+| --------------------------------- | --------------------------------------------------------------- | --------------------------------------------------- |
+| Message kinds                     | `said`, four presence kinds, `summary`, `returned`, `dismissed` | `posted` replaces `returned`; the count stays eight |
+| `said` with `after`               | Carries `after` and `owner`                                     | Carries `after`                                     |
+| `PendingSay`                      | Carries `owner`                                                 | No `owner`                                          |
+| Close                             | `owner: string`                                                 | `person?: string`, required with `summary`          |
+| `ExchangeRef`, `ExchangeHandle`   | `owner: string`                                                 | `person?: string`                                   |
+| `ctx.exchange`, the seat protocol | `owner: string`                                                 | `person?: string`                                   |
+| Room handle                       | `visit`, `dismiss`, `seat`, `unseat`                            | Adds `post`, also on the Cloudflare room object     |
+| `KeySpace`                        | `delivery`, `commit`                                            | Adds `post`                                         |
+| `opensExchange`                   | A person's `said`, a `returned` for a person                    | A person's `said`, every `posted`                   |
+| `admitsClose`                     | Compares `from` and `owner`                                     | Compares `from`                                     |
+| `//@ declare-type Message`        | Holds `owner`                                                   | No `owner`                                          |
 
 The golden journals, the export snapshot, and the body schemas change in
 the same commit. The changelog names each change. No reader for the old
@@ -243,6 +277,10 @@ an operation when no person spoke, `approvals.ts` renames its
 activation. The assistant sits at `broadcast`. The processes page directs
 each post.
 
+**A directed post reaches its target alone until the next activation.** A
+colleague at work reads the post when its next activation reads the
+record.
+
 **Silent exchanges stay in agent context.** A monitor that ticks each ten
 minutes for a week writes about 1,000 returned says, and no summary folds
 them. `limits.context.messages` and `activationTokenLimit` bound the view.
@@ -260,19 +298,22 @@ who started the work, when a person did.
 
 ## The obligations
 
-| Removed                                                         | Added                                           |
-| --------------------------------------------------------------- | ----------------------------------------------- |
-| The fake person in the processes page and in each host          | The `posted` kind, its schema, and `room.post`  |
-| Its arrival, departure, roster line, and summary on each post   | The `post` key space and its retry matcher      |
-| `owner` on a scheduled say, a returned say, and `PendingSay`    | The `posted` cases in `reachOf` and `targetOf`  |
-| `ownerOf`, and the pairing of `after` and `owner` in the schema | The first speaker in `exchangeAfter`            |
-| The refusal for a schedule with no open exchange                | The `Close` union                               |
-| The `owner` clause of `admitsClose`                             | The opening lines for a post and a returned say |
-| The person check on a returned say in `opensExchange`           |                                                 |
-| The summary loop of a self-scheduling seat                      |                                                 |
+| Removed                                                               | Added                                                            |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| The fake person in the processes page and in each host                | `room.post`                                                      |
+| Its arrival, departure, roster line, and summary on each post         | The `post` key space and its retry matcher                       |
+| The `returned` kind, its schema, and its branch in the validator      | The `posted` kind, its schema, and `returns`                     |
+| The `returned` cases in `opensExchange`, `reachOf`, and `targetOf`    | The `posted` cases in `opensExchange`, `reachOf`, and `targetOf` |
+| The steer of a say to oneself                                         | The steer rule for a post                                        |
+| `owner` on a scheduled say, a returned say, and `PendingSay`          | The first speaker in `exchangeAfter`                             |
+| `ownerOf`, and the pairing of `after` and `owner` in the schema       | The `Close` union                                                |
+| The refusal for a schedule with no open exchange                      | The opening line for a post of the host                          |
+| The `owner` clause of `admitsClose`, and `owner` on the close command |                                                                  |
+| The person check on a returned say in `opensExchange`                 |                                                                  |
+| The summary loop of a self-scheduling seat                            |                                                                  |
 
-**The field count stays the same, and its meaning narrows.** `owner`
-becomes `person`, derived from the spoken record. The opening message
+**The journal keeps six entry kinds and eight message kinds.** `owner`
+becomes `person`, derived from the spoken record, and the opening message
 holds the other fact. No rule needs a case for work that the system
 starts.
 
@@ -289,8 +330,7 @@ starts.
   an exchange of the system, an approver who asks a question back becomes
   `person`, and the next request for the approval then reads `complete`.
   The rule of the opening author keeps the behavior of today. Today an
-  owner who asks back loses `awaiting` in the same way, so the rule
-  protects no approval that today does not protect.
+  owner who asks back loses `awaiting` in the same way.
 - **A summary for each person that a seat addressed.** A seat that
   addresses a person already writes the report, and each addressed person
   adds a closing say.
@@ -299,11 +339,20 @@ starts.
   needs a second test for the flag.
 - **A `said` with no `from`.** Each reader of `said` then reads an
   optional author: `routing.ts`, `exchange.ts`, and `people.ts`.
-- **One kind for `posted` and `returned`.** A returned say names its
-  scheduled say, and the fold drops that say when it lands. A post has no
-  such link.
 - **A `source` field and a reserved name `system`.** The room never reads
   either. A label in the text serves a reader.
+- **Fewer kinds by other merges.** Each keeps its cases or loses a fact.
+  - Arrivals, departures, seatings, and unseatings as one kind: the four
+    share one schema today (`journal/validate.ts:67`), and each reader
+    keeps four cases.
+  - A summary as a `said` with `covers`: each reader of `said` needs a
+    guard, and a summary to priya would read `awaiting` her.
+  - A close or `wakes` derived from the record: both read which leases
+    were live on the wall clock, and the record does not hold that.
+  - A cancellation as a close: a cancellation with no open exchange still
+    ends leases and drops every pending say.
+  - A dismissal as a field or a post: the journal appends, and a post of
+    a seat would need an author.
 
 ## Unattended work
 
@@ -338,14 +387,23 @@ its condition. This change leaves room for both.
   **Condition:** a host that loses a reminder across a restart.
 - **Posts in `simulate()`.** **Condition:** a simulator case that needs
   one.
+- **One stored source for the roster.** A composition seeds the roster
+  from its `agents` (`room/projection.ts:341`), and each seating and
+  unseating changes it. A recomposition resets the roster, so it drops a
+  seating that a seat made. The change writes one seating for each seat at
+  a start and drops `agents` from the composition. **Condition:** a
+  recomposition that must keep a seating that a seat made.
 
 ## Evidence
 
 **The change lands with its evidence or stays open.**
 
-- `scheduled-say.test.ts`: a returned say opens an exchange with no
-  `person`, a seat schedules with no exchange open, and a silent tick
-  closes with no summary.
+- `scheduled-say.test.ts`: a due say lands as a `posted` entry with
+  `returns`, it opens an exchange with no `person`, a seat schedules with
+  no exchange open, and a silent tick closes with no summary.
+- `steering-delivery.test.ts`: a scheduled say steers no colleague, a post
+  with `to` steers its target alone, and a post with no `to` steers each
+  seat at work.
 - `exchange-completion.test.ts`: a post opens an exchange, a post joins an
   open exchange, a person who speaks in an exchange of the system becomes
   its `person` and gets the summary, `waitForClose` on a post handle
@@ -359,11 +417,11 @@ its condition. This change leaves room for both.
   the `person` of its close.
 - `cancellation.test.ts`: a cancelled exchange of a person keeps its
   `person`.
-- `routing` cases: a directed post wakes its target, and an undirected post
+- `routing.test.ts`: a directed post wakes its target, and an undirected post
   wakes each seat at `broadcast`.
 - `transition.test.ts` and `journal-validation.test.ts`: the refusals of a
-  post, the `posted` schema, a close with `summary` and no `person`, and
-  `owner` on a returned say.
+  post, the `posted` schema, `returns` with no `to`, `from` on a post, and
+  a close with `summary` and no `person`.
 - `golden.test.ts`, `package.test.ts`, the prompt snapshot, and the
   simulator render.
 - `pnpm rule:check packages/ambion/src/room/rules.verified.ts` for
@@ -376,8 +434,10 @@ its condition. This change leaves room for both.
 
 ## Placement
 
-**The change fits the theme of 0.4.0.** It removes the fake person, three
-`owner` fields, a refusal, and a proof clause, and it adds one kind. It is
-phase 2 step 9. It needs step 1 (C4), so `decide` builds the `posted`
-body, and step 2 (C2), so the proof edits join that re-proof. The owner
-decides between that step and the backlog.
+**The change fits the theme of 0.4.0.** It removes the fake person, the
+`returned` kind, three `owner` fields, a refusal, a steer, and a proof
+clause, and it adds one kind. It is phase 2 step 9. Its prerequisites,
+step 1 (C4, #361) and step 2 (C2, #360), have landed. Steps 3 to 5 (C5,
+C7, C6) and phase 1 step 8 (A1) change the seat protocol, the view, the
+prompt, and the assistant guidance, which this change also touches. The
+step that lands second rebases on the first.
