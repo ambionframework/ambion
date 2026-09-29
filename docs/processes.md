@@ -538,7 +538,7 @@ workspace.processes.subscribe((event) => {
 
 - It opens an exchange when none is open. That exchange has no `person`
   until a person speaks in it, so it owes no summary. When an exchange is
-  open, the post joins it and steers the seat of the process alone.
+  open, the post joins it and steers the seat of the owner agent alone.
 - The owner agent must hold a seat in that room. The room refuses a post to
   an agent in the reserve, and `post` rejects. A stopped room rejects too,
   so the host catches each post.

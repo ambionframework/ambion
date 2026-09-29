@@ -481,7 +481,7 @@ live('the default assistant, driven by the simulator', () => {
 		expect(exchange?.summary?.text).toMatch(EIGHT);
 	});
 	it(
-		'wakes on a post of the host, and reports the event to the person it concerns',
+		'wakes on a post of the host, and speaks to the event with no summary owed',
 		async () => {
 			track('post');
 			const room = await openRoom({ specialist: answers(() => STOCK), attention: 'broadcast' });
@@ -498,17 +498,23 @@ live('the default assistant, driven by the simulator', () => {
 				key: 'stock-sync-0940',
 			});
 			const discussion = await posted.waitForClose();
-			const reports = discussion.filter(
+			expect(discussion[0]).toMatchObject({ kind: 'posted', wakes: ['assistant'] });
+			// The activation that the post starts reads the event and speaks to it.
+			const spoken = discussion.filter(
 				(message): message is SpokenMessage =>
-					isSpoken(message) && message.from === 'assistant' && message.to === priya.name,
+					isSpoken(message) &&
+					message.from === 'assistant' &&
+					message.activationId === `message:${posted.from}:assistant:1`,
 			);
-			expect(reports.length, JSON.stringify(discussion)).toBeGreaterThan(0);
+			expect(spoken.map((message) => message.text).join(' '), JSON.stringify(discussion)).toMatch(
+				/stale|sync/i,
+			);
+			// No person spoke in the work of the post, so it names no person and owes no summary.
 			const closed = (await room.read({ messages: false })).exchanges.find(
 				(exchange) => exchange.from === posted.from,
 			);
-			// No person spoke in the work of the post: it owes no summary, and the report awaits priya.
 			expect(closed).not.toHaveProperty('person');
-			expect(closed).toMatchObject({ outcome: { kind: 'awaiting', person: priya.name } });
+			expect(closed).toMatchObject({ status: 'closed', summary: { status: 'silent' } });
 		},
 		TWO_EXCHANGES_MS,
 	);
