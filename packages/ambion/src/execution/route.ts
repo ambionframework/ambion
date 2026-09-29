@@ -74,7 +74,7 @@ export function route(input: RouteInput): ExecutionConnector {
 		connectors.set(execution, known);
 		return known;
 	};
-	const missing = localConnector(host, (request) => missingExecutor(request));
+	const missing = localConnector(host, (request) => missingExecutor(request, knownKinds(input)));
 	const connectorOf = (kind: string): ExecutionConnector => {
 		const execution = input.executions.find((one) => one.kind === undefined || one.kind === kind);
 		if (execution !== undefined) return explicit(execution);
@@ -92,10 +92,19 @@ export function route(input: RouteInput): ExecutionConnector {
 	};
 }
 
+/** The kinds that the executions of the room and its runtime and the defaults serve, sorted. */
+function knownKinds(input: RouteInput): string {
+	const kinds = new Set(defaults.keys());
+	for (const execution of input.executions) {
+		if (execution.kind !== undefined) kinds.add(execution.kind);
+	}
+	return kinds.size === 0 ? 'none' : [...kinds].sort().join(', ');
+}
+
 /** The executor of a seat with no execution: each activation fails at once, and a retry cannot fix it. */
-function missingExecutor(request: ConnectorRequest): Executor {
+function missingExecutor(request: ConnectorRequest, known: string): Executor {
 	const seat = request.seat;
-	const reason = `No execution serves seat '${seat}' of kind '${request.definition.executor.kind}'. Load the executor package of the kind, or pass an \`execution\` of the kind, such as \`piExecution()\` from @ambionframework/pi, to startRoom or createRuntime.`;
+	const reason = `No execution serves seat '${seat}' of kind '${request.definition.executor.kind}'. Load the executor package of the kind, or pass an \`execution\` of the kind, such as \`piExecution()\` from @ambionframework/pi, to startRoom or createRuntime. Known kinds: ${known}.`;
 	return {
 		open(activation) {
 			const error = new AmbionError('no_execution', reason);

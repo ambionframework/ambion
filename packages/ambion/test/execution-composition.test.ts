@@ -89,8 +89,15 @@ async function ask(options: Parameters<typeof startRoom>[0]) {
 }
 
 describe('the execution a room chooses', () => {
+	// The defaults register as the suite loads, so each case sees the same known kinds.
+	const once = defaultOf('stub-once');
+	const overridden = {
+		room: defaultOf('stub-room-override'),
+		runtime: defaultOf('stub-runtime-override'),
+	};
+
 	it('runs the default of the kind when the host passes none, and builds it once per runtime', async () => {
-		const defaults = defaultOf('stub-once');
+		const defaults = once;
 		// An execution that localExecution builds does not change the default of its kind.
 		let local = 0;
 		localExecution('stub-once', () => {
@@ -109,7 +116,7 @@ describe('the execution a room chooses', () => {
 		'runs the execution of the %s and not the default',
 		async (owner) => {
 			const kind = `stub-${owner}-override`;
-			const defaults = defaultOf(kind);
+			const defaults = overridden[owner];
 			const explicit = stub();
 			await ask({
 				name: roomName(kind),
@@ -137,7 +144,9 @@ describe('the execution a room chooses', () => {
 	});
 
 	const other = () => stub([], 'pi').execution;
-	const reason = /^No execution serves seat 'worker' of kind 'claude'\./;
+	const missing = (kind: string) =>
+		`No execution serves seat 'worker' of kind '${kind}'. Load the executor package of the kind, or pass an \`execution\` of the kind, such as \`piExecution()\` from @ambionframework/pi, to startRoom or createRuntime. Known kinds: pi, stub-once, stub-room-override, stub-runtime-override.`;
+	const reason = missing('claude');
 	it.each([
 		{ router: 'an execution of another kind on the room', kind: 'claude', room: other(), reason },
 		{
@@ -149,7 +158,7 @@ describe('the execution a room chooses', () => {
 		{
 			router: 'the defaults',
 			kind: 'none',
-			reason: /^No execution serves seat 'worker' of kind 'none'\./,
+			reason: missing('none'),
 		},
 	])(
 		'fails the activation at once and for good when $router serves no execution for the kind',
@@ -175,7 +184,7 @@ describe('the execution a room chooses', () => {
 			expect(failures[0]).toMatchObject({
 				cause: 'permanent',
 				agent: 'worker',
-				error: { code: 'no_execution', message: expect.stringMatching(reason) },
+				error: { code: 'no_execution', message: reason },
 			});
 			const seen = events.length;
 			await clock.advance(3 * hostingOf(runtime).limits.delivery.resend);

@@ -56,8 +56,10 @@ export function defineExecution(
 ```
 
 **The port of a local execution is an `AgentRunner` in this process.**
-`build` runs once for each connector. The function that it returns builds
-the executor of one seat. Every seat keeps the trace limits and the logger
+`build` runs once for each connector. The room builds the connector of
+its own execution when the first seat that the execution serves connects.
+`startRoom` does not build it. The function that `build` returns builds the
+executor of one seat. Every seat keeps the trace limits and the logger
 of the host. The runner receives a plain `RoomProtocol` facade with
 `view`, `commit`, and `lease`. The facade gives no access to room lifecycle
 methods.
