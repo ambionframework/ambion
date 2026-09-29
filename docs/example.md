@@ -11,8 +11,8 @@ that idea as a real application on Ambion.
 
 This page describes what the example does today, on the current kernel API.
 The section [Beyond the current scope](#beyond-the-current-scope) lists the
-lab capabilities that wait for later phases in
-[next.md](../planning/next.md).
+lab capabilities that wait for a later release in
+[the backlog](../planning/backlog.md).
 
 ## Workbench: a lab bench for a toy Arduino kit
 
@@ -299,6 +299,6 @@ interface. The Instruments agent and the Data Analysis agent need
 application resources that no release schedules yet. Workbench grows into
 them later.
 
-| Deferred capability                            | Item in next.md |
-| ---------------------------------------------- | --------------- |
-| An Instruments agent and a Data Analysis agent | None            |
+| Deferred capability                            | Item in the backlog |
+| ---------------------------------------------- | ------------------- |
+| An Instruments agent and a Data Analysis agent | None                |
