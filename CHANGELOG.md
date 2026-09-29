@@ -3,9 +3,13 @@
 ## Unreleased
 
 **The workspace defines the sensor wire contract.**
-`@ambionframework/workspace/sensors` exports the version 1 body schemas and
-client types. `@ambionframework/workspace/sensor-api.schema.json` publishes
-the generated JSON Schema.
+`@ambionframework/workspace/sensors` exports the version 1 body schemas,
+client types, and `createSensorClient(root)` for index, observe, and verified
+file reads over a private HTTP transport. The client validates wire bodies,
+preserves transport-root prefixes and measurement timestamps, propagates
+cancellation, and does not follow redirects or retry requests.
+`@ambionframework/workspace/sensor-api.schema.json` publishes the generated
+JSON Schema.
 
 **The workstation forwards private loopback ports over SSH.** The workspace
 root exports `WorkspacePort` and `WorkspacePorts`, and `BashBackend` accepts

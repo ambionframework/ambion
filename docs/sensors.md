@@ -1,6 +1,6 @@
 # Sensors
 
-> **Pending in 0.5.0.** The wire schemas and client types exist in
+> **Pending in 0.5.0.** The wire schemas, client types, and HTTP client exist in
 > `@ambionframework/workspace`. The current branch includes the implemented
 > and validated SN27 Workbench template, and the workstation port transport
 > is available. Workspace `connect` and `observe`, and SN4's reusable
@@ -422,11 +422,26 @@ wire change raises `api`. The client refuses another version. Version 1
 describes this initial subset alone. Acquisition and reducer state are
 never fields of the protocol.
 
-**The wire schemas and client types live in
+**The wire schemas, types, and HTTP client live in
 `@ambionframework/workspace/sensors`.** The package also exports the
 generated `sensor-api.schema.json`. The SN4 `sensorConformance` runner is
 planned for `@ambionframework/workspace/conformance` and is not implemented
 yet. Ambion adds no `@ambionframework/sensors` package in 0.5.0.
+
+**`createSensorClient(root)` reads a sensor server through a private
+transport URL.** Its `index(signal?)`,
+`observe(name, request = { api: 1 }, signal?)`, and `file(digest, signal?)`
+methods implement the three operations above.
+The root is a directory base: a root ending in `/prefix` keeps that prefix
+for `/prefix/`, `/prefix/<sensor>/observe`, and `/prefix/files/<digest>`.
+Observe requests are checked against the version 1 schema before sending.
+The client checks every JSON success and error body, rejects redirects, and
+never retries a request. `file` returns `{ bytes, mediaType }` only after
+the bytes match the requested SHA-256 digest. Measurement timestamp strings
+are returned unchanged. Invalid wire data raises `SensorProtocolError`,
+valid non-success envelopes raise `SensorHttpError` with the HTTP status and
+`sensorError` envelope, and digest mismatch raises `SensorDigestError`;
+fetch, disconnect, and abort failures propagate to the caller.
 
 **The schema cannot compare span endpoints.** The JSON Schema checks request
 shape and timestamp form. `isValidObserveRequest` also requires `from < to`.
