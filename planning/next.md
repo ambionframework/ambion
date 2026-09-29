@@ -131,7 +131,7 @@ condition that brings each one back.
   a person, and no seat schedules work for another seat.
 - **A returned say is an ordinary message when it lands.** It opens an
   exchange when none is open. When an exchange is open, it joins it and
-  steers work.
+  steers the seat that it returns to.
 - **The system speaks, and an exchange has no owner.** The host and the
   room's clock write a `posted` entry with no author, and a returned say
   is a post with `returns`. A post opens an exchange. An exchange has an

@@ -1,4 +1,4 @@
-# Proposal: the system speaks
+# The system speaks: the design of steps 9 and 10
 
 > **Status: accepted on 2026-09-29.** [next.md](next.md) holds the work
 > as phase 2 steps 9 and 10 (S1 and S2). This page holds the design until
