@@ -23,8 +23,8 @@ no idle timer and a crash writes no departure.
 The room can continue between visits. An agent can address a known absent person;
 the message remains on the record for their return. An agent can schedule a
 say for itself, which the room returns while the person is away
-([Exchange](exchange.md#6-a-scheduled-say)). External subscriptions and
-scheduler ingress are host concerns.
+([Exchange](exchange.md#6-a-scheduled-say)). A host posts an event of its
+own with `room.post` ([Exchange](exchange.md#7-the-edges-a-host-sees)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/ambion-room-lifetime-dark.svg">

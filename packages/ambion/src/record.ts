@@ -6,7 +6,7 @@
  */
 
 import {
-	isReturned,
+	isPosted,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -34,8 +34,9 @@ function lineBody(message: Message): string {
 	if (message.kind === 'dismissed') {
 		return `· ${message.from ?? 'the host'} dismissed say #${message.message}`;
 	}
-	if (isReturned(message)) {
-		return `[returned → ${message.to}] ${message.text}${refsOf(message)}`;
+	if (isPosted(message)) {
+		const returns = message.returns === undefined ? '' : `, returns #${message.returns}`;
+		return `[posted → ${message.to ?? 'the room'}${returns}] ${message.text}${refsOf(message)}`;
 	}
 	if (isSpoken(message) || isSummary(message)) return spokenLine(message);
 	const by = message.from === undefined || message.from === message.subject;

@@ -168,6 +168,67 @@ describe('exchange completion handles', () => {
 		};
 	};
 
+	it('opens an exchange with a post of the host, retries its key, and joins an open exchange', async () => {
+		const answered = new Set<string>();
+		const script: Script = (context, agent) => {
+			if (agent === assistant.name) return isClosing(context) ? summarise('For priya.') : quiet();
+			for (const cue of ['ci: build 412', 'Was the build green?']) {
+				if (!contextText(context).includes(cue) || answered.has(cue)) continue;
+				answered.add(cue);
+				return speak(`Seen: ${cue}`);
+			}
+			return quiet();
+		};
+		const { runtime } = await memoryRuntime();
+		const room = await summaryRoom(runtime, script);
+		// A post opens an exchange with no person, and the exchange owes no summary.
+		const post = {
+			to: alpha.name,
+			text: 'ci: build 412 failed.',
+			refs: ['https://ci.example/412'],
+			key: 'ci-412',
+		};
+		const posted = await room.post(post);
+		expect(posted).toMatchObject({ opened: true });
+		expect(posted).not.toHaveProperty('person');
+		await expect(posted.waitForClose()).resolves.toMatchObject([
+			{ kind: 'posted', to: alpha.name, text: post.text, refs: post.refs, key: 'ci-412' },
+			{ kind: 'said', from: alpha.name, text: 'Seen: ci: build 412' },
+		]);
+		await expect(posted.waitForSummary()).resolves.toBeUndefined();
+		expect(closedExchange(room, posted.from)).not.toHaveProperty('person');
+		// The key lands once, refuses another post, and names nothing in the key space of a visit.
+		const again = await room.post(post);
+		expect(again.from).toBe(posted.from);
+		await expect(room.post({ text: 'ci: other.', key: 'ci-412' })).rejects.toThrow(
+			/already names a different room operation/,
+		);
+		const asked = await (
+			await room.visit(priya)
+		).send({ text: 'Was the build green?', key: 'ci-412' });
+		expect(asked).toMatchObject({ opened: true, person: priya.name });
+		// A post into an open exchange joins it and keeps its person.
+		const joined = await room.post({ text: 'ci: build 413 passed.' });
+		expect(joined).toMatchObject({ from: asked.from, opened: false, person: priya.name });
+		await expect(asked.waitForSummary()).resolves.toMatchObject({ to: priya.name });
+		// A post goes to someone in the room who hears it.
+		await expect(room.post({ to: 'nobody', text: 'x' })).rejects.toMatchObject({
+			code: 'unknown_participant',
+		});
+		await expect(room.post({ to: assistant.name, text: 'x' })).rejects.toThrow(/wakes for nothing/);
+		expect((await messagesOf(room)).filter((message) => message.kind === 'posted')).toHaveLength(2);
+		// A resumed room finds the exchange that the post opened.
+		await room.stop();
+		const resumed = stopAtEnd(
+			await resumeRoom(room.name, {
+				runtime,
+				agents: [alpha, assistant],
+				execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+			}),
+		);
+		expect(resumed.exchange(posted.from)).toMatchObject({ from: posted.from, opened: false });
+	});
+
 	it('keeps a close wait pending when the close append fails, then resolves after retry', async () => {
 		const opened = await openFor(memory);
 		const faulty = faultyJournals(opened.storage);

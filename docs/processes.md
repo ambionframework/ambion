@@ -514,43 +514,36 @@ process before it returns the say.
 ### A host can wake the owner seat
 
 **A host that wants a wake posts a message when a process ends.**
-`workspace.processes.subscribe` gives an `ended` event. The host sends a
-message through `room.visit`, as a person that it defines, to the owner
-agent, under a key that names the handle. A message starts an activation,
-so the owner seat reads the end in its reminder, and `status` gives the
-output. The kernel adds nothing for this. It is application code.
+`workspace.processes.subscribe` gives an `ended` event. The host calls
+`room.post` to the owner agent, under a key that names the handle. The post
+starts an activation, so the owner seat reads the end in its reminder, and
+`status` gives the output. The kernel adds nothing else for this.
 
 ```ts
-import { defineHuman } from '@ambionframework/ambion';
-
-const lab = defineHuman({
-  name: 'lab',
-  identity: 'The lab host. It reports each process that ends.',
-});
-const visit = await room.visit(lab);
 workspace.processes.subscribe((event) => {
   const { handle, name, agent, state, room: started } = event.process;
   if (event.type !== 'ended' || started !== room.name) return;
-  visit
-    .send({
+  room
+    .post({
       to: agent,
-      text: `Process ${name ?? handle} is ${state}. Call status with ${handle} for its output.`,
+      text: `lab: process ${name ?? handle} is ${state}. Call status with ${handle} for its output.`,
       key: `process-ended:${handle}`,
     })
     .catch((error: unknown) => log.error(error));
 });
 ```
 
-**The message is an ordinary message of a person.**
+**The post is a message of the system**
+([Exchange](exchange.md#7-the-edges-a-host-sees)).
 
-- It opens an exchange when none is open, and the closing summary goes to
-  the host's person. When an exchange is open, the message joins it, and
-  the summary goes to the `person` of that exchange.
-- The owner agent must hold a seat in that room. The room refuses a
-  delivery to an agent in the reserve, and `send` rejects. A stopped room
-  rejects too, so the host catches each delivery.
-- The key makes a second delivery of one end land once, for example after
-  a restart of the host.
+- It opens an exchange when none is open. That exchange has no `person`
+  until a person speaks in it, so it owes no summary. When an exchange is
+  open, the post joins it and steers the seat of the owner agent alone.
+- The owner agent must hold a seat in that room. The room refuses a post to
+  an agent in the reserve, and `post` rejects. A stopped room rejects too,
+  so the host catches each post.
+- The key makes a second post of one end land once, for example after a
+  restart of the host.
 - A process of an earlier run ends in a read. A host that bridges its
   ends calls `workspace.processes.list()` on an interval, so a read sees
   them. `list` reads the agents that acted in this run. A process that
@@ -693,22 +686,22 @@ the three handle tools stay as they are.
 
 ## Decisions taken
 
-| Decision                                                       | Reason                                                                                             |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| The files of the bash backend are the source of truth          | A new run reads the same table, and a crash loses no record                                        |
-| An agent reaches its own processes alone                       | Its table is its home, and the workstation's accounts make it the wall                             |
-| A lost process reads `failed`                                  | It left no end, and nothing runs it                                                                |
-| The first read of a lost process with a pid writes its `stop`  | A later listing runs no `ps` for a process that nothing runs                                       |
-| The lost `stop` skips `ps` only for a pid gone from `/proc`    | A `ps` that fails once does not hide a live shell, and the skip starts no program                  |
-| The host's list covers this run's agents                       | The workspace keeps no roster                                                                      |
-| The reminder resolves once per activation, and can read I/O    | Every render of one activation reads the same text                                                 |
-| The table holds the timeout, and adopts a live process         | A kill goes through the stops of its agent, in every run                                           |
-| A stop writes no `stop` after `exit`                           | A command that ended reads its own end, whatever stop came late                                    |
-| The default timeout is 600 seconds, and the agent can raise it | An adopted process needs a bound from its spec                                                     |
-| A name is a label, and the handle is the key                   | Two processes can have one name with no rule for which one a call takes                            |
-| `ps` writes an audit entry                                     | The audit log records every tool call                                                              |
-| A process wakes no seat, and the agent waits for its result    | The kernel adds no wake source for the end of a process, and a host that wants one posts a message |
-| The agent comes back to a long process with a scheduled say    | The room keeps one clock, and the agent chooses when to look again                                 |
+| Decision                                                       | Reason                                                                                               |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| The files of the bash backend are the source of truth          | A new run reads the same table, and a crash loses no record                                          |
+| An agent reaches its own processes alone                       | Its table is its home, and the workstation's accounts make it the wall                               |
+| A lost process reads `failed`                                  | It left no end, and nothing runs it                                                                  |
+| The first read of a lost process with a pid writes its `stop`  | A later listing runs no `ps` for a process that nothing runs                                         |
+| The lost `stop` skips `ps` only for a pid gone from `/proc`    | A `ps` that fails once does not hide a live shell, and the skip starts no program                    |
+| The host's list covers this run's agents                       | The workspace keeps no roster                                                                        |
+| The reminder resolves once per activation, and can read I/O    | Every render of one activation reads the same text                                                   |
+| The table holds the timeout, and adopts a live process         | A kill goes through the stops of its agent, in every run                                             |
+| A stop writes no `stop` after `exit`                           | A command that ended reads its own end, whatever stop came late                                      |
+| The default timeout is 600 seconds, and the agent can raise it | An adopted process needs a bound from its spec                                                       |
+| A name is a label, and the handle is the key                   | Two processes can have one name with no rule for which one a call takes                              |
+| `ps` writes an audit entry                                     | The audit log records every tool call                                                                |
+| A process wakes no seat, and the agent waits for its result    | The kernel adds no wake source for the end of a process, and a host that wants one calls `room.post` |
+| The agent comes back to a long process with a scheduled say    | The room keeps one clock, and the agent chooses when to look again                                   |
 
 **The host owns the cleanup of `~/.processes` past the limit of 64.** A
 start removes the oldest finished processes of the agent that starts it,

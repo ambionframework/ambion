@@ -30,6 +30,13 @@ describe('what a message reaches', () => {
 		text: 'go',
 		...(to === undefined ? {} : { to }),
 	});
+	const posted = (to?: string): Message => ({
+		kind: 'posted',
+		seq: 2,
+		at,
+		text: 'ci: build 412 failed.',
+		...(to === undefined ? {} : { to }),
+	});
 	const summary: Message = {
 		kind: 'summary',
 		seq: 3,
@@ -49,6 +56,12 @@ describe('what a message reaches', () => {
 		// a directed say reaches the one it names, however narrowly it is seated
 		['product', 'none', 'a say to product', said('product'), true],
 		['other', 'presence', 'a say to product', said('product'), false],
+		// a post routes as a say does
+		['product', 'broadcast', 'a post to the room', posted(), true],
+		['product', 'named', 'a post to the room', posted(), false],
+		['product', 'named', 'a post to product', posted('product'), true],
+		['other', 'presence', 'a post to product', posted('product'), false],
+		['product', 'presence', 'a post to a person', posted('priya'), false],
 		['product', 'none', 'a summary', summary, false],
 		['product', 'named', 'a summary', summary, false],
 		['product', 'broadcast', 'a summary', summary, false],

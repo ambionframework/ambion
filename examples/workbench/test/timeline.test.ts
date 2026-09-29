@@ -110,10 +110,9 @@ describe('buildTimeline', () => {
 		const scheduled = { ...said(61, 'agent', 'agent'), after: 600 } as Message;
 		const returned = {
 			seq: 70,
-			kind: 'returned',
+			kind: 'posted',
 			to: 'agent',
-			message: 61,
-			person: 'mira',
+			returns: 61,
 			text: 'Check the build.',
 			at: AT,
 		} as Message;
@@ -122,7 +121,7 @@ describe('buildTimeline', () => {
 		expect(shape(build(messages, exchanges))).toEqual([
 			'question:59',
 			'said:61',
-			'returned:70',
+			'posted:70',
 			'said:72',
 		]);
 	});
@@ -147,10 +146,9 @@ describe('buildTimeline', () => {
 	it('keeps a returned say that lands in an open exchange inside its discussion', () => {
 		const returned = {
 			seq: 70,
-			kind: 'returned',
+			kind: 'posted',
 			to: 'agent',
-			message: 61,
-			person: 'mira',
+			returns: 61,
 			text: 'Check the build.',
 			at: AT,
 		} as Message;

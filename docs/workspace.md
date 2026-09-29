@@ -314,13 +314,13 @@ room's own `Message` type plus `room`, the room's name. Every kind also
 carries `at`, an ISO timestamp the runtime stamps when the message lands.
 `refs` is absent when the message cites nothing:
 
-| `kind`                                  | Fields beyond `room`, `kind`, `seq`, `at`                                             |
-| --------------------------------------- | ------------------------------------------------------------------------------------- |
-| `said`                                  | `from`, `to` (absent for a broadcast), `text`, `refs`, and `after` on a scheduled say |
-| `returned`                              | `to`, `message` (the seq of the scheduled say), `text`, `refs`                        |
-| `dismissed`                             | `from` (absent for the host), `message` (the seq of the scheduled say)                |
-| `arrived`, `left`, `seated`, `unseated` | `subject`, and `identity` on `arrived` and `seated`                                   |
-| `summary`                               | `from`, `to`, `text`, `covers: { from, through }`, `refs`                             |
+| `kind`                                  | Fields beyond `room`, `kind`, `seq`, `at`                                                                  |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `said`                                  | `from`, `to` (absent for a broadcast), `text`, `refs`, and `after` on a scheduled say                      |
+| `posted`                                | `to` (absent for the room), `text`, `refs`, and `returns` (the seq of the scheduled say) on a returned say |
+| `dismissed`                             | `from` (absent for the host), `message` (the seq of the scheduled say)                                     |
+| `arrived`, `left`, `seated`, `unseated` | `subject`, and `identity` on `arrived` and `seated`                                                        |
+| `summary`                               | `from`, `to`, `text`, `covers: { from, through }`, `refs`                                                  |
 
 An agent reads its own room's file with `read` or `bash cat`, the same as
 any file a peer wrote.

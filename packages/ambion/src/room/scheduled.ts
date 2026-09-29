@@ -2,7 +2,7 @@
  * The scheduled says that wait to return, as a fold over the record.
  *
  * An agent schedules a say with the `schedule` tool: a say to itself with
- * `after`. The say waits until the room writes a `returned` entry for it. An
+ * `after`. The say waits until the room posts it back with `returns`. An
  * unseating of its author drops it, and a cancellation drops every say
  * before it. The projection runs one step for each entry, so a replay holds
  * the same list in the same order.
@@ -10,7 +10,7 @@
 
 import type { Body } from '../journal/journal.ts';
 import type { PendingSay, ScheduleLimits } from '../scheduling.ts';
-import type { Message, ReturnedMessage, Seq } from '../types.ts';
+import type { Message, PostedMessage, Seq } from '../types.ts';
 
 /** One say that waits to return to its author. */
 export interface ScheduledSay {
@@ -24,6 +24,13 @@ export interface ScheduledSay {
 	readonly refs?: readonly string[];
 }
 
+/** Whether a message is a returned say: a post that gives a scheduled say back to its seat. */
+function returnsSay(
+	message: Message,
+): message is PostedMessage & { readonly returns: Seq; readonly to: string } {
+	return message.kind === 'posted' && message.returns !== undefined;
+}
+
 /** Whether a message is a scheduled say. */
 function isScheduled(message: Message): message is Extract<Message, { kind: 'said' }> {
 	return message.kind === 'said' && message.after !== undefined;
@@ -32,13 +39,13 @@ function isScheduled(message: Message): message is Extract<Message, { kind: 'sai
 /** Whether a message changes the list: a scheduled say, a returned or dismissed say, or an unseating. */
 export function changesScheduled(message: Message): boolean {
 	if (isScheduled(message) || message.kind === 'unseated') return true;
-	return message.kind === 'returned' || message.kind === 'dismissed';
+	return returnsSay(message) || message.kind === 'dismissed';
 }
 
 /** The list after one message. */
 export function scheduleStep(list: readonly ScheduledSay[], message: Message): ScheduledSay[] {
-	if (message.kind === 'returned' || message.kind === 'dismissed')
-		return list.filter((say) => say.seq !== message.message);
+	if (returnsSay(message)) return list.filter((say) => say.seq !== message.returns);
+	if (message.kind === 'dismissed') return list.filter((say) => say.seq !== message.message);
 	if (message.kind === 'unseated') return list.filter((say) => say.seat !== message.subject);
 	if (!isScheduled(message) || message.after === undefined) return [...list];
 	return [
@@ -104,7 +111,7 @@ export function returnable(
 }
 
 /**
- * The returned entry the room writes for one say now, or nothing: the say
+ * The post that the room writes for one say now, or nothing: the say
  * no longer waits, or it is not `returnable`. A second write of the same
  * say finds it gone.
  */
@@ -113,14 +120,14 @@ export function returning(
 	roster: readonly { readonly name: string }[],
 	seq: Seq,
 	now: number,
-): Body<ReturnedMessage> | undefined {
+): Body<PostedMessage> | undefined {
 	const say = list.find((candidate) => candidate.seq === seq);
 	if (say === undefined || !returnable(say, roster, now)) return undefined;
 	return {
-		kind: 'returned',
+		kind: 'posted',
 		at: new Date(now).toISOString(),
 		to: say.seat,
-		message: say.seq,
+		returns: say.seq,
 		text: say.text,
 		...(say.refs === undefined ? {} : { refs: [...say.refs] }),
 	};

@@ -35,7 +35,7 @@ import type {
 	Seq,
 } from './types.ts';
 
-export type { ExchangeHandle, Room, RoomRead, Visit } from './room-host/room.ts';
+export type { ExchangeHandle, PostInput, Room, RoomRead, Visit } from './room-host/room.ts';
 
 export interface StartRoomOptions {
 	/** The room name shared by all runs over its journal. */

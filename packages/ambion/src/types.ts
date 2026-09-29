@@ -199,22 +199,24 @@ export interface SpokenMessage extends Landed {
 }
 
 /**
- * A scheduled say that the room gave back to its author when it was due.
- * The room writes it, so it has no author. It opens an exchange when none
- * is open, as a person's question does.
+ * A message of the system: the host posted it, or the room's clock returned a
+ * scheduled say. It has no author, and the room is not a participant. When no
+ * exchange is open, it opens one, as a person's question does.
  */
-export interface ReturnedMessage extends Landed {
-	kind: 'returned';
-	/** The room wrote it, and the room is not a participant, so it has no author. */
+export interface PostedMessage extends Landed {
+	kind: 'posted';
+	/** The system wrote it, so it has no author. */
 	from?: undefined;
-	/** The seat that scheduled the say, and the one seat this entry wakes. */
-	to: string;
-	/** The seq of the scheduled say. */
-	message: Seq;
-	/** The text of the scheduled say. */
+	/** The seat or the person it goes to. Absent for a post to the room. */
+	to?: string;
 	text: string;
-	/** The refs of the scheduled say. */
+	/** URIs the post cites. Absent when it cites nothing. */
 	refs?: string[];
+	/**
+	 * On a returned say, the seq of the scheduled say. The post copies the text
+	 * and the refs of that say, and `to` names the seat that scheduled it.
+	 */
+	returns?: Seq;
 }
 
 /**
@@ -293,7 +295,7 @@ export interface DismissedMessage extends Landed {
 }
 
 export type Message =
-	SpokenMessage | PresenceMessage | SummaryMessage | ReturnedMessage | DismissedMessage;
+	SpokenMessage | PresenceMessage | SummaryMessage | PostedMessage | DismissedMessage;
 
 /** Copy a recorded message before it crosses an ownership boundary. */
 export function copyMessage<T extends Message>(message: T): T {
@@ -304,8 +306,8 @@ export function isSpoken(message: Message): message is SpokenMessage {
 	return message.kind === 'said';
 }
 
-export function isReturned(message: Message): message is ReturnedMessage {
-	return message.kind === 'returned';
+export function isPosted(message: Message): message is PostedMessage {
+	return message.kind === 'posted';
 }
 
 export function isSummary(message: Message): message is SummaryMessage {

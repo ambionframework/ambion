@@ -54,9 +54,9 @@ pushes, and cites the commit by its full hash. See
 
 **An agent comes back to its work later.** It calls `schedule` with `after`,
 in seconds. The exchange closes while the say waits. When the say is due, the
-room gives it back, and the returned say opens an exchange for the person who
-owned the first one. An agent checks a long build this way with no event
-source and no host code. See [Exchange](docs/exchange.md#6-a-scheduled-say).
+room gives it back, and the returned say opens an exchange of its own. An
+agent checks a long build this way with no event source and no host code. A
+host posts an event of its own with `room.post`. See [Exchange](docs/exchange.md#6-a-scheduled-say).
 
 **The host lists and cancels processes through `workspace.processes`.** It
 hears when each process starts and ends. Host code can post a message to
@@ -218,7 +218,7 @@ later**, the floor `@opentui/core` sets for its terminal renderer. See
 - Tools can act before a contribution commits. Applications own effect
   idempotency.
 - A scheduled say is the one clock an agent sets. A host that wants
-  a wake posts a message.
+  a wake calls `room.post`.
 
 [Technical facts](docs/technical-facts.md) lists every limit.
 

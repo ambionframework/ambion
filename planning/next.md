@@ -122,7 +122,7 @@ condition that brings each one back.
 
 - **A process wakes no seat.** The agent waits for its result inside the
   activation, and a wait stops before the room ends the activation. A host
-  that wants a wake posts a message
+  that wants a wake calls `room.post`
   ([Processes](../docs/processes.md#the-end-of-a-process)).
 - **A scheduled say goes to its author alone.** The `schedule` tool sets
   `to` to the author and `after` to its argument. On the record, `to` names
@@ -136,8 +136,8 @@ condition that brings each one back.
   room's clock write a `posted` entry with no author, and a returned say
   is a post with `returns`. A post opens an exchange. An exchange has an
   opening message and a `person`, the first person who spoke in its range.
-  Step 9 landed the exchange with no owner. Step 10 lands the post, and
-  [the design](system.md) holds it until then.
+  [Exchange](../docs/exchange.md#4-who-directs-one-and-who-receives-its-result)
+  holds the rules.
 - **The journal records the schedule, and the host arms the clock.** The
   fold holds the pending says, and the room's alarm takes the earliest due
   time beside the lease expiries and the retry times. A restart reads the
@@ -210,13 +210,10 @@ page it changes in the same commit.
 - [ ] **7.** Cloudflare reuses the core, and one scripted room serves the
       conformance suites. (C9)
 - [ ] **8.** `wait` takes `handles` alone, beside `status` and `ps`. (C10)
-- [ ] **10.** The system posts, and a post replaces the returned say. (S2)
 
 **Evidence:** the evidence of phase 1 holds for each step. Step 7 passes
 `portConformance` on `rpcExecution` in workerd. Steps 5 and 8 pass one
 live file on each of Pi, Claude, and Codex before they merge.
-Step 10 runs `pnpm rule:check` and `pnpm chaos` on both storages, and
-passes one live file on the assistant before it merges.
 
 ### Phase 3. Release
 
@@ -341,21 +338,3 @@ interactions, so a person who asks and leaves gets the answer later.
 at pass^3, where the person asks and leaves before the first activation.
 The assistant sends a directed request to a specialist, and the closing
 summary answers the question. The live suite of the assistant stays green.
-
-**S2. The system posts.** A host that wants a wake defines a fake person
-today, and the room applies each rule for people to it. [The design](system.md)
-holds the problem, the rules, and the evidence.
-
-- **The change.** `room.post({ to?, text, refs?, key? })` writes a
-  `posted` entry with no author, in its own key space. The room's clock
-  writes a post with `returns` when a scheduled say is due, and the
-  `returned` kind goes. A post opens an exchange. A post with `to` wakes
-  and steers its target, and a post with no `to` reaches each seat at
-  `broadcast`. The Cloudflare room object takes `post`, and
-  [Processes](../docs/processes.md) posts in place of the fake person.
-
-**Evidence:** `exchange-completion.test.ts`, `routing.test.ts`,
-`steering-delivery.test.ts`, `transition.test.ts`, and
-`journal-validation.test.ts` hold the cases of the design, the Cloudflare
-tests pass in workerd, and one live file on the assistant shows a post
-that wakes a seat. The step removes [the design](system.md).

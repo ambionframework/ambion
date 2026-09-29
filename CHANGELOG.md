@@ -4,6 +4,16 @@
 
 ### New
 
+**The host posts a message as the system.**
+`room.post({ to?, text, refs?, key? })` writes a `posted` entry with no
+author and returns the handle of the exchange that holds it. A post opens an
+exchange when none is open, so the host reads `waitForClose`, the usage, and
+the outcome of the work it starts. A post routes as a say does, a post with
+`to` steers its target alone, and its key has a key space of its own. The
+prompt names a post of the host as an event with no direction. The
+Cloudflare room object takes `post`. A host no longer defines a person to
+wake a seat. See [Exchange](docs/exchange.md#7-the-edges-a-host-sees).
+
 **`sql` imports a CSV file.** The `import` parameter names a CSV file in
 the workspace. Its rows are the table `import.rows` for that call alone,
 and the statements copy them into the shared tables with
@@ -177,6 +187,11 @@ its `text`.
 
 ### Breaking changes
 
+- **A returned say is a post.** The `returned` kind goes. The room writes a
+  `posted` entry with `to` and `returns`, the seq of the scheduled say, and
+  a journal read refuses a `returned` entry. `PostedMessage` and `isPosted`
+  replace `ReturnedMessage` and `isReturned`. The record line of a returned
+  say reads `[posted → <seat>, returns #<n>]`.
 - **The remote call is an `Execution`, and one router serves every kind.**
   The hosting entry exports `localExecution(kind, build)`. It returns an
   `Execution` of that kind, whose port is an `AgentRunner` in this process.

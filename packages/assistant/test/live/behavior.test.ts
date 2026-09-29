@@ -480,4 +480,42 @@ live('the default assistant, driven by the simulator', () => {
 		expect(speech[0]).toMatchObject({ to: 'inventory', text: expect.stringMatching(/north/i) });
 		expect(exchange?.summary?.text).toMatch(EIGHT);
 	});
+	it(
+		'wakes on a post of the host, and speaks to the event with no summary owed',
+		async () => {
+			track('post');
+			const room = await openRoom({ specialist: answers(() => STOCK), attention: 'broadcast' });
+			const visit = await room.visit(priya);
+			const asked = await visit.send({
+				text: 'How many units of SKU A can the warehouse dispatch today? Use current stock evidence.',
+			});
+			await asked.waitForClose();
+			await visit.leave();
+			// The host posts an event that changes the answer priya got. No person asks.
+			const posted = await room.post({
+				to: 'assistant',
+				text: 'ci: the stock sync for SKU A failed at 09:40. The count of 8 units is stale until the next sync.',
+				key: 'stock-sync-0940',
+			});
+			const discussion = await posted.waitForClose();
+			expect(discussion[0]).toMatchObject({ kind: 'posted', wakes: ['assistant'] });
+			// The activation that the post starts reads the event and speaks to it.
+			const spoken = discussion.filter(
+				(message): message is SpokenMessage =>
+					isSpoken(message) &&
+					message.from === 'assistant' &&
+					message.activationId === `message:${posted.from}:assistant:1`,
+			);
+			expect(spoken.map((message) => message.text).join(' '), JSON.stringify(discussion)).toMatch(
+				/stale|sync/i,
+			);
+			// No person spoke in the work of the post, so it names no person and owes no summary.
+			const closed = (await room.read({ messages: false })).exchanges.find(
+				(exchange) => exchange.from === posted.from,
+			);
+			expect(closed).not.toHaveProperty('person');
+			expect(closed).toMatchObject({ status: 'closed', summary: { status: 'silent' } });
+		},
+		TWO_EXCHANGES_MS,
+	);
 });

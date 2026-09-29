@@ -84,7 +84,7 @@ describe('one line of the record', () => {
 		expect(renderLine(said)).toBe('#2 [a → b] Done. (refs: https://x/1 file:///2)');
 	});
 
-	it('reads a scheduled say with the time it returns, and a returned say with its owner', () => {
+	it('reads a scheduled say with the time it returns, a returned say with its handle, and a post', () => {
 		const later: Message = {
 			kind: 'said',
 			seq: 3,
@@ -97,17 +97,19 @@ describe('one line of the record', () => {
 		const returns = new Date(Date.parse(at) + 600_000).toISOString();
 		expect(renderLine(later)).toBe(`#3 [worker → worker] Check the build. (returns at ${returns})`);
 		const returned: Message = {
-			kind: 'returned',
+			kind: 'posted',
 			seq: 9,
 			at,
 			to: 'worker',
-			message: 3,
+			returns: 3,
 			text: 'Check the build.',
 			refs: ['file:///out.log'],
 		};
 		expect(renderLine(returned)).toBe(
-			'#9 [returned → worker] Check the build. (refs: file:///out.log)',
+			'#9 [posted → worker, returns #3] Check the build. (refs: file:///out.log)',
 		);
+		const posted: Message = { kind: 'posted', seq: 10, at, text: 'ci: build 412 failed.' };
+		expect(renderLine(posted)).toBe('#10 [posted → the room] ci: build 412 failed.');
 	});
 
 	it.each([
@@ -189,11 +191,11 @@ describe('the URIs a prompt states', () => {
 
 	it('states that a returned say that opened the exchange is the seat’s own', () => {
 		const returned: Message = {
-			kind: 'returned',
+			kind: 'posted',
 			seq: 4,
 			at,
 			to: 'worker',
-			message: 2,
+			returns: 2,
 			text: 'Check the build.',
 		};
 		const view: ActivationView = {
