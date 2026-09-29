@@ -5,7 +5,7 @@
 		".": {
 			"entry": ["scripts/{version,publish,release,journal-smoke,projection-envelope}.mjs"],
 			"project": ["scripts/*.mjs"],
-			"ignoreDependencies": ["@vitest/coverage-v8"]
+			"ignoreDependencies": ["@vitest/coverage-v8", "vitest"]
 		},
 		"packages/*": {
 			"project": ["src/**/*.ts"]
