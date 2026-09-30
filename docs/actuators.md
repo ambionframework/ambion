@@ -1,871 +1,557 @@
 # Actuators
 
 > **Actuators are a design. No package implements them.** The `actuate`
-> tool, the actuator part of `connect`, the actuator API, and the host's
-> `actuation` option do not exist yet. [Sensors](sensors.md) is the
-> implemented counterpart. This design reuses its lifecycle, its
-> connections, and its retained evidence. The backlog holds the work as
-> [D24](../planning/backlog.md#for-actuators).
+> tool, the `act` kind of process, the event log, and the fold do not
+> exist yet. The design builds on [Processes](processes.md) and needs a
+> graceful stop first: `SIGTERM`, a grace, then `SIGKILL`. The backlog
+> holds the graceful stop in
+> [D6](../planning/backlog.md#for-rooms-that-run-unattended) and this
+> design in [D24](../planning/backlog.md#for-actuators).
 
-**An actuator is the output of a control loop.** To change the world, an
-agent establishes a loop. The loop has a desired state, a source of
-feedback that measures it, and a controller that runs at the speed that
-the plant needs. Guardrails bound every output. A command is one input to
-that loop.
+**An actuation is a command that changes the world.** `actuate` runs it as
+a process of a second kind, `act`. The command runs to completion, as a
+`bash` command does. `actuate` adds three things to that contract: a
+stop that lets the command reach a safe state, a rule for what its exit
+code means, and a structured log that the workspace folds into a status.
 
-**The primary job of the agent is to establish the loop.** It chooses the
-feedback. It places the loop at a tier whose latency fits the plant. It
-sets the desired state and the criteria for convergence. It then verifies
-convergence from retained evidence. Sending a target is the smallest part
-of that work.
+**The primary job of the agent is to establish a control loop.** The
+command is the controller. The agent chooses the feedback that closes the
+loop, places the loop where its latency fits, and writes the command. It
+then verifies convergence from an independent source of feedback.
 
-**The design goal is convergence within guardrails.** The loop drives a
-measured stock toward the desired state, inside the safe set, within the
-time that the task allows. The server reports whether the loop converges.
-The agent cites that report and the feedback behind it.
+**The design goal is convergence within guardrails.** The command drives
+the world toward a desired state. The stop contract, the `finally`
+backstop, the account permissions, and the device keep every end safe.
+The workspace reports what the command claims, and the agent checks it.
 
-**A forked Git repository defines an actuator server.** The agent
-customizes its control code, validates it against a simulated plant, and
-saves working versions on a branch. A running workspace process activates
-one version. One server can expose sensors and actuators together.
+## The tool
 
-**The lifecycle is the deployment contract.** Git owns saved versions. The
-existing process tools own execution. `connect` attaches a running version
-to the workspace. `actuate` sets one desired state, and the workspace
-retains the intent and the outcome as snapshots. Ambion adds no separate
-actuator definition or deployment service.
+```ts
+actuate({
+  command: string, // drives the world; carries its own deadline; traps TERM and cleans up
+  grace: number, // seconds the command needs to reach a safe state after SIGTERM
+  finally?: string, // backstop; runs only after an unclean end; idempotent
+  name?: string, // as bash
+  timeout?: number, // as bash; a backstop above the command's own deadline
+  wait?: number, // as bash
+});
+// Result: process act-3f9a2c1d0b7e. status, wait, cancel, and ps take it.
+```
 
-**The server owns the inner loop.** Its implementation owns the device
-drivers, the control law, the controller state, and the return to a safe
-target. The API prescribes no controller, no tuning method, and no state
-format.
+| Parameter | Default   | Bounds                     | Meaning                                                    |
+| --------- | --------- | -------------------------- | ---------------------------------------------------------- |
+| `command` | None      | As `bash`                  | The controller: it acts, prints, logs, and exits           |
+| `grace`   | None      | 1 to 300 s                 | The time from `SIGTERM` to `SIGKILL`                       |
+| `finally` | None      | As `bash`; runs up to 60 s | The command that makes the world safe after an unclean end |
+| `name`    | None      | As `bash`                  | A label for the process                                    |
+| `timeout` | 600 s     | As `bash`                  | The table's deadline; it starts the stop                   |
+| `wait`    | As `bash` | As `bash`                  | Seconds the call waits for the end                         |
 
-## Establish a control loop
+**`grace` has no default.** Only the author of the command knows how long
+the device needs. A heater cuts its power in milliseconds. A valve can
+need 20 seconds to close.
 
-**A loop has five parts, and the agent answers one question for each.**
+**`actuate` adds no new process tool.** `status`, `wait`, `cancel`, and
+`ps` take an `act-` handle as they take a `bash-` handle. The reminder,
+the host's view, and the audit log show it as its own kind.
 
-| Part          | The question that the agent answers                                  | Where the answer lives                                  |
-| ------------- | -------------------------------------------------------------------- | ------------------------------------------------------- |
-| Desired state | Which value, within which tolerance, by which time?                  | The command: `target`, `tolerance`, and `settle`        |
-| Feedback      | Which measurement shows the stock that the goal names?               | The `feedback` sensor that the actuator index declares  |
-| Controller    | Which law turns the error into an output, and at which period?       | The controller code in the fork, and the index `period` |
-| Placement     | Which tier closes the loop within its latency budget?                | The device, the server, or the agent                    |
-| Guardrails    | Which outputs and states does the loop never reach, and who says so? | The device, the host envelope, the server, and the hold |
+**What `actuate` adds over `bash`:**
+
+1. A `grace` for each call.
+2. The rule that exit 0 means safe.
+3. The optional `finally` backstop.
+4. The event log and its fold into a status.
+5. The `act` kind, which the reminder, `ps`, and the audit log show apart.
+
+## The loop
 
 ```mermaid
 flowchart LR
   goal[Goal: a person in the room] --> agent[Agent: establishes the loop]
-  agent -- desired state, tolerance, settle --> server[Server: the control law]
-  agent -- controller code, feedback choice --> server
-  server -- output within guardrails --> actuator[Actuator]
-  actuator -- flow --> stock[(Stock in the world)]
-  stock --> feedback[Feedback sensor]
-  feedback -- measurement at the period --> server
-  server -- convergence phase --> agent
-  feedback -- observe, retained --> agent
-  host[Host: the envelope] -. authorize .-> agent
+  agent -- writes and starts --> command[Command: the controller]
+  command -- drive --> device[Device]
+  device -- flow --> stock[(Stock in the world)]
+  stock --> feedback[Feedback]
+  feedback -- measurement --> command
+  command -- events.jsonl --> fold[Workspace: the fold]
+  fold -- status, reminder --> agent
+  stock --> independent[Independent sensor]
+  independent -- observe --> agent
 ```
 
-**The loop is a balancing loop.** The world holds a stock: a temperature,
-a charge, a position, or a volume. The feedback sensor reports the stock.
-The actuator changes a flow into or out of it. The error is the difference
-between the desired state and the report. The control law turns the error
-into the next output.
+**The command closes the fast loop.** It reads its feedback, drives the
+device, and repeats at the period that the plant needs. The agent closes
+the slow loop. It chooses the feedback, sets the desired state in the
+command, reads the fold, and confirms the result.
 
 ### Choose the feedback
 
-**The feedback decides what the loop can converge on.** A loop converges
-on the value that its feedback measures. A heater loop on the heater's own
-power converges on a power. A heater loop on the bath thermometer
-converges on the bath temperature. Only the second one serves a goal that
-names the bath.
+**A loop converges on the value that its feedback measures.** A heater
+loop on the heater's own power converges on a power. A heater loop on the
+bath thermometer converges on the bath temperature. Only the second one
+serves a goal that names the bath.
 
-**An appropriate source of feedback meets six conditions.**
+**An appropriate source of feedback meets five conditions.**
 
-1. It measures the stock that the goal names. The actuator's own output
-   is not that stock.
+1. It measures the stock that the goal names.
 2. It samples several times in each time constant of the plant.
-3. Its latency is short against the control period.
+3. Its latency is short against the period of the loop.
 4. Its resolution and its noise are small against the tolerance.
-5. It carries measurement timestamps. [Sensors](sensors.md) makes them
-   the source of truth.
-6. For a safety limit, it is independent of the feedback of the control
-   law. A second sensor on the same stock guards the first.
+5. For a safety limit, it is independent of the loop's own feedback.
 
-**Each actuator declares its feedback.** The actuator index names the
-sensor of the same server that closes the inner loop. An actuator with no
-`feedback` is open loop. The `connect` result and the reminder mark it
-open loop. For an open-loop actuator, the agent closes the loop itself
-with `observe`, and the placement rules below limit what it can control.
-
-**The agent verifies the feedback before it trusts it.** It observes the
-feedback sensor and an independent reference on the same stock, and it
-compares them. A template that ships a plant model also ships the
-expected response. The agent checks the real response against it.
+**The event log is the command's claim.** The agent confirms a claim of
+`reached` through a second source: a sensor that it observes, or a
+command of its own through `bash`.
 
 ### Place the loop by its latency
 
-**Each tier closes loops of one speed.**
-
-| Tier            | Loop latency                 | What the tier closes                                             | Real-time class                        |
-| --------------- | ---------------------------- | ---------------------------------------------------------------- | -------------------------------------- |
-| Device          | Microseconds to milliseconds | Interlocks, current limits, pulse-width modulation, the watchdog | Hard real time                         |
-| Server          | Milliseconds to seconds      | The control law on the feedback sensor                           | Soft real time, on the workstation     |
-| Agent           | Tens of seconds to hours     | The desired state, the tuning, the controller code, the feedback | None: an activation or a scheduled say |
-| Person and host | Hours and longer             | The goals and the envelope                                       | None                                   |
+| Tier            | Loop latency                 | What the tier closes                                        | Real-time class                        |
+| --------------- | ---------------------------- | ----------------------------------------------------------- | -------------------------------------- |
+| Device          | Microseconds to milliseconds | Interlocks, current limits, the watchdog                    | Hard real time                         |
+| Command         | Milliseconds to seconds      | The control law on the feedback                             | Soft real time, on the workstation     |
+| Agent           | Tens of seconds to hours     | The feedback, the desired state, the command, its revisions | None: an activation or a scheduled say |
+| Person and host | Hours and longer             | The goals and the account permissions                       | None                                   |
 
 **Close each loop at a tier whose latency is small against the plant.** A
-common engineering rule sets the control period at one tenth of the
-plant's time constant or less. A water bath with a time constant of ten
-minutes tolerates a period of one minute. A motor current with a time
-constant of one millisecond needs the device.
+common engineering rule sets the period of the loop at one tenth of the
+plant's time constant or less. An agent that closes a fast loop across
+activations makes the stock oscillate. It writes that loop into the
+command.
 
-**The workspace path has no real-time guarantee.** An activation takes
-seconds to minutes. `actuate` and `observe` cross SSH forwarding and the
-object store. An agent that closes a fast loop through these tools makes
-the stock oscillate. The agent writes that loop into the server code, and
-it sets the desired state of that loop.
-
-**The index declares the control period.** Each actuator states `period`,
-in milliseconds. The agent compares it with the time constant that it
-measured on the plant. A period that is too long for the plant is a
-finding. The agent changes the controller or asks for a device loop.
-
-**A long horizon belongs in code.** A behavior that must continue while no
-agent is active goes into the controller in the repository. A hold on a
-desired state has a maximum. A loop that needs more time than that maximum
-is a policy, and a policy is versioned code. An agent does not keep a
-stock in place with a chain of renewed commands.
-
-### Converge to the desired state
-
-**A command states the desired state and its criteria.** `target` is the
-value. `tolerance` is the band around a level target, in its unit.
-`settle` is the number of seconds in which the stock must enter that band
-and stay in it. A state target, such as `open`, has no tolerance. Its
-feedback confirms the state, for example through a limit switch.
-
-**The server reports a convergence phase.** It computes the phase from the
-feedback on its own clock, for the command in force.
-
-| Phase        | Meaning                                                                     |
-| ------------ | --------------------------------------------------------------------------- |
-| `converging` | The settle time has not ended, and the stock is outside the tolerance       |
-| `converged`  | The stock entered the tolerance within the settle time and stays in it      |
-| `diverged`   | The settle time ended, and the stock is outside the tolerance               |
-| `limited`    | A guardrail holds the output, so the loop cannot reach the desired state    |
-| `open`       | The actuator has no feedback, so the server cannot compute convergence      |
-| `ended`      | A new command superseded the command, its hold ended, or the server stopped |
-
-**`converged` is the evidence that the agent cites.** `accepted` states
-only that the loop took the desired state. The agent schedules its next
-activation at the settle time. It observes the state sensor for the phase
-and the feedback sensor for the stock, and it cites both refs.
-
-**`diverged` and `limited` are findings.** The agent revises the desired
-state, the controller, or the choice of feedback, or it asks a person. It
-does not widen a guardrail to reach convergence. A desired state outside
-the safe set is a question for the person who owns the goal.
-
-**A converged loop can leave its band.** A disturbance, such as a lid
-that opens, moves the stock. The phase goes back to `converging` while the
-settle time allows, and to `diverged` after it. The state sensor records
-each change of phase with its server time.
-
-### Guardrails at every tier
-
-**A guardrail protects only against the parties that cannot change it.**
-Each tier holds its own guardrails. [Authority](#authority) states the
-envelope, and [The safe target](#the-safe-target) states the hold.
-
-| Guardrail                                       | Tier   | Who can change it            | What it guards against                          |
-| ----------------------------------------------- | ------ | ---------------------------- | ----------------------------------------------- |
-| Interlock, watchdog, hardware default           | Device | The lab                      | Every software failure, the host's included     |
-| The envelope: `authorize`                       | Host   | The host application         | An agent and the server code that it writes     |
-| Range, maximum rate, and `maxHold` in the index | Server | The agent that owns the fork | The mistakes of that agent and of other callers |
-| The hold and the safe target                    | Server | The agent that owns the fork | The absence of the agent                        |
-
-**The server clips an output at a guardrail and reports it.** It does not
-move the desired state. The phase becomes `limited`, and the state sensor
-records the guardrail that holds the output.
-
-### Where an agent intervenes
-
-**Each place to intervene has one owner.** Donella Meadows ranks the
-places to intervene in a system. The table maps the places this design
-reaches to their mechanisms. The rows go from the least effect to the
-most.
-
-| Place to intervene                 | Mechanism                                                               | Owner                                 |
-| ---------------------------------- | ----------------------------------------------------------------------- | ------------------------------------- |
-| Constants and parameters           | The desired state, the tolerance, and the settle time through `actuate` | The agent that owns the connection    |
-| The lengths of delays              | The placement of the loop, its period, and `schedule` with `after`      | The agent, through code and the room  |
-| Balancing feedback loops           | The control law in the fork                                             | The agent, through Git                |
-| The structure of information flows | The feedback that closes the loop, and the evidence that an agent cites | The agent, through code and `observe` |
-| The rules of the system            | The envelope: the commands that the host allows                         | The host, through `authorize`         |
-| The power to change structure      | Fork, customize, validate, save, and start a version while rooms run    | The agent, through Git and processes  |
-| The goals of the system            | A person's question and the room's goal                                 | A person and the host                 |
-
-**The primary job of the agent sits in the middle rows.** It chooses the
-feedback, places the loop, and writes the control law. These places have
-more effect than a desired state. The rules and the goals stay above the
-agent.
+**A long horizon belongs in the command.** A command that holds a stock
+for an hour runs for an hour, with `timeout 3600` or a deadline in its own
+code. It then exits 0. The table's `timeout` is a backstop set above it,
+so a hold that ends and a hold that hangs read differently.
 
 ### The traps
 
-**Five system traps shape the rules.** Each rule on this page answers one
-trap.
-
-| Trap                   | How it shows in a lab                                            | The rule that answers it                                            |
-| ---------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------- |
-| The wrong feedback     | A loop on heater power reports success while the bath stays cold | Each actuator declares its feedback, and the agent verifies it      |
-| Oscillation from delay | An agent switches a pump at each activation                      | The loop runs at the tier that its latency needs                    |
-| Policy resistance      | Two agents set one heater to 40 °C and 60 °C in turn             | One agent commands each actuator ([Authority](#authority))          |
-| Eroding goals          | An agent widens a limit to reach a desired state that it misses  | `limited` is a finding, and the host owns the envelope              |
-| An unconfirmed effect  | An agent reports "the bath is at 37 °C" from an accepted command | The agent cites `converged` and the feedback, after the settle time |
+| Trap                   | How it shows in a lab                                            | The rule that answers it                                         |
+| ---------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| The wrong feedback     | A loop on heater power reports success while the bath stays cold | The agent chooses the feedback and confirms from a second source |
+| Oscillation from delay | An agent switches a pump at each activation                      | The command closes the fast loop                                 |
+| Policy resistance      | Two commands drive one heater to 40 °C and 60 °C in turn         | `flock` in the command; one owner for each device                |
+| An unconfirmed effect  | An agent reports "the bath is at 37 °C" from the log alone       | The fold labels `reached` as a claim                             |
+| A silent hang          | A controller stops logging while its process lives               | `interval` and the `stale` flag                                  |
 
 ## Compose the six capabilities
 
-**The workspace gives six capabilities, and the establishment of a loop
-uses all of them.** Each capability has one role. The room holds the
-goals, the requests, and the decisions, and `schedule` sets the clock of
-the outer loop.
+**The workspace gives six capabilities, and a loop uses all of them.**
 
-| Capability   | Tools                                    | Role in a loop                                                         |
-| ------------ | ---------------------------------------- | ---------------------------------------------------------------------- |
-| Files        | `read`, `write`, `edit`                  | The common medium: exports, manifests, working copies, and plans       |
-| Processes    | `bash`, `ps`, `status`, `wait`, `cancel` | The clock and the life of the inner loop                               |
-| Repositories | `repos`, `fork`                          | The rules of the loop, versioned: controller code, limits, plant model |
-| Tables       | `sql`                                    | Shared stocks of information: plans, schedules, and results            |
-| Sensors      | `connect`, `observe`                     | The flow of information from the world, retained as evidence           |
-| Actuators    | `connect`, `actuate`                     | The desired state of the loop, inside guardrails, retained as evidence |
+| Capability   | Tools                                    | Role in a loop                                               |
+| ------------ | ---------------------------------------- | ------------------------------------------------------------ |
+| Files        | `read`, `write`, `edit`                  | The common medium: logs, exports, working copies, and plans  |
+| Processes    | `bash`, `ps`, `status`, `wait`, `cancel` | The life of every command, and the checks of the agent       |
+| Repositories | `repos`, `fork`                          | The versions of the controller                               |
+| Tables       | `sql`                                    | Shared plans, schedules, and results                         |
+| Sensors      | `connect`, `observe`                     | Independent feedback, retained as evidence                   |
+| Actuators    | `actuate`                                | The controller: a command that stops safe and logs its state |
 
 **Composition happens while the application runs.** A new loop needs no
 restart of the host and no new host code. An agent can build each of
 these compositions in one exchange:
 
-1. **A tuned loop.** Fork the controller template. Run a step response on
-   the simulated plant, and record the time constant, the overshoot, and
-   the settling time in a table. Change the gains on a branch, validate,
-   save, and start. Cite the `converged` phase of the real step.
-2. **A plan that becomes code.** A planning agent writes a schedule of
-   targets into a table. The commanding agent exports it as CSV, commits
-   it to the controller repository, and starts that version. The server
-   runs the schedule with no activation. The table keeps the plan for
-   people and agents to query.
-3. **A second measurement.** A second agent runs an independent sensor
-   server on the same stock, such as a reference thermometer. It observes
-   both sensors and says to the commanding agent when they disagree. Two
-   sensors expose a drifting feedback sensor. One commander keeps one
-   goal.
-4. **A rollback on evidence.** The agent observes a regression. It sends
-   the safe target, stops the process, checks out the previous commit, and
-   starts it. The evidence of both versions stays citable.
+1. **A tuned loop.** Fork a controller repository. Run a step on a
+   simulated plant, and record the overshoot and the settling time in a
+   table. Change the gains on a branch, commit, and start it with
+   `actuate`. Cite the log and the independent observation.
+2. **A plan that becomes a command.** A planning agent writes a schedule
+   of targets into a table. The commanding agent exports it as CSV and
+   starts a command that follows the schedule with no activation.
+3. **A second measurement.** A second agent observes an independent
+   sensor on the same stock and says to the commanding agent when it
+   disagrees with the log.
+4. **A rollback on evidence.** The agent cancels the command, checks out
+   the previous commit, and starts it with `actuate`.
 
-**The kernel adds no workflow for these compositions.** Each one is a
-sequence of existing tool calls that the agent chooses. The host sets the
-envelope. The room keeps the record of the decisions. A new composition
-is a new policy, and the mechanisms stay fixed.
+## The stop
 
-## The functional core
+**A stop sends `SIGTERM`, waits for the grace, then sends `SIGKILL`.** A
+cancel, a timeout, a cancel by the host, and `dispose()` all take this
+path. The signals go to the process group of the command. D6 gives the
+same sequence to `bash`, with a fixed grace.
 
-| Stage          | Agent action                                                          | Result                                           |
-| -------------- | --------------------------------------------------------------------- | ------------------------------------------------ |
-| Fork           | Use `repos` and `fork` on an actuator template                        | An agent-owned repository and checkout           |
-| Measure        | Run a step on the simulated plant; read the plant's time constant     | The latency budget of the loop                   |
-| Design         | Choose the feedback and the tier; edit the control law and the limits | A loop for the task                              |
-| Validate       | Run template tests on the simulated plant and the conformance         | Evidence of convergence and of the protocol      |
-| Save           | Commit and push the branch to the owned fork                          | A saved version that can run again               |
-| Start          | Run its launch command through `bash`; read `status`                  | The inner loop runs under a process handle       |
-| Connect        | Call `connect` with that handle and port; check feedback and period   | Qualified sensor and actuator names              |
-| Actuate        | Call `actuate` with a target, a tolerance, a settle time, and a hold  | A retained intent and a retained outcome         |
-| Verify         | At the settle time, `observe` the state sensor and the feedback       | Retained evidence of convergence                 |
-| Revise or stop | Send the safe target; cancel; edit, validate, save, and start         | A replacement or an idle actuator                |
-| Roll back      | Send the safe target; cancel; check out a previous commit; start      | A previous controller, with a new process handle |
+**`cancel` returns when it sends `SIGTERM`.** It does not wait for the
+grace. The process reads `running` with the note `stopping`, and a later
+read gives the end.
 
-**Stop at the safe target.** `cancel` sends `SIGKILL` to the process
-group today, and [D6](../planning/backlog.md#for-rooms-that-run-unattended)
-holds a graceful cancel. A killed server cannot drive its actuator. Before
-it cancels, the agent sends the safe target and confirms it with `observe`.
-The device holds the last defense ([The safe target](#the-safe-target)).
+**The command traps `TERM` and cleans up.** It installs the trap before it
+drives the device. The trap makes the device safe and exits 0.
 
-**Every other lifecycle rule of Sensors applies.** A branch holds ongoing
-work, and a commit identifies a saved version. The server captures its
-launch source. A dirty run stays marked dirty. Stop before editing a
-running checkout. Rollback selects code and leaves acquisition and
-controller data in place. [Sensors](sensors.md#run-a-server-from-git)
-states these rules.
+**The wrapper handles `TERM` and waits.** It installs a handler with
+`trap : TERM`, so it outlives the signal and writes `exit`. A handler
+resets to the default in every program that the command runs. An ignored
+signal stays ignored in them, so the wrapper never ignores `TERM`. A probe
+with bash 5 confirmed the handler: the command's own trap ran, and the
+wrapper wrote `exit`.
 
-## Words
-
-| Word          | Meaning                                                                          |
-| ------------- | -------------------------------------------------------------------------------- |
-| actuator      | One output of a server that changes the world, named `<connection>/<actuator>`   |
-| plant         | The part of the world that an actuator changes; in validation, a model of it     |
-| loop          | A desired state, a feedback sensor, a control law, a tier, and guardrails        |
-| desired state | The target of a command, with its tolerance and its settle time                  |
-| feedback      | The sensor that measures the stock and closes the inner loop                     |
-| period        | The milliseconds between two outputs of the control law                          |
-| tolerance     | The band around a level target that counts as reached, in the target's unit      |
-| settle time   | The seconds in which the stock must enter the tolerance and stay in it           |
-| phase         | The server's report of convergence for the command in force                      |
-| guardrail     | A limit on an output or a state, held by the device, the host, or the server     |
-| command       | One desired state, sent once under one id, with a hold                           |
-| hold          | The seconds that a command stays in force before the server applies the safe one |
-| safe target   | The target that the server applies when its commander is absent                  |
-| state sensor  | The sensor of the same server that reports commands, phases, and outputs         |
-| envelope      | The commands that the host allows, decided by `authorize`                        |
-| intent        | The retained record of a command before the workspace sends it                   |
-| outcome       | The retained record of the server's answer, or of its absence                    |
-
-## Ownership
-
-| Concern                                                           | Owner                                               |
-| ----------------------------------------------------------------- | --------------------------------------------------- |
-| Choice of feedback, tier, desired state, and convergence criteria | The agent that owns the connection                  |
-| Repository, launch command, controller code, server limits, plant | Server implementation and the agent that manages it |
-| Inner loop, convergence phase, drivers, return to the safe target | Server implementation                               |
-| Defense on process loss: watchdog, interlock, hardware default    | The device and the lab                              |
-| Process handle, status, timeout, cancellation, adoption           | Existing workspace process table                    |
-| Workstation hostname, SSH credentials, port transport             | Workstation backend                                 |
-| Connection names, discovery, command authority, rendering         | Workspace                                           |
-| The envelope                                                      | Host, through `authorize`                           |
-| Retained intents, outcomes, and observations                      | Existing workspace object store                     |
-| Goals, requests, and decisions                                    | Room                                                |
-
-## Command a desired state
-
-**A target names the state to reach.** A command says "keep the bath at
-37.0 °C" or "valve open". It does not say "heat for 30 seconds" or "move
-5 mm". A target that arrives twice has the effect of one. A repeated
-command changes nothing, so safety needs no deduplication.
-
-**A relative action becomes an absolute target.** A dispensing pump
-exposes its total dispensed volume as its level. A stage exposes its
-position. "Dispense 5 mL more" becomes "total 105 mL", from the last
-observed total. A repeat of that command dispenses nothing more. A server
-refuses a total below the volume that it already dispensed.
-
-**A target has one of two kinds.**
-
-- **`level`** is a number in a unit. The actuator declares the unit, the
-  minimum, the maximum, and an optional maximum rate of change.
-- **`state`** is one of the named states that the actuator declares, such
-  as `open` and `closed`.
-
-**A command carries its unit.** The server refuses a level in another
-unit. The workspace converts no unit.
-
-## Authority
-
-**The owner of the connection commands its actuators.** Only the agent
-whose process serves the actuator can call `actuate` on it. Every agent of
-the workspace can observe its state sensor. Another agent that wants a
-change asks the owner with `say({ to })`. The record holds the request,
-the answer, and the refs of the command.
-
-**One commander for each actuator prevents policy resistance.** Two agents
-with two goals on one stock make a loop that works against itself. The
-room shows the disagreement as messages. A person or the agents resolve
-it there. The actuator receives one goal at a time.
-
-**The host decides the envelope.** The host passes an `authorize`
-function to `openWorkspace`. The workspace calls it before each command.
-It returns an allowance or a refusal with a reason. A refusal sends
-nothing, and the tool result gives the reason.
-
-```ts
-interface ActuationOptions {
-  authorize(request: CommandProposal): ActuationDecision | Promise<ActuationDecision>;
-}
-
-interface CommandProposal {
-  readonly agent: string; // the calling agent, from the activation
-  readonly room: string;
-  readonly activation: string;
-  readonly actuator: string; // <connection>/<actuator>
-  readonly target: Target;
-  readonly tolerance?: number;
-  readonly settle: number;
-  readonly hold: number;
-  readonly feedback?: string; // declared by the server; absent: open loop
-  readonly process: string;
-  readonly source: SensorSource; // reported by the server
-}
-
-type ActuationDecision =
-  { readonly allow: true } | { readonly allow: false; readonly reason: string };
-
-// openWorkspace({ name, backend, actuation: { authorize } })
+```sh
+trap : TERM
+echo "$$" > '<dir>/pid'
+(
+export AMBION_EVENTS='<dir>/events.jsonl'
+<command>
+) < /dev/null > '<dir>/out' 2>&1
+code=$?
+echo "$code $(date -u +%Y-%m-%dT%H:%M:%SZ)" > '<dir>/exit.tmp' && mv '<dir>/exit.tmp' '<dir>/exit'
+[ "$code" -ne 0 ] && <claim and run finally>
 ```
 
-**A workspace with no `authorize` has no `actuate` tool.** Actuation is an
-explicit choice of the host. A backend with ports and no `actuation`
-option gives `connect` and `observe`. `connect` then lists each actuator
-and its state sensor, and it marks the actuator as not commandable.
+**A host crash sends no signal.** On the workstation, the command keeps
+running and ends on its own deadline. Its trap and its exit code work as
+usual. The table's timeout does not run while no host runs, so the
+command carries its own deadline.
 
-**The envelope is the host's guardrail.** The device holds the guardrails
-below it, and the server holds the guardrails that the agent can edit.
-[Guardrails at every tier](#guardrails-at-every-tier) states who can
-change each one.
+## Exit 0 means safe
 
-**The server reports most fields of a proposal.** The agent, the room, and
-the activation come from the workspace. The actuator name, the launch
-source, and the declared limits come from server code that the agent can
-edit. An agent can also choose the connection name. A host that protects a
-device keys its envelope on the agent and on target values. A physical
-limit that must hold against every party belongs in the device.
+**The exit code answers one question: is the world safe?** Exit 0 means
+that the command left the world in a state that is safe to leave. That
+holds for a natural end and for an end inside the grace. Any other end is
+unclean.
 
-**A person approves through the room.** `authorize` can refuse a target
-outside a range that a person approved, with a reason that says so. The
-agent then asks the person with `say({ to })`, and the exchange reads
-`awaiting` ([Patterns](patterns.md#approve-before-an-agent-acts)). The
-host reads the reply and widens what `authorize` allows. The kernel adds
-no gate beyond `authorize`.
+**The exit code does not say that the goal was reached.** The event log
+states the command's claim, and the agent confirms it. A command that
+gives up after a clean shutdown exits 0 and logs `gave_up`.
 
-## The safe target
+## The finally backstop
 
-**Every actuator declares a safe target.** The server applies it when it
-starts, when a hold ends, and when it stops on a signal that it can
-handle. A heater declares its minimum level. A valve declares `closed`.
+**`finally` runs after an unclean end.** An unclean end is a non-zero
+exit, a kill after the grace, or a lost process. `finally` runs in a new
+process, so it works after the command crashed. It must be idempotent and
+must need no state from the command. "Heater off" qualifies.
 
-**A hold makes absence safe.** Each command carries `hold`, in seconds,
-from its settle time through the actuator's `maxHold`. The server
-measures the hold on its own clock from receipt. When the hold ends and no later command
-arrived, the server applies the safe target and records `expired`. An
-agent that stops acting leaves the actuator at its safe target within
-`maxHold`. This mechanism is a dead-man switch for an agent whose
-activations end.
+**One atomic claim decides who runs `finally`.** The claimant creates the
+directory `<dir>/finally` with `mkdir`, which succeeds for one caller only.
+It then writes `pid`, `out`, and `exit` in that directory.
 
-**A hold is a duration.** The host and the workstation can disagree on
-the time. A duration needs no comparison of two clocks.
+- **The wrapper** claims after a non-zero exit. It runs `finally` in a new
+  process group with `setsid`, so a stop of the command's group does not
+  reach it.
+- **The table** claims when a read finds a kill or a lost process with no
+  claim. A read of any host run can claim, so a crash of the host delays
+  `finally` until the next read.
 
-**Process loss is the device's concern.** A killed server runs no timer.
-When the device has a watchdog, the server feeds it, and the device
-applies its own default when the feed stops. The template documents this
-behavior. The workspace cannot command an actuator after its process ends.
+**`finally` has 60 seconds, then `SIGKILL`.** `cancel` does not stop it.
+A second host run over the same account finds the claim and runs nothing.
 
-## Run a server from Git
+## End states
 
-**Templates are ordinary repositories in the existing Git backend.** The
-host supplies `templates/actuator-server` as it supplies other templates.
-The template serves a `heater` actuator, its feedback sensor
-`temperature`, and the state sensor `heater-state`. They run over a
-simulated first-order thermal plant. A device mode starts from a
-documented driver stub.
+**The files of an `act` process give a state and a safety.** The state is
+the state of [Processes](processes.md#the-files). The safety is new.
 
-**Each template documents one complete lifecycle.** Its README states the
-items of the [sensor template](sensors.md#run-a-server-from-git) and also:
+| How the command ended                    | `exit`      | Safety     | World                                              |
+| ---------------------------------------- | ----------- | ---------- | -------------------------------------------------- |
+| It still runs, or a stop waits           | Absent      | `pending`  | The command acts on it                             |
+| It exited 0, with or without a stop      | 0           | `safe`     | Safe; the log says whether the goal was reached    |
+| Unclean, and `finally` runs              | Any or none | `settling` | Unknown until `finally` ends                       |
+| Unclean, and `finally` exited 0          | Any or none | `settled`  | Safe now; unknown from the end until `finally` ran |
+| Unclean, and no `finally`                | Any or none | `unknown`  | Unknown                                            |
+| `finally` failed, timed out, or was lost | Any or none | `unknown`  | Unknown                                            |
 
-- The feedback sensor of each actuator, its sample rate, and its latency.
-- The control period, and the time constant of the plant model.
-- The safe target of each actuator, and how the server applies it at
-  start, at the end of a hold, and at a stop.
-- The plant model, its parameters, and the command that validates the
-  controller against it.
-- The device watchdog when the device has one, and the behavior when the
-  process ends with no stop.
-- The server limits and the file in the repository that holds them.
+**Every safety but `safe` fails the call that reports it.** This follows
+the rule of `bash` for a process that ended badly. The result of
+`unknown` ends with one line: `Check the world before you act again.`
 
-**Validate convergence against a plant before the device.** `PLANT=sim`
-runs the controller against the model. The template tests send desired
-states and advance the simulated clock. They check `converged` within the
-settle time, the overshoot, `limited` at a guardrail, and the return to
-the safe target. The agent changes the controller, and the tests show the
-effect. No device moves.
+**A lost `finally` reads `unknown`.** A lost `finally` has a claim, no
+`exit`, and no live shell. The table does not run it a second time.
 
-**The example uses tools that do not exist yet.** `fork`, `bash`, and
-`observe` exist. `actuate` and the actuator part of `connect` are this
-design. The example uses `thermal` as the agent name:
+## The event log
 
-```ts
-fork({ source: 'templates/actuator-server', name: 'bath-control', clone: '~/bath-control' });
-bash({ command: 'cd ~/bath-control && git switch -c pid' });
-// Edit controller.mjs: replace the on-off loop with a PID loop.
-bash({
-  command:
-    'cd ~/bath-control && PLANT=sim npm test && ' +
-    'git add -A && git commit -m "Use a PID loop" && git push -u origin pid',
-});
+**The command writes JSON lines to `$AMBION_EVENTS`.** The file is
+`events.jsonl` in the process directory. stdout and stderr stay free text
+in `out`, so a stack trace never corrupts the log. Any language can append
+a line to a file.
 
-bash({
-  command:
-    'cd ~/bath-control && PLANT=device AMBION_SENSOR_REPOSITORY=thermal/bath-control ' +
-    'AMBION_SENSOR_DATA_DIR="$HOME/sensor-data/bath" PORT=0 node server.mjs',
-  name: 'bath-control',
-  wait: 0,
-  timeout: 86400,
-});
-// Result: process bash-7c1e9a0b3d42. status says READY http://127.0.0.1:41503.
-connect({ name: 'bath', process: 'bash-7c1e9a0b3d42', port: 41503 });
-// Result: bath/heater, feedback bath/temperature, period 1000 ms.
-actuate({
-  actuator: 'bath/heater',
-  target: { kind: 'level', value: 37, unit: '°C' },
-  tolerance: 0.2,
-  settle: 900,
-  hold: 3600,
-});
-// Result: accepted, the command id, the intent ref, and the outcome ref.
-schedule({ after: 900, text: 'Observe bath/heater-state for the phase, and bath/temperature.' });
+```jsonl
+{"v":1,"at":"2026-09-30T14:02:10.001Z","kind":"target","name":"bath","value":37,"unit":"C","tolerance":0.2,"interval":1}
+{"v":1,"at":"2026-09-30T14:02:11.482Z","kind":"observe","name":"bath","value":36.4,"unit":"C","source":"bath/temperature"}
+{"v":1,"at":"2026-09-30T14:02:11.482Z","kind":"drive","name":"power","value":62,"unit":"%"}
+{"v":1,"at":"2026-09-30T14:09:40.310Z","kind":"state","value":"reached","note":"within 0.2 C for 60 s"}
+{"v":1,"at":"2026-09-30T15:02:10.050Z","kind":"state","value":"safe","note":"SIGTERM: heater off"}
 ```
 
-## Connect
+**Every line has `v`, `at`, and `kind`.** `v` is 1. `at` is a UTC ISO 8601
+time with three digits of milliseconds, from the command's clock. Any
+line can carry `interval`, the seconds between two lines of a healthy
+command.
 
-**`connect` adds actuator discovery and keeps its input.** After it reads
-the sensor index, it reads `GET /actuators/`. A 404 means that the server
-has no actuators. The workspace validates API version 1 and unique names.
-It checks that the launch source equals the source of the sensor index,
-and that each state sensor and each feedback sensor is in the sensor
-index. A failure adds no connection.
+| `kind`    | Meaning in the loop                        | Fields                                                                   |
+| --------- | ------------------------------------------ | ------------------------------------------------------------------------ |
+| `target`  | The desired state that the command pursues | `name`, `value` (a number or a state), `unit` for a number, `tolerance?` |
+| `observe` | Feedback: a measured value of the stock    | `name`, `value`, `unit` for a number, `source?`                          |
+| `drive`   | The output of the actuator                 | `name`, `value`, `unit` for a number                                     |
+| `state`   | The command's claim about itself           | `value`, `note?`                                                         |
 
-**A successful result lists the actuators.** Each line gives the
-qualified name, the description, the feedback sensor or `open loop`, the
-period, the target kind, the unit and range or the states, the safe
-target, `maxHold`, and the state sensor. It states
-whether the caller can command the actuator. The activation reminder lists
-the same facts, and it marks the actuators that the seat commands.
+**A `state` value is one of six words.**
 
-**Every connection rule of Sensors applies.** A connection lives for one
-run of the host. A process end makes it unavailable. A repeated `connect`
-is idempotent, and only the owner replaces a registration.
-[Connect](sensors.md#connect) states these rules.
+| Value      | The command claims that it              |
+| ---------- | --------------------------------------- |
+| `acting`   | drives the world toward the target      |
+| `reached`  | measured the stock inside the tolerance |
+| `holding`  | keeps the stock at the target           |
+| `stopping` | received `TERM` and cleans up           |
+| `safe`     | left the device in its safe state       |
+| `gave_up`  | stopped trying, and says why in `note`  |
 
-## The actuator API
+**A name follows the agent-name grammar, `^[a-z][a-z0-9-]*$`.** A line has
+at most 4 KiB. `source` can name a connected sensor, such as
+`bath/temperature`, so the agent can observe the same sensor.
 
-**Version 1 has two operations under `/actuators/`.** The sensor API stays
-unchanged at the root of the same server. The actuator API carries its
-own `api` number. All JSON request and response bodies carry `api: 1`.
+**The format carries its own version.** A command that someone supplies
+does not upgrade with the host. A breaking change raises `v`, and the fold
+counts a line of another version as rejected.
 
-| Method | Path                            | Result                                                                 |
-| ------ | ------------------------------- | ---------------------------------------------------------------------- |
-| `GET`  | `/actuators/`                   | Actuator names, descriptions, targets, limits, safe targets, and state |
-| `POST` | `/actuators/<actuator>/command` | The record of one command: accepted or refused                         |
+## The fold
 
-```ts
-interface ActuatorIndex {
-  readonly api: 1;
-  readonly source: SensorSource; // equal to the source of the sensor index
-  readonly actuators: readonly {
-    readonly name: string;
-    readonly description: string;
-    readonly target: TargetSpec;
-    readonly feedback?: string; // a sensor name of this server; absent: open loop
-    readonly period: number; // milliseconds between two outputs of the control law
-    readonly safe: Target;
-    readonly maxHold: number; // seconds
-    readonly state: string; // a sensor name of this server
-  }[];
-}
+**The table folds the log into one status for each `act` process.** The
+fold is a pure function of the bytes of the log and the host times of the
+reads. The same bytes give the same status.
 
-type TargetSpec =
-  | {
-      readonly kind: 'level';
-      readonly unit: string;
-      readonly min: number;
-      readonly max: number;
-      readonly maxRate?: number; // unit per second
-    }
-  | { readonly kind: 'state'; readonly states: readonly string[] };
+- **Latest wins.** The fold keeps the latest `target`, `observe`, and
+  `drive` for each name, and the latest `state` and `interval`.
+- **Error.** When a `target` and an `observe` share a name and a unit,
+  the fold gives the observed value minus the target.
+- **Stale.** A command that declares `interval` reads `stale` after three
+  intervals with no new line. The fold measures that time with host time,
+  from the first read that saw the log grow. It never compares the
+  command's clock with the host's clock.
+- **Rejected lines.** The fold counts and skips a line that is not valid
+  JSON, has another `v`, has an unknown `kind`, or breaks a field rule.
+  The log never fails the process.
+- **Contradictions.** The fold flags a claim of `reached` or `holding` on
+  an unclean end, and a claim of `safe` before a kill.
 
-type Target =
-  | { readonly kind: 'level'; readonly value: number; readonly unit: string }
-  | { readonly kind: 'state'; readonly value: string };
+**The fold reads only new bytes.** The table keeps the byte offset and the
+folded status in `fold.json` beside the log, as it keeps `cursor` for
+`out`. A read takes at most 1 MiB of new log. Past that, it moves to the
+last 64 KiB and counts the skipped bytes. The command repeats its `target`
+when it changes, so a skip loses no desired state for long.
 
-interface CommandRequest {
-  readonly api: 1;
-  readonly id: string; // cmd-<12 hex digits>, generated by the workspace
-  readonly target: Target;
-  readonly tolerance?: number; // required for a level target, in its unit
-  readonly settle: number; // seconds
-  readonly hold: number; // seconds, settle through maxHold
-}
+**Two host runs can both write `fold.json`.** Each one writes the fold of
+the same bytes through a rename, so the last write is correct.
 
-interface CommandRecord {
-  readonly api: 1;
-  readonly id: string;
-  readonly actuator: string;
-  readonly target: Target;
-  readonly tolerance?: number;
-  readonly settle: number;
-  readonly hold: number;
-  readonly outcome: 'accepted' | 'refused';
-  readonly reason?: string; // present when refused
-  readonly received: string; // server time
-  readonly supersedes?: string; // the id of the command that this one replaces
-}
+## Where the status shows
 
-type Phase = 'converging' | 'converged' | 'diverged' | 'limited' | 'open' | 'ended';
-```
-
-**The server answers when it takes the command.** `accepted` means that
-the desired state is in force. It does not mean that the world reached
-it. The phase and the feedback report the effect.
-
-**`refused` is an answer with a record.** The server refuses a target
-outside its limits, a unit that differs, and a total below the dispensed
-total. It refuses a level target with no tolerance, a settle time shorter
-than the period, and a hold outside `settle` through `maxHold`. The
-response has status 200. The record gives the reason.
-
-**A new command supersedes the previous one.** One target is in force for
-each actuator. The record names the id that it replaces.
-
-**A repeated id returns the first record.** The server keeps the records
-of its commands. A request with a known id changes nothing and returns
-the record of the first request with that id.
-
-**The state sensor reports the commands and the phases.** A text part
-gives each command's id, desired state, outcome, time in force, and end:
-`superseded`, `expired`, or `stopped`. It gives each change of phase with
-its server time, and the guardrail behind a `limited` phase. Series parts
-give the error and the applied output. An `observe` of the state sensor
-retains these records as it retains any observation.
-
-**Server times are the source of truth for effects.** `received` and the
-state sensor's times come from the server clock. Times are UTC ISO 8601
-strings with three digits of milliseconds. Host time governs request
-deadlines and the input of `authorize`. The workspace corrects no time.
-
-**Errors use the envelope of the sensor API:** `{ api: 1, code, message }`.
-
-| HTTP status | Code          | Meaning                                         |
-| ----------- | ------------- | ----------------------------------------------- |
-| 400         | `invalid`     | The request does not match the schema           |
-| 404         | `unknown`     | The actuator or the path does not exist         |
-| 503         | `unavailable` | The server cannot take a command at this moment |
-
-**The wire version is independent of package versions.** A breaking wire
-change raises `api`. The client refuses another version. Controller state
-is never a field of the protocol.
-
-**The workspace package owns the planned exports.**
-`@ambionframework/workspace/actuators` exports the wire schemas, the types,
-and `createActuatorClient`. `@ambionframework/workspace/conformance`
-exports `actuatorConformance`. The package count stays at eleven.
-
-**The conformance cases state the API.** They check the index shape, its
-source, and its feedback sensors. They check a refusal outside the limits,
-a refusal of another unit, a repeated id, and a supersession. On the
-simulated plant, they check `converged`, `diverged`, and `limited`. They
-check the end of a hold with the safe target, and the state sensor's
-record of each command and phase. The fixture declares short settle times
-and a `maxHold` of 2 seconds, so each case runs in real time.
-
-## Actuate and retain
-
-**`actuate` sets the desired state of one loop.** Its input is:
-
-```ts
-interface ActuateInput {
-  readonly actuator: string; // <connection>/<actuator>
-  readonly target: Target;
-  readonly tolerance?: number; // required for a level target
-  readonly settle: number; // seconds
-  readonly hold: number; // seconds
-}
-```
-
-**`settle` and `hold` have no default.** The agent states when the loop
-must converge and how long the desired state stays in force. The hold
-covers at least the settle time and the next observation.
-
-**The workspace retains the intent before it sends the command.**
-
-1. Check that the caller owns the connection and that its process runs.
-2. Check the command against the index: the kind, the unit, the range or
-   the states, the tolerance, the settle time against the period, and the
-   hold. A mismatch sends nothing.
-3. Call `authorize`. A refusal sends nothing.
-4. Generate the command id. Retain the intent manifest: the request, the
-   qualified actuator, the process, the connection facts, the launch
-   source, the activation, and the decision of `authorize`. A failed write
-   sends nothing, and the tool call fails.
-5. Send the command once. The workspace never retries it.
-6. Retain the outcome manifest: the command record or the failure, and
-   the intent ref.
-7. Export both manifests into a directory for the command in the caller's
-   home. Return the outcome, the id, both refs, the feedback sensor, and
-   the state sensor.
-
-**Intent first is a write-ahead rule.** The object store holds each
-command before the command can have an effect. A crash between step 5 and
-step 6 leaves an intent with no outcome. That intent marks a command with
-an unknown outcome.
-
-**An unknown outcome is a result.** A transport failure after the send
-returns `unknown` with the command id. The workspace does not send again,
-because the first request can have taken effect. The agent observes the
-state sensor and looks for the id. It decides from that evidence.
-
-**A failed outcome retention does not hide the effect.** The command
-reached the server, so the result gives the server's answer. It also
-states that the outcome is not retained. The intent ref stays valid. This
-rule differs from `observe`, where a failed retention fails the call. A
-failed `actuate` would invite a second command.
-
-**A cancelled activation does not undo a command.** Cancellation removes
-the authority to publish in the room ([Trust](trust.md)). A target that the
-server accepted stays in force until its hold ends or a new command
-replaces it. An abort before step 5 sends nothing.
-
-**The journal holds no command.** The retained manifests, the state
-sensor, the audit log, and the host's view hold the commands. An agent
-cites the refs in its `say`. The room checks no ref.
-
-**The result states what is known and what is not.**
+**`status` and `wait` give the status above the new output.**
 
 ```text
-bath/heater accepted cmd-4e1f09a2c7d3 at 14:02:11.482 UTC (server time).
-Desired state: level 37 °C ± 0.2 °C within 900 s, in force for 3600 s.
-It replaces cmd-9b20c4f1d9e7. Safe target after the hold: level 20 °C.
-Feedback: bath/temperature, control period 1000 ms.
-Intent: ambion://workspace/lab/snapshot/<sha256>/<path of intent.json>
-Outcome: ambion://workspace/lab/snapshot/<sha256>/<path of outcome.json>
-Accepted means in force. After 900 s, observe bath/heater-state for the phase.
+Process bath-hold, act-3f9a2c1d0b7e, is running for 7m 30s, safety pending.
+bath 36.9 C, target 37 C ±0.2 (error -0.1) · power 58 % · holding, 1 s ago
+The command reports "holding". Confirm it with an independent sensor.
+```
+
+**The reminder and `ps` give one line for each `act` process.** The line
+holds the name, the handle, the safety, the latest claim, the error of
+each target, and `stale` when it applies.
+
+**The host's view gains the status.** `ProcessStatus` gains an optional
+`actuation` field for an `act` process:
+
+```ts
+interface ActuationStatus {
+  readonly grace: number;
+  readonly safety: 'pending' | 'safe' | 'settling' | 'settled' | 'unknown';
+  readonly stopping: boolean;
+  readonly finally?: { readonly state: ProcessState; readonly exitCode?: number };
+  readonly fold: ActuationFold;
+}
+
+interface ActuationFold {
+  readonly targets: Readonly<Record<string, Reading & { readonly tolerance?: number }>>;
+  readonly observed: Readonly<Record<string, Reading & { readonly source?: string }>>;
+  readonly drives: Readonly<Record<string, Reading>>;
+  readonly errors: Readonly<Record<string, number>>;
+  readonly claim?: { readonly value: Claim; readonly note?: string; readonly at: string };
+  readonly interval?: number;
+  readonly stale: boolean;
+  readonly contradiction?: string;
+  readonly rejected: number;
+  readonly skippedBytes: number;
+}
+
+interface Reading {
+  readonly value: number | string;
+  readonly unit?: string;
+  readonly at: string; // the command's clock, unchanged
+}
+
+type Claim = 'acting' | 'reached' | 'holding' | 'stopping' | 'safe' | 'gave_up';
+```
+
+**`subscribe` gains one event.** `{ type: 'claimed', process }` fires when
+a read finds a new `state` line. A host that bridges claims to the room
+calls `room.post`, as it does for the end of a process
+([Processes](processes.md#a-host-can-wake-the-owner-seat)). The event
+comes from a read, so a host that wants it on time lists the processes on
+an interval.
+
+## A command
+
+**This command holds a bath at 37 °C for one hour.** It locks the device,
+traps `TERM`, logs its state, and carries its own deadline. `bath-ctl`
+stands for the device driver.
+
+```sh
+#!/usr/bin/env bash
+set -u
+log() { printf '%s\n' "$1" >> "$AMBION_EVENTS"; }
+now() { date -u +%Y-%m-%dT%H:%M:%S.%3NZ; }
+exec 9> /run/lock/bath.lock
+flock -n 9 || { echo 'bath is busy' >&2; exit 0; }
+off() { bath-ctl power 0; log "{\"v\":1,\"at\":\"$(now)\",\"kind\":\"state\",\"value\":\"safe\"}"; exit 0; }
+trap off TERM
+log "{\"v\":1,\"at\":\"$(now)\",\"kind\":\"target\",\"name\":\"bath\",\"value\":37,\"unit\":\"C\",\"tolerance\":0.2,\"interval\":1}"
+end=$((SECONDS + 3600))
+while [ "$SECONDS" -lt "$end" ]; do
+  t=$(bath-ctl read)
+  p=$(bath-ctl step 37 "$t")
+  log "{\"v\":1,\"at\":\"$(now)\",\"kind\":\"observe\",\"name\":\"bath\",\"value\":$t,\"unit\":\"C\"}"
+  log "{\"v\":1,\"at\":\"$(now)\",\"kind\":\"drive\",\"name\":\"power\",\"value\":$p,\"unit\":\"%\"}"
+  sleep 1 & wait $!
+done
+off
+```
+
+**`sleep 1 & wait $!` lets the trap run at once.** Bash runs a trap only
+after the foreground command ends. `wait` returns when a signal arrives.
+
+**The agent starts it and returns later.** The example uses a tool that
+does not exist yet: `actuate`.
+
+```ts
+actuate({
+  command: '~/bath/hold.sh',
+  grace: 5,
+  finally: 'bath-ctl power 0',
+  name: 'bath-hold',
+  timeout: 3900,
+  wait: 0,
+});
+// Result: process act-3f9a2c1d0b7e is running.
+schedule({ after: 900, text: 'Check bath-hold, and observe bath/temperature.' });
 ```
 
 ## The guidance
 
-**The guidance of `actuate` states the job of the agent.** The bundle
-adds it when the tool is present. It tells the agent six things.
+**The guidance of `actuate` tells the agent eight things.**
 
-1. Establish a loop before the first command: a feedback sensor, a tier,
-   and a desired state with a tolerance and a settle time.
-2. Check that the feedback measures the stock that the goal names.
-3. Compare the control period with the plant's time constant. Put a fast
-   loop into the server code.
-4. Schedule an observation at the settle time. Cite `converged` with the
-   ref of the feedback.
-5. Report `diverged` and `limited` as findings. Do not widen a guardrail
-   to converge.
-6. Send the safe target and confirm it before a cancel.
+1. Choose the feedback before the first command. Check that it measures
+   the stock that the goal names.
+2. Put a fast loop into the command. Revise the command from the agent.
+3. Trap `TERM` before the command drives the device. Make the device safe
+   in the trap, and exit 0.
+4. Put the deadline in the command. Set `timeout` above it.
+5. Log to `$AMBION_EVENTS` at the agent's timescale. Put fast data in a
+   file of its own.
+6. Give a `finally` that is idempotent and needs no state.
+7. Lock a device with `flock` when one command at a time may drive it.
+8. Confirm a claim of `reached` from an independent source, and cite it.
 
-## The host's view
+## Backends
 
-**`workspace.actuation` gives the host each command and one stop.** The
-property exists when the host passes the `actuation` option. It adds no
-tool.
+| Backend              | While the command runs                           | A stop                                            | `finally`                                 |
+| -------------------- | ------------------------------------------------ | ------------------------------------------------- | ----------------------------------------- |
+| `memoryBackend`      | The log grows as the command writes; `out` waits | The simulated shell ends at once; no trap runs    | Runs after every stop, in the same shell  |
+| `directoryBackend`   | As `memoryBackend`                               | As `memoryBackend`                                | As `memoryBackend`                        |
+| `workstationBackend` | The log and `out` grow as the command writes     | `SIGTERM` to the group, the grace, then `SIGKILL` | Runs in a new process group with `setsid` |
 
-```ts
-interface WorkspaceActuation {
-  subscribe(listener: (event: ActuationEvent) => void): () => void;
-  halt(reason: string): Promise<readonly CommandRecord[]>;
-}
+**On just-bash, every stop is unclean.** The simulated shell has no
+signals, so a stop ends the command with no `exit`. `finally` then runs.
+A test of a controller on just-bash therefore runs `finally` on each stop.
 
-type ActuationEvent =
-  | { readonly type: 'intent'; readonly proposal: CommandProposal; readonly ref: string }
-  | {
-      readonly type: 'outcome';
-      readonly id: string;
-      readonly record?: CommandRecord; // absent when the outcome is unknown
-      readonly ref?: string; // absent when the retention failed
-    };
-```
-
-**A host can post each outcome to the room.** It calls `room.post` under
-a key that names the command id, as it does for the end of a process
-([Processes](processes.md#a-host-can-wake-the-owner-seat)). A person then
-reads each effect in the record, in order with the messages.
-
-**`halt` applies every safe target.** It sends the safe target of each
-actuator of each available connection, with its `maxHold`. It retains the
-intents and the outcomes as the host identity. After `halt`, `actuate`
-refuses every command for the rest of the host run. A restart clears the
-halt, so a stop that must last belongs in `authorize`.
-
-## Filesystem access
-
-**The server has its owning process's filesystem access.** Its checkout,
-its controller data, and its acquisition data live in the owner's account
-on the workstation. [Sensors](sensors.md#filesystem-access) states the
-layout and the lifetimes.
-
-**Command manifests go to the caller's home.** The workspace writes the
-intent and the outcome into a directory for each command. The object store
-keeps the bytes. An edit of the export changes no retained record.
+**The just-bash log grows while the command runs.** A probe against the
+in-memory filesystem of `just-bash` read each new line of a log while the
+command that wrote it still ran. `out` still waits for the end.
 
 ## Trust
 
+**`actuate` adds no authority.** An agent can run the same command
+through `bash`. The account permissions on the workstation decide which
+devices an agent can reach: device groups, `sudoers`, and file modes.
+`openWorkspace` gives the `actuate` tool only when the host passes
+`actuation: true`.
+
+**The device holds the last guardrail.** Between a kill and `finally`, and
+while no host runs, only a watchdog or an interlock protects the world.
+Hard real-time limits belong in the device.
+
+**The log is a claim.** The command writes it, and the agent can edit the
+command. The fold labels each claim as the command's report. An
+independent sensor confirms it.
+
 **The kernel does not defend physical effects.** A command changes the
 world before any `say` commits. The room does not run an effect once
-([Durability](durability.md#5-what-the-room-does-not-promise)). The
-application owns the envelope, and the lab owns the device limits.
+([Durability](durability.md#5-what-the-room-does-not-promise)).
 
-**The agent that owns the fork controls the server.** It can change the
-controller, the server limits, the safe target, and the reported source.
-Only `authorize` and the device bind that agent.
+## Records and evidence
 
-**A process handle is a lifecycle link.** It does not prove that a TCP
-listener belongs to that process. The initial deployment trusts the
-workstation and the server code of its owner, as
-[Sensors](sensors.md#workstation-ports) states.
+**The process directory is the record.** It holds `spec`, `out`,
+`events.jsonl`, `fold.json`, `exit`, `stop`, and `finally/`. The agent
+calls `snapshot` on the log or on `out` to cite them in a `say`.
 
-**All agents read an actuator's state.** The state sensor is a sensor, so
-every agent of the workspace can observe it. A command's target is visible
-to every agent.
+**The table prunes `act` processes apart from `bash` processes.** Each
+agent keeps its 64 newest finished `act` processes, so a burst of `bash`
+calls does not remove the record of an actuation.
 
-## Failure and lifecycle
+## Where the code goes
 
-| Event                                      | Result                                                                           |
-| ------------------------------------------ | -------------------------------------------------------------------------------- |
-| Server is not ready                        | `connect` fails; use `status`, then retry                                        |
-| Target is outside the index                | `actuate` sends nothing and gives the reason                                     |
-| `authorize` refuses                        | `actuate` sends nothing and gives the reason                                     |
-| Intent retention fails                     | `actuate` sends nothing and fails                                                |
-| Transport fails after the send             | The outcome is `unknown`; observe the state sensor for the id                    |
-| Outcome retention fails                    | The result gives the server's answer and states that the outcome is not retained |
-| The settle time ends outside the tolerance | The phase becomes `diverged`; the agent reports it                               |
-| A guardrail holds the output               | The phase becomes `limited`; the agent reports it                                |
-| A hold ends with no new command            | The server applies the safe target and records `expired`                         |
-| Process ends or is cancelled               | The connection becomes unavailable; the device applies its own default           |
-| Workspace host restarts                    | Connections and a halt end; use `ps` and `connect` again                         |
-| Workspace disposes                         | Connections close and normal process cleanup runs                                |
+| File                                | Change                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------- |
+| `workspace/src/process-files.ts`    | The `act` kind, the wrapper with the trap, the `finally` claim, the files |
+| `workspace/src/actuation-events.ts` | New: the event schema and the pure fold                                   |
+| `workspace/src/actuate-tool.ts`     | New: the tool and its guidance                                            |
+| `workspace/src/processes.ts`        | The stop with a grace, `finally` on a read, the prune for each kind       |
+| `workspace/src/process-text.ts`     | The status block and the reminder line                                    |
+| `workspace/src/backend.ts`          | The exec context carries a grace for an abort                             |
+| `workstation/src/exec.ts`           | An abort sends `SIGTERM`, waits for the grace, then sends `SIGKILL`       |
+| `just-bash`                         | No change                                                                 |
 
-## The evidence the implementation needs
+**The export snapshot changes.** `ProcessKind` gains `act`,
+`ProcessStatus` gains `actuation`, and `ProcessEvent` gains `claimed`. The
+event schema and the fold export from `@ambionframework/workspace`. The
+changelog names each change.
 
-**One template proves the loop on a workstation.** An agent forks the
-template and changes the controller. It validates the change on the
-simulated plant, commits, pushes, and starts the saved version. It
-connects, and checks the declared feedback and period. It sets a desired
-state, observes `converged` at the settle time, and cites the intent, the
-outcome, the phase, and the feedback. A second agent restores the refs in
-its own home.
+## Tests
 
-**The tests cover the boundaries of this design.**
+- A command that traps `TERM` and exits 0 inside the grace reads `safe`.
+- A command that ignores `TERM` gets `SIGKILL` after the grace, and
+  `finally` runs.
+- A non-zero exit runs `finally` from the wrapper, once.
+- A lost process runs `finally` on the next read, once, across two host
+  runs over one account.
+- A `finally` that fails or times out reads `unknown`, and the call fails.
+- `cancel` returns before the grace ends, and the process reads
+  `stopping`.
+- A stop of the command's group does not reach a running `finally`.
+- The fold gives the same status for the same bytes, and counts rejected
+  lines and skipped bytes.
+- `stale` follows host time, with a command clock that runs 10 minutes
+  ahead.
+- A contradiction shows for `reached` on a kill.
+- A burst of 100 `bash` processes keeps every `act` record.
+- The log grows while the command runs, on both just-bash backends.
+- The OpenSSH tier runs the example with a simulated `bath-ctl`, cancels
+  it, and reads `safe`. It then kills a run after the grace and reads
+  `settled`.
 
-- A caller that does not own the connection cannot command.
-- A workspace with no `actuation` option exposes no `actuate` tool.
-- A refusal of `authorize` or of the index sends no request.
-- A failed intent write sends no request.
-- A transport failure after the send gives `unknown` and sends once.
-- A repeated id returns the first record and changes nothing.
-- A hold ends with the safe target in the state sensor's record.
-- An actuator with no feedback reads `open loop` and reports `open`.
-- A missing feedback sensor fails `connect`.
-- A settle time shorter than the period sends no request.
-- A guardrail gives `limited`, and the desired state stays unchanged.
-- `halt` applies every safe target and refuses later commands.
-- A cancelled activation leaves an accepted target in force.
-- Server times stay unchanged in the manifests and the rendering.
-- The conformance cases pass against the template in `PLANT=sim` mode.
+## Decisions taken
 
-**A scripted seat proves transport and retention.** One optional live
-case checks that a model establishes the loop: it checks the feedback,
-sets a tolerance and a settle time, observes at the settle time, and cites
-`converged`. Neither case claims to validate a controller or a device.
+| Decision                                            | Reason                                                                          |
+| --------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `actuate` is a kind of process                      | Processes already give handles, files, timeouts, adoption, and reminders        |
+| Exit 0 means safe                                   | Safety is the one fact that the tool acts on; the agent judges the goal         |
+| `grace` is required                                 | Only the author of the command knows how long the device needs                  |
+| `finally` is optional and runs after an unclean end | The trap covers a clean stop; `finally` covers a crash and a kill               |
+| One `mkdir` claim runs `finally`                    | It runs once across the wrapper, the table, and two host runs                   |
+| The log is a file of its own                        | Free text in `out` cannot corrupt it                                            |
+| Four kinds and six claims                           | The fold needs no more; richer data goes to `out` or to a sensor                |
+| `stale` uses host time                              | The workspace never compares two clocks                                         |
+| No lock, no `authorize` hook, no automatic snapshot | `bash` reaches the same device; the account is the guardrail; `snapshot` exists |
 
 ## Out of scope
 
-- Relative, impulse, and trajectory commands, and file inputs such as
-  waveforms or programs.
-- Shared command authority, leases between agents, and command queues.
-- A wait in the workspace for convergence; the agent schedules its check.
-- A choice of feedback or a tuning that the workspace makes for the agent.
-- A safe target that the workspace applies after a process ends.
-- A kernel approval gate, new journal bodies, and actuator refs.
-- A controller library, tuning tools, and device drivers.
-- A halt that lasts across a restart of the host.
+- An actuator API, a server, or a `connect` step for actuators.
+- A lock in the workspace; `flock` in the command does it.
+- A check of the goal by the workspace; the agent confirms convergence.
+- An interactive command; D6 holds the `pty` kind.
+- A `finally` that the agent can cancel.
 - Hard real-time guarantees on any path through the workspace.
-- A graceful cancel, which [D6](../planning/backlog.md#for-rooms-that-run-unattended)
-  holds.

@@ -171,7 +171,9 @@ the five tools.
    its timeout.
 2. **A graceful cancel.** `cancel` and the timeout send `SIGTERM` to the
    group, and `SIGKILL` after the grace. Today a stop sends `SIGKILL`, so
-   a server or a database gets no time to flush.
+   a server or a database gets no time to flush. D24 needs this change
+   first. It changes the abort of `WorkspaceEnv.exec` on the workstation,
+   the kill of an adopted process, and the wrapper, which handles `TERM`.
 3. **The head and the tail in a result.** The result shows the first
    lines of the output beside the last ones. The first lines often hold
    the error that the last lines report.
@@ -363,16 +365,14 @@ one of these capabilities. No order between these items is promised.
 
 ### For actuators
 
-**D24. Actuators.** [Actuators](../docs/actuators.md) designs the
-counterpart of sensors. The agent establishes a control loop: a feedback
-sensor that the actuator index declares, a tier that fits the latency of
-the plant, and a desired state with a tolerance and a settle time. The
-server converges within guardrails and reports the phase. The workspace
-retains the intent before the send and the outcome after it. The work
-adds the actuator schemas and client to `@ambionframework/workspace`,
-`actuatorConformance`, the `actuate` tool, `workspace.actuation`, and an
-actuator template with a simulated plant. **Condition:** an application must change a device from
-a room, and a lab supplies the device limits that the design leaves to it.
+**D24. Actuators.** [Actuators](../docs/actuators.md) designs `actuate`:
+a controller command that runs as a process of the `act` kind. It adds a
+`grace` for each call, the rule that exit 0 means safe, an optional
+`finally` after an unclean end, and a JSON-lines log that the table folds
+into a status. It needs the graceful cancel of D6 first. The order of work
+is D6's graceful cancel with its backend change, then the `act` kind, the
+fold, and the tool. **Condition:** an application must drive a device from
+a room, and the workstation accounts hold the device permissions.
 
 ## Deferred by decision
 

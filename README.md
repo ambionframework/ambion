@@ -30,7 +30,7 @@ workspace. See the [Workbench repository](https://github.com/fastforwardengine/w
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-capabilities-dark.svg">
-  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, a say to itself, the close, an optional summary, and the returned say. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. An agent says to itself with a delay. The exchange closes while the say waits. When the say is due, the room gives it back, and the returned say opens an exchange. The workspace gives six capabilities that an agent composes while the room runs. Every workspace gives an agent processes. bash starts a process that outlives the activation. ps lists it. status and cancel take its handle, and wait takes 1 to 16 handles. At the start of each activation, a reminder lists the seat's processes. Optional tables add sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files, with read, write, and edit. The other capabilities write their files there. Optional sensors add connect and observe: an agent observes a server, and the workspace retains the evidence. Actuators are a design with no implementation yet: an agent establishes a control loop with a source of feedback. connect and actuate set a desired state, and the server converges on it within guardrails. The six share the homes and the snapshots. Each agent has a home. On a workstation, no other agent reads it. A snapshot ref names the bytes of a file. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. A person and the host steer the room. A person on a visit asks a question and reads results. The host is application code. It lists and cancels processes, and hears each start and end. Each one posts a message to the room, and the host can post one when a process ends. A message cites a file with a ref. A restart replays the room's entries." src="docs/assets/ambion-capabilities.svg">
+  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, a say to itself, the close, an optional summary, and the returned say. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. An agent says to itself with a delay. The exchange closes while the say waits. When the say is due, the room gives it back, and the returned say opens an exchange. The workspace gives six capabilities that an agent composes while the room runs. Every workspace gives an agent processes. bash starts a process that outlives the activation. ps lists it. status and cancel take its handle, and wait takes 1 to 16 handles. At the start of each activation, a reminder lists the seat's processes. Optional tables add sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files, with read, write, and edit. The other capabilities write their files there. Optional sensors add connect and observe: an agent observes a server, and the workspace retains the evidence. Actuators are a design with no implementation yet: actuate runs a command that controls a device as a process. A stop sends SIGTERM, waits for a grace, then sends SIGKILL. Exit 0 means the world is safe, and an optional finally runs after an unclean end. The command logs JSON lines that the workspace folds into a status. The six share the homes and the snapshots. Each agent has a home. On a workstation, no other agent reads it. A snapshot ref names the bytes of a file. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. A person and the host steer the room. A person on a visit asks a question and reads results. The host is application code. It lists and cancels processes, and hears each start and end. Each one posts a message to the room, and the host can post one when a process ends. A message cites a file with a ref. A restart replays the room's entries." src="docs/assets/ambion-capabilities.svg">
 </picture>
 
 **The journal records what is said. The workspace holds what is made, and a
@@ -61,14 +61,13 @@ object store. The agent can cite the returned snapshot refs. The server owns
 acquisition and reducer state. Measurement timestamps remain the source of
 truth. See [Sensors](docs/sensors.md).
 
-**Actuators are a design: an agent establishes a control loop.** An
-actuator server comes from a Git template, as a sensor server does. The
-agent chooses the feedback that measures the stock, and it places the
-loop at a tier whose latency fits the plant. It sets a desired state with
-a tolerance and a settle time. The server converges on it within
-guardrails that the device, the host, and the server hold, and it reports
-the phase of convergence. No package implements actuators yet. See
-[Actuators](docs/actuators.md).
+**Actuators are a design: `actuate` runs a controller as a process.** The
+command drives a device and carries its own deadline. A stop sends
+`SIGTERM`, waits for a grace, then sends `SIGKILL`. Exit 0 means the world
+is safe, and an optional `finally` runs after an unclean end. The command
+logs JSON lines, and the workspace folds them into a status. The agent
+chooses the feedback and confirms convergence from an independent sensor.
+No package implements actuators yet. See [Actuators](docs/actuators.md).
 
 **The six capabilities compose while the application runs.** Repositories
 hold the code of a loop, and processes run it. Tables hold the plans, and
