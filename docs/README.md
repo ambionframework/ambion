@@ -17,6 +17,7 @@ each page.
 | [Technical facts](technical-facts.md) | Key facts, the 0.5.0 sensor work, eleven packages, and system limits         |
 | [Definitions and tools](agent.md)     | Definitions and tools                                                        |
 | [Executors](executors.md)             | The executor contract, steps, the trace, and adapters                        |
+| [Code mode](codemode.md)              | Proposed pluggable JavaScript execution and bindings for existing tools     |
 | [Pi executor](pi.md)                  | The Pi package: options, exchange continuity, testing                        |
 | [Claude executor](claude.md)          | The Claude Agent SDK package: policy, trust, sessions, testing               |
 | [Codex](codex.md)                     | The Codex SDK executor: install, options, trust, and testing                 |
