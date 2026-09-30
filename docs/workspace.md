@@ -87,7 +87,8 @@ one freezes files and gives the refs that cite them, and the other puts the
 bytes of a cited snapshot in the agent's files
 ([Snapshot a file](#snapshot-a-file)).
 A backend with `ports` adds `connect` to validate and discover a running
-sensor server owned by the caller, and `observe` to read a qualified sensor
+sensor server owned by the caller, `disconnect` to detach an owned link without
+stopping its process, and `observe` to read a qualified sensor
 and retain its returned evidence. Network requests run outside the shell
 owner; only process checks and export or audit writes use that owner. Passing
 `{ images: false }` to `workspace.tools()` renders frame paths for `observe`

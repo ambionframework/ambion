@@ -223,6 +223,11 @@ in [`examples/workbench`](examples/workbench). It needs Node **26.4 or
 later**, the floor `@opentui/core` sets for its terminal renderer. See
 [Contributing](CONTRIBUTING.md) to build from source.
 
+**Camera Chat connects an agent-managed Mac camera to a room conversation.**
+Run `pnpm demo` in [`examples/camera-chat`](examples/camera-chat) for a
+camera-free preview. Its README describes live capture and the localhost
+shell and Git backends.
+
 ## Boundaries
 
 - The journal owns no domain transactions and no credentials.

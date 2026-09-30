@@ -76,6 +76,11 @@ export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.t
 export type { ObjectBackend, ObjectDigest, ObjectEnv } from './object-backend.ts';
 export type { ProcessKind, ProcessState, ProcessStatus } from './process-files.ts';
 export type { ProcessEvent, ProcessQuery } from './process-table.ts';
+export type {
+	RegisteredSensorConnection,
+	SensorConnectionEvent,
+	SensorDiscovery,
+} from './sensor-connections.ts';
 export type { SkillInfo, SkillSet } from './skills.ts';
 export { loadSkills } from './skills.ts';
 export type { SnapshotDetails, SnapshotOptions } from './snapshots.ts';

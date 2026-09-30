@@ -21,6 +21,10 @@
 			"entry": ["test/worker.ts", "test/**/*.test.ts"],
 			"project": ["src/**/*.ts", "test/**/*.ts"],
 			"ignoreDependencies": ["cloudflare"]
+		},
+		"examples/camera-chat": {
+			"entry": ["templates/camera/main.ts"],
+			"project": ["src/**/*.ts", "templates/**/*.ts"]
 		}
 	}
 }

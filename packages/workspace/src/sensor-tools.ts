@@ -4,6 +4,7 @@ import type { AmbionTool } from '@ambionframework/ambion';
 import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
 import { connectToolGuidance, createConnectTool } from './connect-tool.ts';
+import { createDisconnectTool, disconnectToolGuidance } from './disconnect-tool.ts';
 import { createObserveTool, observeToolGuidance } from './observe-tool.ts';
 import type { WorkspaceResource } from './resource.ts';
 import type { SensorConnections } from './sensor-connections.ts';
@@ -22,9 +23,14 @@ export function sensorTools(options: {
 } {
 	if (options.connections === undefined) return { names: [], tools: [], notes: [] };
 	return {
-		names: ['connect', 'observe'],
+		names: ['connect', 'disconnect', 'observe'],
 		tools: [
 			createConnectTool({
+				connections: options.connections,
+				shell: options.shell,
+				audit: options.audit,
+			}),
+			createDisconnectTool({
 				connections: options.connections,
 				shell: options.shell,
 				audit: options.audit,
@@ -37,6 +43,6 @@ export function sensorTools(options: {
 				images: options.images,
 			}),
 		],
-		notes: [connectToolGuidance(), observeToolGuidance(options.images)],
+		notes: [connectToolGuidance(), disconnectToolGuidance(), observeToolGuidance(options.images)],
 	};
 }

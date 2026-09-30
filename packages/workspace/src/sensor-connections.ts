@@ -5,6 +5,15 @@ import type { ProcessStatus } from './process-files.ts';
 import type { ProcessEvent, ProcessTable } from './process-table.ts';
 import type { WorkspaceAgent } from './resource.ts';
 import { createSensorClient, type SensorClient } from './sensor-client.ts';
+import {
+	belongsToEnded,
+	discovery,
+	freezeIndex,
+	freezeSource,
+	sameIdentity,
+	sameSource,
+	validateIndex,
+} from './sensor-connection-facts.ts';
 import type { SensorIndex, SensorSource } from './sensors.ts';
 
 /** The validated connection facts available to workspace sensor readers. */
@@ -26,17 +35,27 @@ export interface SensorDiscovery {
 	readonly hostname: string;
 	readonly port: number;
 	readonly process: string;
-	readonly state: 'connected' | 'unavailable' | 'unknown';
+	readonly state: 'connected' | 'unavailable' | 'disconnected' | 'unknown';
 	readonly sensors: SensorIndex['sensors'];
 }
 
-/** The internal registry boundary shared by connect and future sensor readers. */
+/** A committed link change. Listener failures cannot undo a registry change. */
+export interface SensorConnectionEvent {
+	readonly type: 'connected' | 'refreshed' | 'disconnected' | 'unavailable';
+	readonly connection: SensorDiscovery;
+}
+
+/** The registry shared by standard tools and the host's sensor widgets. */
 export interface SensorConnections {
 	connect(
 		agent: WorkspaceAgent,
 		input: { readonly name: string; readonly process: string; readonly port: number },
 		signal?: AbortSignal,
 	): Promise<RegisteredSensorConnection>;
+	/** Detach an owned link without stopping its process. Repeated calls are harmless. */
+	disconnect(agent: WorkspaceAgent, name: string, signal?: AbortSignal): Promise<void>;
+	/** Subscribe to committed link changes. Returns an unsubscribe function. */
+	subscribe(listener: (event: SensorConnectionEvent) => void): () => void;
 	/** Look up a qualified name after rechecking its owning process. */
 	get(sensor: string, signal?: AbortSignal): Promise<RegisteredSensorConnection | undefined>;
 	/** List captured discovery and process state without reading a server. */
@@ -51,9 +70,12 @@ interface MutableConnection extends RegisteredSensorConnection {
 	client: SensorClient;
 	available: boolean;
 	transport: WorkspacePort;
+	detached?: boolean;
 }
 
 interface Attempt {
+	readonly name: string;
+	readonly owner: string;
 	readonly controller: AbortController;
 	readonly promise: Promise<unknown>;
 }
@@ -68,8 +90,26 @@ export function createSensorConnections(
 	const transports = new Set<WorkspacePort>();
 	const closeInFlight = new WeakMap<WorkspacePort, Promise<void>>();
 	const endedProcesses = new Set<string>();
+	const listeners = new Set<(event: SensorConnectionEvent) => void>();
 	let closing: Promise<void> | undefined;
 	const processKey = (owner: string, handle: string): string => `${owner}\0${handle}`;
+
+	const notify = (type: SensorConnectionEvent['type'], connection: MutableConnection) => {
+		const event = Object.freeze({
+			type,
+			connection: discovery(
+				connection,
+				connection.detached ? 'disconnected' : connection.available ? 'connected' : 'unavailable',
+			),
+		});
+		for (const listener of listeners) {
+			try {
+				listener(event);
+			} catch {
+				/* Host widgets cannot change a committed link. */
+			}
+		}
+	};
 
 	const closeTransport = (transport: WorkspacePort): Promise<void> => {
 		const pending = closeInFlight.get(transport);
@@ -95,12 +135,15 @@ export function createSensorConnections(
 		index: SensorIndex,
 		transport: WorkspacePort,
 	): Promise<RegisteredSensorConnection> => {
+		const type = connection.detached ? 'connected' : 'refreshed';
 		const oldTransport = connection.transport;
 		connection.transport = transport;
 		connection.client = createSensorClient(transport.url);
 		connection.index = freezeIndex(index, connection.source);
 		connection.process = process;
 		connection.available = true;
+		connection.detached = false;
+		notify(type, connection);
 		try {
 			await closeTransport(oldTransport);
 		} catch {
@@ -113,9 +156,9 @@ export function createSensorConnections(
 		if (event.type !== 'ended') return;
 		endedProcesses.add(processKey(event.process.agent, event.process.handle));
 		for (const connection of byName.values()) {
-			if (connection.process.handle !== event.process.handle) continue;
-			if (connection.owner !== event.process.agent) continue;
+			if (!belongsToEnded(connection, event.process)) continue;
 			connection.available = false;
+			notify('unavailable', connection);
 			void disposeTransport(connection).catch(() => undefined);
 		}
 	};
@@ -124,7 +167,9 @@ export function createSensorConnections(
 	const markEnded = (connection: MutableConnection, status?: ProcessStatus): void => {
 		if (status !== undefined) connection.process = status;
 		endedProcesses.add(processKey(connection.owner, connection.process.handle));
+		if (!connection.available) return;
 		connection.available = false;
+		notify('unavailable', connection);
 		void disposeTransport(connection).catch(() => undefined);
 	};
 
@@ -236,7 +281,11 @@ export function createSensorConnections(
 		index: SensorIndex,
 		active: AbortSignal,
 	): MutableConnection | undefined => {
-		if (current?.available) {
+		if (
+			current &&
+			(current.available ||
+				(current.detached && sameIdentity(current, agent, input.process, input.port)))
+		) {
 			checkReusable(current, agent, input, index);
 			return current;
 		}
@@ -276,12 +325,14 @@ export function createSensorConnections(
 		transport: WorkspacePort,
 		active: AbortSignal,
 	): Promise<RegisteredSensorConnection> => {
+		assertCommitAllowed(agent, input, active);
 		const current = byName.get(input.name);
 		const reusable = chooseRegistration(initial, current, agent, input, index, active);
 		if (reusable !== undefined) return refresh(reusable, process, index, transport);
 		const connection = newRegistration(agent, input, process, index, transport);
 		// The claim is committed without an await, so concurrent names have one winner.
 		byName.set(input.name, connection);
+		notify('connected', connection);
 		if (current !== undefined) await disposeTransport(current).catch(() => undefined);
 		return connection;
 	};
@@ -361,7 +412,7 @@ export function createSensorConnections(
 		const combined =
 			signal === undefined ? controller.signal : AbortSignal.any([signal, controller.signal]);
 		const promise = runConnect(initial, agent, input, combined);
-		const attempt: Attempt = { controller, promise };
+		const attempt: Attempt = { controller, promise, name: input.name, owner: agent.name };
 		attempts.add(attempt);
 		try {
 			return await promise;
@@ -423,8 +474,10 @@ export function createSensorConnections(
 		connection: MutableConnection,
 		signal?: AbortSignal,
 	): Promise<SensorDiscovery['state']> => {
+		if (connection.detached) return 'disconnected';
 		if (!connection.available) return 'unavailable';
 		const checked = await readDiscoveryStatus(connection, signal);
+		if (connection.detached) return 'disconnected';
 		if (!connection.available) return 'unavailable';
 		return checked ? 'connected' : 'unknown';
 	};
@@ -435,14 +488,7 @@ export function createSensorConnections(
 	): Promise<SensorDiscovery | undefined> => {
 		const state = await discoveryState(connection, signal);
 		if (byName.get(connection.name) !== connection) return undefined;
-		return Object.freeze({
-			name: connection.name,
-			hostname: connection.hostname,
-			port: connection.port,
-			process: connection.process.handle,
-			state,
-			sensors: connection.index.sensors,
-		});
+		return discovery(connection, state);
 	};
 
 	const list = async (signal?: AbortSignal): Promise<readonly SensorDiscovery[]> => {
@@ -454,12 +500,44 @@ export function createSensorConnections(
 		return discoveries.filter((one): one is SensorDiscovery => one !== undefined);
 	};
 
+	const abortRefreshes = (agent: WorkspaceAgent, name: string) => {
+		for (const attempt of attempts) {
+			if (attempt.name === name && attempt.owner === agent.name)
+				attempt.controller.abort(new Error('Sensor connection was disconnected.'));
+		}
+	};
+
+	const disconnect = async (
+		agent: WorkspaceAgent,
+		name: string,
+		signal?: AbortSignal,
+	): Promise<void> => {
+		if (closing !== undefined) throw new Error('Sensor connections are closing.');
+		signal?.throwIfAborted();
+		const connection = byName.get(name);
+		if (!connection) throw new Error(`Unknown sensor connection '${name}'.`);
+		if (connection.owner !== agent.name)
+			throw new Error(`Only '${connection.owner}' can disconnect '${name}'.`);
+		abortRefreshes(agent, name);
+		if (!connection.detached) {
+			connection.available = false;
+			connection.detached = true;
+			notify('disconnected', connection);
+		}
+		await disposeTransport(connection);
+	};
+
 	const close = (): Promise<void> => {
 		if (closing !== undefined) return closing;
 		closing = (async () => {
 			unsubscribe();
 			const connections = [...byName.values()];
-			for (const connection of connections) connection.available = false;
+			for (const connection of connections) {
+				if (!connection.available) continue;
+				connection.available = false;
+				notify('unavailable', connection);
+			}
+			listeners.clear();
 			for (const attempt of attempts)
 				attempt.controller.abort(new Error('Workspace is disposing.'));
 			const closeTransports = Promise.allSettled([...transports].map(closeTransport));
@@ -470,50 +548,18 @@ export function createSensorConnections(
 		return closing;
 	};
 
-	return Object.freeze({ connect, get, list, close });
-}
-
-function sameIdentity(
-	connection: MutableConnection,
-	agent: WorkspaceAgent,
-	process: string,
-	port: number,
-): boolean {
-	return (
-		connection.owner === agent.name &&
-		connection.process.handle === process &&
-		connection.port === port
-	);
-}
-
-function validateIndex(index: SensorIndex): void {
-	const names = new Set<string>();
-	for (const sensor of index.sensors) {
-		if (!/^[a-z][a-z0-9-]*(?![\s\S])/.test(sensor.name))
-			throw new Error(`Invalid sensor name '${sensor.name}' in the server index.`);
-		if (names.has(sensor.name))
-			throw new Error(`Duplicate sensor name '${sensor.name}' in the server index.`);
-		names.add(sensor.name);
-	}
-}
-
-function freezeSource(source: SensorSource): SensorSource {
-	return Object.freeze({ ...source });
-}
-
-function sameSource(a: SensorSource, b: SensorSource): boolean {
-	return (
-		a.repository === b.repository &&
-		a.commit === b.commit &&
-		a.branch === b.branch &&
-		a.dirty === b.dirty
-	);
-}
-
-function freezeIndex(index: SensorIndex, source: SensorSource): SensorIndex {
 	return Object.freeze({
-		api: 1,
-		source,
-		sensors: Object.freeze(index.sensors.map((sensor) => Object.freeze({ ...sensor }))),
+		connect,
+		disconnect,
+		get,
+		list,
+		close,
+		subscribe(listener: (event: SensorConnectionEvent) => void) {
+			if (closing !== undefined) return () => {};
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+			};
+		},
 	});
 }

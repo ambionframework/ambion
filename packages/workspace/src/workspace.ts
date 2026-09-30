@@ -115,6 +115,8 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	 * `use`, as its owner agent, at `ProcessStatus.output`.
 	 */
 	readonly processes: WorkspaceProcesses;
+	/** Host sensor reads and lifecycle callbacks. Available when the backend supports ports. */
+	readonly sensors?: Pick<SensorConnections, 'get' | 'list' | 'subscribe'>;
 	/**
 	 * Start mirroring `room`'s messages under the backend's layout, at
 	 * `<layout.rooms>/<room.name>/messages.jsonl`. Call once the room has
@@ -524,6 +526,15 @@ export function openWorkspace(options: {
 		tools,
 		host,
 		processes,
+		...(connections === undefined
+			? {}
+			: {
+					sensors: Object.freeze({
+						get: connections.get,
+						list: connections.list,
+						subscribe: connections.subscribe,
+					}),
+				}),
 		mirror,
 		snapshot: (paths: readonly string[], snapshotOptions?: SnapshotOptions) =>
 			takeSnapshot(store, paths, snapshotOptions),
