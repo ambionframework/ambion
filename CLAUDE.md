@@ -47,7 +47,7 @@ floor.
 | `docs/formal.md`          | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                                                          |
 | `docs/toolchain.md`       | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                                                                       |
 | `examples/workbench`      | Runnable example: rooms and an OpenTUI terminal in one process                                                                                                       |
-| `planning/`               | `next.md`: the scope and plan for 0.5.0; `backlog.md`: everything else                                                                                               |
+| `planning/`               | `next.md`: the scope and plan for 0.5.0; `0.6.0.md`: the work lined up for 0.6.0; `backlog.md`: everything else                                                      |
 
 ## Positioning
 
@@ -78,7 +78,8 @@ lets an agent come back to its work on the room's clock. A host that wants a
 wake calls `room.post`.
 
 [`planning/next.md`](planning/next.md) defines the 0.5.0 scope and owns the
-work and its evidence. [`planning/backlog.md`](planning/backlog.md) holds
+work and its evidence. [`planning/0.6.0.md`](planning/0.6.0.md) lines up
+the release after it. [`planning/backlog.md`](planning/backlog.md) holds
 everything else. `docs/` document current capabilities and label
 pending release changes explicitly. Keep the examples in `docs/` on the
 implemented API until the corresponding change lands.
