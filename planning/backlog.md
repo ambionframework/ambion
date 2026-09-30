@@ -14,7 +14,7 @@ condition holds moves to the top of its section.
 | [Known defects](#known-defects)               | K1–K6  | K2, the allow-list of the SQL guard      |
 | [Release and CI](#release-and-ci)             | L3, R1 | L3, a billing failure reads as one       |
 | [Rules and proofs](#rules-and-proofs)         | P1–P6  | P1, `returnable` into the verified rules |
-| [Designs with a shape](#designs-with-a-shape) | D1–D23 | D1, exchange bounds                      |
+| [Designs with a shape](#designs-with-a-shape) | D1–D24 | D1, exchange bounds                      |
 | [Deferred by decision](#deferred-by-decision) | None   | None                                     |
 
 ## Known defects
@@ -360,6 +360,19 @@ connections, automatic retention, and lifecycle acceptance in the plan.
 
 **Condition:** the core workflow has shipped, and an application needs
 one of these capabilities. No order between these items is promised.
+
+### For actuators
+
+**D24. Actuators.** [Actuators](../docs/actuators.md) designs the
+counterpart of sensors. A server from a Git template declares actuators
+under `/actuators/`, and `actuate` sends one declarative target with a
+hold. The workspace retains the intent before the send and the outcome
+after it. The owner of the connection commands, and the host's
+`authorize` decides the envelope. The work adds the actuator schemas and
+client to `@ambionframework/workspace`, `actuatorConformance`, the
+`actuate` tool, `workspace.actuation`, and an actuator template with a
+simulated plant. **Condition:** an application must change a device from
+a room, and a lab supplies the device limits that the design leaves to it.
 
 ## Deferred by decision
 

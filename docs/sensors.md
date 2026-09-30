@@ -643,6 +643,7 @@ Neither case claims to validate hardware timing or scientific inference.
 - Automatic detection delivery and a `followAndPost` library helper.
 - New sensor refs, journal entries, and kernel scheduling rules.
 - Clock synchronization, skew estimates, or timestamp correction.
+- Commands to the world. [Actuators](actuators.md) designs them.
 
 **Existing host composition stays available.** A host can read a service
 and call `room.post` today. That integration uses host time for its own
