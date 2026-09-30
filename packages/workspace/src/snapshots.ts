@@ -30,6 +30,7 @@ import {
 import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
+import type { Capability } from './capability.ts';
 import type { ObjectEnv } from './object-backend.ts';
 import { contextOf, unwrap } from './object-files.ts';
 import { assertObjectSize, MAX_OBJECT_BYTES } from './object-rules.ts';
@@ -248,7 +249,7 @@ export interface SnapshotDetails {
 }
 
 /** Build the `snapshot` tool. Each call reads the files as the calling agent. */
-export function createSnapshotTool(store: SnapshotStore): AmbionTool {
+function createSnapshotTool(store: SnapshotStore): AmbionTool {
 	return defineTool({
 		name: 'snapshot',
 		label: 'Snapshot',
@@ -351,6 +352,14 @@ export function createRestoreTool(store: SnapshotStore): AmbionTool {
 			};
 		},
 	});
+}
+
+/** The snapshot capability: `snapshot` and `restore` over the store, and the citation note. */
+export function snapshotCapability(store: SnapshotStore): Capability {
+	return {
+		tools: [createSnapshotTool(store), createRestoreTool(store)],
+		notes: [snapshotGuidance(store.workspace)],
+	};
 }
 
 /** The note that tells every agent how to cite a file, and how to read one that is cited. */

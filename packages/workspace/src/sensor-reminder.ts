@@ -1,7 +1,5 @@
 /** The captured sensor discovery shown at the start of an activation. */
 
-import type { ReminderSeat } from '@ambionframework/ambion';
-import type { ProcessTable } from './process-table.ts';
 import type { SensorConnections, SensorDiscovery } from './sensor-connections.ts';
 
 /** Render connection facts and qualified sensor names without transport data. */
@@ -18,29 +16,10 @@ function sensorReminderText(discoveries: readonly SensorDiscovery[]): string | u
 	return lines.join('\n');
 }
 
-/** Compose process and sensor reminders while bounding sensor status reads. */
-export async function workspaceReminder(
-	seat: ReminderSeat,
-	signal: AbortSignal,
-	processes: ProcessTable,
-	connections: SensorConnections | undefined,
-): Promise<string | undefined> {
-	const processReminder = processes.remind(seat, signal).catch(() => undefined);
-	const sensorReminder =
-		connections === undefined
-			? Promise.resolve(undefined)
-			: boundedSensorReminder(connections, signal);
-	const [processText, sensorText] = await Promise.all([processReminder, sensorReminder]);
-	return (
-		[processText, sensorText]
-			.filter((text): text is string => text !== undefined && text.trim() !== '')
-			.join('\n\n') || undefined
-	);
-}
-
 const SENSOR_REMINDER_TIMEOUT_MS = 750;
 
-async function boundedSensorReminder(
+/** The sensor text of one activation. A status read that outlasts the bound gives no text. */
+export async function boundedSensorReminder(
 	connections: SensorConnections,
 	signal: AbortSignal,
 ): Promise<string | undefined> {

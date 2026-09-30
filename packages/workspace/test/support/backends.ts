@@ -20,6 +20,10 @@ import type { Workspace } from '../../src/index.ts';
 import { sqliteBackend } from '../../src/sqlite-entry.ts';
 import type { SqlHarness } from './sql-cases.ts';
 
+/** The note on the file tools and the bash tool, as the guidance of every bundle holds it. */
+export const FILES_NOTE =
+	'read, write, edit and bash work on shared files. Other agents connected to this\nworkspace read and write the same files.';
+
 export const sqlBackends: readonly SqlHarness[] = [
 	{
 		name: 'sqlite in memory',

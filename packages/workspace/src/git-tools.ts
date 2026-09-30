@@ -27,6 +27,7 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
+import type { Capability } from './capability.ts';
 import { runScript, shellQuote } from './execution-env.ts';
 import type { GitEnv, GitRepository } from './git-backend.ts';
 import { NAME_PATTERN } from './git-names.ts';
@@ -48,9 +49,6 @@ export interface GitToolOptions {
 	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
 	readonly server: string;
 }
-
-/** The tool names, in the order the tool line of the guidance lists them. */
-export const GIT_TOOL_NAMES = ['repos', 'clone', 'fork'] as const;
 
 /**
  * Guidance for the git tools over a server that the workspace names
@@ -106,8 +104,18 @@ const cloneSchema = Type.Object({
 
 type CloneParams = Static<typeof cloneSchema>;
 
+/** The git capability: `repos`, `clone` and `fork`, and the git note for the workspace `workspace`. */
+export function gitCapability(
+	options: GitToolOptions & { readonly workspace: string },
+): Capability {
+	return {
+		tools: createGitTools(options),
+		notes: [gitToolGuidance(options.server, options.workspace)],
+	};
+}
+
 /** Build the git tools. Repository operations run on the git owner. */
-export function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
+function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 	const repos = defineTool({
 		name: 'repos',
 		label: 'Repositories',

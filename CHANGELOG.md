@@ -14,6 +14,14 @@ of the audit log, now also a field of `AuditLog`, receives an error that
 names the tool and the call id. The tool factories drop their `audit`
 option. No journal body changes.
 
+**One shape holds each workspace capability.** `workspaceTools` builds the
+bundle from six capabilities in a fixed order: the file tools, the
+processes, the snapshots, `sql`, git, and the sensors. Each capability gives
+its tools, its guidance notes, and its reminder. The bundle merges the
+reminders, and `withSkills` uses the same merge. The tool line of the
+guidance reads the names of the tools, so it no longer keeps name lists. The
+text the model reads does not change. No export changes.
+
 **An executor family is one call.** `defineExecution(kind, build)` in
 `@ambionframework/ambion/hosting` now returns the function that gives an
 execution for a set of options, and it registers the execution with no

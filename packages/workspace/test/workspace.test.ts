@@ -29,10 +29,22 @@ import { openWorkspace } from '../src/index.ts';
 import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
 import { processToolGuidance } from '../src/process-tools.ts';
 import { snapshotGuidance } from '../src/snapshots.ts';
-import { wrapped } from './support/backends.ts';
+import { FILES_NOTE, wrapped } from './support/backends.ts';
 import { agent, run, toolResults } from './support/room.ts';
 
 const ROOM_MIRROR_GUIDANCE = roomMirrorGuidance('/rooms');
+const BASE_TOOLS = [
+	'read',
+	'write',
+	'edit',
+	'bash',
+	'ps',
+	'status',
+	'wait',
+	'cancel',
+	'snapshot',
+	'restore',
+];
 const ctx = BACKGROUND_CONTEXT;
 
 /** Every line of one JSONL file, parsed. */
@@ -162,23 +174,24 @@ describe('the workspace bundle', () => {
 			backend: { bash: wrapped() },
 		});
 		expect(workspace.tools()).toBe(workspace.tools());
-		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual([
-			'read',
-			'write',
-			'edit',
-			'bash',
-			'ps',
-			'status',
-			'wait',
-			'cancel',
-			'snapshot',
-			'restore',
-		]);
+		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual(BASE_TOOLS);
 		// The /rooms guidance names no room, so a workspace states it with no other guidance.
 		expect(workspace.tools().guidance).toBe(
-			`${defaultToolGuidance()}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}\n\n${ROOM_MIRROR_GUIDANCE}`,
+			`${defaultToolGuidance(BASE_TOOLS)}\n${FILES_NOTE}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}\n\n${ROOM_MIRROR_GUIDANCE}`,
 		);
 		await workspace.dispose();
+	});
+
+	it.each([
+		[10, 'ten'],
+		[16, 'sixteen'],
+		[9, '9'],
+		[17, '17'],
+	])('counts %i tools in the tool line as %s', (count, word) => {
+		const names = Array.from({ length: count }, (_, index) => `tool${index}`);
+		expect(defaultToolGuidance(names)).toBe(
+			`Your workspace gives you ${word} tools: ${names.slice(0, -1).join(', ')} and tool${count - 1}.`,
+		);
 	});
 
 	it('adds the guidance of the bash backend to the bundle', async () => {
@@ -187,7 +200,7 @@ describe('the workspace bundle', () => {
 			backend: { bash: wrapped(() => ({ guidance: 'Custom backend guidance.' })) },
 		});
 		expect(workspace.tools().guidance).toBe(
-			`${defaultToolGuidance()}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}\n\nCustom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`,
+			`${defaultToolGuidance(BASE_TOOLS)}\n${FILES_NOTE}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}\n\nCustom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`,
 		);
 		await workspace.dispose();
 	});
