@@ -185,6 +185,19 @@ it('exports the neutral endpoint types from the root', async () => {
 	expect([endpoints.machine, endpoint.url]).toEqual(['lab.internal', 'http://127.0.0.1:43127']);
 });
 
+it('exports host sensor discovery and lifecycle types from the root', () => {
+	const connection: main.SensorDiscovery = {
+		name: 'camera',
+		hostname: 'localhost',
+		port: 43127,
+		process: 'bash-000000000001',
+		state: 'disconnected',
+		sensors: [],
+	};
+	const event: main.SensorConnectionEvent = { type: 'disconnected', connection };
+	expect(event.connection.state).toBe('disconnected');
+});
+
 it('keeps the neutral resource contract free of imports, Pi among them', async () => {
 	const contract = await read('src/resource.ts');
 	expect(contract).not.toMatch(/@earendil-works\/pi/);

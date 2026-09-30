@@ -163,6 +163,11 @@ one Unix account for each agent. See
 [Backends and limits](docs/workspace.md#backends-and-limits) and
 [Trust](docs/trust.md).
 
+**Camera Chat connects an agent-managed Mac camera to a room conversation.**
+Run `pnpm demo` in [`examples/camera-chat`](examples/camera-chat) for a
+camera-free preview. Its README describes live capture and the localhost
+shell and Git backends.
+
 ## Boundaries
 
 - The journal owns no domain transactions and no credentials.

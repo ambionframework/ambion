@@ -4,6 +4,7 @@ import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/
 import { type Static, Type } from 'typebox';
 import type { Capability } from './capability.ts';
 import { connectToolGuidance, createConnectTool } from './connect-tool.ts';
+import { createDisconnectTool, disconnectToolGuidance } from './disconnect-tool.ts';
 import {
 	type ObserveRequest,
 	type ObserveResponse,
@@ -159,8 +160,8 @@ async function receiveFiles(
 }
 
 /**
- * The sensor capability: `connect` and `observe` over the connections, their
- * notes, and the reminder of the connected sensors.
+ * The sensor capability: `connect`, `disconnect`, and `observe` over the
+ * connections, their notes, and the reminder of the connected sensors.
  */
 export function sensorCapability(options: {
 	readonly connections: SensorConnections;
@@ -168,8 +169,12 @@ export function sensorCapability(options: {
 }): Capability {
 	const { connections } = options;
 	return {
-		tools: [createConnectTool({ connections }), createObserveTool(options)],
-		notes: [connectToolGuidance(), observeToolGuidance()],
+		tools: [
+			createConnectTool({ connections }),
+			createDisconnectTool({ connections }),
+			createObserveTool(options),
+		],
+		notes: [connectToolGuidance(), disconnectToolGuidance(), observeToolGuidance()],
 		remind: (_seat, signal) => boundedSensorReminder(connections, signal),
 	};
 }

@@ -813,6 +813,21 @@ migration. Journal bodies and stored schemas do not change.
 **The 0.5.0 sensor work keeps the eleven-package workspace.** It adds no
 separate sensors package.
 
+**Sensor connections expose host lifecycle callbacks and a disconnect tool.**
+A ports-enabled workspace exposes `workspace.sensors.get`, `list`, and
+`subscribe`. Events report committed connection, refresh, disconnect, and
+process-unavailability changes. Listener failures do not undo registry changes.
+`disconnect({ name })` detaches an owned link and closes its transport without
+stopping its process; `cancel` remains responsible for acquisition lifetime.
+
+**Camera Chat runs an agent-owned camera template on macOS.** The agent can
+fork and clone the supplied template, launch it through Bash, and use standard
+`connect` and `observe`. A successful connection opens a small native-image
+preview above a Workbench-style transcript. Disconnect or process exit hides
+it. Retained observation images render inline beneath the messages that cite
+them, at the preview size. The demo exercises the same lifecycle with
+synthetic frames.
+
 **Ports-enabled workspaces can observe and retain sensor evidence.** The
 `observe({ sensor, span? })` tool reads one connected sensor, fetches and
 verifies every referenced file, and stores the full response and file refs in

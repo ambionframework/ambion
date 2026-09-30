@@ -87,10 +87,10 @@ one freezes files and gives the refs that cite them, and the other puts the
 bytes of a cited snapshot in the agent's files
 ([Snapshot a file](#snapshot-a-file)).
 A backend with `endpoints` adds `connect` to validate and discover a running
-sensor server owned by the caller, and `observe` to read a qualified sensor
-and retain its returned evidence. Network requests run outside the bash
-resource. Only process checks and export or audit writes use the bash
-resource.
+sensor server owned by the caller, `disconnect` to detach an owned connection
+without stopping its process, and `observe` to read a qualified sensor and
+retain its returned evidence. Network requests run outside the bash resource.
+Only process checks and export or audit writes use the bash resource.
 `observe` returns each frame as an image part and names its export path in
 the text of the result. `read` of an image returns the image part and a text
 part, `Image path: <path>`. A format that the tool does not attach, such as

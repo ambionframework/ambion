@@ -82,6 +82,11 @@ export { err, FileError, ok, ShellError } from './port.ts';
 export type { Process, ProcessKind, ProcessState } from './process-files.ts';
 export { MAX_TIMER_SECONDS } from './process-run.ts';
 export type { ProcessEvent, ProcessQuery } from './process-table.ts';
+export type {
+	RegisteredSensorConnection,
+	SensorConnectionEvent,
+	SensorDiscovery,
+} from './sensor-connections.ts';
 export type { SkillInfo, SkillSet } from './skills.ts';
 export { loadSkills } from './skills.ts';
 export type { SnapshotDetails, SnapshotOptions } from './snapshots.ts';
