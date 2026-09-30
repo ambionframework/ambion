@@ -3,6 +3,10 @@
 > [Sensor servers](sensors.md#run-a-server-from-git) use these existing
 > process tools. A ports-enabled workspace adds `connect`, which attaches a
 > server port and changes no process timeout or disposal rule.
+>
+> [Pending: grace, finally, and the event log](#pending-grace-finally-and-the-event-log)
+> designs three optional features of `bash`. No code implements them yet.
+> [Actuators](actuators.md) builds a pattern on them.
 
 **Background processes are part of 0.3.0.** In 0.2.0, `bash` holds the
 call until its command ends, and a workspace has four tools.
@@ -690,6 +694,207 @@ A wait stops before your activation ends.
 A process that outlives your activation shows in the reminder at the start of your next activation.
 To check a long process later, call schedule with after, in seconds. The room wakes you with it then.
 ```
+
+## Pending: grace, finally, and the event log
+
+> **This section is a design. No code implements it.** It needs the
+> graceful stop of [D6](../planning/backlog.md#for-rooms-that-run-unattended)
+> first: a stop sends `SIGTERM`, waits for a grace, then sends `SIGKILL`.
+> [D24](../planning/backlog.md#for-actuators) holds the work.
+
+**`bash` gains three optional features.** Each one serves any process
+that must clean up or report its state: a server, a database, a training
+run, or a device controller. A process that uses none of them behaves as
+it does today.
+
+```ts
+bash({
+  command: string,
+  grace?: number, // seconds from SIGTERM to SIGKILL; the default comes from D6
+  finally?: string, // runs after an unclean end; idempotent
+  name?: string,
+  timeout?: number,
+  wait?: number,
+});
+```
+
+| Parameter | Default        | Bounds                  | Meaning                                       |
+| --------- | -------------- | ----------------------- | --------------------------------------------- |
+| `grace`   | The D6 default | 1 to 300 s              | The time that the command has to clean up     |
+| `finally` | None           | As `command`; runs 60 s | A command that cleans up after an unclean end |
+
+### The stop with a grace
+
+**A stop sends `SIGTERM` to the group, waits for `grace`, then sends
+`SIGKILL`.** A cancel, a timeout, a cancel by the host, and `dispose()`
+take this path. A command that traps `TERM`, cleans up, and exits inside
+the grace writes its own `exit`, and "`exit` wins" reads its code.
+
+**The wrapper handles `TERM` and waits.** It installs a handler with
+`trap : TERM`, so it outlives the signal and writes `exit`. A handler
+resets to the default in every program that the command runs. An ignored
+signal stays ignored in them, so the wrapper never ignores `TERM`. A probe
+with bash 5 confirmed the handler: the command's own trap ran, and the
+wrapper wrote `exit`.
+
+**A grace longer than the stop wait of D6 returns early.** `cancel` then
+returns while the process still runs, with the note `stopping`. A later
+read gives the end.
+
+### finally
+
+**`finally` runs after an unclean end.** An unclean end is an exit code
+other than 0, a kill after the grace, or a lost process. `finally` runs in
+a new process, so it works after the command crashed. It must be
+idempotent and must need no state from the command.
+
+**One atomic claim decides who runs `finally`.** The claimant creates the
+directory `<dir>/finally` with `mkdir`, which succeeds for one caller only.
+`finally` writes `pid`, `out`, and `exit` in that directory.
+
+- **The wrapper** claims after an exit code other than 0. It starts
+  `finally` in a new process group with `setsid`, under
+  `timeout -s KILL 60`, and does not wait for it. A stop of the command's
+  group does not reach it.
+- **The table** claims when a read finds a kill or a lost process with no
+  claim. A read of any host run can claim, so a crash of the host delays
+  `finally` until the next read.
+
+**`cancel` does not stop `finally`.** A second host run over the same
+account finds the claim and runs nothing. A lost `finally` has a claim, no
+`exit`, and no live shell. The table does not run it a second time.
+
+**`ProcessStatus` gains `finally`.** It holds the state of `finally`
+(`running`, `exited`, `timed_out`, or `failed`) and its exit code. A
+result that reports an end whose `finally` failed, timed out, or was lost
+fails the call. Its last line says that the cleanup did not finish.
+
+### The event log
+
+**The workspace sets `AMBION_EVENTS` for every process.** It names
+`events.jsonl` in the process directory. The command can append JSON lines
+to it. stdout and stderr stay free text in `out`, so a stack trace never
+corrupts the log.
+
+```jsonl
+{"v":1,"at":"2026-09-30T14:02:10.001Z","kind":"target","name":"bath","value":37,"unit":"C","tolerance":0.2,"interval":1}
+{"v":1,"at":"2026-09-30T14:02:11.482Z","kind":"observe","name":"bath","value":36.4,"unit":"C"}
+{"v":1,"at":"2026-09-30T14:02:11.482Z","kind":"drive","name":"power","value":62,"unit":"%"}
+{"v":1,"at":"2026-09-30T14:09:40.310Z","kind":"state","value":"reached","note":"within 0.2 C for 60 s"}
+```
+
+**Every line has `v`, `at`, and `kind`.** `v` is 1. `at` is a UTC ISO 8601
+time with three digits of milliseconds, from the command's clock. Any
+line can carry `interval`, the seconds between two lines of a healthy
+command. A line has at most 4 KiB.
+
+| `kind`    | Meaning                           | Fields                                                                  |
+| --------- | --------------------------------- | ----------------------------------------------------------------------- |
+| `target`  | A value that the command pursues  | `name`, `value` (a number or a word), `unit` for a number, `tolerance?` |
+| `observe` | A value that the command measured | `name`, `value`, `unit` for a number                                    |
+| `drive`   | A value that the command put out  | `name`, `value`, `unit` for a number                                    |
+| `state`   | The command's claim about itself  | `value`, a word; `note?`                                                |
+
+**A name and a `state` value follow the agent-name grammar,
+`^[a-z][a-z0-9-]*$`.** A name belongs to the command. The format carries
+its own version, because a command that someone supplies does not upgrade
+with the host. A breaking change raises `v`.
+
+### The fold
+
+**The table folds the log into one status for each process.** The fold is
+a pure function of the bytes of the log and the host times of the reads.
+
+- **Latest wins.** The fold keeps the latest `target`, `observe`, and
+  `drive` for each name, and the latest `state` and `interval`.
+- **Error.** When a `target` and an `observe` share a name and a unit,
+  the fold gives the observed value minus the target.
+- **Stale.** A command that declares `interval` reads `stale` after three
+  intervals with no new line. The fold measures that time with host time,
+  from the first read that saw the log grow. It never compares the
+  command's clock with the host's clock.
+- **Rejected lines.** The fold counts and skips a line that is not valid
+  JSON, has another `v`, has an unknown `kind`, or breaks a field rule.
+  The log never fails the process.
+
+**The fold reads only new bytes.** The table keeps the byte offset and the
+folded status in `fold.json`, as it keeps `cursor` for `out`. A read takes
+at most 1 MiB of new log. Past that, it moves to the last 64 KiB and
+counts the skipped bytes. Two host runs that write `fold.json` write the
+fold of the same bytes through a rename.
+
+**The status shows where processes show.** `status` and `wait` give it
+above the new output. The reminder and `ps` give one line for each process
+with a non-empty fold. `ProcessStatus` gains `events`, and `subscribe`
+gains `{ type: 'claimed', process }` when a read finds a new `state` line.
+
+```text
+Process bath-hold, bash-3f9a2c1d0b7e, is running for 7m 30s.
+bath 36.9 C, target 37 C ±0.2 (error -0.1) · power 58 % · holding, 1 s ago
+```
+
+```ts
+interface EventFold {
+  readonly targets: Readonly<Record<string, Reading & { readonly tolerance?: number }>>;
+  readonly observed: Readonly<Record<string, Reading>>;
+  readonly drives: Readonly<Record<string, Reading>>;
+  readonly errors: Readonly<Record<string, number>>;
+  readonly state?: { readonly value: string; readonly note?: string; readonly at: string };
+  readonly interval?: number;
+  readonly stale: boolean;
+  readonly rejected: number;
+  readonly skippedBytes: number;
+}
+
+interface Reading {
+  readonly value: number | string;
+  readonly unit?: string;
+  readonly at: string; // the command's clock, unchanged
+}
+```
+
+### On each backend
+
+| Backend              | The log while the command runs | A stop                                            | `finally`                                 |
+| -------------------- | ------------------------------ | ------------------------------------------------- | ----------------------------------------- |
+| `memoryBackend`      | Grows as the command writes    | The simulated shell ends at once; no trap runs    | Runs after every stop, in the same shell  |
+| `directoryBackend`   | As `memoryBackend`; to verify  | As `memoryBackend`                                | As `memoryBackend`                        |
+| `workstationBackend` | Grows as the command writes    | `SIGTERM` to the group, the grace, then `SIGKILL` | Runs in a new process group with `setsid` |
+
+**A probe confirmed the log on just-bash.** Against the in-memory
+filesystem of `just-bash`, a concurrent read found each new line of a log
+while the command that wrote it still ran. `out` still waits for the end.
+
+### Where the code goes
+
+| File                              | Change                                                             |
+| --------------------------------- | ------------------------------------------------------------------ |
+| `workspace/src/process-files.ts`  | The wrapper with the trap and `AMBION_EVENTS`, the `finally` claim |
+| `workspace/src/process-events.ts` | New: the event schema and the pure fold                            |
+| `workspace/src/processes.ts`      | The grace for each process, `finally` on a read                    |
+| `workspace/src/process-tools.ts`  | The `grace` and `finally` parameters of `bash`                     |
+| `workspace/src/process-text.ts`   | The status block and the reminder line                             |
+
+**The export snapshot changes.** `ProcessStatus` gains `finally` and
+`events`, and `ProcessEvent` gains `claimed`. The event schema and the
+fold export from `@ambionframework/workspace`.
+
+### Tests for the pending features
+
+- A command that traps `TERM` and exits 0 inside the grace reads `exited`
+  with code 0 after a cancel, and `finally` does not run.
+- A command that ignores `TERM` gets `SIGKILL` after the grace, and
+  `finally` runs.
+- An exit code other than 0 runs `finally` from the wrapper, once.
+- A lost process runs `finally` on the next read, once, across two host
+  runs over one account.
+- A `finally` that fails or times out fails the call that reports it.
+- A stop of the command's group does not reach a running `finally`.
+- The fold gives the same status for the same bytes, and counts rejected
+  lines and skipped bytes.
+- `stale` follows host time, with a command clock that runs 10 minutes
+  ahead.
+- The log grows while the command runs, on both just-bash backends.
 
 ## Out of scope
 

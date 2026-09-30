@@ -365,14 +365,16 @@ one of these capabilities. No order between these items is promised.
 
 ### For actuators
 
-**D24. Actuators.** [Actuators](../docs/actuators.md) designs `actuate`:
-a controller command that runs as a process of the `act` kind. It adds a
-`grace` for each call, the rule that exit 0 means safe, an optional
-`finally` after an unclean end, and a JSON-lines log that the table folds
-into a status. It needs the graceful cancel of D6 first. The order of work
-is D6's graceful cancel with its backend change, then the `act` kind, the
-fold, and the tool. **Condition:** an application must drive a device from
-a room, and the workstation accounts hold the device permissions.
+**D24. Actuators as a pattern over processes.**
+[Actuators](../docs/actuators.md) designs a controller as an ordinary
+`bash` process. The work adds three optional process features that
+[Processes](../docs/processes.md#pending-grace-finally-and-the-event-log)
+designs: `grace`, `finally`, and the `AMBION_EVENTS` log with its fold. It
+also adds an actuation skill with a controller template, a simulated
+plant, and a test. The order of work is D6's graceful cancel, then the
+three features, then the skill. **Condition:** an application must drive
+a device from a room, and the workstation accounts hold the device
+permissions.
 
 ## Deferred by decision
 
