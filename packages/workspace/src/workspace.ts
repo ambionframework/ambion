@@ -8,6 +8,7 @@ import type {
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, BashServices, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
+import { connectToolGuidance, createConnectTool } from './connect-tool.ts';
 import { createFileTools, defaultToolGuidance } from './default-tools.ts';
 import { workspaceFiles } from './files.ts';
 import type { GitBackend, GitCommit, GitEnv, GitRevision } from './git-backend.ts';
@@ -31,6 +32,7 @@ import {
 	type WorkspaceAgent,
 	type WorkspaceResource,
 } from './resource.ts';
+import { createSensorConnections, type SensorConnections } from './sensor-connections.ts';
 import { type SkillSet, skillGuidance, skillSetOf, syncSkills } from './skills.ts';
 import {
 	createRestoreTool,
@@ -213,7 +215,13 @@ function gitPart(
 function workspaceTools(
 	bash: BashBackend,
 	shell: WorkspaceResource<WorkspaceEnv>,
-	backends: { sql?: SqlBinding; git?: GitBinding; processes: ProcessTable; store: SnapshotStore },
+	backends: {
+		sql?: SqlBinding;
+		git?: GitBinding;
+		processes: ProcessTable;
+		store: SnapshotStore;
+		connections?: SensorConnections;
+	},
 	audit: AuditLog | undefined,
 ): ToolBundle {
 	const { layout, guidance } = bash;
@@ -225,18 +233,36 @@ function workspaceTools(
 	];
 	const sql = sqlPart(backends.sql, shell, audit);
 	const git = gitPart(backends.git, shell, audit);
+	const connect =
+		backends.connections === undefined
+			? { names: [], tools: [], notes: [] }
+			: {
+					names: ['connect'],
+					tools: [
+						createConnectTool({ connections: backends.connections, shell: shell.use, audit }),
+					],
+					notes: [connectToolGuidance()],
+				};
 	const notes = [
-		defaultToolGuidance([...sql.names, ...git.names]),
+		defaultToolGuidance([...sql.names, ...git.names, ...connect.names]),
 		processToolGuidance(),
 		snapshotGuidance(backends.store.workspace),
 		...sql.notes,
 		...git.notes,
+		...connect.notes,
 		guidance,
 		audit && auditGuidance(audit),
 		roomMirrorGuidance(layout.rooms),
 	];
 	return Object.freeze({
-		tools: Object.freeze([...files, ...processes, ...snapshots, ...sql.tools, ...git.tools]),
+		tools: Object.freeze([
+			...files,
+			...processes,
+			...snapshots,
+			...sql.tools,
+			...git.tools,
+			...connect.tools,
+		]),
 		guidance: joinNotes(notes),
 		remind: (seat: ReminderSeat, signal: AbortSignal) => backends.processes.remind(seat, signal),
 	});
@@ -328,10 +354,12 @@ function bashUnderOwner(
 function withProcesses(
 	backend: ResourceBackend<WorkspaceEnv>,
 	processes: ProcessTable,
+	connections?: SensorConnections,
 ): ResourceBackend<WorkspaceEnv> {
 	return {
 		connect: (agent, signal) => backend.connect(agent, signal),
 		dispose: async () => {
+			await connections?.close();
 			await processes.close();
 			await backend.dispose?.();
 		},
@@ -413,9 +441,11 @@ export function openWorkspace(options: {
 		// The owner opens below. The table calls it only after the workspace opens.
 		shell: (agent, operation, signal) => resource.use(agent, operation, signal),
 	});
+	const connections =
+		bash.ports === undefined ? undefined : createSensorConnections(bash.ports, table);
 	const resource = openResource<WorkspaceEnv>({
 		name: options.name,
-		backend: withProcesses(shellBackend, table),
+		backend: withProcesses(shellBackend, table, connections),
 	});
 	const sql =
 		sqlBackend === undefined
@@ -446,7 +476,12 @@ export function openWorkspace(options: {
 		shell: resource.use,
 		objects: objects.use,
 	};
-	const toolBundle = workspaceTools(bash, resource, { sql, git, processes: table, store }, audit);
+	const toolBundle = workspaceTools(
+		bash,
+		resource,
+		{ sql, git, processes: table, store, connections },
+		audit,
+	);
 	const processes: WorkspaceProcesses = Object.freeze({
 		list: (query?: ProcessQuery) => table.hostList(query),
 		subscribe: (listener: (event: ProcessEvent) => void) => table.subscribe(listener),
@@ -467,7 +502,11 @@ export function openWorkspace(options: {
 	const owners = [sql?.owner, resource, objects, git?.owner].flatMap((owner) =>
 		owner === undefined ? [] : [owner],
 	);
-	const dispose = (): Promise<void> => disposeInOrder(owners);
+	const dispose = (): Promise<void> => {
+		const connectionClose = connections?.close() ?? Promise.resolve();
+		const ownersClose = disposeInOrder(owners);
+		return Promise.all([connectionClose, ownersClose]).then(() => undefined);
+	};
 	return Object.freeze({
 		...resource,
 		dispose,

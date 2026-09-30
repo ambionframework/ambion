@@ -20,7 +20,7 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { PROCESS_TOOL_NAMES } from './process-tools.ts';
 
-const COUNTS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen'];
+const COUNTS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen'];
 
 /** The tools every workspace has, in the order the tool line names them. */
 const BASE_TOOLS = ['read', 'write', 'edit', ...PROCESS_TOOL_NAMES, 'snapshot', 'restore'];

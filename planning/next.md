@@ -23,10 +23,11 @@ and its acceptance. [The backlog](backlog.md) holds everything else.
 
 ## Status
 
-**0.4.0 shipped. SN1, SN3, SN4, SN27, and SN32 are implemented and
+**0.4.0 shipped. SN1, SN3, SN4, SN27, SN32, and SN33 are implemented and
 validated on this branch.** The wire schemas, HTTP client, conformance
-runner, validated template, and workstation port transport exist. The
-remaining 0.5.0 steps are pending.
+runner, validated template, workstation port transport, and in-memory
+connection registry with `connect` exist. SN5, SN34, SN6, SN8, SN35, and
+SN31 remain pending.
 This scope incorporates the owner's response to the review of `origin/main`
 `0f9ef1e27eed0f27c3ec47aef09071d54b044ff8` on 2026-09-29.
 [The review disposition](review-0.5.0.md) records the changed decisions.
@@ -144,7 +145,7 @@ resources behind.
 
 ### Phase 2. Connect, observe, and retain
 
-- [ ] **1.** The connection registry and `connect` tool. (SN33)
+- [x] **1.** The connection registry and `connect` tool. (SN33)
 - [ ] **2.** Discovery and the reminder. Needs 1. (SN5)
 - [ ] **3.** Retain received evidence through snapshots. (SN34)
 - [ ] **4.** The observe tool and text-only rendering. Needs 1 and 3. (SN6, SN8)
@@ -224,6 +225,10 @@ each other's processes. Equal retries reuse a registration. Conflicting
 calls do not replace it. A stopped process cannot be connected. A failed
 handshake leaves no registration. Replacing an ended process requires an
 explicit owner call. A request after process end cannot reuse its port.
+The focused Linux tests cover the registry and the real process-to-HTTP path
+through the in-process SSH workstation fixture; `pnpm check` passes. SN33
+was not run against the provisioned OpenSSH tier. The observe and reminder
+flows remain pending.
 
 **SN5. The reminder.** Show the workstation, connected process and port,
 and qualified sensor names with descriptions. Use the index captured at

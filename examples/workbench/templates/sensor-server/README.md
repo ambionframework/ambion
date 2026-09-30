@@ -98,8 +98,8 @@ The server uses `PORT` when set and otherwise requests port zero, so the
 operating system selects a free port. It binds to workstation
 `127.0.0.1`. It writes the fixture acquisition files before printing
 `READY http://127.0.0.1:<port>`. Use that port and the process handle in
-the workspace `connect` call. The workspace sensor tools are pending in
-0.5.0; after they land, connect and observe through those tools.
+the workspace `connect` call, available on a backend with workstation
+ports. `observe` remains pending in 0.5.0.
 
 The `GET /` index captures the repository, full commit, branch when
 attached, and dirty flag once at startup. A detached checkout omits the
