@@ -2,8 +2,8 @@
  * The router: how a room picks the execution for a seat by executor kind.
  *
  * `localExecution` builds the execution of one executor kind.
- * `defineExecution` builds it the same way and makes it the default of that
- * kind. `route` serves every seat of a room: the first execution of the
+ * `defineExecution` defines an executor family: the executions of one kind,
+ * by options, and the default of that kind. `route` serves every seat of a room: the first execution of the
  * room or its runtime that serves the kind of the seat, else the default of
  * the kind. On a miss, the activation fails at once with a permanent
  * `no_execution` error, and the room does not send the wake again.
@@ -37,17 +37,29 @@ export function localExecution(
 }
 
 /**
- * The execution of one executor kind, as `localExecution` builds it, and the
- * default of `kind`: a room with no execution for a seat of that kind runs
- * it. A later definition of the same kind replaces it as the default. An
- * executor package defines its default once, when the package loads.
+ * What builds the executor of one seat, over the host of one connector. An
+ * executor family reads its own options here. The default of the kind
+ * builds with no options.
  */
-export function defineExecution(
+type ExecutionBuild<Options> = (
+	host: ExecutionHost,
+	options: Options | undefined,
+) => (request: ConnectorRequest) => Executor;
+
+/**
+ * The executions of one executor family. The result takes the options of the
+ * family and returns an execution that `localExecution` builds. The call also
+ * makes the execution with no options the default of `kind`: a room with no
+ * execution for a seat of that kind runs it. A later definition of the same
+ * kind replaces the default. An executor package defines its family once,
+ * when the package loads.
+ */
+export function defineExecution<Options = undefined>(
 	kind: string,
-	build: (host: ExecutionHost) => (request: ConnectorRequest) => Executor,
-): Execution<AgentRunner> {
-	const execution = localExecution(kind, build);
-	defaults.set(kind, execution);
+	build: ExecutionBuild<Options>,
+): (options?: Options) => Execution<AgentRunner> {
+	const execution = (options?: Options) => localExecution(kind, (host) => build(host, options));
+	defaults.set(kind, execution());
 	return execution;
 }
 

@@ -24,7 +24,7 @@ import {
 	isExpired,
 	isLive,
 } from './rules.verified.ts';
-import { returnable } from './scheduled.ts';
+import { returnable, returnsAt } from './scheduled.ts';
 
 export interface ReconcileOptions {
 	now: number;
@@ -270,7 +270,7 @@ function nextAlarm(state: RoomState, options: ReconcileOptions): number | undefi
 	const expiries = [...state.leases.values()].flatMap((lease) =>
 		lease.phase === 'running' && isLive(lease, options.now) ? [lease.expiresAt] : [],
 	);
-	const says = state.scheduled.map((say) => say.dueAt);
+	const says = state.scheduled.map(returnsAt);
 	const future = [...expiries, ...retryTimes(state, options), ...says].filter(
 		(at) => at > options.now,
 	);

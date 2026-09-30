@@ -249,7 +249,8 @@ const dismissed = (): Promise<readonly JournalEntry[]> =>
 		async drive(room, clock) {
 			await (await room.visit(priya)).send({ text: 'Is the slab poured?' });
 			await waitForRoom(room);
-			for (const say of await room.scheduled()) await room.dismiss(say.seq);
+			for (const say of (await room.read({ messages: false })).scheduled)
+				await room.dismiss(say.seq);
 			await clock.advance(1_200_000);
 			await waitForRoom(room);
 		},

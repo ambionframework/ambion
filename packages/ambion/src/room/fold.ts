@@ -12,12 +12,12 @@
 
 import type { Close, Composition, Seating } from '../journal/events.ts';
 import { type Entry, placed } from '../journal/journal.ts';
+import type { PendingSay } from '../scheduling.ts';
 import type { ExchangeRef, Message, Seq } from '../types.ts';
 import { type MessageDelivery, messageDelivery } from './delivery.ts';
 import { applyLease, type LeaseHold, type PendingActivation } from './lease.ts';
 import type { PersonState } from './presence.ts';
 import { cancelHold } from './rules.verified.ts';
-import type { ScheduledSay } from './scheduled.ts';
 
 export interface RoomState {
 	readonly composition: Composition | undefined;
@@ -33,7 +33,7 @@ export interface RoomState {
 	/** Every activation the room owes, whatever caused it: the wakes and the drafts as one list. */
 	readonly due: PendingActivation[];
 	/** The scheduled says that wait to return, in the order they landed. None of them is live work. */
-	readonly scheduled: readonly ScheduledSay[];
+	readonly scheduled: readonly PendingSay[];
 	readonly messages: readonly Message[];
 	readonly lastSeq: Seq;
 }

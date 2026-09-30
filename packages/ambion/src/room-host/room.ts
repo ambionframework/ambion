@@ -51,19 +51,12 @@ import {
 	type RoomProjection,
 	replay,
 } from '../room/projection.ts';
-import {
-	captureMessageSelection,
-	type MessageSelection,
-	pendingFor,
-	readView,
-} from '../room/read.ts';
+import { captureMessageSelection, type MessageSelection, readView } from '../room/read.ts';
 import { liveWork } from '../room/reconcile.ts';
 import { decide, type Refusal, type ReleaseCommand } from '../room/transition.ts';
 import type { TokenWindow } from '../room/view.ts';
-import type { PendingSay } from '../scheduling.ts';
 import type {
 	AgentDefinition,
-	ClosedExchangeView,
 	HumanDefinition,
 	Message,
 	RoomNotification,
@@ -114,10 +107,12 @@ export interface CompositionDraft {
 
 export interface Room {
 	readonly name: string;
-	/** Observe one detached room read without waiting for agent work. */
+	/**
+	 * Observe one detached room read without waiting for agent work. The read
+	 * holds the scheduled says, and `pendingFor(read, person)` selects the
+	 * closed exchanges that wait on one person.
+	 */
 	read(options?: { messages?: MessageSelection }): Promise<RoomRead>;
-	/** The closed exchanges that wait on one person. A detached read: it waits for no work. */
-	pendingFor(person: string): Promise<ClosedExchangeView[]>;
 	subscribe(listener: (event: RoomNotification) => void): () => void;
 	/** Reacquire an exchange by the source sequence of its opening question. */
 	exchange(from: Seq): waits.ExchangeHandle | undefined;
@@ -146,8 +141,6 @@ export interface Room {
 	 * or somebody dismissed it, or the room dropped it.
 	 */
 	dismiss(seq: Seq): Promise<boolean>;
-	/** The scheduled says that wait to return. A detached read: it waits for no work. */
-	scheduled(): Promise<PendingSay[]>;
 	/** Fold, decide, write, send. The room runs it on its own; a host on a platform with its own alarms calls it. */
 	reconcile(): Promise<void>;
 }
@@ -445,14 +438,6 @@ export class RoomHost implements Room, RunningRoom {
 			this.journal.lastSeq,
 			messages,
 		);
-	}
-
-	async pendingFor(person: string): Promise<ClosedExchangeView[]> {
-		return pendingFor(await this.read({ messages: false }), person);
-	}
-
-	async scheduled(): Promise<PendingSay[]> {
-		return [...(await this.read({ messages: false })).scheduled];
 	}
 
 	dismiss(seq: Seq): Promise<boolean> {

@@ -1,6 +1,6 @@
 /**
- * The vocabulary of a scheduled say that a host and a view read: the bounds
- * a runtime sets, and a pending say as a read shows it.
+ * The vocabulary of a scheduled say: the bounds a runtime sets, and the one
+ * shape of a say that waits. The fold, a view, and a read hold the same shape.
  */
 import type { Seq } from './types.ts';
 
@@ -15,8 +15,8 @@ export interface ScheduleLimits {
 }
 
 /**
- * A say that waits to return to its seat, as a read shows it. `seq` names
- * it, as the record shows it, and `due` is ISO.
+ * A say that waits to return to its seat. `seq` names it, as the record
+ * shows it, and `due` is ISO.
  */
 export interface PendingSay {
 	readonly seq: Seq;

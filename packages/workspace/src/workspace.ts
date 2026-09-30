@@ -46,7 +46,7 @@ import {
 } from './snapshots.ts';
 import type { SqlBackend, SqlEnv } from './sql-backend.ts';
 import { createSqlTool, sqlToolGuidance } from './sql-tool.ts';
-import { bindTools } from './tools.ts';
+import { audited, bindTools } from './tools.ts';
 
 /** What one agent's bundle adds to the tools every agent shares. */
 export interface WorkspaceToolsOptions {
@@ -176,32 +176,24 @@ interface GitBinding {
 }
 
 /** The `sql` tool and its notes, when the workspace has a SQL backend. */
-function sqlPart(
-	sql: SqlBinding | undefined,
-	shell: WorkspaceResource<WorkspaceEnv>,
-	audit?: AuditLog,
-) {
+function sqlPart(sql: SqlBinding | undefined) {
 	if (sql === undefined) return { names: [], tools: [], notes: [] };
 	const { database, guidance } = sql.backend;
 	return {
 		names: ['sql'],
-		tools: [createSqlTool({ sql: sql.owner.use, shell: shell.use, database, audit })],
+		tools: [createSqlTool({ sql: sql.owner.use, database })],
 		notes: [sqlToolGuidance(database), guidance],
 	};
 }
 
 /** The `repos`, `clone` and `fork` tools and the git note, when the workspace has a git backend. */
-function gitPart(
-	git: GitBinding | undefined,
-	shell: WorkspaceResource<WorkspaceEnv>,
-	audit?: AuditLog,
-) {
+function gitPart(git: GitBinding | undefined, shell: WorkspaceResource<WorkspaceEnv>) {
 	if (git === undefined) return { names: [], tools: [], notes: [] };
 	const { server } = git.backend;
 	const workspace = shell.name;
 	return {
 		names: [...GIT_TOOL_NAMES],
-		tools: createGitTools({ git: git.owner.use, shell: shell.use, server, audit }),
+		tools: createGitTools({ git: git.owner.use, shell: shell.use, server }),
 		notes: [gitToolGuidance(server, workspace)],
 	};
 }
@@ -214,6 +206,7 @@ function gitPart(
  * note, the bash backend's note, the audit note when one is set, and the
  * rooms note, in that order.
  * The bundle's reminder names each seat's processes and connected sensors.
+ * When the workspace has an audit log, `audited` wraps every tool of the bundle.
  */
 function workspaceTools(
 	bash: BashBackend,
@@ -229,19 +222,14 @@ function workspaceTools(
 	images = true,
 ): ToolBundle {
 	const { layout, guidance } = bash;
-	const files = bindTools(createFileTools(images), shell.use, audit);
-	const processes = createProcessTools({ shell: shell.use, processes: backends.processes, audit });
-	const snapshots = [
-		createSnapshotTool(backends.store, audit),
-		createRestoreTool(backends.store, audit),
-	];
-	const sql = sqlPart(backends.sql, shell, audit);
-	const git = gitPart(backends.git, shell, audit);
+	const files = bindTools(createFileTools(images), shell.use);
+	const processes = createProcessTools({ shell: shell.use, processes: backends.processes });
+	const snapshots = [createSnapshotTool(backends.store), createRestoreTool(backends.store)];
+	const sql = sqlPart(backends.sql);
+	const git = gitPart(backends.git, shell);
 	const sensors = sensorTools({
 		connections: backends.connections,
 		store: backends.store,
-		shell: shell.use,
-		audit,
 		images,
 	});
 	const notes = [
@@ -255,15 +243,18 @@ function workspaceTools(
 		audit && auditGuidance(audit),
 		roomMirrorGuidance(layout.rooms),
 	];
+	const tools = [
+		...files,
+		...processes,
+		...snapshots,
+		...sql.tools,
+		...git.tools,
+		...sensors.tools,
+	];
 	return Object.freeze({
-		tools: Object.freeze([
-			...files,
-			...processes,
-			...snapshots,
-			...sql.tools,
-			...git.tools,
-			...sensors.tools,
-		]),
+		tools: Object.freeze(
+			audit === undefined ? tools : tools.map((tool) => audited(tool, shell.use, audit)),
+		),
 		guidance: joinNotes(notes),
 		remind: (seat: ReminderSeat, signal: AbortSignal) =>
 			workspaceReminder(seat, signal, backends.processes, backends.connections),

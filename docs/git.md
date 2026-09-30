@@ -369,8 +369,8 @@ can fill them in for the other action. The file is
 | `clone` | Clone a repository into your workspace without creating a fork. The source is `origin`, with its push permissions.          |
 | `fork`  | Fork a repository into your own namespace on the git server. Set clone to put a working copy of the fork in your workspace. |
 
-**The audit log records each call.** `openWorkspace` binds all three tools
-through the audit log, the same as `sql`. The clone of a `fork` call runs
+**The audit log records each call.** `openWorkspace` records all three
+tools, the same as every tool of the bundle. The clone of a `fork` call runs
 as one more operation on the bash owner, and the log records one entry
 for the `fork` call.
 
