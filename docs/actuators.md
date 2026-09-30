@@ -223,9 +223,10 @@ must need no state from the command. "Heater off" qualifies.
 directory `<dir>/finally` with `mkdir`, which succeeds for one caller only.
 It then writes `pid`, `out`, and `exit` in that directory.
 
-- **The wrapper** claims after a non-zero exit. It runs `finally` in a new
-  process group with `setsid`, so a stop of the command's group does not
-  reach it.
+- **The wrapper** claims after a non-zero exit. It starts `finally` in a
+  new process group with `setsid`, so a stop of the command's group does
+  not reach it. The wrapper does not wait. `finally` runs under
+  `timeout -s KILL 60` and writes its own `exit`.
 - **The table** claims when a read finds a kill or a lost process with no
   claim. A read of any host run can claim, so a crash of the host delays
   `finally` until the next read.
