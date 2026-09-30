@@ -128,7 +128,7 @@ definition runs on different executions in
 | --- | --------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------- | ------ | ---- |
 | W1  | The workspace port is Pi's type                                 | 36 source files import `pi-agent-core`; `index.ts:34` re-exports it          | 1       | High   | 3    |
 | W2  | Each capability repeats one pattern                             | `sqlPart`, `gitPart`, `sensorTools`; hand-kept tool name lists               | 6       | High   | 18   |
-| W3  | Three wrappers audit a tool                                     | `bindTool`, `recordedOnShell`, `withSkills`; 13 tools write their name twice | 2       | High   | 6    |
+| W3  | Two wrappers audit a tool, under two placement rules            | `bindTool`, `recordedOnShell`; 13 tools write their name twice               | 2       | High   | 6    |
 | W4  | Seven conformance suites each have a `check` and a harness type | Five `check` copies; the suites already share `ConformanceCase`              | 3       | High   | 9    |
 | W5  | The sensor path validates at every layer                        | The client and the retention both check the schema and the digest            | 2       | Medium | 4    |
 | W6  | The sensor connections keep a second liveness table             | `endedProcesses` (`sensor-connections.ts:70`); `hostList`, `hostCancel`      | 3       | Medium | 6    |
@@ -142,6 +142,14 @@ environment port, its file errors, and its shell results from Pi. The
 rank counts one concept, but the row fixes a package boundary. CLAUDE.md
 states that `packages/workspace` owns the workspace port. Backlog K6, the
 neutral-file import rule, is the check that holds it.
+
+**The owner decided W1: the workspace owns its port.** The work stays in
+phase 3 for its size. Each change before it adds no import of
+`@earendil-works/pi-agent-core`.
+
+**W3 leaves `withSkills` to W2.** `withSkills` copies the skills at the
+first call of an agent. It audits nothing. The capability shape of W2
+holds that first-use step.
 
 **W7 is a redundancy.** The transport close guards itself
 (`closeInFlight`), so the second call does nothing.
@@ -243,7 +251,8 @@ CLAUDE.md requires for a change that merges tests.
 **Phase 3 needs a decision of the owner.** Each item changes a package
 boundary, a stored format, or a promise.
 
-- W1: the workspace owns its port, and the Pi executor adapts it.
+- W1: the workspace owns its port, and the Pi executor adapts it. The
+  owner decided it; the size keeps it in this phase.
 - K1: the journal reads only the current format. It drops the promise of
   `docs/durability.md:272`.
 - K9: the assistant moves beside Pi, and the room option goes.
