@@ -23,12 +23,13 @@ and its acceptance. [The backlog](backlog.md) holds everything else.
 
 ## Status
 
-**0.4.0 shipped. SN1, SN3, SN4, SN27, SN32, SN33, and SN34 are implemented
-and validated on this branch.** The wire schemas, HTTP client, conformance
-runner, validated template, workstation port transport, in-memory connection
-registry with `connect`, and internal evidence-retention operation exist.
-SN5, SN6, SN8, SN35, and SN31 remain pending. SN33's focused Linux checks
-passed, but its scenario was not run against the provisioned OpenSSH tier.
+**0.4.0 shipped. SN1, SN3, SN4, SN5, SN27, SN32, SN33, and SN34 are
+implemented and validated on this branch.** The wire schemas, HTTP client,
+conformance runner, validated template, workstation port transport,
+connection registry, discovery reminder, and internal evidence-retention
+operation exist. SN6, SN8, SN35, and SN31 remain pending. SN33's focused
+Linux checks passed, but its scenario was not run against the provisioned
+OpenSSH tier.
 This scope incorporates the owner's response to the review of `origin/main`
 `0f9ef1e27eed0f27c3ec47aef09071d54b044ff8` on 2026-09-29.
 [The review disposition](review-0.5.0.md) records the changed decisions.
@@ -147,7 +148,7 @@ resources behind.
 ### Phase 2. Connect, observe, and retain
 
 - [x] **1.** The connection registry and `connect` tool. (SN33)
-- [ ] **2.** Discovery and the reminder. Needs 1. (SN5)
+- [x] **2.** Discovery and the reminder. Needs 1. (SN5)
 - [x] **3.** Retain received evidence through snapshots. (SN34)
 - [ ] **4.** The observe tool and text-only rendering. Needs 1 and 3. (SN6, SN8)
 
@@ -228,8 +229,8 @@ handshake leaves no registration. Replacing an ended process requires an
 explicit owner call. A request after process end cannot reuse its port.
 The focused Linux tests cover the registry and the real process-to-HTTP path
 through the in-process SSH workstation fixture; `pnpm check` passes. SN33
-was not run against the provisioned OpenSSH tier. The observe and reminder
-flows remain pending.
+was not run against the provisioned OpenSSH tier. The observe flow remains
+pending.
 
 **SN5. The reminder.** Show the workstation, connected process and port,
 and qualified sensor names with descriptions. Use the index captured at
@@ -238,8 +239,13 @@ hot-plug discovery is outside the initial release. Read process state
 through the existing process table. Keep media out of the reminder.
 
 **Evidence:** a reminder shows names from two servers without clashes.
-An ended process shows an unavailable connection. Existing process
-reminders still work. Failed sensor work cannot discard their output.
+The captured index refreshes only on explicit `connect`. An ended process
+shows an unavailable connection. Another agent reads discovery without the
+owner's process paths or the private transport URL. Existing process
+reminders still work when a sensor status read fails or exceeds its bound.
+Focused tests use a real room, a running process table, and a real local HTTP
+index server. The workstation SSH test is skipped on macOS. The full
+`pnpm check` passes.
 
 **SN34. Retained evidence.** The internal retention operation reuses the
 existing snapshot object store for verified received bytes and an

@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
-import { createServer, type RequestListener, type Server, type ServerResponse } from 'node:http';
 import { once } from 'node:events';
+import { createServer, type RequestListener, type Server, type ServerResponse } from 'node:http';
 import { expect, it } from 'vitest';
 import {
 	createSensorClient,
 	SensorDigestError,
-	SensorProtocolError,
 	type SensorIndex,
+	SensorProtocolError,
 } from '../src/sensors.ts';
 
 const index: SensorIndex = {

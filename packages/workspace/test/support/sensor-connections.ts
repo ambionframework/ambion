@@ -22,6 +22,7 @@ export interface ConnectionRig {
 	readonly ports: WorkspacePorts;
 	readonly opens: Array<{ closed: number }>;
 	readonly finds: string[];
+	readonly indexRequests: number[];
 	readonly status: ProcessStatus;
 	readonly server: Server;
 	readonly url: string;
@@ -42,11 +43,13 @@ export async function connectionRig(): Promise<ConnectionRig> {
 	let blocked:
 		{ entered: () => void; gate: Promise<void>; expected: number; arrived: number } | undefined;
 	const listeners = new Set<(event: ProcessEvent) => void>();
+	const indexRequests: number[] = [];
 	const server = createServer(async (request, response) => {
 		if (request.method !== 'GET' || request.url !== '/') {
 			response.writeHead(404).end();
 			return;
 		}
+		indexRequests.push(1);
 		if (blocked !== undefined) {
 			const barrier = blocked;
 			barrier.arrived += 1;
@@ -103,6 +106,7 @@ export async function connectionRig(): Promise<ConnectionRig> {
 		ports,
 		opens,
 		finds,
+		indexRequests,
 		status: initialStatus,
 		server,
 		url,

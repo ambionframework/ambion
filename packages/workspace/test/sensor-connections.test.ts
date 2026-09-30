@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { ProcessTable } from '../src/process-table.ts';
 import { createSensorConnections } from '../src/sensor-connections.ts';
+import { workspaceReminder } from '../src/sensor-reminder.ts';
 import {
 	type ConnectionRig,
 	connectionRig,
@@ -45,6 +47,52 @@ describe('the sensor connection registry', () => {
 		expect(await registry.get('bench/no-such-sensor')).toBeUndefined();
 	});
 
+	it('lists captured names through the process table and marks ended connections unavailable', async () => {
+		await connect('bench-one');
+		await connect('bench-two', rig.status.handle, 'owner', 43128);
+		expect(rig.indexRequests).toHaveLength(2);
+		rig.failFind(new Error('temporary process table failure'));
+		const uncertain = await registry.list();
+		expect(uncertain.map((one) => one.state).sort()).toEqual(['connected', 'unknown']);
+		expect(rig.indexRequests).toHaveLength(2);
+		expect((await registry.list()).every((one) => one.state === 'connected')).toBe(true);
+		rig.end();
+		const ended = await registry.list();
+		expect(ended.map((one) => one.state)).toEqual(['unavailable', 'unavailable']);
+		expect(ended.map((one) => one.sensors[0]?.name)).toEqual(['bench', 'bench']);
+		expect(rig.indexRequests).toHaveLength(2);
+	});
+
+	it('keeps process reminder text when sensor status checking hangs or fails', async () => {
+		const processes = { remind: async () => 'process reminder' } as unknown as ProcessTable;
+		const hanging = {
+			list: () => new Promise<never>(() => {}),
+		} as unknown as ReturnType<typeof createSensorConnections>;
+		const started = Date.now();
+		expect(
+			await workspaceReminder(
+				{ agent: 'reader', room: 'room', activation: 'a1' },
+				new AbortController().signal,
+				processes,
+				hanging,
+			),
+		).toBe('process reminder');
+		expect(Date.now() - started).toBeLessThan(1500);
+		const failed = {
+			list: async () => {
+				throw new Error('status failed');
+			},
+		} as unknown as ReturnType<typeof createSensorConnections>;
+		expect(
+			await workspaceReminder(
+				{ agent: 'reader', room: 'room', activation: 'a2' },
+				new AbortController().signal,
+				processes,
+				failed,
+			),
+		).toBe('process reminder');
+	});
+
 	it.each([
 		['wire version', { ...index, api: 2 }],
 		['invalid source', { ...index, source: { ...source, commit: 'short' } }],
@@ -71,12 +119,14 @@ describe('the sensor connection registry', () => {
 
 	it('refreshes discovery on equal retries, preserves launch source, and closes the previous transport', async () => {
 		const first = await connect();
+		expect(rig.indexRequests).toHaveLength(1);
 		const firstClient = first.client;
 		rig.setIndex({
 			...index,
 			sensors: [{ name: 'pressure', description: 'Updated discovery.', spans: true }],
 		});
 		const retry = await connect();
+		expect(rig.indexRequests).toHaveLength(2);
 		expect(retry).toBe(first);
 		expect(retry.source).toEqual(source);
 		expect(retry.index.sensors).toEqual([
@@ -85,6 +135,7 @@ describe('the sensor connection registry', () => {
 		expect(rig.opens.map(({ closed }) => closed)).toEqual([1, 0]);
 		expect(retry.client).not.toBe(firstClient);
 		expect(await registry.get('bench/pressure')).toBe(first);
+		expect(rig.indexRequests).toHaveLength(2);
 	});
 
 	it('rejects a changed launch source without replacing registration metadata or its transport', async () => {

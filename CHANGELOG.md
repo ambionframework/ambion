@@ -10,6 +10,14 @@ private transport while preserving captured launch source metadata. Process
 end makes the connection unavailable, and only its owner can replace it
 with a new process.
 
+**The activation reminder shows connected sensor discovery.** It reads the
+captured index and checks process state through the existing process table.
+It names the workstation hostname, remote sensor port, handle, and qualified
+sensor names with descriptions. An ended process shows as unavailable.
+Another agent can read the discovery without seeing the owner's process
+files or the private transport URL. An explicit repeated `connect` refreshes
+discovery.
+
 **The workspace defines the sensor wire contract.**
 `@ambionframework/workspace/sensors` exports the version 1 body schemas,
 client types, and `createSensorClient(root)` for index, observe, and verified

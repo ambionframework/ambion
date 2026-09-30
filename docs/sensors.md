@@ -242,8 +242,11 @@ and tunnel establishment run outside those queues.
 **A successful result lists the sensors.** Each line gives the qualified
 name and description. The result also names the workstation, remote port,
 process handle, launch source, and captured index. The activation reminder
-will list the same connection facts and currently known sensors in SN5. It
-will embed no observation media.
+lists the configured workstation hostname, remote sensor port, process
+handle, and captured sensor names with descriptions. It checks process state
+through the process table. It shows an ended process as unavailable. It does
+not request a new index; an explicit repeated `connect` refreshes discovery.
+The reminder embeds no observation media or private transport URL.
 
 **A repeated connection is idempotent.** The same owner, process, port,
 and name refresh discovery and return the existing registration. The
