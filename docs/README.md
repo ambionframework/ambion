@@ -25,7 +25,7 @@ each page.
 | [Presence](presence.md)               | Visits, arrivals, departures, and catch-up                                   |
 | [Roster](roster.md)                   | Agent membership, reserve, and attention                                     |
 | [Sensors](sensors.md)                 | Sensor protocol, Git-template lifecycle, workstation transport, and evidence |
-| [Actuators](actuators.md)             | A design: the control loop, targets, command authority, and the envelope     |
+| [Actuators](actuators.md)             | A design: control loops, feedback, convergence, latency, and guardrails      |
 | [Trust](trust.md)                     | What one owner guarantees another, and what the kernel does not defend       |
 | [Patterns](patterns.md)               | The human collaboration patterns the room represents                         |
 | [Summaries](summary.md)               | Optional closing work and context replacement                                |

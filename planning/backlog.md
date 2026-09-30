@@ -364,14 +364,14 @@ one of these capabilities. No order between these items is promised.
 ### For actuators
 
 **D24. Actuators.** [Actuators](../docs/actuators.md) designs the
-counterpart of sensors. A server from a Git template declares actuators
-under `/actuators/`, and `actuate` sends one declarative target with a
-hold. The workspace retains the intent before the send and the outcome
-after it. The owner of the connection commands, and the host's
-`authorize` decides the envelope. The work adds the actuator schemas and
-client to `@ambionframework/workspace`, `actuatorConformance`, the
-`actuate` tool, `workspace.actuation`, and an actuator template with a
-simulated plant. **Condition:** an application must change a device from
+counterpart of sensors. The agent establishes a control loop: a feedback
+sensor that the actuator index declares, a tier that fits the latency of
+the plant, and a desired state with a tolerance and a settle time. The
+server converges within guardrails and reports the phase. The workspace
+retains the intent before the send and the outcome after it. The work
+adds the actuator schemas and client to `@ambionframework/workspace`,
+`actuatorConformance`, the `actuate` tool, `workspace.actuation`, and an
+actuator template with a simulated plant. **Condition:** an application must change a device from
 a room, and a lab supplies the device limits that the design leaves to it.
 
 ## Deferred by decision
