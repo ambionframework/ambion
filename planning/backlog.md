@@ -14,7 +14,7 @@ condition holds moves to the top of its section.
 | [Known defects](#known-defects)               | K1–K6  | K2, the allow-list of the SQL guard      |
 | [Release and CI](#release-and-ci)             | L3, R1 | L3, a billing failure reads as one       |
 | [Rules and proofs](#rules-and-proofs)         | P1–P6  | P1, `returnable` into the verified rules |
-| [Designs with a shape](#designs-with-a-shape) | D1–D23 | D1, exchange bounds                      |
+| [Designs with a shape](#designs-with-a-shape) | D1–D24 | D1, exchange bounds                      |
 | [Deferred by decision](#deferred-by-decision) | None   | None                                     |
 
 ## Known defects
@@ -314,6 +314,15 @@ carries the activation, the exchange, and the room. A purpose field, a
 retry-safe operation key that the kernel derives, and a domain operation
 reused across rooms wait. **Condition:** an application that needs one of
 the three.
+
+**D24. Composition of tools.** A `compose` tool takes the tools that it
+uses and code. The code passes the result of one tool into the next, runs
+calls in parallel, and the model reads only the value it returns.
+[Composition](../docs/composition.md) holds the proposed design. Parallel
+calls of file tools still run one operation at a time on the workspace
+queue; D9 does not change that for one agent. **Condition:** a live
+comparison on one task shows that `compose` cuts the input tokens of a
+seat and keeps its tool-call success.
 
 **D19. Posts in `simulate()`.** A scenario posts an event during an
 exchange. **Condition:** a simulator case that needs one.
