@@ -473,7 +473,7 @@ describe('a scheduled say', () => {
 			{
 				seq: 5,
 				seat: 'product',
-				dueAt: due,
+				due: new Date(due).toISOString(),
 				text: 'Check the build.',
 				refs: ['file:///out.log'],
 			},

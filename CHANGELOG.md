@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+**An executor family is one call.** `defineExecution(kind, build)` in
+`@ambionframework/ambion/hosting` now returns the function that gives an
+execution for a set of options, and it registers the execution with no
+options as the default of the kind. `build` takes the host and the options.
+The hosting entry exports the `ExecutionBuild` type. `piExecution`,
+`claudeExecution`, and `codexExecution` are the results of that call, with
+unchanged signatures. `localExecution` stays for an execution that is not a
+family. `@ambionframework/claude` drops the `ClaudeExecutionOptions` alias
+and `@ambionframework/codex` drops `CodexExecutionOptions`; use
+`ClaudeRuntime` and `CodexRuntime`.
+
+**A room read is the one read of pending says and waits.** `Room` drops
+`pendingFor(person)` and `scheduled()`, and the Cloudflare `RoomObject`
+drops `scheduledSays()`. Read `scheduled` from `room.read()`, and call
+`pendingFor(read, person)` on the read. Journal bodies and stored formats do
+not change.
+
 **Git backends support shared repositories.** Both `justGitBackend` and
 `workstationGitBackend` accept `shared` registrations. Every workspace
 agent can push to `shared/<name>`; templates stay read-only and agent forks

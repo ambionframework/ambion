@@ -54,12 +54,6 @@ function fakeRoom(
 				watermark: backlog.at(-1)?.seq ?? 0,
 			};
 		},
-		async pendingFor() {
-			return [];
-		},
-		async scheduled() {
-			return [];
-		},
 		async dismiss() {
 			return false;
 		},

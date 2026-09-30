@@ -12,18 +12,6 @@ import type { Body } from '../journal/journal.ts';
 import type { PendingSay, ScheduleLimits } from '../scheduling.ts';
 import type { Message, PostedMessage, Seq } from '../types.ts';
 
-/** One say that waits to return to its author. */
-export interface ScheduledSay {
-	/** The seq of the say. */
-	readonly seq: Seq;
-	/** The seat that said it, and the seat it returns to. */
-	readonly seat: string;
-	/** When the say is due, in milliseconds on the wall clock. */
-	readonly dueAt: number;
-	readonly text: string;
-	readonly refs?: readonly string[];
-}
-
 /** Whether a message is a returned say: a post that gives a scheduled say back to its seat. */
 function returnsSay(
 	message: Message,
@@ -43,7 +31,7 @@ export function changesScheduled(message: Message): boolean {
 }
 
 /** The list after one message. */
-export function scheduleStep(list: readonly ScheduledSay[], message: Message): ScheduledSay[] {
+export function scheduleStep(list: readonly PendingSay[], message: Message): PendingSay[] {
 	if (returnsSay(message)) return list.filter((say) => say.seq !== message.returns);
 	if (message.kind === 'dismissed') return list.filter((say) => say.seq !== message.message);
 	if (message.kind === 'unseated') return list.filter((say) => say.seat !== message.subject);
@@ -53,21 +41,15 @@ export function scheduleStep(list: readonly ScheduledSay[], message: Message): S
 		{
 			seq: message.seq,
 			seat: message.from,
-			dueAt: Date.parse(message.at) + message.after * 1000,
+			due: new Date(Date.parse(message.at) + message.after * 1000).toISOString(),
 			text: message.text,
 			...(message.refs === undefined ? {} : { refs: message.refs }),
 		},
 	];
 }
 
-/** A pending say as a read and a view show it: its due time as ISO, and a copy of its refs. */
-export function pendingSay({ dueAt, refs, ...say }: ScheduledSay): PendingSay {
-	return {
-		...say,
-		due: new Date(dueAt).toISOString(),
-		...(refs === undefined ? {} : { refs: [...refs] }),
-	};
-}
+/** When a say is due, in milliseconds on the wall clock. */
+export const returnsAt = (say: PendingSay): number => Date.parse(say.due);
 
 /** No bound: a room that passes no limits takes any whole number of seconds and any count. */
 const UNBOUNDED: ScheduleLimits = {
@@ -81,7 +63,7 @@ const UNBOUNDED: ScheduleLimits = {
  * author, within the bounds.
  */
 export function scheduleRefusal(
-	list: readonly ScheduledSay[],
+	list: readonly PendingSay[],
 	seat: string,
 	intent: { to?: string; after?: number },
 	schedule: ScheduleLimits = UNBOUNDED,
@@ -103,11 +85,11 @@ export function scheduleRefusal(
  * roster. A say of a seat off the roster waits for the seat to return.
  */
 export function returnable(
-	say: ScheduledSay,
+	say: PendingSay,
 	roster: readonly { readonly name: string }[],
 	now: number,
 ): boolean {
-	return say.dueAt <= now && roster.some((seat) => seat.name === say.seat);
+	return returnsAt(say) <= now && roster.some((seat) => seat.name === say.seat);
 }
 
 /**
@@ -116,7 +98,7 @@ export function returnable(
  * say finds it gone.
  */
 export function returning(
-	list: readonly ScheduledSay[],
+	list: readonly PendingSay[],
 	roster: readonly { readonly name: string }[],
 	seq: Seq,
 	now: number,
@@ -140,7 +122,7 @@ export function returning(
  * of a seat gets a refusal.
  */
 export function dismissal(
-	list: readonly ScheduledSay[],
+	list: readonly PendingSay[],
 	messages: readonly Message[],
 	seat: string | undefined,
 	seq: Seq,

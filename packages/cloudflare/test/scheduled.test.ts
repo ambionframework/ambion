@@ -40,11 +40,11 @@ it('lists the says that wait, and dismisses one through the room object', async 
 	await stub.visit({ name: 'priya', identity: 'Project manager.' });
 	const first = await stub.send({ from: 'priya', text: 'Is the pour logged tomorrow?', key: 'q1' });
 	await stub.waitForClose(first.from);
-	const [say] = await stub.scheduledSays();
+	const [say] = (await stub.read({ messages: false })).scheduled;
 	expect(say).toMatchObject({ seat: 'checker', text: 'Check the pour log.' });
 	expect(await stub.dismiss(say?.seq ?? 0)).toBe(true);
 	expect(await stub.dismiss(say?.seq ?? 0)).toBe(false);
-	expect(await stub.scheduledSays()).toEqual([]);
+	expect((await stub.read({ messages: false })).scheduled).toEqual([]);
 	expect((await stub.read()).messages.at(-1)).toMatchObject({
 		kind: 'dismissed',
 		message: say?.seq,

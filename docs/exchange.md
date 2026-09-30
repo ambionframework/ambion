@@ -149,8 +149,7 @@ beside the delta. A closing activation reads none.
 **A say can stop waiting.** An unseating of its author drops it, and a
 cancellation drops every say before it. A recomposition that leaves the author
 out writes no unseating, so its says wait until the seat is on the roster
-again. A read lists the says that wait in `scheduled`, and so does
-`room.scheduled()`.
+again. A read lists the says that wait in `scheduled`.
 
 **The agent or the host dismisses a say.** A correction to long work can make
 a pending say wrong, and its text is fixed. The `dismiss` tool takes the
@@ -298,8 +297,8 @@ person's question, so it never makes an exchange `awaiting`. A returned say
 has no author, so in its exchange each message to a person can make it
 `awaiting`. `pendingFor` then lists what the work of a returned say needs of
 that person. `awaiting` carries the `person`. It clears when
-that person speaks. `pendingFor(read, person)` and `room.pendingFor(person)`
-return the closed exchanges that await one person. A failed summary reads
+that person speaks. `pendingFor(read, person)` returns the closed exchanges
+of a room read that await one person. A failed summary reads
 through `summary`, not `outcome`. The verified rule `exchangeOutcome` fixes the
 order.
 

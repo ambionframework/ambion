@@ -11,7 +11,6 @@ import { type Block, blocks, renderLine } from '../record.ts';
 import type { AgentParticipantInfo, ExchangeRef, ParticipantInfo, Seq } from '../types.ts';
 import { isSummary, type Message } from '../types.ts';
 import type { RoomState } from './fold.ts';
-import { pendingSay } from './scheduled.ts';
 
 /** The token limit of one seat, and the estimator that counts against it. */
 export interface TokenWindow {
@@ -112,7 +111,7 @@ function scheduledOf(
 	state: RoomState,
 ): Pick<CollaborationContext, 'scheduled'> {
 	if (spec.purpose.kind !== 'respond') return {};
-	const own = state.scheduled.filter((say) => say.seat === spec.seat).map(pendingSay);
+	const own = state.scheduled.filter((say) => say.seat === spec.seat);
 	return own.length === 0 ? {} : { scheduled: own };
 }
 

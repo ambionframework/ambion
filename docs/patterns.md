@@ -38,10 +38,9 @@ on a person reads `awaiting` and carries the `person`.
 [The outcome contract](exchange.md#7-the-edges-a-host-sees) states the
 derivation and the clearing.
 
-**`pendingFor` lists the waits.** `pendingFor(read, person)` and
-`room.pendingFor(person)` return the closed exchanges that await one person.
-Both are detached reads. The room derives the outcome from the record, so a
-resumed room reads the same answer.
+**`pendingFor` lists the waits.** `pendingFor(read, person)` returns the
+closed exchanges of a room read that await one person. The room derives the
+outcome from the record, so a resumed room reads the same answer.
 
 ## Approve before an agent acts
 

@@ -7,7 +7,9 @@
  * side the room calls back. An `Execution` connects one to the other: its
  * connector returns the port of each seat. `localExecution` builds the
  * execution of one executor kind, whose port is an `AgentRunner` in this
- * process, and `defineExecution` also makes it the default of the kind. A
+ * process. `defineExecution` defines an executor family: the executions of
+ * one kind by options, and the default of that kind. An executor package
+ * calls it once. A
  * host that puts the seats somewhere else writes an execution whose port
  * crosses the boundary, and runs an `AgentRunner` there.
  * `@ambionframework/cloudflare` is one such host.
@@ -59,7 +61,7 @@ export type {
 	RoomToolResult,
 } from './execution/room-tools.ts';
 export { toolContext } from './execution/room-tools.ts';
-export { defineExecution, localExecution } from './execution/route.ts';
+export { defineExecution, type ExecutionBuild, localExecution } from './execution/route.ts';
 export { AgentRunner } from './execution/runner.ts';
 export type { StepSink, TraceOpener, TraceSink } from './execution/trace.ts';
 export type {
