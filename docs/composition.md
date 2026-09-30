@@ -216,6 +216,80 @@ second query. A row value is JSON: text, a number, or null. A blob is its
 bytes as lowercase hex, as the CSV export writes it. A `bigint` is its
 decimal digits as text.
 
+## Typing a declared output
+
+**`defineTool` ties the return type of `execute` to the declared output.**
+With `compose: { output: O }`, `execute` must return a `ToolResult` whose
+`details` is `Static<O>`. A string, a missing field, or a value of the
+wrong type fails `tsc`. The runtime check of each call stays, because a
+tool built by hand as an `AmbionTool` gets no help from the compiler.
+
+```ts
+const Order = Type.Object({
+  id: Type.String(),
+  status: Type.Union([Type.Literal('open'), Type.Literal('delayed'), Type.Literal('shipped')]),
+  eta: Type.Optional(Type.String()),
+});
+
+const lookup = defineTool({
+  name: 'lookup_order',
+  description: 'Fetch an order by id.',
+  parameters: Type.Object({ id: Type.String() }),
+  compose: { output: Order },
+  execute: async ({ id }) => {
+    const order = await orders.get(id); // Static<typeof Order>
+    return { content: [{ type: 'text', text: `Order ${id}: ${order.status}` }], details: order };
+  },
+});
+```
+
+**`ToolResult` takes the type of its details.** `ToolResult<TDetails =
+unknown>` keeps its current shape when no type is given. `AmbionTool`
+keeps `details` as `unknown`, because a list of tools holds tools of many
+outputs.
+
+**`defineTool` has two overloads.** The overload for a declared output
+comes last, so the compiler reports its error, and that error names the
+field that breaks the schema, such as `Property 'status' is missing`.
+
+```ts
+interface DeclaredToolOptions<P extends TSchema, O extends TSchema> extends BaseToolOptions<P> {
+  compose: { readonly output: O };
+  execute: (
+    params: Static<P>,
+    ctx: ToolContext,
+  ) => Promise<ToolResult<Static<O>>> | ToolResult<Static<O>>;
+}
+
+interface PlainToolOptions<P extends TSchema> extends BaseToolOptions<P> {
+  compose?: false;
+  execute: (
+    params: Static<P>,
+    ctx: ToolContext,
+  ) => Promise<string | ToolResult> | string | ToolResult;
+}
+
+function defineTool<P extends TSchema>(options: PlainToolOptions<P>): AmbionTool;
+function defineTool<P extends TSchema, O extends TSchema>(
+  options: DeclaredToolOptions<P, O>,
+): AmbionTool;
+```
+
+`BaseToolOptions` holds the fields that `DefineToolOptions` holds today,
+except `execute`. A `tsc` run over this sketch accepts a matching `details`
+and a string from an undeclared tool. It refuses a string, a wrong literal,
+and a missing field from a declared tool.
+
+**The schema is the one source of the type.** A workspace tool derives its
+details type from its output schema, as `type SnapshotDetails =
+Static<typeof SnapshotOutput>`. The interface and the schema then cannot
+drift. `SqlDetails`, `SnapshotDetails`, `ProcessDetails`, `PsDetails`,
+`WaitDetails`, and `ForkDetails` each become such a type.
+
+**`fromPiTool` takes the same declaration.** A second argument,
+`{ output: O }`, requires the `TDetails` of the Pi `AgentTool` to be
+`Static<O>`, and passes the declaration to `defineTool`.
+
 ## What composes
 
 **A composition binds the tools of the definition.** It binds each tool
@@ -591,12 +665,12 @@ each page states the current surface.
 
 | Page                                                                   | Change                                                                                                                                                                                                                                    |
 | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Definitions and tools](agent.md)                                      | The `compose` option of a definition, and the `compose` field of a tool.                                                                                                                                                                  |
+| [Definitions and tools](agent.md)                                      | The `compose` option, the `compose` field of a tool, the two overloads of `defineTool`, and `ToolResult<TDetails>`.                                                                                                                       |
 | [Executors](executors.md)                                              | `parent` on `tool_call` and `tool_result`, `record` in `toolContext`, `callId`.                                                                                                                                                           |
 | [Trust](trust.md)                                                      | A harness approval hook sees no tool that the room hosts, so it sees no composition. `approve` is the one hook that sees one.                                                                                                             |
 | [Workspace](workspace.md)                                              | The declared outputs of `sql`, `snapshot`, `bash`, `ps`, `wait`, and `fork`.                                                                                                                                                              |
 | [Envelope](envelope.md)                                                | The four limits of the `compose` option and their defaults.                                                                                                                                                                               |
-| [Pi](pi.md)                                                            | `toolsFor` passes the step sink of the activation to each call.                                                                                                                                                                           |
+| [Pi](pi.md)                                                            | `toolsFor` passes the step sink of the activation to each call. `fromPiTool` takes an output declaration.                                                                                                                                 |
 | [Technical facts](technical-facts.md) and [Toolchain](toolchain.md)    | The package `@ambionframework/evaluator`, and the count of packages.                                                                                                                                                                      |
 | `biome.jsonc` and `scripts/import-rules.test.mjs`                      | `compose.ts` joins the vocabulary layer. `packages/evaluator/src` may import `@ambionframework/ambion`, and not `/testing` or the source of the core.                                                                                     |
 | [Executors](executors.md#the-room-tools) and [Toolchain](toolchain.md) | The scripted executor of `/testing` gives each tool call a signal, the deadline, and a step sink.                                                                                                                                         |

@@ -325,8 +325,9 @@ comparison on one task shows that `compose` cuts the input tokens of a
 seat and keeps its tool-call success.
 The work comes in six slices, each with its own tests:
 
-1. The vocabulary: the `compose` field of a tool, `ToolContext.record`
-   and `composition`, `parent` on a step, and the reserved name.
+1. The vocabulary: the `compose` field of a tool, the typed overloads of
+   `defineTool`, `ToolContext.record` and `composition`, `parent` on a
+   step, and the reserved name.
 2. The trace: the step sink in `toolContext` and in `toolsFor`, the
    parented steps in `ToolCalls`, and the scripted executor.
 3. The composer, with an evaluator for tests alone: acceptance items 1,
