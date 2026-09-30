@@ -779,7 +779,7 @@ describe('the files as the source of truth', () => {
 			expect(status.stopping).toBe(stopping);
 			if (files.exit?.includes(' ')) expect(status.endedAt).toBe('2026-01-01T00:01:00Z');
 			// The state line names a stop that waits for the end.
-			expect(stateLine(status).includes('a stop waits for its end')).toBe(stopping === true);
+			expect(stateLine(status).includes('the table stopped it')).toBe(stopping === true);
 		},
 	);
 

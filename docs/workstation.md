@@ -328,17 +328,22 @@ signals. Each signal opens a short channel that runs
 | Not 0 to 2,147,483 | No command: `exec` fails with `spawn_error`                               |
 
 **The host holds the timer of the grace.** No channel stays open while
-the grace runs. The `SIGKILL` goes only to a group whose command has not
-exited. After the exit, the group can be empty, and the system can give
-its ID to another program. A
-child that the command left in the group keeps running, as after a
-natural exit. A host that stops during the grace sends no `SIGKILL`.
+the grace runs. The `SIGKILL` after the grace goes only to a group whose
+command has not exited. After the exit, the group can be empty, and the
+system can give its ID to another program. A child that the command left
+in the group keeps running, as after a natural exit. The first signal
+goes to the group also after the exit. A deadline that comes while a
+child holds the output open stops that child, as the `SIGKILL` did
+before. A host that stops during the
+grace sends no `SIGKILL`.
 
 **A command that ends inside the grace gives its own exit status.** The
 channel reports it, and `exec` still returns the abort as `aborted` or
 `timeout`. The process table reads the code from the `exit` file
 ([Processes](processes.md#the-stop)). The command's channel closes 2
-seconds after the time of the `SIGKILL` at the latest.
+seconds after the time of the `SIGKILL` at the latest. The times of the
+signals count from the `AMBION_PGID=` line. Until that line comes, the
+channel closes after the grace and 2 seconds.
 
 **A login shell can write lines before the script's first line.**
 `sshd` runs the command through the account's login shell, and Debian's

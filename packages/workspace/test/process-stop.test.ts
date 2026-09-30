@@ -129,7 +129,7 @@ describe.skipIf(!hasSetsid)('a stop on a real signal path', () => {
 		}
 		expect(listed).toMatchObject({ handle, state: 'running', stopping: true });
 		expect((await invoke(workspace, 'status', { handle })).text).toContain(
-			'is running, and a stop waits for its end.',
+			'is running, and the table stopped it. It has not ended yet.',
 		);
 		const [ownedEnd, adoptedEnd] = await stops;
 		expect(Date.now() - began).toBeGreaterThanOrEqual(10_000);

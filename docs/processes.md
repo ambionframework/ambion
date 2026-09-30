@@ -215,7 +215,7 @@ compiling 14 of 120
 | State       | The bracketed line, where `<h>` is the handle and the name |
 | ----------- | ---------------------------------------------------------- |
 | `running`   | `Process <h> is running. ... Call status or cancel ...`    |
-| `running`   | `Process <h> is running, and a stop waits for its end.`    |
+| `running`   | `Process <h> is running, and the table stopped it. ...`    |
 | `exited`    | `Process <h> exited with code <n>.`                        |
 | `timed_out` | `Process <h> timed out after <timeout> seconds.`           |
 | `cancelled` | `Process <h> is cancelled.`                                |
@@ -369,8 +369,10 @@ stopped nothing.
 **`cancel` waits for the end, up to the grace and 5 seconds.** The 5
 seconds cover the `SIGKILL`, the close of the channel, and the read of
 the files. While the stop waits, the status reads `running` with
-`stopping: true`. The first read after the end gives the final state. A
-process that has not ended by then still reads `running`.
+`stopping: true`. The flag stays while the process runs, also after the
+wait ends and in a later run of the host. The first read after the end
+gives the final state. A process that has not ended by then still reads
+`running`.
 
 **The timeout takes the same path.** At the timeout, the table writes
 `timed_out` to `stop` and aborts the process's controller. A command that

@@ -174,6 +174,12 @@ the five tools.
    after a grace of 10 seconds. The grace goes to the backend in the
    options of `exec`. [Processes](../docs/processes.md#the-stop) states
    the contract. A grace for each call waits for its first caller.
+   Open: `dispose()` stops the processes of one agent one at a time, so
+   an agent with 4 processes that ignore `TERM` takes up to 60 seconds.
+   A process of this run needs no signal channel of the table, so a later
+   change aborts every such process of an agent at once, and keeps the
+   chain for adopted processes. **Condition:** a host whose shutdown
+   budget is shorter than that time, or a grace for each call.
 3. **The head and the tail in a result.** The result shows the first
    lines of the output beside the last ones. The first lines often hold
    the error that the last lines report.

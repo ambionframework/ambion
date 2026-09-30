@@ -249,9 +249,15 @@ async function signalGroup(
 /**
  * Stop the group once its ID is known: `SIGTERM`, then `SIGKILL` after
  * `grace` seconds when the command has not exited. A grace of 0 sends
- * `SIGKILL` at once. The channel closes `CLOSE_WAIT_MS` after the time of
- * the `SIGKILL`. The host holds the timer, so no channel stays open for the
- * grace.
+ * `SIGKILL` at once. The host holds the timer, so no channel stays open
+ * for the grace. The first signal goes to the group also after the exit:
+ * a deadline in the drain stops a child that holds the output. The
+ * `SIGKILL` after the grace goes only to a command that has not exited.
+ *
+ * The channel closes `CLOSE_WAIT_MS` after the time of the `SIGKILL`. The
+ * times count from the group ID line, which can come after the abort.
+ * Until the line comes, a fallback timer closes the channel after the grace
+ * and `CLOSE_WAIT_MS`.
  */
 function stopWhenAborted(
 	host: CommandHost,
@@ -264,21 +270,25 @@ function stopWhenAborted(
 	channel.once('exit', () => {
 		exited = true;
 	});
+	const closeIn = (ms: number) => setTimeout(() => channel.close(), ms).unref();
+	let fallback: NodeJS.Timeout | undefined;
+	const kill = (pgid: number) => {
+		void signalGroup(host, pgid, 'KILL');
+		closeIn(CLOSE_WAIT_MS);
+	};
 	const send = (pgid: number) => {
-		if (grace === 0) return void signalGroup(host, pgid, 'KILL');
+		clearTimeout(fallback);
+		if (grace === 0) return kill(pgid);
 		void signalGroup(host, pgid, 'TERM');
-		const kill = () => {
-			if (!exited) void signalGroup(host, pgid, 'KILL');
-		};
-		setTimeout(kill, grace * 1000).unref();
+		const later = () => (exited ? closeIn(CLOSE_WAIT_MS) : kill(pgid));
+		setTimeout(later, grace * 1000).unref();
 	};
 	const stop = () => {
-		const signal = () => {
+		if (stderr.pgid !== undefined) return send(stderr.pgid);
+		stderr.onPgid = () => {
 			if (stderr.pgid !== undefined) send(stderr.pgid);
 		};
-		if (stderr.pgid === undefined) stderr.onPgid = signal;
-		else signal();
-		setTimeout(() => channel.close(), grace * 1000 + CLOSE_WAIT_MS).unref();
+		fallback = closeIn(grace * 1000 + CLOSE_WAIT_MS);
 	};
 	if (deadline.signal.aborted) stop();
 	else deadline.signal.addEventListener('abort', stop, { once: true });

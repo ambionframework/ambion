@@ -15,10 +15,10 @@ and 5 seconds. On just-bash a stop still ends the command at once.
 exec options with a `grace` in seconds. `WorkspaceEnv.exec` takes it. The
 workstation sends the two signals for an abort with a grace, and refuses
 a grace outside 0 to 2,147,483 seconds. `ProcessStatus` gains `stopping`,
-which is `true` while a stop waits for the end. The workstation's command
-script adds `trap : TERM`. A channel that a signal ends now reports 128
-plus the signal number: before, `ssh2`'s `SIG` prefix gave 128. No
-journal body changes.
+which is `true` while a process that the table stopped still runs. The
+workstation's command script adds `trap : TERM`. A channel that a signal
+ends now reports 128 plus the signal number: before, `ssh2`'s `SIG`
+prefix gave 128. No journal body changes.
 
 **One rule records every tool call.** `workspaceTools` passes each tool of
 the bundle through one function, `audited`, when the workspace has an audit
