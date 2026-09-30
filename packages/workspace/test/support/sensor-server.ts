@@ -34,20 +34,43 @@ const within = {
 const allObservations = [early, within];
 
 export type SensorDefect =
-	'version' | 'observation-version' | 'digest' | 'span' | 'sample' | 'name' | 'unsupported-span';
+	| 'version'
+	| 'observation-version'
+	| 'digest'
+	| 'span'
+	| 'sample'
+	| 'name'
+	| 'unsupported-span'
+	| 'unavailable-span'
+	| 'dirty-source';
 
-export async function startSensorServer(defect?: SensorDefect): Promise<{
+export interface SensorServerOptions {
+	/** Wait at the request boundary so tests can cancel or exercise other tools. */
+	readonly beforeObserve?: (body: Record<string, unknown>) => Promise<void>;
+}
+
+export async function startSensorServer(
+	defect?: SensorDefect,
+	options: SensorServerOptions = {},
+): Promise<{
 	origin: string;
+	readonly observeCalls: number;
 	close(): Promise<void>;
 }> {
+	let observeCalls = 0;
 	let server: Server;
-	server = createServer((request, response) => void route(request, response, defect));
+	server = createServer(
+		(request, response) => void route(request, response, defect, options, () => observeCalls++),
+	);
 	await new Promise<void>((resolveListen) => server.listen(0, '127.0.0.1', resolveListen));
 	const address = server.address();
 	if (!address || typeof address === 'string')
 		throw new Error('Sensor fixture did not bind a TCP port.');
 	return {
 		origin: `http://127.0.0.1:${address.port}`,
+		get observeCalls() {
+			return observeCalls;
+		},
 		async close() {
 			await new Promise<void>((resolveClose, reject) => {
 				server.close((error) => (error ? reject(error) : resolveClose()));
@@ -56,14 +79,21 @@ export async function startSensorServer(defect?: SensorDefect): Promise<{
 	};
 }
 
-async function route(request: IncomingMessage, response: ServerResponse, defect?: SensorDefect) {
+async function route(
+	request: IncomingMessage,
+	response: ServerResponse,
+	defect: SensorDefect | undefined,
+	options: SensorServerOptions,
+	countObserve: () => void,
+) {
 	const url = new URL(request.url ?? '/', 'http://localhost');
 	if (request.method === 'GET' && url.pathname === '/') return sendIndex(response, defect);
 	if (request.method === 'GET' && url.pathname.startsWith('/files/')) {
 		return sendFile(response, url.pathname, defect);
 	}
 	if (request.method === 'POST' && url.pathname === '/bench/observe') {
-		return sendObservation(request, response, defect);
+		countObserve();
+		return sendObservation(request, response, defect, options.beforeObserve);
 	}
 	if (request.method === 'POST' && /\/observe$/.test(url.pathname)) {
 		return sendError(response, 404, 'unknown', 'Unknown sensor.');
@@ -74,7 +104,11 @@ async function route(request: IncomingMessage, response: ServerResponse, defect?
 function sendIndex(response: ServerResponse, defect?: SensorDefect) {
 	const index = {
 		api: defect === 'version' ? 2 : 1,
-		source: { repository: 'tests/sensor-fixture', commit: 'a'.repeat(40), dirty: false },
+		source: {
+			repository: 'tests/sensor-fixture',
+			commit: 'a'.repeat(40),
+			dirty: defect === 'dirty-source',
+		},
 		sensors: [
 			{
 				name: defect === 'name' ? 'wrong-name' : 'bench',
@@ -102,13 +136,17 @@ async function sendObservation(
 	request: IncomingMessage,
 	response: ServerResponse,
 	defect?: SensorDefect,
+	beforeObserve?: SensorServerOptions['beforeObserve'],
 ) {
 	const body = await readJson(request);
 	if (body.api !== 1) return sendError(response, 400, 'invalid', 'Wrong API.');
+	await beforeObserve?.(body);
 	if (isInvalidSpan(body))
 		return sendError(response, 400, 'invalid', 'The span is empty or reversed.');
 	if (body.span && defect === 'unsupported-span')
 		return json(response, 200, { api: 1, observations: [within] });
+	if (body.span && defect === 'unavailable-span')
+		return sendError(response, 422, 'unavailable', 'This fixture cannot serve the requested span.');
 	if (body.span && defect === 'span')
 		return json(response, 200, { api: 1, observations: [{ ...within, at: span.to }] });
 	if (body.span && defect === 'sample') return sendBadSamples(response);
