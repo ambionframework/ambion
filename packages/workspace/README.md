@@ -76,7 +76,9 @@ contract, and `gitConformance` and `objectConformance`, the cases a
 `./git` holds what every git backend shares, and it loads no git library.
 The name rules of a repository ID are `validName`, `namespaceOf`,
 `assertAgent`, `readOnly`, `writableBy`, `TEMPLATES`, and `SHARED`. `revisionOf` and
-`validRefName` read a branch, a tag, or a hash as a name alone. The registration helpers
+`validRefName` read a branch, a tag, or a hash as a name alone.
+`registerRepositories` holds every decision of registration, and a backend
+supplies its `RegistrationSteps`. The registration helpers
 are `filesOf`, `hashesOf`, `sameFiles`, and `changeTo`, with the
 `RepositoryRegistration` type. `@ambionframework/just-bash/git` holds a git
 backend that uses them. The root entry holds `fromDirectory` and the

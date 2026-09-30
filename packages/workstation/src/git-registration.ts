@@ -1,39 +1,25 @@
 /**
- * Repository registration on the git account: templates can refresh from
- * their source, while shared repositories are seeded once and then kept as
- * shared state. A crash leaves no partially published repository.
+ * The storage steps of registration on the git account.
+ * `registerRepositories` of the workspace holds the decisions and calls
+ * these steps. Each step runs a shell script on the server.
  *
- * For each template, in name order, registration takes the first case that
- * holds, and it compares the files by their blob hashes.
- *
- * 1. The template exists, and `git ls-tree -r` of its tip gives the blob
- *    hashes of the source. Nothing happens.
- * 2. The template exists, and the hashes differ. The backend writes the
- *    files into a staging folder over SFTP, commits them on the tip of
- *    `main` as `ambion`, and moves `main` to that commit. A fork is a clone,
- *    so a fork made before the update keeps its own objects and refs.
- * 3. The template does not exist. The backend writes the files into a
- *    staging folder over SFTP, commits them to a new bare repository on
- *    `main` as `ambion`, writes the description, installs a `pre-receive`
- *    hook that refuses every push, and renames the repository to
- *    `templates/<name>.git`.
+ * A write goes in three parts. The backend writes the files into a staging
+ * folder over SFTP. A script commits them as `ambion` to a bare repository.
+ * For a new repository, the script installs a `pre-receive` hook and
+ * renames the repository into its folder. The rename is the one step that
+ * publishes a repository. A template that changes takes a commit on the
+ * tip of `main`, and the move of `main` compares the old commit. A fork is
+ * a clone, so a fork made before the update keeps its own objects and refs.
  *
  * A commit adds every file with `--force`, so a `.gitignore` in the source
- * skips no file. Each case writes the description when it differs. The rename is the one
- * step that publishes a template, and the move of `main` compares the old
- * commit. A crash leaves a folder in `.staging`, and the sweep removes it.
- * When two host processes register one template at once, one rename or one
- * move wins, and each compares the template that landed.
+ * skips no file. The step that reads a repository writes its description
+ * when it differs. A crash leaves a folder in `.staging`, and the sweep
+ * removes it. When two host processes register one repository at once, one
+ * rename or one move wins, and each reads the repository that landed.
  */
 
 import { randomName, type SourceFiles } from '@ambionframework/workspace';
-import {
-	filesOf,
-	hashesOf,
-	type RepositoryRegistration,
-	sameFiles,
-	validName,
-} from '@ambionframework/workspace/git';
+import type { RegistrationSteps } from '@ambionframework/workspace/git';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type GitAccount, runIn, tagged } from './git-account.ts';
 import type { SshEnv } from './ssh-env.ts';
@@ -164,16 +150,6 @@ const SHARED_BUILD_SCRIPT = [
 	'',
 ].join('\n');
 
-/** Refuse a path that leaves the root of the template. */
-function checkPaths(name: string, files: SourceFiles): void {
-	for (const path of Object.keys(files)) {
-		const parts = path.split('/');
-		if (parts.some((part) => part === '' || part === '.' || part === '..' || part === '.git')) {
-			throw new Error(`The template '${name}' holds the path '${path}', which leaves its root.`);
-		}
-	}
-}
-
 /** Each blob of `git ls-tree -r -z` output, by path. */
 function blobsOf(listing: Buffer): ReadonlyMap<string, string> {
 	const blobs = new Map<string, string>();
@@ -212,12 +188,12 @@ async function writeFiles(env: SshEnv, folder: string, files: SourceFiles): Prom
 	}
 }
 
-/** Write the files of a template into a new folder in `.staging`, run `script` over it, and give its output. */
+/** Write `files` into a new folder in `.staging`, run `script` over it, and give its output. */
 async function stageAndRun(
 	account: GitAccount,
 	root: string,
 	name: string,
-	registration: RepositoryRegistration,
+	description: string | undefined,
 	files: SourceFiles,
 	script: string,
 ): Promise<string> {
@@ -228,51 +204,15 @@ async function stageAndRun(
 			AMBION_ROOT: root,
 			AMBION_STAGE: stage,
 			AMBION_NAME: name,
-			AMBION_DESCRIPTION: registration.description ?? '',
+			AMBION_DESCRIPTION: description ?? '',
 		});
 	});
 }
 
-async function registerOne(
-	account: GitAccount,
-	root: string,
-	name: string,
-	registration: RepositoryRegistration,
-): Promise<void> {
-	if (!validName(name)) throw new Error(`'${name}' is not a valid template name.`);
-	const files = await filesOf(registration);
-	checkPaths(name, files);
-	const wanted = hashesOf(files);
-	const tip = await tipOf(account, root, name, registration.description);
-	if (tip !== undefined && sameFiles(tip, wanted)) return;
-	const script = tip === undefined ? BUILD_SCRIPT : UPDATE_SCRIPT;
-	const output = await stageAndRun(account, root, name, registration, files, script);
-	const landed = await tipOf(account, root, name, registration.description);
-	if (landed === undefined)
-		throw new Error(`The template '${name}' is missing after its registration.`);
-	if (!sameFiles(landed, wanted)) throw new Error(notLanded(name, output));
-}
-
-/** The error of a registration whose template does not hold its source: the error of git, or another host. */
-function notLanded(name: string, output: string): string {
+/** The git refusal that a move of `main` printed, or `undefined` when the move succeeded. */
+function refusalOf(output: string): string | undefined {
 	const refused = tagged(output, 'AMBION_REFUSED')[0];
-	const cause =
-		refused === undefined
-			? 'Another host process can have registered other files.'
-			: `git update-ref failed: ${Buffer.from(refused, 'base64').toString('utf8').trim()}`;
-	return `The template '${name}' does not hold its source after its registration. ${cause}`;
-}
-
-/** Register every template, in name order. */
-export async function registerTemplates(
-	account: GitAccount,
-	root: string,
-	templates: Readonly<Record<string, RepositoryRegistration>>,
-): Promise<void> {
-	for (const name of Object.keys(templates).sort()) {
-		const registration = templates[name];
-		if (registration !== undefined) await registerOne(account, root, name, registration);
-	}
+	return refused === undefined ? undefined : Buffer.from(refused, 'base64').toString('utf8').trim();
 }
 
 async function sharedExists(
@@ -289,31 +229,25 @@ async function sharedExists(
 	return tagged(output, 'AMBION_SHARED_EXISTS').length > 0;
 }
 
-async function registerSharedOne(
-	account: GitAccount,
-	root: string,
-	name: string,
-	registration: RepositoryRegistration,
-): Promise<void> {
-	if (!validName(name)) throw new Error(`'${name}' is not a valid shared repository name.`);
-	// A published shared repo is durable shared state. Registration only
-	// updates its description and must not even read the configured source.
-	if (await sharedExists(account, root, name, registration.description)) return;
-	const files = await filesOf(registration);
-	checkPaths(name, files);
-	await stageAndRun(account, root, name, registration, files, SHARED_BUILD_SCRIPT);
-	if (!(await sharedExists(account, root, name, registration.description)))
-		throw new Error(`The shared repository '${name}' is missing after its registration.`);
-}
-
-/** Register shared repositories in name order. */
-export async function registerShared(
-	account: GitAccount,
-	root: string,
-	shared: Readonly<Record<string, RepositoryRegistration>>,
-): Promise<void> {
-	for (const name of Object.keys(shared).sort()) {
-		const registration = shared[name];
-		if (registration !== undefined) await registerSharedOne(account, root, name, registration);
-	}
+/** The storage steps of registration over the git account: shell scripts and a staging folder. */
+export function registrationSteps(account: GitAccount, root: string): RegistrationSteps {
+	return {
+		template: (name, description) => tipOf(account, root, name, description),
+		createTemplate: async (name, files, description) => {
+			await stageAndRun(account, root, name, description, files, BUILD_SCRIPT);
+		},
+		updateTemplate: async (name, files, description) => {
+			const output = await stageAndRun(account, root, name, description, files, UPDATE_SCRIPT);
+			const refusal = refusalOf(output);
+			if (refusal !== undefined) {
+				throw new Error(
+					`The template '${name}' did not move to its new source: git update-ref failed: ${refusal}`,
+				);
+			}
+		},
+		shared: (name, description) => sharedExists(account, root, name, description),
+		seedShared: async (name, files, description) => {
+			await stageAndRun(account, root, name, description, files, SHARED_BUILD_SCRIPT);
+		},
+	};
 }
