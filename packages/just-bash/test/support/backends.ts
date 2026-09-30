@@ -12,7 +12,10 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ConformanceBackend } from '@ambionframework/workspace/conformance';
+import type {
+	ConformanceHarness,
+	WorkspaceConformanceStore,
+} from '@ambionframework/workspace/conformance';
 import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { directoryBackend, memoryBackend } from '../../src/index.ts';
 
@@ -22,7 +25,7 @@ export async function tempDir(prefix: string) {
 	return { dir, dispose: () => rm(dir, { recursive: true, force: true }) };
 }
 
-export const backends: readonly ConformanceBackend[] = [
+export const backends: readonly ConformanceHarness<WorkspaceConformanceStore>[] = [
 	{
 		name: 'memory',
 		async open() {

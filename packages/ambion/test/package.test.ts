@@ -108,8 +108,10 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 	}
 });
 
-it('exports exactly the conformance suite and its in-process executor', () => {
+it('exports exactly the conformance suite, its shared parts, and its in-process executor', () => {
 	expect(Object.keys(conformance).sort()).toEqual([
+		'check',
+		'conformanceSuite',
 		'executorConformance',
 		'portConformance',
 		'speakOnce',

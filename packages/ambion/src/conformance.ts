@@ -12,17 +12,14 @@
  * A case is a name and a `run` that throws on failure. The suite needs no
  * test framework, so it runs in Node and in workerd alike.
  */
-import type { ConformanceCase } from '@ambionframework/journal/conformance';
-import { type RoomScript, type ScriptedRoom, scriptedRoom } from './conformance-room.ts';
 import {
+	type ConformanceCase,
+	type ConformanceHarness,
 	check,
-	claims,
-	leases,
-	operations,
-	pause,
-	released,
-	until,
-} from './conformance-support.ts';
+	conformanceSuite,
+} from '@ambionframework/journal/conformance';
+import { type RoomScript, type ScriptedRoom, scriptedRoom } from './conformance-room.ts';
+import { claims, leases, operations, pause, released, until } from './conformance-support.ts';
 import type { Executor, ExecutorActivation, ExecutorSession, Pass } from './execution/executor.ts';
 import type {
 	AgentPort,
@@ -39,7 +36,7 @@ export {
 	type ExecutorPlan,
 	executorConformance,
 } from './conformance-executor.ts';
-export type { ConformanceCase };
+export { type ConformanceCase, type ConformanceHarness, check, conformanceSuite };
 
 /** What an execution under test gives the suite. */
 export interface PortHarness {

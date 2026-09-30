@@ -882,11 +882,12 @@ identity of a push.
 ## Tests
 
 **`gitConformance(harness)` holds the cases of a `GitBackend`.** It lives
-in `@ambionframework/workspace/conformance`. A harness opens a store: one
-bash backend, and a factory that opens a git backend over the same
-repositories each time it is called. The suite knows no transport. Three
-cases ask a hook of the harness for a credential fact, and each hook takes
-the backend and the workspace that the case opened.
+in `@ambionframework/workspace/conformance`. A `GitConformanceBackend` is a
+`ConformanceHarness<GitConformanceStore>` with three credential hooks. Its
+`open()` returns a store: one bash backend, and a factory that opens a git
+backend over the same repositories each time it is called. The suite knows
+no transport. Three cases ask a hook of the harness for a credential fact,
+and each hook takes the backend and the workspace that the case opened.
 
 - `list` shows each template with its description, and each fork with its
   source, its default branch, and its URL. `list` with a namespace shows

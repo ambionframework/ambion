@@ -29,17 +29,18 @@ and the order of the dependencies together.
 
 ## Done
 
-**Six reductions have landed.** `pnpm check` passes on them, and the
+**Seven reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
-| Change                                 | Concepts removed                                                         | Files                                 |
-| -------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------- |
-| One shape of a say that waits          | `ScheduledSay`, `pendingSay()`                                           | `room/scheduled.ts`, `scheduling.ts`  |
-| One read of the pending says and waits | `room.pendingFor()`, `room.scheduled()`, `RoomObject.scheduledSays()`    | `room-host/room.ts`, `room-object.ts` |
-| One acquisition of a room name         | The second copy of build, register, start, and release on failure        | `room.ts` (`acquire`)                 |
-| One call defines an executor family    | The `*Build` closures, `localExecution` in adapters, two option aliases  | `execution/route.ts`, `compose.ts` ×3 |
-| One wrapper audits every tool (W3)     | `recordedOnShell`, the audit code of `bindTool`, the `audit` options     | `tools.ts`, `workspace.ts`            |
-| One shape holds each capability (W2)   | `sqlPart`, `gitPart`, `sensorTools`, `workspaceReminder`, the name lists | `capability.ts`, `workspace.ts`       |
+| Change                                      | Concepts removed                                                         | Files                                    |
+| ------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------- |
+| One shape of a say that waits               | `ScheduledSay`, `pendingSay()`                                           | `room/scheduled.ts`, `scheduling.ts`     |
+| One read of the pending says and waits      | `room.pendingFor()`, `room.scheduled()`, `RoomObject.scheduledSays()`    | `room-host/room.ts`, `room-object.ts`    |
+| One acquisition of a room name              | The second copy of build, register, start, and release on failure        | `room.ts` (`acquire`)                    |
+| One call defines an executor family         | The `*Build` closures, `localExecution` in adapters, two option aliases  | `execution/route.ts`, `compose.ts` ×3    |
+| One wrapper audits every tool (W3)          | `recordedOnShell`, the audit code of `bindTool`, the `audit` options     | `tools.ts`, `workspace.ts`               |
+| One shape holds each capability (W2)        | `sqlPart`, `gitPart`, `sensorTools`, `workspaceReminder`, the name lists | `capability.ts`, `workspace.ts`          |
+| One harness for the conformance suites (W4) | Four harness types, six `check` copies, the hand-written case runners    | `journal/src/conformance.ts`, the suites |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -133,18 +134,18 @@ definition runs on different executions in
 
 ## The workspace: `packages/workspace`
 
-| ID  | Finding                                                         | Evidence                                                                | Removes | Conf.  | Rank |
-| --- | --------------------------------------------------------------- | ----------------------------------------------------------------------- | ------- | ------ | ---- |
-| W1  | The workspace port is Pi's type                                 | 36 source files import `pi-agent-core`; `index.ts:34` re-exports it     | 1       | High   | 3    |
-| W2  | Each capability repeats one pattern (done)                      | `sqlPart`, `gitPart`, `sensorTools`; hand-kept tool name lists          | 6       | High   | 18   |
-| W3  | Two wrappers audit a tool, under two placement rules (done)     | `bindTool`, `recordedOnShell`; 13 tools write their name twice          | 2       | High   | 6    |
-| W4  | Seven conformance suites each have a `check` and a harness type | Five `check` copies; the suites already share `ConformanceCase`         | 3       | High   | 9    |
-| W5  | The sensor path validates at every layer                        | The client and the retention both check the schema and the digest       | 2       | Medium | 4    |
-| W6  | The sensor connections keep a second liveness table             | `endedProcesses` (`sensor-connections.ts:70`); `hostList`, `hostCancel` | 3       | Medium | 6    |
-| W7  | Two owners close the sensor connections (kept)                  | `workspace.ts:364` and `workspace.ts:517`                               | 0       | High   | —    |
-| W8  | The backends label themselves under four names                  | `database`, `server`, `store`, `hostname`                               | 2       | Medium | 4    |
-| W9  | Refs, logs, and constants repeat                                | See the list below                                                      | 5       | High   | 15   |
-| W10 | `ProcessKind` has one value                                     | `process-files.ts:23`; backlog D5 holds the question                    | 1       | Medium | 2    |
+| ID  | Finding                                                                | Evidence                                                                | Removes | Conf.  | Rank |
+| --- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------- | ------ | ---- |
+| W1  | The workspace port is Pi's type                                        | 36 source files import `pi-agent-core`; `index.ts:34` re-exports it     | 1       | High   | 3    |
+| W2  | Each capability repeats one pattern (done)                             | `sqlPart`, `gitPart`, `sensorTools`; hand-kept tool name lists          | 6       | High   | 18   |
+| W3  | Two wrappers audit a tool, under two placement rules (done)            | `bindTool`, `recordedOnShell`; 13 tools write their name twice          | 2       | High   | 6    |
+| W4  | Seven conformance suites each have a `check` and a harness type (done) | Five `check` copies; the suites already share `ConformanceCase`         | 3       | High   | 9    |
+| W5  | The sensor path validates at every layer                               | The client and the retention both check the schema and the digest       | 2       | Medium | 4    |
+| W6  | The sensor connections keep a second liveness table                    | `endedProcesses` (`sensor-connections.ts:70`); `hostList`, `hostCancel` | 3       | Medium | 6    |
+| W7  | Two owners close the sensor connections (kept)                         | `workspace.ts:364` and `workspace.ts:517`                               | 0       | High   | —    |
+| W8  | The backends label themselves under four names                         | `database`, `server`, `store`, `hostname`                               | 2       | Medium | 4    |
+| W9  | Refs, logs, and constants repeat                                       | See the list below                                                      | 5       | High   | 15   |
+| W10 | `ProcessKind` has one value                                            | `process-files.ts:23`; backlog D5 holds the question                    | 1       | Medium | 2    |
 
 **W1 is larger than the re-export.** The workspace also takes its
 environment port, its file errors, and its shell results from Pi. The
@@ -258,7 +259,7 @@ item is one commit that updates the export snapshot and the changelog.
 CLAUDE.md requires for a change that merges tests.
 
 1. X1: one name rule, exported by the core.
-2. W4: one harness type and one `check`. W3 and W2 are done.
+2. W3, W2, and W4 are done.
 3. B1 and B3: the registration step and the file adapter.
 4. E1, E2, E3: the steer, the failure, and the executor level.
 5. K2 and K16: one runtime state and one room host view.

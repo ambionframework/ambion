@@ -17,7 +17,12 @@
  * ```
  */
 
-import type { ConformanceCase } from '@ambionframework/ambion/conformance';
+import {
+	type ConformanceCase,
+	type ConformanceHarness,
+	check,
+	conformanceSuite,
+} from '@ambionframework/ambion/conformance';
 import {
 	BACKGROUND_CONTEXT,
 	ExecutionError,
@@ -37,31 +42,23 @@ export type {
 	GitConformanceTemplate,
 } from './git-conformance.ts';
 export { gitConformance } from './git-conformance.ts';
-export type { ObjectConformanceBackend, ObjectConformanceStore } from './object-conformance.ts';
+export type { ObjectConformanceStore } from './object-conformance.ts';
 export { objectConformance } from './object-conformance.ts';
 export type {
 	SensorConformanceFixture,
-	SensorConformanceHarness,
 	SensorConformanceProbe,
 	SensorConformanceReply,
 } from './sensor-conformance.ts';
 export { sensorConformance } from './sensor-conformance.ts';
-export type { ConformanceCase };
+export { type ConformanceCase, type ConformanceHarness, check, conformanceSuite };
 
-/**
- * A backend under test. `open` runs inside every case, so a directory
- * backend can mint its own temporary root and clean it up after.
- */
-export interface ConformanceBackend {
-	readonly name: string;
-	open(): Promise<{ backend: BashBackend; dispose(): Promise<void> }>;
+/** A bash backend that a case connects to, and how the case releases it. */
+export interface WorkspaceConformanceStore {
+	readonly backend: BashBackend;
+	dispose(): Promise<void>;
 }
 
 const ctx = BACKGROUND_CONTEXT;
-
-function check(condition: boolean, what: string): void {
-	if (!condition) throw new Error(what);
-}
 
 // -- the cases ----------------------------------------------------------------
 
@@ -206,25 +203,28 @@ const CASES: readonly [string, Body][] = [
 	['creates temp files and directories under /tmp with distinct names', temporaryNames],
 ];
 
-/** Connects one agent through `harness`, runs `body`, and cleans up. */
-async function runCase(harness: ConformanceBackend, body: Body): Promise<void> {
-	const { backend, dispose } = await harness.open();
-	try {
+/** Connects one agent to the backend of the store, runs `body`, and cleans the agent up. */
+const connected =
+	(body: Body) =>
+	async ({ backend }: WorkspaceConformanceStore): Promise<void> => {
 		const env = await backend.connect({ name: 'conformance' });
 		try {
 			await body(env);
 		} finally {
 			await env.cleanup();
 		}
-	} finally {
-		await dispose();
-	}
-}
+	};
 
 /**
  * The cases every `BashBackend` must pass. The order is stable and the
- * names are the contract.
+ * names are the contract. `open` runs inside every case, so a directory
+ * backend can mint its own temporary root and clean it up after.
  */
-export function workspaceConformance(harness: ConformanceBackend): readonly ConformanceCase[] {
-	return CASES.map(([name, body]) => ({ name, run: () => runCase(harness, body) }));
+export function workspaceConformance(
+	harness: ConformanceHarness<WorkspaceConformanceStore>,
+): readonly ConformanceCase[] {
+	return conformanceSuite(
+		harness,
+		CASES.map(([name, body]) => [name, connected(body)] as const),
+	);
 }

@@ -1,6 +1,7 @@
-import type { SensorConformanceHarness } from '@ambionframework/workspace/conformance';
 import {
+	type ConformanceHarness,
 	type SensorConformanceFixture,
+	type SensorConformanceProbe,
 	sensorConformance,
 } from '@ambionframework/workspace/conformance';
 
@@ -61,7 +62,7 @@ export function templateSensorFixture(
 	};
 }
 
-export function templateSensorHarness(origin: string): SensorConformanceHarness {
+export function templateSensorHarness(origin: string): ConformanceHarness<SensorConformanceProbe> {
 	return {
 		name: 'landed sensor-server template',
 		async open() {

@@ -505,20 +505,24 @@ has mode `0600`, and each temporary directory has mode `0700`.
 
 ## Tests
 
-**Both tiers run `workspaceConformance`.** A `ConformanceBackend` harness
-opens a fresh `workstationBackend` and disposes of it. The cases check the
-`ExecutionEnv` rules that the file tools and the process tools need. The scripted harness
+**Both tiers run `workspaceConformance`.** A
+`ConformanceHarness<WorkspaceConformanceStore>` opens a fresh
+`workstationBackend` and disposes of it. The cases check the `ExecutionEnv`
+rules that the file tools and the process tools need. The scripted harness
 starts an `ssh2` server for each case
 (`packages/workstation/test/conformance.test.ts`).
 
 ```ts
-import type { ConformanceBackend } from '@ambionframework/workspace/conformance';
+import type {
+  ConformanceHarness,
+  WorkspaceConformanceStore,
+} from '@ambionframework/workspace/conformance';
 import { workspaceConformance } from '@ambionframework/workspace/conformance';
 import { workstationBackend } from '@ambionframework/workstation';
 import { describe, it } from 'vitest';
 import { startSshServer } from './support/server.ts';
 
-const harness: ConformanceBackend = {
+const harness: ConformanceHarness<WorkspaceConformanceStore> = {
   name: 'workstation',
   async open() {
     const server = await startSshServer(['conformance']);

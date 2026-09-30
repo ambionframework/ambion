@@ -14,7 +14,8 @@ import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { backends, tempDir } from '../../just-bash/test/support/backends.ts';
 import type { BashBackend } from '../src/backend.ts';
 import {
-	type ObjectConformanceBackend,
+	type ConformanceHarness,
+	type ObjectConformanceStore,
 	objectConformance,
 	workspaceConformance,
 } from '../src/conformance.ts';
@@ -45,7 +46,7 @@ function fileStore(bash: () => BashBackend) {
 	return open;
 }
 
-const objectStores: ObjectConformanceBackend[] = [
+const objectStores: ConformanceHarness<ObjectConformanceStore>[] = [
 	{
 		name: 'file store on memory',
 		open: async () => {

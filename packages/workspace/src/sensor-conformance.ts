@@ -1,7 +1,12 @@
 /** The cases every sensor server must pass. The harness supplies raw replies. */
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import type { ConformanceCase } from '@ambionframework/ambion/conformance';
+import {
+	type ConformanceCase,
+	type ConformanceHarness,
+	check,
+	conformanceSuite,
+} from '@ambionframework/ambion/conformance';
 import { Check } from 'typebox/value';
 import {
 	isValidObserveRequest,
@@ -26,12 +31,6 @@ export interface SensorConformanceProbe {
 	dispose(): Promise<void>;
 }
 
-/** Opens one probe per case. Network and process details belong to the harness. */
-export interface SensorConformanceHarness {
-	readonly name: string;
-	open(): Promise<SensorConformanceProbe>;
-}
-
 /** Expected wire evidence supplied independently from the server under test. */
 export interface SensorConformanceFixture {
 	readonly span: SensorSpan;
@@ -45,10 +44,6 @@ export interface SensorConformanceFixture {
 }
 
 type Body = (probe: SensorConformanceProbe) => Promise<void>;
-
-function check(condition: boolean, message: string): void {
-	if (!condition) throw new Error(message);
-}
 
 function checkJson(reply: SensorConformanceReply, status: number, what: string): unknown {
 	check(reply.status === status, `${what} returned HTTP ${reply.status}; expected ${status}.`);
@@ -301,18 +296,12 @@ async function filesCase(probe: SensorConformanceProbe, fixture: SensorConforman
 	}
 }
 
-async function runCase(harness: SensorConformanceHarness, body: Body): Promise<void> {
-	const probe = await harness.open();
-	try {
-		await body(probe);
-	} finally {
-		await probe.dispose();
-	}
-}
-
-/** Returns stable cases for the expected fixtures in `fixture`. */
+/**
+ * Returns stable cases for the expected fixtures in `fixture`. Each case
+ * opens one probe. Network and process details belong to the harness.
+ */
 export function sensorConformance(
-	harness: SensorConformanceHarness,
+	harness: ConformanceHarness<SensorConformanceProbe>,
 	fixture: SensorConformanceFixture,
 ): readonly ConformanceCase[] {
 	check(
@@ -358,8 +347,5 @@ export function sensorConformance(
 		]);
 	}
 	cases.push(['GET /files verifies every expected digest', (probe) => filesCase(probe, fixture)]);
-	return cases.map(([name, body]) => ({
-		name,
-		run: () => runCase(harness, body),
-	}));
+	return conformanceSuite(harness, cases);
 }
