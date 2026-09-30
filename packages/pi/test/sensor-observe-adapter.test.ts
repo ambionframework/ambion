@@ -4,8 +4,8 @@ import { expect, it, onTestFinished } from 'vitest';
 import { andrei, roomName, waitForRoom } from '../../ambion/test/support/room.ts';
 import { callTool, quiet, scripted } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
-import { openSensorObserveRoom } from '../../workspace/test/support/sensor-observe-room.ts';
 import { frameBytes } from '../../workspace/test/support/sensor-blobs.ts';
+import { openSensorObserveRoom } from '../../workspace/test/support/sensor-observe-room.ts';
 import { pi, piExecution } from '../src/index.ts';
 
 it.each([

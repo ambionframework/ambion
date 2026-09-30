@@ -47,6 +47,8 @@ export type SensorDefect =
 export interface SensorServerOptions {
 	/** Wait at the request boundary so tests can cancel or exercise other tools. */
 	readonly beforeObserve?: (body: Record<string, unknown>) => Promise<void>;
+	/** Wait at a file boundary so tests can cancel before retention starts. */
+	readonly beforeFile?: (digest: string) => Promise<void>;
 }
 
 export async function startSensorServer(
@@ -89,6 +91,7 @@ async function route(
 	const url = new URL(request.url ?? '/', 'http://localhost');
 	if (request.method === 'GET' && url.pathname === '/') return sendIndex(response, defect);
 	if (request.method === 'GET' && url.pathname.startsWith('/files/')) {
+		await options.beforeFile?.(url.pathname.slice('/files/'.length));
 		return sendFile(response, url.pathname, defect);
 	}
 	if (request.method === 'POST' && url.pathname === '/bench/observe') {

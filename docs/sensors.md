@@ -507,6 +507,11 @@ interface ObserveInput {
    generated filenames; source filenames stay in the observations as metadata.
 6. Return the rendered result, export paths, and manifest snapshot ref.
 
+The workspace rechecks that the same connection is still registered and its
+process is running after it verifies every response file and before retention
+starts. Retention can finish after a later process stop or connection change
+because the complete response bytes already passed verification.
+
 **The existing snapshot machinery owns hashing and storage.** An
 internal helper can store the received buffers directly. It must retain
 the received bytes, even if a process later edits an exported file.

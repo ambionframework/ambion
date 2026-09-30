@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { callTool, quiet } from '../../ambion/test/support/scripted.ts';
 import { DEFAULT_AUDIT_LOG } from '../src/audit.ts';
 import type { ObjectBackend } from '../src/object-backend.ts';
+import { toolOf } from './support/backends.ts';
 import { agent, run, toolResults } from './support/room.ts';
 import { sensorFixture } from './support/sensor-fixture.ts';
 import {
@@ -308,6 +309,106 @@ describe('workspace observe integration', () => {
 		}
 	});
 
+	it('refuses an observation when its process ends before the response is verified', async () => {
+		let enterRequest!: () => void;
+		let releaseRequest!: () => void;
+		const entered = new Promise<void>((resolve) => (enterRequest = resolve));
+		const gate = new Promise<void>((resolve) => (releaseRequest = resolve));
+		const rig = await openSensorObserveRoom({
+			server: {
+				async beforeObserve() {
+					enterRequest();
+					await gate;
+				},
+			},
+		});
+		try {
+			const observation = rig.observe.invoke({ sensor: 'bench-one/bench' }, rig.observer);
+			await entered;
+			await rig.site.processes.cancel(rig.process);
+			releaseRequest();
+			await expect(observation).rejects.toThrow(/ended or its connection changed before/i);
+			expect(rig.observeCalls).toBe(1);
+			const exports = await rig.site.use({ name: 'observer' }, (env) =>
+				env.exists('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
+			);
+			expect(exports).toMatchObject({ ok: true, value: false });
+		} finally {
+			releaseRequest();
+			await rig.close();
+		}
+	});
+
+	it('refuses an observation when its process ends during a blocked file fetch', async () => {
+		let enterFile!: () => void;
+		let releaseFile!: () => void;
+		const entered = new Promise<void>((resolve) => (enterFile = resolve));
+		const gate = new Promise<void>((resolve) => (releaseFile = resolve));
+		const rig = await openSensorObserveRoom({
+			server: {
+				async beforeFile() {
+					enterFile();
+					await gate;
+				},
+			},
+		});
+		try {
+			const observation = rig.observe.invoke({ sensor: 'bench-one/bench' }, rig.observer);
+			await entered;
+			await rig.site.processes.cancel(rig.process);
+			releaseFile();
+			await expect(observation).rejects.toThrow(/ended or its connection changed before/i);
+			expect(rig.observeCalls).toBe(1);
+			const exports = await rig.site.use({ name: 'observer' }, (env) =>
+				env.exists('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
+			);
+			expect(exports).toMatchObject({ ok: true, value: false });
+		} finally {
+			releaseFile();
+			await rig.close();
+		}
+	});
+
+	it('refuses an observation when its connection is replaced while the request is in flight', async () => {
+		let enterRequest!: () => void;
+		let releaseRequest!: () => void;
+		const entered = new Promise<void>((resolve) => (enterRequest = resolve));
+		const gate = new Promise<void>((resolve) => (releaseRequest = resolve));
+		const rig = await openSensorObserveRoom({
+			server: {
+				async beforeObserve() {
+					enterRequest();
+					await gate;
+				},
+			},
+		});
+		try {
+			const observation = rig.observe.invoke({ sensor: 'bench-one/bench' }, rig.observer);
+			await entered;
+			await rig.site.processes.cancel(rig.process);
+			const started = await toolOf(rig.site, 'bash').invoke(
+				{ command: 'sleep 30', wait: 0 },
+				rig.owner,
+			);
+			if (typeof started === 'string') throw new Error('The bash tool did not return details.');
+			const replacement = (started.details as { process: { handle: string } }).process.handle;
+			await toolOf(rig.site, 'connect').invoke(
+				{ name: 'bench-one', process: replacement, port: rig.port },
+				rig.owner,
+			);
+			releaseRequest();
+			await expect(observation).rejects.toThrow(/ended or its connection changed before/i);
+			expect(rig.observeCalls).toBe(1);
+			const exports = await rig.site.use({ name: 'observer' }, (env) =>
+				env.exists('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
+			);
+			expect(exports).toMatchObject({ ok: true, value: false });
+		} finally {
+			releaseRequest();
+			await rig.close();
+		}
+	});
+
 	it('propagates cancellation without replay or partially retained exports', async () => {
 		let enterRequest!: () => void;
 		let releaseRequest!: () => void;
@@ -338,6 +439,40 @@ describe('workspace observe integration', () => {
 			expect(exports).toMatchObject({ ok: true, value: false });
 		} finally {
 			releaseRequest();
+			await rig.close();
+		}
+	});
+
+	it('propagates cancellation during file fetch without retention or replay', async () => {
+		let enterFile!: () => void;
+		let releaseFile!: () => void;
+		const entered = new Promise<void>((resolve) => (enterFile = resolve));
+		const gate = new Promise<void>((resolve) => (releaseFile = resolve));
+		const rig = await openSensorObserveRoom({
+			server: {
+				async beforeFile() {
+					enterFile();
+					await gate;
+				},
+			},
+		});
+		const controller = new AbortController();
+		try {
+			const operation = rig.observe.invoke(
+				{ sensor: 'bench-one/bench' },
+				{ ...rig.observer, signal: controller.signal },
+			);
+			await entered;
+			controller.abort(new Error('stop file fetch'));
+			await expect(operation).rejects.toThrow(/stop file fetch|abort/i);
+			releaseFile();
+			expect(rig.observeCalls).toBe(1);
+			const exports = await rig.site.use({ name: 'observer' }, (env) =>
+				env.exists('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
+			);
+			expect(exports).toMatchObject({ ok: true, value: false });
+		} finally {
+			releaseFile();
 			await rig.close();
 		}
 	});

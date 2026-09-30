@@ -3,14 +3,14 @@
  * fixture. Tests may invoke the tool directly or place its bundle in a room.
  */
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
+import { DEFAULT_AUDIT_LOG } from '../../src/audit.ts';
 import type { BashBackend, WorkspacePort, WorkspacePorts } from '../../src/backend.ts';
+import { openWorkspace } from '../../src/index.ts';
 import type { ObjectBackend } from '../../src/object-backend.ts';
 import type { Workspace } from '../../src/workspace.ts';
-import { DEFAULT_AUDIT_LOG } from '../../src/audit.ts';
-import { openWorkspace } from '../../src/index.ts';
 import { callAs, toolOf, wrapped } from './backends.ts';
 import { fileBytes, fileDigest, frameBytes, frameDigest } from './sensor-blobs.ts';
-import { startSensorServer, type SensorDefect, type SensorServerOptions } from './sensor-server.ts';
+import { type SensorDefect, type SensorServerOptions, startSensorServer } from './sensor-server.ts';
 
 export interface SensorObserveRoom {
 	/** Alias for consumers that name the workspace `site`. */

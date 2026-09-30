@@ -151,13 +151,15 @@ resources behind.
 - [x] **3.** Retain received evidence through snapshots. (SN34)
 - [x] **4.** The observe tool and text-only rendering. Needs 1 and 3. (SN6, SN8)
 
-**Evidence:** focused workspace acceptance passes eight cases. A real room
+**Evidence:** focused workspace acceptance passes twelve cases. A real room
 observes numeric, text, frame, and file parts, cites the manifest ref, and
 records it in the audit result. A separate cross-agent restore case stops the
 fixture server before restoring the manifest and exact frame and file bytes.
 Other cases cover supported and unavailable spans, image paths and fixed
-schema, continued shell work while HTTP is blocked, cancellation, and
-retention failure without a replay.
+schema, continued shell work while HTTP is blocked, process end before
+verification and during file fetch, connection replacement during an in-flight
+request, cancellation during observation and file fetch, and retention failure
+without a replay.
 Manifest timestamps and series boundaries remain exact. Adapter checks pass
 for Pi (2/2) and Claude (1/1) image-delivery fixtures; Pi also checks
 text-only output. Workspace checks separately verify text-only paths and

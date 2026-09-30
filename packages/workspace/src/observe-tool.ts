@@ -6,16 +6,16 @@ import { type Static, Type } from 'typebox';
 import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
 import type { WorkspaceResource } from './resource.ts';
-import type { RegisteredSensorConnection, SensorConnections } from './sensor-connections.ts';
 import type { SensorClient } from './sensor-client.ts';
+import type { RegisteredSensorConnection, SensorConnections } from './sensor-connections.ts';
 import { retainSensorObservation, type SensorRetentionMetadata } from './sensor-retention.ts';
-import type { SnapshotStore } from './snapshots.ts';
 import {
-	SensorSpanSchema,
 	type ObserveRequest,
 	type ObserveResponse,
 	type SensorPart,
+	SensorSpanSchema,
 } from './sensors.ts';
+import type { SnapshotStore } from './snapshots.ts';
 import { recordedOnShell } from './tools.ts';
 
 const observeSchema = Type.Object(
@@ -93,6 +93,7 @@ async function executeObserve(
 	const metadata = retentionMetadata(params.sensor, connection.process.handle, connection, request);
 	const response = await client.observe(sensorName, request, ctx.signal);
 	const received = await receiveFiles(response, client, ctx.signal);
+	await assertConnectionActive(options.connections, params.sensor, connection, ctx.signal);
 	const retained = await retainSensorObservation(
 		options.store,
 		ctx.agent,
@@ -102,6 +103,19 @@ async function executeObserve(
 		ctx.signal,
 	);
 	return renderResult(metadata, hostname, response, received, retained, options.images !== false);
+}
+
+async function assertConnectionActive(
+	connections: SensorConnections,
+	sensor: string,
+	started: RegisteredSensorConnection,
+	signal?: AbortSignal,
+): Promise<void> {
+	const current = await connections.get(sensor, signal);
+	if (current !== started)
+		throw new Error(
+			`Sensor process '${started.process.handle}' ended or its connection changed before its observation was verified.`,
+		);
 }
 
 function assertSpanAllowed(
