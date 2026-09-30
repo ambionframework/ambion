@@ -65,8 +65,9 @@ truth. See [Sensors](docs/sensors.md).
 command drives a device and carries its own deadline. A stop sends
 `SIGTERM`, waits for a grace, then sends `SIGKILL`. Exit 0 means the world
 is safe, and an optional `finally` runs after an unclean end. The command
-logs JSON lines, and the workspace folds them into a status. The agent
-chooses the feedback and confirms convergence from an independent sensor.
+logs JSON lines, and the workspace folds them into a status. The command
+reads its own instruments, and the agent confirms convergence through a
+sensor.
 No package implements actuators yet. See [Actuators](docs/actuators.md).
 
 **The six capabilities compose while the application runs.** Repositories

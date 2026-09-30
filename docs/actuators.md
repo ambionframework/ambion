@@ -15,9 +15,14 @@ stop that lets the command reach a safe state, a rule for what its exit
 code means, and a structured log that the workspace folds into a status.
 
 **The primary job of the agent is to establish a control loop.** The
-command is the controller. The agent chooses the feedback that closes the
-loop, places the loop where its latency fits, and writes the command. It
-then verifies convergence from an independent source of feedback.
+command is the controller. The agent writes the command with the feedback
+that closes the loop, and places the loop where its latency fits. It then
+verifies convergence through a sensor of its own.
+
+**The command owns its inputs.** Its instruments, its feedback, its
+target, and its configuration live inside the command: its code, its
+arguments, and its files. `actuate` passes no input to the actuator.
+[Sensors](sensors.md) serve agents, and no command reads one.
 
 **The design goal is convergence within guardrails.** The command drives
 the world toward a desired state. The stop contract, the `finally`
@@ -40,7 +45,7 @@ actuate({
 
 | Parameter | Default   | Bounds                     | Meaning                                                    |
 | --------- | --------- | -------------------------- | ---------------------------------------------------------- |
-| `command` | None      | As `bash`                  | The controller: it acts, prints, logs, and exits           |
+| `command` | None      | As `bash`                  | The controller, with every input that it reads             |
 | `grace`   | None      | 1 to 300 s                 | The time from `SIGTERM` to `SIGKILL`                       |
 | `finally` | None      | As `bash`; runs up to 60 s | The command that makes the world safe after an unclean end |
 | `name`    | None      | As `bash`                  | A label for the process                                    |
@@ -50,6 +55,12 @@ actuate({
 **`grace` has no default.** Only the author of the command knows how long
 the device needs. A heater cuts its power in milliseconds. A valve can
 need 20 seconds to close.
+
+**Every other parameter controls the process.** `grace`, `finally`,
+`timeout`, and `wait` govern the life of the command. None carries a
+target, a reading, or a device address. The workspace passes `command` to
+the shell and reads nothing in it. A new target is a new command, or a
+file that the command reads.
 
 **`actuate` adds no new process tool.** `status`, `wait`, `cancel`, and
 `ps` take an `act-` handle as they take a `bash-` handle. The reminder,
@@ -71,46 +82,67 @@ flowchart LR
   agent -- writes and starts --> command[Command: the controller]
   command -- drive --> device[Device]
   device -- flow --> stock[(Stock in the world)]
-  stock --> feedback[Feedback]
-  feedback -- measurement --> command
+  stock --> instrument[Instrument]
+  instrument -- internal feedback --> command
   command -- events.jsonl --> fold[Workspace: the fold]
   fold -- status, reminder --> agent
-  stock --> independent[Independent sensor]
-  independent -- observe --> agent
+  stock --> sensor[Sensor server]
+  sensor -- observe --> agent
 ```
 
-**The command closes the fast loop.** It reads its feedback, drives the
+**The command closes the fast loop.** It reads its instrument, drives the
 device, and repeats at the period that the plant needs. The agent closes
-the slow loop. It chooses the feedback, sets the desired state in the
-command, reads the fold, and confirms the result.
+the slow loop. It writes the command, reads the fold, observes its
+sensors, and revises the command.
 
-### Choose the feedback
+### Two paths of feedback
+
+**The loop has two paths of feedback, and they do not meet.**
+
+| Path              | Reader      | Carrier                                   | Purpose                                    |
+| ----------------- | ----------- | ----------------------------------------- | ------------------------------------------ |
+| Internal feedback | The command | Its own driver or instrument, in process  | The control law, at the period of the loop |
+| Sensor            | The agent   | A sensor server, `connect`, and `observe` | Confirmation, evidence, and revision       |
+
+**A sensor is not an input of a command.** A command that read a sensor
+through the workspace would put the host inside its loop. The loop would
+then take the latency of SSH forwarding. It would also stop when a host
+run ends, because a connection lasts for one host run. The command reads
+its instrument directly, and it keeps running while no host runs.
+
+**One instrument can serve both paths.** A command and a sensor server
+that need the same instrument share it through the lab's own means, such
+as a driver that serves several readers. The workspace adds no path
+between them. For a safety limit, the lab gives the sensor its own
+instrument.
+
+### Choose the internal feedback
 
 **A loop converges on the value that its feedback measures.** A heater
 loop on the heater's own power converges on a power. A heater loop on the
 bath thermometer converges on the bath temperature. Only the second one
 serves a goal that names the bath.
 
-**An appropriate source of feedback meets five conditions.**
+**Appropriate internal feedback meets five conditions.**
 
 1. It measures the stock that the goal names.
 2. It samples several times in each time constant of the plant.
 3. Its latency is short against the period of the loop.
 4. Its resolution and its noise are small against the tolerance.
-5. For a safety limit, it is independent of the loop's own feedback.
+5. For a safety limit, a second instrument checks it.
 
 **The event log is the command's claim.** The agent confirms a claim of
-`reached` through a second source: a sensor that it observes, or a
-command of its own through `bash`.
+`reached` through a sensor that it observes, or through a command of its
+own that reads an instrument.
 
 ### Place the loop by its latency
 
-| Tier            | Loop latency                 | What the tier closes                                        | Real-time class                        |
-| --------------- | ---------------------------- | ----------------------------------------------------------- | -------------------------------------- |
-| Device          | Microseconds to milliseconds | Interlocks, current limits, the watchdog                    | Hard real time                         |
-| Command         | Milliseconds to seconds      | The control law on the feedback                             | Soft real time, on the workstation     |
-| Agent           | Tens of seconds to hours     | The feedback, the desired state, the command, its revisions | None: an activation or a scheduled say |
-| Person and host | Hours and longer             | The goals and the account permissions                       | None                                   |
+| Tier            | Loop latency                 | What the tier closes                                       | Real-time class                        |
+| --------------- | ---------------------------- | ---------------------------------------------------------- | -------------------------------------- |
+| Device          | Microseconds to milliseconds | Interlocks, current limits, the watchdog                   | Hard real time                         |
+| Command         | Milliseconds to seconds      | The control law on its internal feedback                   | Soft real time, on the workstation     |
+| Agent           | Tens of seconds to hours     | The command, its revisions, and the checks through sensors | None: an activation or a scheduled say |
+| Person and host | Hours and longer             | The goals and the account permissions                      | None                                   |
 
 **Close each loop at a tier whose latency is small against the plant.** A
 common engineering rule sets the period of the loop at one tenth of the
@@ -125,13 +157,13 @@ so a hold that ends and a hold that hangs read differently.
 
 ### The traps
 
-| Trap                   | How it shows in a lab                                            | The rule that answers it                                         |
-| ---------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
-| The wrong feedback     | A loop on heater power reports success while the bath stays cold | The agent chooses the feedback and confirms from a second source |
-| Oscillation from delay | An agent switches a pump at each activation                      | The command closes the fast loop                                 |
-| Policy resistance      | Two commands drive one heater to 40 °C and 60 °C in turn         | `flock` in the command; one owner for each device                |
-| An unconfirmed effect  | An agent reports "the bath is at 37 °C" from the log alone       | The fold labels `reached` as a claim                             |
-| A silent hang          | A controller stops logging while its process lives               | `interval` and the `stale` flag                                  |
+| Trap                   | How it shows in a lab                                            | The rule that answers it                                        |
+| ---------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------- |
+| The wrong feedback     | A loop on heater power reports success while the bath stays cold | The command reads the bath; the agent confirms through a sensor |
+| Oscillation from delay | An agent switches a pump at each activation                      | The command closes the fast loop                                |
+| Policy resistance      | Two commands drive one heater to 40 °C and 60 °C in turn         | `flock` in the command; one owner for each device               |
+| An unconfirmed effect  | An agent reports "the bath is at 37 °C" from the log alone       | The fold labels `reached` as a claim                            |
+| A silent hang          | A controller stops logging while its process lives               | `interval` and the `stale` flag                                 |
 
 ## Compose the six capabilities
 
@@ -143,7 +175,7 @@ so a hold that ends and a hold that hangs read differently.
 | Processes    | `bash`, `ps`, `status`, `wait`, `cancel` | The life of every command, and the checks of the agent       |
 | Repositories | `repos`, `fork`                          | The versions of the controller                               |
 | Tables       | `sql`                                    | Shared plans, schedules, and results                         |
-| Sensors      | `connect`, `observe`                     | Independent feedback, retained as evidence                   |
+| Sensors      | `connect`, `observe`                     | The agent's own view of the stock, retained as evidence      |
 | Actuators    | `actuate`                                | The controller: a command that stops safe and logs its state |
 
 **Composition happens while the application runs.** A new loop needs no
@@ -264,7 +296,7 @@ a line to a file.
 
 ```jsonl
 {"v":1,"at":"2026-09-30T14:02:10.001Z","kind":"target","name":"bath","value":37,"unit":"C","tolerance":0.2,"interval":1}
-{"v":1,"at":"2026-09-30T14:02:11.482Z","kind":"observe","name":"bath","value":36.4,"unit":"C","source":"bath/temperature"}
+{"v":1,"at":"2026-09-30T14:02:11.482Z","kind":"observe","name":"bath","value":36.4,"unit":"C"}
 {"v":1,"at":"2026-09-30T14:02:11.482Z","kind":"drive","name":"power","value":62,"unit":"%"}
 {"v":1,"at":"2026-09-30T14:09:40.310Z","kind":"state","value":"reached","note":"within 0.2 C for 60 s"}
 {"v":1,"at":"2026-09-30T15:02:10.050Z","kind":"state","value":"safe","note":"SIGTERM: heater off"}
@@ -275,12 +307,12 @@ time with three digits of milliseconds, from the command's clock. Any
 line can carry `interval`, the seconds between two lines of a healthy
 command.
 
-| `kind`    | Meaning in the loop                        | Fields                                                                   |
-| --------- | ------------------------------------------ | ------------------------------------------------------------------------ |
-| `target`  | The desired state that the command pursues | `name`, `value` (a number or a state), `unit` for a number, `tolerance?` |
-| `observe` | Feedback: a measured value of the stock    | `name`, `value`, `unit` for a number, `source?`                          |
-| `drive`   | The output of the actuator                 | `name`, `value`, `unit` for a number                                     |
-| `state`   | The command's claim about itself           | `value`, `note?`                                                         |
+| `kind`    | Meaning in the loop                         | Fields                                                                   |
+| --------- | ------------------------------------------- | ------------------------------------------------------------------------ |
+| `target`  | The desired state that the command pursues  | `name`, `value` (a number or a state), `unit` for a number, `tolerance?` |
+| `observe` | Internal feedback: a value that it measured | `name`, `value`, `unit` for a number                                     |
+| `drive`   | The output of the actuator                  | `name`, `value`, `unit` for a number                                     |
+| `state`   | The command's claim about itself            | `value`, `note?`                                                         |
 
 **A `state` value is one of six words.**
 
@@ -294,8 +326,8 @@ command.
 | `gave_up`  | stopped trying, and says why in `note`  |
 
 **A name follows the agent-name grammar, `^[a-z][a-z0-9-]*$`.** A line has
-at most 4 KiB. `source` can name a connected sensor, such as
-`bath/temperature`, so the agent can observe the same sensor.
+at most 4 KiB. A name belongs to the command. It names no sensor of the
+workspace.
 
 **The format carries its own version.** A command that someone supplies
 does not upgrade with the host. A breaking change raises `v`, and the fold
@@ -358,7 +390,7 @@ interface ActuationStatus {
 
 interface ActuationFold {
   readonly targets: Readonly<Record<string, Reading & { readonly tolerance?: number }>>;
-  readonly observed: Readonly<Record<string, Reading & { readonly source?: string }>>;
+  readonly observed: Readonly<Record<string, Reading>>;
   readonly drives: Readonly<Record<string, Reading>>;
   readonly errors: Readonly<Record<string, number>>;
   readonly claim?: { readonly value: Claim; readonly note?: string; readonly at: string };
@@ -435,7 +467,7 @@ schedule({ after: 900, text: 'Check bath-hold, and observe bath/temperature.' })
 
 **The guidance of `actuate` tells the agent eight things.**
 
-1. Choose the feedback before the first command. Check that it measures
+1. Build the internal feedback into the command. Check that it measures
    the stock that the goal names.
 2. Put a fast loop into the command. Revise the command from the agent.
 3. Trap `TERM` before the command drives the device. Make the device safe
@@ -445,7 +477,7 @@ schedule({ after: 900, text: 'Check bath-hold, and observe bath/temperature.' })
    file of its own.
 6. Give a `finally` that is idempotent and needs no state.
 7. Lock a device with `flock` when one command at a time may drive it.
-8. Confirm a claim of `reached` from an independent source, and cite it.
+8. Confirm a claim of `reached` through a sensor, and cite its snapshot.
 
 ## Backends
 
@@ -543,6 +575,7 @@ changelog names each change.
 | `grace` is required                                 | Only the author of the command knows how long the device needs                  |
 | `finally` is optional and runs after an unclean end | The trap covers a clean stop; `finally` covers a crash and a kill               |
 | One `mkdir` claim runs `finally`                    | It runs once across the wrapper, the table, and two host runs                   |
+| The command owns its inputs                         | A loop through the host would take SSH latency and stop with the host run       |
 | The log is a file of its own                        | Free text in `out` cannot corrupt it                                            |
 | Four kinds and six claims                           | The fold needs no more; richer data goes to `out` or to a sensor                |
 | `stale` uses host time                              | The workspace never compares two clocks                                         |
@@ -551,6 +584,7 @@ changelog names each change.
 ## Out of scope
 
 - An actuator API, a server, or a `connect` step for actuators.
+- A sensor as an input of a command, and any input parameter on `actuate`.
 - A lock in the workspace; `flock` in the command does it.
 - A check of the goal by the workspace; the agent confirms convergence.
 - An interactive command; D6 holds the `pty` kind.
