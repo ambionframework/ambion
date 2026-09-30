@@ -15,6 +15,7 @@ import type {
 	GitConformanceOptions,
 	GitConformancePair,
 	GitConformanceProbe,
+	GitConformanceShared,
 } from '@ambionframework/workspace/conformance';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import { type JustGitBackend, justGitBackend, sqliteGitStorage } from '../../src/git/index.ts';
@@ -24,6 +25,10 @@ export const SECRET = 'conformance-secret';
 
 /** The options of a conformance case, as `justGitBackend` options over `file`. */
 export function backendOver(file: string, options: GitConformanceOptions) {
+	const registrations = (items: Readonly<Record<string, GitConformanceShared>> | undefined) =>
+		Object.fromEntries(
+			Object.entries(items ?? {}).map(([name, registration]) => [name, registration]),
+		);
 	return justGitBackend({
 		storage: sqliteGitStorage(file),
 		secret: SECRET,
@@ -37,6 +42,7 @@ export function backendOver(file: string, options: GitConformanceOptions) {
 				},
 			]),
 		),
+		shared: registrations(options.shared),
 	});
 }
 

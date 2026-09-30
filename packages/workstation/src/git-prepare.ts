@@ -10,10 +10,10 @@
  * forced command exists.
  */
 
-import type { TemplateRegistration } from '@ambionframework/workspace/git';
+import type { RepositoryRegistration } from '@ambionframework/workspace/git';
 import type { GitAccount } from './git-account.ts';
 import { runIn } from './git-account.ts';
-import { registerTemplates } from './git-registration.ts';
+import { registerShared, registerTemplates } from './git-registration.ts';
 
 /** What the preparation learns about the account. */
 export interface Prepared {
@@ -45,7 +45,7 @@ function serveScript(root: string): string {
 		'  echo "ambion: $namespace/$name does not exist" >&2; exit 1',
 		'fi',
 		'if [ "$service" = git-receive-pack ] && [ "$namespace" != "$agent" ]; then',
-		'  echo "ambion: $agent cannot push to $namespace/$name" >&2; exit 1',
+		'  [ "$namespace" = shared ] || { echo "ambion: $agent cannot push to $namespace/$name" >&2; exit 1; }',
 		'fi',
 		'export GIT_COMMITTER_NAME="$agent" GIT_COMMITTER_EMAIL="$agent@ambion.invalid"',
 		`exec git "\${service#git-}" "$repo"`,
@@ -74,7 +74,8 @@ const PREPARE_SCRIPT = [
 export async function prepareAccount(
 	account: GitAccount,
 	root: string,
-	templates: Readonly<Record<string, TemplateRegistration>>,
+	templates: Readonly<Record<string, RepositoryRegistration>>,
+	shared: Readonly<Record<string, RepositoryRegistration>>,
 ): Promise<Prepared> {
 	const prepared = await account.use(async (env, session) => {
 		if (!PLAIN_PATH.test(session.home)) {
@@ -86,5 +87,6 @@ export async function prepareAccount(
 		return { serve: `${session.home}/.ambion/serve`, hostKey: session.hostKey };
 	});
 	await registerTemplates(account, root, templates);
+	await registerShared(account, root, shared);
 	return prepared;
 }

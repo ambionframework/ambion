@@ -85,6 +85,9 @@ const templatesOf = (templates: GitConformanceOptions['templates']) =>
 		]),
 	);
 
+/** The shared registrations already use the workstation registration shape. */
+const sharedOf = (shared: GitConformanceOptions['shared']) => ({ ...shared });
+
 /** Run `command` in the shell of `agent`. The connect writes the agent's git files first. */
 function shell(workspace: Workspace, agent: WorkspaceAgent, command: string): Promise<Ran> {
 	return workspace.use(agent, (env) => run(env, command));
@@ -148,10 +151,11 @@ const harness: GitConformanceBackend<GitBackend> = {
 		await wipe(bash);
 		return {
 			bash,
-			backend: ({ templates, credentialTtl }) =>
+			backend: ({ templates, shared, credentialTtl }) =>
 				workstationGitBackend({
 					...base,
 					templates: templatesOf(templates),
+					shared: sharedOf(shared),
 					...(credentialTtl === undefined ? {} : { keyTtl: credentialTtl }),
 				}),
 			dispose: async () => bash.dispose?.(),

@@ -4,7 +4,7 @@
  * reach them (`docs/workstation-git.md`).
  *
  * The host drives the git account over its own SSH client: `list`, `get`,
- * `fork`, and template registration run as short scripts on the server,
+ * `fork`, and repository registration run as short scripts on the server,
  * and the host runs no git library. Each agent reaches the account with a
  * key that the backend issues. The line of each key in
  * `~/.ssh/authorized_keys.ambion` has the forced command
@@ -16,7 +16,7 @@
  */
 
 import type { GitAccess, GitBackend, GitEnv } from '@ambionframework/workspace';
-import { assertAgent, type TemplateRegistration } from '@ambionframework/workspace/git';
+import { assertAgent, type RepositoryRegistration } from '@ambionframework/workspace/git';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import { checkedServer } from './backend.ts';
 import { GitAccount } from './git-account.ts';
@@ -47,8 +47,10 @@ export interface WorkstationGitOptions {
 	readonly root?: string;
 	/** The host name in every clone URL. The default is `ambion-git`. */
 	readonly alias?: string;
-	/** The templates, by name. */
-	readonly templates?: Readonly<Record<string, TemplateRegistration>>;
+	/** The read-only templates, by name. */
+	readonly templates?: Readonly<Record<string, RepositoryRegistration>>;
+	/** The shared repositories, by name. */
+	readonly shared?: Readonly<Record<string, RepositoryRegistration>>;
 	/** Whole seconds an agent key lives. The default is 3600. */
 	readonly keyTtl?: number;
 	/** Seconds the client of the git account may stay unused. The default is 300. */
@@ -121,7 +123,12 @@ export function workstationGitBackend(
 	const ready = (agent: WorkspaceAgent): Promise<Prepared> => {
 		if (disposed) return Promise.reject(new Error('The git backend is disposed.'));
 		assertAgent(agent);
-		preparing ??= prepareAccount(account, root, options.templates ?? {}).catch((error: unknown) => {
+		preparing ??= prepareAccount(
+			account,
+			root,
+			options.templates ?? {},
+			options.shared ?? {},
+		).catch((error: unknown) => {
 			preparing = undefined;
 			throw error;
 		});

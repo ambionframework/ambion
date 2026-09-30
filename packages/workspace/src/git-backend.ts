@@ -11,9 +11,10 @@
  * `openWorkspace` refuses a pair whose transport the bash backend does not
  * carry.
  *
- * A repository ID is `templates/<name>` or `<agent>/<name>`. Only its
- * registration changes a template. Only the owner of a repository holds a
- * write credential for it, and every other agent holds a read credential.
+ * A repository ID is `templates/<name>`, `shared/<name>`, or
+ * `<agent>/<name>`. Only registration changes a template. Shared
+ * repositories are writable by every agent. Only the owner of a fork holds
+ * a write credential for it, and every other agent holds a read credential.
  * A credential grants one scope on one repository, and it expires. The
  * package of each git backend defines its credentials.
  *
@@ -23,7 +24,7 @@
 
 import type { ResourceBackend, ResourceEnv } from './resource.ts';
 
-/** A repository ID: `templates/<name>` or `<agent>/<name>`. */
+/** A repository ID: `templates/<name>`, `shared/<name>`, or `<agent>/<name>`. */
 export type GitRepositoryId = string;
 
 /** One repository, as the backend reports it. */
@@ -33,7 +34,7 @@ export interface GitRepository {
 	readonly url: string;
 	/** The repository this one was forked from. */
 	readonly source?: GitRepositoryId;
-	/** What the repository holds. The host sets it when it registers a template. */
+	/** What the repository holds. The host sets it when it registers a template or shared repository. */
 	readonly description?: string;
 	/** The branch that a clone checks out. */
 	readonly defaultBranch: string;

@@ -1,6 +1,7 @@
 /**
- * The git backend of the just-bash backends: read-only templates, forks,
- * and pushes, over a `just-git` server in the host's process.
+ * The git backend of the just-bash backends: read-only templates, shared
+ * repositories, forks, and pushes, over a `just-git` server in the host's
+ * process.
  *
  * ```ts
  * import { directoryBackend } from '@ambionframework/just-bash';

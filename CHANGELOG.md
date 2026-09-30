@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+**Git backends support shared repositories.** Both `justGitBackend` and
+`workstationGitBackend` accept `shared` registrations. Every workspace
+agent can push to `shared/<name>`; templates stay read-only and agent forks
+keep their owner. Registration seeds `main` once as `ambion`, then updates
+only the description without reading the source. Removing a registration
+preserves the repository and its push rights. Shared default branches
+refuse deletion and non-fast-forward pushes; other branches remain mutable.
+The git tools remain `repos`, `clone`, and `fork`, with updated guidance.
+`gitConformance` covers shared repositories; its fixture options add
+`shared` and the conformance entry exports `GitConformanceShared`.
+
+**The git registration type is renamed.** The workspace git entry replaces
+`TemplateRegistration` with `RepositoryRegistration`, exports `SHARED` and
+`writableBy`, and reserves `shared` as an agent name. There is no alias or
+migration. Journal bodies and stored schemas do not change.
+
 **The 0.5.0 sensor work keeps the eleven-package workspace.** It adds no
 separate sensors package.
 

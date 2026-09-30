@@ -137,6 +137,91 @@ describe('justGitBackend', () => {
 		expect(listed?.map((repository) => repository.id)).toEqual(['templates/blank']);
 	});
 
+	it('publishes a shared seed after restart without rereading an interrupted source', async () => {
+		const file = join(await tempDir(), 'git.db');
+		const store = sqliteGitStorage(file).open();
+		const server = openServer({ storage: store.storage, secret: SECRET });
+		store.registry.begin('shared/interrupted', undefined, 'Before restart.');
+		await server.createRepo('shared/interrupted', { defaultBranch: 'main' });
+		const { hash } = await server.commit('shared/interrupted', {
+			files: { 'README.md': 'committed seed\n' },
+			message: 'Register the shared repository interrupted\n',
+			author: { name: 'ambion', email: 'ambion@ambion.invalid' },
+			branch: 'main',
+		});
+		await server.close();
+		store.close();
+		const { workspace } = workspaceOver(file, {
+			shared: {
+				interrupted: {
+					source: {
+						read: async () => {
+							throw new Error('the committed seed source was read after restart');
+						},
+					},
+					description: 'Recovered description.',
+				},
+			},
+		});
+		const recovered = await workspace.git?.use(ANALYST, (env) => env.get('shared/interrupted'));
+		expect(recovered?.branches.main).toBe(hash);
+		expect(recovered?.description).toBe('Recovered description.');
+	});
+
+	it('keeps an interrupted committed shared seed visible when it is omitted after restart', async () => {
+		const file = join(await tempDir(), 'git.db');
+		const store = sqliteGitStorage(file).open();
+		const server = openServer({ storage: store.storage, secret: SECRET });
+		store.registry.begin('shared/committed', undefined, 'Committed description.');
+		await server.createRepo('shared/committed', { defaultBranch: 'main' });
+		const { hash } = await server.commit('shared/committed', {
+			files: { 'README.md': 'durable seed\n' },
+			message: 'Register the shared repository committed\n',
+			author: { name: 'ambion', email: 'ambion@ambion.invalid' },
+			branch: 'main',
+		});
+		await server.close();
+		store.close();
+		const { workspace } = workspaceOver(file);
+		const visible = await workspace.git?.use(ANALYST, (env) => env.get('shared/committed'));
+		expect(visible?.branches.main).toBe(hash);
+		expect(visible?.description).toBe('Committed description.');
+	});
+
+	it('hides an interrupted unborn shared repository when omitted, then finishes its registered seed', async () => {
+		const file = join(await tempDir(), 'git.db');
+		const store = sqliteGitStorage(file).open();
+		const server = openServer({ storage: store.storage, secret: SECRET });
+		store.registry.begin('shared/unborn', undefined, 'Unborn description.');
+		await server.createRepo('shared/unborn', { defaultBranch: 'main' });
+		await server.close();
+		store.close();
+		const omitted = workspaceOver(file);
+		const hidden = await omitted.workspace.git?.use(ANALYST, (env) => env.get('shared/unborn'));
+		expect(hidden).toBeUndefined();
+		await omitted.workspace.dispose();
+		const registered = workspaceOver(file, {
+			shared: {
+				unborn: {
+					source: { 'README.md': 'completed seed\n' },
+					description: 'Completed description.',
+				},
+			},
+		});
+		const completed = await registered.workspace.git?.use(ANALYST, (env) =>
+			env.get('shared/unborn'),
+		);
+		expect(completed?.branches.main).toMatch(/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/);
+		expect(completed?.description).toBe('Completed description.');
+		const contents = await sh(
+			registered.workspace,
+			ANALYST,
+			`git clone ${completed?.url ?? ''} ~/unborn && cat ~/unborn/README.md`,
+		);
+		expect(contents.code, contents.output).toBe(0);
+		expect(contents.output).toContain('completed seed');
+	});
+
 	it('finishes an update that stopped after the commit to template-sources', async () => {
 		const file = join(await tempDir(), 'git.db');
 		const first = workspaceOver(file);
