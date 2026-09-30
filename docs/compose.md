@@ -156,6 +156,53 @@ adds each declared output. A seat with many tools pays that cost in every
 activation. The live comparison of D24 counts the catalog in the input
 tokens of the seat.
 
+## Guidance
+
+**The model decides when to compose.** The name of the tool gives little
+of that decision. The guidance gives the rest. It states when a compose
+call helps, and when a direct call is the right call.
+
+**`compose` adds guidance, as a bundle does.** `describeExecutor` joins
+the guidance of `compose` after the guidance of the bundles, in the
+`guidance` field of the executor. The prompt renders it after the speaking
+policy, as it renders the guidance of every bundle
+([Executors](executors.md#the-prompt-the-core-renders)). The description of
+`compose` holds one sentence and the catalog.
+
+**The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main
+entry exports it. `ComposeOptions.guidance` replaces it, as the `speaking`
+option replaces `DEFAULT_GUIDANCE`. The text follows:
+
+```text
+compose joins your tools in one call. Put the tools that you use in
+uses, and the body of an async function in code. Each tool is
+tools.<name>, and the description of compose gives its signature. You
+read only the value that the code returns.
+
+Use compose when:
+- the result of one tool is the input of another tool;
+- a tool gives a large result, and you need a count, a filter, or a
+  few fields of it;
+- you call one tool for many inputs;
+- you start several processes and wait for each.
+
+Call a tool directly when:
+- you must read its result before you decide the next step;
+- you make one call and need its whole result;
+- you speak. say, schedule, seat, unseat, dismiss, and recall are not
+  in compose.
+
+Return only the values that you need to read. The code has no clock,
+no random source, and no I/O except through tools. A failed compose
+call lists each call and its outcome. A completed call can have had an
+effect, so read the list before you call a tool again.
+```
+
+**The description of `compose` is one sentence and the catalog.** The
+sentence is `Join your tools in one call. Code calls them as
+tools.<name>, and you read only the value that it returns.` The catalog
+follows it.
+
 ## Bindings
 
 **A binding returns the declared output of its tool.** A tool declares the
@@ -510,6 +557,8 @@ interface ComposeOptions {
     request: { readonly uses: readonly string[]; readonly code: string },
     ctx: Omit<ToolContext, 'record'>,
   ) => Promise<'allow' | 'deny'> | 'allow' | 'deny';
+  /** Replaces `COMPOSE_GUIDANCE` ([Guidance](#guidance)). */
+  readonly guidance?: string;
   /** Absent fields keep their defaults ([Limits](#limits)). */
   readonly limits?: Partial<ComposeLimits>;
 }
@@ -717,19 +766,19 @@ trace can cut a nested output.
 **The implementation updates these pages in the same change.** Until then,
 each page states the current surface.
 
-| Page                                                                   | Change                                                                                                                                                                                                                                |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Definitions and tools](agent.md)                                      | The `compose` option, the `compose` field of a tool, the two overloads of `defineTool`, and `ToolResult<TDetails>`.                                                                                                                   |
-| [Executors](executors.md)                                              | `parent` on `tool_call` and `tool_result`, `record` in `toolContext`, `callId`.                                                                                                                                                       |
-| [Trust](trust.md)                                                      | A harness approval hook sees no tool that the room hosts, so it sees no compose call. `approve` is the one hook that sees one.                                                                                                        |
-| [Workspace](workspace.md)                                              | The declared outputs of `sql`, `snapshot`, `bash`, `ps`, `wait`, and `fork`, and `count` in the `sql` details.                                                                                                                        |
-| [Envelope](envelope.md)                                                | The four limits of the `compose` option and their defaults.                                                                                                                                                                           |
-| [Pi](pi.md)                                                            | `toolsFor` passes the step sink of the activation to each call. `fromPiTool` takes an output declaration.                                                                                                                             |
-| [Technical facts](technical-facts.md) and [Toolchain](toolchain.md)    | The package `@ambionframework/evaluator`, and the count of packages.                                                                                                                                                                  |
-| `biome.jsonc` and `scripts/import-rules.test.mjs`                      | `compose.ts` joins the vocabulary layer. `packages/evaluator/src` may import `@ambionframework/ambion`, and not `/testing` or the source of the core.                                                                                 |
-| [Executors](executors.md#the-room-tools) and [Toolchain](toolchain.md) | The scripted executor of `/testing` gives each tool call a signal, the deadline, and a step sink.                                                                                                                                     |
-| Export entries and snapshot                                            | The main entry exports the types `Evaluator`, `EvaluatorInput`, `ComposeOptions`, `ComposeLimits`, `ComposeResult`, and `LedgerEntry`. The snapshot lists values only, so only `evaluatorConformance` from `/conformance` changes it. |
-| Changelog                                                              | The step vocabulary, `ToolContext`, `AmbionTool`, `defineTool`, and the `sql` details: `rows` becomes `count`.                                                                                                                        |
+| Page                                                                   | Change                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Definitions and tools](agent.md)                                      | The `compose` option, the `compose` field of a tool, the two overloads of `defineTool`, and `ToolResult<TDetails>`.                                                                                                                                                                      |
+| [Executors](executors.md)                                              | `parent` on `tool_call` and `tool_result`, `record` in `toolContext`, `callId`.                                                                                                                                                                                                          |
+| [Trust](trust.md)                                                      | A harness approval hook sees no tool that the room hosts, so it sees no compose call. `approve` is the one hook that sees one.                                                                                                                                                           |
+| [Workspace](workspace.md)                                              | The declared outputs of `sql`, `snapshot`, `bash`, `ps`, `wait`, and `fork`, and `count` in the `sql` details.                                                                                                                                                                           |
+| [Envelope](envelope.md)                                                | The four limits of the `compose` option and their defaults.                                                                                                                                                                                                                              |
+| [Pi](pi.md)                                                            | `toolsFor` passes the step sink of the activation to each call. `fromPiTool` takes an output declaration.                                                                                                                                                                                |
+| [Technical facts](technical-facts.md) and [Toolchain](toolchain.md)    | The package `@ambionframework/evaluator`, and the count of packages.                                                                                                                                                                                                                     |
+| `biome.jsonc` and `scripts/import-rules.test.mjs`                      | `compose.ts` joins the vocabulary layer. `packages/evaluator/src` may import `@ambionframework/ambion`, and not `/testing` or the source of the core.                                                                                                                                    |
+| [Executors](executors.md#the-room-tools) and [Toolchain](toolchain.md) | The scripted executor of `/testing` gives each tool call a signal, the deadline, and a step sink.                                                                                                                                                                                        |
+| Export entries and snapshot                                            | The main entry exports the types `Evaluator`, `EvaluatorInput`, `ComposeOptions`, `ComposeLimits`, `ComposeResult`, and `LedgerEntry`, and the value `COMPOSE_GUIDANCE`. The snapshot lists values only, so `COMPOSE_GUIDANCE` and `evaluatorConformance` from `/conformance` change it. |
+| Changelog                                                              | The step vocabulary, `ToolContext`, `AmbionTool`, `defineTool`, and the `sql` details: `rows` becomes `count`.                                                                                                                                                                           |
 
 ## Acceptance
 
@@ -764,3 +813,7 @@ once.
 6. **Processes carry parallel work.** A compose call starts several
    processes with `bash` and waits for each. The wall time stays near the
    time of the slowest process.
+7. **The guidance steers the choice.** The live comparison of D24 holds
+   two cases on each family. In the first, the result of one tool feeds
+   another, and the seat calls `compose`. In the second, the seat must
+   read a result before it decides, and it calls the tool directly.
