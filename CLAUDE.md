@@ -10,8 +10,8 @@ Agents speak when they have something to add and stay silent when they do
 not. The kernel keeps the record and the rules. A restart loses nothing.
 
 pnpm workspace, ESM only, TypeScript. Every library package needs Node
-22.19 or newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI
-floor.
+22.19 or newer. `examples/workbench` and `examples/camera-chat` need Node
+26.4 or newer, the OpenTUI floor.
 
 | Path                      | What                                                                                                                                                                 |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -47,6 +47,7 @@ floor.
 | `docs/formal.md`          | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                                                          |
 | `docs/toolchain.md`       | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                                                                       |
 | `examples/workbench`      | Runnable example: rooms and an OpenTUI terminal in one process                                                                                                       |
+| `examples/camera-chat`    | Runnable example: a macOS room chat with an agent-managed camera sensor and a preview                                                                                |
 | `planning/`               | `next.md`: the scope and plan for 0.5.0; `backlog.md`: everything else                                                                                               |
 
 ## Positioning
