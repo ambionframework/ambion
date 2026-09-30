@@ -19,7 +19,8 @@ template, customizes and validates its code, and saves a working branch.
 It starts acquisition as a workstation process, connects, observes, and
 cites retained evidence. Replacement and rollback use the same tools.
 [Sensors](../docs/sensors.md) owns the contract. This file owns the work
-and its acceptance. [The backlog](backlog.md) holds everything else.
+and its acceptance. [0.6.0.md](0.6.0.md) lines up the release after it,
+the `compose` tool. [The backlog](backlog.md) holds everything else.
 
 ## Status
 

@@ -18,12 +18,21 @@ import {
 	createWriteTool,
 	type ExecutionToolContext,
 } from '@earendil-works/pi-agent-core';
-import { PROCESS_TOOL_NAMES } from './process-tools.ts';
+import type { WorkspaceEnv } from './backend.ts';
+import type { Capability } from './capability.ts';
+import type { WorkspaceResource } from './resource.ts';
+import { bindTools } from './tools.ts';
 
-const COUNTS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen'];
-
-/** The tools every workspace has, in the order the tool line names them. */
-const BASE_TOOLS = ['read', 'write', 'edit', ...PROCESS_TOOL_NAMES, 'snapshot', 'restore'];
+/** The number words of the tool line, by the number of tools, from ten. */
+const COUNT_WORDS: Readonly<Record<number, string>> = {
+	10: 'ten',
+	11: 'eleven',
+	12: 'twelve',
+	13: 'thirteen',
+	14: 'fourteen',
+	15: 'fifteen',
+	16: 'sixteen',
+};
 
 /** `a, b and c`. */
 function listOf(names: readonly string[]): string {
@@ -31,21 +40,30 @@ function listOf(names: readonly string[]): string {
 }
 
 /**
- * The tool line of the guidance. `extra` names the tools that the other
- * backends add, in order: `sql`, `repos`, `clone`, `fork`, `connect`, and
- * `observe`. Absent, the workspace has ten tools.
+ * The tool line of the guidance. `names` holds the name of each tool of the
+ * bundle, in order. The count is a word from ten to sixteen, and digits
+ * outside that range.
  */
-export function defaultToolGuidance(extra: readonly string[] = []): string {
-	const names = [...BASE_TOOLS, ...extra];
-	return [
-		`Your workspace gives you ${COUNTS[names.length - BASE_TOOLS.length]} tools: ${listOf(names)}.`,
-		`read, write, edit and bash work on shared files. Other agents connected to this`,
-		`workspace read and write the same files.`,
-	].join('\n');
+export function defaultToolGuidance(names: readonly string[]): string {
+	return `Your workspace gives you ${COUNT_WORDS[names.length] ?? names.length} tools: ${listOf(names)}.`;
+}
+
+/** The note on the file tools and the bash tool. */
+const FILES_NOTE = [
+	`read, write, edit and bash work on shared files. Other agents connected to this`,
+	`workspace read and write the same files.`,
+].join('\n');
+
+/** The file capability: the three file tools on the bash owner, and their note. */
+export function fileCapability(
+	shell: WorkspaceResource<WorkspaceEnv>['use'],
+	images: boolean,
+): Capability {
+	return { tools: bindTools(createFileTools(images), shell), notes: [FILES_NOTE] };
 }
 
 /** Build the three file tools every workspace gets. */
-export function createFileTools(images = true): readonly AgentHarnessTool<ExecutionToolContext>[] {
+function createFileTools(images = true): readonly AgentHarnessTool<ExecutionToolContext>[] {
 	const nativeRead = createReadTool(
 		images
 			? undefined

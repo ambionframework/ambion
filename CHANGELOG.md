@@ -20,6 +20,26 @@ workstation's command script adds `trap : TERM`. A channel that a signal
 ends now reports 128 plus the signal number: before, `ssh2`'s `SIG`
 prefix gave 128. No journal body changes.
 
+**One harness type, one `check`, and one case runner serve the conformance
+suites.** `@ambionframework/journal/conformance` exports three new parts:
+`check(condition, what)`, `ConformanceHarness<Subject>`, and
+`conformanceSuite(harness, cases)`. `ConformanceHarness<Subject>` has a
+`name` and an `open()` that returns the subject. `conformanceSuite` opens the
+subject for each case, runs the body, and disposes the subject after it.
+`@ambionframework/ambion/conformance` and
+`@ambionframework/workspace/conformance` export the same three. The harness
+type replaces four names, and each suite keeps its subject type:
+`StorageBackend` is now `ConformanceHarness<OpenedBackend>`,
+`ConformanceBackend` is now `ConformanceHarness<WorkspaceConformanceStore>`,
+`ObjectConformanceBackend` is now `ConformanceHarness<ObjectConformanceStore>`,
+and `SensorConformanceHarness` is now
+`ConformanceHarness<SensorConformanceProbe>`. A storage harness now needs a
+`name`, as the three other harnesses had. `@ambionframework/workspace/conformance`
+also exports `WorkspaceConformanceStore`, the subject of
+`workspaceConformance`. `GitConformanceBackend` extends
+`ConformanceHarness<GitConformanceStore>`. The case names and messages do not
+change.
+
 **One rule records every tool call.** `workspaceTools` passes each tool of
 the bundle through one function, `audited`, when the workspace has an audit
 log. The entry is one more operation on the bash owner after the call ends.
@@ -31,6 +51,14 @@ starts has no entry, because the bash owner refuses the record. The `onError`
 of the audit log, now also a field of `AuditLog`, receives an error that
 names the tool and the call id. The tool factories drop their `audit`
 option. No journal body changes.
+
+**One shape holds each workspace capability.** `workspaceTools` builds the
+bundle from six capabilities in a fixed order: the file tools, the
+processes, the snapshots, `sql`, git, and the sensors. Each capability gives
+its tools, its guidance notes, and its reminder. The bundle merges the
+reminders, and `withSkills` uses the same merge. The tool line of the
+guidance reads the names of the tools, so it no longer keeps name lists. The
+text the model reads does not change. No export changes.
 
 **An executor family is one call.** `defineExecution(kind, build)` in
 `@ambionframework/ambion/hosting` now returns the function that gives an

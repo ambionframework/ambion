@@ -26,6 +26,7 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
+import type { Capability } from './capability.ts';
 import { PROCESSES_DIR, type ProcessStatus } from './process-files.ts';
 import { readOutput } from './process-output.ts';
 import type { ProcessTable } from './process-table.ts';
@@ -59,9 +60,6 @@ const NOT_CUT = { cut: false } as const;
 
 /** The largest timeout a Node timer holds, in seconds. */
 const MAX_TIMEOUT_SECONDS = 2_147_483;
-
-/** The tool names, in the order the tool line of the guidance lists them. */
-export const PROCESS_TOOL_NAMES = ['bash', 'ps', 'status', 'wait', 'cancel'] as const;
 
 /** What the process tools need from the workspace: the bash owner and the process table. */
 export interface ProcessToolOptions {
@@ -151,8 +149,17 @@ export interface PsDetails {
 	processes: readonly ProcessStatus[];
 }
 
+/** The process capability: the five process tools, their note, and the reminder of the table. */
+export function processCapability(options: ProcessToolOptions): Capability {
+	return {
+		tools: createProcessTools(options),
+		notes: [processToolGuidance()],
+		remind: options.processes.remind,
+	};
+}
+
 /** Build the `bash`, `ps`, `status`, `wait` and `cancel` tools over the process table. */
-export function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] {
+function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] {
 	const table = options.processes;
 	return Object.freeze([
 		defineTool({

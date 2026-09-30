@@ -81,7 +81,9 @@ describe('the tools and the guidance', () => {
 			'fork',
 		]);
 		const guidance = workspace.tools().guidance ?? '';
-		expect(guidance.startsWith(defaultToolGuidance(['sql', 'repos', 'clone', 'fork']))).toBe(true);
+		expect(
+			guidance.startsWith(defaultToolGuidance(workspace.tools().tools.map((t) => t.name))),
+		).toBe(true);
 		expect(guidance).toContain(
 			'fourteen tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, restore, sql, repos, clone and fork.',
 		);
@@ -90,6 +92,93 @@ describe('the tools and the guidance', () => {
 		expect(git).toBeGreaterThan(guidance.indexOf('sql runs statements'));
 		expect(git).toBeLessThan(guidance.indexOf('The shell is a simulated Unix shell'));
 		expect(guidance.endsWith(roomMirrorGuidance('/rooms'))).toBe(true);
+	});
+
+	it('states the full guidance of a bundle with sql, git and audit', async () => {
+		const { workspace } = await lab({ sql: true, audit: true });
+		expect(workspace.tools().guidance).toMatchInlineSnapshot(`
+			"Your workspace gives you fourteen tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, restore, sql, repos, clone and fork.
+			read, write, edit and bash work on shared files. Other agents connected to this
+			workspace read and write the same files.
+
+			bash starts each command as a background process and returns its handle, such as bash-1a2b3c4d5e6f.
+			Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.
+			The call waits up to wait seconds, 30 by default, and then gives the state of the process and its output.
+			The whole output of a process goes to ~/.processes/<handle>/out. Read it with read.
+			status and cancel take a handle, and wait takes a list of handles. status gives the state of a process,
+			wait waits for the first of them to end, and cancel stops one. ps lists your running processes.
+			A process keeps running after your activation ends. It stops after timeout seconds, 600 by default.
+			No message tells you when a process ends. When your answer needs the result, call wait before you answer.
+			A wait stops before your activation ends.
+			A process that outlives your activation shows in the reminder at the start of your next activation.
+			To check a long process later, call schedule with after, in seconds. The room wakes you with it then.
+
+			To cite a file, call snapshot with its path, and put the ref it gives in the refs of a
+			say. The ref has the form ambion://workspace/lab/snapshot/<digest>/<path>. It
+			names the bytes the file holds at the snapshot, and a later change to the file does not
+			change them. To read a cited snapshot, call restore with its ref: restore puts the bytes in
+			a file of your own and gives its path.
+
+			sql runs statements on one shared database, :memory:. Every agent queries this
+			database. Put structured data that a colleague needs here as a named table or view:
+			the colleague queries it by its name at once, with no copy. Reach this database with
+			sql alone. The
+			tool shows the last result as a table and keeps the data in the database. Set export to
+			write the full result as a CSV file in your workspace for another tool or script.
+			Set import to read a CSV file with a header from your workspace, up to 32 MiB. Its rows
+			are the table import.rows for that call alone: every value is text, and \\N is NULL. Copy
+			them in the same call with INSERT INTO ... SELECT, and CAST each value. Wait for the
+			process that writes the file before you import it.
+
+			The database is SQLite: dates are functions, || joins text, and a column type is an
+			affinity. Attach a private scratch database with ATTACH ':memory:' inside one call;
+			ATTACH opens no file, and VACUUM INTO is refused. Commit a transaction within the call
+			that begins it. sqlite_master holds the definition of each view. A call stops after 30
+			seconds.
+
+			repos, clone and fork reach the git server of this workspace, http://git.ambion.invalid.
+			templates/<name> is a read-only template. shared/<name> is a repository every agent can write.
+			<agent>/<name> belongs to that agent. You can read every repository.
+			You push to <your name>/<name> and to shared/<name>. Before a shared push, fetch and rebase onto origin/main.
+			If a push is rejected because another agent pushed first, fetch, rebase, resolve conflicts, and retry.
+			Use clone to make a local checkout of any repository without creating a fork. Its
+			origin is the source, with the source's push permissions. To make work you can push, fork a
+			template and set clone. In that clone, make a branch, commit, and push to origin with git in bash.
+			An edit persists only after you commit it and push it. Push before you finish.
+			To cite a commit you pushed, put its full hash from git rev-parse in the refs of a say:
+			ambion://workspace/lab/repo/<repository>/branch/<branch>/commit/<hash>. Use
+			/tag/<tag> for a tag, or leave both out. Percent-encode the branch or tag name as one URI part, so / is %2F and # is %23.
+
+			The shell is a simulated Unix shell: the common coreutils (ls, cat, grep, sed, awk, find,
+			tar, and more), plus jq for JSON, yq for YAML and TOML, xan for CSV, and sqlite3. Run a
+			script with js-exec (JavaScript) or python3 (Python).
+
+			git is available: init, clone, add, commit, status, log, diff, show, branch, checkout,
+			switch, merge, rebase, cherry-pick, stash, tag, reset, fetch, pull, push, and more. Each
+			command supports a subset of the flags of real git. Your commits carry your name as the
+			author, and git config does not change it. A remote is a path in this filesystem, or a URL
+			that this guidance names. git reaches no other host.
+
+			The shell has no network: curl and every other network command are disabled. Your home is
+			/home/<your name>, and there is no wall between one agent's home and another's.
+
+			Every tool call on this workspace is recorded at /workspace/audit.jsonl, one JSON line per
+			call: the room, the agent, the tool, the activation and the exchange it ran in,
+			its full arguments, and its full result or error. Read it to see what happened
+			here, including calls other agents and other rooms made. Filter it with jq:
+			select on room, tool, agent, or activation to find one call among many. Past
+			5 MiB the file rotates: it moves beside itself under a
+			timestamped name, and a new file starts at /workspace/audit.jsonl.
+
+			This workspace may hold /rooms/<room name>/messages.jsonl for any room
+			that mirrors its record here. Read a room's file with read or bash
+			cat. It can hold messages your own context has trimmed or folded
+			into a summary, and the history of a room you are not seated in.
+			Each line carries the message's own seq. A message ref names the
+			same seq: ambion://room/<name>/message/<seq>. Filter it with jq:
+			jq 'select(.seq == <seq>)' finds the line a ref or the ask line
+			names. jq also filters by kind or from."
+		`);
 	});
 
 	it('counts thirteen tools with no SQL backend, states the form of a commit ref, and states the shell sentence that holds with a git backend', async () => {

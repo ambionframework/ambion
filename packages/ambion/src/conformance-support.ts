@@ -29,10 +29,6 @@ export async function until(
 
 export const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-export const check = (condition: boolean, what: string): void => {
-	if (!condition) throw new Error(what);
-};
-
 /** What the helpers read of a scripted room. */
 export interface Recorded {
 	readonly calls: Call[];

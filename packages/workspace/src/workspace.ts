@@ -1,18 +1,13 @@
-import type {
-	AmbionTool,
-	ReminderSeat,
-	Room,
-	ToolBundle,
-	ToolContext,
-} from '@ambionframework/ambion';
+import type { AmbionTool, Room, ToolBundle, ToolContext } from '@ambionframework/ambion';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, BashServices, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
-import { createFileTools, defaultToolGuidance } from './default-tools.ts';
+import { type Capability, joinNotes, mergeReminders } from './capability.ts';
+import { defaultToolGuidance, fileCapability } from './default-tools.ts';
 import { workspaceFiles } from './files.ts';
 import type { GitBackend, GitCommit, GitEnv, GitRevision } from './git-backend.ts';
 import { commitRefOf, readCommitOf } from './git-refs.ts';
-import { createGitTools, GIT_TOOL_NAMES, gitToolGuidance } from './git-tools.ts';
+import { gitCapability } from './git-tools.ts';
 import {
 	mirrorRoom,
 	type RoomMirror,
@@ -21,9 +16,10 @@ import {
 } from './mirror.ts';
 import type { ObjectBackend, ObjectEnv } from './object-backend.ts';
 import { fileObjectBackend } from './object-files.ts';
+import { sensorCapability } from './observe-tool.ts';
 import type { ProcessStatus } from './process-files.ts';
 import type { ProcessEvent, ProcessQuery, ProcessTable } from './process-table.ts';
-import { createProcessTools, processToolGuidance } from './process-tools.ts';
+import { processCapability } from './process-tools.ts';
 import { openProcessTable } from './processes.ts';
 import {
 	openResource,
@@ -32,21 +28,17 @@ import {
 	type WorkspaceResource,
 } from './resource.ts';
 import { createSensorConnections, type SensorConnections } from './sensor-connections.ts';
-import { workspaceReminder } from './sensor-reminder.ts';
-import { sensorTools } from './sensor-tools.ts';
 import { type SkillSet, skillGuidance, skillSetOf, syncSkills } from './skills.ts';
 import {
-	createRestoreTool,
-	createSnapshotTool,
 	readSnapshot,
 	type SnapshotOptions,
 	type SnapshotStore,
-	snapshotGuidance,
+	snapshotCapability,
 	takeSnapshot,
 } from './snapshots.ts';
 import type { SqlBackend, SqlEnv } from './sql-backend.ts';
-import { createSqlTool, sqlToolGuidance } from './sql-tool.ts';
-import { audited, bindTools } from './tools.ts';
+import { sqlCapability } from './sql-tool.ts';
+import { audited } from './tools.ts';
 
 /** What one agent's bundle adds to the tools every agent shares. */
 export interface WorkspaceToolsOptions {
@@ -159,11 +151,6 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	): Promise<GitCommit>;
 }
 
-/** The notes that are set, joined as paragraphs in the order given. */
-function joinNotes(notes: readonly (string | undefined)[]): string {
-	return notes.filter((note): note is string => note !== undefined && note !== '').join('\n\n');
-}
-
 /** The SQL backend of a workspace, and the owner the workspace opened over it. */
 interface SqlBinding {
 	readonly backend: SqlBackend;
@@ -176,96 +163,81 @@ interface GitBinding {
 	readonly owner: WorkspaceResource<GitEnv>;
 }
 
-/** The `sql` tool and its notes, when the workspace has a SQL backend. */
-function sqlPart(sql: SqlBinding | undefined) {
-	if (sql === undefined) return { names: [], tools: [], notes: [] };
-	const { database, guidance } = sql.backend;
-	return {
-		names: ['sql'],
-		tools: [createSqlTool({ sql: sql.owner.use, database })],
-		notes: [sqlToolGuidance(database), guidance],
-	};
-}
-
-/** The `repos`, `clone` and `fork` tools and the git note, when the workspace has a git backend. */
-function gitPart(git: GitBinding | undefined, shell: WorkspaceResource<WorkspaceEnv>) {
-	if (git === undefined) return { names: [], tools: [], notes: [] };
-	const { server } = git.backend;
-	const workspace = shell.name;
-	return {
-		names: [...GIT_TOOL_NAMES],
-		tools: createGitTools({ git: git.owner.use, shell: shell.use, server }),
-		notes: [gitToolGuidance(server, workspace)],
-	};
+/** What the capabilities of a workspace need from its backends. */
+interface WorkspaceBackings {
+	readonly sql?: SqlBinding;
+	readonly git?: GitBinding;
+	readonly processes: ProcessTable;
+	readonly store: SnapshotStore;
+	readonly connections?: SensorConnections;
 }
 
 /**
- * Bind the three file tools, the five process tools, `snapshot` and `restore`, `sql`
- * when the workspace has a SQL backend, and `repos`, `clone` and `fork` when it has a
- * git backend. The guidance names the
- * tools, then the process note, the snapshot note, the SQL notes, the git
- * note, the bash backend's note, the audit note when one is set, and the
- * rooms note, in that order.
- * The bundle's reminder names each seat's processes and connected sensors.
+ * The capabilities of a workspace, in the order of its bundle: files,
+ * processes, snapshots, SQL, git and sensors. The composer leaves out a
+ * capability whose backend is absent.
+ */
+function capabilitiesOf(
+	shell: WorkspaceResource<WorkspaceEnv>,
+	{ sql, git, connections, store, processes }: WorkspaceBackings,
+	images: boolean,
+): readonly Capability[] {
+	return [
+		fileCapability(shell.use, images),
+		processCapability({ shell: shell.use, processes }),
+		snapshotCapability(store),
+		sql && sqlCapability(sql.backend, sql.owner),
+		git &&
+			gitCapability({
+				git: git.owner.use,
+				shell: shell.use,
+				server: git.backend.server,
+				workspace: shell.name,
+			}),
+		connections && sensorCapability({ connections, store, images }),
+	].filter((capability) => capability !== undefined);
+}
+
+/**
+ * Compose the bundle from the capabilities of the workspace. The tools keep
+ * the order of the capabilities. The guidance holds the tool line, the notes
+ * of each capability in order, the bash backend's note, the audit note when
+ * one is set, and the rooms note. The tool line opens the first note, in the
+ * same paragraph. The bundle's reminder merges the reminders of the
+ * capabilities, so it names each seat's processes and connected sensors.
  * When the workspace has an audit log, `audited` wraps every tool of the bundle.
  */
 function workspaceTools(
 	bash: BashBackend,
 	shell: WorkspaceResource<WorkspaceEnv>,
-	backends: {
-		sql?: SqlBinding;
-		git?: GitBinding;
-		processes: ProcessTable;
-		store: SnapshotStore;
-		connections?: SensorConnections;
-	},
+	backends: WorkspaceBackings,
 	audit: AuditLog | undefined,
 	images = true,
 ): ToolBundle {
-	const { layout, guidance } = bash;
-	const files = bindTools(createFileTools(images), shell.use);
-	const processes = createProcessTools({ shell: shell.use, processes: backends.processes });
-	const snapshots = [createSnapshotTool(backends.store), createRestoreTool(backends.store)];
-	const sql = sqlPart(backends.sql);
-	const git = gitPart(backends.git, shell);
-	const sensors = sensorTools({
-		connections: backends.connections,
-		store: backends.store,
-		images,
-	});
+	const capabilities = capabilitiesOf(shell, backends, images);
+	const tools = capabilities.flatMap((capability) => capability.tools);
+	const toolLine = defaultToolGuidance(tools.map((tool) => tool.name));
+	const [first = '', ...rest] = capabilities.flatMap((capability) => capability.notes);
 	const notes = [
-		defaultToolGuidance([...sql.names, ...git.names, ...sensors.names]),
-		processToolGuidance(),
-		snapshotGuidance(backends.store.workspace),
-		...sql.notes,
-		...git.notes,
-		...sensors.notes,
-		guidance,
+		`${toolLine}\n${first}`,
+		...rest,
+		bash.guidance,
 		audit && auditGuidance(audit),
-		roomMirrorGuidance(layout.rooms),
-	];
-	const tools = [
-		...files,
-		...processes,
-		...snapshots,
-		...sql.tools,
-		...git.tools,
-		...sensors.tools,
+		roomMirrorGuidance(bash.layout.rooms),
 	];
 	return Object.freeze({
 		tools: Object.freeze(
 			audit === undefined ? tools : tools.map((tool) => audited(tool, shell.use, audit)),
 		),
 		guidance: joinNotes(notes),
-		remind: (seat: ReminderSeat, signal: AbortSignal) =>
-			workspaceReminder(seat, signal, backends.processes, backends.connections),
+		remind: mergeReminders(capabilities.map((capability) => capability.remind)),
 	});
 }
 
 /**
  * The bundle with the skills of `set`. The guidance lists them. The
- * reminder queues the copy on the bash owner, then gives the process
- * reminder. The owner runs its operations in order, so the copy ends
+ * reminder queues the copy on the bash owner, then gives the reminder of
+ * the bundle. The owner runs its operations in order, so the copy ends
  * before any tool call of the activation starts. The reminder does not
  * wait for the copy, so the bound of the reminder does not cut it. A copy
  * that fails leaves no manifest, and the next activation copies again.
@@ -278,7 +250,6 @@ function withSkills(
 	set: SkillSet,
 	shell: WorkspaceResource<WorkspaceEnv>['use'],
 ): ToolBundle {
-	const processes = bundle.remind;
 	const copied = new Set<string>();
 	const copy = (agent: string): void => {
 		copied.add(agent);
@@ -299,10 +270,13 @@ function withSkills(
 		...bundle,
 		tools: Object.freeze(tools),
 		guidance: joinNotes([bundle.guidance, skillGuidance(set)]),
-		remind: (seat: ReminderSeat, signal: AbortSignal) => {
-			copy(seat.agent);
-			return processes?.(seat, signal);
-		},
+		remind: mergeReminders([
+			(seat) => {
+				copy(seat.agent);
+				return undefined;
+			},
+			bundle.remind,
+		]),
 	});
 }
 
@@ -353,6 +327,8 @@ function withProcesses(
 	return {
 		connect: (agent, signal) => backend.connect(agent, signal),
 		dispose: async () => {
+			// The processes wait until the connections have closed. `close()` is
+			// memoised, so a second call awaits the first.
 			await connections?.close();
 			await processes.close();
 			await backend.dispose?.();
@@ -506,6 +482,8 @@ export function openWorkspace(options: {
 		owner === undefined ? [] : [owner],
 	);
 	const dispose = (): Promise<void> => {
+		// This call stops a pending sensor connect at once, even while the bash
+		// owner is busy. The call in `withProcesses` then awaits the same close.
 		const connectionClose = connections?.close() ?? Promise.resolve();
 		const ownersClose = disposeInOrder(owners);
 		return Promise.all([connectionClose, ownersClose]).then(() => undefined);
