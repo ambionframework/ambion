@@ -80,8 +80,9 @@ console.log(drive.host); // { name: 'town-host' }
 binds three file tools first: `read`, `write`, and `edit`. The five process
 tools come next: `bash`, `ps`, `status`, `wait`, and `cancel`. `bash` starts
 each command as a background process and returns its handle
-([Processes](processes.md)). The bundle also reminds each seat of its
-processes at the start of an activation. `snapshot` and `restore` come next:
+([Processes](processes.md)). The bundle reminds each seat of its processes
+and lists captured sensor discovery when the backend has ports. `snapshot`
+and `restore` come next:
 one freezes files and gives the refs that cite them, and the other puts the
 bytes of a cited snapshot in the agent's files
 ([Snapshot a file](#snapshot-a-file)).

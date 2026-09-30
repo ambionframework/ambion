@@ -3,14 +3,14 @@ import { createHash } from 'node:crypto';
 import type { TSchema } from 'typebox';
 import { Check } from 'typebox/value';
 import {
-	ObserveResponseSchema,
-	SensorErrorSchema,
-	SensorIndexSchema,
 	isValidObserveRequest,
 	type ObserveRequest,
 	type ObserveResponse,
+	ObserveResponseSchema,
 	type SensorError,
+	SensorErrorSchema,
 	type SensorIndex,
+	SensorIndexSchema,
 } from './sensors.ts';
 
 /** An HTTP response that reports a valid sensor error envelope. */

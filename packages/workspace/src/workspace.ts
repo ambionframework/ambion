@@ -32,6 +32,7 @@ import {
 	type WorkspaceResource,
 } from './resource.ts';
 import { createSensorConnections, type SensorConnections } from './sensor-connections.ts';
+import { workspaceReminder } from './sensor-reminder.ts';
 import { sensorTools } from './sensor-tools.ts';
 import { type SkillSet, skillGuidance, skillSetOf, syncSkills } from './skills.ts';
 import {
@@ -212,7 +213,7 @@ function gitPart(
  * tools, then the process note, the snapshot note, the SQL notes, the git
  * note, the bash backend's note, the audit note when one is set, and the
  * rooms note, in that order.
- * The bundle's reminder names each seat's processes.
+ * The bundle's reminder names each seat's processes and connected sensors.
  */
 function workspaceTools(
 	bash: BashBackend,
@@ -264,7 +265,8 @@ function workspaceTools(
 			...sensors.tools,
 		]),
 		guidance: joinNotes(notes),
-		remind: (seat: ReminderSeat, signal: AbortSignal) => backends.processes.remind(seat, signal),
+		remind: (seat: ReminderSeat, signal: AbortSignal) =>
+			workspaceReminder(seat, signal, backends.processes, backends.connections),
 	});
 }
 

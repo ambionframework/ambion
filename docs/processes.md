@@ -427,7 +427,7 @@ Call status or cancel with a handle, and wait with a list of handles. Call ps to
 
 **Each line starts with the name when the process has one.** The handle
 follows it. A process from another room names that room. A seat with no
-process to name gets no reminder, and a summarize activation calls none.
+process to name gets no process reminder. A summarize activation calls none.
 
 **The core resolves the reminders once, at the start of an activation.** `ToolBundle.remind` returns the text, or a promise of it.
 `describeExecutor` collects the reminders of the bundles into
@@ -469,8 +469,10 @@ when the pass has something to send.
   it reads the reminder before the delta.
 - **Claude** and **Codex** read the whole view on the first pass.
 
-**The workspace reminder costs one read of the agent's table.** It runs
-on the bash owner. A bundle with skills first queues the copy of the
+**The process reminder reads the agent's table once.** It runs on the
+bash owner. A sensor-enabled workspace also checks each connected process
+through the table and adds captured sensor discovery to the reminder.
+A bundle with skills first queues the copy of the
 skills, which costs one more read when the copy matches
 ([Skills](skills.md#the-copy-in-the-home)). On the workstation, the read connects the agent's SSH
 session at the start of the agent's first activation, and it creates the

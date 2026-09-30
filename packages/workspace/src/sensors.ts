@@ -209,9 +209,9 @@ export function isValidObserveRequest(value: unknown): value is ObserveRequest {
 
 export {
 	createSensorClient,
+	type SensorClient,
 	SensorDigestError,
+	type SensorFile,
 	SensorHttpError,
 	SensorProtocolError,
-	type SensorClient,
-	type SensorFile,
 } from './sensor-client.ts';

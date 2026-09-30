@@ -20,6 +20,16 @@ export interface RegisteredSensorConnection {
 	readonly available: boolean;
 }
 
+/** The display-safe sensor discovery for one connection. */
+export interface SensorDiscovery {
+	readonly name: string;
+	readonly hostname: string;
+	readonly port: number;
+	readonly process: string;
+	readonly state: 'connected' | 'unavailable' | 'unknown';
+	readonly sensors: SensorIndex['sensors'];
+}
+
 /** The internal registry boundary shared by connect and future sensor readers. */
 export interface SensorConnections {
 	connect(
@@ -29,6 +39,8 @@ export interface SensorConnections {
 	): Promise<RegisteredSensorConnection>;
 	/** Look up a qualified name after rechecking its owning process. */
 	get(sensor: string, signal?: AbortSignal): Promise<RegisteredSensorConnection | undefined>;
+	/** List captured discovery and process state without reading a server. */
+	list(signal?: AbortSignal): Promise<readonly SensorDiscovery[]>;
 	/** Abort connection work and close every registered transport. */
 	close(): Promise<void>;
 }
@@ -139,7 +151,7 @@ export function createSensorConnections(
 
 	const checkRegisteredStatus = async (
 		connection: MutableConnection,
-		signal: AbortSignal,
+		signal?: AbortSignal,
 	): Promise<void> => {
 		const status = await processes.find(
 			{ name: connection.owner },
@@ -394,6 +406,54 @@ export function createSensorConnections(
 		return getActive(connection, sensor.slice(slash + 1), signal);
 	};
 
+	const readDiscoveryStatus = async (
+		connection: MutableConnection,
+		signal?: AbortSignal,
+	): Promise<boolean> => {
+		try {
+			await checkRegisteredStatus(connection, signal);
+			return true;
+		} catch {
+			if (signal?.aborted) throw signal.reason;
+			return false;
+		}
+	};
+
+	const discoveryState = async (
+		connection: MutableConnection,
+		signal?: AbortSignal,
+	): Promise<SensorDiscovery['state']> => {
+		if (!connection.available) return 'unavailable';
+		const checked = await readDiscoveryStatus(connection, signal);
+		if (!connection.available) return 'unavailable';
+		return checked ? 'connected' : 'unknown';
+	};
+
+	const listConnection = async (
+		connection: MutableConnection,
+		signal?: AbortSignal,
+	): Promise<SensorDiscovery | undefined> => {
+		const state = await discoveryState(connection, signal);
+		if (byName.get(connection.name) !== connection) return undefined;
+		return Object.freeze({
+			name: connection.name,
+			hostname: connection.hostname,
+			port: connection.port,
+			process: connection.process.handle,
+			state,
+			sensors: connection.index.sensors,
+		});
+	};
+
+	const list = async (signal?: AbortSignal): Promise<readonly SensorDiscovery[]> => {
+		if (closing !== undefined) return [];
+		const discoveries = await Promise.all(
+			[...byName.values()].map((connection) => listConnection(connection, signal)),
+		);
+		if (closing !== undefined) return [];
+		return discoveries.filter((one): one is SensorDiscovery => one !== undefined);
+	};
+
 	const close = (): Promise<void> => {
 		if (closing !== undefined) return closing;
 		closing = (async () => {
@@ -410,7 +470,7 @@ export function createSensorConnections(
 		return closing;
 	};
 
-	return Object.freeze({ connect, get, close });
+	return Object.freeze({ connect, get, list, close });
 }
 
 function sameIdentity(
