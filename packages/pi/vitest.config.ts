@@ -17,6 +17,9 @@ export const hosting = fileURLToPath(new URL('../ambion/src/hosting.ts', import.
 export const conformance = fileURLToPath(new URL('../ambion/src/conformance.ts', import.meta.url));
 export const testing = fileURLToPath(new URL('../ambion/src/testing.ts', import.meta.url));
 export const journal = fileURLToPath(new URL('../journal/src/index.ts', import.meta.url));
+export const journalConformance = fileURLToPath(
+	new URL('../journal/src/conformance.ts', import.meta.url),
+);
 
 export default defineConfig({
 	resolve: {
@@ -25,6 +28,7 @@ export default defineConfig({
 			{ find: '@ambionframework/ambion/testing', replacement: testing },
 			{ find: '@ambionframework/ambion/hosting', replacement: hosting },
 			{ find: '@ambionframework/ambion', replacement: core },
+			{ find: '@ambionframework/journal/conformance', replacement: journalConformance },
 			{ find: '@ambionframework/journal', replacement: journal },
 		],
 	},

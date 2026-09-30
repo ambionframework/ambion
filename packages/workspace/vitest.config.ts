@@ -25,8 +25,12 @@ const core = fileURLToPath(new URL('../ambion/src/index.ts', import.meta.url));
 /** The core's host-facing entry, aliased ahead of the bare package name below: a
  * string alias matches by prefix, and the bare entry's file path is not a directory. */
 const hosting = fileURLToPath(new URL('../ambion/src/hosting.ts', import.meta.url));
+/** The core's conformance entry, which the suites here build on. */
+const conformance = fileURLToPath(new URL('../ambion/src/conformance.ts', import.meta.url));
 /** The core's source names the journal; one module, the way the core's own suite reads it. */
 const journal = fileURLToPath(new URL('../journal/src/index.ts', import.meta.url));
+/** The journal's conformance entry, which the core's conformance entry names. */
+const journalConformance = fileURLToPath(new URL('../journal/src/conformance.ts', import.meta.url));
 /** The Pi executor, which names the core; one module, the way the core's own suite reads it. */
 const pi = fileURLToPath(new URL('../pi/src/index.ts', import.meta.url));
 /** This package's own entries, for the just-bash source that names them. */
@@ -34,8 +38,10 @@ const own = (entry: string) => fileURLToPath(new URL(`./src/${entry}`, import.me
 /** The aliases both tiers share. A string alias matches by prefix, so a subpath comes first. */
 export const alias = [
 	{ find: '@ambionframework/ambion/hosting', replacement: hosting },
+	{ find: '@ambionframework/ambion/conformance', replacement: conformance },
 	{ find: '@ambionframework/ambion', replacement: core },
 	{ find: '@ambionframework/pi', replacement: pi },
+	{ find: '@ambionframework/journal/conformance', replacement: journalConformance },
 	{ find: '@ambionframework/journal', replacement: journal },
 	{ find: '@ambionframework/workspace/resource', replacement: own('resource-entry.ts') },
 	{ find: '@ambionframework/workspace/conformance', replacement: own('conformance.ts') },

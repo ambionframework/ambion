@@ -590,8 +590,9 @@ owner, and the git owner, in that order, so a use that starts after
 `dispose` is refused at once.
 
 **A new object backend passes `objectConformance`** from
-`@ambionframework/workspace/conformance`. A harness opens a store and gives
-the backend. A harness that can open the same store again gives `reopen`.
+`@ambionframework/workspace/conformance`. A
+`ConformanceHarness<ObjectConformanceStore>` opens a store and gives the
+backend. A harness that can open the same store again gives `reopen`.
 
 - `put` then `get` gives the same bytes: 1 byte, bytes with zeros, 0 bytes,
   and 1 MiB.
@@ -1006,8 +1007,10 @@ distinct name under `/tmp` for each temporary file or directory.
 
 A case is a `ConformanceCase`: a name and a `run` that throws on failure.
 The entry loads no test framework and no just-bash, so any backend runs it.
-`workspaceConformance(harness)` takes a named backend with an `open()` that
-returns a fresh `BashBackend` and a `dispose()`, and returns the cases:
+`workspaceConformance(harness)` takes a
+`ConformanceHarness<WorkspaceConformanceStore>`: a name and an `open()` that
+returns a `WorkspaceConformanceStore`, a fresh `BashBackend` with a
+`dispose()`. It returns the cases:
 
 ```ts
 import { workspaceConformance } from '@ambionframework/workspace/conformance';
@@ -1017,6 +1020,15 @@ describe.each(backends)('$name', (harness) => {
   for (const c of workspaceConformance(harness)) it(c.name, c.run);
 });
 ```
+
+**One harness type serves every conformance suite.**
+`ConformanceHarness<Subject>` has a `name` and an `open()` that
+returns the subject of one case. `conformanceSuite(harness, cases)` opens the
+subject for each case, runs the body, and disposes the subject after, also
+when the body throws. `check(condition, what)` throws `what` when the
+condition fails. The entries `@ambionframework/journal/conformance`,
+`@ambionframework/ambion/conformance`, and
+`@ambionframework/workspace/conformance` export the three.
 
 The memory and directory backends run the suite first
 (`packages/just-bash/test/conformance.test.ts`). A new backend runs it

@@ -1,10 +1,13 @@
 import type {
-	SensorConformanceHarness,
+	ConformanceHarness,
 	SensorConformanceProbe,
 	SensorConformanceReply,
 } from '../../src/conformance.ts';
 
-export function httpSensorHarness(name: string, origin: string): SensorConformanceHarness {
+export function httpSensorHarness(
+	name: string,
+	origin: string,
+): ConformanceHarness<SensorConformanceProbe> {
 	return {
 		name,
 		async open(): Promise<SensorConformanceProbe> {

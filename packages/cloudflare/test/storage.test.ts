@@ -69,6 +69,7 @@ it('keeps each object record in one row, and applies each change whole', async (
 // The cases run inside the object, where the SQLite storage lives. Each case
 // builds its suite in place, so the journal names it mints stay its own.
 const listed = storageConformance({
+	name: 'durable object SQLite',
 	open: () => {
 		throw new Error('The listing opens no storage.');
 	},
@@ -77,7 +78,10 @@ for (const [index, c] of listed.entries()) {
 	it(`durable object SQLite ${c.name}`, async () => {
 		const stub = env.ROOM.get(env.ROOM.idFromName('storage-conformance'));
 		await runInDurableObject(stub, async (_instance, state) => {
-			const suite = storageConformance({ open: () => ({ opener: sqlStorage(state) }) });
+			const suite = storageConformance({
+				name: 'durable object SQLite',
+				open: () => ({ opener: sqlStorage(state) }),
+			});
 			await suite[index]?.run();
 		});
 	});

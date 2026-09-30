@@ -17,7 +17,8 @@ import {
 	type WorkspaceEnv,
 } from '@ambionframework/workspace';
 import {
-	type ConformanceBackend,
+	type ConformanceHarness,
+	type WorkspaceConformanceStore,
 	workspaceConformance,
 } from '@ambionframework/workspace/conformance';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
@@ -28,7 +29,7 @@ import { type Backend, configPath, options, run, WIPE, withEnv } from '../suppor
 
 const ctx = BACKGROUND_CONTEXT;
 
-const harness: ConformanceBackend = {
+const harness: ConformanceHarness<WorkspaceConformanceStore> = {
 	name: 'workstation on OpenSSH',
 	async open() {
 		const backend = workstationBackend(await options());

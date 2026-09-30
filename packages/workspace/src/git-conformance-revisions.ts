@@ -5,8 +5,9 @@
  */
 
 import { commitUri } from '@ambionframework/ambion';
+import { check } from '@ambionframework/ambion/conformance';
 import type { GitRevision } from './git-backend.ts';
-import { ANALYST, check, forkAs, git, REVIEWER, sh } from './git-conformance-support.ts';
+import { ANALYST, forkAs, git, REVIEWER, sh } from './git-conformance-support.ts';
 import type { Workspace } from './workspace.ts';
 
 /** The SHA-1 blobs of `collide 826\n` and `collide 4561\n` both start with it. */

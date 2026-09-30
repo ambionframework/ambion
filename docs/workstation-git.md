@@ -537,11 +537,11 @@ override of the workstation allows `@ambionframework/workspace/git`.
 
 **`gitConformance` asks the harness for each credential fact.** The
 suite stays blind to transports. Four cases touch a credential, and each
-calls a hook of `GitConformanceBackend` that the package of the pair
-implements. Each hook takes the opened backend and workspace.
-[Tests](#tests) lists them. The store of each harness maps
-`credentialTtl` to the option of its backend: `tokenTtl` of
-`justGitBackend` or `keyTtl` of `workstationGitBackend`.
+calls a hook of `GitConformanceBackend`, a `ConformanceHarness` of
+`GitConformanceStore`, that the package of the pair implements. Each hook
+takes the opened backend and workspace. [Tests](#tests) lists them. The
+store of each harness maps `credentialTtl` to the option of its backend:
+`tokenTtl` of `justGitBackend` or `keyTtl` of `workstationGitBackend`.
 
 **The [changelog](../CHANGELOG.md) names each export change of G1 and
 G2.**
