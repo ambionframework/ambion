@@ -151,7 +151,7 @@ const SHARED_BUILD_SCRIPT = [
 	'while read old new ref; do',
 	'  [ "$ref" = "$protected" ] || continue',
 	'  [ "$new" != "$zero" ] || { echo "ambion: cannot delete protected branch $protected" >&2; exit 1; }',
-	'  if [ "$old" != "$zero" ] && ! git merge-base --is-ancestor "$old" "$new"; then',
+	'  if [ "$old" != "$zero" ] && ! git --no-replace-objects merge-base --is-ancestor "$old" "$new"; then',
 	'    echo "ambion: non-fast-forward push to protected branch $protected" >&2',
 	'    exit 1',
 	'  fi',

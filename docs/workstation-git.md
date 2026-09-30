@@ -284,7 +284,8 @@ exec git "${service#git-}" "$repo"
 **Shared registration seeds once and installs branch protection.** The
 backend publishes `shared/<name>.git` only after the seed commit on `main`
 and its `pre-receive` hook are installed. That hook refuses deletion or a
-non-fast-forward update of the default branch. Other branches remain
+non-fast-forward update of the default branch. It checks original commit
+ancestry with replacement objects disabled. Other branches remain
 mutable; repository-wide receive restrictions are not used. A later
 registration updates the description without reading the seed or moving
 refs. Removing the registration preserves the repository and push rights.

@@ -172,12 +172,14 @@ describe.skipIf(configPath === undefined)('workstation git on OpenSSH', () => {
 		let bash: Backend;
 		let workspace: Workspace;
 		let url: string;
+		let sharedUrl: string;
 		beforeAll(async () => {
 			bash = workstationBackend(await options());
 			await wipe(bash);
 			const git = workstationGitBackend({
 				...(await gitOptions()),
 				templates: { blank: { source: { 'README.md': 'blank\n' } } },
+				shared: { notes: { source: { 'README.md': 'seed\n' } } },
 			});
 			workspace = openWorkspace({ name: 'lab', backend: { bash, git } });
 			const outcome = await workspace.git?.use(ANALYST, (env) =>
@@ -185,6 +187,9 @@ describe.skipIf(configPath === undefined)('workstation git on OpenSSH', () => {
 			);
 			if (outcome?.ok !== true) throw new Error('The fork of templates/blank failed.');
 			url = outcome.repository.url;
+			const shared = await workspace.git?.use(ANALYST, (env) => env.get('shared/notes'));
+			if (shared === undefined) throw new Error('The shared repository was not registered.');
+			sharedUrl = shared.url;
 		});
 		afterAll(async () => workspace.dispose());
 
@@ -238,6 +243,56 @@ describe.skipIf(configPath === undefined)('workstation git on OpenSSH', () => {
 				run(env, "git -C ~/repos/analyst/mine.git log -g --format='%gn %an' main"),
 			);
 			expect(reflog.output.split('\n')[0]).toBe('analyst someone');
+		});
+
+		it('checks original shared main ancestry when replacement refs are present', async () => {
+			const scenario = await shell(
+				workspace,
+				ANALYST,
+				[
+					'set -e',
+					'export GIT_AUTHOR_NAME=analyst GIT_AUTHOR_EMAIL=analyst@ambion.invalid GIT_COMMITTER_NAME=analyst GIT_COMMITTER_EMAIL=analyst@ambion.invalid',
+					`git clone -q ${sharedUrl} ~/replace-attack`,
+					'cd ~/replace-attack',
+					'a=$(git rev-parse main)',
+					'git switch -q -c linear',
+					'echo linear > linear.txt',
+					'git add linear.txt',
+					'git commit -q -m linear',
+					'b=$(git rev-parse HEAD)',
+					'git push -q origin HEAD:refs/heads/main',
+					'git switch -q -c divergent "$a"',
+					'echo divergent > divergent.txt',
+					'git add divergent.txt',
+					'git commit -q -m divergent',
+					'c=$(git rev-parse HEAD)',
+					'git push -q origin HEAD:refs/heads/candidate',
+					'tree=$(git rev-parse "$c^{tree}")',
+					'd=$(printf "forged ancestry\\n" | GIT_AUTHOR_NAME=analyst GIT_AUTHOR_EMAIL=analyst@ambion.invalid GIT_COMMITTER_NAME=analyst GIT_COMMITTER_EMAIL=analyst@ambion.invalid git commit-tree "$tree" -p "$b")',
+					'git replace "$c" "$d"',
+					'git push -q origin "refs/replace/$c:refs/replace/$c"',
+					'git merge-base --is-ancestor "$b" "$c"',
+					'if git --no-replace-objects merge-base --is-ancestor "$b" "$c"; then exit 50; fi',
+					'if git push --force origin "$c:refs/heads/main" >push.out 2>&1; then cat push.out; exit 51; fi',
+					'cat push.out',
+					'printf "LINEAR=%s\\nDIVERGENT=%s\\n" "$b" "$c"',
+				].join(' && '),
+			);
+			expect(scenario.code).toBe(0);
+			expect(scenario.output).toContain('non-fast-forward push to protected branch');
+			const linear = /^LINEAR=([0-9a-f]{40})$/m.exec(scenario.output)?.[1];
+			expect(linear).toBeDefined();
+			const main = await withEnv(bash, GIT_ACCOUNT, (env) =>
+				run(env, 'git -C ~/repos/shared/notes.git rev-parse refs/heads/main'),
+			);
+			expect(main.output.trim()).toBe(linear);
+			const peer = await shell(
+				workspace,
+				REVIEWER,
+				`git clone -q ${sharedUrl} ~/replace-peer && git -C ~/replace-peer show main:linear.txt && if git -C ~/replace-peer cat-file -e main:divergent.txt 2>/dev/null; then exit 1; fi`,
+			);
+			expect(peer.code, peer.output).toBe(0);
+			expect(peer.output).toContain('linear');
 		});
 	});
 });
