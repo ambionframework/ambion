@@ -6,7 +6,8 @@ rules, and a restart loses nothing. [`README.md`](README.md) holds the
 positioning and the current surface; no other page states it twice.
 
 pnpm workspace, ESM only, TypeScript. Library packages need Node 22.19 or
-newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI floor.
+newer. `examples/workbench` and `examples/camera-chat` need Node 26.4 or
+newer, the OpenTUI floor.
 `AGENTS.md` is a symbolic link to `CLAUDE.md`. Edit `CLAUDE.md`.
 
 ## Packages
@@ -33,6 +34,8 @@ newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI floor.
 - `packages/workstation`: a bash backend over SSH to one server, one Unix
   account for each agent, and `workstationGitBackend`.
 - `examples/workbench`: rooms and an OpenTUI terminal in one process.
+- `examples/camera-chat`: a macOS room chat with an agent-managed camera
+  sensor and a preview.
 - `planning/`: `next.md` is the 0.5.0 scope and plan, `0.6.0.md` is the next
   release, `simplification.md` is the concepts that the repository holds twice,
   `backlog.md` is everything else.
