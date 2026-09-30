@@ -30,8 +30,9 @@ pnpm start
 ```
 
 The default model is `openai/gpt-6-luna` with medium reasoning. The app reads
-its raw API key from `~/.openai/dev-key`; it does not copy the key into the
-checkout. `--model <provider/model>` or `AMBION_MODEL` selects another model.
+its raw API key from `~/.openai/dev-key` and keeps it in the host process. The
+agent shell receives a fixed set of variables and no host credential. The
+shell runs as the signed-in user, so it can read the key file. `--model <provider/model>` or `AMBION_MODEL` selects another model.
 Other providers use their usual environment credentials. macOS may ask for
 camera permission when the agent starts the server. Approve access for the
 terminal application that runs it.
@@ -57,18 +58,20 @@ Send a message to trigger the scripted agent. It executes the actual Git,
 process, connect, and observe tools against a clone of the camera template.
 The cloned server runs with `--demo` and produces a synthetic image. It opens
 no physical device and makes no provider request. Its reply does not perform
-visual inference. Demo state uses `.data/demo`; live state uses `.data/live`.
+visual inference. The demo also requires macOS. Demo state uses `.data/demo`; live state uses `.data/live`.
 `--directory <path>` selects another directory.
 
 ## Preview and connection lifetime
 
 The host subscribes to `workspace.sensors` lifecycle events. A successful
-camera `connect` opens the image-only preview when its first frame arrives. It polls the registered connection
-through the standard sensor client and verifies PNG digests. Preview frames
-are temporary display data; standard `observe` retains evidence independently
-in workspace snapshots. Inline images resolve those immutable snapshots,
-so later preview frames do not change the evidence shown with an answer.
-The agent's answer should cite the time of its own observation.
+camera `connect` opens the image-only preview when its first frame arrives. It
+polls the registered connection through the standard sensor client and
+verifies PNG digests. It rechecks the server process every two seconds; a link
+event hides the preview at once. Preview frames are temporary display data;
+standard `observe` retains evidence independently in workspace snapshots.
+Inline images resolve those immutable snapshots, so later preview frames do
+not change the evidence shown with an answer. The agent's answer should cite
+the time of its own observation.
 
 | Key               | Action                                      |
 | ----------------- | ------------------------------------------- |
@@ -90,8 +93,7 @@ The standalone [camera template](templates/camera/README.md) documents runtime,
 validation, device selection, readiness, Git source metadata, replacement, and
 rollback. It uses no runtime npm dependencies and implements the version 1
 [sensor API](../../docs/sensors.md). It buffers recent frames in memory and
-advertises no span support. Launch source metadata is captured in the clone,
-not in the chat application's checkout.
+advertises no span support. The clone records its own launch source metadata.
 
 ## Local backends and storage
 
@@ -102,7 +104,8 @@ host's permissions. Use this example with trusted agents.
 Git uses local bare repositories and filesystem clone URLs. The backend
 supplies `templates/camera` and `templates/camera-notes`. It checks names at its
 API boundary, but filesystem access does not enforce per-agent Git push
-permissions. Template repositories are seeded when absent. The room SQLite
+permissions. The backend seeds a template repository when it is absent. A
+`pre-receive` hook refuses a push into a template; the shell can remove it. The room SQLite
 journal, model sessions, audit, checkouts, and snapshots stay under the selected
 data directory. Model sessions and snapshots can contain image data.
 
@@ -128,5 +131,5 @@ pnpm test
 Tests run the real clone → validate → launch → connect → observe path with a
 scripted agent and synthetic frame. They check retained evidence, connection
 and process lifetime, preview visibility, resizing, native image dimensions,
-and the standard sensor conformance suite. No physical camera or live model
-request is made by these tests.
+and the standard sensor conformance suite. These tests open no physical camera
+and make no live model request.

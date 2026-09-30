@@ -125,6 +125,8 @@ export async function localGitBackend(directory: string): Promise<GitBackend> {
 			pathOf('templates/camera'),
 			fileURLToPath(new URL('../templates/camera', import.meta.url)),
 		);
+	await protect(pathOf(template));
+	await protect(pathOf('templates/camera'));
 	return {
 		access: { transport: 'local-file' },
 		server: 'localhost (local bare repositories)',
@@ -147,6 +149,15 @@ export async function localGitBackend(directory: string): Promise<GitBackend> {
 			};
 		},
 	};
+}
+
+/** Refuse a push into a template. The trusted local shell can still remove the hook. */
+async function protect(repository: string): Promise<void> {
+	await writeFile(
+		join(repository, 'hooks', 'pre-receive'),
+		'#!/bin/sh\necho "A template is read-only. Fork it and push to the fork." >&2\nexit 1\n',
+		{ mode: 0o755 },
+	);
 }
 
 async function seed(destination: string, template?: string): Promise<void> {

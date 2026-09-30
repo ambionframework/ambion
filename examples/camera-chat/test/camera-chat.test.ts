@@ -10,11 +10,19 @@ import { demoStream, openHost } from '../src/host.ts';
 import { nativeProtocol } from '../src/terminal.ts';
 import { cameraView } from '../src/tui.ts';
 import { parseCameras } from '../templates/camera/camera.ts';
-import { demoFrame, FRAME_BYTES, FrameDecoder, HEIGHT, WIDTH } from '../templates/camera/frame.ts';
+import {
+	demoFrame,
+	encodeFrame,
+	FRAME_BYTES,
+	FrameDecoder,
+	HEIGHT,
+	WIDTH,
+} from '../templates/camera/frame.ts';
 import { openSensor } from '../templates/camera/server.ts';
 
-it('decodes split RGB frames and preserves 720p pixels in a valid PNG', () => {
+it('decodes split RGB frames and preserves 720p pixels in a valid PNG', async () => {
 	const frame = demoFrame();
+	expect((await encodeFrame(frame.rgb, frame.at)).png.equals(frame.png)).toBe(true);
 	expect(imageInfo(frame.png)).toMatchObject({ width: 1280, height: 720 });
 	const decoder = new FrameDecoder();
 	expect(decoder.push(frame.rgb.subarray(0, 123))).toEqual([]);
@@ -55,6 +63,10 @@ it('clones and launches the actual template, connects through standard tools, an
 	try {
 		expect(host.workspace.tools().tools.some((tool) => tool.name === 'observe_camera')).toBe(false);
 		expect(await host.workspace.processes.list()).toEqual([]);
+		vi.stubEnv('OPENAI_API_KEY', 'host-only-key');
+		const shell = JSON.stringify(await invoke('bash', { command: 'env' }));
+		expect(shell).toContain(`HOME=${directory}/workspace/homes/observer`);
+		expect(shell).not.toContain('host-only-key');
 		await setup.renderOnce();
 		const modal = setup.renderer.root.findDescendantById('camera-modal');
 		const chat = setup.renderer.root.findDescendantById('room-chat');
@@ -70,6 +82,11 @@ it('clones and launches the actual template, connects through standard tools, an
 			(message) => message.kind === 'said' && message.from === 'observer',
 		);
 		expect(answer && 'text' in answer && answer.text).toContain('received a synthetic frame');
+		await expect(
+			invoke('bash', {
+				command: `cd ~/camera && git push ${directory}/git/templates/camera.git HEAD:refs/heads/x`,
+			}),
+		).rejects.toThrow('A template is read-only');
 		const reference = answer && 'refs' in answer ? answer.refs?.[0] : undefined;
 		if (!reference) throw new Error('No retained observation manifest.');
 		const manifest = JSON.parse(
@@ -145,6 +162,7 @@ it('clones and launches the actual template, connects through standard tools, an
 		await setup.renderOnce();
 		expect(modal?.visible).toBe(false);
 	} finally {
+		vi.unstubAllEnvs();
 		view.close();
 		setup.renderer.destroy();
 		capabilities.mockRestore();
