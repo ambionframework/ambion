@@ -112,6 +112,25 @@ describe('the tools and the guidance', () => {
 	});
 });
 
+describe('the audit log', () => {
+	it('gets one entry from every tool of a bundle with sql and git, also for a call that fails', async () => {
+		const { workspace } = await lab({ sql: true, audit: true });
+		const who = callAs('analyst');
+		const names = workspace.tools().tools.map((tool) => tool.name);
+		// An empty argument object fails validation for most tools. The entry exists either way.
+		for (const tool of workspace.tools().tools)
+			await Promise.resolve(tool.invoke({}, who)).catch(() => undefined);
+		const log = await workspace.use({ name: 'analyst' }, (env) =>
+			env.readTextFile('/workspace/audit.jsonl', BACKGROUND_CONTEXT),
+		);
+		const entries = (log.ok ? log.value : '')
+			.trim()
+			.split('\n')
+			.map((line) => JSON.parse(line) as { tool: string });
+		expect(entries.map((entry) => entry.tool)).toEqual(names);
+	});
+});
+
 describe('the pair', () => {
 	it.each<[string, readonly string[] | undefined, string]>([
 		["['ssh']", ['ssh'], 'ssh'],

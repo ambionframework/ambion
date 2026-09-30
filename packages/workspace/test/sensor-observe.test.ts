@@ -119,6 +119,7 @@ describe('workspace observe integration', () => {
 			const connect = entries.find((entry) => entry.tool === 'connect');
 			const observe = entries.find((entry) => entry.tool === 'observe');
 			expect(connect).toMatchObject({
+				agent: 'sensor-owner',
 				arguments: { name: 'bench-one', port: rig.port },
 				result: {
 					details: { owner: 'sensor-owner', process: rig.process, sensors: ['bench-one/bench'] },

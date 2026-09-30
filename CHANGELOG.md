@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+**One rule records every tool call.** `workspaceTools` passes each tool of
+the bundle through one function, `audited`, when the workspace has an audit
+log. The entry is one more operation on the bash owner after the call ends.
+Another operation can run between the call and its entry. The file tools
+`read`, `write`, and `edit` now follow this rule. Before, their entry ran
+inside the operation of the call. A call with invalid arguments now has an
+entry, as `docs/workspace.md` states. A call that ends after `dispose`
+starts has no entry, because the bash owner refuses the record. The `onError`
+of the audit log, now also a field of `AuditLog`, receives an error that
+names the tool and the call id. The tool factories drop their `audit`
+option. No journal body changes.
+
 **An executor family is one call.** `defineExecution(kind, build)` in
 `@ambionframework/ambion/hosting` now returns the function that gives an
 execution for a set of options, and it registers the execution with no

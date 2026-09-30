@@ -10,10 +10,6 @@
  * agent's files into the table `import.rows` for the one call, and the
  * statements copy the rows into the shared tables. Each call passes its
  * provenance, so a backend with append-only tables writes it on each row.
- *
- * The audit entry of a call runs as one more operation on the bash owner,
- * after the call ends, over `BACKGROUND_CONTEXT`. A cut call still leaves
- * its entry.
  */
 
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
@@ -23,15 +19,12 @@ import {
 	withAbortSignal,
 } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
-import type { AuditLog } from './audit.ts';
-import type { WorkspaceEnv } from './backend.ts';
 import { callEnvelope } from './call-envelope.ts';
 import { markdownTable } from './markdown-table.ts';
 import type { WorkspaceResource } from './resource.ts';
 import type { SqlEnv, SqlOutcome, SqlProvenance, SqlRunOptions } from './sql-backend.ts';
 import { IMPORT_TABLE, MAX_IMPORT_BYTES } from './sql-import.ts';
 import { csvHeader, csvRecord, NULL_SENTINEL } from './sql-result.ts';
-import { recordedOnShell } from './tools.ts';
 
 /** How many rows the preview shows when the caller names no limit. */
 const PREVIEW_ROWS = 50;
@@ -79,12 +72,10 @@ const sqlSchema = Type.Object({
 
 type SqlParams = Static<typeof sqlSchema>;
 
-/** What the tool needs from the workspace: the two owners, the database name, and the audit log. */
+/** What the tool needs from the workspace: the SQL owner and the database name. */
 export interface SqlToolOptions {
 	readonly sql: WorkspaceResource<SqlEnv>['use'];
-	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
 	readonly database: string;
-	readonly audit?: AuditLog;
 }
 
 /** Guidance for the `sql` tool over a SQL backend that the workspace names `database`. */
@@ -111,9 +102,7 @@ export function createSqlTool(options: SqlToolOptions): AmbionTool {
 		description:
 			'Run statements on the shared database. Share a table or a view; it needs no copy. Set export to write a CSV file, and import to read one.',
 		parameters: sqlSchema,
-		execute: recordedOnShell('sql', options.shell, options.audit, (params: SqlParams, ctx) =>
-			run(options, params, ctx),
-		),
+		execute: (params: SqlParams, ctx) => run(options, params, ctx),
 	});
 }
 

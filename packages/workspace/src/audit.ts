@@ -3,10 +3,10 @@
  * workspace's own filesystem.
  *
  * The log is an ordinary file: an agent reads it with `read` or `bash cat`,
- * the same as any file a peer wrote. Writing one entry runs inside the same
- * queued operation as the tool call it records, over the same `ExecutionEnv`,
- * so the entry and the call it describes never separate under concurrent
- * work, and a rotation never races another agent's write.
+ * the same as any file a peer wrote. Writing one entry runs as one more
+ * operation on the bash owner after the call ends. Another operation can run
+ * between the call and its entry. A rotation never races another agent's
+ * write, because each entry is an operation on the one owner.
  *
  * The append and the rotation are `log.ts`'s shared mechanism. This module
  * adds what is specific to a tool-call entry: the JSONL shape, a short
@@ -62,13 +62,18 @@ export interface AuditLogOptions {
 	readonly path?: string;
 	/** Bytes the file may hold before the next entry rotates it. Default 5 MiB. */
 	readonly maxBytes?: number;
-	/** Told about a directory, write, or rotation failure. The call that triggered it still returns. */
+	/**
+	 * Told about a directory, write, or rotation failure, and about an entry
+	 * that the bash owner refuses, as after `dispose`. The call still returns.
+	 */
 	readonly onError?: (error: Error) => void;
 }
 
 export interface AuditLog {
 	readonly path: string;
 	readonly maxBytes: number;
+	/** The callback of the options. The workspace tells it about an entry that a refused operation loses. */
+	readonly onError?: (error: Error) => void;
 	/** Append one entry over `env`. Never throws: a failure goes to `onError` instead. */
 	record(env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void>;
 }
@@ -122,16 +127,21 @@ async function recordEntry(
 }
 
 /**
- * Open one rotating JSONL audit log. `record` runs inside the caller's own
- * `use` operation, so it needs no queue of its own: the workspace resource
- * already lets one operation touch the filesystem at a time.
+ * Open one rotating JSONL audit log. `record` runs inside one `use`
+ * operation of the bash owner. It needs no queue of its own, because the
+ * owner runs one operation at a time.
  */
 export function openAuditLog(options: AuditLogOptions = {}): AuditLog {
 	const path = checkedLogPath(options.path ?? DEFAULT_AUDIT_LOG, 'An audit log path');
 	const maxBytes = checkedByteThreshold(options.maxBytes ?? DEFAULT_MAX_BYTES, 'maxBytes');
 	const record = (env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void> =>
 		bestEffort(() => recordEntry(env, path, maxBytes, entry, context), options.onError);
-	return Object.freeze({ path, maxBytes, record });
+	return Object.freeze({
+		path,
+		maxBytes,
+		...(options.onError === undefined ? {} : { onError: options.onError }),
+		record,
+	});
 }
 
 /** `maxBytes` as whole mebibytes or kibibytes when it divides evenly, bytes otherwise. */

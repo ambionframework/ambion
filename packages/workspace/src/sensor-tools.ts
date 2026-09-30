@@ -1,19 +1,14 @@
 /** The tools and guidance supplied when workstation ports are available. */
 
 import type { AmbionTool } from '@ambionframework/ambion';
-import type { AuditLog } from './audit.ts';
-import type { WorkspaceEnv } from './backend.ts';
 import { connectToolGuidance, createConnectTool } from './connect-tool.ts';
 import { createObserveTool, observeToolGuidance } from './observe-tool.ts';
-import type { WorkspaceResource } from './resource.ts';
 import type { SensorConnections } from './sensor-connections.ts';
 import type { SnapshotStore } from './snapshots.ts';
 
 export function sensorTools(options: {
 	readonly connections?: SensorConnections;
 	readonly store: SnapshotStore;
-	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
-	readonly audit?: AuditLog;
 	readonly images: boolean;
 }): {
 	readonly names: readonly string[];
@@ -24,16 +19,10 @@ export function sensorTools(options: {
 	return {
 		names: ['connect', 'observe'],
 		tools: [
-			createConnectTool({
-				connections: options.connections,
-				shell: options.shell,
-				audit: options.audit,
-			}),
+			createConnectTool({ connections: options.connections }),
 			createObserveTool({
 				connections: options.connections,
 				store: options.store,
-				shell: options.shell,
-				audit: options.audit,
 				images: options.images,
 			}),
 		],

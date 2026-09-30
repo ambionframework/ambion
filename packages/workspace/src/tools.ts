@@ -3,6 +3,7 @@ import {
 	defineTool,
 	loggedToolResult,
 	type ToolContext,
+	type ToolResult,
 } from '@ambionframework/ambion';
 import type {
 	AgentHarnessTool,
@@ -13,6 +14,7 @@ import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-co
 import type { AuditEntry, AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
 import { callEnvelope } from './call-envelope.ts';
+import { bestEffort } from './log.ts';
 import type { WorkspaceResource } from './resource.ts';
 
 type HarnessTool = AgentHarnessTool<ExecutionToolContext>;
@@ -77,50 +79,63 @@ function auditEntry(
 	};
 }
 
+/** What a call gave: its result, or the error it threw. */
+type Outcome = { result: string | ToolResult } | { error: unknown };
+
 /**
- * Wrap the `execute` of a tool that runs on an owner other than the bash
- * owner. After the call ends, its audit entry runs as one more operation on
- * the bash owner, over `BACKGROUND_CONTEXT`, so a cut call still leaves its
- * entry. A closed bash owner does not replace the call's own outcome.
+ * Run one call. A tool can return at once, return a promise, or throw at
+ * once, as `defineTool` does for invalid arguments. Each way has an outcome.
  */
-export function recordedOnShell<P, R>(
-	tool: string,
+async function outcomeOf(tool: AmbionTool, params: unknown, ctx: ToolContext): Promise<Outcome> {
+	try {
+		return { result: await tool.invoke(params, ctx) };
+	} catch (error) {
+		return { error };
+	}
+}
+
+/**
+ * A copy of `tool` that records one audit entry for each call, successful
+ * or not. A call with invalid arguments has an entry. The entry runs as one
+ * more operation on the bash owner after the call ends, over
+ * `BACKGROUND_CONTEXT`, so a cut call still leaves its entry. Another
+ * operation can run between the call and its entry. A call that ends after
+ * `dispose` starts has no entry: the bash owner refuses the record, and the
+ * log's `onError` receives the loss. A failure to record does not replace
+ * the result or the error of the call.
+ */
+export function audited(
+	tool: AmbionTool,
 	shell: WorkspaceResource<WorkspaceEnv>['use'],
-	audit: AuditLog | undefined,
-	execute: (params: P, ctx: ToolContext) => Promise<R>,
-): (params: P, ctx: ToolContext) => Promise<R> {
-	const record = async (
-		params: P,
-		ctx: ToolContext,
-		outcome: { result: unknown } | { error: unknown },
-	): Promise<void> => {
-		if (audit === undefined) return;
-		try {
-			await shell(ctx.agent, (env) =>
-				audit.record(env, auditEntry(tool, params, ctx, outcome), BACKGROUND_CONTEXT),
+	audit: AuditLog,
+): AmbionTool {
+	const record = async (params: unknown, ctx: ToolContext, outcome: Outcome): Promise<void> => {
+		// A refused record, as after `dispose`, goes to `onError`. It never replaces the call's outcome.
+		const lost = (error: Error) =>
+			audit.onError?.(
+				new Error(
+					`The audit entry of the ${tool.name} call ${ctx.callId} was not recorded: ${error.message}`,
+					{ cause: error },
+				),
 			);
-		} catch {
-			// The log is best-effort. A closed bash owner does not replace the call's own outcome.
-		}
+		await bestEffort(async () => {
+			const entry = auditEntry(tool.name, params, ctx, outcome);
+			await shell(ctx.agent, (env) => audit.record(env, entry, BACKGROUND_CONTEXT));
+		}, lost);
 	};
-	return async (params, ctx) => {
-		try {
-			const result = await execute(params, ctx);
-			await record(params, ctx, { result });
-			return result;
-		} catch (error) {
-			await record(params, ctx, { error });
-			throw error;
-		}
-	};
+	return Object.freeze({
+		...tool,
+		invoke: async (params: unknown, ctx: ToolContext) => {
+			const outcome = await outcomeOf(tool, params, ctx);
+			await record(params, ctx, outcome);
+			if ('error' in outcome) throw outcome.error;
+			return outcome.result;
+		},
+	});
 }
 
 /** Bind a Pi harness tool through the owner's whole-operation queue. */
-function bindTool(
-	tool: HarnessTool,
-	use: WorkspaceResource<WorkspaceEnv>['use'],
-	audit?: AuditLog,
-): AmbionTool {
+function bindTool(tool: HarnessTool, use: WorkspaceResource<WorkspaceEnv>['use']): AmbionTool {
 	return defineTool({
 		name: tool.name,
 		description: tool.description,
@@ -135,33 +150,15 @@ function bindTool(
 					: withAbortSignal(ctx.signal, BACKGROUND_CONTEXT);
 			return use(
 				ctx.agent,
-				async (env) => {
-					try {
-						const result = await tool.execute(
-							ctx.callId,
-							params,
-							ctx.onUpdate ?? (() => undefined),
-							{ env },
-							invocationOf(ctx.callId),
-							context,
-						);
-						// The record itself runs over BACKGROUND_CONTEXT, never ctx's own
-						// signal: a cut activation must still leave a trace of what it did.
-						await audit?.record(
-							env,
-							auditEntry(tool.name, params, ctx, { result }),
-							BACKGROUND_CONTEXT,
-						);
-						return result;
-					} catch (error) {
-						await audit?.record(
-							env,
-							auditEntry(tool.name, params, ctx, { error }),
-							BACKGROUND_CONTEXT,
-						);
-						throw error;
-					}
-				},
+				(env) =>
+					tool.execute(
+						ctx.callId,
+						params,
+						ctx.onUpdate ?? (() => undefined),
+						{ env },
+						invocationOf(ctx.callId),
+						context,
+					),
 				ctx.signal,
 			);
 		},
@@ -172,7 +169,6 @@ function bindTool(
 export function bindTools(
 	tools: readonly HarnessTool[],
 	use: WorkspaceResource<WorkspaceEnv>['use'],
-	audit?: AuditLog,
 ): readonly AmbionTool[] {
-	return Object.freeze(tools.map((tool) => bindTool(tool, use, audit)));
+	return Object.freeze(tools.map((tool) => bindTool(tool, use)));
 }

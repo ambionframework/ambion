@@ -4,6 +4,7 @@
  * to a short notice when the full entry will not serialize or will not fit.
  * The entry a call through a running room writes is in `workspace.test.ts`.
  */
+import type { AmbionTool } from '@ambionframework/ambion';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, err, FileError } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
@@ -12,7 +13,7 @@ import { memoryBackend } from '../../just-bash/src/index.ts';
 import { DEFAULT_AUDIT_LOG, openAuditLog } from '../src/audit.ts';
 import type { BashBackend, WorkspaceEnv } from '../src/backend.ts';
 import { openWorkspace, type Workspace } from '../src/index.ts';
-import { bindTools } from '../src/tools.ts';
+import { audited, bindTools } from '../src/tools.ts';
 import { callAs, invokeText, toolOf } from './support/backends.ts';
 
 const ctx = BACKGROUND_CONTEXT;
@@ -23,7 +24,7 @@ const PNG = new Uint8Array([
 	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
 ]);
 
-const audited = (bash: BashBackend = memoryBackend()) =>
+const auditedSite = (bash: BashBackend = memoryBackend()) =>
 	openWorkspace({ name: 'audited', backend: { bash }, audit: {} });
 
 async function readLines(env: ExecutionEnv, path: string): Promise<Record<string, unknown>[]> {
@@ -78,7 +79,7 @@ const entryFor = (callId: string) => ({
 
 describe('the workspace audit log', () => {
 	it('records the room, agent, tool, arguments and result of each call, and names it in guidance for the read tool', async () => {
-		const site = audited();
+		const site = auditedSite();
 		const guidance = site.tools().guidance ?? '';
 		expect(guidance).toContain(DEFAULT_AUDIT_LOG);
 		expect(guidance).toMatch(/read it/i);
@@ -129,11 +130,22 @@ describe('the workspace audit log', () => {
 			error: { name: 'ToolFailure', details: { process: { state: 'exited', exitCode: 3 } } },
 		});
 		expect(failed).not.toHaveProperty('result');
+		// A call that fails argument validation throws before its tool runs, and has an entry.
+		await expect(
+			toolOf(site, 'write').invoke({ path: 7 }, callAs('scribe', { callId: 'call-bad' })),
+		).rejects.toThrow(/Invalid arguments for tool 'write'/);
+		const invalid = (await entriesOf(site)).find((entry) => entry.callId === 'call-bad');
+		expect(invalid).toMatchObject({
+			tool: 'write',
+			arguments: { path: 7 },
+			error: { name: 'Error', message: expect.stringMatching(/Invalid arguments/) },
+		});
+		expect(invalid).not.toHaveProperty('result');
 		await site.dispose();
 	});
 
 	it('reads an image file as an image content part, and keeps only its byte count in the audit log', async () => {
-		const site = audited();
+		const site = auditedSite();
 		await site.use(scribe, (env) => env.writeFile('/home/scribe/photo.png', PNG, ctx));
 		const result = await toolOf(site, 'read').invoke(
 			{ path: 'photo.png' },
@@ -164,7 +176,7 @@ describe('the workspace audit log', () => {
 			parameters: Type.Object({}),
 			execute,
 		});
-		const site = audited();
+		const site = auditedSite();
 		const bound = bindTools(
 			[
 				tool('explode', async () => {
@@ -190,8 +202,7 @@ describe('the workspace audit log', () => {
 				),
 			],
 			site.use,
-			openAuditLog(),
-		);
+		).map((bare) => audited(bare, site.use, openAuditLog()));
 		const tools = { tools: () => ({ tools: bound }) };
 		await expect(
 			toolOf(tools, 'explode').invoke({}, callAs('scribe', { callId: 'call-2', room: 'lobby' })),
@@ -217,6 +228,113 @@ describe('the workspace audit log', () => {
 		expect(entries[0]).not.toHaveProperty('result');
 		expect(entries[1]).toMatchObject({ tool: 'slow', error: { message: 'cut mid-flight' } });
 		await site.dispose();
+	});
+});
+
+describe('audited', () => {
+	const plain = (invoke: AmbionTool['invoke']): AmbionTool => ({
+		name: 'plain',
+		label: 'plain',
+		description: 'A tool that answers at once.',
+		parameters: Type.Object({}),
+		invoke,
+	});
+
+	it('records a call that returns or throws at once, and reports a refused record to onError without changing the outcome', async () => {
+		const site = auditedSite();
+		const errors: Error[] = [];
+		const log = openAuditLog({ onError: (error) => errors.push(error) });
+		const ok = audited(
+			plain(() => 'fine'),
+			site.use,
+			log,
+		);
+		const broken = audited(
+			plain(() => {
+				throw new Error('thrown at once');
+			}),
+			site.use,
+			log,
+		);
+		expect(Object.isFrozen(ok)).toBe(true);
+		expect(await ok.invoke({}, callAs('scribe', { callId: 'sync-ok' }))).toBe('fine');
+		await expect(broken.invoke({}, callAs('scribe', { callId: 'sync-throw' }))).rejects.toThrow(
+			'thrown at once',
+		);
+		const entries = await entriesOf(site);
+		expect(entries).toMatchObject([
+			{ tool: 'plain', callId: 'sync-ok', result: 'fine' },
+			{ tool: 'plain', callId: 'sync-throw', error: { message: 'thrown at once' } },
+		]);
+		expect(errors).toEqual([]);
+
+		// A closed bash owner refuses the record. The call keeps its own outcome, and onError hears the loss.
+		await site.dispose();
+		expect(await ok.invoke({}, callAs('scribe', { callId: 'late-ok' }))).toBe('fine');
+		expect(errors).toHaveLength(1);
+		await expect(broken.invoke({}, callAs('scribe', { callId: 'late-throw' }))).rejects.toThrow(
+			'thrown at once',
+		);
+		expect(errors.map((error) => error.message)).toEqual([
+			expect.stringMatching(/plain call late-ok was not recorded: .*no longer available/),
+			expect.stringMatching(/plain call late-throw was not recorded: .*no longer available/),
+		]);
+		expect(errors[0]?.cause).toBeInstanceOf(Error);
+	});
+
+	it('leaves no entry for a call that ends after dispose starts, keeps its effect, and reports the loss to onError', async () => {
+		const started = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		const errors: Error[] = [];
+		const appended: string[] = [];
+		let written: unknown;
+		const site = auditedSite();
+		const [slowWrite] = bindTools(
+			[
+				{
+					name: 'slow-write',
+					label: 'slow-write',
+					description: 'Write a file once released.',
+					parameters: Type.Object({}),
+					execute: async (
+						_id: string,
+						_params: unknown,
+						_onUpdate: unknown,
+						toolContext: { env: WorkspaceEnv },
+					) => {
+						started.resolve();
+						await release.promise;
+						await toolContext.env.writeFile('/home/scribe/late.txt', 'written', ctx);
+						written = await toolContext.env.readTextFile('/home/scribe/late.txt', ctx);
+						return { content: [{ type: 'text' as const, text: 'done' }], details: {} };
+					},
+				},
+			],
+			site.use,
+		);
+		if (slowWrite === undefined) throw new Error('The bound tool is missing.');
+		const inner = openAuditLog({ onError: (error) => errors.push(error) });
+		const log = {
+			...inner,
+			record: (...args: Parameters<typeof inner.record>) => {
+				appended.push(args[1].callId);
+				return inner.record(...args);
+			},
+		};
+		const call = audited(slowWrite, site.use, log).invoke(
+			{},
+			callAs('scribe', { callId: 'in-flight' }),
+		);
+		await started.promise;
+		const disposing = site.dispose();
+		release.resolve();
+		expect(await call).toMatchObject({ content: [{ text: 'done' }] });
+		await disposing;
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0]?.message).toMatch(/slow-write call in-flight was not recorded/);
+		expect(written).toEqual({ ok: true, value: 'written' });
+		expect(appended).toEqual([]);
 	});
 });
 

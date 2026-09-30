@@ -14,8 +14,7 @@
  * process starts after every earlier operation of the owner. The process
  * then runs off the owner. Each handle tool reads the end of the output
  * file as one more operation on the bash owner. No tool holds the owner
- * while it waits for a process. The audit entry of a call runs on the bash
- * owner after the call ends. `docs/processes.md` states the texts.
+ * while it waits for a process. `docs/processes.md` states the texts.
  */
 
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
@@ -26,14 +25,13 @@ import {
 	type ShellOutputTruncation,
 } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
-import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
 import { PROCESSES_DIR, type ProcessStatus } from './process-files.ts';
 import { readOutput } from './process-output.ts';
 import type { ProcessTable } from './process-table.ts';
 import { deadlineNote, psTable, stateLine } from './process-text.ts';
 import type { WorkspaceResource } from './resource.ts';
-import { recordedOnShell, ToolFailure } from './tools.ts';
+import { ToolFailure } from './tools.ts';
 
 /** Seconds a process may run when `bash` names no timeout. */
 const DEFAULT_TIMEOUT_SECONDS = 600;
@@ -65,11 +63,10 @@ const MAX_TIMEOUT_SECONDS = 2_147_483;
 /** The tool names, in the order the tool line of the guidance lists them. */
 export const PROCESS_TOOL_NAMES = ['bash', 'ps', 'status', 'wait', 'cancel'] as const;
 
-/** What the process tools need from the workspace: the bash owner, the process table, and the audit log. */
+/** What the process tools need from the workspace: the bash owner and the process table. */
 export interface ProcessToolOptions {
 	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
 	readonly processes: ProcessTable;
-	readonly audit?: AuditLog;
 }
 
 /** Guidance for the process tools. */
@@ -156,10 +153,6 @@ export interface PsDetails {
 
 /** Build the `bash`, `ps`, `status`, `wait` and `cancel` tools over the process table. */
 export function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] {
-	const recorded = <P, D>(
-		name: string,
-		execute: (params: P, ctx: ToolContext) => Promise<AgentToolResult<D>>,
-	) => recordedOnShell(name, options.shell, options.audit, execute);
 	const table = options.processes;
 	return Object.freeze([
 		defineTool({
@@ -167,14 +160,14 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			label: 'bash',
 			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out.`,
 			parameters: bashSchema,
-			execute: recorded('bash', (params: BashParams, ctx) => started(options, params, ctx)),
+			execute: (params: BashParams, ctx) => started(options, params, ctx),
 		}),
 		defineTool({
 			name: 'ps',
 			label: 'Processes',
 			description: 'List your running processes.',
 			parameters: psSchema,
-			execute: recorded('ps', async (_params: object, ctx) => listed(table, ctx)),
+			execute: async (_params: object, ctx) => listed(table, ctx),
 		}),
 		defineTool({
 			name: 'status',
@@ -182,11 +175,11 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			description:
 				'Give the state of a process and its new output: the output after your last result for it.',
 			parameters: handleSchema,
-			execute: recorded('status', async (params: HandleParams, ctx) => {
+			execute: async (params: HandleParams, ctx) => {
 				const process = await table.find(ctx.agent, params.handle, ctx.signal);
 				const note = deadlineLine(NOT_CUT, process, [process], ctx);
 				return failedOr(await described(options, process, ctx, note), [process]);
-			}),
+			},
 		}),
 		defineTool({
 			name: 'wait',
@@ -194,7 +187,7 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			description:
 				'Wait for the first of your processes in handles to end, up to timeout seconds. Give the state and the new output of each one that ended, and the state of each one that still runs. A process keeps running when the time ends first. A process that has ended makes a wait return at once, so drop its handle from handles.',
 			parameters: waitSchema,
-			execute: recorded('wait', (params: WaitParams, ctx) => waited(options, params, ctx)),
+			execute: (params: WaitParams, ctx) => waited(options, params, ctx),
 		}),
 		defineTool({
 			name: 'cancel',
@@ -202,9 +195,8 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			description:
 				'Stop a running process, and give its state and its new output. A process that takes over 10 seconds to stop still shows running.',
 			parameters: handleSchema,
-			execute: recorded('cancel', async (params: HandleParams, ctx) =>
+			execute: async (params: HandleParams, ctx) =>
 				cancelled(await described(options, await table.cancel(ctx.agent, params.handle), ctx)),
-			),
 		}),
 	]);
 }

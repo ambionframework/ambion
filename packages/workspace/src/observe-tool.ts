@@ -3,9 +3,6 @@
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
-import type { AuditLog } from './audit.ts';
-import type { WorkspaceEnv } from './backend.ts';
-import type { WorkspaceResource } from './resource.ts';
 import type { SensorClient } from './sensor-client.ts';
 import type { RegisteredSensorConnection, SensorConnections } from './sensor-connections.ts';
 import { retainSensorObservation, type SensorRetentionMetadata } from './sensor-retention.ts';
@@ -16,7 +13,6 @@ import {
 	SensorSpanSchema,
 } from './sensors.ts';
 import type { SnapshotStore } from './snapshots.ts';
-import { recordedOnShell } from './tools.ts';
 
 const observeSchema = Type.Object(
 	{
@@ -52,8 +48,6 @@ interface ObserveDetails {
 export function createObserveTool(options: {
 	readonly connections: SensorConnections;
 	readonly store: SnapshotStore;
-	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
-	readonly audit?: AuditLog;
 	readonly images?: boolean;
 }): AmbionTool {
 	return defineTool({
@@ -61,12 +55,7 @@ export function createObserveTool(options: {
 		label: 'Observe sensor',
 		description: 'Read a connected sensor and retain its evidence as a workspace snapshot.',
 		parameters: observeSchema,
-		execute: recordedOnShell(
-			'observe',
-			options.shell,
-			options.audit,
-			(params: ObserveParams, ctx: ToolContext) => executeObserve(params, ctx, options),
-		),
+		execute: (params: ObserveParams, ctx: ToolContext) => executeObserve(params, ctx, options),
 	});
 }
 
