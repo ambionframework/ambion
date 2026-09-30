@@ -3,8 +3,9 @@ node_modules/
 .turbo/
 pnpm-lock.yaml
 CHANGELOG.md
-# Local Workbench workspace artifacts are runtime data.
+# Local example workspace artifacts are runtime data.
 examples/workbench/.data/
+examples/camera-chat/.data/
 
 # Local agent worktrees are copies of the repository, with their own state.
 .claude/worktrees/

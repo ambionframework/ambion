@@ -5,6 +5,7 @@ import {
 	bold,
 	type CliRenderer,
 	fg,
+	type Renderable,
 	ScrollBoxRenderable,
 	StyledText,
 	TextRenderable,
@@ -125,7 +126,10 @@ export class Transcript {
 	private readonly renderer: CliRenderer;
 	private readonly list: BoxRenderable;
 
-	constructor(renderer: CliRenderer) {
+	private readonly attachments: ((message: Message) => readonly Renderable[]) | undefined;
+
+	constructor(renderer: CliRenderer, attachments?: (message: Message) => readonly Renderable[]) {
+		this.attachments = attachments;
 		this.renderer = renderer;
 		this.root = new ScrollBoxRenderable(renderer, {
 			flexGrow: 1,
@@ -224,6 +228,7 @@ export class Transcript {
 		const width = Math.max(CHIP_MIN, this.root.width - CHIP_MARGIN - indent);
 		for (const item of marks.refs.get(block.message.seq) ?? [])
 			box.add(this.chip(item, item.id === marks.picked, width, fill));
+		for (const attachment of this.attachments?.(block.message) ?? []) box.add(attachment);
 		return box;
 	}
 
