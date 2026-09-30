@@ -5,8 +5,11 @@
 > and validated SN27 Workbench template, and the workstation port transport
 > is available. SN4's conformance runner is available from
 > `@ambionframework/workspace/conformance`, and the SN3 production HTTP client
-> is available from `@ambionframework/workspace/sensors`. Workspace `connect`
-> and `observe` remain pending. See the [release plan](../planning/next.md).
+> is available from `@ambionframework/workspace/sensors`. A workspace with
+> `BashBackend.ports` now exposes `connect`; `observe` and automatic evidence
+> SN34's internal retention operation is implemented; `observe` and its
+> integration of that operation remain pending. See the
+> [release plan](../planning/next.md).
 
 **A forked Git repository defines a sensor server.** The agent customizes
 its acquisition and reduction code, validates it, and saves working
@@ -135,8 +138,8 @@ observe({ sensor: 'bench/room-temperature' });
 // Result: values, measurement times, export paths, and a snapshot ref.
 ```
 
-The `fork` and process commands use existing workspace tools. `connect` and
-`observe` show the intended sensor workflow and remain pending in 0.5.0.
+The `fork` and process commands use existing workspace tools. `connect` is
+available on a backend with ports; `observe` remains pending in 0.5.0.
 
 **Starting this template starts fixture acquisition before readiness.** It
 stores its initial fixture data, then prints `READY` with the bound port.
@@ -226,10 +229,11 @@ interface ConnectInput {
 - `port` is an integer from 1 through 65535 on the workstation.
 
 **The workspace checks readiness before registering the connection.** It
-checks the process, opens the port transport, and reads the server index.
-It validates `api`, launch source metadata, and the listed names. It checks
-the process again before committing the registration. A failure closes the temporary
-transport and adds no connection. The server process keeps running.
+checks that the caller owns a running process, opens the port transport, and
+reads the server index through `createSensorClient`. It validates API
+version 1, launch source metadata, unique sensor names, and the listed names.
+It checks the same process again before committing. A failure closes the
+temporary transport and adds no connection. The server process keeps running.
 
 **Network waits hold no workspace resource owner.** Process checks and
 export writes use the existing short resource operations. HTTP requests
@@ -237,14 +241,19 @@ and tunnel establishment run outside those queues.
 
 **A successful result lists the sensors.** Each line gives the qualified
 name and description. The result also names the workstation, remote port,
-process handle, and launch source. An activation reminder lists the same connection
-facts and currently known sensors. It embeds no observation media.
+process handle, launch source, and captured index. The activation reminder
+will list the same connection facts and currently known sensors in SN5. It
+will embed no observation media.
 
 **A repeated connection is idempotent.** The same owner, process, port,
-and name refresh the index and return the existing registration. A name
-assigned to another live process is refused. Once its process ends, its
-owner can bind that name to a replacement process with another `connect`.
-Another agent cannot replace the owner's registration.
+and name refresh discovery and return the existing registration. The
+registration preserves its captured launch source and rejects a retry if
+the server reports altered source metadata. The explicit retry can renew a
+failed transport after checking the process again. A name assigned to
+another live process is refused. Once its process ends, its owner can bind
+that name to a different running process with another `connect`. The ended
+process handle cannot be revived, and another agent cannot replace the
+owner's registration.
 
 **All agents of the workspace can observe connected sensors.** The
 connection retains the identity of its process owner for transport.
@@ -256,10 +265,23 @@ does not automatically restart a server or restore a connection. The
 agent reads `ps`, adopts a surviving process through the existing table,
 and calls `connect` again. This avoids a second durable service registry.
 
-**A process end makes its connection unavailable.** The next reminder,
-`observe`, or `connect` checks that state. The workspace closes the port
-transport when it learns of the end. It never silently attaches to
-another server that later uses the same port.
+**A process end makes its connection unavailable.** The process table's end
+event or a process check marks it unavailable and closes its port transport.
+The registry remembers the ended process identity for this host run, so a
+stale read cannot revive it. Reconnecting a replacement is an explicit owner
+call and does not reuse the old registration's transport. A listener that
+later reuses the port is never attached silently.
+
+**Future sensor readers use one internal registry boundary.** The source
+module `sensor-connections.ts` exposes
+`createSensorConnections(...).get('<connection>/<sensor>', signal)` to
+workspace internals. It checks the captured process owner and handle before
+returning the available connection, client, index, and launch source. It
+returns `undefined` for an unknown or unavailable sensor. A reader passes
+its own signal to `get` and to the request. A status-read failure propagates
+without declaring the process ended, so an explicit `connect` can retry the
+process check and renew its transport. A failed observe request is not
+replayed. This boundary adds no public `Workspace` method or package export.
 
 ## Workstation ports
 
@@ -305,9 +327,11 @@ safe more than once. An aborted request does not close this shared transport.
 SSH disconnect, forwarding failure, and backend disposal release its channels,
 session reference, and local listener.
 
-**Sensor request recovery remains pending.** The future observe flow may
-rebuild a transport only after it rechecks the process. It will not replay a
-failed observe automatically, because the server may acquire data on request.
+**Sensor request recovery stays explicit.** A repeated `connect` may build a
+new transport after it rechecks the process and validates the index. A future
+observe flow can use the same boundary when it renews a failed transport. It
+must not replay a failed observe automatically, because the server may acquire
+data on request.
 
 **OpenSSH must permit this forwarding.** The backend reports a forwarding
 refusal explicitly. The example setup enables the required loopback

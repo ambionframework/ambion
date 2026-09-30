@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**A ports-enabled workspace connects running sensor servers.** The
+`connect({ name, process, port })` tool checks process ownership and
+readiness, validates the version 1 index, and registers qualified sensor
+names in memory for the host run. Equal retries refresh discovery and the
+private transport while preserving captured launch source metadata. Process
+end makes the connection unavailable, and only its owner can replace it
+with a new process.
+
 **The workspace defines the sensor wire contract.**
 `@ambionframework/workspace/sensors` exports the version 1 body schemas,
 client types, and `createSensorClient(root)` for index, observe, and verified

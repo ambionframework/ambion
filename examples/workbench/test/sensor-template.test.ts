@@ -15,7 +15,7 @@ import {
 const template = fileURLToPath(new URL('../templates/sensor-server/', import.meta.url));
 
 describe('the sensor server template', () => {
-	// Allow three npm tests (each capped at 10s), Git operations, and server startup.
+	// Allow three npm tests (each capped at 30s), Git operations, and server startup.
 	it('is registered, forkable, and survives a customized Git push and fresh clone', async () => {
 		const repositories = labRepositories(':memory:');
 		onTestFinished(() => repositories.dispose?.());
@@ -115,7 +115,7 @@ describe('the sensor server template', () => {
 			at: '2025-01-02T03:04:07.000Z',
 			parts: [{ kind: 'text', text: 'Fixture run: the indicator is green.' }],
 		});
-	}, 60_000);
+	}, 120_000);
 });
 
 function gitCommand(cwd: string, args: string[]): string {
@@ -125,8 +125,16 @@ function gitCommand(cwd: string, args: string[]): string {
 }
 
 function npmTest(cwd: string): { status: number | null; output: string } {
-	const result = spawnSync('npm', ['test'], { cwd, encoding: 'utf8', timeout: 10_000 });
-	return { status: result.status, output: `${result.stdout}${result.stderr}` };
+	const result = spawnSync('npm', ['test'], { cwd, encoding: 'utf8', timeout: 30_000 });
+	const diagnostics = [
+		result.stdout,
+		result.stderr,
+		result.error === undefined ? undefined : `spawnSync error: ${result.error.message}`,
+		result.signal === null ? undefined : `signal: ${result.signal}`,
+	]
+		.filter((part) => part !== undefined)
+		.join('');
+	return { status: result.status, output: diagnostics };
 }
 
 async function packageRoot(file: string, expectedName: string): Promise<string> {

@@ -1,11 +1,11 @@
 # The workspace
 
-> **Pending in 0.5.0:** [Sensors](sensors.md) specifies the `connect` and
-> `observe` tools and their rendering and audit details. The internal
-> retention operation is implemented; it stores verified sensor bytes and
-> manifests through the existing snapshot store and exports a complete
-> per-call directory into the observing agent's home. The tools require a
-> bash backend with the optional workstation port capability.
+> **Pending in 0.5.0:** [Sensors](sensors.md) specifies `observe` and its
+> rendering and audit details. `connect` is available when the bash backend
+> has the optional workstation port capability. The internal SN34 retention
+> operation stores verified sensor bytes and manifests through the existing
+> snapshot store, then exports a complete per-call directory into the
+> observing agent's home.
 
 **The workspace is the Pi binding of the resource contract.** The optional
 `@ambionframework/workspace` package provides a workspace resource and its
@@ -86,12 +86,15 @@ processes at the start of an activation. `snapshot` and `restore` come next:
 one freezes files and gives the refs that cite them, and the other puts the
 bytes of a cited snapshot in the agent's files
 ([Snapshot a file](#snapshot-a-file)).
-A workspace
-with a SQL backend adds `sql`
+A backend with `ports` adds `connect` to validate and discover a running
+sensor server owned by the caller. It adds no process lifecycle operation.
+A workspace with a SQL backend adds `sql`
 ([Query the shared database](#query-the-shared-database)). A workspace with
 no SQL backend has no `sql` tool. The bash backend adds its own guidance
-about its own shell, if it has any. The bundle binds every tool through the
-resource owner and keeps one stable identity. Pass the bundle in an agent's `bundles` field.
+about its own shell, if it has any. Tools use resource owners for storage
+operations; process waits and sensor network requests run outside those
+operations. The bundle keeps one stable identity. Pass it in an agent's
+`bundles` field.
 
 **A failure is an error, and every result tells the agent what to do.**
 The workspace tools share these rules:
