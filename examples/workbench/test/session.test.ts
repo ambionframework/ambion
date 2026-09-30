@@ -606,7 +606,7 @@ describe('Session /ps', () => {
 		void panel.cancel();
 		expect(panel.message).toBe('Cancelling bash-000000000001.');
 		await cancelling;
-		expect(panel.message).toBe('bash-000000000001 did not end within 10 seconds.');
+		expect(panel.message).toBe('bash-000000000001 did not end within 15 seconds.');
 		expect(host.calls.filter((call) => call.startsWith('cancel:'))).toHaveLength(1);
 	});
 

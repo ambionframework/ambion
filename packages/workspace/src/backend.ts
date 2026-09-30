@@ -1,11 +1,27 @@
-import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
+import type {
+	Context,
+	ExecutionEnv,
+	ExecutionError,
+	Result,
+	ShellExecResult,
+} from '@earendil-works/pi-agent-core';
+import type { WorkspaceExecOptions } from './execution-env.ts';
 import type { GitAccess, GitBackend } from './git-backend.ts';
 import type { ObjectBackend } from './object-backend.ts';
 import type { ResourceBackend, ResourceEnv, WorkspaceAgent } from './resource.ts';
 import type { SqlBackend } from './sql-backend.ts';
 
-/** A Pi `ExecutionEnv` whose cleanup the resource owner calls with no context. */
-export interface WorkspaceEnv extends Omit<ExecutionEnv, 'cleanup'>, ResourceEnv {}
+/**
+ * A Pi `ExecutionEnv` whose cleanup the resource owner calls with no
+ * context. Its `exec` also takes the grace of a stop.
+ */
+export interface WorkspaceEnv extends Omit<ExecutionEnv, 'cleanup' | 'exec'>, ResourceEnv {
+	exec(
+		command: string,
+		options: WorkspaceExecOptions | undefined,
+		context: Context,
+	): Promise<Result<ShellExecResult, ExecutionError>>;
+}
 
 /**
  * Where a bash backend keeps the shared records the neutral layer writes:

@@ -89,7 +89,7 @@ export interface Workbench {
 	 */
 	processOutput(handle: string, agent: string): Promise<ProcessOutput>;
 	/**
-	 * Stop one process. It waits up to 10 seconds for the end, then gives the
+	 * Stop one process. It waits up to 15 seconds for the end, then gives the
 	 * state. It runs outside the queue of the host's file reads.
 	 */
 	cancelProcess(handle: string): Promise<ProcessView>;

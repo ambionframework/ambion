@@ -45,6 +45,9 @@ export function stateLine(process: ProcessStatus): string {
 	const where = `Output: ${process.output}.`;
 	switch (process.state) {
 		case 'running':
+			if (process.stopping === true) {
+				return `${who} is running, and the table stopped it. It has not ended yet. ${where} Call status with its handle, or wait with it in handles, to read the end.`;
+			}
 			return `${who} is running. ${where} Call status or cancel with its handle, wait with it in handles, or ps to list your processes.`;
 		case 'exited':
 			return `${who} exited with code ${process.exitCode}. ${where}`;

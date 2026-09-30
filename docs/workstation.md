@@ -272,11 +272,15 @@ standard input:
 
 1. `printf 'AMBION_PGID=%s\n' "$$" >&2`, which gives the process group
    ID.
-2. `cd -- '<dir>' || exit 1`, which stops the script when the directory
+2. `trap : TERM`, which keeps the script's shell alive through the
+   `SIGTERM` of a stop. The shell waits for the command, so the channel
+   reports the command's exit status. The handler resets to the default in
+   the command.
+3. `cd -- '<dir>' || exit 1`, which stops the script when the directory
    went away after the check.
-3. One `export NAME='value'` for each variable, with each value quoted
+4. One `export NAME='value'` for each variable, with each value quoted
    for the shell.
-4. The command as the body of a quoted heredoc, passed to `bash -c` with
+5. The command as the body of a quoted heredoc, passed to `bash -c` with
    standard input from `/dev/null` and its stderr joined to its stdout:
 
    ```sh
@@ -308,10 +312,39 @@ of one agent to another account.
 **Each command runs in its own process group.** Pi's `NodeExecutionEnv`
 starts each command detached and kills the whole group with `SIGKILL`.
 `setsid --wait` makes `bash` the leader of a new group and waits for it,
-so the channel reports the exit status of the command. An abort opens a
-second channel and sends `kill -KILL -- -<group>`. An abort that comes
-before the `AMBION_PGID=` line waits for that line, which is the first
-thing the script prints.
+so the channel reports the exit status of the command. An abort that
+comes before the `AMBION_PGID=` line waits for that line, which is the
+first thing the script prints.
+
+**An abort stops the group with `SIGTERM`, a grace, and `SIGKILL`.** The
+`grace` field of `WorkspaceExecOptions` gives the seconds between the two
+signals. Each signal opens a short channel that runs
+`kill -<signal> -- -<group>`.
+
+| `grace`            | What an abort sends                                                       |
+| ------------------ | ------------------------------------------------------------------------- |
+| Absent, or 0       | `SIGKILL` at once, as `NodeExecutionEnv` does                             |
+| 1 or more          | `SIGTERM`, then `SIGKILL` after `grace` seconds if the command still runs |
+| Not 0 to 2,147,483 | No command: `exec` fails with `spawn_error`                               |
+
+**The host holds the timer of the grace.** No channel stays open while
+the grace runs. The `SIGKILL` after the grace goes only to a group whose
+command has not exited. After the exit, the group can be empty, and the
+system can give its ID to another program. A child that the command left
+in the group keeps running, as after a natural exit. The first signal
+goes to the group also after the exit. A deadline that comes while a
+child holds the output open sends that child the first signal. With a
+grace, that signal is `SIGTERM`, so a child that ignores `TERM` keeps
+running until the channel closes. A host that stops during the grace
+sends no `SIGKILL`.
+
+**A command that ends inside the grace gives its own exit status.** The
+channel reports it, and `exec` still returns the abort as `aborted` or
+`timeout`. The process table reads the code from the `exit` file
+([Processes](processes.md#the-stop)). The command's channel closes 2
+seconds after the time of the `SIGKILL` at the latest. The times of the
+signals count from the `AMBION_PGID=` line. Until that line comes, the
+channel closes after the grace and 2 seconds.
 
 **A login shell can write lines before the script's first line.**
 `sshd` runs the command through the account's login shell, and Debian's
@@ -328,7 +361,8 @@ session's own child, and a pipeline's other processes keep running.
 
 **A deadline takes the same path and reports `timeout`.** `Deadline`
 tells an abort apart from a timeout, and a command with no timeout gets
-30 seconds. `SshEnv` supplies the group kill for both.
+30 seconds. `SshEnv` supplies the same signals and the same grace for
+both.
 
 **`SshEnv` hands one view to `onUpdate`.** The conformance suite expects
 one update for each command, the same as the just-bash backends give.
@@ -362,9 +396,10 @@ while output still arrives, the view ends with a line that says so. Over
 a slow link, that line also marks output of the command itself that the
 channel still held.
 
-**A process that starts its own session escapes the kill.** After a kill,
-its channel closes 2 seconds later. When the client cannot open a channel,
-the backend drops the client, and the next `connect()` builds a new one.
+**A process that starts its own session escapes the kill.** After the
+`SIGKILL`, its channel closes 2 seconds later. When the client cannot open
+a channel, the backend drops the client, and the next `connect()` builds a
+new one.
 
 ## Connections
 
@@ -405,14 +440,14 @@ call adds network round trips to every tool call.
 **The channels stay under the server's limit.** OpenSSH allows 10 sessions
 on one connection by default (`MaxSessions`). The bash owner runs one
 operation at a time, so the owner's work holds at most three channels of
-a client: SFTP, one command, and one abort. Each running process of the
+a client: SFTP, one command, and one signal. Each running process of the
 agent holds one command channel, and the process table allows 4. The table
 stops the processes of one agent one at a time, and a timeout stops a
-process the same way, so the stops hold at most one abort channel. A
-client then holds at most 8 channels, while each stop ends within its
-grace of 10 seconds. A process that outlives its grace meets the
-backend's own deadline later, and that kill opens one more channel
-([Processes](processes.md#a-process)).
+process the same way, so the stops hold at most one signal channel. A
+signal channel stays open only while `kill` runs. A client then holds at
+most 8 channels. A process that outlives the wait of its stop meets the
+backend's own deadline later, and that stop opens one more signal
+channel ([Processes](processes.md#a-process)).
 
 **The bash owner serializes every agent's file work and the start of each
 process.** A workstation keeps one queue in v1, and each operation now waits

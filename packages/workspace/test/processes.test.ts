@@ -14,7 +14,7 @@ import {
 	writeSpec,
 	writeStop,
 } from '../src/process-files.ts';
-import { FINISHED_IN_REMINDER, LATER_LINE } from '../src/process-text.ts';
+import { FINISHED_IN_REMINDER, LATER_LINE, stateLine } from '../src/process-text.ts';
 import type { ProcessDetails, PsDetails, WaitDetails } from '../src/process-tools.ts';
 import { MAX_FINISHED_PROCESSES, MAX_RUNNING_PROCESSES } from '../src/processes.ts';
 import { openWorkspace, type Workspace } from '../src/workspace.ts';
@@ -245,13 +245,18 @@ describe('bash', () => {
 });
 
 describe('status, wait and cancel', () => {
-	it('cancels a running process, and a second cancel gives the same final state', async () => {
+	it('cancels a running process at once on just-bash, and a second cancel gives the same final state', async () => {
 		const workspace = site();
-		const { details } = await call(workspace, 'bash', { command: 'sleep 30', wait: 0 });
+		// just-bash has no signals and no trap: the stop ends the command at once, and no trap runs.
+		const command = "trap 'echo cleanup; exit 0' TERM\nsleep 30";
+		const { details } = await call(workspace, 'bash', { command, wait: 0 });
 		const { handle } = details.process;
+		const started = Date.now();
 		const cancelled = await call(workspace, 'cancel', { handle });
+		expect(Date.now() - started).toBeLessThan(5_000);
 		expect(cancelled.details.process.state).toBe('cancelled');
 		expect(cancelled.text).toContain(`Process ${handle} is cancelled.`);
+		expect(cancelled.text).not.toContain('cleanup');
 		expect((await call(workspace, 'cancel', { handle })).details.process).toEqual(
 			cancelled.details.process,
 		);
@@ -490,9 +495,9 @@ describe('a process on a backend that misbehaves', () => {
 						const env = await inner.connect(agent, signal);
 						const exec = env.exec.bind(env);
 						let ran = false;
-						// Only the environment of a process runs the wrapper, which starts with its pid.
+						// Only the environment of a process runs the wrapper, which starts with its trap.
 						env.exec = (...args) => {
-							if (args[0].startsWith('echo "$$"')) ran = true;
+							if (args[0].startsWith('trap : TERM')) ran = true;
 							return exec(...args);
 						};
 						env.cleanup = async () => {
@@ -728,31 +733,55 @@ describe('an aborted wait', () => {
 
 describe('the files as the source of truth', () => {
 	const EXIT = '0 2026-01-01T00:01:00Z';
+	const TERMED = '143 2026-01-01T00:01:00Z';
 	const STOP = 'cancelled 2026-01-01T00:00:30.000Z';
+	const TIMED_OUT = 'timed_out 2026-01-01T00:00:30.000Z';
+	const LOST_LINE = `failed 2026-01-01T00:00:30.000Z ${LOST}`;
 	it.each([
 		{ files: { exit: EXIT }, live: false, state: 'exited' },
 		{ files: { exit: EXIT, stop: STOP }, live: false, state: 'exited' },
 		{ files: { exit: EXIT, stop: STOP }, live: true, state: 'exited' },
-		{ files: { stop: STOP }, live: true, state: 'running' },
+		// The SIGTERM of a stop ended the command: the cause in stop names the end.
+		{ files: { exit: TERMED, stop: STOP }, live: false, state: 'cancelled' },
+		{ files: { exit: TERMED, stop: TIMED_OUT }, live: false, state: 'timed_out' },
+		{ files: { exit: '143', stop: STOP }, live: false, state: 'cancelled' },
+		{ files: { exit: TERMED }, live: false, state: 'exited' },
+		{ files: { exit: TERMED, stop: LOST_LINE }, live: false, state: 'exited' },
+		{ files: { stop: STOP }, live: true, state: 'running', stopping: true },
+		{ files: { stop: LOST_LINE }, live: true, state: 'running' },
 		{
 			files: { stop: 'failed 2026-01-01T00:00:30.000Z The run broke.' },
 			live: false,
 			state: 'failed',
 		},
+		// A run that broke names no stop, so a shell that still runs reads running alone.
+		{
+			files: { stop: 'failed 2026-01-01T00:00:30.000Z The run broke.' },
+			live: true,
+			state: 'running',
+		},
 		{ files: {}, live: true, state: 'running' },
 		{ files: {}, live: false, state: 'failed' },
-	])('reads $state from the files $files, with a live shell: $live', ({ files, live, state }) => {
-		const spec = {
-			handle: 'bash-00000000000b',
-			kind: 'bash' as const,
-			agent: 'alpha',
-			command: 'true',
-			timeout: 600,
-			startedAt: '2026-01-01T00:00:00.000Z',
-		};
-		const read: ProcessFiles = { dir: '/p', spec, seen: false, pid: true, alive: live, ...files };
-		expect(statusOf(read, false).state).toBe(state);
-	});
+	])(
+		'reads $state from the files $files, with a live shell: $live',
+		({ files, live, state, stopping }) => {
+			const spec = {
+				handle: 'bash-00000000000b',
+				kind: 'bash' as const,
+				agent: 'alpha',
+				command: 'true',
+				timeout: 600,
+				startedAt: '2026-01-01T00:00:00.000Z',
+			};
+			const read: ProcessFiles = { dir: '/p', spec, seen: false, pid: true, alive: live, ...files };
+			const status = statusOf(read, false);
+			expect(status.state).toBe(state);
+			expect(status.stopping).toBe(stopping);
+			if (files.exit?.includes(' ')) expect(status.endedAt).toBe('2026-01-01T00:01:00Z');
+			// The state line names a stop that waits for the end.
+			expect(stateLine(status).includes('the table stopped it')).toBe(stopping === true);
+		},
+	);
 
 	it('reads the table of a new workspace over the same directory: a finished process, and one that no run owns', async () => {
 		const { dir, dispose } = await tempDir('ambion-processes-');

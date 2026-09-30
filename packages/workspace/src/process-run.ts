@@ -26,9 +26,9 @@ import {
 } from './process-files.ts';
 
 /**
- * Seconds past its own timeout that the table gives the backend's deadline.
- * The table stops the process first. The backend's deadline stops a process
- * that the table's stop did not end.
+ * Seconds past its own timeout and its grace that the table gives the
+ * backend's deadline. The table stops the process first. The backend's
+ * deadline stops a process that the table's stop did not end.
  */
 const BACKEND_SLACK_SECONDS = 30;
 
@@ -74,22 +74,25 @@ export function pause(ms: number, signal?: AbortSignal): Promise<void> {
 export type Run = Result<ShellExecResult, ExecutionError> | { thrown: unknown };
 
 /**
- * Run one bash process on its own environment. The shell itself can write
- * before the redirect applies, for example a syntax error. That output goes
- * to the end of `out`.
+ * Run one bash process on its own environment. An abort of `signal` stops
+ * it with `grace` seconds from `SIGTERM` to `SIGKILL`, on a backend with
+ * signals. The shell itself can write before the redirect applies, for
+ * example a syntax error. That output goes to the end of `out`.
  */
 export async function runBash(
 	env: WorkspaceEnv,
 	spec: ProcessSpec,
 	dir: string,
 	signal: AbortSignal,
+	grace: number,
 ): Promise<Run> {
 	try {
 		const result = await runScript(
 			env,
 			wrapped(spec.command, dir),
 			{
-				timeout: Math.min(spec.timeout + BACKEND_SLACK_SECONDS, MAX_TIMER_SECONDS),
+				timeout: Math.min(spec.timeout + grace + BACKEND_SLACK_SECONDS, MAX_TIMER_SECONDS),
+				grace,
 				capture: { limits: SHELL_OUTPUT },
 			},
 			withAbortSignal(signal, BACKGROUND_CONTEXT),
