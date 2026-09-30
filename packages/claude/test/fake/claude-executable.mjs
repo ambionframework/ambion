@@ -162,6 +162,7 @@ async function callRoom(tool, args) {
 	await ensureMcp();
 	const id = toolUse(`mcp__ambion__${tool}`, args);
 	const result = await mcp('tools/call', { name: tool, arguments: args });
+	log({ tool_result: { tool, args, content: result.content, isError: result.isError === true } });
 	toolResult(id, result.content, result.isError === true);
 	return result;
 }

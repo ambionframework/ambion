@@ -1,15 +1,12 @@
 # Sensors
 
-> **Pending in 0.5.0.** The wire schemas, client types, and HTTP client exist in
-> `@ambionframework/workspace`. The current branch includes the implemented
-> and validated SN27 Workbench template, and the workstation port transport
-> is available. SN4's conformance runner is available from
-> `@ambionframework/workspace/conformance`, and the SN3 production HTTP client
-> is available from `@ambionframework/workspace/sensors`. A workspace with
-> `BashBackend.ports` now exposes `connect`; `observe` and automatic evidence
-> SN34's internal retention operation is implemented; `observe` and its
-> integration of that operation remain pending. See the
-> [release plan](../planning/next.md).
+> **Implemented in the current branch.** A workspace with `BashBackend.ports`
+> exposes `connect` and `observe`. Observation reads use the connected server,
+> retain verified bytes and the manifest through snapshots, and export the
+> result into the observing agent's home. The version 1 schemas and client are
+> available from `@ambionframework/workspace/sensors`, and the conformance
+> runner is available from `@ambionframework/workspace/conformance`. See the
+> [release plan](../planning/next.md) for remaining acceptance work.
 
 **A forked Git repository defines a sensor server.** The agent customizes
 its acquisition and reduction code, validates it, and saves working
@@ -138,8 +135,8 @@ observe({ sensor: 'bench/room-temperature' });
 // Result: values, measurement times, export paths, and a snapshot ref.
 ```
 
-The `fork` and process commands use existing workspace tools. `connect` is
-available on a backend with ports; `observe` remains pending in 0.5.0.
+The `fork` and process commands use existing workspace tools. `connect` and
+`observe` are available on a backend with ports.
 
 **Starting this template starts fixture acquisition before readiness.** It
 stores its initial fixture data, then prints `READY` with the bound port.
@@ -272,7 +269,7 @@ stale read cannot revive it. Reconnecting a replacement is an explicit owner
 call and does not reuse the old registration's transport. A listener that
 later reuses the port is never attached silently.
 
-**Future sensor readers use one internal registry boundary.** The source
+**Sensor readers use one internal registry boundary.** The source
 module `sensor-connections.ts` exposes
 `createSensorConnections(...).get('<connection>/<sensor>', signal)` to
 workspace internals. It checks the captured process owner and handle before
@@ -327,11 +324,10 @@ safe more than once. An aborted request does not close this shared transport.
 SSH disconnect, forwarding failure, and backend disposal release its channels,
 session reference, and local listener.
 
-**Sensor request recovery stays explicit.** A repeated `connect` may build a
-new transport after it rechecks the process and validates the index. A future
-observe flow can use the same boundary when it renews a failed transport. It
-must not replay a failed observe automatically, because the server may acquire
-data on request.
+**Sensor request recovery stays explicit.** A repeated `connect` can build a
+new transport after it rechecks the process and validates the index. `observe`
+does not renew a failed transport or replay a failed request, because the
+server may acquire data on request.
 
 **OpenSSH must permit this forwarding.** The backend reports a forwarding
 refusal explicitly. The example setup enables the required loopback
@@ -490,7 +486,7 @@ shape and timestamp form. `isValidObserveRequest` also requires `from < to`.
 
 ## Observe and retain evidence
 
-**`observe` reads one connected sensor.** Its proposed input is:
+**`observe` reads one connected sensor.** Its input is:
 
 ```ts
 interface ObserveInput {
@@ -510,6 +506,11 @@ interface ObserveInput {
 5. Export the manifest and files into the calling agent's home, using safe
    generated filenames; source filenames stay in the observations as metadata.
 6. Return the rendered result, export paths, and manifest snapshot ref.
+
+The workspace rechecks that the same connection is still registered and its
+process is running after it verifies every response file and before retention
+starts. Retention can finish after a later process stop or connection change
+because the complete response bytes already passed verification.
 
 **The existing snapshot machinery owns hashing and storage.** An
 internal helper can store the received buffers directly. It must retain
@@ -542,14 +543,14 @@ that the result was retained. Content-addressed objects already written
 can remain for retry. A partial local export must not appear complete.
 The workspace generates a separate export directory for each call.
 
-**The internal SN34 boundary is `retainSensorObservation`.** SN6 will pass
+**The internal SN34 boundary is `retainSensorObservation`.** `observe` passes
 the existing `SnapshotStore`, the observing `WorkspaceAgent`, captured
 metadata (`sensor`, `process`, `connection`, `request`, and `source`), the
 validated `ObserveResponse`, a `Map<string, Uint8Array>` of verified bytes
 keyed by digest (the SN3 adapter supplies each `SensorFile.bytes`), and an
 optional `AbortSignal`. It receives the manifest object and snapshot ref,
 the published export directory and manifest path, and each file's digest,
-snapshot ref, and export path. SN6 remains responsible for acquiring and
+snapshot ref, and export path. The observe tool is responsible for acquiring and
 validating the connection and response, fetching the files, rendering the
 result, and recording its audit details.
 
@@ -566,15 +567,15 @@ initial `observe` schema has no per-call image override.
 
 ## Failure and lifecycle
 
-| Event                                           | Result                                                              |
-| ----------------------------------------------- | ------------------------------------------------------------------- |
-| Server is not ready                             | `connect` fails; use `status`, then retry                           |
-| Process ends or is cancelled                    | Its connection becomes unavailable; retained snapshots still work   |
-| SSH session ends                                | The current request fails; a later request can reopen the transport |
-| Server returns invalid data or wrong file bytes | The observation fails validation                                    |
-| Object store write fails                        | `observe` fails without a retained-result claim                     |
-| Workspace host restarts                         | Use `ps` and `connect` again for a surviving process                |
-| Workspace disposes                              | Connections close and normal process cleanup runs                   |
+| Event                                           | Result                                                                            |
+| ----------------------------------------------- | --------------------------------------------------------------------------------- |
+| Server is not ready                             | `connect` fails; use `status`, then retry                                         |
+| Process ends or is cancelled                    | Its connection becomes unavailable; retained snapshots still work                 |
+| SSH session ends                                | The request fails; repeat `connect` to check the process and open a new transport |
+| Server returns invalid data or wrong file bytes | The observation fails validation                                                  |
+| Object store write fails                        | `observe` fails without a retained-result claim                                   |
+| Workspace host restarts                         | Use `ps` and `connect` again for a surviving process                              |
+| Workspace disposes                              | Connections close and normal process cleanup runs                                 |
 
 **A read request follows its tool's cancellation.** Aborting a request
 closes its HTTP work. It does not cancel the server process. A callback

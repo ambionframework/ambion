@@ -8,7 +8,6 @@ import type {
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, BashServices, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
-import { connectToolGuidance, createConnectTool } from './connect-tool.ts';
 import { createFileTools, defaultToolGuidance } from './default-tools.ts';
 import { workspaceFiles } from './files.ts';
 import type { GitBackend, GitCommit, GitEnv, GitRevision } from './git-backend.ts';
@@ -33,6 +32,7 @@ import {
 	type WorkspaceResource,
 } from './resource.ts';
 import { createSensorConnections, type SensorConnections } from './sensor-connections.ts';
+import { sensorTools } from './sensor-tools.ts';
 import { type SkillSet, skillGuidance, skillSetOf, syncSkills } from './skills.ts';
 import {
 	createRestoreTool,
@@ -55,6 +55,8 @@ export interface WorkspaceToolsOptions {
 	 * their files.
 	 */
 	readonly skills?: SkillSet;
+	/** Render image parts as model attachments. Bytes are retained either way. */
+	readonly images?: boolean;
 }
 
 /**
@@ -223,9 +225,10 @@ function workspaceTools(
 		connections?: SensorConnections;
 	},
 	audit: AuditLog | undefined,
+	images = true,
 ): ToolBundle {
 	const { layout, guidance } = bash;
-	const files = bindTools(createFileTools(), shell.use, audit);
+	const files = bindTools(createFileTools(images), shell.use, audit);
 	const processes = createProcessTools({ shell: shell.use, processes: backends.processes, audit });
 	const snapshots = [
 		createSnapshotTool(backends.store, audit),
@@ -233,23 +236,20 @@ function workspaceTools(
 	];
 	const sql = sqlPart(backends.sql, shell, audit);
 	const git = gitPart(backends.git, shell, audit);
-	const connect =
-		backends.connections === undefined
-			? { names: [], tools: [], notes: [] }
-			: {
-					names: ['connect'],
-					tools: [
-						createConnectTool({ connections: backends.connections, shell: shell.use, audit }),
-					],
-					notes: [connectToolGuidance()],
-				};
+	const sensors = sensorTools({
+		connections: backends.connections,
+		store: backends.store,
+		shell: shell.use,
+		audit,
+		images,
+	});
 	const notes = [
-		defaultToolGuidance([...sql.names, ...git.names, ...connect.names]),
+		defaultToolGuidance([...sql.names, ...git.names, ...sensors.names]),
 		processToolGuidance(),
 		snapshotGuidance(backends.store.workspace),
 		...sql.notes,
 		...git.notes,
-		...connect.notes,
+		...sensors.notes,
 		guidance,
 		audit && auditGuidance(audit),
 		roomMirrorGuidance(layout.rooms),
@@ -261,7 +261,7 @@ function workspaceTools(
 			...snapshots,
 			...sql.tools,
 			...git.tools,
-			...connect.tools,
+			...sensors.tools,
 		]),
 		guidance: joinNotes(notes),
 		remind: (seat: ReminderSeat, signal: AbortSignal) => backends.processes.remind(seat, signal),
@@ -482,15 +482,24 @@ export function openWorkspace(options: {
 		{ sql, git, processes: table, store, connections },
 		audit,
 	);
+	const textToolBundle = workspaceTools(
+		bash,
+		resource,
+		{ sql, git, processes: table, store, connections },
+		audit,
+		false,
+	);
 	const processes: WorkspaceProcesses = Object.freeze({
 		list: (query?: ProcessQuery) => table.hostList(query),
 		subscribe: (listener: (event: ProcessEvent) => void) => table.subscribe(listener),
 		cancel: (handle: string) => table.hostCancel(handle),
 	});
-	const tools = (toolsOptions?: WorkspaceToolsOptions): ToolBundle =>
-		toolsOptions?.skills === undefined
-			? toolBundle
-			: withSkills(toolBundle, skillSetOf(toolsOptions.skills), resource.use);
+	const tools = (toolsOptions?: WorkspaceToolsOptions): ToolBundle => {
+		const bundle = toolsOptions?.images === false ? textToolBundle : toolBundle;
+		return toolsOptions?.skills === undefined
+			? bundle
+			: withSkills(bundle, skillSetOf(toolsOptions.skills), resource.use);
+	};
 	const mirror = (room: Room, mirrorOptions?: RoomMirrorOptions): Promise<RoomMirror> =>
 		mirrorRoom(room, resource, host, layout.rooms, mirrorOptions);
 	// The SQL owner goes first: a SQL operation may still write through the

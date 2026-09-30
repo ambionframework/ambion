@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**Ports-enabled workspaces can observe and retain sensor evidence.** The
+`observe({ sensor, span? })` tool reads one connected sensor, fetches and
+verifies every referenced file, and stores the full response and file refs in
+the existing snapshot object store before returning. The result includes
+measurement values and times, export paths, and a manifest snapshot ref.
+`workspace.tools({ images: false })` returns frame paths for `observe` and
+`read`. `observe` still retains frame bytes in its exports and snapshots;
+`read` leaves its source file unchanged.
+
 **A ports-enabled workspace connects running sensor servers.** The
 `connect({ name, process, port })` tool checks process ownership and
 readiness, validates the version 1 index, and registers qualified sensor
