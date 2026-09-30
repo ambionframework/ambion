@@ -1,7 +1,7 @@
 # Sensors
 
 > **Sensor reads require a backend with ports.** Such a workspace exposes
-> `connect` and `observe`. Observation reads use the connected server, retain
+> `connect`, `disconnect`, and `observe`. Observation reads use the connected server, retain
 > verified bytes and the manifest through snapshots, and export the result
 > into the observing agent's home. The version 1 schemas and client are
 > available from `@ambionframework/workspace/sensors`, and the conformance
@@ -172,8 +172,8 @@ observe({ sensor: 'bench/room-temperature' });
 // Result: values, measurement times, export paths, and a snapshot ref.
 ```
 
-The `fork` and process commands use existing workspace tools. `connect` and
-`observe` are available on a backend with ports.
+The `fork` and process commands use existing workspace tools. `connect`,
+`disconnect`, and `observe` are available on a backend with ports.
 
 **Starting this template starts fixture acquisition before readiness.** It
 stores its initial fixture data, then prints `READY` with the bound port.
@@ -318,7 +318,8 @@ returns `undefined` for an unknown or unavailable sensor. A reader passes
 its own signal to `get` and to the request. A status-read failure propagates
 without declaring the process ended, so an explicit `connect` can retry the
 process check and renew its transport. A failed observe request is not
-replayed. This boundary adds no public `Workspace` method or package export.
+replayed. A host reads the same boundary through `workspace.sensors`, which
+[Host lifecycle and disconnect](#host-lifecycle-and-disconnect) describes.
 
 ## Workstation ports
 

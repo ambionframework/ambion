@@ -32,6 +32,8 @@ Use this flag only for a demonstration. `--device <index>` selects a specific
 AVFoundation video device; without it, the server selects the built-in camera.
 `CAMERA_FFMPEG` can name the FFmpeg executable. Capture is 1280 × 720, five frames
 per second, with no audio. Timestamps record receipt of the captured frame.
+The server compresses one frame at a time on the thread pool. A newer frame
+replaces a frame that waits for compression.
 
 The server binds only to 127.0.0.1 on a random port. It supports `GET /`,
 `POST /camera/observe`, and `GET /files/<sha256>`. The last 60 distinct PNG frames

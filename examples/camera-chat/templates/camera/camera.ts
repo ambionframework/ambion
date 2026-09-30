@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { type Frame, FrameDecoder, frameFromRgb, HEIGHT, WIDTH } from './frame.ts';
+import { encodeFrame, type Frame, FrameDecoder, HEIGHT, WIDTH } from './frame.ts';
 
 const executable = () => process.env.CAMERA_FFMPEG ?? 'ffmpeg';
 
@@ -39,6 +39,28 @@ export async function builtInCamera(): Promise<string> {
 	return camera.index;
 }
 
+/** Encode one frame at a time. A newer frame replaces a frame that waits. */
+function latestEncoder(receive: (frame: Frame) => void, fail: (error: unknown) => void) {
+	let waiting: { rgb: Buffer; at: string } | undefined;
+	let busy = false;
+	const drain = async () => {
+		busy = true;
+		try {
+			while (waiting) {
+				const { rgb, at } = waiting;
+				waiting = undefined;
+				receive(await encodeFrame(rgb, at));
+			}
+		} finally {
+			busy = false;
+		}
+	};
+	return (rgb: Buffer) => {
+		waiting = { rgb, at: new Date().toISOString() };
+		if (!busy) drain().catch(fail);
+	};
+}
+
 /** Acquire five frames each second. Audio capture stays disabled. */
 export function startCamera(
 	device: string,
@@ -74,12 +96,17 @@ export function startCamera(
 	const decoder = new FrameDecoder();
 	let diagnostic = '';
 	let stopping = false;
+	const abandon = (error: unknown) => {
+		stopping = true;
+		fail(String(error));
+		child.kill('SIGTERM');
+	};
+	const encode = latestEncoder(receive, abandon);
 	child.stdout.on('data', (bytes: Buffer) => {
 		try {
-			for (const rgb of decoder.push(bytes)) receive(frameFromRgb(rgb));
+			for (const rgb of decoder.push(bytes)) encode(rgb);
 		} catch (error) {
-			fail(String(error));
-			child.kill('SIGTERM');
+			abandon(error);
 		}
 	});
 	child.stderr.on('data', (bytes: Buffer) => {

@@ -85,7 +85,7 @@ also provides a private transport for sensor servers.
 | Output after cancel or timeout | The file stays empty                                                 | The file keeps the output so far                           |
 | Work after a host restart      | Memory: none. Directory: the files; earlier processes read as failed | The files, and the processes that still run                |
 | Repositories                   | In the host's process, with `justGitBackend`                         | In one account on the server, with `workstationGitBackend` |
-| Sensor servers                 | No port transport; no `connect` or `observe` tools                   | Workstation provides loopback forwarding over SSH          |
+| Sensor servers                 | No port transport; no `connect`, `disconnect`, or `observe` tools    | Workstation provides loopback forwarding over SSH          |
 
 0.3.0 adds the rows "Output of a running process" and "Output after cancel
 or timeout", the processes in "Work after a host restart", and
