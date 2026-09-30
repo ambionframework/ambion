@@ -671,6 +671,8 @@ build binds each tool as a host function that returns `ctx.newPromise()`.
 The host settles that promise when the nested call settles, then runs
 `runtime.executePendingJobs()`. Several nested calls then run together.
 `setMemoryLimit` and `setInterruptHandler` give the limits in the table.
+The evaluator disposes each promise and each value handle that it makes.
+QuickJS aborts the process when it frees a runtime that still holds one.
 The package is MIT, it has no native part, and the lockfile already holds
 it through `just-bash`.
 
