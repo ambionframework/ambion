@@ -53,6 +53,14 @@ pushes, and cites the commit by its full hash. See
 [Workspace](docs/workspace.md), [Processes](docs/processes.md),
 [Snapshot a file](docs/workspace.md#snapshot-a-file), and [Git](docs/git.md).
 
+**A backend with ports can connect to sensor servers.** An agent forks a
+Git template, customizes the server, validates it, and saves a commit before
+launch. The agent connects by process handle and port. `observe` verifies the
+response and retains its manifest and file bytes in the existing snapshot
+object store. The agent can cite the returned snapshot refs. The server owns
+acquisition and reducer state. Measurement timestamps remain the source of
+truth. See [Sensors](docs/sensors.md).
+
 **An agent comes back to its work later.** It calls `schedule` with `after`,
 in seconds. The exchange closes while the say waits. When the say is due, the
 room gives it back, and the returned say opens an exchange of its own. An
@@ -64,7 +72,8 @@ hears when each process starts and ends. Host code can post a message to
 the owner seat when a process ends. The message starts an activation of
 that seat. See [The host's view](docs/processes.md#the-hosts-view).
 
-**Two deployment shapes give the same tools and differ in reach.**
+**Both deployments provide the core workspace tools.** A backend with ports
+also provides a private transport for sensor servers.
 
 | What an agent gets             | One node: `@ambionframework/just-bash`                               | A remote server: `@ambionframework/workstation`            |
 | ------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
@@ -76,6 +85,7 @@ that seat. See [The host's view](docs/processes.md#the-hosts-view).
 | Output after cancel or timeout | The file stays empty                                                 | The file keeps the output so far                           |
 | Work after a host restart      | Memory: none. Directory: the files; earlier processes read as failed | The files, and the processes that still run                |
 | Repositories                   | In the host's process, with `justGitBackend`                         | In one account on the server, with `workstationGitBackend` |
+| Sensor servers                 | No port transport; no `connect` or `observe` tools                   | Workstation provides loopback forwarding over SSH          |
 
 0.3.0 adds the rows "Output of a running process" and "Output after cancel
 or timeout", the processes in "Work after a host restart", and

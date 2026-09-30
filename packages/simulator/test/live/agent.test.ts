@@ -8,11 +8,21 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { byAgent, quiet, speak } from '@ambionframework/ambion/testing';
 import { describe, expect, it, onTestFailed } from 'vitest';
-import { agentActor, agentJudge, type Run, simulate, type Verdict } from '../../src/index.ts';
+import {
+	type AgentActorOptions,
+	type AgentJudgeOptions,
+	agentActor,
+	agentJudge,
+	type Run,
+	simulate,
+	type Verdict,
+} from '../../src/index.ts';
 import { open, priya } from '../support.ts';
 
 const MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
 const JUDGE_MODEL = process.env.JUDGE_MODEL ?? MODEL;
+const THINKING = process.env.AMBION_THINKING as AgentActorOptions['thinking'];
+const JUDGE_THINKING = process.env.JUDGE_THINKING as AgentJudgeOptions['thinking'];
 const keyOf = (model: string) =>
 	`${(model.split('/')[0] ?? '').toUpperCase().replace(/-/g, '_')}_API_KEY`;
 const live = describe.skipIf(!process.env[keyOf(MODEL)] || !process.env[keyOf(JUDGE_MODEL)]);
@@ -43,6 +53,7 @@ live('an agent actor and an agent judge on a real model', () => {
 		);
 		const actor = agentActor({
 			model: MODEL,
+			...(THINKING === undefined ? {} : { thinking: THINKING }),
 			brief: 'Ask the desk whether Thursday will be dry. Stop as soon as you know.',
 		});
 		// A polite model may thank the desk before it stops, so the bound leaves room for it.
@@ -50,7 +61,10 @@ live('an agent actor and an agent judge on a real model', () => {
 		const { run } = evidence;
 		expect(['stopped', 'limit']).toContain(run.ended);
 		expect(run.moves[0]).toHaveProperty('text');
-		const judge = agentJudge({ model: JUDGE_MODEL });
+		const judge = agentJudge({
+			model: JUDGE_MODEL,
+			...(JUDGE_THINKING === undefined ? {} : { thinking: JUDGE_THINKING }),
+		});
 		evidence.verdict = await judge(run, ['The desk tells the person that Thursday is dry.']);
 		const { verdict } = evidence;
 		const cost = (run.usage.actor.cost ?? 0) + (verdict.usage?.cost ?? 0);

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+**The 0.5.0 sensor work keeps the eleven-package workspace.** It adds no
+separate sensors package.
+
 **Ports-enabled workspaces can observe and retain sensor evidence.** The
 `observe({ sensor, span? })` tool reads one connected sensor, fetches and
 verifies every referenced file, and stores the full response and file refs in
@@ -48,13 +51,15 @@ the optional `ports` capability. `workstationBackend` forwards a remote
 The caller closes each transport. The URL is private and temporary.
 
 **The workspace retains received sensor evidence in snapshots.** An internal
-operation stores verified file buffers and an observation manifest through
-the existing object store. The manifest format records exact observations,
-the qualified sensor and process, captured connection and request facts, and
-launch source metadata including the dirty marker. Exports use generated
-filenames in a per-call directory in the observing agent's home; a complete
-directory appears only after the files and manifest are written. No public
-snapshot variant or sensor evidence store is added.
+operation stores verified file buffers and a JSON manifest through the
+existing object store. The manifest has `api: 1`, `sensor`, `process`,
+`connection`, `request`, `source`, `observations`, and `files`; each file
+records its digest and snapshot ref. The source captures launch metadata,
+including the dirty marker. Exports use generated filenames in a per-call
+directory in the observing agent's home; a complete directory appears only
+after the files and manifest are written. The manifest is a regular snapshot
+object. The snapshot and journal formats do not change, and no separate
+sensor evidence store is added.
 
 **The Workbench adds a forkable sensor-server template.** It serves
 deterministic numeric, frame, and text fixtures, captures Git source

@@ -23,12 +23,13 @@ and its acceptance. [The backlog](backlog.md) holds everything else.
 
 ## Status
 
-**0.4.0 shipped. SN1, SN3, SN4, SN5, SN6, SN8, SN27, SN32, SN33, and
-SN34 are implemented and validated.** The wire schemas, HTTP client,
+**0.4.0 shipped. SN1, SN3, SN4, SN5, SN6, SN8, SN27, SN32, SN33, SN34,
+and SN35 are implemented and validated. SN31's release documentation and
+required checks are complete.** The wire schemas, HTTP client,
 conformance runner, template, workstation ports, connection registry,
-discovery reminder, `connect` and `observe` tools, and snapshot retention
-exist. SN35 and SN31 remain pending. SN33's focused Linux checks passed,
-but its scenario was not run against the provisioned OpenSSH tier.
+discovery reminder, `connect` and `observe` tools, snapshot retention, and
+the OpenSSH lifecycle acceptance exist. SN33's focused Linux checks passed;
+SN35 separately validates the complete path on the provisioned OpenSSH tier.
 This scope incorporates the owner's response to the review of `origin/main`
 `0f9ef1e27eed0f27c3ec47aef09071d54b044ff8` on 2026-09-29.
 [The review disposition](review-0.5.0.md) records the changed decisions.
@@ -167,14 +168,31 @@ restored bytes.
 
 ### Phase 3. The complete lifecycle and release
 
-- [ ] **1.** The workstation lifecycle acceptance scenario. (SN35)
-- [ ] **2.** Documentation and release checks. Needs 1. (SN31)
+- [x] **1.** The workstation lifecycle acceptance scenario. (SN35)
+- [x] **2.** Documentation and release checks. Needs 1. (SN31)
 
 **Evidence:** fork, customization, validation, commit, push, start,
 connection, observation, citation, replacement, rollback, and restore
-all run through their real tools.
-The host-restart case reconnects to an adopted process. `pnpm check`
-passes, and the OpenSSH tier passes the workstation scenario.
+all run through real room tools. The host-crash case reconnects to an adopted
+process after a separate checkout advances its branch. `pnpm check` passes.
+The focused lifecycle passes 2/2, and `pnpm test:live-local-workstation`
+passes 48/48 across four OpenSSH files, including the actual template,
+host-staged runtime, crash recovery, and orphan cleanup after a timed-out
+startup response.
+
+SN31 updates current sensor capability, backend requirements, exports, and
+the 0.5.0 JSON manifest format. Release packaging validates all eleven
+packages, version agreement, package hygiene, and the packed sensor schema.
+The final Linux `pnpm format && pnpm check` passes all 23 Turbo tasks;
+`pnpm test:reports` passes 79/79. The final OpenSSH target passes 48/48.
+An optional Pi live run with `openai/gpt-6-luna` at medium reasoning completed
+all 38 cases once with no skips or provider errors: 35 passed and 3 failed.
+The findings are the `corrects-3` judge rejecting "referenced withdrawn
+limit" where the criterion expected explicit "planned" wording, an extra
+`override` scheduled self-message
+that was later dismissed, and a `direct-question` answer broadcast instead
+of sent to Priya. The ignored run evidence is under
+`packages/assistant/test/live/runs/openai-gpt-6-luna/`.
 
 ## The items
 
@@ -340,8 +358,10 @@ readable after shutdown. A dirty run remains dirty in its manifest even
 after the edits are committed and pushed. Export edits change no snapshot.
 
 After a host crash, an adopted server can be connected again. Its launch
-source remains the earlier value even if the branch moved. A clean
-workspace disposal follows the existing process stop rules.
+source remains the earlier value even if the branch moved. If startup fails
+after the remote server is ready, a fresh workspace adopts and cancels the
+orphan, then verifies its port closed. A clean workspace disposal follows the
+existing process stop rules.
 
 **SN31. Release documentation.** Update workspace, workstation, process,
 example, trust, and package docs as their pending changes land. Remove

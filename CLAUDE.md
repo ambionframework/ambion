@@ -41,7 +41,7 @@ floor.
 | `docs/workstation-git.md` | Design contract for the git backend on the workstation: one account for the repositories, git over SSH — read with `git.md`                                          |
 | `docs/example.md`         | The one runnable example, an agentic lab workspace, and what it must show                                                                                            |
 | `docs/roster.md`          | Design contract for a roster that changes while the room runs — read with `agent.md`                                                                                 |
-| `docs/sensors.md`         | Design contract for sensors, pending in 0.5.0: agent-managed server processes, connected through the workspace — read with `workspace.md`                            |
+| `docs/sensors.md`         | Design contract for the versioned sensor API, workstation connections, observations, and retained evidence — read with `workspace.md`                                |
 | `docs/durability.md`      | What the record promises under failure, and how the tiers prove it — read with `agent.md`                                                                            |
 | `docs/deployment.md`      | Host placement, storage, reconnect, and the recovery evidence — read with `durability.md`                                                                            |
 | `docs/formal.md`          | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                                                          |
