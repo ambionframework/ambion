@@ -22,6 +22,15 @@ the optional `ports` capability. `workstationBackend` forwards a remote
 `127.0.0.1` service port to an automatically assigned host loopback port.
 The caller closes each transport. The URL is private and temporary.
 
+**The workspace retains received sensor evidence in snapshots.** An internal
+operation stores verified file buffers and an observation manifest through
+the existing object store. The manifest format records exact observations,
+the qualified sensor and process, captured connection and request facts, and
+launch source metadata including the dirty marker. Exports use generated
+filenames in a per-call directory in the observing agent's home; a complete
+directory appears only after the files and manifest are written. No public
+snapshot variant or sensor evidence store is added.
+
 **The Workbench adds a forkable sensor-server template.** It serves
 deterministic numeric, frame, and text fixtures, captures Git source
 metadata at launch, and keeps acquisition files outside its checkout. The

@@ -481,9 +481,10 @@ interface ObserveInput {
 2. Fetch and verify every referenced file through that connection.
 3. Store those bytes in the existing workspace object store.
 4. Store a manifest with the exact observations and each file's snapshot
-   ref. Include the qualified sensor, process handle, request, and launch
-   source metadata from the connection.
-5. Export the manifest and files into the calling agent's home.
+   ref. Include the qualified sensor, process handle, captured connection
+   facts, request, and launch source metadata from the connection.
+5. Export the manifest and files into the calling agent's home, using safe
+   generated filenames; source filenames stay in the observations as metadata.
 6. Return the rendered result, export paths, and manifest snapshot ref.
 
 **The existing snapshot machinery owns hashing and storage.** An
@@ -491,7 +492,11 @@ internal helper can store the received buffers directly. It must retain
 the received bytes, even if a process later edits an exported file.
 The implementation takes no object-owner lock inside a bash-owner call.
 The current snapshot rules for digest verification and backend errors
-continue to apply.
+continue to apply. The internal retention operation stages each export and
+publishes its per-call directory only after all files and the manifest are
+written. Cancellation or a failed export cannot report a completed
+observation. The object buffers are retained before export, so an export
+failure can leave content-addressed objects available for a retry.
 
 **Source metadata identifies the serving implementation.** It does not
 claim that all historical measurements were acquired by that revision.
@@ -512,6 +517,17 @@ It lasts as long as the configured object store retains those snapshots.
 that the result was retained. Content-addressed objects already written
 can remain for retry. A partial local export must not appear complete.
 The workspace generates a separate export directory for each call.
+
+**The internal SN34 boundary is `retainSensorObservation`.** SN6 will pass
+the existing `SnapshotStore`, the observing `WorkspaceAgent`, captured
+metadata (`sensor`, `process`, `connection`, `request`, and `source`), the
+validated `ObserveResponse`, a `Map<string, Uint8Array>` of verified bytes
+keyed by digest (the SN3 adapter supplies each `SensorFile.bytes`), and an
+optional `AbortSignal`. It receives the manifest object and snapshot ref,
+the published export directory and manifest path, and each file's digest,
+snapshot ref, and export path. SN6 remains responsible for acquiring and
+validating the connection and response, fetching the files, rendering the
+result, and recording its audit details.
 
 **The result states values, units, measurement times, and evidence.**
 Text renders as text; a frame renders as an image; a series renders a
