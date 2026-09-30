@@ -114,9 +114,10 @@ The trap keeps the wrapper alive through the `SIGTERM` of a stop
 ([The stop](#the-stop)). The subshell keeps an `exit` in the command from
 ending the wrapper. The command stands on lines of its own, so a comment
 or a here-document at its end does not reach the parenthesis. The rename
-makes `exit` whole or absent. The shell can write before the redirect applies, for example on a
-syntax error. The table adds that output to the end of `out`, up to 16 KB
-or 200 lines, and records the shell's exit code in `exit`.
+makes `exit` whole or absent. The shell can write before the redirect
+applies, for example on a syntax error. The table adds that output to the
+end of `out`, up to 16 KB or 200 lines, and records the shell's exit code
+in `exit`.
 
 **The files give the state.**
 
@@ -258,22 +259,22 @@ rest with `read`, which takes an offset and a limit.
 **`details.process` is a `ProcessStatus`.** The host's view gives the
 same value.
 
-| Field       | Holds                                                        |
-| ----------- | ------------------------------------------------------------ |
-| `handle`    | The key of the process                                       |
-| `name`      | The label, when the agent gave one                           |
-| `kind`      | `bash`                                                       |
-| `agent`     | The owner agent                                              |
-| `command`   | The command as the agent gave it                             |
-| `state`     | `running`, `exited`, `timed_out`, `cancelled`, or `failed`   |
-| `output`    | The absolute path of the output file                         |
-| `timeout`   | Seconds the process may run                                  |
-| `room`      | The room of the `bash` call, when it had one. Metadata alone |
-| `startedAt` | ISO time of the start                                        |
-| `endedAt`   | ISO time of the end, when the files name it                  |
-| `exitCode`  | Set when the state is `exited`                               |
-| `error`     | Set when the state is `failed`                               |
-| `stopping`  | `true` while the state is `running` and a stop waits         |
+| Field       | Holds                                                                      |
+| ----------- | -------------------------------------------------------------------------- |
+| `handle`    | The key of the process                                                     |
+| `name`      | The label, when the agent gave one                                         |
+| `kind`      | `bash`                                                                     |
+| `agent`     | The owner agent                                                            |
+| `command`   | The command as the agent gave it                                           |
+| `state`     | `running`, `exited`, `timed_out`, `cancelled`, or `failed`                 |
+| `output`    | The absolute path of the output file                                       |
+| `timeout`   | Seconds the process may run                                                |
+| `room`      | The room of the `bash` call, when it had one. Metadata alone               |
+| `startedAt` | ISO time of the start                                                      |
+| `endedAt`   | ISO time of the end, when the files name it                                |
+| `exitCode`  | Set when the state is `exited`                                             |
+| `error`     | Set when the state is `failed`                                             |
+| `stopping`  | `true` while the state is `running` and `stop` names a cancel or a timeout |
 
 **A process that ended badly fails the call that reports it.** An exit
 code other than 0, a timeout, and a failed process make `bash`, `status`,
@@ -354,11 +355,11 @@ has the same handler ([Workstation](workstation.md#commands-and-aborts)).
 
 **The files record how the command ended.**
 
-| The command                                            | `exit` | State                   |
-| ------------------------------------------------------ | ------ | ----------------------- |
-| Traps `TERM`, and exits in time with code `n`, not 143 | `n`    | `exited`, with code `n` |
-| Ends on the `SIGTERM`: code 143                        | `143`  | The cause in `stop`     |
-| Outlives the grace, and `SIGKILL` ends it              | Absent | The cause in `stop`     |
+| The command                                                    | `exit` | State                   |
+| -------------------------------------------------------------- | ------ | ----------------------- |
+| Traps `TERM`, and exits in time with a code `n` other than 143 | `n`    | `exited`, with code `n` |
+| Ends on the `SIGTERM`: code 143                                | `143`  | The cause in `stop`     |
+| Outlives the grace, and `SIGKILL` ends it                      | Absent | The cause in `stop`     |
 
 **A command that exits 0 inside the grace reads `exited` with code 0.**
 The code is the command's own answer: it cleaned up. `stop` still names

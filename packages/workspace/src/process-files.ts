@@ -353,11 +353,13 @@ function stopEnding(stop: string): Ending {
 }
 
 /**
- * A process that still runs. A `stop` of the table means that a stop waits
- * for the end. The lost line of a read is no stop.
+ * A process that still runs. A `stop` that names a cancel or a timeout
+ * means that the table stopped the process. A `failed` line, from a run
+ * that broke or from a read that found the process lost, names no stop.
  */
 function runningEnding(stop: string | undefined): Ending {
-	const stopping = stop !== undefined && stopEnding(stop).error !== LOST;
+	const state = stop === undefined ? undefined : stopEnding(stop).state;
+	const stopping = state === 'cancelled' || state === 'timed_out';
 	return stopping ? { state: 'running', stopping } : { state: 'running' };
 }
 

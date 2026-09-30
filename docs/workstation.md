@@ -391,8 +391,9 @@ a slow link, that line also marks output of the command itself that the
 channel still held.
 
 **A process that starts its own session escapes the kill.** After the
-`SIGKILL`, its channel closes 2 seconds later. When the client cannot open a channel,
-the backend drops the client, and the next `connect()` builds a new one.
+`SIGKILL`, its channel closes 2 seconds later. When the client cannot open
+a channel, the backend drops the client, and the next `connect()` builds a
+new one.
 
 ## Connections
 

@@ -754,6 +754,12 @@ describe('the files as the source of truth', () => {
 			live: false,
 			state: 'failed',
 		},
+		// A run that broke names no stop, so a shell that still runs reads running alone.
+		{
+			files: { stop: 'failed 2026-01-01T00:00:30.000Z The run broke.' },
+			live: true,
+			state: 'running',
+		},
 		{ files: {}, live: true, state: 'running' },
 		{ files: {}, live: false, state: 'failed' },
 	])(

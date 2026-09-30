@@ -18,7 +18,7 @@
  * it within a bound. `exec` hands one view to `onUpdate` after the command
  * ends, through the workspace's `deliverView`, the same as the just-bash
  * backends. A child that keeps the output open after the
- * command exits gets `EXIT_GRACE_MS` after the last output, and at most
+ * command exits gets `EXIT_WAIT_MS` after the last output, and at most
  * `EXIT_DRAIN_MS` in all, and then the channel closes. A command that exits
  * before its deadline gives its exit status, whatever arrives after it.
  */
@@ -47,7 +47,7 @@ import { commandScript, invalidNames, PGID_PREFIX } from './script.ts';
 const MAX_TIMEOUT_SECONDS = 2_147_483;
 
 /** How long an aborted command's channel may stay open after the `SIGKILL`. */
-const CLOSE_GRACE_MS = 2_000;
+const CLOSE_WAIT_MS = 2_000;
 
 /**
  * How long the channel stays open after the last output, once the command
@@ -55,7 +55,7 @@ const CLOSE_GRACE_MS = 2_000;
  * after it, and over a slow link the rest waits on a window adjustment.
  * Pi's 100 ms fits a local pipe and can cut a remote output.
  */
-const EXIT_GRACE_MS = 1_000;
+const EXIT_WAIT_MS = 1_000;
 
 /**
  * The longest the channel stays open after the command exits. A background
@@ -64,11 +64,11 @@ const EXIT_GRACE_MS = 1_000;
 const EXIT_DRAIN_MS = 5_000;
 
 /**
- * How late the grace timer may fire and still close the channel. A later
+ * How late the drain timer may fire and still close the channel. A later
  * timer measured a stall of this process, and output can wait unread in a
- * pipe or a socket behind it. The timer then waits one more grace.
+ * pipe or a socket behind it. The timer then waits once more.
  */
-const GRACE_LATE_MS = EXIT_GRACE_MS / 2;
+const WAIT_LATE_MS = EXIT_WAIT_MS / 2;
 
 /** The line the view ends with when `EXIT_DRAIN_MS` closed the channel while output still arrived. */
 const DRAIN_NOTICE = `\n[The workstation closed the output ${EXIT_DRAIN_MS / 1000} seconds after the command exited. The view does not show the output after that.]\n`;
@@ -189,18 +189,18 @@ function finished(
 			code: undefined,
 			signal: undefined,
 		};
-		let grace: NodeJS.Timeout | undefined;
+		let drain: NodeJS.Timeout | undefined;
 		let drainEnd = Number.POSITIVE_INFINITY;
 		// Only output sets `cut`: a timer that waits again after a stall saw no output.
 		const arm = (outputArrived: boolean) => {
 			if (!ending.exited) return;
-			clearTimeout(grace);
+			clearTimeout(drain);
 			const left = Math.max(0, drainEnd - Date.now());
-			const cut = outputArrived && left < EXIT_GRACE_MS;
-			const wait = Math.min(EXIT_GRACE_MS, left);
+			const cut = outputArrived && left < EXIT_WAIT_MS;
+			const wait = Math.min(EXIT_WAIT_MS, left);
 			const due = Date.now() + wait;
-			grace = setTimeout(() => {
-				const stalled = Date.now() - due > GRACE_LATE_MS;
+			drain = setTimeout(() => {
+				const stalled = Date.now() - due > WAIT_LATE_MS;
 				if (!cut && left > 0 && stalled) return arm(false);
 				ending = { ...ending, cut };
 				channel.close();
@@ -218,7 +218,7 @@ function finished(
 			arm(false);
 		});
 		channel.on('close', () => {
-			clearTimeout(grace);
+			clearTimeout(drain);
 			resolve(ending);
 		});
 	});
@@ -249,7 +249,7 @@ async function signalGroup(
 /**
  * Stop the group once its ID is known: `SIGTERM`, then `SIGKILL` after
  * `grace` seconds when the command has not exited. A grace of 0 sends
- * `SIGKILL` at once. The channel closes `CLOSE_GRACE_MS` after the time of
+ * `SIGKILL` at once. The channel closes `CLOSE_WAIT_MS` after the time of
  * the `SIGKILL`. The host holds the timer, so no channel stays open for the
  * grace.
  */
@@ -278,7 +278,7 @@ function stopWhenAborted(
 		};
 		if (stderr.pgid === undefined) stderr.onPgid = signal;
 		else signal();
-		setTimeout(() => channel.close(), grace * 1000 + CLOSE_GRACE_MS).unref();
+		setTimeout(() => channel.close(), grace * 1000 + CLOSE_WAIT_MS).unref();
 	};
 	if (deadline.signal.aborted) stop();
 	else deadline.signal.addEventListener('abort', stop, { once: true });
