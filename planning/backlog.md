@@ -1,8 +1,8 @@
 # Backlog
 
-Everything that is not in [next.md](next.md). Each item names the
-condition that brings it into a release. Nothing here blocks a release
-until the item moves to that file.
+Everything that is not in [next.md](next.md) or [0.6.0.md](0.6.0.md).
+Each item names the condition that brings it into a release. Nothing here
+blocks a release until the item moves to one of those files.
 
 **The sections come in the order of their priority.** Known defects come
 first, then the release and CI, then the rules and proofs, then
@@ -14,7 +14,7 @@ condition holds moves to the top of its section.
 | [Known defects](#known-defects)               | K1–K6  | K2, the allow-list of the SQL guard      |
 | [Release and CI](#release-and-ci)             | L3, R1 | L3, a billing failure reads as one       |
 | [Rules and proofs](#rules-and-proofs)         | P1–P6  | P1, `returnable` into the verified rules |
-| [Designs with a shape](#designs-with-a-shape) | D1–D24 | D1, exchange bounds                      |
+| [Designs with a shape](#designs-with-a-shape) | D1–D23 | D1, exchange bounds                      |
 | [Deferred by decision](#deferred-by-decision) | None   | None                                     |
 
 ## Known defects
@@ -314,27 +314,6 @@ carries the activation, the exchange, and the room. A purpose field, a
 retry-safe operation key that the kernel derives, and a domain operation
 reused across rooms wait. **Condition:** an application that needs one of
 the three.
-
-**D24. The `compose` tool.** A `compose` tool takes the tools that it
-uses and code. The code passes the result of one tool into the next, runs
-calls in parallel, and the model reads only the value it returns.
-[Compose](../docs/compose.md) holds the proposed design. Parallel calls of
-file tools still run one operation at a time on the workspace queue; D9
-does not change that for one agent. **Condition:** a live comparison on
-one task shows that `compose` cuts the input tokens of a seat, catalog
-included, and keeps its tool-call success. The work comes in six slices,
-each with its own tests:
-
-1. The vocabulary: the `compose` field of a tool, the typed overloads of
-   `defineTool`, `ToolContext.record` and `composeCall`, `parent` on a
-   step, and the reserved name.
-2. The trace: the step sink in `toolContext` and in `toolsFor`, the
-   parented steps in `ToolCalls`, and the scripted executor.
-3. The `compose` tool, with an evaluator for tests alone: acceptance
-   items 1, 2, 4, and 5 on the scripted executor.
-4. The declared outputs of the workspace tools.
-5. `@ambionframework/evaluator` and `evaluatorConformance`.
-6. The live evidence, the pages that the design names, and the changelog.
 
 **D19. Posts in `simulate()`.** A scenario posts an event during an
 exchange. **Condition:** a simulator case that needs one.

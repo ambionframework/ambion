@@ -1,7 +1,7 @@
 # Compose
 
 **Status: proposed design.** No package exports these interfaces yet.
-[The backlog](../planning/backlog.md) holds the work as D24.
+[The 0.6.0 plan](../planning/0.6.0.md) holds the work.
 
 **The `compose` tool joins the tools of a seat into one call.** The agent
 calls `compose` with the tools that it uses and short code. The code passes
@@ -153,7 +153,7 @@ the authority: `compose` checks every argument against it.
 **The catalog costs input tokens.** The model already reads the schema of
 each tool as a native tool. The catalog repeats each input schema, and
 adds each declared output. A seat with many tools pays that cost in every
-activation. The live comparison of D24 counts the catalog in the input
+activation. The live comparison of CP6 counts the catalog in the input
 tokens of the seat.
 
 ## Guidance
@@ -815,7 +815,7 @@ once.
 6. **Processes carry parallel work.** A compose call starts several
    processes with `bash` and waits for each. The wall time stays near the
    time of the slowest process.
-7. **The guidance steers the choice.** The live comparison of D24 holds
+7. **The guidance steers the choice.** The live comparison of CP6 holds
    two cases on each family. In the first, the result of one tool feeds
    another, and the seat calls `compose`. In the second, the seat must
    read a result before it decides, and it calls the tool directly.
