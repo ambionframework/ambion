@@ -74,7 +74,8 @@ export interface WorkspaceProcesses {
 	subscribe(listener: (event: ProcessEvent) => void): () => void;
 	/**
 	 * Stop the process `handle` of any agent, and give its status once it
-	 * ends, or after 10 seconds, when it can still read `running`.
+	 * ends, or after 15 seconds, the grace and 5 seconds, when it can still
+	 * read `running`.
 	 */
 	cancel(handle: string): Promise<ProcessStatus>;
 }

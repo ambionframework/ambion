@@ -333,9 +333,10 @@ command has not exited. After the exit, the group can be empty, and the
 system can give its ID to another program. A child that the command left
 in the group keeps running, as after a natural exit. The first signal
 goes to the group also after the exit. A deadline that comes while a
-child holds the output open stops that child, as the `SIGKILL` did
-before. A host that stops during the
-grace sends no `SIGKILL`.
+child holds the output open sends that child the first signal. With a
+grace, that signal is `SIGTERM`, so a child that ignores `TERM` keeps
+running until the channel closes. A host that stops during the grace
+sends no `SIGKILL`.
 
 **A command that ends inside the grace gives its own exit status.** The
 channel reports it, and `exec` still returns the abort as `aborted` or

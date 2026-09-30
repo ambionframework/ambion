@@ -141,7 +141,7 @@ the list again, and the slow poll updates the times.
 - **The panel reads an output file up to 1 MiB.** A larger output shows
   its size and its path. The agent's `status` tool reads the end of any size.
 - **The first `x` chooses the process, and the second `x` cancels it.** The
-  cancel waits up to 10 seconds for the process to end. The file reads of
+  cancel waits up to 15 seconds for the process to end. The file reads of
   the terminal do not wait for it.
 
 `/attach <local path>` reads a file from your own machine and copies it into
