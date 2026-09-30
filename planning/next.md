@@ -23,13 +23,12 @@ and its acceptance. [The backlog](backlog.md) holds everything else.
 
 ## Status
 
-**0.4.0 shipped. SN1, SN3, SN4, SN5, SN27, SN32, SN33, and SN34 are
-implemented and validated on this branch.** The wire schemas, HTTP client,
-conformance runner, validated template, workstation port transport,
-connection registry, discovery reminder, and internal evidence-retention
-operation exist. SN6, SN8, SN35, and SN31 remain pending. SN33's focused
-Linux checks passed, but its scenario was not run against the provisioned
-OpenSSH tier.
+**0.4.0 shipped. SN1, SN3, SN4, SN5, SN6, SN8, SN27, SN32, SN33, and
+SN34 are implemented and validated.** The wire schemas, HTTP client,
+conformance runner, template, workstation ports, connection registry,
+discovery reminder, `connect` and `observe` tools, and snapshot retention
+exist. SN35 and SN31 remain pending. SN33's focused Linux checks passed,
+but its scenario was not run against the provisioned OpenSSH tier.
 This scope incorporates the owner's response to the review of `origin/main`
 `0f9ef1e27eed0f27c3ec47aef09071d54b044ff8` on 2026-09-29.
 [The review disposition](review-0.5.0.md) records the changed decisions.
@@ -150,11 +149,21 @@ resources behind.
 - [x] **1.** The connection registry and `connect` tool. (SN33)
 - [x] **2.** Discovery and the reminder. Needs 1. (SN5)
 - [x] **3.** Retain received evidence through snapshots. (SN34)
-- [ ] **4.** The observe tool and text-only rendering. Needs 1 and 3. (SN6, SN8)
+- [x] **4.** The observe tool and text-only rendering. Needs 1 and 3. (SN6, SN8)
 
-**Evidence:** a real room connects a process, observes all four part
-forms, and cites the manifest ref. Another agent restores the evidence
-after the server stops. Source timestamps remain unchanged.
+**Evidence:** focused workspace acceptance passes twelve cases. A real room
+observes numeric, text, frame, and file parts, cites the manifest ref, and
+records it in the audit result. A separate cross-agent restore case stops the
+fixture server before restoring the manifest and exact frame and file bytes.
+Other cases cover supported and unavailable spans, image paths and fixed
+schema, continued shell work while HTTP is blocked, process end before
+verification and during file fetch, connection replacement during an in-flight
+request, cancellation during observation and file fetch, and retention failure
+without a replay.
+Manifest timestamps and series boundaries remain exact. Adapter checks pass
+for Pi (2/2) and Claude (1/1) image-delivery fixtures; Pi also checks
+text-only output. Workspace checks separately verify text-only paths and
+restored bytes.
 
 ### Phase 3. The complete lifecycle and release
 
@@ -269,23 +278,26 @@ exports never report a successful retained observation. A real Git-template
 test retains a dirty launch before stopping the server, advances the checkout
 to a later commit, and restores the original launch source and bytes afterward.
 
-**SN6. Observe.** Implement the input, rendering, audit details, and
-snapshot result of [Observe](../docs/sensors.md#observe-and-retain-evidence).
-Use host time for request lifecycle and source time for measurements.
-Support latest and explicitly supported spans through the same call.
+**SN6. Observe.** The `observe` tool implements the input, rendering, audit
+details, and snapshot result of
+[Observe](../docs/sensors.md#observe-and-retain-evidence). It uses host time
+for request lifecycle and source time for measurements, and supports latest
+and explicitly supported spans through the same call.
 
 **Evidence:** a real room observes numeric, text, frame, and file results.
 The audit result carries the manifest ref. A message can cite it through
 the existing ref validator. The initial call works without a prior
 activation reminder. Unavailable spans fail explicitly.
 
-**SN8. Text-only rendering.** Add `images?: boolean` to the workspace
-bundle options. `false` produces paths in place of image content. Keep
-the same tool schema for every executor and retain every image byte.
+**SN8. Text-only rendering.** `WorkspaceToolsOptions.images?: boolean`
+controls inline image content for the bundle. `false` returns paths in place
+of image content while the observe tool retains image bytes. The observe
+schema stays the same for every executor.
 
-**Evidence:** Pi and Claude receive image parts through their adapters.
-A text-only bundle receives text and paths, and restores identical bytes.
-These are adapter checks with no paid model call.
+**Evidence:** Pi passes 2/2 adapter cases and Claude passes 1/1 image-delivery
+fixtures. Pi also verifies text-only output. Workspace checks verify that
+text-only results name frame paths and that restoring the manifest returns
+the exact retained image bytes. Adapter checks use no paid model call.
 
 **SN27. The sensor template.** Add `templates/sensor-server` beside the
 existing workbench templates. Its standalone Node program serves

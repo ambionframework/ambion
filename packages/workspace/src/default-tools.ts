@@ -20,7 +20,7 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { PROCESS_TOOL_NAMES } from './process-tools.ts';
 
-const COUNTS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen'];
+const COUNTS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen'];
 
 /** The tools every workspace has, in the order the tool line names them. */
 const BASE_TOOLS = ['read', 'write', 'edit', ...PROCESS_TOOL_NAMES, 'snapshot', 'restore'];
@@ -32,8 +32,8 @@ function listOf(names: readonly string[]): string {
 
 /**
  * The tool line of the guidance. `extra` names the tools that the other
- * backends add, in order: `sql`, then `repos`, `clone` and `fork`. Absent, the
- * workspace has ten tools.
+ * backends add, in order: `sql`, `repos`, `clone`, `fork`, `connect`, and
+ * `observe`. Absent, the workspace has ten tools.
  */
 export function defaultToolGuidance(extra: readonly string[] = []): string {
 	const names = [...BASE_TOOLS, ...extra];
@@ -45,6 +45,47 @@ export function defaultToolGuidance(extra: readonly string[] = []): string {
 }
 
 /** Build the three file tools every workspace gets. */
-export function createFileTools(): readonly AgentHarnessTool<ExecutionToolContext>[] {
-	return [createReadTool(), createWriteTool(), createEditTool()];
+export function createFileTools(images = true): readonly AgentHarnessTool<ExecutionToolContext>[] {
+	const nativeRead = createReadTool(
+		images
+			? undefined
+			: {
+					imageProcessor: async (_bytes, mimeType) => ({
+						ok: false,
+						message: `[Image attachment omitted for this tool bundle: ${mimeType}]`,
+					}),
+				},
+	);
+	const read = images
+		? nativeRead
+		: {
+				...nativeRead,
+				description: nativeRead.description.replace(
+					'Images are sent as attachments.',
+					'Images are omitted and their paths are returned.',
+				),
+				execute: async (...args: Parameters<typeof nativeRead.execute>) => {
+					const result = await nativeRead.execute(...args);
+					if (
+						!result.content.some(
+							(item) =>
+								item.type === 'text' &&
+								item.text.includes('[Image attachment omitted for this tool bundle:'),
+						)
+					)
+						return result;
+					const params = args[1] as { readonly path: string };
+					const env = (args[3] as ExecutionToolContext).env;
+					const context = args[5];
+					const resolved = await env.absolutePath(params.path, context);
+					const path = resolved.ok ? resolved.value : params.path;
+					return {
+						...result,
+						content: result.content.map((item) =>
+							item.type === 'text' ? { ...item, text: `${item.text}\nImage path: ${path}` } : item,
+						),
+					};
+				},
+			};
+	return [read, createWriteTool(), createEditTool()];
 }
