@@ -323,6 +323,17 @@ calls of file tools still run one operation at a time on the workspace
 queue; D9 does not change that for one agent. **Condition:** a live
 comparison on one task shows that `compose` cuts the input tokens of a
 seat and keeps its tool-call success.
+The work comes in six slices, each with its own tests:
+
+1. The vocabulary: the `compose` field of a tool, `ToolContext.record`
+   and `composition`, `parent` on a step, and the reserved name.
+2. The trace: the step sink in `toolContext` and in `toolsFor`, the
+   parented steps in `ToolCalls`, and the scripted executor.
+3. The composer, with an evaluator for tests alone: acceptance items 1,
+   2, 4, and 5 on the scripted executor.
+4. The declared outputs of the workspace tools.
+5. `@ambionframework/evaluator` and `evaluatorConformance`.
+6. The live evidence, the pages that the design names, and the changelog.
 
 **D19. Posts in `simulate()`.** A scenario posts an event during an
 exchange. **Condition:** a simulator case that needs one.

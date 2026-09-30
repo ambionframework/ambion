@@ -213,7 +213,8 @@ text, so the change gives these tools an output schema:
 **`sql` gives the rows that it already reads.** The preview of the result
 holds the rows up to the limit `rows`, so the declared output needs no
 second query. A row value is JSON: text, a number, or null. A blob is its
-bytes as lowercase hex, as the CSV export writes it.
+bytes as lowercase hex, as the CSV export writes it. A `bigint` is its
+decimal digits as text.
 
 ## What composes
 
@@ -308,9 +309,16 @@ outcome of each call, so code that wants every result uses it.
 `compose` option, beside `tools` and `bundles`. `describeExecutor`
 flattens the tools, then appends `compose` when the option is present.
 `pi()`, `claude()`, and `codex()` each call `describeExecutor`, so every
-family gets the tool the same way. The name `compose` is reserved: the
-check of the agent tools refuses a tool of that name, as it refuses the
-name of a room tool. Pi builds its tools from the definition. Claude and Codex host
+family gets the tool the same way. The name `compose` is reserved.
+`appendTools` refuses a tool of that name while it flattens the tools of
+the options, before the composer appends its own. The check of the agent
+tools runs later, and its duplicate rule refuses a second `compose`. The
+frozen executor keeps no `compose` field: the tool closes over the option.
+
+**The composer lives in `packages/ambion/src/compose.ts`.** It uses the
+TypeBox checks and the step vocabulary, as `define.ts` does, so it joins
+the vocabulary layer. The file list of that layer in `biome.jsonc` gains
+it ([Toolchain](toolchain.md)). Pi builds its tools from the definition. Claude and Codex host
 `pass.agentTools`, which maps the same tools one to one. So each family
 hosts `compose` as one more tool. Its `invoke` closes over the other tools
 of the definition and calls each `AmbionTool` directly.
@@ -348,7 +356,7 @@ activation, as a direct call does.
 the call id of `compose`. The core raises the tool events from them, as it
 does for every tool.
 
-**`record` is the one harness change.** The hosting export `toolContext`
+**`record` is the one change to `ToolContext` for the trace.** The hosting export `toolContext`
 takes the step sink of the activation. The core passes it for Claude and
 Codex. `@ambionframework/pi` builds the context of each call itself, so it
 passes `activation.trace` through `toolsFor`. `runAgent` runs outside a
@@ -501,6 +509,13 @@ the kernel.
 | `quickjsEvaluator()` | In QuickJS compiled to WebAssembly, in the process of the host       | A fresh QuickJS runtime for each composition. A memory limit on its heap, and an interrupt handler that stops the code at the signal.       |
 | `processEvaluator()` | In a `node:vm` context, in a child Node process for each composition | The child runs under `--permission` with no allow flag: no file, network, child process, worker, or addon. The host kills it at the signal. |
 
+**The child entry of `processEvaluator` is one file.** Under
+`--permission` with no allow flag, Node loads the entry and refuses every
+other file read, so a relative import fails with `ERR_ACCESS_DENIED`. The
+package builds the child entry as its own tsdown entry, and the entry
+imports only `node:` built-ins. `packages/claude/tsdown.config.ts` builds
+two entries in the same way.
+
 **`quickjsEvaluator` builds on `quickjs-emscripten`.** The package is MIT,
 and it has no native part. The evaluator sets the globals of the table
 above before it runs the code.
@@ -574,18 +589,19 @@ trace can cut a nested output.
 **The implementation updates these pages in the same change.** Until then,
 each page states the current surface.
 
-| Page                                                                   | Change                                                                                                                                                                    |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Definitions and tools](agent.md)                                      | The `compose` option of a definition, and the `compose` field of a tool.                                                                                                  |
-| [Executors](executors.md)                                              | `parent` on `tool_call` and `tool_result`, `record` in `toolContext`, `callId`.                                                                                           |
-| [Trust](trust.md)                                                      | A harness approval hook sees `compose` as one call; `approve` sees its tools.                                                                                             |
-| [Workspace](workspace.md)                                              | The declared outputs of `sql`, `snapshot`, `bash`, `ps`, `wait`, and `fork`.                                                                                              |
-| [Envelope](envelope.md)                                                | The four limits of the `compose` option and their defaults.                                                                                                               |
-| [Pi](pi.md)                                                            | `toolsFor` passes the step sink of the activation to each call.                                                                                                           |
-| [Technical facts](technical-facts.md) and [Toolchain](toolchain.md)    | The package `@ambionframework/evaluator`, and the count of packages.                                                                                                      |
-| [Executors](executors.md#the-room-tools) and [Toolchain](toolchain.md) | The scripted executor of `/testing` gives each tool call a signal, the deadline, and a step sink.                                                                         |
-| Export snapshot                                                        | `Evaluator`, `EvaluatorInput`, `ComposeOptions`, `ComposeLimits`, `CompositionResult`, and `LedgerEntry` from the main entry; `evaluatorConformance` from `/conformance`. |
-| Changelog                                                              | The step vocabulary, `ToolContext`, `AmbionTool`, and the `sql` details.                                                                                                  |
+| Page                                                                   | Change                                                                                                                                                                                                                                    |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Definitions and tools](agent.md)                                      | The `compose` option of a definition, and the `compose` field of a tool.                                                                                                                                                                  |
+| [Executors](executors.md)                                              | `parent` on `tool_call` and `tool_result`, `record` in `toolContext`, `callId`.                                                                                                                                                           |
+| [Trust](trust.md)                                                      | A harness approval hook sees no tool that the room hosts, so it sees no composition. `approve` is the one hook that sees one.                                                                                                             |
+| [Workspace](workspace.md)                                              | The declared outputs of `sql`, `snapshot`, `bash`, `ps`, `wait`, and `fork`.                                                                                                                                                              |
+| [Envelope](envelope.md)                                                | The four limits of the `compose` option and their defaults.                                                                                                                                                                               |
+| [Pi](pi.md)                                                            | `toolsFor` passes the step sink of the activation to each call.                                                                                                                                                                           |
+| [Technical facts](technical-facts.md) and [Toolchain](toolchain.md)    | The package `@ambionframework/evaluator`, and the count of packages.                                                                                                                                                                      |
+| `biome.jsonc` and `scripts/import-rules.test.mjs`                      | `compose.ts` joins the vocabulary layer. `packages/evaluator/src` may import `@ambionframework/ambion`, and not `/testing` or the source of the core.                                                                                     |
+| [Executors](executors.md#the-room-tools) and [Toolchain](toolchain.md) | The scripted executor of `/testing` gives each tool call a signal, the deadline, and a step sink.                                                                                                                                         |
+| Export entries and snapshot                                            | The main entry exports the types `Evaluator`, `EvaluatorInput`, `ComposeOptions`, `ComposeLimits`, `CompositionResult`, and `LedgerEntry`. The snapshot lists values only, so only `evaluatorConformance` from `/conformance` changes it. |
+| Changelog                                                              | The step vocabulary, `ToolContext`, `AmbionTool`, and the `sql` details.                                                                                                                                                                  |
 
 ## Acceptance
 
