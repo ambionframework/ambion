@@ -244,8 +244,10 @@ shows an unavailable connection. Another agent reads discovery without the
 owner's process paths or the private transport URL. Existing process
 reminders still work when a sensor status read fails or exceeds its bound.
 Focused tests use a real room, a running process table, and a real local HTTP
-index server. The workstation SSH test is skipped on macOS. The full
-`pnpm check` passes.
+index server. The workspace suite passes 469 tests and skips 11. The
+workstation SSH test is skipped on macOS. The ten MinIO tests skip without a
+configured endpoint. The full `pnpm check` passes. SN35 still covers the full
+workstation lifecycle.
 
 **SN34. Retained evidence.** The internal retention operation reuses the
 existing snapshot object store for verified received bytes and an

@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ProcessTable } from '../src/process-table.ts';
 import { createSensorConnections } from '../src/sensor-connections.ts';
-import { workspaceReminder } from '../src/sensor-reminder.ts';
 import {
 	type ConnectionRig,
 	connectionRig,
@@ -61,36 +59,6 @@ describe('the sensor connection registry', () => {
 		expect(ended.map((one) => one.state)).toEqual(['unavailable', 'unavailable']);
 		expect(ended.map((one) => one.sensors[0]?.name)).toEqual(['bench', 'bench']);
 		expect(rig.indexRequests).toHaveLength(2);
-	});
-
-	it('keeps process reminder text when sensor status checking hangs or fails', async () => {
-		const processes = { remind: async () => 'process reminder' } as unknown as ProcessTable;
-		const hanging = {
-			list: () => new Promise<never>(() => {}),
-		} as unknown as ReturnType<typeof createSensorConnections>;
-		const started = Date.now();
-		expect(
-			await workspaceReminder(
-				{ agent: 'reader', room: 'room', activation: 'a1' },
-				new AbortController().signal,
-				processes,
-				hanging,
-			),
-		).toBe('process reminder');
-		expect(Date.now() - started).toBeLessThan(1500);
-		const failed = {
-			list: async () => {
-				throw new Error('status failed');
-			},
-		} as unknown as ReturnType<typeof createSensorConnections>;
-		expect(
-			await workspaceReminder(
-				{ agent: 'reader', room: 'room', activation: 'a2' },
-				new AbortController().signal,
-				processes,
-				failed,
-			),
-		).toBe('process reminder');
 	});
 
 	it.each([

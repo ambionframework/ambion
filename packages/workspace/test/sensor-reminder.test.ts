@@ -10,6 +10,7 @@ describe('sensor discovery in the activation reminder', () => {
 		const firstServer = await connectionRig();
 		const secondServer = await connectionRig();
 		let failOwnerStatus = false;
+		let hangOwnerStatus = false;
 		onTestFinished(async () => {
 			await firstServer.close();
 			await secondServer.close();
@@ -26,6 +27,11 @@ describe('sensor discovery in the activation reminder', () => {
 						},
 					},
 					connect(agent, signal, services) {
+						if (hangOwnerStatus && agent.name === 'owner')
+							return new Promise((_, reject) => {
+								if (signal?.aborted) reject(signal.reason);
+								else signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+							});
 						if (failOwnerStatus && agent.name === 'owner')
 							return Promise.reject(new Error('owner process status failed'));
 						return inner.connect(agent, signal, services);
@@ -54,10 +60,12 @@ describe('sensor discovery in the activation reminder', () => {
 			{ name: 'bench-two', process: secondProcess.handle, port: 43128 },
 			callAs('owner'),
 		);
-		await toolOf(workspace, 'bash').invoke(
+		const readerResult = await toolOf(workspace, 'bash').invoke(
 			{ command: 'sleep 60', name: 'reader-job', wait: 0 },
 			callAs('reader'),
 		);
+		if (typeof readerResult === 'string') throw new Error('bash returned no process details.');
+		const readerProcess = (readerResult.details as { process: { handle: string } }).process;
 
 		const remind = workspace.tools().remind;
 		if (remind === undefined) throw new Error('The workspace bundle must remind.');
@@ -72,6 +80,7 @@ describe('sensor discovery in the activation reminder', () => {
 		expect(before).toContain('configured-workstation');
 		expect(before).toContain('remote port 43127');
 		expect(before).toContain('remote port 43128');
+		expect(before).toContain(`process ${firstProcess.handle}`);
 		expect(before).not.toContain('/home/owner');
 		expect(before).not.toContain('sleep 100');
 		expect(before).not.toContain(firstServer.url);
@@ -79,6 +88,21 @@ describe('sensor discovery in the activation reminder', () => {
 		expect(before).not.toContain('sleep 60\n- bench-one');
 		expect(firstServer.indexRequests).toHaveLength(1);
 		expect(secondServer.indexRequests).toHaveLength(1);
+		const activeRoomContext: string[] = [];
+		await run([agent('observer', { bundles: [workspace.tools()] })], {
+			observer: (context, _name, call) => {
+				activeRoomContext.push(
+					`${context.systemPrompt ?? ''}\n${JSON.stringify(context.messages)}`,
+				);
+				return call === 1 ? speak('done') : quiet();
+			},
+		});
+		expect(activeRoomContext.join('\n')).toContain('bench-one/bench: Bench fixture.');
+		expect(activeRoomContext.join('\n')).toContain('bench-two/bench: Bench fixture.');
+		expect(activeRoomContext.join('\n')).toContain('remote port 43127');
+		expect(activeRoomContext.join('\n')).toContain('remote port 43128');
+		expect(activeRoomContext.join('\n')).toContain('configured-workstation');
+		expect(activeRoomContext.join('\n')).toContain(`process ${firstProcess.handle}`);
 
 		secondServer.setIndex({
 			...fixtureIndex,
@@ -105,12 +129,30 @@ describe('sensor discovery in the activation reminder', () => {
 			{ agent: 'reader', room: 'lab', activation: 'a1d' },
 			new AbortController().signal,
 		);
+		failOwnerStatus = false;
 		expect(withStatusFailure).toContain('Your background processes in the workspace:');
 		expect(withStatusFailure).toContain(': sleep 60');
 		expect(withStatusFailure).toContain('process status unknown');
 		expect(withStatusFailure).toContain('bench-two/pressure: Updated pressure.');
 
-		failOwnerStatus = false;
+		hangOwnerStatus = true;
+		const started = Date.now();
+		const withStatusTimeout = await remind(
+			{ agent: 'reader', room: 'lab', activation: 'a1e' },
+			new AbortController().signal,
+		);
+		hangOwnerStatus = false;
+		expect(Date.now() - started).toBeLessThan(1500);
+		expect(withStatusTimeout).toContain('Your background processes in the workspace:');
+		expect(withStatusTimeout).toContain(`${readerProcess.handle}, is running`);
+		expect(withStatusTimeout).not.toContain('Connected sensor servers in the workspace:');
+		const recovered = await remind(
+			{ agent: 'reader', room: 'lab', activation: 'a1f' },
+			new AbortController().signal,
+		);
+		expect(recovered).toContain('Your background processes in the workspace:');
+		expect(recovered).toContain('bench-two/pressure: Updated pressure.');
+
 		await workspace.processes.cancel(firstProcess.handle);
 		const after = await remind(
 			{ agent: 'reader', room: 'lab', activation: 'a2' },
@@ -129,5 +171,6 @@ describe('sensor discovery in the activation reminder', () => {
 			},
 		});
 		expect(roomContext.join('\n')).toContain('remote port 43127: unavailable');
+		expect(roomContext.join('\n')).toContain(`process ${firstProcess.handle}`);
 	});
 });

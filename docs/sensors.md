@@ -6,9 +6,9 @@
 > is available. SN4's conformance runner is available from
 > `@ambionframework/workspace/conformance`, and the SN3 production HTTP client
 > is available from `@ambionframework/workspace/sensors`. A workspace with
-> `BashBackend.ports` now exposes `connect`; `observe` and automatic evidence
-> SN34's internal retention operation is implemented; `observe` and its
-> integration of that operation remain pending. See the
+> `BashBackend.ports` exposes `connect`, and SN5 discovery appears in activation
+> reminders. SN34's internal retention operation is implemented. The `observe`
+> tool and its integration with that operation remain pending. See the
 > [release plan](../planning/next.md).
 
 **A forked Git repository defines a sensor server.** The agent customizes
