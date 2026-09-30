@@ -20,9 +20,16 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import { callEnvelope } from './call-envelope.ts';
+import type { Capability } from './capability.ts';
 import { markdownTable } from './markdown-table.ts';
 import type { WorkspaceResource } from './resource.ts';
-import type { SqlEnv, SqlOutcome, SqlProvenance, SqlRunOptions } from './sql-backend.ts';
+import type {
+	SqlBackend,
+	SqlEnv,
+	SqlOutcome,
+	SqlProvenance,
+	SqlRunOptions,
+} from './sql-backend.ts';
 import { IMPORT_TABLE, MAX_IMPORT_BYTES } from './sql-import.ts';
 import { csvHeader, csvRecord, NULL_SENTINEL } from './sql-result.ts';
 
@@ -73,13 +80,13 @@ const sqlSchema = Type.Object({
 type SqlParams = Static<typeof sqlSchema>;
 
 /** What the tool needs from the workspace: the SQL owner and the database name. */
-export interface SqlToolOptions {
+interface SqlToolOptions {
 	readonly sql: WorkspaceResource<SqlEnv>['use'];
 	readonly database: string;
 }
 
 /** Guidance for the `sql` tool over a SQL backend that the workspace names `database`. */
-export function sqlToolGuidance(database: string): string {
+function sqlToolGuidance(database: string): string {
 	return [
 		`sql runs statements on one shared database, ${database}. Every agent queries this`,
 		`database. Put structured data that a colleague needs here as a named table or view:`,
@@ -94,8 +101,17 @@ export function sqlToolGuidance(database: string): string {
 	].join('\n');
 }
 
+/** The SQL capability: the `sql` tool over the SQL owner, its note, and the note of the backend. */
+export function sqlCapability(backend: SqlBackend, owner: WorkspaceResource<SqlEnv>): Capability {
+	const { database, guidance } = backend;
+	return {
+		tools: [createSqlTool({ sql: owner.use, database })],
+		notes: [sqlToolGuidance(database), guidance],
+	};
+}
+
 /** Build the `sql` tool that runs on the SQL owner. */
-export function createSqlTool(options: SqlToolOptions): AmbionTool {
+function createSqlTool(options: SqlToolOptions): AmbionTool {
 	return defineTool({
 		name: 'sql',
 		label: 'SQL',
