@@ -61,12 +61,12 @@ object store. The agent can cite the returned snapshot refs. The server owns
 acquisition and reducer state. Measurement timestamps remain the source of
 truth. See [Sensors](docs/sensors.md).
 
-**Actuators are a pattern over processes, and the pattern is a design.**
+**Actuators are a pattern over processes.**
 An agent starts a controller command with `bash`. The command reads its
 own instruments, drives a device, and traps `SIGTERM` to stop safe. It
 logs JSON lines, and the workspace folds them into a status. Optional
-`grace` and `finally` parameters of `bash` are pending, and an actuation
-skill carries the practice. The agent confirms convergence through a
+`grace` and `finally` parameters of `bash` are pending. The workbench
+ships an actuator controller template with tests. The agent confirms convergence through a
 sensor. See [Actuators](docs/actuators.md).
 
 **The six capabilities compose while the application runs.** Repositories

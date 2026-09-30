@@ -369,10 +369,10 @@ one of these capabilities. No order between these items is promised.
 [Actuators](../docs/actuators.md) designs a controller as an ordinary
 `bash` process. The work adds three optional process features that
 [Processes](../docs/processes.md#pending-grace-finally-and-the-event-log)
-designs: `grace`, `finally`, and the `AMBION_EVENTS` log with its fold. It
-also adds an actuation skill with a controller template, a simulated
-plant, and a test. The order of work is D6's graceful cancel, then the
-three features, then the skill. **Condition:** an application must drive
+designs: `grace`, `finally`, and the `AMBION_EVENTS` log with its fold. The
+workbench already ships `templates/actuator-controller`, a Node controller
+with a simulated plant and tests. The order of work is D6's graceful
+cancel, then the three features. **Condition:** an application must drive
 a device from a room, and the workstation accounts hold the device
 permissions.
 

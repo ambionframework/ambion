@@ -1,0 +1,15 @@
+{
+	"name": "bath",
+	"unit": "C",
+	"target": 37,
+	"tolerance": 0.2,
+	"settleSeconds": 60,
+	"holdSeconds": 3600,
+	"periodMs": 1000,
+	"logIntervalMs": 1000,
+	"device": "sim",
+	"lock": "/tmp/actuator-bath.lock",
+	"output": { "name": "power", "unit": "%", "min": 0, "max": 100, "safe": 0 },
+	"law": { "kp": 10, "ki": 0.0167 },
+	"sim": { "ambient": 20, "tau": 600, "gain": 0.000667, "state": ".plant.json" }
+}

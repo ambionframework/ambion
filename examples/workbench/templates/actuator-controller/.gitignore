@@ -1,0 +1,4 @@
+node_modules/
+events.jsonl
+.plant.json*
+*.log

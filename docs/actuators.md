@@ -1,11 +1,13 @@
 # Actuators
 
-> **Actuators are a pattern over processes. The pattern is a design.** It
-> uses three optional features of `bash` that no code implements yet:
-> `grace`, `finally`, and the event log with its fold.
+> **Actuators are a pattern over processes.** The workbench ships the
+> [actuator controller template](../examples/workbench/templates/actuator-controller),
+> and its tests pass today. The pattern also uses three optional features
+> of `bash` that no code implements yet: `grace`, `finally`, and the event
+> log with its fold.
 > [Processes](processes.md#pending-grace-finally-and-the-event-log) owns
-> their contract. The actuation skill on this page does not exist yet. The
-> backlog holds the work in [D24](../planning/backlog.md#for-actuators).
+> their contract. The backlog holds the work in
+> [D24](../planning/backlog.md#for-actuators).
 
 **An actuator is a controller command that runs as a process.** The
 command drives a device toward a desired state, runs to completion, and
@@ -42,10 +44,10 @@ any command through `bash`, so a separate actuation tool or an `act` kind
 of process gates nothing. The account permissions on the workstation
 decide which devices an agent reaches.
 
-**A skill carries the practice.** The host gives the actuation skill to
-the seats that drive devices, through `loadSkills`
-([Skills](skills.md)). The skill holds the guidance, a controller
-template, and a test on a simulated plant.
+**A Git template carries the practice.** The host registers
+`templates/actuator-controller` as it registers the sensor template. The
+agent forks it, writes the driver, tunes the law on a simulated plant,
+and saves each version on a branch. [Git](git.md) owns that lifecycle.
 
 ## The loop
 
@@ -137,10 +139,11 @@ so a hold that ends and a hold that hangs read differently.
 ## The controller contract
 
 **A controller command follows seven rules.** The workspace checks none
-of them. The skill states them, and its template follows them.
+of them. The template follows them, and its tests check them.
 
-1. **Trap `TERM` before it drives the device.** The trap makes the device
-   safe and exits 0.
+1. **Handle `TERM` before it drives the device.** The handler makes the
+   device safe and exits 0. No parent process stands between the signal
+   and the controller.
 2. **Exit 0 means safe.** An exit code of 0 means that the command left
    the world in a state that is safe to leave. A command that gives up
    after a clean shutdown exits 0 and logs `gave_up`.
@@ -184,44 +187,60 @@ agent reads them from `status` and the pattern names them.
 checks it through a sensor before it starts another command. It reports a
 claim of `reached` or `holding` on an unclean end as a contradiction.
 
-## A controller
+## The actuator template
 
-**This command holds a bath at 37 °C for one hour.** It locks the device,
-traps `TERM`, logs its state, and carries its own deadline. `bath-ctl`
-stands for the device driver.
+**`templates/actuator-controller` is a Node controller for one actuator.**
+It holds a bath at a target on a simulated first-order plant by default.
+It needs Node 22.19 or newer and has no dependencies. `start` also needs
+`flock` from util-linux.
 
-```sh
-#!/usr/bin/env bash
-set -u
-log() { printf '%s\n' "$1" >> "$AMBION_EVENTS"; }
-now() { date -u +%Y-%m-%dT%H:%M:%S.%3NZ; }
-exec 9> /run/lock/bath.lock
-flock -n 9 || { echo 'bath is busy' >&2; exit 0; }
-off() { bath-ctl power 0; log "{\"v\":1,\"at\":\"$(now)\",\"kind\":\"state\",\"value\":\"safe\"}"; exit 0; }
-trap off TERM
-log "{\"v\":1,\"at\":\"$(now)\",\"kind\":\"target\",\"name\":\"bath\",\"value\":37,\"unit\":\"C\",\"tolerance\":0.2,\"interval\":1}"
-end=$((SECONDS + 3600))
-while [ "$SECONDS" -lt "$end" ]; do
-  t=$(bath-ctl read)
-  p=$(bath-ctl step 37 "$t")
-  log "{\"v\":1,\"at\":\"$(now)\",\"kind\":\"observe\",\"name\":\"bath\",\"value\":$t,\"unit\":\"C\"}"
-  log "{\"v\":1,\"at\":\"$(now)\",\"kind\":\"drive\",\"name\":\"power\",\"value\":$p,\"unit\":\"%\"}"
-  sleep 1 & wait $!
-done
-off
-```
+| File             | Role                                                            | The agent customizes it |
+| ---------------- | --------------------------------------------------------------- | ----------------------- |
+| `controller.mjs` | The harness: stop handlers, deadline, claims, and the event log | No                      |
+| `device.mjs`     | The driver: `read()`, `drive(output)`, and `safe()`             | Yes                     |
+| `law.mjs`        | The control law: a PI law with output limits                    | Yes                     |
+| `config.json`    | Target, tolerance, times, lock, limits, gains, and plant model  | Yes                     |
+| `plant.mjs`      | A simulated plant with the interface of a device                | To match the real plant |
+| `finally.mjs`    | The backstop: it calls `safe()` alone                           | Rarely                  |
+| `start`          | Takes the lock, then replaces itself with `node controller.mjs` | No                      |
 
-**`sleep 1 & wait $!` lets the trap run at once.** Bash runs a trap only
-after the foreground command ends. `wait` returns when a signal arrives.
+**The harness holds the contract.** It installs the stop handlers before
+it opens the device. One queue serializes every call to the device, so
+`safe()` comes after an output that was already on its way. An error makes
+the device safe when it can, and the process exits 1.
 
-**The agent starts it and returns later.** The example uses `grace` and
-`finally`, which do not exist yet.
+**`start` keeps `node` as the only process.** It takes the lock on a file
+descriptor and replaces itself with `node`. A probe showed why: a forking
+`flock` reported 143 on `SIGTERM` while its child cleaned up and exited 0.
+`flock -F` and `exec` both passed the 0 through. A busy lock makes `start`
+log `gave_up` and exit 0, so `finally` does not act on the device of the
+controller that holds the lock.
+
+**The template tests check the contract with real signals.** They run
+the controller as a process against the simulated plant.
+
+| Case                           | Result                                                      |
+| ------------------------------ | ----------------------------------------------------------- |
+| The deadline                   | `reached`, `holding`, then `safe`; exit 0; the output is 0  |
+| `SIGTERM` while it holds       | `stopping` and `safe` in under 1 s; exit 0; the output is 0 |
+| `SIGKILL` while it holds       | The output stays on; `finally.mjs` sets 0, twice over       |
+| A failed read                  | `safe` with the error; exit 1; the output is 0              |
+| A second `start` on one device | `gave_up` and exit 0; the first controller runs on          |
+
+**The workbench test guards the template.** It checks that the lab
+registers the template and that a fork holds every file. It runs the
+template tests, then removes the stop handlers and checks that the
+`SIGTERM` case fails.
+
+**The agent starts it and returns later.** `grace` and `finally` do not
+exist yet. Until they do, a `cancel` sends `SIGKILL`, and the agent runs
+`node finally.mjs` in the checkout after it.
 
 ```ts
 bash({
-  command: '~/bath/hold.sh',
+  command: 'bash ~/bath-control/start',
   grace: 5,
-  finally: 'bath-ctl power 0',
+  finally: 'cd ~/bath-control && node finally.mjs',
   name: 'bath-hold',
   timeout: 3900,
   wait: 0,
@@ -241,13 +260,13 @@ schedule({ after: 900, text: 'Check bath-hold, and observe bath/temperature.' })
 | Repositories | `repos`, `fork`                          | The versions of the controller                               |
 | Tables       | `sql`                                    | Shared plans, schedules, and results                         |
 | Sensors      | `connect`, `observe`                     | The agent's own view of the stock, retained as evidence      |
-| Actuators    | `bash` and the actuation skill           | The controller: a command that stops safe and logs its state |
+| Actuators    | `bash` and the actuator template         | The controller: a command that stops safe and logs its state |
 
 **Composition happens while the application runs.** A new loop needs no
 restart of the host and no new host code. An agent can build each of
 these compositions in one exchange:
 
-1. **A tuned loop.** Fork a controller repository. Run a step on a
+1. **A tuned loop.** Fork the actuator template. Run a step on a
    simulated plant, and record the overshoot and the settling time in a
    table. Change the gains on a branch, commit, and start it. Cite the log
    and the observation of a sensor.
@@ -258,22 +277,6 @@ these compositions in one exchange:
    stock and says to the commanding agent when it disagrees with the log.
 4. **A rollback on evidence.** The agent cancels the command, checks out
    the previous commit, and starts it.
-
-## The actuation skill
-
-**The skill packs the pattern for one seat.** It is an agentskills.io
-skill that the host loads with `loadSkills`. It does not exist yet.
-
-| Part            | Content                                                                          |
-| --------------- | -------------------------------------------------------------------------------- |
-| `SKILL.md`      | The loop, the two paths of feedback, the tiers, and the controller contract      |
-| `controller.sh` | The template above, with the driver calls marked                                 |
-| `plant.sh`      | A simulated first-order plant that the template can drive                        |
-| `test.sh`       | A step on the plant: it checks `reached`, a stop inside the grace, and `finally` |
-
-**The test runs on just-bash.** A stop on just-bash ends the simulated
-shell with no signal, so the test checks `finally` there. The trap and
-the grace need the workstation.
 
 ## Trust
 
@@ -294,14 +297,15 @@ world before any `say` commits. The room does not run an effect once
 
 ## Decisions taken
 
-| Decision                            | Reason                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------------- |
-| Actuators are a pattern over `bash` | Every mechanism serves other processes; a separate tool gates nothing     |
-| A skill carries the practice        | The host gives it to the seats that drive devices                         |
-| Exit 0 means safe                   | The agent judges the goal; the exit code states the safety of the world   |
-| The command owns its inputs         | A loop through the host would take SSH latency and stop with the host run |
-| Sensors serve agents                | The agent confirms and revises through its own view of the stock          |
-| Six `state` words                   | The agent reads one vocabulary across every controller                    |
+| Decision                            | Reason                                                                     |
+| ----------------------------------- | -------------------------------------------------------------------------- |
+| Actuators are a pattern over `bash` | Every mechanism serves other processes; a separate tool gates nothing      |
+| A Git template carries the practice | The agent owns, versions, and tests its controller like a sensor server    |
+| `start` replaces itself with `node` | A parent that dies on `SIGTERM` reports 143 while the controller cleans up |
+| Exit 0 means safe                   | The agent judges the goal; the exit code states the safety of the world    |
+| The command owns its inputs         | A loop through the host would take SSH latency and stop with the host run  |
+| Sensors serve agents                | The agent confirms and revises through its own view of the stock           |
+| Six `state` words                   | The agent reads one vocabulary across every controller                     |
 
 ## Out of scope
 

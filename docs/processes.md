@@ -737,6 +737,13 @@ signal stays ignored in them, so the wrapper never ignores `TERM`. A probe
 with bash 5 confirmed the handler: the command's own trap ran, and the
 wrapper wrote `exit`.
 
+**A parent process can hide a clean stop.** The group signal reaches
+every process of the command. A parent that dies on `TERM` gives the
+wrapper 143 while its child cleans up. A probe showed it for a forking
+`flock`, and `flock -F` or `exec` passed the child's 0 through. A command
+that must report a clean stop keeps its controller as the last process.
+The wrapper's own subshell passed the code through in every probe.
+
 **A grace longer than the stop wait of D6 returns early.** `cancel` then
 returns while the process still runs, with the note `stopping`. A later
 read gives the end.

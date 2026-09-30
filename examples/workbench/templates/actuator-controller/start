@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Start the controller under an exclusive lock on the device.
+#
+# The shell takes the lock on file descriptor 9, then replaces itself with
+# node. node holds the lock through the descriptor, and it is the only
+# process: SIGTERM reaches it directly, and its exit code reaches the
+# workspace. Do not start the controller through npm or a forking flock:
+# a parent process that dies on SIGTERM reports 143 while node cleans up.
+set -eu
+cd "$(dirname "$0")"
+lock=$(node config.mjs lock)
+exec 9> "$lock"
+if ! flock -n 9; then
+	node --input-type=module -e "import { emit } from './events.mjs'; emit('state', { value: 'gave_up', note: process.argv[1] });" "another controller holds $lock"
+	echo "Another controller holds $lock." >&2
+	exit 0
+fi
+exec node controller.mjs
