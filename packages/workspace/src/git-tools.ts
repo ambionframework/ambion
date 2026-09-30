@@ -63,8 +63,10 @@ export const GIT_TOOL_NAMES = ['repos', 'clone', 'fork'] as const;
 export function gitToolGuidance(server: string, workspace: string): string {
 	return [
 		`repos, clone and fork reach the git server of this workspace, ${server}.`,
-		`templates/<name> is a read-only template. <agent>/<name> belongs to that agent.`,
-		`You push only to <your name>/<name>, and you can read every repository.`,
+		`templates/<name> is a read-only template. shared/<name> is a repository every agent can write.`,
+		`<agent>/<name> belongs to that agent. You can read every repository.`,
+		`You push to <your name>/<name> and to shared/<name>. Before a shared push, fetch and rebase onto origin/main.`,
+		`If a push is rejected because another agent pushed first, fetch, rebase, resolve conflicts, and retry.`,
 		`Use clone to make a local checkout of any repository without creating a fork. Its`,
 		`origin is the source, with the source's push permissions. To make work you can push, fork a`,
 		`template and set clone. In that clone, make a branch, commit, and push to origin with git in bash.`,
@@ -78,7 +80,7 @@ export function gitToolGuidance(server: string, workspace: string): string {
 const reposSchema = Type.Object({
 	namespace: Type.Optional(
 		Type.String({
-			description: 'templates or the name of an agent. Omit it to list every repository.',
+			description: 'templates, shared, or the name of an agent. Omit it to list every repository.',
 		}),
 	),
 });
@@ -114,7 +116,7 @@ export function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 		name: 'repos',
 		label: 'Repositories',
 		description:
-			"List the repositories on the workspace's git server: the read-only templates and every agent's forks, with clone URLs.",
+			"List the repositories on the workspace's git server: read-only templates, shared repositories, and every agent's forks, with clone URLs.",
 		parameters: reposSchema,
 		execute: recordedOnShell('repos', options.shell, options.audit, (params: ReposParams, ctx) =>
 			listed(options, params, ctx),

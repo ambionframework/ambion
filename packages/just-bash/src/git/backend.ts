@@ -10,9 +10,10 @@
  * never resolves. `access.fetch` passes each request to the server in the
  * same process, so no DNS lookup and no socket take part.
  *
- * An agent holds a write credential for each repository in its namespace,
- * and a read credential for every template and every other agent's fork.
- * No agent holds a credential for `template-sources`.
+ * An agent holds a write credential for each repository in its namespace
+ * and for each shared repository, and a read credential for every template
+ * and every other agent's fork. No agent holds a credential for
+ * `template-sources`.
  */
 
 import type {
@@ -28,9 +29,10 @@ import {
 	assertCommitHash,
 	byPath,
 	namespaceOf,
+	type RepositoryRegistration,
 	revisionOf,
-	type TemplateRegistration,
 	validName,
+	writableBy,
 } from '@ambionframework/workspace/git';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import {
@@ -43,7 +45,13 @@ import {
 } from 'just-git/repo';
 import type { GitServer } from 'just-git/server';
 import type { GitCredential, GitFetch, JustGitAccess } from './access.ts';
-import { DEFAULT_BRANCH, registerTemplates, SOURCES, settleAll } from './registration.ts';
+import {
+	DEFAULT_BRANCH,
+	registerShared,
+	registerTemplates,
+	SOURCES,
+	settleAll,
+} from './registration.ts';
 import { openServer, repositoryOfPath } from './server.ts';
 import type { GitStorage, OpenGitStorage, RegistryRow } from './storage.ts';
 import { signToken, type TokenClaims } from './tokens.ts';
@@ -67,8 +75,10 @@ export interface JustGitBackendOptions {
 	readonly storage: GitStorage;
 	/** The key of every token. A new secret revokes every token. */
 	readonly secret: string;
-	/** The templates, by name. */
-	readonly templates?: Readonly<Record<string, TemplateRegistration>>;
+	/** The read-only templates, by name. */
+	readonly templates?: Readonly<Record<string, RepositoryRegistration>>;
+	/** The shared repositories, by name. */
+	readonly shared?: Readonly<Record<string, RepositoryRegistration>>;
 	/** Seconds a token lives. The default is 3600. */
 	readonly tokenTtl?: number;
 	/** Called with a fault of the server that the client sees as status 500. Absent, the backend reports nothing. */
@@ -131,7 +141,8 @@ export function justGitBackend(options: JustGitBackendOptions): JustGitBackend {
 		const current = open();
 		registering ??= (async () => {
 			await registerTemplates(current.store, current.server, options.templates ?? {});
-			await settleAll(current.store);
+			await registerShared(current.store, current.server, options.shared ?? {});
+			await settleAll(current.store, current.server);
 		})().catch((error: unknown) => {
 			registering = undefined;
 			throw error;
@@ -142,7 +153,7 @@ export function justGitBackend(options: JustGitBackendOptions): JustGitBackend {
 	const repositories = new Repositories(ready);
 
 	const credential = (agent: WorkspaceAgent, row: RegistryRow): GitCredential => {
-		const scope = namespaceOf(row.id) === agent.name ? 'write' : 'read';
+		const scope = writableBy(row.id, agent) ? 'write' : 'read';
 		const expiresAt = Date.now() + ttl * 1000;
 		const token = signToken(options.secret, {
 			agent: agent.name,

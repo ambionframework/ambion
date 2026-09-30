@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fromDirectory, openWorkspace, type Workspace } from '@ambionframework/workspace';
-import type { TemplateRegistration } from '@ambionframework/workspace/git';
+import type { RepositoryRegistration } from '@ambionframework/workspace/git';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { workstationBackend, workstationGitBackend } from '../../src/index.ts';
 import {
@@ -189,7 +189,7 @@ interface RuntimeAssets {
 async function openLifecycleWorkspace(): Promise<LifecycleWorkspace> {
 	const ssh = await options();
 	const setup = await readSetup();
-	const template: TemplateRegistration = {
+	const template: RepositoryRegistration = {
 		source: await fromDirectory(templatePath),
 		description: 'A deterministic server for SN35 lifecycle acceptance.',
 	};

@@ -9,12 +9,14 @@
  * challenge.
  *
  * `advertiseRefs` checks the repository again after the server resolves
- * it. `preReceive` refuses a push to a read-only namespace and a push with
- * a read token.
+ * it. `preReceive` refuses a push to a read-only namespace, a push with a
+ * read token, or a deletion or non-fast-forward update to a shared
+ * repository's default branch.
  */
 
-import { namespaceOf, readOnly } from '@ambionframework/workspace/git';
-import { createServer, type GitServer, type Storage } from 'just-git/server';
+import { namespaceOf, readOnly, SHARED } from '@ambionframework/workspace/git';
+import { type GitRepo, readHead } from 'just-git/repo';
+import { createServer, type GitServer, type RefUpdate, type Storage } from 'just-git/server';
 import { SOURCES } from './registration.ts';
 import { type TokenClaims, tokenOf, verifyToken } from './tokens.ts';
 
@@ -33,6 +35,37 @@ export function repositoryOfPath(pathname: string): string | undefined {
 	} catch {
 		return undefined;
 	}
+}
+
+interface PushRefusal {
+	readonly reject: true;
+	readonly message: string;
+}
+
+function pushRefusal(repoId: string, auth: TokenClaims): PushRefusal | undefined {
+	if (readOnly(repoId) || namespaceOf(repoId) === SOURCES)
+		return { reject: true, message: `${repoId} is read-only` };
+	if (auth.repository !== repoId || auth.scope !== 'write')
+		return { reject: true, message: `${auth.agent} cannot push to ${repoId}` };
+	return undefined;
+}
+
+async function sharedDefaultBranchRefusal(
+	repo: GitRepo,
+	repoId: string,
+	updates: readonly RefUpdate[],
+): Promise<PushRefusal | undefined> {
+	if (namespaceOf(repoId) !== SHARED) return undefined;
+	const branch = (await readHead(repo)).branch ?? 'main';
+	const ref = `refs/heads/${branch}`;
+	const rejected = updates.find(
+		(update) => update.ref === ref && (update.isDelete || (!update.isCreate && !update.isFF)),
+	);
+	if (rejected === undefined) return undefined;
+	const message = rejected.isDelete
+		? `cannot delete protected branch ${ref}`
+		: `non-fast-forward push to protected branch ${ref}`;
+	return { reject: true, message };
 }
 
 function challenge(status: 401 | 403, message: string): Response {
@@ -70,14 +103,10 @@ export function openServer(options: {
 				auth.repository === repoId
 					? undefined
 					: { reject: true, message: 'The token does not grant this repository.' },
-			preReceive: ({ repoId, auth }) => {
-				if (readOnly(repoId) || namespaceOf(repoId) === SOURCES) {
-					return { reject: true, message: `${repoId} is read-only` };
-				}
-				if (auth.repository !== repoId || auth.scope !== 'write') {
-					return { reject: true, message: `${auth.agent} cannot push to ${repoId}` };
-				}
-				return undefined;
+			preReceive: async ({ repo, repoId, auth, updates }) => {
+				const refused = pushRefusal(repoId, auth);
+				if (refused !== undefined) return refused;
+				return sharedDefaultBranchRefusal(repo, repoId, updates);
 			},
 		},
 	});

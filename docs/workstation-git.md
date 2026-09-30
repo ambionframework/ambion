@@ -273,13 +273,28 @@ exec git "${service#git-}" "$repo"
   A name holds no `/` and starts with no `.`, so no path leaves `~/repos`.
 - **A push creates no repository.** `serve` refuses a path whose `HEAD`
   does not exist. Only `fork` and registration create a repository.
-- **A push goes only to the agent's own namespace.** No agent is named
-  `templates`, so no push reaches a template. Each template also has a
+- **A push goes to the agent's namespace or `shared`.** No agent is named
+  `templates` or `shared`, so no push reaches a template. Each template also has a
   `pre-receive` hook that refuses every push.
 - **The committer variables name the agent in the reflog.** Each
   repository sets `core.logAllRefUpdates=always`. The reflog of each ref
   then records the agent that moved it, whatever `user.name` the agent
   set in its commits.
+
+**Shared registration seeds once and installs branch protection.** The
+backend publishes `shared/<name>.git` only after the seed commit on `main`
+and its `pre-receive` hook are installed. That hook refuses deletion or a
+non-fast-forward update of the default branch. It checks original commit
+ancestry with replacement objects disabled. Other branches remain
+mutable; repository-wide receive restrictions are not used. A later
+registration updates the description without reading the seed or moving
+refs. Removing the registration preserves the repository and push rights.
+[Shared repositories](git.md#shared-repositories) states the contract.
+
+**The commit author is not an authenticated pusher identity.** `serve`
+sets the committer environment for ref updates, so the reflog names the
+agent whose key authenticated the push. It does not rewrite authors or
+committers embedded in uploaded commits.
 
 ## Keys
 
@@ -503,10 +518,11 @@ none.
 A credential names one agent, and it expires. The server checks each
 request against the namespace rule. The tokens of `justGitBackend` grant
 one scope on one repository. The SSH keys name the agent, and `serve`
-applies the rule. The one-pusher rule holds on both.
+applies the rule. Shared repositories accept every agent; other forks
+keep their owner.
 
 **The template helpers live in the workspace package.** `filesOf`,
-`hashesOf`, `sameFiles`, `changeTo`, `TemplateRegistration`, and the name
+`hashesOf`, `sameFiles`, `changeTo`, `RepositoryRegistration`, and the name
 rules are in `@ambionframework/workspace/git`. `fromDirectory` and the
 source types are in the root entry. Both entries load `node:fs` and
 `node:crypto` and no git library, so the workstation installs no
@@ -567,19 +583,23 @@ snapshot or one `git bundle` for each repository.
 ## Trust
 
 **`docs/trust.md` holds a row for this backend.** The forced command and
-the account permissions enforce the one-pusher rule. The kernel does not.
+the account permissions enforce namespace push rights. The shared
+repository hook protects its default branch. The kernel does not.
 
-| Attempt                                 | just-bash with `justGitBackend`                              | Workstation with this backend                                                                        |
-| --------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Push to another agent's repository      | Refused: no write credential                                 | Refused by `serve`                                                                                   |
-| Push to a template                      | Refused: read-only                                           | Refused by `serve` and by the template's hook                                                        |
-| Use another agent's credential          | Not possible: no file holds it                               | Needs that agent's key file, mode `0600`, or a copy of it                                            |
-| Read or change a repository on the disk | Not possible: the repositories are in the host's SQLite file | Refused: the git home has mode `0700`                                                                |
-| Use its credential from another machine | Not possible: no file holds it                               | Refused by `from`                                                                                    |
-| Copy its credential into the record     | Not possible: no file holds it                               | Possible. A peer on the server can then push to every repository of that agent until the key expires |
-| Open a shell as the git account         | Not applicable                                               | Refused: `restrict` and the forced command                                                           |
-| Find which agent moved a ref            | The just-bash `git` locks the author to the agent            | The reflog of the repository names the agent                                                         |
-| Fill the disk with pushes               | Fills the host's SQLite file                                 | Fills the server's disk                                                                              |
+| Attempt                                 | just-bash with `justGitBackend`                              | Workstation with this backend                                                                               |
+| --------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Push to another agent's repository      | Refused: no write credential                                 | Refused by `serve`                                                                                          |
+| Push to a template                      | Refused: read-only                                           | Refused by `serve` and by the template's hook                                                               |
+| Push any content to a shared repository | Allowed                                                      | Allowed                                                                                                     |
+| Delete or rewrite its default branch    | Refused by the server hook                                   | Refused by the repository hook                                                                              |
+| Rewrite or delete another shared branch | Allowed                                                      | Allowed                                                                                                     |
+| Use another agent's credential          | Not possible: no file holds it                               | Needs that agent's key file, mode `0600`, or a copy of it                                                   |
+| Read or change a repository on the disk | Not possible: the repositories are in the host's SQLite file | Refused: the git home has mode `0700`                                                                       |
+| Use its credential from another machine | Not possible: no file holds it                               | Refused by `from`                                                                                           |
+| Copy its credential into the record     | Not possible: no file holds it                               | Possible. A peer on the server can push to that agent's forks and shared repositories until the key expires |
+| Open a shell as the git account         | Not applicable                                               | Refused: `restrict` and the forced command                                                                  |
+| Find which agent moved a ref            | The client stamps new commits; no server reflog is exposed   | The reflog of the repository names the agent                                                                |
+| Fill the disk with pushes               | Fills the host's SQLite file                                 | Fills the server's disk                                                                                     |
 
 ## Prepare the server
 

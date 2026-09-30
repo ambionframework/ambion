@@ -32,6 +32,7 @@ export type {
 	GitConformanceOptions,
 	GitConformancePair,
 	GitConformanceProbe,
+	GitConformanceShared,
 	GitConformanceStore,
 	GitConformanceTemplate,
 } from './git-conformance.ts';

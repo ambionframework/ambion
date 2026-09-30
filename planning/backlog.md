@@ -14,7 +14,7 @@ condition holds moves to the top of its section.
 | [Known defects](#known-defects)               | K1–K6  | K2, the allow-list of the SQL guard      |
 | [Release and CI](#release-and-ci)             | L3, R1 | L3, a billing failure reads as one       |
 | [Rules and proofs](#rules-and-proofs)         | P1–P6  | P1, `returnable` into the verified rules |
-| [Designs with a shape](#designs-with-a-shape) | D1–D22 | D1, exchange bounds                      |
+| [Designs with a shape](#designs-with-a-shape) | D1–D23 | D1, exchange bounds                      |
 | [Deferred by decision](#deferred-by-decision) | None   | None                                     |
 
 ## Known defects
@@ -190,6 +190,16 @@ seating that a seat made.
 to another scheduled say. Existing schedule limits bound one delay and
 the pending count, not the full chain. This is outside 0.5.0.
 **Condition:** an application needs a finite chain enforced by the room.
+
+**D23. Shared git repositories.** Implemented: both backends accept
+create-once `shared` registrations, and every workspace agent can push.
+Only the shared default branch refuses deletion and non-fast-forward
+updates. [Git](../docs/git.md#shared-repositories) states the contract.
+**Condition:** an application needs several agents to write one repository;
+Workbench team notes meet it. The [live acceptance evidence](shared-git-live.json)
+records the rejected push, rebase, and retry on Luna with high reasoning.
+Push notifications, activation reminders,
+per-seat grants, and per-room repositories remain outside this change.
 
 ### For labs at scale
 

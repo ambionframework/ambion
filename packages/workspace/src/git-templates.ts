@@ -1,24 +1,23 @@
 /**
- * Templates: the registration a host gives each one, and the pure helpers
+ * Repositories: the registration a host gives each one, and the pure helpers
  * that compare its source with a repository.
  *
- * A git backend registers each template before its first operation. It
- * compares the files of the source with the tree at the tip of the
- * template by their blob hashes (`./sources.ts`), so it writes nothing to
- * compare. This module reads no repository and loads no git library. Each
- * git backend reads the hashes at a tip with its own library.
+ * A git backend registers each template before its first operation and may
+ * seed a shared repository once. Templates can refresh from their source;
+ * an existing shared repository remains writable shared state. This module
+ * reads no repository and loads no git library.
  */
 
 import { readSource, type SourceFiles, type SourceInput } from './sources.ts';
 
-/** One template: its source, and an optional description that `repos` shows. */
-export interface TemplateRegistration {
+/** One registered repository: its source, and an optional description that `repos` shows. */
+export interface RepositoryRegistration {
 	readonly source: SourceInput;
 	readonly description?: string;
 }
 
 /** The files of a registration, as bytes. */
-export function filesOf(registration: TemplateRegistration): Promise<SourceFiles> {
+export function filesOf(registration: RepositoryRegistration): Promise<SourceFiles> {
 	return readSource(registration.source);
 }
 

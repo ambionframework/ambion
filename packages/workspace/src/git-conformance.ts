@@ -24,8 +24,18 @@ import type { ConformanceCase } from '@ambionframework/ambion/conformance';
 import type { BashBackend } from './backend.ts';
 import type { GitBackend } from './git-backend.ts';
 import { resolvesBranchTagAndHash } from './git-conformance-revisions.ts';
+import {
+	concurrentSharedMainPushes,
+	SHARED_FIXTURE,
+	sharedForkAndRefsRoundTrip,
+	sharedGuidanceExplainsPushPolicy,
+	sharedMainAndSideBranchPolicy,
+	sharedPushesMergeFromBothAgents,
+	sharedRegistrationPersists,
+} from './git-conformance-shared.ts';
 import { ANALYST, check, ctx, forkAs, git, REVIEWER, sh } from './git-conformance-support.ts';
 import type { WorkspaceAgent } from './resource.ts';
+import type { SourceInput } from './sources.ts';
 import { openWorkspace, type Workspace } from './workspace.ts';
 
 /** One template, as a case registers it. */
@@ -37,8 +47,16 @@ export interface GitConformanceTemplate {
 /** What a case asks of a git backend. */
 export interface GitConformanceOptions {
 	readonly templates: Readonly<Record<string, GitConformanceTemplate>>;
+	/** Shared repositories, seeded once and then writable by every agent. */
+	readonly shared?: Readonly<Record<string, GitConformanceShared>>;
 	/** Seconds a credential lives. */
 	readonly credentialTtl?: number;
+}
+
+/** One shared repository registration, including a source that can detect unwanted reads. */
+export interface GitConformanceShared {
+	readonly source: SourceInput;
+	readonly description?: string;
 }
 
 /** One store of repositories, and a bash backend beside it. */
@@ -103,7 +121,7 @@ type Body = <B extends GitBackend>(
 async function withWorkspace<B extends GitBackend>(
 	harness: GitConformanceBackend<B>,
 	body: Body,
-	options: GitConformanceOptions = { templates: TEMPLATES },
+	options: GitConformanceOptions = { templates: TEMPLATES, shared: SHARED_FIXTURE },
 ): Promise<void> {
 	const store = await harness.open();
 	const backend = store.backend(options);
@@ -127,7 +145,13 @@ const listsTemplatesAndForks: Body = async ({ workspace }) => {
 	const ids = all.map((repository) => repository.id);
 	check(
 		JSON.stringify(ids) ===
-			JSON.stringify(['analyst/report', 'templates/blank', 'templates/weekly-report']),
+			JSON.stringify([
+				'analyst/report',
+				'shared/empty',
+				'shared/room-notes',
+				'templates/blank',
+				'templates/weekly-report',
+			]),
 		`list gave ${JSON.stringify(ids)}`,
 	);
 	const template = all.find((repository) => repository.id === 'templates/weekly-report');
@@ -140,6 +164,13 @@ const listsTemplatesAndForks: Body = async ({ workspace }) => {
 	check(fork?.url.includes('report') === true, 'the fork has no clone URL');
 	const templates = await git(workspace, ANALYST, (env) => env.list('templates'));
 	check(templates.length === 2, 'list with a namespace did not keep that namespace alone');
+	const shared = await git(workspace, ANALYST, (env) => env.list('shared'));
+	check(shared.length === 2, 'list with the shared namespace did not keep that namespace alone');
+	const empty = shared.find((repository) => repository.id === 'shared/empty');
+	check(
+		typeof empty?.branches.main === 'string',
+		'an empty shared source did not get a main commit',
+	);
 };
 
 const cloneSetsOrigin: Body = async ({ workspace }) => {
@@ -176,19 +207,20 @@ const forkOfForkNamesItsSource: Body = async ({ workspace }) => {
 	check(review?.source === 'analyst/report', 'a fork of a fork does not name its direct source');
 };
 
-const templatesNameIsRefused: Body = async (pair, harness) => {
+const reservedNamespaceIsRefused: Body = async (pair, harness) => {
 	const { workspace } = pair;
-	const name = 'templates';
-	const refused = await git(workspace, { name }, (env) => env.list()).then(
-		() => false,
-		() => true,
-	);
-	check(refused, `an agent named ${name} was not refused`);
-	const credential = await harness.issueCredentials(pair, { name }).then(
-		() => false,
-		() => true,
-	);
-	check(credential, `an agent named ${name} got a credential`);
+	for (const name of ['templates', 'shared']) {
+		const refused = await git(workspace, { name }, (env) => env.list()).then(
+			() => false,
+			() => true,
+		);
+		check(refused, `an agent named ${name} was not refused`);
+		const credential = await harness.issueCredentials(pair, { name }).then(
+			() => false,
+			() => true,
+		);
+		check(credential, `an agent named ${name} got a credential`);
+	}
 };
 
 const ownerPushesPeerReads: Body = async ({ workspace }) => {
@@ -311,7 +343,7 @@ const abortedForkRejects: Body = async ({ workspace }) => {
 /** Open a workspace over `store` with `templates`, run `body` in it, and dispose it. */
 async function registered<T>(
 	store: GitConformanceStore,
-	templates: GitConformanceOptions['templates'],
+	options: GitConformanceOptions,
 	body: (workspace: Workspace) => Promise<T>,
 ): Promise<T> {
 	// Registration cases reopen a workspace over one persistent store. The
@@ -325,7 +357,7 @@ async function registered<T>(
 	});
 	const workspace = openWorkspace({
 		name: 'git-conformance',
-		backend: { bash, git: store.backend({ templates }) },
+		backend: { bash, git: store.backend(options) },
 	});
 	try {
 		return await body(workspace);
@@ -368,14 +400,16 @@ const registrationFollowsSource = async <B extends GitBackend>(
 ): Promise<void> => {
 	const store = await harness.open();
 	try {
-		const before = await registered(store, TEMPLATES, async (workspace) => {
+		const before = await registered(store, { templates: TEMPLATES }, async (workspace) => {
 			await forkAs(workspace, ANALYST, 'templates/blank', 'early');
 			return mainOf(workspace, 'templates/blank');
 		});
 		check(typeof before === 'string', 'the first registration made no template');
-		const again = await registered(store, TEMPLATES, (w) => mainOf(w, 'templates/blank'));
+		const again = await registered(store, { templates: TEMPLATES }, (w) =>
+			mainOf(w, 'templates/blank'),
+		);
 		check(again === before, 'a second registration wrote a commit');
-		const updated = await registered(store, CHANGED, async (workspace) => {
+		const updated = await registered(store, { templates: CHANGED }, async (workspace) => {
 			const template = await git(workspace, ANALYST, (env) => env.get('templates/blank'));
 			check(template?.description === 'An empty start.', 'the description did not update');
 			check(
@@ -386,7 +420,9 @@ const registrationFollowsSource = async <B extends GitBackend>(
 			return template?.branches.main;
 		});
 		check(updated !== undefined && updated !== before, 'a changed source did not update');
-		const last = await registered(store, CHANGED, (w) => mainOf(w, 'templates/blank'));
+		const last = await registered(store, { templates: CHANGED }, (w) =>
+			mainOf(w, 'templates/blank'),
+		);
 		check(last === updated, 'a registration after the update wrote a commit');
 	} finally {
 		await store.dispose();
@@ -406,7 +442,11 @@ const credentialExpires = async <B extends GitBackend>(
 			await new Promise((resolve) => setTimeout(resolve, probe.expiresAt - Date.now() + 250));
 			check(!(await probe.accepted()), 'an expired credential was accepted');
 		},
-		{ templates: TEMPLATES, credentialTtl: harness.shortestCredentialTtl },
+		{
+			templates: TEMPLATES,
+			shared: SHARED_FIXTURE,
+			credentialTtl: harness.shortestCredentialTtl,
+		},
 	);
 };
 
@@ -419,7 +459,10 @@ const CASES: readonly [string, Body][] = [
 	['a second fork with a taken name is name_taken and creates nothing', takenNameCreatesNothing],
 	['a fork of a missing source is no_source', missingSourceIsRefused],
 	['a fork of a fork names its direct source', forkOfForkNamesItsSource],
-	['an agent named templates is refused', templatesNameIsRefused],
+	[
+		'agents named templates or shared are refused for repositories and credentials',
+		reservedNamespaceIsRefused,
+	],
 	['the owner pushes a branch, and a peer reads it', ownerPushesPeerReads],
 	[
 		'resolve gives the commit of a branch, a tag, or a hash, and show gives what the commit holds',
@@ -445,6 +488,37 @@ export function gitConformance<B extends GitBackend>(
 		{
 			name: 'a registration with the same source writes nothing, and a changed one fast-forwards the template',
 			run: () => registrationFollowsSource(harness),
+		},
+		{
+			name: 'a shared repository persists through restart, ignores changed and unreadable sources, and stays writable when omitted',
+			run: () => sharedRegistrationPersists(harness, SHARED_FIXTURE),
+		},
+		{
+			name: 'both agents push shared main, and a stale second push rebases with both commits intact',
+			run: () =>
+				withWorkspace(harness, async ({ workspace }) => sharedPushesMergeFromBothAgents(workspace)),
+		},
+		{
+			name: 'two concurrent same-base pushes to shared main have one winner and one rejection',
+			run: () =>
+				withWorkspace(harness, async ({ workspace }) => concurrentSharedMainPushes(workspace)),
+		},
+		{
+			name: 'shared main refuses deletion and non-fast-forward updates, while side branches can be rewritten or deleted',
+			run: () =>
+				withWorkspace(harness, async ({ workspace }) => sharedMainAndSideBranchPolicy(workspace)),
+		},
+		{
+			name: 'a fork of a shared repository has ordinary permissions and its refs roundtrip',
+			run: () =>
+				withWorkspace(harness, async ({ workspace }) => sharedForkAndRefsRoundTrip(workspace)),
+		},
+		{
+			name: 'git guidance explains shared repository names and shared main policy',
+			run: () =>
+				withWorkspace(harness, async ({ workspace }) =>
+					sharedGuidanceExplainsPushPolicy(workspace),
+				),
 		},
 		{ name: 'a credential is refused after it expires', run: () => credentialExpires(harness) },
 	];

@@ -13,10 +13,12 @@ export {
 	namespaceOf,
 	readOnly,
 	revisionOf,
+	SHARED,
 	TEMPLATES,
 	validName,
 	validRefName,
+	writableBy,
 } from './git-names.ts';
-export type { TemplateRegistration } from './git-templates.ts';
+export type { RepositoryRegistration } from './git-templates.ts';
 export { changeTo, filesOf } from './git-templates.ts';
 export { hashesOf, sameFiles } from './sources.ts';

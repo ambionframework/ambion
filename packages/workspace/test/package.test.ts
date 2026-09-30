@@ -137,6 +137,7 @@ it.each([
 		'./git',
 		git,
 		[
+			'SHARED',
 			'TEMPLATES',
 			'assertAgent',
 			'assertCommitHash',
@@ -150,6 +151,7 @@ it.each([
 			'sameFiles',
 			'validName',
 			'validRefName',
+			'writableBy',
 		],
 	],
 ])('exports exactly its bindings from %s', (_path, entry, names) => {

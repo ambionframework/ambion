@@ -2,8 +2,8 @@
  * Repository IDs and the reserved namespace.
  *
  * An ID is `<namespace>/<name>`. `templates` holds the read-only templates,
- * and every other namespace is the name of an agent. No agent takes the
- * reserved name. A backend can reserve more names for its own storage.
+ * `shared` holds writable repositories common to the workspace, and every
+ * other namespace is the name of an agent. No agent takes a reserved name.
  */
 
 import type { GitCommit, GitRevision } from './git-backend.ts';
@@ -11,6 +11,9 @@ import type { WorkspaceAgent } from './resource.ts';
 
 /** The namespace of the read-only templates. */
 export const TEMPLATES = 'templates';
+
+/** The namespace of the repositories shared by every agent. */
+export const SHARED = 'shared';
 
 /** The rule for the name of a repository, 1 to 64 characters, as the source of a pattern. */
 export const NAME_PATTERN = '^[a-z0-9][a-z0-9._-]{0,63}$';
@@ -35,7 +38,7 @@ export function namespaceOf(id: string): string | undefined {
 
 /** Refuse an agent that takes the reserved name, or a name that no namespace takes. */
 export function assertAgent(agent: WorkspaceAgent): void {
-	if (agent.name === TEMPLATES) {
+	if (agent.name === TEMPLATES || agent.name === SHARED) {
 		throw new Error(`The name '${agent.name}' is reserved by the git backend.`);
 	}
 	if (!NAMESPACE.test(agent.name)) {
@@ -46,6 +49,12 @@ export function assertAgent(agent: WorkspaceAgent): void {
 /** Whether no agent can push to the repository `id`: a template. */
 export function readOnly(id: string): boolean {
 	return namespaceOf(id) === TEMPLATES;
+}
+
+/** Whether `agent` may push to the repository `id`. */
+export function writableBy(id: string, agent: WorkspaceAgent): boolean {
+	const namespace = namespaceOf(id);
+	return namespace === SHARED || namespace === agent.name;
 }
 
 /** A commit hash, full or short. */

@@ -1,6 +1,7 @@
 /**
- * Template registration on the git account: idempotent, and a crash leaves
- * no half template.
+ * Repository registration on the git account: templates can refresh from
+ * their source, while shared repositories are seeded once and then kept as
+ * shared state. A crash leaves no partially published repository.
  *
  * For each template, in name order, registration takes the first case that
  * holds, and it compares the files by their blob hashes.
@@ -29,8 +30,8 @@ import { randomName, type SourceFiles } from '@ambionframework/workspace';
 import {
 	filesOf,
 	hashesOf,
+	type RepositoryRegistration,
 	sameFiles,
-	type TemplateRegistration,
 	validName,
 } from '@ambionframework/workspace/git';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
@@ -53,6 +54,17 @@ const TIP_SCRIPT = [
 	'  tree=$(git --git-dir="$repo" ls-tree -r -z --full-tree HEAD | base64 -w0)',
 	'fi',
 	String.raw`printf 'AMBION_TREE %s\n' "$tree"`,
+	'',
+].join('\n');
+
+/** Check for a published shared repo and update only its description. */
+const SHARED_EXISTS_SCRIPT = [
+	'set -euo pipefail',
+	'repo="$HOME/$AMBION_ROOT/shared/$AMBION_NAME.git"',
+	'[ -f "$repo/HEAD" ] || exit 0',
+	`printf '%s' "$AMBION_DESCRIPTION" | cmp -s - "$repo/description" ||`,
+	`  printf '%s' "$AMBION_DESCRIPTION" >"$repo/description"`,
+	"printf 'AMBION_SHARED_EXISTS 1\\n'",
 	'',
 ].join('\n');
 
@@ -111,6 +123,47 @@ const UPDATE_SCRIPT = [
 	'',
 ].join('\n');
 
+/** Build and fully seed a shared repo before its rename publishes it. */
+const SHARED_BUILD_SCRIPT = [
+	'set -euo pipefail',
+	'root="$HOME/$AMBION_ROOT"',
+	'stage="$root/.staging/$AMBION_STAGE"',
+	'repo="$stage/repo.git"',
+	'mkdir -p "$stage/files"',
+	'git init --bare --quiet "$repo"',
+	'export GIT_DIR="$repo" GIT_WORK_TREE="$stage/files" GIT_INDEX_FILE="$stage/index"',
+	'git add -A --force',
+	'tree=$(git write-tree)',
+	'export GIT_AUTHOR_NAME=ambion GIT_AUTHOR_EMAIL=ambion@ambion.invalid',
+	'export GIT_COMMITTER_NAME=ambion GIT_COMMITTER_EMAIL=ambion@ambion.invalid',
+	String.raw`commit=$(printf 'Register the shared repository %s\n' "$AMBION_NAME" | git commit-tree "$tree")`,
+	'git update-ref refs/heads/main "$commit"',
+	'git symbolic-ref HEAD refs/heads/main',
+	'git config core.logAllRefUpdates always',
+	'unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE',
+	`[ -z "$AMBION_DESCRIPTION" ] || printf '%s' "$AMBION_DESCRIPTION" >"$repo/description"`,
+	'mkdir -p "$repo/hooks"',
+	'cat >"$repo/hooks/pre-receive" <<\'AMBION_HOOK\'',
+	'#!/bin/sh',
+	'set -eu',
+	"zero=$(printf '%040d' 0)",
+	'protected=$(git symbolic-ref HEAD)',
+	'while read old new ref; do',
+	'  [ "$ref" = "$protected" ] || continue',
+	'  [ "$new" != "$zero" ] || { echo "ambion: cannot delete protected branch $protected" >&2; exit 1; }',
+	'  if [ "$old" != "$zero" ] && ! git --no-replace-objects merge-base --is-ancestor "$old" "$new"; then',
+	'    echo "ambion: non-fast-forward push to protected branch $protected" >&2',
+	'    exit 1',
+	'  fi',
+	'done',
+	'AMBION_HOOK',
+	'chmod 755 "$repo/hooks/pre-receive"',
+	'mkdir -p "$root/shared"',
+	'mv -T "$repo" "$root/shared/$AMBION_NAME.git" 2>/dev/null || true',
+	'rm -rf -- "$stage"',
+	'',
+].join('\n');
+
 /** Refuse a path that leaves the root of the template. */
 function checkPaths(name: string, files: SourceFiles): void {
 	for (const path of Object.keys(files)) {
@@ -164,7 +217,7 @@ async function stageAndRun(
 	account: GitAccount,
 	root: string,
 	name: string,
-	registration: TemplateRegistration,
+	registration: RepositoryRegistration,
 	files: SourceFiles,
 	script: string,
 ): Promise<string> {
@@ -184,7 +237,7 @@ async function registerOne(
 	account: GitAccount,
 	root: string,
 	name: string,
-	registration: TemplateRegistration,
+	registration: RepositoryRegistration,
 ): Promise<void> {
 	if (!validName(name)) throw new Error(`'${name}' is not a valid template name.`);
 	const files = await filesOf(registration);
@@ -214,10 +267,53 @@ function notLanded(name: string, output: string): string {
 export async function registerTemplates(
 	account: GitAccount,
 	root: string,
-	templates: Readonly<Record<string, TemplateRegistration>>,
+	templates: Readonly<Record<string, RepositoryRegistration>>,
 ): Promise<void> {
 	for (const name of Object.keys(templates).sort()) {
 		const registration = templates[name];
 		if (registration !== undefined) await registerOne(account, root, name, registration);
+	}
+}
+
+async function sharedExists(
+	account: GitAccount,
+	root: string,
+	name: string,
+	description: string | undefined,
+): Promise<boolean> {
+	const output = await account.run(SHARED_EXISTS_SCRIPT, {
+		AMBION_ROOT: root,
+		AMBION_NAME: name,
+		AMBION_DESCRIPTION: description ?? '',
+	});
+	return tagged(output, 'AMBION_SHARED_EXISTS').length > 0;
+}
+
+async function registerSharedOne(
+	account: GitAccount,
+	root: string,
+	name: string,
+	registration: RepositoryRegistration,
+): Promise<void> {
+	if (!validName(name)) throw new Error(`'${name}' is not a valid shared repository name.`);
+	// A published shared repo is durable shared state. Registration only
+	// updates its description and must not even read the configured source.
+	if (await sharedExists(account, root, name, registration.description)) return;
+	const files = await filesOf(registration);
+	checkPaths(name, files);
+	await stageAndRun(account, root, name, registration, files, SHARED_BUILD_SCRIPT);
+	if (!(await sharedExists(account, root, name, registration.description)))
+		throw new Error(`The shared repository '${name}' is missing after its registration.`);
+}
+
+/** Register shared repositories in name order. */
+export async function registerShared(
+	account: GitAccount,
+	root: string,
+	shared: Readonly<Record<string, RepositoryRegistration>>,
+): Promise<void> {
+	for (const name of Object.keys(shared).sort()) {
+		const registration = shared[name];
+		if (registration !== undefined) await registerSharedOne(account, root, name, registration);
 	}
 }

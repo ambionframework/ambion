@@ -75,13 +75,17 @@ contract, and `gitConformance` and `objectConformance`, the cases a
 
 `./git` holds what every git backend shares, and it loads no git library.
 The name rules of a repository ID are `validName`, `namespaceOf`,
-`assertAgent`, `readOnly`, and `TEMPLATES`, and `revisionOf` and
-`validRefName` read a branch, a tag, or a hash as a name alone. The template helpers
+`assertAgent`, `readOnly`, `writableBy`, `TEMPLATES`, and `SHARED`. `revisionOf` and
+`validRefName` read a branch, a tag, or a hash as a name alone. The registration helpers
 are `filesOf`, `hashesOf`, `sameFiles`, and `changeTo`, with the
-`TemplateRegistration` type. `@ambionframework/just-bash/git` holds a git
+`RepositoryRegistration` type. `@ambionframework/just-bash/git` holds a git
 backend that uses them. The root entry holds `fromDirectory` and the
 `FileSource`, `SourceFiles`, and `SourceInput` types, which templates and
-skills share.
+skills share. Both git backends accept `templates` and `shared` maps of
+registrations. Templates follow their source; shared repositories read
+it only to create the first commit, then preserve agents' content.
+Every agent can push to `shared/<name>`, whose default branch refuses
+deletion and non-fast-forward updates.
 
 `openWorkspace` takes its backends by kind: `backend: { bash, sql, git,
 objects }`. `bash` is required. `sql` is an optional `SqlBackend`, and the

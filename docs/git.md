@@ -62,15 +62,17 @@ that is still in the home, or it clones the fork again
 
 ## Decisions taken
 
-- **One agent pushes to a repository: its owner.** A peer reads the
-  repository and forks it. Two agents work on one task through two forks.
+- **An agent owns its forks; every agent writes shared repositories.** A
+  peer reads or forks another agent's repository. `shared/<name>` belongs
+  to the workspace and accepts pushes from every agent across its rooms.
 - **A registration updates its template.** A changed source fast-forwards
   `templates/<name>` to a new commit. A fork keeps the commit it came from.
 - **A clone URL is opaque.** The tools give each URL, and no agent builds
   one. Each implementation picks its own URL shape.
 - **A credential names one agent, and it expires.** The server checks
   each request against the namespace rule: the owner writes to each of
-  its repositories, and every agent reads every other repository.
+  its repositories and shared repositories, and every agent reads every
+  other repository.
 - **`fork` returns when the fork can be cloned.** An implementation that
   forks in the background waits inside the call.
 - **A message cites a commit with a commit ref.** The ref holds the full
@@ -232,14 +234,15 @@ host use IDs. Each implementation maps an ID to a URL of its own.
 | Namespace   | Holds                   | Who can push |
 | ----------- | ----------------------- | ------------ |
 | `templates` | The read-only templates | Nobody       |
+| `shared`    | Shared repositories     | Every agent  |
 | `<agent>`   | The forks of that agent | That agent   |
 
 **A name has 1 to 64 characters.** It starts with a lowercase letter or a
 digit, and the rest are lowercase letters, digits, `.`, `_`, and `-`. An
 agent name matches `^[a-z][a-z0-9-]*$`, so it holds no `.`.
 
-**`templates` is a reserved name.** Every git backend refuses an agent
-with that name, in `connect` and in each credential call. A backend can
+**`templates` and `shared` are reserved names.** Every git backend refuses
+an agent with either name, in `connect` and in each credential call. A backend can
 reserve more names for its own storage.
 
 **`justGitBackend` keeps the source of each template in
@@ -313,6 +316,43 @@ it. A plain object maps each path to text.
 template. Removal of a registration from the options deletes nothing. The
 host deletes a template with its own tools.
 
+## Shared repositories
+
+**Every agent of a workspace can push to `shared/<name>`.** A shared
+repository belongs to the workspace, so agents in different rooms use the
+same repository. The host registers it alongside templates on either git
+backend, using the same `RepositoryRegistration` type:
+
+```ts
+shared: {
+  notes: {
+    description: 'Team facts, decisions, and open questions.',
+    source: fromDirectory('./notes-seed'),
+  },
+},
+```
+
+**The source seeds the repository once.** Registration creates its first
+commit on `main` as `ambion`. The repository becomes available only after
+its seed and protection are complete. A later registration does not read
+the source or change any file or ref; it updates the description when it
+differs. Removing the registration deletes nothing and revokes no write
+access. A failed initial registration can be retried.
+
+**The default branch keeps its history.** A push cannot delete it or move
+it to a commit that does not descend from its current tip. Protection
+applies only to shared repositories. Other branches can be created,
+rewritten, and deleted; an agent's fork keeps its own push rules. Any
+agent can commit unwanted content, including a deletion of every file:
+protection preserves history, not the content of the current tree.
+
+**Use `clone` to work together and `fork` to work separately.** A clone of
+`shared/notes` pushes back to the shared repository. A fork goes to the
+calling agent's namespace. Fetch and rebase before pushing; after a
+rejected push, fetch again, resolve conflicts, and retry. Git rejects
+competing updates of one tip; resolving a conflict still requires the
+agents' judgment.
+
 ## The tools
 
 **The git backend adds three tools: `repos`, `clone` and `fork`.** Each tool does one
@@ -358,9 +398,9 @@ The details hold `repository`, `source`, `url`, and `clone` on success.
 
 ### repos
 
-| Parameter   | Meaning                                                                          |
-| ----------- | -------------------------------------------------------------------------------- |
-| `namespace` | Optional. `templates` or the name of an agent. Omit it to list every repository. |
+| Parameter   | Meaning                                                                                     |
+| ----------- | ------------------------------------------------------------------------------------------- |
+| `namespace` | Optional. `templates`, `shared`, or the name of an agent. Omit it to list every repository. |
 
 **The result is a Markdown table with one line for each repository.**
 
@@ -531,8 +571,10 @@ its own name into the form of a commit ref.
 
 ```text
 repos, clone and fork reach the git server of this workspace, <server>.
-templates/<name> is a read-only template. <agent>/<name> belongs to that agent.
-You push only to <your name>/<name>, and you can read every repository.
+templates/<name> is a read-only template. shared/<name> is a repository every agent can write.
+<agent>/<name> belongs to that agent. You can read every repository.
+You push to <your name>/<name> and to shared/<name>. Before a shared push, fetch and rebase onto origin/main.
+If a push is rejected because another agent pushed first, fetch, rebase, resolve conflicts, and retry.
 Use clone to make a local checkout of any repository without creating a fork. Its
 origin is the source, with the source's push permissions. To make work you can push, fork a
 template and set clone. In that clone, make a branch, commit, and push to origin with git in bash.
@@ -565,6 +607,7 @@ the backend its secret. An agent holds this set:
 | Repository                 | Scope   |
 | -------------------------- | ------- |
 | Each fork in its namespace | `write` |
+| Each shared repository     | `write` |
 | Each template              | `read`  |
 | Each fork of another agent | `read`  |
 
@@ -572,9 +615,11 @@ the backend its secret. An agent holds this set:
 the `write` credential alone, which also reads. No agent holds a
 credential for `template-sources` of `justGitBackend`.
 
-**The one-pusher rule rests on the set.** No agent holds a write
-credential for a repository outside its namespace. `justGitBackend` also
-checks the namespace in its pre-receive hook.
+**Push rights rest on the credential set.** An agent holds write
+credentials for its own namespace and `shared`, and read credentials for
+templates and other agents' forks. The server checks the credential and
+protects the default branch of shared repositories in its pre-receive
+hook.
 
 **A credential lives for `tokenTtl`, 1 hour by default.** A client asks
 again before it expires. A new fork adds a write credential at once.
@@ -786,12 +831,17 @@ push in flight ends before the git owner disposes the backend. The
 ## Trust
 
 **`docs/trust.md` gets a row for the git backend.** The credential set
-enforces the one-pusher rule. The bash backend decides the rest.
+enforces namespace push rights. A shared repository preserves default
+branch history while accepting any content. The bash backend decides the
+rest.
 
 | Attempt                                       | just-bash backends                          |
 | --------------------------------------------- | ------------------------------------------- |
 | Push to another agent's repository            | Refused: no write credential                |
 | Push to a template                            | Refused: read-only                          |
+| Push any content to a shared repository       | Allowed                                     |
+| Delete or rewrite the shared default branch   | Refused by the server hook                  |
+| Rewrite or delete another shared branch       | Allowed                                     |
 | Use another agent's credential                | Not possible: no file holds it              |
 | Read another agent's repository on the server | Allowed                                     |
 | Read or change another agent's working copy   | Possible: no wall between homes             |
@@ -799,8 +849,10 @@ enforces the one-pusher rule. The bash backend decides the rest.
 | Copy its own token into the record            | Not possible: no file holds it              |
 | Set `GIT_HTTP_BEARER_TOKEN` to another token  | No effect: the client's own credential wins |
 
-**Every commit names its agent.** The just-bash `git` locks the author to
-the agent's name.
+**The just-bash client stamps new commits with its agent.** Its `git`
+locks the author when creating a commit. A pushed commit can already have
+another author, so commit authorship is distinct from the authenticated
+identity of a push.
 
 ## Where the code lives
 
