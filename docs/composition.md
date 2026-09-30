@@ -159,6 +159,11 @@ interface AmbionTool {
 | absent               | Returns the text of `content`, with the text parts joined by a line. |
 | `false`              | Does not exist. The tool is not in the catalog.                      |
 
+**The definition keeps the field.** `defineTool` takes `compose` and puts
+it on the tool. `captureTool` copies it, and captures the `output` schema
+as it captures `parameters`. The check of a tool refuses a `compose` value
+that is not `false` or an object with a TypeBox `output`.
+
 **The binding returns one kind of value per tool.** A declared tool always
 gives its `details`, and an undeclared tool always gives a string. The
 catalog states which one. `details` with no declared schema has no
@@ -203,7 +208,12 @@ text, so the change gives these tools an output schema:
 | `bash`     | The process, with its handle and its state, and the output read. |
 | `ps`       | The processes, with the handle and the state of each.            |
 | `wait`     | The processes, and the processes that ended.                     |
-| `fork`     | The repository that the fork made.                               |
+| `fork`     | The repository that the fork made, when the fork made one.       |
+
+**`sql` gives the rows that it already reads.** The preview of the result
+holds the rows up to the limit `rows`, so the declared output needs no
+second query. A row value is JSON: text, a number, or null. A blob is its
+bytes as lowercase hex, as the CSV export writes it.
 
 ## What composes
 
@@ -243,7 +253,7 @@ const orders = await Promise.all(ids.map((id) => tools.lookup_order({ id })));
 return orders.filter((order) => order.includes('delayed'));
 ```
 
-**`limits.compose.concurrent` caps the calls that run together.** A call
+**`compose.limits.concurrent` caps the calls that run together.** A call
 past the cap waits in a queue, in the order that the code made it. It
 starts when a running call settles. The ledger lists the calls in the
 order that the code made them.
@@ -294,9 +304,13 @@ outcome of each call, so code that wants every result uses it.
 
 ## The composer
 
-**`compose` is a definition tool.** `defineAgent` adds it to the flattened
-tools of the definition when the definition has a `compose` option. Pi
-builds its tools from the definition. Claude and Codex host
+**`compose` is a definition tool.** The executor options take a
+`compose` option, beside `tools` and `bundles`. `describeExecutor`
+flattens the tools, then appends `compose` when the option is present.
+`pi()`, `claude()`, and `codex()` each call `describeExecutor`, so every
+family gets the tool the same way. The name `compose` is reserved: the
+check of the agent tools refuses a tool of that name, as it refuses the
+name of a room tool. Pi builds its tools from the definition. Claude and Codex host
 `pass.agentTools`, which maps the same tools one to one. So each family
 hosts `compose` as one more tool. Its `invoke` closes over the other tools
 of the definition and calls each `AmbionTool` directly.
@@ -307,7 +321,9 @@ in this order:
 1. It checks that the name is in `uses`, and that the composition is under
    its limits.
 2. It applies `prepareArguments`, then checks the arguments against the
-   input schema.
+   input schema. A tool from `defineTool` checks them again inside
+   `invoke`. The composer keeps its own check, because a tool built by hand
+   can have an `invoke` that checks nothing.
 3. It gives the call a fresh call id and a `ToolContext`. The context
    copies the agent, the room, the activation, the exchange, the
    `deadline`, and the signal from the `compose` call. It sets
@@ -341,7 +357,14 @@ room and has no sink, so a composition there records no nested step.
 **`callId(tool)` skips a step with a `parent`.** A harness that cannot see
 the id of a call takes the oldest `tool_call` step of that tool
 ([Executors](executors.md#the-room-tools)). A nested `bash` step must not
-give its id to a direct `bash` call of the same batch.
+give its id to a direct `bash` call of the same batch. The record of
+unclaimed calls skips a step with a `parent` too, so no harness can claim
+it later.
+
+**A nested step closes an open text block.** The trace closes an open
+`text` or `thinking` block when any other step arrives. A nested step
+that arrives while the model streams closes the block, as a direct tool
+step does. The trace keeps the text. It keeps it in two blocks.
 
 **Only the `compose` result reaches the model.** A nested result does not
 call `delivered(call)`, and it does not move `readThrough`. The model read
@@ -374,6 +397,15 @@ interface ComposeOptions {
     request: { readonly uses: readonly string[]; readonly code: string },
     ctx: Omit<ToolContext, 'record'>,
   ) => Promise<'allow' | 'deny'> | 'allow' | 'deny';
+  /** Absent fields keep their defaults ([Limits](#limits)). */
+  readonly limits?: Partial<ComposeLimits>;
+}
+
+interface ComposeLimits {
+  readonly calls: number;
+  readonly concurrent: number;
+  readonly bytes: number;
+  readonly time: number;
 }
 ```
 
@@ -397,9 +429,22 @@ interface EvaluatorInput {
 ```
 
 **The evaluator gives code no ambient authority.** The global scope holds
-`tools`, the standard JavaScript built-ins, and no other value. There is
-no module import, no filesystem, no network, no process, no timer, no
-clock, and no random source.
+`tools` and the ECMAScript built-ins, except those that read the clock or
+a random source. There is no module import, no filesystem, no network, no
+process, and no timer.
+
+| Name                                          | In a composition                                 |
+| --------------------------------------------- | ------------------------------------------------ |
+| `Date.now()`, `Date()`, `new Date()`          | Throws. A clock gives a value that no tool gave. |
+| `new Date(value)`, `Date.UTC`, `Date.parse`   | Works. The value comes from the code or a tool.  |
+| `Math.random`                                 | Throws.                                          |
+| `WeakRef`, `FinalizationRegistry`             | Absent. Garbage collection sets their results.   |
+| `Intl`, `performance`, `crypto`               | Absent.                                          |
+| `setTimeout`, `setInterval`, `queueMicrotask` | Absent. `await` orders the work.                 |
+
+**A tool gives the time.** Code that needs the current time calls a tool
+that returns it. The ledger and the trace then hold the time that the code
+read.
 
 **The glue is deterministic.** Two runs that get the same binding values
 make the same calls in the same order and return the same value. The
@@ -422,20 +467,48 @@ host files outside the sandbox ([Codex](codex.md#the-trust-boundary)).
 `nativeTools: 'none'` keeps it off. A Codex seat composes through the
 `compose` tool, as every seat does.
 
-**A seat opts in with an evaluator.** The definition takes a `compose`
-option. With no option, the seat has no `compose` tool.
+**A seat opts in with an evaluator.** The executor options take a
+`compose` option. With no option, the seat has no `compose` tool.
 
 ```ts
+import { quickjsEvaluator } from '@ambionframework/evaluator';
+
 const analyst = defineAgent({
   name: 'analyst',
-  bundles: [lab.tools()],
-  compose: { evaluator: quickjsEvaluator() },
+  identity: 'Reads the lab records.',
+  executor: pi({
+    instructions: 'Compose the lab tools when one result feeds another.',
+    model: 'anthropic/claude-sonnet-5',
+    bundles: [lab.tools()],
+    compose: { evaluator: quickjsEvaluator(), limits: { calls: 32 } },
+  }),
 });
 ```
 
 **The kernel imports no evaluator.** An evaluator package provides one, as
 an executor package provides an execution. A definition already holds the
-`invoke` function of each tool, so it can hold an evaluator.
+`invoke` function of each tool, so it can hold an evaluator. No journal
+entry holds a definition, and `@ambionframework/cloudflare` finds each
+definition by name in the worker, so no function crosses a wire.
+
+**`@ambionframework/evaluator` holds the first two evaluators.** Both pass
+one conformance suite, `evaluatorConformance`, which
+`@ambionframework/ambion/conformance` exports beside the other suites of
+the kernel.
+
+| Evaluator            | Runs the code                                                        | Isolation and limits                                                                                                                        |
+| -------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `quickjsEvaluator()` | In QuickJS compiled to WebAssembly, in the process of the host       | A fresh QuickJS runtime for each composition. A memory limit on its heap, and an interrupt handler that stops the code at the signal.       |
+| `processEvaluator()` | In a `node:vm` context, in a child Node process for each composition | The child runs under `--permission` with no allow flag: no file, network, child process, worker, or addon. The host kills it at the signal. |
+
+**`quickjsEvaluator` builds on `quickjs-emscripten`.** The package is MIT,
+and it has no native part. The evaluator sets the globals of the table
+above before it runs the code.
+
+**Cloudflare has no evaluator in the first version.** A worker cannot
+start a process, and a worker loads WebAssembly only from its bundle. A
+seat on `@ambionframework/cloudflare` has no `compose` option until an
+evaluator for workerd exists.
 
 ## Failure, cancellation, and effects
 
@@ -457,7 +530,7 @@ reads the result.
 when the function returns fails the composition, after that call settles.
 
 **`pending` marks a call that did not settle.** Only a cut or the limit
-`limits.compose.time` can end a composition before a call settles. The
+`compose.limits.time` can end a composition before a call settles. The
 ledger marks that call `pending`, and its effect can still happen.
 
 **The cut cancels the composition.** The composer passes the signal of the
@@ -474,12 +547,17 @@ UNIQUE constraint on a table.
 
 ## Limits
 
+**The limits live on the `compose` option.** A definition tool reaches no
+limit of the runtime: `limits` goes to the executions, and the context of
+a tool call carries none. So the composer reads its limits from its own
+option. An absent field keeps the default.
+
 | Limit                       | What it bounds                                      | Default    |
 | --------------------------- | --------------------------------------------------- | ---------- |
-| `limits.compose.calls`      | Nested calls in one composition                     | 64         |
-| `limits.compose.concurrent` | Nested calls that run at the same time              | 8          |
-| `limits.compose.bytes`      | UTF-8 bytes of the encoded return value             | 65,536     |
-| `limits.compose.time`       | Wall time of one composition, within `ctx.deadline` | 120,000 ms |
+| `compose.limits.calls`      | Nested calls in one composition                     | 64         |
+| `compose.limits.concurrent` | Nested calls that run at the same time              | 8          |
+| `compose.limits.bytes`      | UTF-8 bytes of the encoded return value             | 65,536     |
+| `compose.limits.time`       | Wall time of one composition, within `ctx.deadline` | 120,000 ms |
 
 **A composition that passes a limit fails.** The composer never cuts a
 return value to fit. The error names the limit, so the code can return a
@@ -496,17 +574,26 @@ trace can cut a nested output.
 **The implementation updates these pages in the same change.** Until then,
 each page states the current surface.
 
-| Page                              | Change                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------- |
-| [Definitions and tools](agent.md) | The `compose` option of a definition, and the `compose` field of a tool.        |
-| [Executors](executors.md)         | `parent` on `tool_call` and `tool_result`, `record` in `toolContext`, `callId`. |
-| [Trust](trust.md)                 | A harness approval hook sees `compose` as one call; `approve` sees its tools.   |
-| [Workspace](workspace.md)         | The declared outputs of `sql`, `snapshot`, `bash`, `ps`, `wait`, and `fork`.    |
-| [Envelope](envelope.md)           | The four `limits.compose` limits and their defaults.                            |
-| [Pi](pi.md)                       | `toolsFor` passes the step sink of the activation to each call.                 |
-| Changelog                         | The step vocabulary, `ToolContext`, `AmbionTool`, and the `sql` details.        |
+| Page                                                                   | Change                                                                                                                                                                    |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Definitions and tools](agent.md)                                      | The `compose` option of a definition, and the `compose` field of a tool.                                                                                                  |
+| [Executors](executors.md)                                              | `parent` on `tool_call` and `tool_result`, `record` in `toolContext`, `callId`.                                                                                           |
+| [Trust](trust.md)                                                      | A harness approval hook sees `compose` as one call; `approve` sees its tools.                                                                                             |
+| [Workspace](workspace.md)                                              | The declared outputs of `sql`, `snapshot`, `bash`, `ps`, `wait`, and `fork`.                                                                                              |
+| [Envelope](envelope.md)                                                | The four limits of the `compose` option and their defaults.                                                                                                               |
+| [Pi](pi.md)                                                            | `toolsFor` passes the step sink of the activation to each call.                                                                                                           |
+| [Technical facts](technical-facts.md) and [Toolchain](toolchain.md)    | The package `@ambionframework/evaluator`, and the count of packages.                                                                                                      |
+| [Executors](executors.md#the-room-tools) and [Toolchain](toolchain.md) | The scripted executor of `/testing` gives each tool call a signal, the deadline, and a step sink.                                                                         |
+| Export snapshot                                                        | `Evaluator`, `EvaluatorInput`, `ComposeOptions`, `ComposeLimits`, `CompositionResult`, and `LedgerEntry` from the main entry; `evaluatorConformance` from `/conformance`. |
+| Changelog                                                              | The step vocabulary, `ToolContext`, `AmbionTool`, and the `sql` details.                                                                                                  |
 
 ## Acceptance
+
+**The scripted executor runs the acceptance.** Today it gives a tool call
+no signal, no deadline, and no step sink. The same change gives it all
+three, so `settled(room)` waits for a deterministic composition, and a
+test reads the nested steps. Items 1 and 6 also run on the live tier of
+each family once.
 
 1. **The tools compose unchanged.** A seat on each of Pi, Claude, and Codex
    composes `sql` and `snapshot` with the same code. Each nested call keeps
@@ -515,15 +602,16 @@ each page states the current surface.
 2. **The data stays out of the context.** A test passes a large result
    from one tool into another. The model receives only the returned value,
    and the trace holds the nested calls with their `parent`.
-3. **Two evaluators run the same code.** An in-process evaluator and a
-   separate-process evaluator pass one conformance suite of compositions,
-   with no change to a tool.
+3. **Two evaluators run the same code.** `quickjsEvaluator()` and
+   `processEvaluator()` pass `evaluatorConformance`, with no change to a
+   tool. The suite covers the globals table, a memory limit, a cut, and
+   JSON at each crossing.
 4. **Failure keeps its facts.** An error, a cut, a limit, a denial, an
    invalid declared output, and an unawaited call each give the stated
    status and ledger. No nested call counts as delivered to the model, and
    no nested step gives its id to a direct call.
 5. **Parallel calls keep their facts.** Code that starts more calls than
-   `limits.compose.concurrent` runs the cap at a time. A `sequential` tool
+   `compose.limits.concurrent` runs the cap at a time. A `sequential` tool
    runs one call at a time. A failed call in `Promise.all` leaves its
    siblings to settle, and the ledger holds the outcome of each.
 6. **Processes carry parallel work.** A composition starts several
