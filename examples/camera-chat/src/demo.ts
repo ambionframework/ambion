@@ -1,8 +1,19 @@
 import { callTool, quiet, scripted, toolResultTexts } from '@ambionframework/pi/testing';
 
+/** The demo reads status this many times, 100 ms apart, before it reports a failed start. */
+const READY_READS = 100;
+
+function notReady(status: string) {
+	return callTool('say', {
+		to: 'you',
+		text: `Demo agent: the camera server did not report READY. Last status:\n${status}`,
+	});
+}
+
 /** Exercise the same Git/process/connect/observe path without a camera or provider. */
 export function demoStream() {
 	let phase = 0;
+	let reads = 0;
 	let handle = '';
 	let port = 0;
 	return scripted(async (context) => {
@@ -26,12 +37,14 @@ export function demoStream() {
 			case 3: {
 				handle ||= last.match(/bash-[a-f0-9]+/)?.[0] ?? '';
 				port = Number(last.match(/READY \{"port":(\d+)/)?.[1]);
-				if (!port) {
-					phase--;
-					await new Promise<void>((resolve) => setTimeout(resolve, 100));
-					return callTool('status', { handle });
+				if (port) return callTool('connect', { name: 'camera', process: handle, port });
+				if (++reads > READY_READS) {
+					phase = 6;
+					return notReady(last);
 				}
-				return callTool('connect', { name: 'camera', process: handle, port });
+				phase--;
+				await new Promise<void>((resolve) => setTimeout(resolve, 100));
+				return callTool('status', { handle });
 			}
 			case 4:
 				return callTool('observe', { sensor: 'camera/camera' });

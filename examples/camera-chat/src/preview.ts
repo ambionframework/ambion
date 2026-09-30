@@ -1,4 +1,13 @@
-import type { SensorConnectionEvent, Workspace } from '@ambionframework/workspace';
+import type {
+	RegisteredSensorConnection,
+	SensorConnectionEvent,
+	Workspace,
+} from '@ambionframework/workspace';
+
+/** The preview reads a frame at this interval. */
+const FRAME_MS = 200;
+/** The preview rechecks the owning process at this interval. Link events end it sooner. */
+const RECHECK_MS = 2000;
 
 export interface PreviewFrame {
 	at: string;
@@ -9,6 +18,8 @@ export interface PreviewFrame {
 /** Read preview frames through the standard registry and sensor HTTP client. */
 export function cameraPreview(workspace: Workspace, changed: () => void) {
 	let sensor: string | undefined;
+	let connection: RegisteredSensorConnection | undefined;
+	let checked = 0;
 	let latest: PreviewFrame | undefined;
 	let failure: string | undefined;
 	let controller = new AbortController();
@@ -19,6 +30,8 @@ export function cameraPreview(workspace: Workspace, changed: () => void) {
 		controller.abort();
 		controller = new AbortController();
 		sensor = undefined;
+		connection = undefined;
+		checked = 0;
 		latest = undefined;
 		failure = undefined;
 		changed();
@@ -33,10 +46,18 @@ export function cameraPreview(workspace: Workspace, changed: () => void) {
 			void poll();
 		} else if (sensor?.startsWith(`${event.connection.name}/`)) detach();
 	};
+	async function resolveLink(name: string, signal: AbortSignal) {
+		if (connection?.available && Date.now() - checked < RECHECK_MS) return connection;
+		const link = await workspace.sensors?.get(name, signal);
+		signal.throwIfAborted();
+		connection = link;
+		checked = Date.now();
+		return link;
+	}
 	async function fetchFrame(name: string, signal: AbortSignal) {
-		const connection = await workspace.sensors?.get(name, signal);
-		if (!connection) return undefined;
-		const observation = await connection.client.observe(
+		const link = await resolveLink(name, signal);
+		if (!link) return undefined;
+		const observation = await link.client.observe(
 			name.slice(name.indexOf('/') + 1),
 			{ api: 1 },
 			signal,
@@ -44,7 +65,7 @@ export function cameraPreview(workspace: Workspace, changed: () => void) {
 		const sample = observation.observations.at(-1);
 		const part = sample?.parts.find((part) => part.kind === 'frame');
 		if (!sample || !part || part.kind !== 'frame') throw new Error('The camera returned no image.');
-		const file = await connection.client.file(part.file, signal);
+		const file = await link.client.file(part.file, signal);
 		return { at: sample.at, digest: part.file, png: file.bytes };
 	}
 	function accept(frame: PreviewFrame | undefined, signal: AbortSignal) {
@@ -74,7 +95,7 @@ export function cameraPreview(workspace: Workspace, changed: () => void) {
 	}
 
 	const unwatch = workspace.sensors?.subscribe(linked);
-	const timer = setInterval(() => void poll(), 200);
+	const timer = setInterval(() => void poll(), FRAME_MS);
 	return {
 		get revision() {
 			return revision;

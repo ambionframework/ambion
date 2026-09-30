@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto';
-import { crc32, deflateSync } from 'node:zlib';
+import { promisify } from 'node:util';
+import { crc32, deflate, deflateSync } from 'node:zlib';
+
+const deflateAsync = promisify(deflate);
 
 export const WIDTH = 1280;
 export const HEIGHT = 720;
@@ -21,37 +24,59 @@ function chunk(kind: string, bytes: Buffer): Buffer {
 	return Buffer.concat([size, type, bytes, checksum]);
 }
 
-/** Encode the exact RGB pixels as a PNG for the sensor API. */
-export function frameFromRgb(rgb: Buffer, at = new Date().toISOString()): Frame {
+/** Copy the RGB pixels and add the PNG filter byte before each row. */
+function scanlines(rgb: Buffer): { pixels: Buffer; rows: Buffer } {
 	if (rgb.length !== FRAME_BYTES) throw new Error('The RGB frame has an invalid size.');
 	const pixels = Buffer.from(rgb);
+	const rows = Buffer.alloc(HEIGHT * (WIDTH * 3 + 1));
+	for (let y = 0; y < HEIGHT; y++)
+		pixels.copy(rows, y * (WIDTH * 3 + 1) + 1, y * WIDTH * 3, (y + 1) * WIDTH * 3);
+	return { pixels, rows };
+}
+
+function assemble(pixels: Buffer, compressed: Buffer, at: string): Frame {
 	const header = Buffer.alloc(13);
 	header.writeUInt32BE(WIDTH, 0);
 	header.writeUInt32BE(HEIGHT, 4);
 	header[8] = 8;
 	header[9] = 2;
-	const rows = Buffer.alloc(HEIGHT * (WIDTH * 3 + 1));
-	for (let y = 0; y < HEIGHT; y++)
-		pixels.copy(rows, y * (WIDTH * 3 + 1) + 1, y * WIDTH * 3, (y + 1) * WIDTH * 3);
 	const png = Buffer.concat([
 		Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
 		chunk('IHDR', header),
-		chunk('IDAT', deflateSync(rows)),
+		chunk('IDAT', compressed),
 		chunk('IEND', Buffer.alloc(0)),
 	]);
 	return { at, rgb: pixels, png, digest: createHash('sha256').update(png).digest('hex') };
 }
 
-/** Collect complete frames across arbitrary pipe boundaries. */
+/** Encode the exact RGB pixels as a PNG for the sensor API. */
+function frameFromRgb(rgb: Buffer, at = new Date().toISOString()): Frame {
+	const { pixels, rows } = scanlines(rgb);
+	return assemble(pixels, deflateSync(rows), at);
+}
+
+/** Encode the exact RGB pixels as a PNG. Compress on the thread pool to keep HTTP reads responsive. */
+export async function encodeFrame(rgb: Buffer, at: string): Promise<Frame> {
+	const { pixels, rows } = scanlines(rgb);
+	return assemble(pixels, await deflateAsync(rows), at);
+}
+
+/** Collect complete frames across arbitrary pipe boundaries. Copy each byte once. */
 export class FrameDecoder {
-	private pending = Buffer.alloc(0);
+	private chunks: Buffer[] = [];
+	private size = 0;
 	push(bytes: Buffer): Buffer[] {
-		this.pending = Buffer.concat([this.pending, bytes]);
+		this.chunks.push(bytes);
+		this.size += bytes.length;
+		if (this.size < FRAME_BYTES) return [];
+		let pending = Buffer.concat(this.chunks, this.size);
 		const frames: Buffer[] = [];
-		while (this.pending.length >= FRAME_BYTES) {
-			frames.push(this.pending.subarray(0, FRAME_BYTES));
-			this.pending = this.pending.subarray(FRAME_BYTES);
+		while (pending.length >= FRAME_BYTES) {
+			frames.push(pending.subarray(0, FRAME_BYTES));
+			pending = pending.subarray(FRAME_BYTES);
 		}
+		this.chunks = pending.length > 0 ? [pending] : [];
+		this.size = pending.length;
 		return frames;
 	}
 }

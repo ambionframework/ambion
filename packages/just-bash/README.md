@@ -39,7 +39,7 @@ backend, and it is optional. `drive.dispose()` releases the handle
 and keeps the root and its files. A host deletes the data it owns.
 
 Neither backend exposes workstation endpoints. A workspace using these backends
-has no `connect` or `observe` tools.
+has no `connect`, `disconnect`, or `observe` tools.
 
 Agents connected to one workspace share every file. just-bash is single-user,
 so one agent can read another agent's home. The default workspace provides no
