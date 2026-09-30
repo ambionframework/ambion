@@ -1,12 +1,12 @@
 # Sensors
 
-> **Implemented in the current branch.** A workspace with `BashBackend.ports`
-> exposes `connect` and `observe`. Observation reads use the connected server,
-> retain verified bytes and the manifest through snapshots, and export the
-> result into the observing agent's home. The version 1 schemas and client are
+> **Sensor reads require a backend with ports.** Such a workspace exposes
+> `connect` and `observe`. Observation reads use the connected server, retain
+> verified bytes and the manifest through snapshots, and export the result
+> into the observing agent's home. The version 1 schemas and client are
 > available from `@ambionframework/workspace/sensors`, and the conformance
 > runner is available from `@ambionframework/workspace/conformance`. See the
-> [release plan](../planning/next.md) for remaining acceptance work.
+> [release plan](../planning/next.md) for scope and acceptance evidence.
 
 **A forked Git repository defines a sensor server.** The agent customizes
 its acquisition and reduction code, validates it, and saves working
@@ -447,12 +447,12 @@ wire change raises `api`. The client refuses another version. Version 1
 describes this initial subset alone. Acquisition and reducer state are
 never fields of the protocol.
 
-**The wire schemas, types, and HTTP client live in
-`@ambionframework/workspace/sensors`.** The package also exports the
-generated `sensor-api.schema.json`. The `sensorConformance` runner is
-available from `@ambionframework/workspace/conformance`. It checks raw server
-replies against a host-supplied fixture. Ambion adds no
-`@ambionframework/sensors` package in 0.5.0.
+**The workspace package owns the sensor exports.**
+`@ambionframework/workspace/sensors` exports the wire schemas, types, and
+HTTP client. `@ambionframework/workspace/sensor-api.schema.json` exports the
+generated schema. `@ambionframework/workspace/conformance` exports
+`sensorConformance`. The package count stays at eleven; there is no separate
+sensor package.
 
 **A host supplies the transport and expected evidence.** The harness opens a
 probe for each case. A probe sends a method, path, and optional JSON body. It
@@ -600,8 +600,17 @@ A second agent restores the evidence in its own home.
 **Replacement and rollback are part of acceptance.** The run stops the
 server, saves and starts another version, and observes its changed result.
 It then starts the earlier commit and observes the earlier behavior.
-The snapshots of both versions remain readable after both processes stop.
-A separate dirty-run case keeps its original source metadata after a commit.
+The snapshots of both versions remain readable after both processes stop,
+and an acquisition-data marker outside the checkout survives the code
+rollback. A separate dirty-run case keeps its original source metadata after
+that same edit is committed and pushed.
+
+The OpenSSH acceptance test also kills the host process abruptly, creates a
+fresh workspace, adopts the surviving server, and explicitly reconnects it.
+A separate checkout advances the launch branch while the restored manifest
+keeps the original commit and dirty state. The provisioned OpenSSH test is
+serialized with the other SSHD cases because they share account homes and
+Git repositories.
 
 **The tests cover the essential boundaries.**
 

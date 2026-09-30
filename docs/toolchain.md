@@ -190,6 +190,16 @@ On the web, the SessionStart hook at `.claude/hooks/session-start.sh` runs
 the script, and the tool paths reach every later shell through
 `CLAUDE_ENV_FILE`.
 
+`pnpm test:live-local-workstation` needs a running Docker daemon. It copies
+the checkout into a disposable `node:26.10-bookworm` container, installs
+pnpm 10.20.0 from the workspace's `packageManager` pin, installs the Linux
+OpenSSH test prerequisites, and runs the same `test/sshd/setup.sh` and
+`test:sshd` commands as CI. The setup provisions Unix accounts only inside
+the container. The checkout is mounted read-only while copied; Git metadata,
+dependency/build output, caches, and local environment files are excluded.
+The container is removed after success, test failure, or an interrupt. This
+target runs scripted tests and does not need model or paid API credentials.
+
 ## 7. Lint and format split
 
 Biome lints and Prettier formats. The key repository rules are no explicit
@@ -254,7 +264,10 @@ job per harness. The `pi` and `claude` jobs read `ANTHROPIC_API_KEY` and use
 `AMBION_MODEL` (the default is `anthropic/claude-sonnet-5`). The `codex` job
 reads `CODEX_API_KEY`. The `packages` job runs the live tier of every other
 package, with a limit of 90 minutes. It sets `AMBION_THINKING` and
-`JUDGE_THINKING` to `medium` for the assistant's evals. With an
+`JUDGE_THINKING` to `medium`. `AMBION_THINKING` sets the Pi executor's
+reasoning in the Ambion, workspace, assistant, and simulator live suites. `JUDGE_THINKING`
+sets reasoning for assistant and simulator judges. If either variable is
+unset, each consumer uses its own default. With an
 `OPENAI_API_KEY` secret, it sets `JUDGE_MODEL` to `openai/gpt-5.6-luna`, so
 another model family grades the assistant. The workflow cancels a superseded
 run. Run it locally

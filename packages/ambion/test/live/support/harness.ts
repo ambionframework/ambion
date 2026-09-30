@@ -65,7 +65,12 @@ export function executorFor(options: Omit<PiOptions, 'model'> & { model?: string
 			...rest,
 		});
 	}
-	return pi({ model: model ?? MODEL, ...rest });
+	const thinking = rest.thinking ?? process.env.AMBION_THINKING;
+	return pi({
+		model: model ?? MODEL,
+		...rest,
+		...(thinking === undefined ? {} : { thinking: thinking as PiOptions['thinking'] }),
+	});
 }
 
 /** The execution services of the harness of the run. */

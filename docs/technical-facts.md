@@ -1,8 +1,8 @@
 # Technical facts
 
-This page lists the key technical facts of Ambion, what is new, the
-packages, and the limits of the 0.4.0 release. The [README](../README.md)
-holds the positioning and the headline of what is new.
+This page lists the key technical facts of Ambion, the 0.5.0 sensor scope,
+the eleven packages, and system limits. The [README](../README.md) holds the
+positioning and the current capabilities.
 
 ## Key technical facts
 
@@ -94,6 +94,11 @@ holds the positioning and the headline of what is new.
   background process with a handle. The files of the bash backend hold the
   process table, so a new run of the host adopts the live processes. See
   [Processes](processes.md).
+- **Sensor servers use the Git and process tools.** A workspace backend with
+  ports adds `connect` and `observe`. The workspace package owns
+  the versioned client and schema exports. `observe` stores the response
+  manifest and verified file bytes as ordinary snapshot objects. The server
+  owns acquisition and reducer state.
 - **A clock that the agent sets.** An agent calls `schedule` with `after`,
   and the room returns the say when it is due. The journal holds the
   schedule, and the host arms one alarm. See
@@ -104,19 +109,19 @@ holds the positioning and the headline of what is new.
 
 ## Packages
 
-| Package                        | Concern                                                                               |
-| ------------------------------ | ------------------------------------------------------------------------------------- |
-| `@ambionframework/ambion`      | The kernel: protocol, journal vocabulary, rules, room, driver; `/hosting`, `/testing` |
-| `@ambionframework/pi`          | The Pi executor, on Pi's AgentHarness                                                 |
-| `@ambionframework/claude`      | The Claude Agent SDK executor                                                         |
-| `@ambionframework/codex`       | The Codex SDK executor                                                                |
-| `@ambionframework/workspace`   | The workspace interface, its tools, a SQLite backend, and the conformance suites      |
-| `@ambionframework/just-bash`   | The just-bash shell and filesystem in the process, and a git backend in `/git`        |
-| `@ambionframework/workstation` | A bash backend over SSH, with one Unix account for each agent, and a git backend      |
-| `@ambionframework/assistant`   | A default assistant that guides membership and writes summaries                       |
-| `@ambionframework/simulator`   | Evals: an actor plays a person in a room, and the run holds what the room did         |
-| `@ambionframework/journal`     | The append-only journal and its storage contract                                      |
-| `@ambionframework/cloudflare`  | Rooms and seats as Durable Objects                                                    |
+| Package                        | Concern                                                                                 |
+| ------------------------------ | --------------------------------------------------------------------------------------- |
+| `@ambionframework/ambion`      | The kernel: protocol, journal vocabulary, rules, room, driver; `/hosting`, `/testing`   |
+| `@ambionframework/pi`          | The Pi executor, on Pi's AgentHarness                                                   |
+| `@ambionframework/claude`      | The Claude Agent SDK executor                                                           |
+| `@ambionframework/codex`       | The Codex SDK executor                                                                  |
+| `@ambionframework/workspace`   | The workspace interface, sensor subpaths, SQLite backend, and conformance suites        |
+| `@ambionframework/just-bash`   | The just-bash shell and filesystem in the process, and a git backend in `/git`          |
+| `@ambionframework/workstation` | A bash backend over SSH, with one Unix account for each agent, port forwarding, and Git |
+| `@ambionframework/assistant`   | A default assistant that guides membership and writes summaries                         |
+| `@ambionframework/simulator`   | Evals: an actor plays a person in a room, and the run holds what the room did           |
+| `@ambionframework/journal`     | The append-only journal and its storage contract                                        |
+| `@ambionframework/cloudflare`  | Rooms and seats as Durable Objects                                                      |
 
 ## Boundaries and limits
 

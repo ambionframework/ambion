@@ -117,6 +117,12 @@ and a `name`, and the sweep runs past the exchange. A later exchange in the
 same room reads its state with `ps`, `status`, or `wait`, and the reminder
 of each activation names it ([Processes](processes.md)).
 
+**The sensor server uses the workstation backend.** The running Workbench
+uses `directoryBackend`, which has no port transport. Its terminal workspace
+has no `connect` or `observe` tools. A workstation with ports provides those
+tools for the same Git template. See [Sensors](sensors.md) and the
+[workstation acceptance](../packages/workstation/test/sshd/sensor-lifecycle.test.ts).
+
 The datasheets are simplified summaries for a runnable example. They are not
 the manufacturer datasheets.
 
