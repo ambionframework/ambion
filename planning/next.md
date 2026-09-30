@@ -23,11 +23,12 @@ and its acceptance. [The backlog](backlog.md) holds everything else.
 
 ## Status
 
-**0.4.0 shipped. SN1, SN3, SN4, SN27, SN32, and SN33 are implemented and
-validated on this branch.** The wire schemas, HTTP client, conformance
-runner, validated template, workstation port transport, and in-memory
-connection registry with `connect` exist. SN5, SN34, SN6, SN8, SN35, and
-SN31 remain pending.
+**0.4.0 shipped. SN1, SN3, SN4, SN27, SN32, SN33, and SN34 are implemented
+and validated on this branch.** The wire schemas, HTTP client, conformance
+runner, validated template, workstation port transport, in-memory connection
+registry with `connect`, and internal evidence-retention operation exist.
+SN5, SN6, SN8, SN35, and SN31 remain pending. SN33's focused Linux checks
+passed, but its scenario was not run against the provisioned OpenSSH tier.
 This scope incorporates the owner's response to the review of `origin/main`
 `0f9ef1e27eed0f27c3ec47aef09071d54b044ff8` on 2026-09-29.
 [The review disposition](review-0.5.0.md) records the changed decisions.
@@ -147,7 +148,7 @@ resources behind.
 
 - [x] **1.** The connection registry and `connect` tool. (SN33)
 - [ ] **2.** Discovery and the reminder. Needs 1. (SN5)
-- [ ] **3.** Retain received evidence through snapshots. (SN34)
+- [x] **3.** Retain received evidence through snapshots. (SN34)
 - [ ] **4.** The observe tool and text-only rendering. Needs 1 and 3. (SN6, SN8)
 
 **Evidence:** a real room connects a process, observes all four part
@@ -240,19 +241,25 @@ through the existing process table. Keep media out of the reminder.
 An ended process shows an unavailable connection. Existing process
 reminders still work. Failed sensor work cannot discard their output.
 
-**SN34. Retained evidence.** Reuse the existing snapshot store for
-received bytes and an observation manifest. Include launch source metadata
-and preserve its dirty marker. Retain received bytes independently of the
-server owner's acquisition files and the observer's mutable exports. Add
-an internal buffer helper if needed; add no public snapshot variant.
-Keep object and bash owner operations separate. Generate local filenames and one directory per call.
-Return success only after retention and export finish.
+**SN34. Retained evidence.** The internal retention operation reuses the
+existing snapshot object store for verified received bytes and an
+observation manifest. The manifest preserves exact observations, request,
+qualified sensor, process handle, connection facts, and launch source
+metadata including its dirty marker. Received bytes are independent of the
+server owner's acquisition files and the observer's mutable exports. The
+snapshot buffer helper stays internal; no public snapshot variant is added.
+Object and bash owner operations remain separate. The operation writes safe
+generated filenames into a per-call directory under the observing agent's
+home and reports success only after the complete export is published.
 
 **Evidence:** `restore` retrieves the manifest and its referenced files
-after server shutdown. Test the default store and existing object
-conformance path. Modified exports do not modify evidence. Missing files,
-changed digests, object-write failures, and partial exports never report
-a successful retained observation.
+after HTTP server shutdown, including for another agent. Tests cover the
+default directory-backed store and the existing object conformance
+backends. Modified exports do not modify evidence. Missing files, changed
+digests, object-write failures, reversed requests, and cancelled partial
+exports never report a successful retained observation. A real Git-template
+test retains a dirty launch before stopping the server, advances the checkout
+to a later commit, and restores the original launch source and bytes afterward.
 
 **SN6. Observe.** Implement the input, rendering, audit details, and
 snapshot result of [Observe](../docs/sensors.md#observe-and-retain-evidence).

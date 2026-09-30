@@ -109,6 +109,21 @@ function digestOf(bytes: Uint8Array): string {
 	return createHash('sha256').update(bytes).digest('hex');
 }
 
+/** Store verified received bytes under the same immutable object/ref contract as snapshots. */
+export async function retainSnapshotBuffer(
+	store: SnapshotStore,
+	path: string,
+	bytes: Uint8Array,
+	signal?: AbortSignal,
+): Promise<{ readonly digest: string; readonly ref: string }> {
+	assertObjectSize(path, bytes.byteLength);
+	const digest = digestOf(bytes);
+	const ref = snapshotUri(store.workspace, digest, path);
+	checkRef(ref, path);
+	await store.objects(store.host, (env) => env.put(digest, bytes, signal), signal);
+	return { digest, ref };
+}
+
 /** Refuse a list of paths that is empty, too long, or not strings. */
 function checkPaths(paths: readonly unknown[]): asserts paths is readonly string[] {
 	if (paths.length === 0) throw new Error('A snapshot needs at least one path.');
@@ -166,9 +181,8 @@ export async function takeSnapshot(
 	const refs: string[] = [];
 	for (const file of found) {
 		const bytes = await store.shell(reader, (env) => read(env, file, context), signal);
-		const digest = digestOf(bytes);
-		await store.objects(store.host, (env) => env.put(digest, bytes, signal), signal);
-		refs.push(snapshotUri(store.workspace, digest, file.path));
+		const saved = await retainSnapshotBuffer(store, file.path, bytes, signal);
+		refs.push(saved.ref);
 	}
 	return Object.freeze(refs);
 }

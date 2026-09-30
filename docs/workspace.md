@@ -1,8 +1,11 @@
 # The workspace
 
-> **Pending in 0.5.0:** [Sensors](sensors.md) specifies `observe` and
-> automatic evidence retention through snapshots. `connect` is available
-> when the bash backend has the optional workstation port capability.
+> **Pending in 0.5.0:** [Sensors](sensors.md) specifies `observe` and its
+> rendering and audit details. `connect` is available when the bash backend
+> has the optional workstation port capability. The internal SN34 retention
+> operation stores verified sensor bytes and manifests through the existing
+> snapshot store, then exports a complete per-call directory into the
+> observing agent's home.
 
 **The workspace is the Pi binding of the resource contract.** The optional
 `@ambionframework/workspace` package provides a workspace resource and its
